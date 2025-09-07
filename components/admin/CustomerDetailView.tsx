@@ -207,10 +207,10 @@ export const CustomerDetailView: React.FC<{
                                 <tbody className="bg-white divide-y divide-gray-200">
                                     {paginatedBookings.map(b => (
                                         <tr key={b.id}>
-                                            <td className="px-4 py-2 whitespace-nowrap">
-                                                <div className="text-sm font-semibold text-brand-text">{formatDate(b.createdAt)}</div>
-                                                <div className="text-xs font-mono text-brand-secondary">{b.bookingCode || '---'}</div>
-                                            </td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">
+                                                 {booking.createdAt ? formatDate(booking.createdAt) : '---'}
+                                                <div className="text-xs text-gray-500">{booking.bookingCode}</div>
+                                             </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{b.product?.name || 'N/A'}</td>
                                             <td className="px-4 py-2 whitespace-nowrap">{renderProgressExpiry(b)}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-center">

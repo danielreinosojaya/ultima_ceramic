@@ -1,26 +1,26 @@
-import React from 'react';
-import { useLanguage } from '../context/LanguageContext';
-import { SpainFlagIcon } from './icons/SpainFlagIcon';
-import { UKFlagIcon } from './icons/UKFlagIcon';
+
+import { useLanguage } from '../context/LanguageContext.js';
+
+
 
 export const LanguageSelector: React.FC = () => {
   const { language, setLanguage } = useLanguage();
 
   return (
-    <div className="flex items-center space-x-2">
+    <div className="flex items-center p-1 bg-brand-background rounded-full border border-brand-border">
       <button 
         onClick={() => setLanguage('es')}
-        className={`w-8 h-6 rounded-sm overflow-hidden transition-all duration-200 ${language === 'es' ? 'ring-2 ring-brand-accent ring-offset-2' : 'opacity-60 hover:opacity-100'}`}
+        className={`px-3 py-1 text-xs font-bold rounded-full transition-all duration-300 ${language === 'es' ? 'bg-brand-secondary text-white shadow-sm' : 'text-brand-secondary hover:bg-brand-border/50'}`}
         aria-label="Cambiar a español"
       >
-        <SpainFlagIcon />
+        ES
       </button>
       <button 
         onClick={() => setLanguage('en')}
-        className={`w-8 h-6 rounded-sm overflow-hidden transition-all duration-200 ${language === 'en' ? 'ring-2 ring-brand-accent ring-offset-2' : 'opacity-60 hover:opacity-100'}`}
+        className={`px-3 py-1 text-xs font-bold rounded-full transition-all duration-300 ${language === 'en' ? 'bg-brand-secondary text-white shadow-sm' : 'text-brand-secondary hover:bg-brand-border/50'}`}
         aria-label="Switch to English"
       >
-        <UKFlagIcon />
+        EN
       </button>
     </div>
   );
