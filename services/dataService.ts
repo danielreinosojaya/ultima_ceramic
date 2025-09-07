@@ -87,10 +87,32 @@ const parseInstructor = (i: any): Instructor => ({
     id: parseInt(i.id, 10),
 });
 
-const parseGroupInquiry = (i: any): GroupInquiry => ({
-    ...i,
-    participants: parseInt(i.participants, 10),
-});
+const parseGroupInquiry = (i: any): GroupInquiry => {
+        console.log('Valor de tentativeDate en el frontend (desde la API):', i.tentativeDate, '| Tipo:', typeof i.tentativeDate);
+
+    // Definimos una variable para la fecha tentativa
+    let tentativeDate: Date | undefined;
+
+    // Comprobamos si el valor de la fecha existe y es una cadena de texto
+    if (i.tentativeDate && typeof i.tentativeDate === 'string') {
+        // Usamos una expresión regular para verificar que el formato sea YYYY-MM-DD
+        if (/^\d{4}-\d{2}-\d{2}$/.test(i.tentativeDate)) {
+            // Si el formato es correcto, creamos un objeto Date
+            // Agregamos 'T00:00:00' para evitar problemas de zona horaria
+            tentativeDate = new Date(i.tentativeDate + 'T00:00:00');
+        } else {
+            // Si la cadena tiene un formato inesperado, la convertimos a "Fecha Inválida"
+            // Esto es para que la función formatDate pueda manejarlo correctamente
+            tentativeDate = new Date('invalid date');
+        }
+    }
+
+    return {
+        ...i,
+        participants: parseInt(i.participants, 10),
+        tentativeDate: tentativeDate
+    };
+};
 
 
 // --- Service Functions ---

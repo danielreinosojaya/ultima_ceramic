@@ -3,6 +3,9 @@ import { useNotifications } from '../../context/NotificationContext.js';
 import { useLanguage } from '../../context/LanguageContext.js';
 import { BellIcon } from '../icons/BellIcon.js';
 import type { Notification } from '../../types.js';
+import { formatDistanceToNow } from 'date-fns';
+
+
 
 const calculateTimeAgo = (isoDate: string | null): string => {
     if (!isoDate || typeof isoDate !== 'string') {
@@ -106,10 +109,10 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onNotificati
                                   onClick={() => handleItemClick(notif)}
                                   className={`w-full text-left p-3 border-b border-gray-100 transition-colors ${!notif.read ? 'bg-brand-background' : 'hover:bg-gray-50'}`}
                                 >
-                                    <div className="flex justify-between items-start">
-                                        <p className="text-sm font-semibold text-brand-text pr-2">{notif.userName}</p>
-                                        <TimeAgo isoDate={notif.timestamp} />
-                                    </div>
+                                                                
+                                <div className="text-xs text-gray-500">
+                                    {formatDistanceToNow(new Date(notif.timestamp), { addSuffix: true })}
+                                </div>
                                     <p className="text-xs text-brand-secondary mt-1">
                                         {t(`admin.notifications.template_${notif.type}`, { name: notif.userName, summary: notif.summary })}
                                     </p>

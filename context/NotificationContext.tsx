@@ -17,9 +17,11 @@ interface NotificationContextType {
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 const safeGetTime = (timestamp: string | null) => {
-    if (!timestamp) return 0; // Treat null/undefined as very old
+     // Si no hay timestamp, devuelve null para que la ordenación lo ignore
+    if (!timestamp || typeof timestamp !== 'string') return null;
     const date = new Date(timestamp);
-    return isNaN(date.getTime()) ? 0 : date.getTime();
+    // Si la fecha es inválida, devuelve null
+    return isNaN(date.getTime()) ? null : date.getTime();
 }
 
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
