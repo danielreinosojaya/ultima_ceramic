@@ -183,26 +183,28 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
             const { rows: instructors } = await sql`SELECT * FROM instructors ORDER BY id ASC`;
             data = toCamelCase(instructors);
             break;
-         
-            const { rows: inquiries } = await sql`
-                SELECT
-                    id,
-                    name,
-                    email,
-                    phone,
-                    country_code,
-                    s   participants,
-                    TO_CHAR(tentative_date, 'YYYY-MM-DD') as tentative_date,
-                    event_type,
-                    message,
-                    status,
-                    TO_CHAR(created_at, 'YYYY-MM-DD') as created_at, -- Agrega esta línea
-                    inquiry_type
-                FROM inquiries
-             ORDER BY created_at DESC
+            
+        case 'groupInquiries':
+    const { rows: inquiries } = await sql`
+        SELECT
+            id,
+            name,
+            email,
+            phone,
+            country_code,
+            participants,
+            TO_CHAR(tentative_date, 'YYYY-MM-DD') as tentative_date,
+            event_type,
+            message,
+            status,
+            TO_CHAR(created_at, 'YYYY-MM-DD') as created_at, -- Agrega esta línea
+            inquiry_type
+        FROM inquiries
+        ORDER BY created_at DESC
     `;
     data = inquiries.map(parseGroupInquiryFromDB);
-    break;
+    break; 
+            
         case 'notifications':
              const { rows: notifications } = await sql`SELECT * FROM notifications ORDER BY timestamp DESC`;
             data = notifications.map(parseNotificationFromDB);
