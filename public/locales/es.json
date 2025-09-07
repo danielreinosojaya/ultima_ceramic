@@ -29,7 +29,8 @@
         "selectSubscriptionButton": "Suscribirme Ahora",
         "classes": "Clases",
         "perMonth": "por mes",
-        "viewIntroClassesLink": "¿Buscas una sola clase? Ver Clases Introductorias →"
+        "viewIntroClassesLink": "¿Buscas una sola clase? Ver Clases Introductorias →",
+        "membershipLabel": "MEMBRESÍA"
     },
     "introClass": {
         "title": "Clase Introductoria",
@@ -94,7 +95,8 @@
         "daysAccess": "días de acceso",
         "proceedToConfirmButton": "Guardar y Continuar",
         "activationNotice": "Tu suscripción se activará con la confirmación del pago, no con la pre-reserva.",
-        "savingButton": "Guardando tu pre-reserva"
+        "savingButton": "Guardando tu pre-reserva",
+        "downloadButton": "Descargar Boleto"
     },
     "userInfoModal": {
         "title": "Tu Información",
@@ -154,7 +156,14 @@
         "downloadButton": "Descargar PDF de Reserva",
         "sendProofButton": "Enviar Comprobante",
         "backToStartButton": "Reservar Otra Clase",
-        "whatsappMessage": "¡Hola! Envío mi comprobante de pago para la reserva con código: {{code}}"
+        "whatsappMessage": "¡Hola! Envío mi comprobante de pago para la reserva con código: {{code}}",
+        "transferReference": "Importante: Por favor, usa tu código de reserva {{code}} como referencia en la transferencia.",
+        "paymentInstructionsTitle": "Próximos Pasos para Activar",
+        "paymentInstruction1": "Contáctanos por WhatsApp con tu comprobante de pago.",
+        "paymentInstruction2": "Incluye tu código de reserva: {{code}}.",
+        "paymentInstruction3": "Una vez validado, ¡tu reserva será confirmada!",
+        "openStudioInstruction3": "Una vez validado, tu suscripción se activará y comenzará tu período de acceso.",
+        "newBookingButton": "Iniciar Nueva Reserva"
     },
     "pdf": {
         "title": "Confirmación de Reserva",
