@@ -124,7 +124,10 @@ export const getProducts = async (): Promise<Product[]> => {
 };
 export const updateProducts = (products: Product[]): Promise<{ success: boolean }> => setData('products', products);
 export const addProduct = (productData: Omit<Product, 'id' | 'isActive'>): Promise<{ success: boolean }> => postAction('addProduct', productData);
-export const deleteProduct = (id: number): Promise<{ success: boolean }> => postAction('deleteProduct', { id });
+export const deleteProduct = (id: number): Promise<{ success: boolean }> => fetchData(`/api/data?action=deleteProduct&id=${id}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+});
 
 
 // Bookings
