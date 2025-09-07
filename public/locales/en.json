@@ -79,7 +79,8 @@
     "daysAccess": "Days Access",
     "selectButton": "Select",
     "perMonth": "per month",
-    "selectSubscriptionButton": "Select Subscription"
+    "selectSubscriptionButton": "Select Subscription",
+    "membershipLabel": "MEMBERSHIP"
   },
   "modal": {
     "title": "You've selected",
@@ -211,7 +212,11 @@
     "emailLabel": "Email",
     "whatsappLabel": "WhatsApp",
     "googleMapsLabel": "Find us on Google Maps",
-    "instagramLabel": "Instagram"
+    "instagramLabel": "Instagram",
+    "durationLabel": "Duration",
+    "activitiesLabel": "Activities",
+    "generalRecommendationsLabel": "Recommendations",
+    "materialsLabel": "Materials"
   },
   "admin": {
     "headerTitle": "Admin Console",
@@ -686,6 +691,8 @@
         "managerSubtitle": "Configure and activate automated communications with clients.",
         "title": "Communications Automation",
         "subtitle": "Activate and configure automatic notifications for your clients.",
+        "envVarTitle": "Required Setup",
+        "envVarMessage": "For emails to be sent correctly, you must set the following environment variables in your hosting service (e.g., Vercel):",
         "preBookingConfirmation": "Pre-Booking Confirmation",
         "paymentReceipt": "Payment Receipt",
         "classReminder": "Class Reminder",
@@ -694,9 +701,7 @@
         "days": "days",
         "beforeClass": "before the class.",
         "saveButton": "Save Automations",
-        "savedMessage": "Settings saved!",
-        "envVarTitle": "Required Setup",
-        "envVarMessage": "For emails to be sent correctly, you must set the following environment variables in your hosting service (e.g., Vercel):"
+        "savedMessage": "Settings saved!"
       },
       "policiesLabel": "Policies and Returns Process",
       "saveButton": "Save Policies",
@@ -747,11 +752,7 @@
       "requiredFieldIndicator": "*"
     },
     "errors": {
-      "DUPLICATE_BOOKING_ERROR": "This user is already registered for this class on this day and time.",
-      "UNPAID_BOOKING_EXISTS": "This user already has a pending pre-booking. Please complete the payment before creating a new one.",
-      "SLOT_NOT_FOUND": "The original slot could not be found to reschedule.",
-      "BOOKING_NOT_FOUND": "The booking could not be found.",
-      "SLOT_FULL": "This class is already full."
+      "DUPLICATE_BOOKING_ERROR": "This user is already registered for this class on this day and time."
     },
     "app": {
         "loading": "Loading",
