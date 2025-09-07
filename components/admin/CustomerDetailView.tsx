@@ -1,98 +1,148 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import type { Customer, Booking, ClassPackage, TimeSlot, OpenStudioSubscription, InvoiceRequest, AdminTab } from '../../types.js';
+
+import React, { useMemo, useState } from 'react';
+import type { Customer, Booking, InvoiceRequest, AdminTab, ClassPackage, OpenStudioSubscription, IntroductoryClass, PaymentDetails } from '../../types.js';
 import { useLanguage } from '../../context/LanguageContext.js';
-import * as dataService from '../../services/dataService.js';
 import { MailIcon } from '../icons/MailIcon.js';
 import { PhoneIcon } from '../icons/PhoneIcon.js';
+import { ActivePackagesDisplay, AugmentedPackage } from './ActivePackagesDisplay.js';
+import { AcceptPaymentModal } from './AcceptPaymentModal.js';
+import * as dataService from '../../services/dataService.js';
 import { CurrencyDollarIcon } from '../icons/CurrencyDollarIcon.js';
 import { TrashIcon } from '../icons/TrashIcon.js';
-import { DeleteConfirmationModal } from './DeleteConfirmationModal.js';
+import { UserIcon } from '../icons/UserIcon.js';
 import { InvoiceReminderModal } from './InvoiceReminderModal.js';
 
-const KPICard: React.FC<{ title: string; value: string | number; }> = ({ title, value }) => (
-    <div className="bg-brand-background p-4 rounded-lg">
-        <h3 className="text-sm font-semibold text-brand-secondary">{title}</h3>
-        <p className="text-2xl font-bold text-brand-text mt-1">{value}</p>
-    </div>
-);
 
 interface NavigationState {
     tab: AdminTab;
     targetId: string;
 }
 
-const getSlotDateTime = (slot: TimeSlot) => {
-    const time24h = new Date(`1970-01-01 ${slot.time}`).toTimeString().slice(0, 5);
-    const [hours, minutes] = time24h.split(':').map(Number);
-    const [year, month, day] = slot.date.split('-').map(Number);
-    return new Date(year, month - 1, day, hours, minutes);
-};
+interface CustomerDetailViewProps {
+  customer: Customer;
+  onBack: () => void;
+  onDataChange: () => void;
+  invoiceRequests: InvoiceRequest[];
+  setNavigateTo: React.Dispatch<React.SetStateAction<NavigationState | null>>;
+}
 
+export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer, onBack, onDataChange, invoiceRequests, setNavigateTo }) => {
+  const { t, language } = useLanguage();
+  const [bookingToPay, setBookingToPay] = useState<Booking | null>(null);
+  const [isInvoiceReminderOpen, setIsInvoiceReminderOpen] = useState(false);
+  const [bookingForReminder, setBookingForReminder] = useState<Booking | null>(null);
 
-export const CustomerDetailView: React.FC<{ 
-    customer: Customer; 
-    onBack: () => void; 
-    onDataChange: () => void;
-    invoiceRequests: InvoiceRequest[];
-    setNavigateTo: React.Dispatch<React.SetStateAction<NavigationState | null>>;
-}> = ({ customer, onBack, onDataChange, invoiceRequests, setNavigateTo }) => {
-    const { t, language } = useLanguage();
-    
-    const [now, setNow] = useState(new Date());
-    const [bookingsPage, setBookingsPage] = useState(1);
-    const recordsPerPage = 5;
-    const [bookingToDelete, setBookingToDelete] = useState<Booking | null>(null);
-    const [isInvoiceReminderOpen, setIsInvoiceReminderOpen] = useState(false);
-    const [bookingForReminder, setBookingForReminder] = useState<Booking | null>(null);
+  const formatDate = (dateInput: Date | string | undefined | null): string => {
+    if (!dateInput) return '---';
+    const date = new Date(dateInput);
+    if (isNaN(date.getTime()) || date.getTime() === 0) return '---';
+    return date.toLocaleDateString(language, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
 
-    useEffect(() => {
-        const timerId = setInterval(() => setNow(new Date()), 60000);
-        return () => clearInterval(timerId);
-    }, []);
-
-    const formatDate = (dateInput: Date | string | undefined | null): string => {
-        if (!dateInput) return '---';
-        
-        const date = new Date(dateInput);
-
-        // Robust check for invalid dates AND the Unix epoch date (which causes the 1969 bug)
-        if (isNaN(date.getTime()) || date.getTime() === 0) {
-            return '---'; 
-        }
-
-        return date.toLocaleDateString(language, { year: 'numeric', month: 'short', day: 'numeric' });
+  const { totalValue, totalBookings, lastBookingDate } = useMemo(() => {
+    const paidBookings = customer.bookings.filter(b => b.isPaid);
+    return {
+      totalValue: paidBookings.reduce((sum, b) => sum + (b.price || 0), 0),
+      totalBookings: customer.bookings.length,
+      lastBookingDate: customer.bookings.length > 0 ? customer.bookings[0].createdAt : null,
     };
+  }, [customer.bookings]);
 
-    const handleTogglePaidStatus = async (booking: Booking) => {
-        if (booking.isPaid) {
-            if (window.confirm("Are you sure you want to mark this booking as UNPAID? This will remove the payment details.")) {
-               await dataService.markBookingAsUnpaid(booking.id);
-               onDataChange();
+  const augmentedPackages = useMemo((): AugmentedPackage[] => {
+    const now = new Date();
+    return customer.bookings
+        .map(booking => {
+            let status: AugmentedPackage['status'] = 'Pending Payment';
+            let progressPercent = 0;
+            let completedCount = 0;
+            let totalCount = 0;
+            let expiryDate: Date | null = null;
+            let nextClassDate: Date | null = null;
+
+            const isPackageOrIntro = booking.productType === 'CLASS_PACKAGE' || booking.productType === 'INTRODUCTORY_CLASS';
+            
+            if (isPackageOrIntro || booking.productType === 'OPEN_STUDIO_SUBSCRIPTION') {
+                if (booking.isPaid) {
+                    if (isPackageOrIntro) {
+                        const pkg = booking.product as ClassPackage | IntroductoryClass;
+                        totalCount = 'classes' in pkg ? pkg.classes : 1;
+                        const sortedSlots = [...booking.slots].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                        
+                        if (sortedSlots.length > 0) {
+                            const firstClassDate = new Date(sortedSlots[0].date + 'T00:00:00Z'); // Use Z for UTC
+                            expiryDate = new Date(firstClassDate);
+                            expiryDate.setUTCDate(expiryDate.getUTCDate() + 30); // 30 day validity
+
+                            completedCount = sortedSlots.filter(s => new Date(`${s.date}T${s.time}`) < now).length;
+                            
+                            const futureSlots = sortedSlots.filter(s => new Date(`${s.date}T${s.time}`) >= now);
+                            if (futureSlots.length > 0) {
+                                nextClassDate = new Date(`${futureSlots[0].date}T${futureSlots[0].time}`);
+                            }
+                        }
+
+                        if (completedCount >= totalCount) {
+                            status = 'Completed';
+                        } else if (expiryDate && now > expiryDate) {
+                            status = 'Expired';
+                        } else {
+                            status = 'Active';
+                        }
+                        progressPercent = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+
+                    } else if (booking.productType === 'OPEN_STUDIO_SUBSCRIPTION') {
+                        const sub = booking.product as OpenStudioSubscription;
+                        totalCount = sub.details.durationDays;
+                        if (booking.paymentDetails?.receivedAt) {
+                            const startDate = new Date(booking.paymentDetails.receivedAt);
+                            expiryDate = new Date(startDate);
+                            expiryDate.setDate(expiryDate.getDate() + totalCount);
+                            
+                            if (now > expiryDate) {
+                                status = 'Expired';
+                            } else {
+                                status = 'Active';
+                                const elapsed = now.getTime() - startDate.getTime();
+                                const totalDuration = expiryDate.getTime() - startDate.getTime();
+                                progressPercent = totalDuration > 0 ? (elapsed / totalDuration) * 100 : 0;
+                                completedCount = Math.floor(elapsed / (1000 * 60 * 60 * 24));
+                            }
+                        }
+                    }
+                } else {
+                    status = 'Pending Payment';
+                }
             }
+            
+            return {
+                ...booking, status, progressPercent, completedCount,
+                totalCount, expiryDate, nextClassDate
+            };
+        })
+        .filter(p => p.status === 'Active' || p.status === 'Pending Payment');
+  }, [customer.bookings]);
+
+  const handleConfirmPayment = async (details: Omit<PaymentDetails, 'receivedAt'>) => {
+    if (bookingToPay) {
+        await dataService.markBookingAsPaid(bookingToPay.id, details);
+        setBookingToPay(null);
+        onDataChange();
+    }
+  };
+  
+  const handleAcceptPaymentClick = (booking: Booking) => {
+        const pendingInvoiceRequest = invoiceRequests.find(
+            req => req.bookingId === booking.id && req.status === 'Pending'
+        );
+        if (pendingInvoiceRequest) {
+            setBookingForReminder(booking);
+            setIsInvoiceReminderOpen(true);
         } else {
-            const pendingInvoiceRequest = invoiceRequests.find(
-                req => req.bookingId === booking.id && req.status === 'Pending'
-            );
-
-            if (pendingInvoiceRequest) {
-                setBookingForReminder(booking);
-                setIsInvoiceReminderOpen(true);
-            } else {
-                await dataService.markBookingAsPaid(booking.id, { method: 'Cash', amount: booking.price });
-                onDataChange();
-            }
-        }
-    };
-    
-    const handleDeleteRequest = (booking: Booking) => {
-        setBookingToDelete(booking);
-    };
-
-    const handleDeleteConfirm = async () => {
-        if (bookingToDelete) {
-            await dataService.deleteBooking(bookingToDelete.id);
-            setBookingToDelete(null);
-            onDataChange();
+            setBookingToPay(booking);
         }
     };
 
@@ -106,139 +156,123 @@ export const CustomerDetailView: React.FC<{
         setBookingForReminder(null);
     };
 
-    const handleProceedWithPayment = async () => {
+    const handleProceedWithPayment = () => {
         if (bookingForReminder) {
-            await dataService.markBookingAsPaid(bookingForReminder.id, { method: 'Cash', amount: bookingForReminder.price });
-            onDataChange();
+            setBookingToPay(bookingForReminder);
         }
         setIsInvoiceReminderOpen(false);
         setBookingForReminder(null);
     };
 
-    const { userInfo, totalSpent, lastBookingDate, bookings } = customer;
 
-    const allBookingsSorted = useMemo(() => 
-        [...bookings].sort((a, b) => {
-            const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-            const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-            return dateB - dateA;
-        }),
-        [bookings]
-    );
+  const handleDeleteBooking = async (bookingId: string) => {
+      if(window.confirm(t('admin.customerDetail.deleteConfirmText'))) {
+          await dataService.deleteBooking(bookingId);
+          onDataChange();
+      }
+  }
 
-    const totalBookingPages = Math.ceil(allBookingsSorted.length / recordsPerPage);
-    const paginatedBookings = allBookingsSorted.slice((bookingsPage - 1) * recordsPerPage, bookingsPage * recordsPerPage);
 
-    const renderProgressExpiry = (booking: Booking) => {
-        if (booking.productType === 'CLASS_PACKAGE' && booking.product.type === 'CLASS_PACKAGE' && booking.slots && booking.slots.length > 0) {
-            const completed = booking.slots.filter(s => getSlotDateTime(s) < now).length;
-            const total = booking.product.classes;
-            return <span className="text-sm">{t('admin.crm.completedOf', { completed, total })}</span>
-        }
-        if (booking.productType === 'OPEN_STUDIO_SUBSCRIPTION' && booking.product.type === 'OPEN_STUDIO_SUBSCRIPTION' && booking.isPaid && booking.paymentDetails?.receivedAt) {
-            const startDate = new Date(booking.paymentDetails.receivedAt);
-            if (isNaN(startDate.getTime())) return <span className="text-sm text-gray-400">N/A</span>;
-            
-            const expiryDate = new Date(startDate);
-            const durationDays = booking.product.details.durationDays;
-            expiryDate.setDate(startDate.getDate() + durationDays);
-            const isActive = now < expiryDate;
+  return (
+    <div className="animate-fade-in">
+       {bookingToPay && (
+            <AcceptPaymentModal
+                isOpen={!!bookingToPay}
+                onClose={() => setBookingToPay(null)}
+                onConfirm={handleConfirmPayment}
+                booking={bookingToPay}
+            />
+        )}
+        {isInvoiceReminderOpen && (
+            <InvoiceReminderModal
+                isOpen={isInvoiceReminderOpen}
+                onClose={() => setIsInvoiceReminderOpen(false)}
+                onProceed={handleProceedWithPayment}
+                onGoToInvoicing={handleGoToInvoicing}
+            />
+        )}
+      <button onClick={onBack} className="text-brand-secondary hover:text-brand-text mb-4 transition-colors font-semibold">
+        &larr; {t('admin.customerDetail.backButton')}
+      </button>
 
-            return (
-                 <span className={`text-sm ${isActive ? 'text-brand-text' : 'text-gray-500'}`}>
-                    {t('admin.crm.expiresOn', { date: formatDate(expiryDate) })}
-                </span>
-            )
-        }
-        return <span className="text-sm text-gray-400">N/A</span>;
-    };
-
-    return (
-        <div className="animate-fade-in">
-            {bookingToDelete && (
-                <DeleteConfirmationModal
-                    isOpen={!!bookingToDelete}
-                    onClose={() => setBookingToDelete(null)}
-                    onConfirm={handleDeleteConfirm}
-                    title={t('admin.crm.deleteBookingTitle')}
-                    message={t('admin.crm.deleteBookingMessage', { code: bookingToDelete.bookingCode || 'N/A' })}
-                />
-            )}
-            {isInvoiceReminderOpen && (
-                <InvoiceReminderModal
-                    isOpen={isInvoiceReminderOpen}
-                    onClose={() => setIsInvoiceReminderOpen(false)}
-                    onProceed={handleProceedWithPayment}
-                    onGoToInvoicing={handleGoToInvoicing}
-                />
-            )}
-            <button onClick={onBack} className="text-brand-secondary hover:text-brand-accent mb-4 transition-colors font-semibold">
-                &larr; {t('admin.crm.backToList')}
-            </button>
-            <div className="bg-brand-background p-6 rounded-lg mb-6">
-                <h3 className="text-2xl font-serif text-brand-accent">{userInfo.firstName} {userInfo.lastName}</h3>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-brand-secondary">
-                    <a href={`mailto:${userInfo.email}`} className="flex items-center gap-2 hover:text-brand-accent"><MailIcon className="w-4 h-4" /> {userInfo.email}</a>
-                    <div className="flex items-center gap-2"><PhoneIcon className="w-4 h-4" /> {userInfo.countryCode} {userInfo.phone}</div>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-                <KPICard title={t('admin.crm.lifetimeValue')} value={`$${totalSpent.toFixed(2)}`} />
-                <KPICard title={t('admin.crm.totalBookings')} value={customer.totalBookings} />
-                <KPICard title={t('admin.crm.lastBooking')} value={formatDate(lastBookingDate)} />
-            </div>
-            
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                <h3 className="font-bold text-brand-text mb-4">{t('admin.crm.bookingAndPrebookingHistory')}</h3>
-                <div className="overflow-x-auto">
-                     {allBookingsSorted.length > 0 ? (
-                        <>
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-brand-background">
-                                    <tr>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.crm.date')}</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.crm.package')}</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.crm.progressExpiry')}</th>
-                                        <th className="px-4 py-2 text-center text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.crm.status')}</th>
-                                        <th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.productManager.actionsLabel')}</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {paginatedBookings.map(b => (
-                                        <tr key={b.id}>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">
-                                                 {booking.createdAt ? formatDate(booking.createdAt) : '---'}
-                                                <div className="text-xs text-gray-500">{booking.bookingCode}</div>
-                                             </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{b.product?.name || 'N/A'}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap">{renderProgressExpiry(b)}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-center">
-                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${b.isPaid ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{b.isPaid ? t('admin.bookingModal.paidStatus') : t('admin.bookingModal.unpaidStatus')}</span>
-                                            </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-right">
-                                                <div className="flex items-center justify-end">
-                                                    <button onClick={() => handleTogglePaidStatus(b)} title={t('admin.bookingModal.togglePaid')} className={`p-2 rounded-full transition-colors ${b.isPaid ? 'text-brand-success hover:bg-green-100' : 'text-gray-400 hover:bg-gray-200'}`}><CurrencyDollarIcon className="w-5 h-5"/></button>
-                                                    <button onClick={() => handleDeleteRequest(b)} title="Delete Booking" className="p-2 rounded-full text-red-500 hover:bg-red-100"><TrashIcon className="w-5 h-5" /></button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                             {totalBookingPages > 1 && (
-                                <div className="mt-4 flex justify-between items-center text-sm">
-                                    <button onClick={() => setBookingsPage(p => Math.max(1, p - 1))} disabled={bookingsPage === 1} className="font-semibold disabled:text-gray-400">&larr; {t('admin.crm.previous')}</button>
-                                    <span>{t('admin.crm.page')} {bookingsPage} {t('admin.crm.of')} {totalBookingPages}</span>
-                                    <button onClick={() => setBookingsPage(p => Math.min(totalBookingPages, p + 1))} disabled={bookingsPage === totalBookingPages} className="font-semibold disabled:text-gray-400">{t('admin.crm.next')} &rarr;</button>
-                                </div>
-                            )}
-                        </>
-                    ) : (
-                         <p className="text-sm text-brand-secondary text-center py-4">{t('admin.crm.noCustomers')}</p>
-                    )}
-                </div>
-            </div>
+      <div className="bg-brand-background p-6 rounded-lg mb-6">
+        <h2 className="text-2xl font-bold text-brand-text">{customer.userInfo.firstName.toUpperCase()} {customer.userInfo.lastName.toUpperCase()}</h2>
+        <div className="flex items-center gap-6 mt-2 text-sm text-brand-secondary">
+          <span className="flex items-center gap-2"><MailIcon className="w-4 h-4" />{customer.userInfo.email}</span>
+          <span className="flex items-center gap-2"><PhoneIcon className="w-4 h-4" />{customer.userInfo.countryCode} {customer.userInfo.phone}</span>
         </div>
-    );
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="bg-brand-background p-4 rounded-lg">
+          <h3 className="text-sm font-semibold text-brand-secondary">{t('admin.crm.lifetimeValue')}</h3>
+          <p className="text-3xl font-bold text-brand-text mt-1">${totalValue.toFixed(2)}</p>
+        </div>
+        <div className="bg-brand-background p-4 rounded-lg">
+          <h3 className="text-sm font-semibold text-brand-secondary">{t('admin.crm.totalBookings')}</h3>
+          <p className="text-3xl font-bold text-brand-text mt-1">{totalBookings}</p>
+        </div>
+        <div className="bg-brand-background p-4 rounded-lg">
+          <h3 className="text-sm font-semibold text-brand-secondary">{t('admin.crm.lastBooking')}</h3>
+          <p className="text-3xl font-bold text-brand-text mt-1">{formatDate(lastBookingDate)}</p>
+        </div>
+      </div>
+
+      <ActivePackagesDisplay packages={augmentedPackages} />
+
+      <div className="mt-8">
+        <h3 className="text-xl font-bold text-brand-text mb-4">{t('admin.customerDetail.historyTitle')}</h3>
+        <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-brand-background">
+                    <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.customerDetail.history.date')}</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.customerDetail.history.product')}</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.customerDetail.history.progress')}</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.customerDetail.history.status')}</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.customerDetail.history.actions')}</th>
+                    </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                    {customer.bookings.map(booking => (
+                        <tr key={booking.id}>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">
+                                {booking.createdAt ? formatDate(booking.createdAt) : '---'}
+                             <div className="text-xs text-gray-500">{booking.bookingCode}</div>
+                            </td>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{booking.product.name}</td>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">N/A</td>
+                            <td className="px-4 py-2 whitespace-nowrap">
+                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${booking.isPaid ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                    {booking.isPaid ? t('admin.customerDetail.history.paid') : t('admin.customerDetail.history.unpaid')}
+                                </span>
+                            </td>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm">
+                                <div className="flex items-center gap-2">
+                                    {!booking.isPaid && (
+                                        <button 
+                                            onClick={() => handleAcceptPaymentClick(booking)}
+                                            className="p-1.5 text-green-600 hover:text-green-800 bg-green-100 rounded-full hover:bg-green-200 transition-colors"
+                                            title={t('admin.customerDetail.history.acceptPayment')}
+                                        >
+                                            <CurrencyDollarIcon className="w-4 h-4"/>
+                                        </button>
+                                    )}
+                                     <button 
+                                        onClick={() => handleDeleteBooking(booking.id)}
+                                        className="p-1.5 text-red-600 hover:text-red-800 bg-red-100 rounded-full hover:bg-red-200 transition-colors"
+                                        title={t('admin.customerDetail.history.deleteBooking')}
+                                    >
+                                        <TrashIcon className="w-4 h-4"/>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+      </div>
+    </div>
+  );
 };
