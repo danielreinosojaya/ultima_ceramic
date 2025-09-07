@@ -1,0 +1,5 @@
+{
+  "name": "ceramicalma-backend",
+  "description": "A modern web application for students to book class packages and select their preferred schedules at a pottery school. It includes a schedule download feature for operational organization and a simulated payment gateway integration.",
+  "requestFramePermissions": []
+}
