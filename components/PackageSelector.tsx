@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useEffect } from 'react';
 import type { Product, OpenStudioSubscription, ClassPackage } from '../types';
 import { useLanguage } from '../context/LanguageContext';
@@ -35,35 +32,26 @@ export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect }) =>
             return (
               <div
                 key={openStudioPkg.id}
-                className="bg-brand-premium-dark bg-brushed-clay rounded-xl overflow-hidden transition-all duration-300 cursor-pointer flex flex-col shadow-subtle hover:shadow-lifted transform hover:-translate-y-1 group"
+                className="md:col-span-3 bg-rigid-texture border border-brand-border rounded-xl shadow-subtle hover:shadow-lifted transition-all duration-300 cursor-pointer transform hover:-translate-y-1"
                 onClick={() => onSelect(openStudioPkg)}
               >
-                <div className="relative p-6 flex-grow flex flex-col text-left text-brand-premium-light">
-                  <div className="mb-4">
-                    <span className="bg-brand-primary/20 text-brand-primary text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-full">
-                      {t('admin.productManager.openStudioSubscription')}
-                    </span>
-                  </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <KeyIcon className="w-6 h-6 text-brand-primary flex-shrink-0"/>
-                    <h3 className="text-3xl font-semibold">{openStudioPkg.name}</h3>
-                  </div>
-                  <p className="text-brand-premium-light/80 mt-2 text-sm flex-grow">{openStudioPkg.description}</p>
-                  
-                  <div className="mt-auto pt-6 border-t border-brand-premium-light/20">
-                    <div className="text-left mb-4">
-                        <p className="text-4xl font-bold">${openStudioPkg.price}</p>
-                        <p className="text-sm font-normal text-brand-premium-light/70 -mt-1">{t('packages.perMonth')}</p>
+                <div className="p-12 flex flex-col items-center text-center h-full">
+                    <p className="text-brand-accent uppercase tracking-widest text-xs font-semibold mb-6">{t('packages.membershipLabel')}</p>
+                    <KeyIcon className="w-8 h-8 text-brand-accent mb-4" />
+                    <h3 className="text-4xl font-semibold text-brand-text mt-2">{openStudioPkg.name}</h3>
+                    <p className="text-brand-secondary mt-4 max-w-xl mx-auto flex-grow">{openStudioPkg.description}</p>
+                    
+                    <div className="my-8">
+                        <p className="text-4xl font-bold text-brand-text">${openStudioPkg.price}</p>
+                        <p className="text-base font-normal text-brand-secondary mt-1">{t('packages.perMonth')}</p>
                     </div>
-                    <button className="w-full bg-brand-premium-light text-brand-premium-dark font-bold py-3 px-5 rounded-lg hover:bg-brand-surface transition-colors duration-300">
+                
+                    <button className="bg-transparent border border-brand-accent text-brand-accent font-bold py-3 px-12 rounded-lg hover:bg-brand-accent hover:text-white transition-colors duration-300 w-full max-w-xs mx-auto">
                       {t('packages.selectSubscriptionButton')}
                     </button>
-                  </div>
                 </div>
               </div>
             );
-          // FIX: Use 'else if' to narrow the type of 'pkg' to 'ClassPackage', making properties like 'price' and 'classes' type-safe.
           } else if (pkg.type === 'CLASS_PACKAGE') {
             return (
               <div 
