@@ -289,21 +289,36 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
 
 // Handler for specific actions
 async function handleAction(action: string, req: VercelRequest, res: VercelResponse) {
-    const body = req.body;
+    const { id } = req.query;
+    
     let result: any = { success: true };
 
     switch (action) {
         case 'addBooking':
-            result = await addBookingAction(body);
+            const addBookingBody = req.body;
+            result = await addBookingAction(addBookingBody);
             break;
         case 'updateBooking':
-             await sql`UPDATE bookings SET user_info = ${JSON.stringify(body.userInfo)}, price = ${body.price} WHERE id = ${body.id}`;
+            const updateBookingBody = req.body;
+            await sql`UPDATE bookings SET user_info = ${JSON.stringify(updateBookingBody.userInfo)}, price = ${updateBookingBody.price} WHERE id = ${updateBookingBody.id}`;
             break;
         case 'deleteBooking':
-            await sql`DELETE FROM bookings WHERE id = ${body.bookingId}`;
+            const deleteBookingBody = req.body;
+            await sql`DELETE FROM bookings WHERE id = ${deleteBookingBody.bookingId}`;
             break;
+
+         case 'deleteProduct':
+            // Asegúrate de que el ID del producto es del tipo correcto (integer)
+            const productId = parseInt(id as string, 10);
+            if (isNaN(productId)) {
+                return res.status(400).json({ error: 'Product ID must be a valid number.' });
+            }
+            await sql`DELETE FROM products WHERE id = ${productId}`;
+            break;    
+
         case 'removeBookingSlot':
-            const { bookingId: removeId, slotToRemove } = body;
+            const removeBookingBody = req.body;
+            const { bookingId: removeId, slotToRemove } = removeBookingBody;
             const { rows: [bookingToRemoveFrom] } = await sql`SELECT slots FROM bookings WHERE id = ${removeId}`;
             if (bookingToRemoveFrom) {
                 const updatedSlots = bookingToRemoveFrom.slots.filter((s: any) => s.date !== slotToRemove.date || s.time !== slotToRemove.time);
@@ -311,7 +326,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             }
             break;
         case 'markBookingAsPaid':
-            const { bookingId: paidId, details } = body;
+            const markPaidBody = req.body;
+            const { bookingId: paidId, details } = markPaidBody;
             const paymentDetails: PaymentDetails = { ...details, receivedAt: new Date().toISOString() };
             const { rows: [updatedBookingRow] } = await sql`
                 UPDATE bookings 
@@ -344,10 +360,12 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             }
             break;
         case 'markBookingAsUnpaid':
-            await sql`UPDATE bookings SET is_paid = false, payment_details = NULL WHERE id = ${body.bookingId}`;
+            const markUnpaidBody = req.body;
+            await sql`UPDATE bookings SET is_paid = false, payment_details = NULL WHERE id = ${markUnpaidBody.bookingId}`;
             break;
         case 'rescheduleBookingSlot':
-            const { bookingId: rescheduleId, oldSlot, newSlot } = body;
+            const rescheduleBody = req.body;
+            const { bookingId: rescheduleId, oldSlot, newSlot } = rescheduleBody;
             const { rows: [bookingToReschedule] } = await sql`SELECT slots FROM bookings WHERE id = ${rescheduleId}`;
             if (bookingToReschedule) {
                 const otherSlots = bookingToReschedule.slots.filter((s: any) => s.date !== oldSlot.date || s.time !== oldSlot.time);
@@ -356,7 +374,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             }
             break;
         case 'deleteBookingsInDateRange':
-            const { startDate, endDate } = body;
+            const deleteRangeBody = req.body;
+            const { startDate, endDate } = deleteRangeBody;
             const { rows: bookingsInRange } = await sql`SELECT id, slots FROM bookings`;
             for (const booking of bookingsInRange) {
                 const remainingSlots = booking.slots.filter((s: any) => {
@@ -373,12 +392,14 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             }
             break;
         case 'updateAttendanceStatus':
-            const { bookingId: attendanceId, slot, status } = body;
+            const updateAttendanceBody = req.body;
+            const { bookingId: attendanceId, slot, status } = updateAttendanceBody;
             const slotIdentifier = `${slot.date}_${slot.time}`;
             await sql`UPDATE bookings SET attendance = COALESCE(attendance, '{}'::jsonb) || ${JSON.stringify({ [slotIdentifier]: status })}::jsonb WHERE id = ${attendanceId}`;
             break;
         case 'addGroupInquiry':
-            const newInquiry = { ...body, status: 'New', createdAt: new Date().toISOString() };
+            const addInquiryBody = req.body;
+            const newInquiry = { ...addInquiryBody, status: 'New', createdAt: new Date().toISOString() };
             const { rows: [insertedInquiry] } = await sql`INSERT INTO inquiries (name, email, phone, country_code, participants, tentative_date, event_type, message, status, created_at, inquiry_type)
             VALUES (${newInquiry.name}, ${newInquiry.email}, ${newInquiry.phone}, ${newInquiry.countryCode}, ${newInquiry.participants}, ${newInquiry.tentativeDate || null}, ${newInquiry.eventType}, ${newInquiry.message}, ${newInquiry.status}, ${newInquiry.createdAt}, ${newInquiry.inquiryType})
             RETURNING *;`;
@@ -387,10 +408,12 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             result = toCamelCase(insertedInquiry);
             break;
         case 'updateGroupInquiry':
-            await sql`UPDATE inquiries SET status = ${body.status} WHERE id = ${body.id}`;
+            const updateInquiryBody = req.body;
+            await sql`UPDATE inquiries SET status = ${updateInquiryBody.status} WHERE id = ${updateInquiryBody.id}`;
             break;
         case 'checkInstructorUsage':
-            const { instructorId } = body;
+            const checkInstructorBody = req.body;
+            const { instructorId } = checkInstructorBody;
             const { rows: productUsage } = await sql`
                 SELECT 1 FROM products WHERE EXISTS (
                     SELECT 1 FROM jsonb_array_elements(scheduling_rules) AS rule
@@ -410,7 +433,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             result = { hasUsage: productUsage.length > 0 || bookingUsage.length > 0 };
             break;
         case 'reassignAndDeleteInstructor':
-            const { instructorIdToDelete, replacementInstructorId } = body;
+            const reassignBody = req.body;
+            const { instructorIdToDelete, replacementInstructorId } = reassignBody;
             await sql`BEGIN`;
             const { rows: introClasses } = await sql`SELECT id, scheduling_rules FROM products WHERE type = 'INTRODUCTORY_CLASS'`;
             for (const p of introClasses) {
@@ -421,7 +445,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             await sql`COMMIT`;
             break;
         case 'deleteInstructor':
-             await sql`DELETE FROM instructors WHERE id = ${body.id}`;
+             const deleteInstructorBody = req.body;
+             await sql`DELETE FROM instructors WHERE id = ${deleteInstructorBody.id}`;
              break;
         case 'markAllNotificationsAsRead':
             await sql`UPDATE notifications SET read = true`;
@@ -429,10 +454,11 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             result = notifications.map(parseNotificationFromDB);
             break;
         case 'markInvoiceAsProcessed':
+            const processInvoiceBody = req.body;
             const { rows: [processedInvoice] } = await sql`
                 UPDATE invoice_requests
                 SET status = 'Processed', processed_at = NOW()
-                WHERE id = ${body.invoiceId}
+                WHERE id = ${processInvoiceBody.invoiceId}
                 RETURNING *;
             `;
             result = parseInvoiceRequestFromDB(processedInvoice);
