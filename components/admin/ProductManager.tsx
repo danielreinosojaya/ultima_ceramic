@@ -37,7 +37,8 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
   const [productIdToUpdateImage, setProductIdToUpdateImage] = useState<number | null>(null);
 
   const handleStatusToggle = async (id: number) => {
-    const updatedProducts = products.map((p) =>
+    const currentProducts = await dataService.getProducts();
+    const updatedProducts = currentProducts.map((p) =>
       p.id === id ? { ...p, isActive: !p.isActive } : p
     );
     await dataService.updateProducts(updatedProducts);
