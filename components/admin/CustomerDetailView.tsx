@@ -25,17 +25,19 @@ interface CustomerDetailViewProps {
   setNavigateTo: React.Dispatch<React.SetStateAction<NavigationState | null>>;
 }
 
+// Add this helper function to your file
 const formatDate = (dateInput: Date | string | undefined | null): string => {
   if (!dateInput) return '---';
   const date = new Date(dateInput);
   if (isNaN(date.getTime()) || date.getTime() === 0) return '---';
-  return date.toLocaleDateString(language, {
+  return date.toLocaleDateString('es', {
     month: 'short',
     day: 'numeric',
     year: 'numeric'
   });
 };
 
+// Add this helper function to your file
 const getBookingDisplayDate = (booking: Booking, language: string): string => {
     // 1. Prioritize the new, reliable bookingDate field
     if (booking.bookingDate) {
@@ -254,8 +256,9 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer
                     {customer.bookings.map(booking => (
                         <tr key={booking.id}>
                             <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">
-                                {booking.createdAt ? formatDate(booking.createdAt) : '---'}
-                             <div className="text-xs text-gray-500">{booking.bookingCode}</div>
+                                {/* Corrected date display logic */}
+                                {getBookingDisplayDate(booking, language)}
+                                <div className="text-xs text-gray-500">{booking.bookingCode}</div>
                             </td>
                             <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{booking.product.name}</td>
                             <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">N/A</td>
