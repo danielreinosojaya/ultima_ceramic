@@ -1,19 +1,10 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import type { ClassPackage, TimeSlot, EnrichedAvailableSlot, BookingMode, AppData } from '../types';
 import * as dataService from '../services/dataService';
 import { useLanguage } from '../context/LanguageContext';
 import { BookingSidebar } from './BookingSidebar';
 import { CapacityIndicator } from './CapacityIndicator';
 import { InstructorTag } from './InstructorTag';
-
-interface ScheduleSelectorProps {
-  pkg: ClassPackage;
-  onConfirm: (slots: TimeSlot[]) => void;
-  initialSlots: TimeSlot[];
-  onBack: () => void;
-  bookingMode: BookingMode;
-  appData: AppData;
-}
 
 const formatDateToYYYYMMDD = (d: Date): string => {
     const year = d.getFullYear();
@@ -27,12 +18,34 @@ const parseYYYYMMDDToDate = (dateStr: string): Date => {
     return new Date(Date.UTC(year, month - 1, day));
 };
 
+const getWeekStartDate = (date: Date) => {
+    const d = new Date(date);
+    d.setHours(0,0,0,0);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday, making Monday the start
+    return new Date(d.setDate(diff));
+};
+
+
+interface ScheduleSelectorProps {
+  pkg: ClassPackage;
+  onConfirm: (slots: TimeSlot[]) => void;
+  initialSlots: TimeSlot[];
+  onBack: () => void;
+  bookingMode: BookingMode;
+  appData: AppData;
+}
+
 export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfirm, initialSlots, onBack, bookingMode, appData }) => {
   const { t, language } = useLanguage();
   const [selectedSlots, setSelectedSlots] = useState<TimeSlot[]>(initialSlots);
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const timeSlotsRef = useRef<HTMLDivElement>(null);
+  const [currentDate, setCurrentDate] = useState(getWeekStartDate(new Date()));
+
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
 
   const firstSelectionDate = useMemo(() => {
     if (selectedSlots.length === 0 || bookingMode === 'monthly') return null;
@@ -46,216 +59,142 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
     endDate.setDate(endDate.getDate() + 30);
     return endDate;
   }, [firstSelectionDate]);
-  
-  const today = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }, []);
 
-  useEffect(() => {
-    if (selectedDate && timeSlotsRef.current && window.innerWidth < 768) { // md breakpoint for Tailwind
-      timeSlotsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, [selectedDate]);
-
-  const handleFlexibleSlotSelect = (slot: EnrichedAvailableSlot) => {
-    if (!selectedDate) return;
-    const dateStr = formatDateToYYYYMMDD(selectedDate);
-    
-    const isSlotCurrentlySelected = selectedSlots.some(s => s.date === dateStr && s.time === slot.time);
-
-    if (isSlotCurrentlySelected) {
-      setSelectedSlots(prev => prev.filter(s => !(s.date === dateStr && s.time === slot.time)));
-    } else if (selectedSlots.length < pkg.classes) {
-      const newSlot: TimeSlot = { date: dateStr, time: slot.time, instructorId: slot.instructorId };
-      setSelectedSlots(prev => [...prev, newSlot].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)));
-      setSelectedDate(null);
-    }
-  };
-
-  const handleMonthlySlotSelect = (slot: EnrichedAvailableSlot) => {
-    if (!selectedDate) return;
-    
-    const newSlots: TimeSlot[] = [];
-    for (let i = 0; i < 4; i++) {
-        const classDate = new Date(selectedDate);
-        classDate.setDate(classDate.getDate() + (i * 7));
-        newSlots.push({
-            date: formatDateToYYYYMMDD(classDate),
-            time: slot.time,
-            instructorId: slot.instructorId,
-        });
-    }
-    setSelectedSlots(newSlots);
-    setSelectedDate(null);
-  };
-
-  const handleDayClick = (day: number) => {
-    const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-    date.setHours(0,0,0,0);
-    if(date < today) return;
-    
-    const availableTimesOnDay = dataService.getAvailableTimesForDate(date, appData);
-    if (bookingMode === 'monthly') {
-        if (!availableTimesOnDay.some(slot => dataService.checkMonthlyAvailability(date, slot, appData))) return;
-    } else if (dataService.getAllConfiguredTimesForDate(date, appData).length === 0) {
-        return;
-    }
-
-    setSelectedDate(date);
-  };
-
-  const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-  const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
-  const calendarDays = useMemo(() => {
-    const blanks = Array(firstDayOfMonth.getDay()).fill(null);
-    const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-    return [...blanks, ...days];
-  }, [currentDate.getFullYear(), currentDate.getMonth()]);
-  
-  const translatedDayNames = useMemo(() => 
-      [0, 1, 2, 3, 4, 5, 6].map(dayIndex => {
-        const date = new Date(2024, 0, dayIndex + 7); // A week that starts on Sunday
-        return date.toLocaleDateString(language, { weekday: 'short' });
-      }), 
-  [language]);
-
-  const timesForDay = useMemo(() => {
-      if (!selectedDate) return [];
-      if (bookingMode === 'flexible') {
-          return dataService.getAllConfiguredTimesForDate(selectedDate, appData);
+  const { weekDates, scheduleData } = useMemo(() => {
+      const startOfWeek = new Date(currentDate);
+      const dates: Date[] = [];
+      for (let i = 0; i < 7; i++) {
+          const date = new Date(startOfWeek);
+          date.setDate(date.getDate() + i);
+          dates.push(date);
       }
-      // For monthly mode, only show slots that can actually start a 4-week booking.
-      const availableTimes = dataService.getAvailableTimesForDate(selectedDate, appData);
-      return availableTimes.filter(slot => dataService.checkMonthlyAvailability(selectedDate, slot, appData));
-  }, [selectedDate, bookingMode, appData]);
+      
+      const data: Record<string, EnrichedAvailableSlot[]> = {};
+      dates.forEach(date => {
+          const dateStr = formatDateToYYYYMMDD(date);
+          data[dateStr] = dataService.getAllConfiguredTimesForDate(date, appData)
+            .sort((a, b) => a.time.localeCompare(b.time));
+      });
+
+      return { weekDates: dates, scheduleData: data };
+  }, [currentDate, appData]);
   
+  const handleSlotSelect = (date: Date, slot: EnrichedAvailableSlot) => {
+    const dateStr = formatDateToYYYYMMDD(date);
+    const isCurrentlySelected = selectedSlots.some(s => s.date === dateStr && s.time === slot.time);
+
+    if (bookingMode === 'monthly') {
+      if (dataService.checkMonthlyAvailability(date, slot, appData)) {
+        const newSlots: TimeSlot[] = [];
+        for (let i = 0; i < 4; i++) {
+            const classDate = new Date(date);
+            classDate.setDate(classDate.getDate() + (i * 7));
+            newSlots.push({
+                date: formatDateToYYYYMMDD(classDate),
+                time: slot.time,
+                instructorId: slot.instructorId,
+            });
+        }
+        setSelectedSlots(newSlots);
+      } else {
+        alert(t('schedule.monthlyNotAvailableError', { default: 'This slot is not available for 4 consecutive weeks. Please choose another.'}));
+      }
+    } else { // Flexible mode
+      if (isCurrentlySelected) {
+        setSelectedSlots(prev => prev.filter(s => !(s.date === dateStr && s.time === slot.time)));
+      } else if (selectedSlots.length < pkg.classes) {
+        const newSlot: TimeSlot = { date: dateStr, time: slot.time, instructorId: slot.instructorId };
+        setSelectedSlots(prev => [...prev, newSlot].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)));
+      }
+    }
+  };
+
+  const handleNextWeek = () => setCurrentDate(prev => { const next = new Date(prev); next.setDate(next.getDate() + 7); return next; });
+  const handlePrevWeek = () => setCurrentDate(prev => { const prevDate = new Date(prev); prevDate.setDate(prevDate.getDate() - 7); return prevDate; });
+
+  const weekStart = weekDates[0];
+  const weekEnd = weekDates[6];
+
   return (
-    <div className="bg-brand-surface p-6 sm:p-8 rounded-xl shadow-subtle animate-fade-in-up">
+    <div className="bg-brand-surface p-4 sm:p-6 rounded-xl shadow-subtle animate-fade-in-up">
         <button onClick={onBack} className="text-brand-secondary hover:text-brand-text mb-4 transition-colors font-semibold">
             &larr; {t('schedule.backButton')}
         </button>
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2">
-                <p className="text-brand-secondary mb-6">
+                <p className="text-brand-secondary mb-2">
                   {bookingMode === 'monthly' ? t('schedule.monthlySubtitle') : t('schedule.subtitle')} <span className="font-bold text-brand-text">{pkg.name}</span>.
                 </p>
-                
-                <div>
-                    {!selectedDate ? (
-                        // CALENDAR VIEW
-                        <div className="animate-fade-in-fast">
-                            <div className="flex items-center justify-between mb-4">
-                                <button 
-                                    onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}
-                                    disabled={currentDate.getMonth() === today.getMonth() && currentDate.getFullYear() === today.getFullYear()}
-                                    className="p-2 rounded-full hover:bg-brand-background disabled:opacity-50 disabled:cursor-not-allowed"
-                                >&larr;</button>
-                                <h3 className="text-xl font-bold text-brand-text capitalize">
-                                    {currentDate.toLocaleString(language, { month: 'long', year: 'numeric' })}
-                                </h3>
-                                <button 
-                                    onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}
-                                    className="p-2 rounded-full hover:bg-brand-background"
-                                >&rarr;</button>
-                            </div>
-                            <div className="grid grid-cols-7 gap-2 text-center text-sm text-brand-secondary">
-                                {translatedDayNames.map(day => <div key={day} className="font-bold">{day}</div>)}
-                            </div>
-                            <div className="grid grid-cols-7 gap-2 mt-2">
-                                {calendarDays.map((day, index) => {
-                                    if (!day) return <div key={`blank-${index}`}></div>;
-                                    const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-                                    date.setHours(0,0,0,0);
-                                    
-                                    const dateStr = formatDateToYYYYMMDD(date);
-                                    const isPast = date < today;
-                                    
-                                    let isUnavailable = dataService.getAvailableTimesForDate(date, appData).length === 0;
-                                    if (bookingMode === 'monthly' && !isPast) {
-                                        const availableSlotsOnDay = dataService.getAvailableTimesForDate(date, appData);
-                                        isUnavailable = !availableSlotsOnDay.some(slot => dataService.checkMonthlyAvailability(date, slot, appData));
-                                    } else if (bookingMode === 'flexible' && !isPast) {
-                                        isUnavailable = dataService.getAllConfiguredTimesForDate(date, appData).length === 0;
-                                    }
-                                    
-                                    const dayIsBooked = selectedSlots.some(s => s.date === dateStr);
-                                    const isOutsideBookingWindow = !!firstSelectionDate && !!bookingWindowEndDate && (date < firstSelectionDate || date > bookingWindowEndDate);
-                                    
-                                    const isDisabled = isPast || (isUnavailable && !dayIsBooked) || (bookingMode === 'flexible' && !dayIsBooked && isOutsideBookingWindow);
+                {bookingMode === 'flexible' && firstSelectionDate && bookingWindowEndDate && (
+                    <div className="text-xs text-center font-semibold bg-amber-100 text-amber-800 p-2 rounded-md mb-4 animate-fade-in-fast">
+                      {t('schedule.bookingWindowMessage')} {bookingWindowEndDate.toLocaleDateString(language, { month: 'long', day: 'numeric' })}.
+                    </div>
+                )}
+                 <div className="flex justify-between items-center mb-4">
+                    <button onClick={handlePrevWeek} disabled={currentDate <= today} className="p-2 rounded-full hover:bg-gray-100 disabled:opacity-50">&lt;</button>
+                    <div className="font-semibold text-brand-text text-center">
+                        {weekStart.toLocaleDateString(language, { month: 'short', day: 'numeric' })} - {weekEnd.toLocaleDateString(language, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </div>
+                    <button onClick={handleNextWeek} className="p-2 rounded-full hover:bg-gray-100">&gt;</button>
+                </div>
+                <div className="grid grid-cols-7 gap-2 border-t border-b border-gray-200 py-2">
+                  {weekDates.map(date => (
+                    <div key={date.toISOString()} className="text-center font-bold text-gray-500 uppercase">
+                      <div className="text-xs">{date.toLocaleDateString(language, { weekday: 'short' })}</div>
+                      <div className="text-lg">{date.getDate()}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 gap-2 mt-2 min-h-[400px]">
+                  {weekDates.map(date => {
+                    const dateStr = formatDateToYYYYMMDD(date);
+                    const slots = scheduleData[dateStr] || [];
+                    const isPast = date < today;
 
-                                    let dayClasses = 'w-full aspect-square rounded-md flex items-center justify-center text-md font-semibold transition-all duration-200 relative';
-                                    if (isDisabled) {
-                                        dayClasses += ' text-brand-border cursor-not-allowed bg-white';
-                                    } else if (dayIsBooked) {
-                                        dayClasses += ' bg-brand-primary text-white';
-                                    } else {
-                                        dayClasses += ' bg-brand-background text-brand-text hover:bg-brand-border';
-                                    }
+                    return (
+                      <div key={dateStr} className="flex flex-col gap-2 p-1 bg-brand-background/70 rounded-md">
+                        {isPast ? (
+                           <div className="flex-grow flex items-center justify-center">
+                               <span className="text-xs text-gray-300">-</span>
+                           </div>
+                        ) : slots.length > 0 ? (
+                           slots.map(slot => {
+                                const isSelected = selectedSlots.some(s => s.date === dateStr && s.time === slot.time);
+                                const isFull = slot.paidBookingsCount >= slot.maxCapacity;
+                                const isOutsideBookingWindow = bookingMode === 'flexible' && firstSelectionDate && bookingWindowEndDate && (date < firstSelectionDate || date > bookingWindowEndDate);
+                                const isMonthlyStartInvalid = bookingMode === 'monthly' && !dataService.checkMonthlyAvailability(date, slot, appData);
+                                const isDisabled = isFull || (!isSelected && isOutsideBookingWindow) || isMonthlyStartInvalid;
 
-                                    return (
-                                        <button key={day} onClick={() => handleDayClick(day)} disabled={isDisabled} className={dayClasses}>
-                                            {day}
-                                            {dayIsBooked && bookingMode === 'monthly' && <div className="absolute top-1 right-1 w-2 h-2 bg-white rounded-full ring-2 ring-brand-primary"></div>}
-                                            {!isPast && !isUnavailable && <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-brand-primary rounded-full opacity-50"></div>}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    ) : (
-                        // TIME PICKER VIEW
-                        <div ref={timeSlotsRef} className="animate-fade-in-fast">
-                            <button onClick={() => setSelectedDate(null)} className="text-brand-secondary hover:text-brand-text mb-4 transition-colors font-semibold">
-                                &larr; {t('schedule.backToCalendar')}
-                            </button>
-                            <h4 className="font-bold text-center text-brand-text mb-4">
-                                {t('schedule.timeSlotTitle', { date: selectedDate.toLocaleDateString(language, { weekday: 'long', day: 'numeric' }) })}
-                            </h4>
-                            <div className="grid grid-cols-2 gap-3">
-                                {timesForDay.length > 0 ? (
-                                    timesForDay.map(slot => {
-                                        const isSelected = selectedSlots.some(s => s.date === formatDateToYYYYMMDD(selectedDate) && s.time === slot.time);
-                                        const isFull = slot.paidBookingsCount >= slot.maxCapacity;
-                                        const handleSelect = bookingMode === 'monthly' ? handleMonthlySlotSelect : handleFlexibleSlotSelect;
-                                        
-                                        return (
-                                            <button 
-                                                key={slot.time}
-                                                onClick={() => handleSelect(slot)}
-                                                disabled={isFull}
-                                                className={`relative p-2 rounded-md transition-colors duration-200 font-semibold flex flex-col items-center justify-center gap-2 overflow-hidden ${
-                                                    isSelected ? 'bg-brand-primary/10 ring-2 ring-offset-1 ring-brand-primary' : 
-                                                    isFull ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-70' :
-                                                    'bg-white border border-brand-border hover:border-brand-primary'
-                                                }`}
-                                            >
-                                                {isFull && (
-                                                    <div className="absolute -top-1 -right-7 bg-red-600 text-white text-[10px] font-bold px-6 py-0.5 transform rotate-45">
-                                                        {t('app.soldOut')}
-                                                    </div>
-                                                )}
-                                                <span className="text-brand-text">{slot.time}</span>
-                                                <div className="flex items-center gap-2">
-                                                    <InstructorTag instructorId={slot.instructorId} instructors={appData.instructors} />
-                                                    <CapacityIndicator count={slot.totalBookingsCount} max={slot.maxCapacity} capacityMessages={appData.capacityMessages} />
-                                                </div>
-                                            </button>
-                                        );
-                                    })
-                                ) : (
-                                    <p className="col-span-full text-center text-brand-secondary py-4">{t('schedule.modal.noClasses')}</p>
-                                )}
-                            </div>
-                        </div>
-                    )}
+                                return (
+                                  <button
+                                    key={slot.time}
+                                    onClick={() => handleSlotSelect(date, slot)}
+                                    disabled={isDisabled}
+                                    className={`relative p-2 rounded-md text-left transition-all duration-200 border w-full flex flex-col gap-1.5 ${
+                                      isSelected ? 'bg-brand-primary/10 ring-2 ring-brand-primary border-transparent' : 
+                                      isDisabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-70' :
+                                      'bg-white hover:border-brand-primary hover:shadow-sm'
+                                    }`}
+                                  >
+                                    <span className="font-semibold text-sm text-brand-text">{slot.time}</span>
+                                    <InstructorTag instructorId={slot.instructorId} instructors={appData.instructors} />
+                                    <CapacityIndicator count={slot.totalBookingsCount} max={slot.maxCapacity} capacityMessages={appData.capacityMessages} />
+                                    {isFull && <div className="absolute top-1 right-1 text-[8px] font-bold bg-red-500 text-white px-1 rounded-sm">LLENO</div>}
+                                  </button>
+                                )
+                            })
+                        ) : (
+                          <div className="flex-grow flex items-center justify-center">
+                               <span className="text-xs text-gray-300">-</span>
+                           </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
             </div>
-            
             <div className="lg:col-span-1">
-                <BookingSidebar 
+                 <BookingSidebar 
                     product={pkg} 
                     selectedSlots={selectedSlots}
                     onRemoveSlot={(slotToRemove) => setSelectedSlots(prev => prev.filter(s => s !== slotToRemove))}

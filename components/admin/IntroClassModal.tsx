@@ -219,7 +219,7 @@ export const IntroClassModal: React.FC<IntroClassModalProps> = ({ isOpen, onClos
                 </div>
                 <div className="flex items-center gap-2 mt-3 pt-3 border-t">
                     <select value={newRule.dayOfWeek} onChange={e => setNewRule({...newRule, dayOfWeek: Number(e.target.value)})} className="p-2 border rounded-md text-sm bg-white">
-                        {DAY_NAMES.map((day, index) => index > 0 && <option key={day} value={index}>{day}</option>)}
+                        {DAY_NAMES.map((day, index) => <option key={day} value={index}>{day}</option>)}
                     </select>
                     <input type="time" value={newRule.time} onChange={e => setNewRule({...newRule, time: e.target.value})} className="p-2 border rounded-md text-sm"/>
                     <select value={newRule.instructorId} onChange={e => setNewRule({...newRule, instructorId: Number(e.target.value)})} className="p-2 border rounded-md text-sm bg-white">

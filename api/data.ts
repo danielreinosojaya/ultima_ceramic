@@ -79,6 +79,8 @@ const parseBookingFromDB = (dbRow: any): Booking => {
 
     // Safely parse date fields
     camelCased.createdAt = safeParseDate(camelCased.createdAt);
+        camelCased.bookingDate = safeParseDate(camelCased.bookingDate)?.toISOString();
+
     if (camelCased.paymentDetails) {
         camelCased.paymentDetails.receivedAt = safeParseDate(camelCased.paymentDetails.receivedAt)?.toISOString();
     }
@@ -525,8 +527,9 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
 
 async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookingCode'> & { invoiceData?: Omit<InvoiceRequest, 'id' | 'bookingId' | 'status' | 'requestedAt' | 'processedAt'> }): Promise<AddBookingResult> {
-    const { productId, slots, userInfo, productType, invoiceData } = body;
-
+    const { productId, slots, userInfo, productType, invoiceData, bookingDate } = body;
+    // ^^^ ADD 'bookingDate' HERE ^^^
+    
     // Server-side validation
     if (productType === 'INTRODUCTORY_CLASS' || productType === 'CLASS_PACKAGE') {
         const { rows: existingBookings } = await sql`SELECT slots FROM bookings WHERE user_info->>'email' = ${userInfo.email}`;
@@ -549,9 +552,20 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
     };
 
     const { rows: [insertedRow] } = await sql`
-        INSERT INTO bookings (product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_code)
-        VALUES (${newBooking.productId}, ${newBooking.productType}, ${JSON.stringify(newBooking.slots)}, ${JSON.stringify(newBooking.userInfo)}, 
-        ${newBooking.createdAt.toISOString()}, ${newBooking.isPaid}, ${newBooking.price}, ${newBooking.bookingMode}, ${JSON.stringify(newBooking.product)}, ${newBooking.bookingCode})
+        INSERT INTO bookings (product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_code, booking_date)
+        VALUES (
+            ${newBooking.productId}, 
+            ${newBooking.productType}, 
+            ${JSON.stringify(newBooking.slots)}, 
+            ${JSON.stringify(newBooking.userInfo)}, 
+            ${new Date().toISOString()}, 
+            ${newBooking.isPaid}, 
+            ${newBooking.price}, 
+            ${newBooking.bookingMode}, 
+            ${JSON.stringify(newBooking.product)}, 
+            ${newBooking.bookingCode},
+            ${bookingDate}
+        )
         RETURNING *;
     `;
     

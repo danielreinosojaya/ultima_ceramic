@@ -154,6 +154,7 @@ export interface Booking {
     bookingMode: BookingMode;
     paymentDetails?: PaymentDetails;
     attendance?: Record<string, AttendanceStatus>; // key is `${date}_${time}`
+    bookingDate: string;
 }
 
 export interface BookingDetails {
