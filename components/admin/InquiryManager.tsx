@@ -42,7 +42,21 @@ export const InquiryManager: React.FC<InquiryManagerProps> = ({ navigateToId, in
             onDataChange();
         }
     };
-    
+        const handleDelete = async (id: string) => {
+        const confirmed = window.confirm(t('admin.inquiryManager.confirmDelete'));
+        if (confirmed) {
+            try {
+                // Aquí usamos dataService.deleteGroupInquiry que crearemos en el siguiente paso
+                await dataService.deleteGroupInquiry(id);
+                // Llamamos a onDataChange para que el componente padre se refresque
+                onDataChange();
+            } catch (error) {
+                console.error('Error al eliminar la consulta:', error);
+                alert(t('admin.inquiryManager.deleteError'));
+            }
+        }
+    };
+
     const toggleExpand = (id: string) => {
         setExpandedInquiryId(prevId => (prevId === id ? null : id));
     };
@@ -136,6 +150,18 @@ export const InquiryManager: React.FC<InquiryManagerProps> = ({ navigateToId, in
                                         ))}
                                     </select>
                                 </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium">
+    <button
+        onClick={(e) => {
+            e.stopPropagation(); // Previene que la fila se expanda
+            handleDelete(inquiry.id);
+        }}
+        className="text-red-600 hover:text-red-900"
+    >
+        {t('admin.inquiryManager.delete')}
+    </button>
+</td>
+
                             </tr>
                             {expandedInquiryId === inquiry.id && (
                                 <tr className="bg-brand-background animate-fade-in-fast">
