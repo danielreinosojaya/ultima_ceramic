@@ -224,7 +224,10 @@ const App: React.FC = () => {
           price: (selectedProduct as any).price,
           bookingMode,
           product: selectedProduct,
-          invoiceData: data.needsInvoice ? data.invoiceData : undefined
+          invoiceData: data.needsInvoice ? data.invoiceData : undefined,
+          bookingDate: new Date().toISOString() // This captures the exact time of the booking
+
+
         };
         
         try {

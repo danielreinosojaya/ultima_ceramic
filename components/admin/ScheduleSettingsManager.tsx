@@ -157,7 +157,7 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
                 <h2 className="text-xl font-serif text-brand-text mb-2">{t('admin.scheduleManager.title')}</h2>
                 <p className="text-brand-secondary text-sm mb-4">{t('admin.scheduleManager.subtitle')}</p>
                 <div className="space-y-4">
-                    {DAY_NAMES.filter(day => day !== 'Sunday').map(day => (
+                    {DAY_NAMES.map(day => (
                         <div key={day} className="bg-brand-background p-3 rounded-lg">
                             <h4 className="font-bold text-brand-text mb-2">{day}</h4>
                             <div className="space-y-2">
