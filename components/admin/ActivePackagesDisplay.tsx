@@ -107,8 +107,8 @@ export const ActivePackagesDisplay: React.FC<ActivePackagesDisplayProps> = ({ pa
                                     </div>
                                 </div>
                                 <div className="text-right text-[10px] text-gray-400 border-t pt-2 mt-auto">
-                                    {t('admin.customerDetail.bookedOn')} {new Date(pkg.createdAt).toLocaleDateString(language)}
-                                </div>
+        {t('admin.customerDetail.bookedOn')} {new Date(pkg.bookingDate).toLocaleDateString(language)}
+    </div>
                             </div>
                         )
                     })}
