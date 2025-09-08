@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState } from 'react';
 import type { Customer, Booking, InvoiceRequest, AdminTab, ClassPackage, OpenStudioSubscription, IntroductoryClass, PaymentDetails } from '../../types.js';
 import { useLanguage } from '../../context/LanguageContext.js';
@@ -26,22 +25,40 @@ interface CustomerDetailViewProps {
   setNavigateTo: React.Dispatch<React.SetStateAction<NavigationState | null>>;
 }
 
+const formatDate = (dateInput: Date | string | undefined | null): string => {
+  if (!dateInput) return '---';
+  const date = new Date(dateInput);
+  if (isNaN(date.getTime()) || date.getTime() === 0) return '---';
+  return date.toLocaleDateString(language, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+};
+
+const getBookingDisplayDate = (booking: Booking, language: string): string => {
+    // 1. Prioritize the new, reliable bookingDate field
+    if (booking.bookingDate) {
+        return formatDate(booking.bookingDate);
+    } 
+    // 2. Fallback to the first slot date for older bookings or class packages
+    if (booking.slots && booking.slots.length > 0) {
+        return formatDate(booking.slots[0].date);
+    }
+    // 3. Last resort is the server-side creation timestamp
+    if (booking.createdAt) {
+      return formatDate(booking.createdAt);
+    }
+    // 4. Return a placeholder if no valid date is found
+    return '---';
+};
+
+
 export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer, onBack, onDataChange, invoiceRequests, setNavigateTo }) => {
   const { t, language } = useLanguage();
   const [bookingToPay, setBookingToPay] = useState<Booking | null>(null);
   const [isInvoiceReminderOpen, setIsInvoiceReminderOpen] = useState(false);
   const [bookingForReminder, setBookingForReminder] = useState<Booking | null>(null);
-
-  const formatDate = (dateInput: Date | string | undefined | null): string => {
-    if (!dateInput) return '---';
-    const date = new Date(dateInput);
-    if (isNaN(date.getTime()) || date.getTime() === 0) return '---';
-    return date.toLocaleDateString(language, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
 
   const { totalValue, totalBookings, lastBookingDate } = useMemo(() => {
     const paidBookings = customer.bookings.filter(b => b.isPaid);
