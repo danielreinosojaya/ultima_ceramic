@@ -186,7 +186,7 @@
         "generalRecommendationsLabel": "Recomendaciones",
         "materialsLabel": "Materiales"
     },
-     "groupInquiry": {
+    "groupInquiry": {
         "title": "Planifica una Experiencia Grupal",
         "subtitle": "Perfecto para cumpleaños, eventos de team building o una reunión creativa con amigos. Completa el formulario y nos pondremos en contacto para personalizar tu evento.",
         "formTitle": "Detalles de la Consulta",
@@ -256,7 +256,11 @@
             "notSpecified": "No Especificado",
             "noInquiries": "No se encontraron consultas.",
             "notApplicable": "No Aplica",
-            "invalidDate": "Fecha Inválida"
+            "invalidDate": "Fecha Inválida",
+            "actions": "Acciones",
+            "delete": "Eliminar",
+            "confirmDelete": "¿Estás seguro de que quieres eliminar esta consulta? Esta acción no se puede deshacer.",
+            "deleteError": "Ocurrió un error al intentar eliminar la consulta."
         },
         "invoiceManager": {
             "title": "Facturación",

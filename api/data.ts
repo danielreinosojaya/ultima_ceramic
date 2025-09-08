@@ -152,8 +152,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             await handleGet(req, res);
         } else if (req.method === 'POST') {
             await handlePost(req, res);
+           } else if (req.method === 'DELETE') { // <-- ¡Agrega esta línea!
+            await handleDelete(req, res);    // <-- ¡Agrega esta línea!    
+
         } else {
-            res.setHeader('Allow', ['GET, POST']);
+            res.setHeader('Allow', ['GET, POST, DELETE']);
             res.status(405).end(`Method ${req.method} Not Allowed`);
         }
     } catch (error) {
@@ -287,6 +290,39 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
     }
 
     return res.status(200).json({ success: true });
+}
+
+// Nuevo Handler para las solicitudes DELETE
+async function handleDelete(req: VercelRequest, res: VercelResponse) {
+    const { key, id } = req.query;
+
+    if (key === 'inquiry') {
+        // Validación básica
+        if (!id || typeof id !== 'string') {
+            return res.status(400).json({ error: 'Inquiry ID is required for deletion.' });
+        }
+
+        try {
+            const { rowCount } = await sql`
+                DELETE FROM inquiries
+                WHERE id = ${id};
+            `;
+
+            if (rowCount > 0) {
+                // Si se eliminó al menos una fila, la operación fue exitosa
+                return res.status(204).end(); // 204 No Content es la respuesta estándar para DELETE exitosos
+            } else {
+                // Si rowCount es 0, no se encontró el ID
+                return res.status(404).json({ error: 'Inquiry not found.' });
+            }
+        } catch (error) {
+            console.error('Error deleting inquiry:', error);
+            const errorMessage = (error instanceof Error) ? error.message : 'An internal server error occurred.';
+            return res.status(500).json({ error: errorMessage });
+        }
+    } else {
+        return res.status(400).json({ error: 'Unknown deletion key.' });
+    }
 }
 
 // Handler for specific actions

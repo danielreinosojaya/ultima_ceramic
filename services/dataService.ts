@@ -187,6 +187,16 @@ export const addGroupInquiry = async (inquiryData: Omit<GroupInquiry, 'id' | 'st
     return parseGroupInquiry(result);
 };
 export const updateGroupInquiry = (inquiry: GroupInquiry): Promise<{ success: boolean }> => postAction('updateGroupInquiry', inquiry);
+export const deleteGroupInquiry = async (id: string): Promise<void> => {
+    // Cambia la URL para incluir el 'key' que usarás en el backend
+    const response = await fetch(`/api?key=inquiry&id=${id}`, {
+    method: 'DELETE',
+});
+
+    if (!response.ok) {
+        throw new Error(`Failed to delete inquiry: ${response.statusText}`);
+    }
+};
 
 // Invoicing
 export const getInvoiceRequests = (): Promise<InvoiceRequest[]> => getData('invoiceRequests');
