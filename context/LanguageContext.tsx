@@ -41,8 +41,8 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
   const fetchTranslations = useCallback(async () => {
     try {
       const [esDefaults, enDefaults, storedEs, storedEn] = await Promise.all([
-        fetch('../locales/es.json').then(res => res.json()),
-        fetch('../locales/en.json').then(res => res.json()),
+        fetch('/locales/es.json').then(res => res.json()),
+        fetch('/locales/en.json').then(res => res.json()),
         dataService.getUITexts('es'),
         dataService.getUITexts('en')
       ]);
@@ -57,8 +57,8 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
       // Fallback to local files if API fails
       try {
         const [esDefaults, enDefaults] = await Promise.all([
-            fetch('./locales/es.json').then(res => res.json()),
-            fetch('./locales/en.json').then(res => res.json())
+            fetch('/locales/es.json').then(res => res.json()),
+            fetch('/locales/en.json').then(res => res.json())
         ]);
         setTranslations({ es: esDefaults, en: enDefaults });
       } catch (fallbackError) {
