@@ -1,3 +1,4 @@
+
 {
   "header": {
     "title": "CeramicAlma Reservations"
@@ -283,6 +284,23 @@
       "status_ProposalSent": "Proposal Sent",
       "status_Confirmed": "Confirmed",
       "status_Archived": "Archived"
+    },
+    "clientNotificationLog": {
+      "title": "Communications Log",
+      "subtitle": "Review the history of notifications sent to clients.",
+      "searchPlaceholder": "Search by client name or email...",
+      "allTypes": "All Types",
+      "type_PRE_BOOKING_CONFIRMATION": "Pre-booking Confirmation",
+      "type_PAYMENT_RECEIPT": "Payment Receipt",
+      "type_CLASS_REMINDER": "Class Reminder",
+      "date": "Date",
+      "client": "Client",
+      "type": "Communication Type",
+      "status": "Status",
+      "status_Sent": "Sent",
+      "status_Failed": "Failed",
+      "status_Pending": "Pending",
+      "noNotifications": "No notifications found."
     },
     "errors": {
       "DUPLICATE_BOOKING_ERROR": "The student is already enrolled in one of the selected time slots.",
