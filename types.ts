@@ -313,6 +313,11 @@ export interface AppData {
 // Admin & Notifications
 export type AdminTab = 'products' | 'calendar' | 'schedule-settings' | 'financials' | 'customers' | 'inquiries' | 'settings' | 'communications' | 'invoicing';
 
+export interface NavigationState {
+    tab: AdminTab;
+    targetId: string;
+}
+
 export interface Notification {
     id: string;
     type: 'new_booking' | 'new_inquiry' | 'new_invoice_request';

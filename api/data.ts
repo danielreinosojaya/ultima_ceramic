@@ -120,7 +120,9 @@ const parseGroupInquiryFromDB = (dbRow: any): GroupInquiry => {
 const parseInvoiceRequestFromDB = (dbRow: any): InvoiceRequest => {
     if (!dbRow) return dbRow;
     const camelCased = toCamelCase(dbRow);
-    camelCased.requestedAt = safeParseDate(camelCased.requestedAt)?.toISOString();
+    // Use the explicitly formatted ISO string from the query
+    camelCased.requestedAt = camelCased.requestedAtIso;
+    delete camelCased.requestedAtIso;
     camelCased.processedAt = safeParseDate(camelCased.processedAt)?.toISOString();
     return camelCased as InvoiceRequest;
 };
@@ -219,8 +221,12 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
             data = clientNotifications.map(parseClientNotificationFromDB);
             break;
         case 'invoiceRequests':
-            const { rows: invoiceRequests } = await sql`
-                SELECT i.*, b.booking_code, b.user_info
+             const { rows: invoiceRequests } = await sql`
+                SELECT 
+                    i.*, 
+                    to_char(i.requested_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as requested_at_iso,
+                    b.booking_code, 
+                    b.user_info
                 FROM invoice_requests i
                 JOIN bookings b ON i.booking_id = b.id
                 ORDER BY i.requested_at DESC

@@ -1,4 +1,3 @@
-
 {
   "header": {
     "title": "CeramicAlma Booking"
@@ -277,7 +276,8 @@
         "noRequests": "No invoice requests found.",
         "filterAll": "All",
         "filterPending": "Pending",
-        "filterProcessed": "Processed"
+        "filterProcessed": "Processed",
+        "goToCustomer": "Go to Customer Profile"
     },
     "invoiceReminderModal": {
       "title": "Invoice Requested",
@@ -537,14 +537,6 @@
       "selectNewSlot": "Select a new date and time",
       "saveButton": "Save Changes"
     },
-    "notifications": {
-      "newNotificationTitle": "New Notification",
-      "title": "Notification Center",
-      "noNotifications": "You have no notifications.",
-      "template_new_booking": "{{name}} booked '{{summary}}'.",
-      "template_new_inquiry": "{{name}} sent an inquiry for '{{summary}}'.",
-      "template_new_invoice_request": "{{name}} requested an invoice for booking {{summary}}."
-    },
     "financialDashboard": {
       "title": "Financial Center",
       "subtitle": "Analyze revenue and performance of paid bookings.",
@@ -655,7 +647,7 @@
           "status": "Status",
           "startDate": "Start Date",
           "expiryDate": "Expiry Date",
-          "purchaseDate": "Purchase Date",
+      "purchaseDate": "Purchase Date",
           "remainingTime": "Remaining Time",
           "statusActive": "Active",
           "statusExpired": "Expired",
@@ -767,9 +759,74 @@
     "errors": {
       "DUPLICATE_BOOKING_ERROR": "This user is already registered for this class on this day and time."
     },
-    "app": {
-        "loading": "Loading",
-        "soldOut": "Sold Out"
+    "rescheduleModal": {
+      "title": "Reschedule Class for {{name}}",
+      "currentSlot": "Current Slot",
+      "selectNewSlot": "Select a new date and time",
+      "saveButton": "Save Changes"
+    },
+    "customerDetail": {
+      "backButton": "Volver a la lista de clientes",
+      "historyTitle": "Historial de Reservas y Pre-reservas",
+      "history": {
+          "date": "Fecha",
+          "product": "Producto",
+          "progress": "Progreso / Vencimiento",
+          "status": "Estado",
+          "actions": "Acciones",
+          "paid": "Pagado",
+          "unpaid": "No Pagado",
+          "acceptPayment": "Aceptar Pago",
+          "deleteBooking": "Eliminar Reserva"
+      },
+      "activePackages": "Paquetes Activos",
+      "noActivePackages": "Este cliente no tiene paquetes activos.",
+      "statusActive": "Activo",
+      "statusExpired": "Expirado",
+      "statusPendingPayment": "Pendiente de Pago",
+      "statusCompleted": "Completado",
+      "progress": "Progreso",
+      "progressText": "{{completed}} de {{total}} clases",
+      "nextClass": "Próxima Clase",
+      "expiresOn": "Expira el",
+      "bookedOn": "Reservado el",
+      "deleteConfirmText": "¿Estás seguro de que quieres eliminar esta reserva? Esta acción no se puede deshacer."
+    },
+    "crm": {
+      "allCustomersTab": "Todos los Clientes",
+      "openStudioTab": "Miembros Estudio Abierto",
+      "title": "Centro de Clientes",
+      "subtitle": "Busca y gestiona la información y el historial de tus clientes.",
+      "searchPlaceholder": "Buscar por nombre, email, o código de reserva...",
+      "lifetimeValue": "Valor Total (LTV)",
+      "totalBookings": "Reservas Totales",
+      "lastBooking": "Última Reserva",
+      "customer": "Cliente",
+      "status": "Estado",
+      "totalSpent": "Gasto Total",
+      "noCustomers": "No se encontraron clientes con tus criterios.",
+      "previous": "Anterior",
+      "page": "Página",
+      "of": "de",
+      "next": "Siguiente",
+      "filters": {
+          "title": "Filtrar por clases restantes",
+          "all": "Todos",
+          "2left": "Quedan 2",
+          "1left": "Queda 1",
+          "completed": "Completado"
+      },
+      "openStudio": {
+          "status": "Estado",
+          "startDate": "Fecha de Inicio",
+          "remainingTime": "Tiempo Restante",
+          "purchaseDate": "Fecha de Compra",
+          "noSubscriptions": "No se encontraron suscripciones de Estudio Abierto.",
+          "d": "d",
+          "statusActive": "Activo",
+          "statusExpired": "Expirado",
+          "statusPendingPayment": "Pendiente de Pago"
+      }
     }
   }
 }
