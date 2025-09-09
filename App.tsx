@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { WelcomeSelector } from './components/WelcomeSelector';
@@ -113,9 +114,14 @@ const App: React.FC = () => {
 
     const handlePackageSelect = (product: Product) => {
         setBookingDetails(prev => ({ ...prev, product }));
-        if (product.type === 'CLASS_PACKAGE') {
+        if (product.type === 'CLASS_PACKAGE' && product.classes === 4) {
             setIsBookingTypeModalOpen(true);
         } else {
+            // For other class packages, default to flexible mode.
+            // For non-packages (e.g., open studio), bookingMode isn't needed at this stage.
+            if (product.type === 'CLASS_PACKAGE') {
+                setBookingMode('flexible');
+            }
             setIsClassInfoModalOpen(true);
         }
     };
