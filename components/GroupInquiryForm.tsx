@@ -31,7 +31,26 @@ export const GroupInquiryForm: React.FC<GroupInquiryFormProps> = ({ onBack, inqu
   });
   const [isSubmitted, setIsSubmitted] = useState(false);
   
-  const whatsappLink = footerInfo?.whatsapp ? `https://wa.me/${footerInfo.whatsapp.replace(/\D/g, '')}` : '';
+  const generateWhatsappLink = () => {
+    if (!footerInfo?.whatsapp) return '';
+
+    const inquiryTypeText = t(inquiryType === 'group' ? 'groupInquiry.inquiryType_group' : 'groupInquiry.inquiryType_couple');
+    
+    const messageDetails = {
+      inquiryType: inquiryTypeText,
+      participants: formData.participants,
+      name: formData.name,
+      eventType: formData.eventType ? t(`groupInquiry.eventTypeOptions.${formData.eventType}`) : t('admin.inquiryManager.notSpecified'),
+      date: formData.tentativeDate || t('admin.inquiryManager.notSpecified'),
+      time: formData.tentativeTime || t('admin.inquiryManager.notSpecified')
+    };
+
+    const message = t('groupInquiry.whatsappMessage', messageDetails);
+
+    const encodedMessage = encodeURIComponent(message);
+    const whatsappNumber = footerInfo.whatsapp.replace(/\D/g, '');
+    return `https://wa.me/${whatsappNumber}?text=${encodedMessage}`;
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -50,6 +69,7 @@ export const GroupInquiryForm: React.FC<GroupInquiryFormProps> = ({ onBack, inqu
   };
 
   if (isSubmitted) {
+    const whatsappLink = generateWhatsappLink();
     return (
       <div className="text-center p-8 bg-brand-surface rounded-xl shadow-subtle animate-fade-in-up max-w-lg mx-auto">
         <h2 className="text-3xl font-semibold text-brand-text mb-4">{t('groupInquiry.successTitle')}</h2>

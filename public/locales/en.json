@@ -140,6 +140,9 @@
     "backToHomeButton": "Back to Home",
     "whatsappPrompt": "For faster, personalized attention, click here to contact us directly via WhatsApp.",
     "whatsappButton": "Chat on WhatsApp",
+    "whatsappMessage": "Hello! I would like more information about the {{inquiryType}} for {{participants}} participants.\n\nName: {{name}}\nEvent Type: {{eventType}}\nTentative Date: {{date}}\nTentative Time: {{time}}\n\nThank you!",
+    "inquiryType_group": "Group Experience",
+    "inquiryType_couple": "Couples Experience",
     "eventTypeOptions": {
       "birthday": "Birthday",
       "anniversary": "Anniversary",
@@ -172,7 +175,8 @@
     "email": "Email",
     "whatsapp": "WhatsApp",
     "googleMapsLink": "Find us on Google Maps",
-    "instagram": "Instagram"
+    "instagram": "Instagram",
+    "returnPolicies": "Return Policies"
   },
   "pdf": {
     "title": "Booking Confirmation",
@@ -213,6 +217,10 @@
     "customersTab": "Customers",
     "invoicingTab": "Invoicing",
     "settingsTab": "Configuration",
+    "productManager": {
+      "duplicateButton": "Duplicate",
+      "duplicatePrefix": "Copy of "
+    },
     "crm": {
         "allCustomersTab": "All Customers",
         "openStudioTab": "Open Studio"

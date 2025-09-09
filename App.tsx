@@ -18,8 +18,14 @@ import { NotificationProvider } from './context/NotificationContext';
 
 import type { AppView, Product, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession } from './types';
 import * as dataService from './services/dataService';
+import { useLanguage } from './context/LanguageContext';
+import { InstagramIcon } from './components/icons/InstagramIcon';
+import { WhatsAppIcon } from './components/icons/WhatsAppIcon';
+import { MailIcon } from './components/icons/MailIcon';
+import { LocationPinIcon } from './components/icons/LocationPinIcon';
 
 const App: React.FC = () => {
+    const { t } = useLanguage();
     const [isAdmin, setIsAdmin] = useState(false);
     const [view, setView] = useState<AppView>('welcome');
     const [bookingDetails, setBookingDetails] = useState<BookingDetails>({ product: null, slots: [], userInfo: null });
@@ -219,14 +225,41 @@ const App: React.FC = () => {
     }
 
     return (
-        <div className="bg-brand-background min-h-screen text-brand-text font-sans relative">
+        <div className="bg-brand-background min-h-screen text-brand-text font-sans relative flex flex-col">
             <Header />
-            <main className="container mx-auto px-4 py-8">
+            <main className="container mx-auto px-4 py-8 flex-grow">
                 {appData && <AnnouncementsBoard announcements={appData.announcements} />}
                 <div className="mt-8">
                     {renderView()}
                 </div>
             </main>
+             {appData?.footerInfo && (
+                <footer className="bg-brand-surface border-t border-brand-border py-8 px-4 text-center">
+                    <div className="max-w-md mx-auto flex flex-col items-center gap-4 text-brand-secondary text-sm">
+                        <div className="flex items-center gap-3">
+                            <LocationPinIcon className="w-5 h-5 flex-shrink-0" />
+                            <a href={appData.footerInfo.googleMapsLink || '#'} target="_blank" rel="noopener noreferrer" className="hover:text-brand-primary transition-colors">
+                                {appData.footerInfo.address}
+                            </a>
+                        </div>
+                        <div className="flex items-center justify-center gap-6 mt-2">
+                             <a href={`https://wa.me/${appData.footerInfo.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" aria-label={t('footer.whatsapp')} className="hover:text-brand-primary transition-colors">
+                                <WhatsAppIcon className="w-6 h-6" />
+                            </a>
+                             <a href={`mailto:${appData.footerInfo.email}`} aria-label={t('footer.email')} className="hover:text-brand-primary transition-colors">
+                                <MailIcon className="w-6 h-6" />
+                            </a>
+                             <a href={`https://instagram.com/${appData.footerInfo.instagramHandle}`} target="_blank" rel="noopener noreferrer" aria-label={t('footer.instagram')} className="hover:text-brand-primary transition-colors">
+                                <InstagramIcon className="w-6 h-6" />
+                            </a>
+                        </div>
+                         <button onClick={() => setIsPolicyModalOpen(true)} className="mt-4 text-xs hover:underline text-brand-secondary transition-colors">
+                            {t('footer.returnPolicies')}
+                        </button>
+                    </div>
+                </footer>
+            )}
+
 
             {isUserInfoModalOpen && (
                 <UserInfoModal 
