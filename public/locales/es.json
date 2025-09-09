@@ -207,6 +207,33 @@
     "customersTab": "Clientes",
     "invoicingTab": "Facturación",
     "settingsTab": "Configuración",
+    "customerDetail": {
+        "backButton": "Volver a la Lista",
+        "activePackages": "Paquetes Activos",
+        "historyTitle": "Historial de Compras",
+        "noActivePackages": "Este cliente no tiene paquetes activos.",
+        "progress": "Progreso",
+        "progressText": "{{completed}} de {{total}} clases",
+        "nextClass": "Próxima Clase",
+        "expiresOn": "Expira el",
+        "bookedOn": "Reservado el",
+        "statusActive": "Activo",
+        "statusExpired": "Expirado",
+        "statusPendingPayment": "Pago Pendiente",
+        "statusCompleted": "Completado",
+        "history": {
+            "date": "Fecha",
+            "product": "Producto",
+            "progress": "Progreso",
+            "status": "Estado",
+            "actions": "Acciones",
+            "paid": "Pagado",
+            "unpaid": "No Pagado",
+            "acceptPayment": "Aceptar Pago",
+            "deleteBooking": "Eliminar Reserva"
+        },
+        "deleteConfirmText": "¿Estás seguro de que quieres eliminar esta reserva? Esta acción no se puede deshacer."
+    },
     "productManager": {
       "duplicateButton": "Duplicar",
       "duplicatePrefix": "Copia de "
