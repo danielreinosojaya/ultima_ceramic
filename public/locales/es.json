@@ -1,4 +1,3 @@
-
 {
     "header": {
         "title": "CeramicAlma"
@@ -289,7 +288,8 @@
             "statusPending": "Pendiente",
             "statusProcessed": "Procesada",
             "markAsProcessed": "Marcar como Procesada",
-            "noRequests": "No se encontraron solicitudes de factura."
+            "noRequests": "No se encontraron solicitudes de factura.",
+            "goToCustomer": "Ir al Perfil del Cliente"
         },
         "introClassModal": {
             "editTitle": "Editar Clase Introductoria",
@@ -633,6 +633,33 @@
             "selectNewSlot": "Seleccionar Nueva Fecha",
             "saveButton": "Confirmar Reagendamiento"
         },
+        "customerDetail": {
+            "backButton": "Volver a la lista de clientes",
+            "historyTitle": "Historial de Reservas y Pre-reservas",
+            "history": {
+                "date": "Fecha",
+                "product": "Producto",
+                "progress": "Progreso / Vencimiento",
+                "status": "Estado",
+                "actions": "Acciones",
+                "paid": "Pagado",
+                "unpaid": "No Pagado",
+                "acceptPayment": "Aceptar Pago",
+                "deleteBooking": "Eliminar Reserva"
+            },
+            "activePackages": "Paquetes Activos",
+            "noActivePackages": "Este cliente no tiene paquetes activos.",
+            "statusActive": "Activo",
+            "statusExpired": "Expirado",
+            "statusPendingPayment": "Pendiente de Pago",
+            "statusCompleted": "Completado",
+            "progress": "Progreso",
+            "progressText": "{{completed}} de {{total}} clases",
+            "nextClass": "Próxima Clase",
+            "expiresOn": "Expira el",
+            "bookedOn": "Reservado el",
+            "deleteConfirmText": "¿Estás seguro de que quieres eliminar esta reserva? Esta acción no se puede deshacer."
+        },
         "crm": {
             "allCustomersTab": "Todos los Clientes",
             "openStudioTab": "Miembros Estudio Abierto",
@@ -667,73 +694,6 @@
                 "statusActive": "Activo",
                 "statusExpired": "Expirado",
                 "statusPendingPayment": "Pendiente de Pago"
-            }
-        },
-        "customerDetail": {
-            "backButton": "Volver a la lista de clientes",
-            "historyTitle": "Historial de Reservas y Pre-reservas",
-            "history": {
-                "date": "Fecha",
-                "product": "Producto",
-                "progress": "Progreso / Vencimiento",
-                "status": "Estado",
-                "actions": "Acciones",
-                "paid": "Pagado",
-                "unpaid": "No Pagado",
-                "acceptPayment": "Aceptar Pago",
-                "deleteBooking": "Eliminar Reserva"
-            },
-            "activePackages": "Paquetes Activos",
-            "noActivePackages": "Este cliente no tiene paquetes activos.",
-            "statusActive": "Activo",
-            "statusExpired": "Expirado",
-            "statusPendingPayment": "Pendiente de Pago",
-            "statusCompleted": "Completado",
-            "progress": "Progreso",
-            "progressText": "{{completed}} de {{total}} clases",
-            "nextClass": "Próxima Clase",
-            "expiresOn": "Expira el",
-            "bookedOn": "Reservado el",
-            "deleteConfirmText": "¿Estás seguro de que quieres eliminar esta reserva? Esta acción no se puede deshacer."
-        },
-        "financialDashboard": {
-            "title": "Finanzas",
-            "subtitle": "Revisa resúmenes de ingresos y haz seguimiento de pagos.",
-            "incomeSummaryTab": "Resumen de Ingresos",
-            "pendingPreservationsTab": "Pre-reservas Pendientes",
-            "capacityHealthTab": "Salud de Capacidad",
-            "today": "Hoy",
-            "thisWeek": "Esta Semana",
-            "thisMonth": "Este Mes",
-            "totalRevenue": "Ingresos Totales",
-            "revenueOverTime": "Ingresos a lo Largo del Tiempo",
-            "revenueByPackage": "Ingresos por Paquete",
-            "revenueByPaymentMethod": "Ingresos por Método de Pago",
-            "detailedReport": "Transacciones Detalladas",
-            "exportCSV": "Exportar CSV",
-            "date": "Fecha",
-            "customer": "Cliente",
-            "package": "Paquete",
-            "amount": "Monto",
-            "noData": "No hay datos financieros para el período seleccionado.",
-            "pendingSubtitle": "Rastrea y gestiona todas las pre-reservas pendientes de pago.",
-            "packagesAndClasses": "Paquetes y Clases",
-            "openStudio": "Estudio Abierto",
-            "openStudioDateFilterInfo": "Los filtros de fecha no aplican a las suscripciones de Estudio Abierto ya que están pendientes de pago antes de su activación.",
-            "pendingTable": {
-                "date": "Fecha Pre-reserva",
-                "customer": "Cliente",
-                "product": "Producto",
-                "amount": "Monto",
-                "actions": "Acciones",
-                "acceptPayment": "Aceptar Pago",
-                "noPending": "No se encontraron pre-reservas pendientes para el período seleccionado."
-            },
-            "capacityHealth": {
-                "subtitle": "Monitorea la ocupación futura de las clases para identificar oportunidades de venta o problemas de horario.",
-                "totalCapacity": "Capacidad Total (Próximos 30 Días)",
-                "bookedSlots": "Cupos Reservados",
-                "occupancyRate": "Tasa de Ocupación"
             }
         }
     }
