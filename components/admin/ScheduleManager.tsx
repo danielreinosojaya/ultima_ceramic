@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import type { Instructor, Booking, IntroductoryClass, Product, EditableBooking, RescheduleSlotInfo, PaymentDetails, AppData, InvoiceRequest, AdminTab } from '../../types';
 import * as dataService from '../../services/dataService';
 import { useLanguage } from '../../context/LanguageContext';
-import { DAY_NAMES, PALETTE_COLORS } from '@/constants';
+import { DAY_NAMES, PALETTE_COLORS } from '../../constants.js';
 import { InstructorTag } from '../InstructorTag';
 import { BookingDetailsModal } from './BookingDetailsModal';
 import { generateWeeklySchedulePDF } from '../../services/pdfService';
@@ -159,6 +159,15 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({ initialDate, o
 
         return { weekDates: dates, scheduleData: data };
     }, [currentDate, appData]);
+    
+    const todayStr = useMemo(() => formatDateToYYYYMMDD(new Date()), []);
+    const todayIndex = useMemo(() => weekDates.findIndex(d => formatDateToYYYYMMDD(d) === todayStr), [weekDates, todayStr]);
+    const [selectedDayIndex, setSelectedDayIndex] = useState(todayIndex !== -1 ? todayIndex : 0);
+
+    useEffect(() => {
+        const newTodayIndex = weekDates.findIndex(d => formatDateToYYYYMMDD(d) === todayStr);
+        setSelectedDayIndex(newTodayIndex !== -1 ? newTodayIndex : 0);
+    }, [weekDates, todayStr]);
 
     const bookingToManage = useMemo(() => {
         if (!bookingToManageId) return null;
@@ -337,7 +346,6 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({ initialDate, o
         return false;
     }, [showUnpaidOnly, filteredScheduleData]);
 
-    const todayStr = formatDateToYYYYMMDD(new Date());
     const isTodayInView = weekDates.some(d => formatDateToYYYYMMDD(d) === todayStr);
 
     const dayStartHour = 8; // 8 AM
@@ -434,7 +442,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({ initialDate, o
             </label>
         </div>
 
-        <div className="border border-gray-200 rounded-lg overflow-hidden">
+        {/* --- DESKTOP VIEW --- */}
+        <div className="hidden lg:block border border-gray-200 rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
                  <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
@@ -518,6 +527,90 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({ initialDate, o
                     <div className="text-center py-10 text-brand-secondary">
                         {t('admin.weeklyView.noUnpaidFound')}
                     </div>
+                )}
+            </div>
+        </div>
+        
+        {/* --- MOBILE VIEW --- */}
+        <div className="block lg:hidden">
+            <div className="border-b border-gray-200 mb-4">
+                <nav className="-mb-px flex space-x-2 sm:space-x-4 overflow-x-auto" aria-label="Days">
+                    {weekDates.map((date, index) => {
+                        const isSelected = index === selectedDayIndex;
+                        return (
+                            <button
+                                key={date.toISOString()}
+                                onClick={() => setSelectedDayIndex(index)}
+                                className={`flex-shrink-0 whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm text-center w-14 transition-colors duration-200 ${
+                                isSelected
+                                    ? 'border-brand-primary text-brand-primary'
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                }`}
+                            >
+                                <span className="block">{date.toLocaleDateString(language, { weekday: 'short' })}</span>
+                                <span className="text-lg font-bold">{date.getDate()}</span>
+                            </button>
+                        )
+                    })}
+                </nav>
+            </div>
+
+            <div className="space-y-6">
+                {[...filteredScheduleData.values()].map(({ instructor, schedule }) => {
+                    const selectedDate = weekDates[selectedDayIndex];
+                    const dateStr = formatDateToYYYYMMDD(selectedDate);
+                    const slots = schedule[dateStr] || [];
+
+                    if (slots.length === 0) return null;
+
+                    return (
+                        <div key={instructor.id}>
+                            <InstructorTag instructorId={instructor.id} instructors={appData.instructors} />
+                            <div className="space-y-2 mt-2 border-l-2 pl-4 ml-3 border-gray-200">
+                                {slots.map((slot, index) => {
+                                    const unpaidBookingsCount = slot.bookings.filter(b => !b.isPaid).length;
+                                    const hasUnpaidBookings = unpaidBookingsCount > 0;
+                                    return (
+                                        <button
+                                            key={index}
+                                            onClick={() => handleShiftClick(dateStr, slot)}
+                                            className="w-full text-left p-3 rounded-lg shadow-sm bg-white hover:shadow-md transition-shadow relative overflow-hidden border border-gray-200"
+                                        >
+                                            {hasUnpaidBookings && <div className="absolute inset-0 unpaid-booking-stripe opacity-70"></div>}
+                                            <div className="relative z-10">
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        <div className="font-bold text-sm text-brand-text">{slot.time}</div>
+                                                        <div className="text-xs font-semibold text-gray-600 mt-1 truncate">{slot.product.name}</div>
+                                                    </div>
+                                                    <div className={`text-xs font-bold px-2 py-0.5 rounded-full ${slot.bookings.length >= slot.capacity ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                                                        {slot.bookings.length}/{slot.capacity}
+                                                    </div>
+                                                </div>
+                                                {hasUnpaidBookings && 
+                                                    <div className="text-xs text-brand-primary font-bold mt-2">
+                                                        {t('admin.weeklyView.unpaid', { count: unpaidBookingsCount })}
+                                                    </div>
+                                                }
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    );
+                })}
+
+                {!hasVisibleSlotsInFilter && (
+                    <div className="text-center py-10 text-brand-secondary">
+                        {t('admin.weeklyView.noUnpaidFound')}
+                    </div>
+                )}
+                
+                {![...filteredScheduleData.values()].some(({ schedule }) => (schedule[formatDateToYYYYMMDD(weekDates[selectedDayIndex])] || []).length > 0) && (
+                  <div className="text-center py-10 text-brand-secondary">
+                    No classes scheduled for this day.
+                  </div>
                 )}
             </div>
         </div>

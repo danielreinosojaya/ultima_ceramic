@@ -1,17 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import type { ClassPackage, TimeSlot, EnrichedAvailableSlot, BookingMode, AppData } from '../types';
-import * as dataService from '../services/dataService';
-import { useLanguage } from '../context/LanguageContext';
-import { BookingSidebar } from './BookingSidebar';
-import { CapacityIndicator } from './CapacityIndicator';
-import { InstructorTag } from './InstructorTag';
+import type { ClassPackage, TimeSlot, EnrichedAvailableSlot, BookingMode, AppData } from '../types.js';
+import * as dataService from '../services/dataService.js';
+import { useLanguage } from '../context/LanguageContext.js';
+import { BookingSidebar } from './BookingSidebar.js';
+import { CapacityIndicator } from './CapacityIndicator.js';
+import { InstructorTag } from './InstructorTag.js';
+import { DAY_NAMES } from '../constants.js';
 
-const formatDateToYYYYMMDD = (d: Date): string => {
-    const year = d.getFullYear();
-    const month = (d.getMonth() + 1).toString().padStart(2, '0');
-    const day = d.getDate().toString().padStart(2, '0');
-    return `${year}-${month}-${day}`;
-};
+const formatDateToYYYYMMDD = (d: Date): string => d.toISOString().split('T')[0];
 
 const parseYYYYMMDDToDate = (dateStr: string): Date => {
     const [year, month, day] = dateStr.split('-').map(Number);
@@ -22,10 +18,9 @@ const getWeekStartDate = (date: Date) => {
     const d = new Date(date);
     d.setHours(0,0,0,0);
     const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday, making Monday the start
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday is start
     return new Date(d.setDate(diff));
 };
-
 
 interface ScheduleSelectorProps {
   pkg: ClassPackage;
@@ -108,20 +103,30 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
       }
     }
   };
-
+  
   const handleNextWeek = () => setCurrentDate(prev => { const next = new Date(prev); next.setDate(next.getDate() + 7); return next; });
   const handlePrevWeek = () => setCurrentDate(prev => { const prevDate = new Date(prev); prevDate.setDate(prevDate.getDate() - 7); return prevDate; });
 
   const weekStart = weekDates[0];
   const weekEnd = weekDates[6];
 
+  // State for mobile view
+  const todayStr = useMemo(() => formatDateToYYYYMMDD(new Date()), []);
+  const todayIndex = useMemo(() => weekDates.findIndex(d => formatDateToYYYYMMDD(d) === todayStr), [weekDates, todayStr]);
+  const [selectedDayIndex, setSelectedDayIndex] = useState(todayIndex !== -1 ? todayIndex : 0);
+
+  useEffect(() => {
+    const newTodayIndex = weekDates.findIndex(d => formatDateToYYYYMMDD(d) === todayStr);
+    setSelectedDayIndex(newTodayIndex !== -1 ? newTodayIndex : 0);
+  }, [weekDates, todayStr]);
+
   return (
     <div className="bg-brand-surface p-4 sm:p-6 rounded-xl shadow-subtle animate-fade-in-up">
         <button onClick={onBack} className="text-brand-secondary hover:text-brand-text mb-4 transition-colors font-semibold">
             &larr; {t('schedule.backButton')}
         </button>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2">
+        <div className="flex flex-col lg:flex-row gap-8">
+            <div className="lg:w-2/3">
                 <p className="text-brand-secondary mb-2">
                   {bookingMode === 'monthly' ? t('schedule.monthlySubtitle') : t('schedule.subtitle')} <span className="font-bold text-brand-text">{pkg.name}</span>.
                 </p>
@@ -130,71 +135,124 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                       {t('schedule.bookingWindowMessage')} {bookingWindowEndDate.toLocaleDateString(language, { month: 'long', day: 'numeric' })}.
                     </div>
                 )}
-                 <div className="flex justify-between items-center mb-4">
+                <div className="flex justify-between items-center mb-4">
                     <button onClick={handlePrevWeek} disabled={currentDate <= today} className="p-2 rounded-full hover:bg-gray-100 disabled:opacity-50">&lt;</button>
                     <div className="font-semibold text-brand-text text-center">
                         {weekStart.toLocaleDateString(language, { month: 'short', day: 'numeric' })} - {weekEnd.toLocaleDateString(language, { month: 'short', day: 'numeric', year: 'numeric' })}
                     </div>
                     <button onClick={handleNextWeek} className="p-2 rounded-full hover:bg-gray-100">&gt;</button>
                 </div>
-                <div className="grid grid-cols-7 gap-2 border-t border-b border-gray-200 py-2">
-                  {weekDates.map(date => (
-                    <div key={date.toISOString()} className="text-center font-bold text-gray-500 uppercase">
-                      <div className="text-xs">{date.toLocaleDateString(language, { weekday: 'short' })}</div>
-                      <div className="text-lg">{date.getDate()}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="grid grid-cols-7 gap-2 mt-2 min-h-[400px]">
-                  {weekDates.map(date => {
-                    const dateStr = formatDateToYYYYMMDD(date);
-                    const slots = scheduleData[dateStr] || [];
-                    const isPast = date < today;
-
-                    return (
-                      <div key={dateStr} className="flex flex-col gap-2 p-1 bg-brand-background/70 rounded-md">
-                        {isPast ? (
-                           <div className="flex-grow flex items-center justify-center">
-                               <span className="text-xs text-gray-300">-</span>
-                           </div>
-                        ) : slots.length > 0 ? (
-                           slots.map(slot => {
-                                const isSelected = selectedSlots.some(s => s.date === dateStr && s.time === slot.time);
-                                const isFull = slot.paidBookingsCount >= slot.maxCapacity;
-                                const isOutsideBookingWindow = bookingMode === 'flexible' && firstSelectionDate && bookingWindowEndDate && (date < firstSelectionDate || date > bookingWindowEndDate);
-                                const isMonthlyStartInvalid = bookingMode === 'monthly' && !dataService.checkMonthlyAvailability(date, slot, appData, pkg.details.technique);
-                                const isDisabled = isFull || (!isSelected && isOutsideBookingWindow) || isMonthlyStartInvalid;
-
-                                return (
-                                  <button
-                                    key={slot.time}
-                                    onClick={() => handleSlotSelect(date, slot)}
-                                    disabled={isDisabled}
-                                    className={`relative p-2 rounded-md text-left transition-all duration-200 border w-full flex flex-col gap-1.5 ${
-                                      isSelected ? 'bg-brand-primary/10 ring-2 ring-brand-primary border-transparent' : 
-                                      isDisabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-70' :
-                                      'bg-white hover:border-brand-primary hover:shadow-sm'
-                                    }`}
-                                  >
-                                    <span className="font-semibold text-sm text-brand-text">{slot.time}</span>
-                                    <InstructorTag instructorId={slot.instructorId} instructors={appData.instructors} />
-                                    <CapacityIndicator count={slot.totalBookingsCount} max={slot.maxCapacity} capacityMessages={appData.capacityMessages} />
-                                    {isFull && <div className="absolute top-1 right-1 text-[8px] font-bold bg-red-500 text-white px-1 rounded-sm">LLENO</div>}
-                                  </button>
-                                )
-                            })
-                        ) : (
-                          <div className="flex-grow flex items-center justify-center">
-                               <span className="text-xs text-gray-300">-</span>
-                           </div>
-                        )}
+                
+                {/* --- DESKTOP VIEW --- */}
+                <div className="hidden lg:block">
+                  <div className="grid grid-cols-7 gap-2 border-t border-b border-gray-200 py-2">
+                    {weekDates.map(date => (
+                      <div key={date.toISOString()} className="text-center font-bold text-gray-500 uppercase">
+                        <div className="text-xs">{date.toLocaleDateString(language, { weekday: 'short' })}</div>
+                        <div className="text-lg">{date.getDate()}</div>
                       </div>
-                    )
-                  })}
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7 gap-2 mt-2 min-h-[400px]">
+                    {weekDates.map(date => {
+                      const dateStr = formatDateToYYYYMMDD(date);
+                      const slots = scheduleData[dateStr] || [];
+                      const isPast = date < today;
+
+                      return (
+                        <div key={dateStr} className="flex flex-col gap-2 p-1 bg-brand-background/70 rounded-md">
+                          {isPast ? (
+                            <div className="flex-grow flex items-center justify-center"> <span className="text-xs text-gray-300">-</span> </div>
+                          ) : slots.length > 0 ? (
+                            slots.map(slot => {
+                                  const isSelected = selectedSlots.some(s => s.date === dateStr && s.time === slot.time);
+                                  const isFull = slot.paidBookingsCount >= slot.maxCapacity;
+                                  const isOutsideBookingWindow = bookingMode === 'flexible' && firstSelectionDate && bookingWindowEndDate && (date < firstSelectionDate || date > bookingWindowEndDate);
+                                  const isMonthlyStartInvalid = bookingMode === 'monthly' && !dataService.checkMonthlyAvailability(date, slot, appData, pkg.details.technique);
+                                  const isDisabled = isFull || (!isSelected && isOutsideBookingWindow) || isMonthlyStartInvalid;
+
+                                  return (
+                                    <button key={slot.time} onClick={() => handleSlotSelect(date, slot)} disabled={isDisabled}
+                                      className={`relative p-2 rounded-md text-left transition-all duration-200 border w-full flex flex-col gap-1.5 ${
+                                        isSelected ? 'bg-brand-primary/10 ring-2 ring-brand-primary border-transparent' : 
+                                        isDisabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-70' :
+                                        'bg-white hover:border-brand-primary hover:shadow-sm'
+                                      }`}
+                                    >
+                                      <span className="font-semibold text-sm text-brand-text">{slot.time}</span>
+                                      <InstructorTag instructorId={slot.instructorId} instructors={appData.instructors} />
+                                      <CapacityIndicator count={slot.totalBookingsCount} max={slot.maxCapacity} capacityMessages={appData.capacityMessages} />
+                                      {isFull && <div className="absolute top-1 right-1 text-[8px] font-bold bg-red-500 text-white px-1 rounded-sm">LLENO</div>}
+                                    </button>
+                                  )
+                              })
+                          ) : (
+                            <div className="flex-grow flex items-center justify-center"> <span className="text-xs text-gray-300">-</span> </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* --- MOBILE VIEW --- */}
+                <div className="block lg:hidden">
+                  <div className="border-b border-gray-200">
+                    <nav className="-mb-px flex space-x-2 sm:space-x-4 overflow-x-auto" aria-label="Days">
+                      {weekDates.map((date, index) => {
+                        const isSelected = index === selectedDayIndex;
+                        return (
+                          <button key={date.toISOString()} onClick={() => setSelectedDayIndex(index)}
+                            className={`flex-shrink-0 whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm text-center w-14 transition-colors duration-200 ${
+                              isSelected ? 'border-brand-primary text-brand-primary' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }`}
+                          >
+                            <span className="block">{date.toLocaleDateString(language, { weekday: 'short' })}</span>
+                            <span className="text-lg font-bold">{date.getDate()}</span>
+                          </button>
+                        )
+                      })}
+                    </nav>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    {(() => {
+                      const selectedDate = weekDates[selectedDayIndex];
+                      const dateStr = formatDateToYYYYMMDD(selectedDate);
+                      const slotsForDay = scheduleData[dateStr] || [];
+                      const isPast = selectedDate < today;
+
+                      if (isPast) return <div className="text-center py-10 text-brand-secondary">-</div>;
+                      if (slotsForDay.length === 0) return <div className="text-center py-10 text-brand-secondary">{t('schedule.modal.noClasses')}</div>;
+                      
+                      return slotsForDay.map(slot => {
+                        const isSelected = selectedSlots.some(s => s.date === dateStr && s.time === slot.time);
+                        const isFull = slot.paidBookingsCount >= slot.maxCapacity;
+                        const isOutsideBookingWindow = bookingMode === 'flexible' && firstSelectionDate && bookingWindowEndDate && (selectedDate < firstSelectionDate || selectedDate > bookingWindowEndDate);
+                        const isMonthlyStartInvalid = bookingMode === 'monthly' && !dataService.checkMonthlyAvailability(selectedDate, slot, appData, pkg.details.technique);
+                        const isDisabled = isFull || (!isSelected && isOutsideBookingWindow) || isMonthlyStartInvalid;
+                        return (
+                          <button key={slot.time} onClick={() => handleSlotSelect(selectedDate, slot)} disabled={isDisabled}
+                            className={`relative p-3 rounded-md text-left transition-all duration-200 border w-full flex items-center justify-between gap-4 ${
+                              isSelected ? 'bg-brand-primary/10 ring-2 ring-brand-primary border-transparent' : 
+                              isDisabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-70' :
+                              'bg-white hover:border-brand-primary hover:shadow-sm'
+                            }`}
+                          >
+                            <div>
+                              <span className="font-semibold text-md text-brand-text">{slot.time}</span>
+                              <InstructorTag instructorId={slot.instructorId} instructors={appData.instructors} />
+                            </div>
+                            <CapacityIndicator count={slot.totalBookingsCount} max={slot.maxCapacity} capacityMessages={appData.capacityMessages} />
+                            {isFull && <div className="absolute top-1 right-1 text-[8px] font-bold bg-red-500 text-white px-1 rounded-sm">LLENO</div>}
+                          </button>
+                        )
+                      })
+                    })()}
+                  </div>
                 </div>
             </div>
-            <div className="lg:col-span-1">
-                 <BookingSidebar 
+            <div className="lg:w-1/3">
+                <BookingSidebar 
                     product={pkg} 
                     selectedSlots={selectedSlots}
                     onRemoveSlot={(slotToRemove) => setSelectedSlots(prev => prev.filter(s => s !== slotToRemove))}
@@ -203,6 +261,6 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                 />
             </div>
         </div>
-    </div>
+      </div>
   );
 };
