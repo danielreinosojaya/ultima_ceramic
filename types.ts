@@ -1,3 +1,4 @@
+
 // Basic Types
 export type DayKey = 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday';
 export type AppView = 'welcome' | 'techniques' | 'packages' | 'intro_classes' | 'schedule' | 'summary' | 'group_experience' | 'couples_experience';
@@ -332,7 +333,7 @@ export interface Notification {
 export type ClientNotificationType = 'PRE_BOOKING_CONFIRMATION' | 'PAYMENT_RECEIPT' | 'CLASS_REMINDER';
 export interface ClientNotification {
     id: string;
-    createdAt: string; // ISO string
+    createdAt: string | null; // ISO string
     clientName: string;
     clientEmail: string;
     type: ClientNotificationType;

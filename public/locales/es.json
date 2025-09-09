@@ -1,3 +1,4 @@
+
 {
   "header": {
     "title": "Reservas CeramicAlma"
@@ -283,6 +284,23 @@
       "status_ProposalSent": "Propuesta Enviada",
       "status_Confirmed": "Confirmado",
       "status_Archived": "Archivado"
+    },
+    "clientNotificationLog": {
+      "title": "Registro de Comunicaciones",
+      "subtitle": "Revisa el historial de notificaciones enviadas a los clientes.",
+      "searchPlaceholder": "Buscar por nombre o email de cliente...",
+      "allTypes": "Todos los Tipos",
+      "type_PRE_BOOKING_CONFIRMATION": "Confirmación de Pre-reserva",
+      "type_PAYMENT_RECEIPT": "Recibo de Pago",
+      "type_CLASS_REMINDER": "Recordatorio de Clase",
+      "date": "Fecha",
+      "client": "Cliente",
+      "type": "Tipo de Comunicación",
+      "status": "Estado",
+      "status_Sent": "Enviado",
+      "status_Failed": "Fallido",
+      "status_Pending": "Pendiente",
+      "noNotifications": "No se encontraron notificaciones."
     },
     "errors": {
       "DUPLICATE_BOOKING_ERROR": "El alumno ya está inscrito en uno de los horarios seleccionados.",
