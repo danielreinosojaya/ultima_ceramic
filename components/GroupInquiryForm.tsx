@@ -16,8 +16,10 @@ export const GroupInquiryForm: React.FC<GroupInquiryFormProps> = ({ inquiryType,
 
     const [formData, setFormData] = useState({
         name: '', email: '', phone: '', countryCode: COUNTRIES[0].code,
-        participants: isCouples ? 2 : 10,
-        tentativeDate: '', eventType: '', message: ''
+        participants: isCouples ? 2 : 6,
+        tentativeDate: '',
+        tentativeTime: '',
+        eventType: '', message: ''
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
     
@@ -73,13 +75,11 @@ export const GroupInquiryForm: React.FC<GroupInquiryFormProps> = ({ inquiryType,
                     <p className="text-brand-secondary mb-10 max-w-2xl mx-auto">{subtitle}</p>
                 </div>
 
-                <form onSubmit={handleSubmit} className="bg-brand-background p-6 sm:p-8 rounded-xl shadow-subtle space-y-6">
+                <form onSubmit={handleSubmit} className="bg-brand-background p-6 sm:p-8 rounded-xl shadow-subtle space-y-4">
                     <h3 className="text-xl font-bold text-brand-accent border-b border-brand-border pb-3 mb-6">{t('groupInquiry.formTitle')}</h3>
                     
-                    <div className="grid md:grid-cols-2 gap-6">
-                        <InputField label={t('groupInquiry.nameLabel')} name="name" value={formData.name} onChange={handleChange} placeholder={t('groupInquiry.namePlaceholder')} required />
-                        <InputField label={t('groupInquiry.emailLabel')} name="email" type="email" value={formData.email} onChange={handleChange} placeholder="you@email.com" required />
-                    </div>
+                    <InputField label={t('groupInquiry.nameLabel')} name="name" value={formData.name} onChange={handleChange} placeholder={t('groupInquiry.namePlaceholder')} required />
+                    <InputField label={t('groupInquiry.emailLabel')} name="email" type="email" value={formData.email} onChange={handleChange} placeholder="you@email.com" required />
                     
                     <div>
                         <label className="block text-sm font-semibold text-brand-secondary mb-1">{t('groupInquiry.phoneLabel')}</label>
@@ -91,22 +91,23 @@ export const GroupInquiryForm: React.FC<GroupInquiryFormProps> = ({ inquiryType,
                         </div>
                     </div>
 
-                    <div className="grid md:grid-cols-2 gap-6">
-                         <InputField label={t('groupInquiry.participantsLabel')} name="participants" type="number" min="2" value={formData.participants} onChange={handleChange} required disabled={isCouples} />
-                         <InputField label={t('groupInquiry.dateLabel')} name="tentativeDate" type="date" value={formData.tentativeDate} onChange={handleChange} required />
-                    </div>
+                     <div>
+                        <InputField label={t('groupInquiry.participantsLabel')} name="participants" type="number" min={isCouples ? "2" : "6"} value={formData.participants} onChange={handleChange} required disabled={isCouples} />
+                        {!isCouples && (
+                            <p className="text-xs text-brand-secondary mt-1">{t('groupInquiry.participantsInfo')}</p>
+                        )}
+                     </div>
+                     <InputField label={t('groupInquiry.eventTypeLabel')} name="eventType" type="select" value={formData.eventType} onChange={handleChange}>
+                        <option value="">-- {t('groupInquiry.eventTypePlaceholder')} --</option>
+                        <option value="birthday">{t('groupInquiry.eventTypeOptions.birthday')}</option>
+                        <option value="anniversary">{t('groupInquiry.eventTypeOptions.anniversary')}</option>
+                        <option value="team">{t('groupInquiry.eventTypeOptions.team')}</option>
+                        <option value="friends">{t('groupInquiry.eventTypeOptions.friends')}</option>
+                        <option value="other">{t('groupInquiry.eventTypeOptions.other')}</option>
+                     </InputField>
 
-                    <div>
-                        <label htmlFor="eventType" className="block text-sm font-semibold text-brand-secondary mb-1">{t('groupInquiry.eventTypeLabel')}</label>
-                        <select id="eventType" name="eventType" value={formData.eventType} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
-                            <option value="">-- {t('groupInquiry.eventTypePlaceholder')} --</option>
-                            <option value="birthday">{t('groupInquiry.eventTypeOptions.birthday')}</option>
-                            <option value="anniversary">{t('groupInquiry.eventTypeOptions.anniversary')}</option>
-                            <option value="team">{t('groupInquiry.eventTypeOptions.team')}</option>
-                            <option value="friends">{t('groupInquiry.eventTypeOptions.friends')}</option>
-                            <option value="other">{t('groupInquiry.eventTypeOptions.other')}</option>
-                        </select>
-                    </div>
+                    <InputField label={t('groupInquiry.dateLabel')} name="tentativeDate" type="date" value={formData.tentativeDate} onChange={handleChange} required />
+                    <InputField label={t('groupInquiry.timeLabel')} name="tentativeTime" type="time" value={formData.tentativeTime} onChange={handleChange} required />
 
                     <div>
                         <label htmlFor="message" className="block text-sm font-semibold text-brand-secondary mb-1">{t('groupInquiry.messageLabel')}</label>
@@ -127,9 +128,15 @@ export const GroupInquiryForm: React.FC<GroupInquiryFormProps> = ({ inquiryType,
     );
 };
 
-const InputField: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: string }> = ({ label, ...props }) => (
+const InputField: React.FC<React.InputHTMLAttributes<HTMLInputElement> & React.SelectHTMLAttributes<HTMLSelectElement> & { label: string, children?: React.ReactNode }> = ({ label, type, children, ...props }) => (
     <div>
         <label htmlFor={props.name} className="block text-sm font-semibold text-brand-secondary mb-1">{label}</label>
-        <input {...props} id={props.name} className="w-full px-3 py-2 border border-gray-300 rounded-lg disabled:bg-gray-100 disabled:cursor-not-allowed" />
+        {type === 'select' ? (
+             <select {...props} id={props.name} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
+                {children}
+             </select>
+        ) : (
+            <input {...props} type={type} id={props.name} className="w-full px-3 py-2 border border-gray-300 rounded-lg disabled:bg-gray-100 disabled:cursor-not-allowed" />
+        )}
     </div>
 );

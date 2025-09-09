@@ -504,14 +504,25 @@ const App: React.FC = () => {
       
       {appData.footerInfo && (
         <footer className="bg-brand-background border-t border-brand-border/80 mt-12 py-8 text-center text-brand-secondary">
-            <div className="max-w-4xl mx-auto px-4">
-                <div className="flex justify-center items-center gap-x-6 gap-y-2 flex-wrap mb-4">
-                    <a href={appData.footerInfo.googleMapsLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-brand-accent"><LocationPinIcon className="w-4 h-4" /> {appData.footerInfo.address}</a>
-                    <a href={`https://wa.me/${appData.footerInfo.whatsapp.replace(/\s/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-brand-accent"><WhatsAppIcon className="w-4 h-4" /> {appData.footerInfo.whatsapp}</a>
-                    <a href={`mailto:${appData.footerInfo.email}`} className="flex items-center gap-2 hover:text-brand-accent"><MailIcon className="w-4 h-4" /> {appData.footerInfo.email}</a>
-                    <a href={`https://instagram.com/${appData.footerInfo.instagramHandle.replace('@','')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-brand-accent"><InstagramIcon className="w-4 h-4" /> {appData.footerInfo.instagramHandle}</a>
+            <div className="max-w-4xl mx-auto px-4 flex flex-col items-center">
+                <a href={appData.footerInfo.googleMapsLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-brand-accent transition-colors">
+                    <LocationPinIcon className="w-4 h-4" /> 
+                    {appData.footerInfo.address}
+                </a>
+                
+                <div className="flex items-center gap-x-8 mt-4">
+                    <a href={`https://wa.me/${appData.footerInfo.whatsapp.replace(/\s/g, '')}`} target="_blank" rel="noopener noreferrer" aria-label={t('footer.whatsappAriaLabel')} className="hover:text-brand-accent transition-colors">
+                        <WhatsAppIcon className="w-6 h-6" /> 
+                    </a>
+                    <a href={`mailto:${appData.footerInfo.email}`} aria-label={t('footer.emailAriaLabel')} className="hover:text-brand-accent transition-colors">
+                        <MailIcon className="w-6 h-6" />
+                    </a>
+                    <a href={`https://instagram.com/${appData.footerInfo.instagramHandle.replace('@','')}`} target="_blank" rel="noopener noreferrer" aria-label={t('footer.instagramAriaLabel')} className="hover:text-brand-accent transition-colors">
+                        <InstagramIcon className="w-6 h-6" /> 
+                    </a>
                 </div>
-                <p className="text-sm">{new Date().getFullYear()} &copy; {t('footer.text')}</p>
+                
+                <p className="text-sm mt-6">{new Date().getFullYear()} &copy; {t('footer.text')}</p>
             </div>
         </footer>
       )}

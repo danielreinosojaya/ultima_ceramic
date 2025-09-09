@@ -204,6 +204,7 @@ export interface GroupInquiry {
     countryCode: string;
     participants: number;
     tentativeDate: string | null;
+    tentativeTime: string | null;
     eventType: string;
     message: string;
     status: InquiryStatus;

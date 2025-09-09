@@ -2,6 +2,12 @@
     "header": {
         "title": "CeramicAlma"
     },
+    "footer": {
+        "text": "CeramicAlma. Todos los derechos reservados.",
+        "whatsappAriaLabel": "Contáctanos por WhatsApp",
+        "emailAriaLabel": "Envíanos un correo electrónico",
+        "instagramAriaLabel": "Visita nuestro perfil de Instagram"
+    },
     "app": {
         "loading": "Cargando tu espacio creativo",
         "soldOut": "Agotado"
@@ -207,7 +213,9 @@
         "emailLabel": "Correo Electrónico",
         "phoneLabel": "Teléfono / WhatsApp",
         "participantsLabel": "Número de Participantes",
+        "participantsInfo": "Mínimo 6 participantes para experiencias grupales.",
         "dateLabel": "Fecha Tentativa",
+        "timeLabel": "Hora Tentativa",
         "eventTypeLabel": "Tipo de Evento",
         "eventTypePlaceholder": "Selecciona una opción",
         "eventTypeOptions": {
