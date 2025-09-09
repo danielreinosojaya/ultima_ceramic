@@ -5,6 +5,7 @@ import { COUNTRIES } from '@/constants';
 import { UserIcon } from './icons/UserIcon';
 import { MailIcon } from './icons/MailIcon';
 import { PhoneIcon } from './icons/PhoneIcon';
+import { InfoCircleIcon } from './icons/InfoCircleIcon';
 
 interface InvoiceData {
     companyName: string;
@@ -18,7 +19,6 @@ interface UserInfoModalProps {
   onShowPolicies: () => void;
 }
 
-// FIX: Added optional 'name' prop and made 'placeholder' optional to fix type errors.
 const InputField: React.FC<{
     id: string;
     name?: string;
@@ -66,7 +66,6 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
     const [country, setCountry] = useState(COUNTRIES[0]);
     
     // Invoice state
-    const [needsInvoice, setNeedsInvoice] = useState(false);
     const [invoiceData, setInvoiceData] = useState<InvoiceData>({
         companyName: '', taxId: '', address: '', email: ''
     });
@@ -90,11 +89,11 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
         } else if (!/^[0-9\s-]{7,15}$/.test(phone)) {
             newErrors.phone = t('userInfoModal.validationPhone');
         }
-        if (needsInvoice) {
-            if (!invoiceData.companyName.trim()) newErrors.companyName = t('userInfoModal.validationRequired');
-            if (!invoiceData.taxId.trim()) newErrors.taxId = t('userInfoModal.validationRequired');
-            if (!invoiceData.address.trim()) newErrors.address = t('userInfoModal.validationRequired');
-        }
+        
+        if (!invoiceData.companyName.trim()) newErrors.companyName = t('userInfoModal.validationRequired');
+        if (!invoiceData.taxId.trim()) newErrors.taxId = t('userInfoModal.validationRequired');
+        if (!invoiceData.address.trim()) newErrors.address = t('userInfoModal.validationRequired');
+        
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -104,8 +103,8 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
         if (validate()) {
             onSubmit({
                 userInfo: { firstName, lastName, email, phone, countryCode: country.code },
-                needsInvoice,
-                invoiceData: needsInvoice ? { ...invoiceData, email: invoiceData.email || email } : undefined
+                needsInvoice: true,
+                invoiceData: { ...invoiceData, email: invoiceData.email || email }
             });
         }
     };
@@ -117,9 +116,9 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
     
     const isFormValid = useMemo(() => {
         const baseValid = firstName.trim() && lastName.trim() && email.trim() && phone.trim();
-        const invoiceValid = !needsInvoice || (invoiceData.companyName.trim() && invoiceData.taxId.trim() && invoiceData.address.trim());
+        const invoiceValid = invoiceData.companyName.trim() && invoiceData.taxId.trim() && invoiceData.address.trim();
         return baseValid && invoiceValid && Object.keys(errors).length === 0;
-    }, [firstName, lastName, email, phone, needsInvoice, invoiceData, errors]);
+    }, [firstName, lastName, email, phone, invoiceData, errors]);
 
     return (
         <div
@@ -172,19 +171,19 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                         </div>
                     </div>
                      <div className="mt-6 pt-4 border-t border-brand-border space-y-4">
-                        <div className="flex items-start">
-                            <input id="needs-invoice" type="checkbox" checked={needsInvoice} onChange={(e) => setNeedsInvoice(e.target.checked)} className="h-4 w-4 text-brand-primary border-brand-border rounded focus:ring-brand-primary mt-1"/>
-                            <label htmlFor="needs-invoice" className="ml-3 text-sm text-brand-secondary">{t('userInfoModal.needsInvoice')}</label>
-                        </div>
-                        {needsInvoice && (
-                            <div className="space-y-4 mt-4 p-4 border border-brand-border rounded-lg animate-fade-in-fast bg-brand-background">
-                                <h4 className="font-semibold text-brand-text">{t('userInfoModal.invoiceDataTitle')}</h4>
-                                <InputField id="companyName" name="companyName" label={t('userInfoModal.invoiceCompanyName')} value={invoiceData.companyName} onChange={handleInvoiceDataChange} error={errors.companyName} required />
-                                <InputField id="taxId" name="taxId" label={t('userInfoModal.invoiceTaxId')} value={invoiceData.taxId} onChange={handleInvoiceDataChange} error={errors.taxId} required />
-                                <InputField id="address" name="address" label={t('userInfoModal.invoiceAddress')} value={invoiceData.address} onChange={handleInvoiceDataChange} error={errors.address} required />
-                                <InputField id="invoiceEmail" name="email" label={t('userInfoModal.invoiceEmail')} value={invoiceData.email} onChange={handleInvoiceDataChange} type="email" placeholder={t('userInfoModal.invoiceEmailPlaceholder')} error={errors.invoiceEmail} />
+                        <div className="flex items-start gap-3 bg-blue-50 border-l-4 border-blue-400 p-3 rounded-r-md text-blue-800">
+                            <InfoCircleIcon className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                            <div>
+                                <h4 className="font-bold text-sm">{t('userInfoModal.invoiceMandatoryTitle')}</h4>
+                                <p className="text-xs mt-1">{t('userInfoModal.invoiceMandatoryText')}</p>
                             </div>
-                        )}
+                        </div>
+                        <div className="space-y-4 mt-4 p-4 border border-brand-border rounded-lg bg-brand-background animate-fade-in-fast">
+                            <InputField id="companyName" name="companyName" label={t('userInfoModal.invoiceCompanyName')} value={invoiceData.companyName} onChange={handleInvoiceDataChange} error={errors.companyName} required />
+                            <InputField id="taxId" name="taxId" label={t('userInfoModal.invoiceTaxId')} value={invoiceData.taxId} onChange={handleInvoiceDataChange} error={errors.taxId} required />
+                            <InputField id="address" name="address" label={t('userInfoModal.invoiceAddress')} value={invoiceData.address} onChange={handleInvoiceDataChange} error={errors.address} required />
+                            <InputField id="invoiceEmail" name="email" label={t('userInfoModal.invoiceEmail')} value={invoiceData.email} onChange={handleInvoiceDataChange} type="email" placeholder={t('userInfoModal.invoiceEmailPlaceholder')} error={errors.invoiceEmail} />
+                        </div>
                     </div>
                     <div className="mt-6 pt-4 border-t border-brand-border">
                         <div className="flex items-start">
