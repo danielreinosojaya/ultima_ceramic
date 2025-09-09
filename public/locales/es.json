@@ -1,3 +1,4 @@
+
 {
     "header": {
         "title": "CeramicAlma"
@@ -126,11 +127,12 @@
         "validationPhone": "Por favor, ingresa un teléfono válido",
         "acceptPolicies": "He leído y acepto las",
         "readPoliciesLink": "políticas del estudio",
-        "needsInvoice": "Necesito una factura para esta compra.",
+        "invoiceMandatoryTitle": "Información para Facturación (Obligatorio)",
+        "invoiceMandatoryText": "Por disposición del SRI (Servicio de Rentas Internas), es obligatorio emitir una factura para este valor de compra. Por favor, completa los siguientes datos para procesar tu pedido.",
         "invoiceDataTitle": "Datos de Facturación",
-        "invoiceCompanyName": "Razón Social / Nombre Completo",
-        "invoiceTaxId": "RUC / Cédula",
-        "invoiceAddress": "Dirección Fiscal",
+        "invoiceCompanyName": "Razón Social / Nombre Completo *",
+        "invoiceTaxId": "RUC / Cédula *",
+        "invoiceAddress": "Dirección Fiscal *",
         "invoiceEmail": "Email para Factura (opcional)",
         "invoiceEmailPlaceholder": "Por defecto, tu email principal"
     },
