@@ -120,7 +120,9 @@ const parseGroupInquiryFromDB = (dbRow: any): GroupInquiry => {
 const parseInvoiceRequestFromDB = (dbRow: any): InvoiceRequest => {
     if (!dbRow) return dbRow;
     const camelCased = toCamelCase(dbRow);
-    camelCased.requestedAt = safeParseDate(camelCased.requestedAt)?.toISOString();
+    // Use the explicitly formatted ISO string from the query
+    camelCased.requestedAt = camelCased.requestedAtIso;
+    delete camelCased.requestedAtIso;
     camelCased.processedAt = safeParseDate(camelCased.processedAt)?.toISOString();
     return camelCased as InvoiceRequest;
 };
@@ -199,6 +201,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
             country_code,
             participants,
             TO_CHAR(tentative_date, 'YYYY-MM-DD') as tentative_date,
+            tentative_time,
             event_type,
             message,
             status,
@@ -219,8 +222,12 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
             data = clientNotifications.map(parseClientNotificationFromDB);
             break;
         case 'invoiceRequests':
-            const { rows: invoiceRequests } = await sql`
-                SELECT i.*, b.booking_code, b.user_info
+             const { rows: invoiceRequests } = await sql`
+                SELECT 
+                    i.*, 
+                    to_char(i.requested_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as requested_at_iso,
+                    b.booking_code, 
+                    b.user_info
                 FROM invoice_requests i
                 JOIN bookings b ON i.booking_id = b.id
                 ORDER BY i.requested_at DESC
@@ -438,8 +445,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         case 'addGroupInquiry':
             const addInquiryBody = req.body;
             const newInquiry = { ...addInquiryBody, status: 'New', createdAt: new Date().toISOString() };
-            const { rows: [insertedInquiry] } = await sql`INSERT INTO inquiries (name, email, phone, country_code, participants, tentative_date, event_type, message, status, created_at, inquiry_type)
-            VALUES (${newInquiry.name}, ${newInquiry.email}, ${newInquiry.phone}, ${newInquiry.countryCode}, ${newInquiry.participants}, ${newInquiry.tentativeDate || null}, ${newInquiry.eventType}, ${newInquiry.message}, ${newInquiry.status}, ${newInquiry.createdAt}, ${newInquiry.inquiryType})
+            const { rows: [insertedInquiry] } = await sql`INSERT INTO inquiries (name, email, phone, country_code, participants, tentative_date, tentative_time, event_type, message, status, created_at, inquiry_type)
+            VALUES (${newInquiry.name}, ${newInquiry.email}, ${newInquiry.phone}, ${newInquiry.countryCode}, ${newInquiry.participants}, ${newInquiry.tentativeDate || null}, ${newInquiry.tentativeTime || null}, ${newInquiry.eventType}, ${newInquiry.message}, ${newInquiry.status}, ${newInquiry.createdAt}, ${newInquiry.inquiryType})
             RETURNING *;`;
             // Create notification
             await sql`INSERT INTO notifications (type, target_id, user_name, summary) VALUES ('new_inquiry', ${insertedInquiry.id}, ${insertedInquiry.name}, ${insertedInquiry.inquiry_type});`;

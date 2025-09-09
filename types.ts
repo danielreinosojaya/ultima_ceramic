@@ -1,7 +1,9 @@
 // Basic Types
 export type DayKey = 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday';
-export type AppView = 'welcome' | 'packages' | 'intro_classes' | 'schedule' | 'summary' | 'group_experience' | 'couples_experience';
+export type AppView = 'welcome' | 'techniques' | 'packages' | 'intro_classes' | 'schedule' | 'summary' | 'group_experience' | 'couples_experience';
 export type BookingMode = 'flexible' | 'monthly';
+export type Technique = 'potters_wheel' | 'molding';
+
 
 // User and Customer
 export interface UserInfo {
@@ -35,6 +37,7 @@ export interface ClassPackageDetails {
   activities: string[];
   generalRecommendations: string;
   materials: string;
+  technique: Technique;
 }
 
 export interface OpenStudioSubscriptionDetails {
@@ -110,6 +113,7 @@ export interface TimeSlot {
 export interface AvailableSlot {
   time: string;
   instructorId: number;
+  technique: Technique;
 }
 
 export interface EnrichedAvailableSlot extends AvailableSlot {
@@ -200,6 +204,7 @@ export interface GroupInquiry {
     countryCode: string;
     participants: number;
     tentativeDate: string | null;
+    tentativeTime: string | null;
     eventType: string;
     message: string;
     status: InquiryStatus;
@@ -308,6 +313,11 @@ export interface AppData {
 
 // Admin & Notifications
 export type AdminTab = 'products' | 'calendar' | 'schedule-settings' | 'financials' | 'customers' | 'inquiries' | 'settings' | 'communications' | 'invoicing';
+
+export interface NavigationState {
+    tab: AdminTab;
+    targetId: string;
+}
 
 export interface Notification {
     id: string;

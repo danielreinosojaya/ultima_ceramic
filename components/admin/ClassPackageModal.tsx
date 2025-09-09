@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { ClassPackage } from '../../types';
+import type { ClassPackage, Technique } from '../../types';
 import { useLanguage } from '../../context/LanguageContext';
 import { CubeIcon } from '../icons/CubeIcon';
 
@@ -46,6 +46,7 @@ export const ClassPackageModal: React.FC<ClassPackageModalProps> = ({ isOpen, on
     activities: '',
     generalRecommendations: '',
     materials: '',
+    technique: 'potters_wheel' as Technique,
   });
 
   useEffect(() => {
@@ -61,17 +62,19 @@ export const ClassPackageModal: React.FC<ClassPackageModalProps> = ({ isOpen, on
         activities: packageToEdit.details.activities.join('\n'),
         generalRecommendations: packageToEdit.details.generalRecommendations,
         materials: packageToEdit.details.materials,
+        technique: packageToEdit.details.technique || 'potters_wheel',
       });
     } else {
       setFormData({
         name: '', classes: 0, price: 0, description: '',
         imageUrl: '',
         duration: '', durationHours: 0, activities: '', generalRecommendations: '', materials: '',
+        technique: 'potters_wheel',
       });
     }
   }, [packageToEdit, isOpen]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
@@ -105,6 +108,7 @@ export const ClassPackageModal: React.FC<ClassPackageModalProps> = ({ isOpen, on
         activities: formData.activities.split('\n').filter(line => line.trim() !== ''),
         generalRecommendations: formData.generalRecommendations,
         materials: formData.materials,
+        technique: formData.technique,
       },
     };
     onSave(pkgData, packageToEdit?.id);
@@ -136,6 +140,15 @@ export const ClassPackageModal: React.FC<ClassPackageModalProps> = ({ isOpen, on
             <InputField label={t('admin.packageModal.nameLabel')} id="name" name="name" value={formData.name} onChange={handleChange} placeholder={t('admin.packageModal.namePlaceholder')} required />
             <InputField label={t('admin.packageModal.classesLabel')} id="classes" name="classes" type="number" value={formData.classes} onChange={handleChange} placeholder={t('admin.packageModal.classesPlaceholder')} required />
             <InputField label={t('admin.packageModal.priceLabel')} id="price" name="price" type="number" value={formData.price} onChange={handleChange} placeholder={t('admin.packageModal.pricePlaceholder')} required />
+            
+            <div>
+              <label htmlFor="technique" className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.packageModal.techniqueLabel')}</label>
+              <select id="technique" name="technique" value={formData.technique} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
+                  <option value="potters_wheel">{t('techniques.pottersWheelTitle')}</option>
+                  <option value="molding">{t('techniques.moldingTitle')}</option>
+              </select>
+            </div>
+            
             <div className="md:col-span-2">
                 <TextareaField label={t('admin.packageModal.descriptionLabel')} id="description" name="description" value={formData.description} onChange={handleChange} placeholder={t('admin.packageModal.descriptionPlaceholder')} />
             </div>
