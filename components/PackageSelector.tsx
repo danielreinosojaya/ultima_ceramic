@@ -31,7 +31,7 @@ export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, tech
   }, [technique]);
 
   return (
-    <div className="text-center p-6 bg-brand-surface rounded-xl shadow-subtle">
+    <div className="text-center p-6 bg-brand-surface rounded-xl shadow-subtle max-w-5xl mx-auto">
       <h2 className="text-3xl font-semibold text-brand-text mb-2">{t('packages.title')}</h2>
       <p className="text-brand-secondary mb-8">{t('packages.subtitle')}</p>
       <div className="grid md:grid-cols-3 gap-8">

@@ -178,60 +178,50 @@
     "instagram": "Instagram",
     "returnPolicies": "Return Policies"
   },
-  "pdf": {
-    "title": "Booking Confirmation",
-    "schoolName": "CeramicAlma",
-    "customerInfoTitle": "Customer Information",
-    "statusNotPaid": "PRE-BOOKING - PAYMENT PENDING",
-    "bookingCode": "Booking Code",
-    "packageName": "Package Name",
-    "packageDetailsTitle": "Package Details",
+  "modal": {
+    "title": "You have selected",
+    "subtitle": "This is what awaits you. Let's get creative!",
     "durationLabel": "Duration",
-    "durationValue": "2 hours per class",
-    "activitiesLabel": "Activities",
-    "activitiesValue": ["Clay kneading and preparation", "Centering clay on the wheel", "Creating basic cylinders and bowls", "Finishing and trimming techniques"],
-    "generalRecommendationsLabel": "Recommendations",
-    "generalRecommendationsValue": "Wear comfortable clothes that can get dirty, keep nails short, and tie back long hair. Bring your enthusiasm to learn!",
+    "daysDuration": "{{count}} days of access",
+    "activitiesLabel": "What We'll Do",
+    "generalRecommendationsLabel": "General Recommendations",
     "materialsLabel": "Materials",
-    "materialsValue": "Includes all necessary clay for the classes and use of studio tools.",
-    "scheduleTitle": "Class Schedule",
-    "dateHeader": "Date",
-    "timeHeader": "Time",
-    "instructorHeader": "Instructor",
-    "importantInfoTitle": "Important Information",
-    "policy": "Cancellation and Rescheduling Policy:\n- A minimum of 72 hours' notice is required to reschedule a class without penalty.\n- Cancellations made with less than 72 hours' notice are non-refundable.\n- Class packages are valid for 30 days from the date of the first scheduled class.",
-    "addressLabel": "Address",
-    "emailLabel": "Email",
-    "whatsappLabel": "WhatsApp",
-    "googleMapsLabel": "Find us on Google Maps",
-    "instagramLabel": "Instagram"
+    "accessIncludes": "Access Includes",
+    "howItWorks": "How It Works",
+    "backButton": "Choose Another",
+    "confirmButton": "Let's Go!",
+    "activationTitle": "How to Activate Your Subscription",
+    "activationStep1": "Complete your purchase and user information.",
+    "activationStep2": "We will confirm your payment within 24 business hours.",
+    "activationStep3": "Once confirmed, your access begins and you can start booking studio time via WhatsApp.",
+    "activationStartInfo": "Your {{duration}} days of access start from the moment your payment is confirmed."
   },
   "admin": {
     "headerTitle": "Administration Console",
     "productsTab": "Products",
     "calendarTab": "Calendar View",
-    "scheduleSettingsTab": "Schedule Config",
+    "scheduleSettingsTab": "Schedule Settings",
     "inquiriesTab": "Inquiries",
     "communicationsTab": "Communications",
-    "financialsTab": "Financial Center",
+    "financialsTab": "Financials",
     "customersTab": "Customers",
     "invoicingTab": "Invoicing",
-    "settingsTab": "Configuration",
+    "settingsTab": "Settings",
     "productManager": {
       "duplicateButton": "Duplicate",
       "duplicatePrefix": "Copy of "
     },
     "crm": {
-        "allCustomersTab": "All Customers",
-        "openStudioTab": "Open Studio"
+      "allCustomersTab": "All Customers",
+      "openStudioTab": "Open Studio"
     },
     "invoiceManager": {
       "title": "Invoice Requests",
-      "subtitle": "Manage and process invoice requests from customers.",
+      "subtitle": "Manage and process customer invoice requests.",
       "filterAll": "All",
       "filterPending": "Pending",
       "filterProcessed": "Processed",
-      "requestedAt": "Requested At",
+      "requestedAt": "Request Date",
       "customer": "Customer / Booking",
       "company": "Company Details",
       "status": "Status",
@@ -244,7 +234,7 @@
     },
     "inquiryManager": {
       "title": "Event Inquiries",
-      "subtitle": "Manage and follow up on private and group event requests.",
+      "subtitle": "Manage and follow up on requests for private and group events.",
       "received": "Received",
       "name": "Name",
       "participants": "Participants",
@@ -268,8 +258,8 @@
       "status_Archived": "Archived"
     },
     "errors": {
-      "DUPLICATE_BOOKING_ERROR": "The student is already booked for one of the selected time slots.",
-      "RESCHEDULE_SLOT_FULL": "The new slot is already full. Please choose another time.",
+      "DUPLICATE_BOOKING_ERROR": "The student is already enrolled in one of the selected time slots.",
+      "RESCHEDULE_SLOT_FULL": "The new time slot is already full. Please choose another.",
       "DEFAULT": "An unknown error occurred."
     }
   }
