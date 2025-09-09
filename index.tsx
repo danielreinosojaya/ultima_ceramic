@@ -1,7 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App.js';
-import { LanguageProvider } from './context/LanguageContext.js';
+// FIX: Changed import from App.js to App, and LanguageContext.js to LanguageContext
+import App from './App';
+import { LanguageProvider } from './context/LanguageContext';
 import './index.css';
 
 const rootElement = document.getElementById('root');

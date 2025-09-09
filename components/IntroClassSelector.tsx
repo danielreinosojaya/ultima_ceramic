@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useEffect } from 'react';
 import type { Product, IntroductoryClass, EnrichedIntroClassSession, IntroClassSession, AppData } from '../types.js';
 import * as dataService from '../services/dataService.js';
@@ -32,7 +29,7 @@ export const IntroClassSelector: React.FC<IntroClassSelectorProps> = ({ onConfir
 
   if (introClasses.length === 0) {
     return (
-      <div className="text-center p-6 bg-brand-surface rounded-xl shadow-subtle">
+      <div className="text-center p-6 bg-brand-surface rounded-xl shadow-subtle max-w-5xl mx-auto">
         <h2 className="text-3xl font-semibold text-brand-text mb-2">{t('introClass.title')}</h2>
         <p className="text-brand-secondary">Actualmente no hay clases introductorias programadas. ¡Vuelve pronto!</p>
       </div>
@@ -40,7 +37,7 @@ export const IntroClassSelector: React.FC<IntroClassSelectorProps> = ({ onConfir
   }
 
   return (
-    <div className="p-0 sm:p-6 bg-brand-surface rounded-xl shadow-none sm:shadow-subtle animate-fade-in-up">
+    <div className="p-0 sm:p-6 bg-brand-surface rounded-xl shadow-none sm:shadow-subtle animate-fade-in-up max-w-5xl mx-auto">
       <div className="text-center mb-8">
         <h2 className="text-3xl font-semibold text-brand-text mb-2">{t('introClass.title')}</h2>
         <p className="text-brand-secondary">{t('introClass.subtitle')}</p>
