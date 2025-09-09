@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type { ClassPackage, TimeSlot, EnrichedAvailableSlot, BookingMode, AppData } from '../types.js';
 import * as dataService from '../services/dataService.js';
 import { useLanguage } from '../context/LanguageContext.js';
@@ -35,6 +35,10 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
   const { t, language } = useLanguage();
   const [selectedSlots, setSelectedSlots] = useState<TimeSlot[]>(initialSlots);
   const [currentDate, setCurrentDate] = useState(getWeekStartDate(new Date()));
+
+  // Refs for mobile day carousel
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const dayRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const today = useMemo(() => {
     const d = new Date();
@@ -120,6 +124,17 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
     setSelectedDayIndex(newTodayIndex !== -1 ? newTodayIndex : 0);
   }, [weekDates, todayStr]);
 
+  // Effect to scroll the selected day into view on mobile
+  useEffect(() => {
+    if (dayRefs.current[selectedDayIndex]) {
+        dayRefs.current[selectedDayIndex]?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'nearest',
+            inline: 'center'
+        });
+    }
+  }, [selectedDayIndex]);
+
   return (
     <div className="bg-brand-surface p-4 sm:p-6 rounded-xl shadow-subtle animate-fade-in-up">
         <button onClick={onBack} className="text-brand-secondary hover:text-brand-text mb-4 transition-colors font-semibold">
@@ -197,26 +212,45 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
 
                 {/* --- MOBILE VIEW --- */}
                 <div className="block lg:hidden">
-                  <div className="border-b border-gray-200">
-                    <nav className="-mb-px flex space-x-2 sm:space-x-4 overflow-x-auto" aria-label="Days">
-                      {weekDates.map((date, index) => {
-                        const isSelected = index === selectedDayIndex;
-                        return (
-                          <button key={date.toISOString()} onClick={() => setSelectedDayIndex(index)}
-                            className={`flex-shrink-0 whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm text-center w-14 transition-colors duration-200 ${
-                              isSelected ? 'border-brand-primary text-brand-primary' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                            }`}
-                          >
-                            <span className="block">{date.toLocaleDateString(language, { weekday: 'short' })}</span>
-                            <span className="text-lg font-bold">{date.getDate()}</span>
-                          </button>
-                        )
-                      })}
-                    </nav>
+                  <div
+                    ref={scrollContainerRef}
+                    className="flex items-center space-x-2 overflow-x-auto pb-2 -mx-4 px-4"
+                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
+                  >
+                     {weekDates.map((date, index) => {
+                      const dateStr = formatDateToYYYYMMDD(date);
+                      const slotsForDay = scheduleData[dateStr] || [];
+                      const isPast = date < today;
+                      const hasAvailableSlots = !isPast && slotsForDay.length > 0;
+                      const isSelected = index === selectedDayIndex;
+
+                      return (
+                        <button
+                          key={date.toISOString()}
+                          ref={el => { dayRefs.current[index] = el; }}
+                          onClick={() => hasAvailableSlots && setSelectedDayIndex(index)}
+                          disabled={!hasAvailableSlots}
+                          className={`flex-shrink-0 w-16 h-20 rounded-lg flex flex-col items-center justify-center transition-all duration-300 relative border-2 ${
+                            isSelected
+                              ? 'bg-brand-primary text-white border-brand-primary shadow-lg'
+                              : hasAvailableSlots
+                              ? 'bg-white text-brand-text border-transparent hover:bg-gray-100'
+                              : 'bg-brand-background text-gray-400 border-transparent opacity-70 cursor-not-allowed'
+                          }`}
+                        >
+                          <span className="text-xs font-bold uppercase">{date.toLocaleDateString(language, { weekday: 'short' })}</span>
+                          <span className="text-2xl font-extrabold mt-1">{date.getDate()}</span>
+                          {hasAvailableSlots && (
+                             <div className={`absolute bottom-2 h-1.5 w-1.5 rounded-full transition-colors ${isSelected ? 'bg-white' : 'bg-brand-primary'}`}></div>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                   <div className="mt-4 space-y-2">
                     {(() => {
                       const selectedDate = weekDates[selectedDayIndex];
+                      if (!selectedDate) return null; // Guard against undefined date
                       const dateStr = formatDateToYYYYMMDD(selectedDate);
                       const slotsForDay = scheduleData[dateStr] || [];
                       const isPast = selectedDate < today;
