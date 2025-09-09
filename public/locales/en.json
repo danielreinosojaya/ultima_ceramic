@@ -6,6 +6,17 @@
   "footer": {
     "text": "CeramicAlma Pottery. All Rights Reserved."
   },
+  "techniques": {
+    "title": "Choose Your Technique",
+    "subtitle": "What would you like to focus on during your classes?",
+    "pottersWheelTitle": "Potter's Wheel",
+    "pottersWheelSubtitle": "Learn to center clay and create bowls, cups, and vases on the electric wheel.",
+    "moldingTitle": "Hand-building & Molding",
+    "moldingSubtitle": "Explore techniques like pinching, coiling, and slab building to create unique sculptural pieces.",
+    "selectButton": "See Packages",
+    "short_potters_wheel": "Wheel",
+    "short_molding": "Molding"
+  },
   "welcome": {
     "title": "Welcome to CeramicAlma",
     "subtitle": "Is this your first time with us?",
@@ -409,7 +420,8 @@
       "durationPlaceholder": "e.g. 2 hours per class",
       "activitiesPlaceholder": "Centering clay\nThrowing bowls...",
       "generalRecommendationsPlaceholder": "Comfortable clothes, be on time, etc...",
-      "materialsPlaceholder": "All clay included..."
+      "materialsPlaceholder": "All clay included...",
+      "techniqueLabel": "Technique"
     },
     "openStudioModal": {
         "createTitle": "Create Open Studio Subscription",

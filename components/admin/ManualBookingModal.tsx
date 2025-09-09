@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import type { Product, UserInfo, Booking, AddBookingResult, Customer, TimeSlot, EnrichedAvailableSlot, Instructor, ClassPackage, IntroductoryClass, AppData, CapacityMessageSettings } from '../../types';
+import type { Product, UserInfo, Booking, AddBookingResult, Customer, TimeSlot, EnrichedAvailableSlot, Instructor, ClassPackage, IntroductoryClass, AppData, CapacityMessageSettings, Technique } from '../../types';
 import * as dataService from '../../services/dataService';
 import { useLanguage } from '../../context/LanguageContext';
 import { COUNTRIES } from '@/constants';
@@ -149,7 +149,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
     const getTimesForDate = (date: Date): EnrichedAvailableSlot[] => {
         if (!selectedProduct || !appData) return [];
         if (selectedProduct.type === 'CLASS_PACKAGE') {
-            return dataService.getAvailableTimesForDate(date, appData);
+            return dataService.getAvailableTimesForDate(date, appData, selectedProduct.details.technique);
         }
         if (selectedProduct.type === 'INTRODUCTORY_CLASS') {
             const dateStr = formatDateToYYYYMMDD(date);
@@ -158,6 +158,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
             return sessionsForDate.map(s => ({
                 time: s.time,
                 instructorId: s.instructorId,
+                technique: selectedProduct.details.technique,
                 paidBookingsCount: s.paidBookingsCount,
                 totalBookingsCount: s.totalBookingsCount,
                 maxCapacity: s.capacity
@@ -226,6 +227,8 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
             userInfo,
             isPaid: false,
             price: finalPrice,
+            bookingMode: 'flexible' as const,
+            bookingDate: new Date().toISOString(),
         };
 
         const result = await dataService.addBooking(newBookingData);
@@ -288,10 +291,10 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
                                 <input type="text" name="lastName" value={userInfo.lastName} onChange={handleUserInputChange} placeholder={t('userInfoModal.lastNamePlaceholder')} className="w-full px-3 py-2 border border-gray-300 rounded-lg disabled:bg-gray-100" required disabled={!!selectedCustomer} />
                                 <input type="email" name="email" value={userInfo.email} onChange={handleUserInputChange} placeholder={t('userInfoModal.emailPlaceholder')} className="w-full px-3 py-2 border border-gray-300 rounded-lg disabled:bg-gray-100" required disabled={!!selectedCustomer} />
                                 <div className="flex gap-2">
-                                    <select name="countryCode" value={userInfo.countryCode} onChange={handleUserInputChange} className="border border-gray-300 rounded-lg bg-gray-50 disabled:bg-gray-100" disabled={!!selectedCustomer}>
+                                    <select name="countryCode" value={userInfo.countryCode} onChange={handleUserInputChange} className="border border-r-0 border-gray-300 rounded-l-lg bg-gray-50 disabled:bg-gray-100" disabled={!!selectedCustomer}>
                                         {COUNTRIES.map(c => <option key={c.name} value={c.code}>{c.flag} {c.code}</option>)}
                                     </select>
-                                    <input type="tel" name="phone" value={userInfo.phone} onChange={handleUserInputChange} placeholder={t('userInfoModal.phonePlaceholder')} className="w-full px-3 py-2 border border-gray-300 rounded-lg disabled:bg-gray-100" disabled={!!selectedCustomer} />
+                                    <input type="tel" name="phone" value={userInfo.phone} onChange={handleUserInputChange} placeholder={t('userInfoModal.phonePlaceholder')} className="w-full px-3 py-2 border border-gray-300 rounded-r-lg" required disabled={!!selectedCustomer} />
                                 </div>
                             </div>
                          </div>

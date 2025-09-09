@@ -4,7 +4,7 @@ import type {
     UITexts, FooterInfo, DayKey, AvailableSlot, GroupInquiry, AddBookingResult, 
     PaymentDetails, AttendanceStatus, ClientNotification, AutomationSettings, ClassPackage, 
     IntroductoryClass, OpenStudioSubscription, UserInfo, Customer, EnrichedIntroClassSession, 
-    BackgroundSettings, AppData, BankDetails, InvoiceRequest
+    BackgroundSettings, AppData, BankDetails, InvoiceRequest, Technique
 } from '../types';
 import { DAY_NAMES } from '../constants.ts';
 
@@ -328,14 +328,17 @@ const getBookingsForSlot = (date: Date, time: string, appData: Pick<AppData, 'bo
     return appData.bookings.filter(b => b.slots.some(s => s.date === dateStr && s.time === time));
 };
 
-export const getAvailableTimesForDate = (date: Date, appData: Pick<AppData, 'availability' | 'scheduleOverrides' | 'classCapacity' | 'bookings'>): EnrichedAvailableSlot[] => {
+export const getAvailableTimesForDate = (date: Date, appData: Pick<AppData, 'availability' | 'scheduleOverrides' | 'classCapacity' | 'bookings'>, technique?: Technique): EnrichedAvailableSlot[] => {
     const dateStr = formatDateToYYYYMMDD(date);
     const dayKey = DAY_NAMES[date.getDay()];
     const override = appData.scheduleOverrides[dateStr];
     
     if (override && override.slots === null) return [];
 
-    const baseSlots = override ? override.slots! : appData.availability[dayKey];
+    let baseSlots = override ? override.slots! : appData.availability[dayKey];
+    if (technique) {
+        baseSlots = baseSlots.filter(s => s.technique === technique);
+    }
     const maxCapacity = override?.capacity ?? appData.classCapacity.max;
 
     return baseSlots.map(slot => {
@@ -349,15 +352,15 @@ export const getAvailableTimesForDate = (date: Date, appData: Pick<AppData, 'ava
     });
 };
 
-export const getAllConfiguredTimesForDate = (date: Date, appData: Pick<AppData, 'availability' | 'scheduleOverrides' | 'classCapacity' | 'bookings'>): EnrichedAvailableSlot[] => {
-    return getAvailableTimesForDate(date, appData);
+export const getAllConfiguredTimesForDate = (date: Date, appData: Pick<AppData, 'availability' | 'scheduleOverrides' | 'classCapacity' | 'bookings'>, technique?: Technique): EnrichedAvailableSlot[] => {
+    return getAvailableTimesForDate(date, appData, technique);
 };
 
-export const checkMonthlyAvailability = (startDate: Date, slot: AvailableSlot, appData: Pick<AppData, 'availability' | 'scheduleOverrides' | 'classCapacity' | 'bookings'>): boolean => {
+export const checkMonthlyAvailability = (startDate: Date, slot: AvailableSlot, appData: Pick<AppData, 'availability' | 'scheduleOverrides' | 'classCapacity' | 'bookings'>, technique: Technique): boolean => {
     for (let i = 0; i < 4; i++) {
         const checkDate = new Date(startDate);
         checkDate.setDate(startDate.getDate() + (i * 7));
-        const daySlots = getAvailableTimesForDate(checkDate, appData);
+        const daySlots = getAvailableTimesForDate(checkDate, appData, technique);
         const matchingSlot = daySlots.find(s => s.time === slot.time && s.instructorId === slot.instructorId);
         if (!matchingSlot || matchingSlot.paidBookingsCount >= matchingSlot.maxCapacity) {
             return false;

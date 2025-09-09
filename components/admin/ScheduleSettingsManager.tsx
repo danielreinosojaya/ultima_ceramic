@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import * as dataService from '../../services/dataService';
 import { useLanguage } from '../../context/LanguageContext';
-import type { AvailableSlot, Instructor, ScheduleOverrides, DayKey, ClassCapacity } from '../../types';
+import type { AvailableSlot, Instructor, ScheduleOverrides, DayKey, ClassCapacity, Technique } from '../../types';
 import { DAY_NAMES } from '@/constants';
 import { PlusIcon } from '../icons/PlusIcon';
 import { TrashIcon } from '../icons/TrashIcon';
@@ -20,9 +20,9 @@ interface ScheduleSettingsManagerProps {
 export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = ({ availability, overrides, instructors, classCapacity, onDataChange }) => {
     const { t, language } = useLanguage();
     
-    const [newSlot, setNewSlot] = useState<{ day: DayKey, time: string, instructorId: number }>({ day: 'Monday', time: '', instructorId: instructors[0]?.id || 0 });
+    const [newSlot, setNewSlot] = useState<{ day: DayKey, time: string, instructorId: number, technique: Technique }>({ day: 'Monday', time: '', instructorId: instructors[0]?.id || 0, technique: 'potters_wheel' });
     const [selectedExceptionDate, setSelectedExceptionDate] = useState<Date | null>(null);
-    const [newExceptionSlot, setNewExceptionSlot] = useState<{ time: string, instructorId: number }>({ time: '', instructorId: instructors[0]?.id || 0 });
+    const [newExceptionSlot, setNewExceptionSlot] = useState<{ time: string, instructorId: number, technique: Technique }>({ time: '', instructorId: instructors[0]?.id || 0, technique: 'potters_wheel' });
     const [defaultCapacity, setDefaultCapacity] = useState<ClassCapacity>(classCapacity);
     const [isCapacitySaved, setIsCapacitySaved] = useState(false);
     
@@ -32,15 +32,15 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
             return;
         }
         const updatedAvailability = { ...availability };
-        updatedAvailability[day].push({ time: newSlot.time, instructorId: newSlot.instructorId });
+        updatedAvailability[day].push({ time: newSlot.time, instructorId: newSlot.instructorId, technique: newSlot.technique });
         updatedAvailability[day].sort((a, b) => a.time.localeCompare(b.time));
         await dataService.updateAvailability(updatedAvailability);
         onDataChange();
     };
 
-    const handleRemoveSlot = async (day: DayKey, time: string, instructorId: number) => {
+    const handleRemoveSlot = async (day: DayKey, slotToRemove: AvailableSlot) => {
         const updatedAvailability = { ...availability };
-        updatedAvailability[day] = updatedAvailability[day].filter(s => s.time !== time || s.instructorId !== instructorId);
+        updatedAvailability[day] = updatedAvailability[day].filter(s => s.time !== slotToRemove.time || s.instructorId !== slotToRemove.instructorId || s.technique !== slotToRemove.technique);
         await dataService.updateAvailability(updatedAvailability);
         onDataChange();
     };
@@ -53,18 +53,18 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
             const dayKey = DAY_NAMES[selectedExceptionDate.getDay()];
             updatedOverrides[dateStr] = { slots: [...availability[dayKey]] };
         }
-        updatedOverrides[dateStr].slots.push({ time: newExceptionSlot.time, instructorId: newExceptionSlot.instructorId });
-        updatedOverrides[dateStr].slots.sort((a, b) => a.time.localeCompare(b.time));
+        updatedOverrides[dateStr].slots!.push({ time: newExceptionSlot.time, instructorId: newExceptionSlot.instructorId, technique: newExceptionSlot.technique });
+        updatedOverrides[dateStr].slots!.sort((a, b) => a.time.localeCompare(b.time));
         await dataService.updateScheduleOverrides(updatedOverrides);
         onDataChange();
     };
 
-    const handleRemoveExceptionSlot = async (time: string, instructorId: number) => {
+    const handleRemoveExceptionSlot = async (slotToRemove: AvailableSlot) => {
         if (!selectedExceptionDate) return;
         const dateStr = formatDateToYYYYMMDD(selectedExceptionDate);
         const updatedOverrides = { ...overrides };
-        if (!updatedOverrides[dateStr]) return;
-        updatedOverrides[dateStr].slots = updatedOverrides[dateStr].slots.filter(s => s.time !== time || s.instructorId !== instructorId);
+        if (!updatedOverrides[dateStr] || !updatedOverrides[dateStr].slots) return;
+        updatedOverrides[dateStr].slots = updatedOverrides[dateStr].slots!.filter(s => s.time !== slotToRemove.time || s.instructorId !== slotToRemove.instructorId || s.technique !== slotToRemove.technique);
         await dataService.updateScheduleOverrides(updatedOverrides);
         onDataChange();
     };
@@ -162,17 +162,21 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
                             <h4 className="font-bold text-brand-text mb-2">{day}</h4>
                             <div className="space-y-2">
                                 {availability[day]?.map(slot => (
-                                    <div key={`${slot.time}-${slot.instructorId}`} className="flex items-center justify-between bg-white p-2 rounded-md text-sm">
-                                        <span>{slot.time} - {instructors.find(i => i.id === slot.instructorId)?.name || 'N/A'}</span>
-                                        <button onClick={() => handleRemoveSlot(day, slot.time, slot.instructorId)} className="text-red-500 hover:text-red-700"><TrashIcon className="w-4 h-4" /></button>
+                                    <div key={`${slot.time}-${slot.instructorId}-${slot.technique}`} className="flex items-center justify-between bg-white p-2 rounded-md text-sm">
+                                        <span>{slot.time} - {instructors.find(i => i.id === slot.instructorId)?.name || 'N/A'} ({t(`techniques.short_${slot.technique}`)})</span>
+                                        <button onClick={() => handleRemoveSlot(day, slot)} className="text-red-500 hover:text-red-700"><TrashIcon className="w-4 h-4" /></button>
                                     </div>
                                 ))}
                                 {availability[day]?.length === 0 && <p className="text-xs text-brand-secondary text-center">{t('admin.scheduleManager.noSlots')}</p>}
                             </div>
                             <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-200">
                                 <input type="time" onChange={e => setNewSlot({...newSlot, time: e.target.value})} className="p-1 border rounded-md text-sm"/>
-                                <select onChange={e => setNewSlot({...newSlot, instructorId: parseInt(e.target.value)})} className="p-1 border rounded-md text-sm">
+                                <select onChange={e => setNewSlot({...newSlot, instructorId: parseInt(e.target.value)})} className="p-1 border rounded-md text-sm bg-white">
                                     {instructors.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                                </select>
+                                <select onChange={e => setNewSlot({...newSlot, technique: e.target.value as Technique})} className="p-1 border rounded-md text-sm bg-white">
+                                    <option value="potters_wheel">{t('techniques.short_potters_wheel')}</option>
+                                    <option value="molding">{t('techniques.short_molding')}</option>
                                 </select>
                                 <button onClick={() => handleAddSlot(day)} className="p-2 bg-brand-primary text-white rounded-md"><PlusIcon className="w-4 h-4"/></button>
                             </div>
@@ -212,16 +216,20 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
                             </div>
                              <div className="space-y-2">
                                 {exceptionDaySlots.map(slot => (
-                                    <div key={`${slot.time}-${slot.instructorId}`} className="flex items-center justify-between bg-white p-2 rounded-md text-sm">
-                                        <span>{slot.time} - {instructors.find(i => i.id === slot.instructorId)?.name || 'N/A'}</span>
-                                        <button onClick={() => handleRemoveExceptionSlot(slot.time, slot.instructorId)} className="text-red-500 hover:text-red-700"><TrashIcon className="w-4 h-4" /></button>
+                                    <div key={`${slot.time}-${slot.instructorId}-${slot.technique}`} className="flex items-center justify-between bg-white p-2 rounded-md text-sm">
+                                        <span>{slot.time} - {instructors.find(i => i.id === slot.instructorId)?.name || 'N/A'} ({t(`techniques.short_${slot.technique}`)})</span>
+                                        <button onClick={() => handleRemoveExceptionSlot(slot)} className="text-red-500 hover:text-red-700"><TrashIcon className="w-4 h-4" /></button>
                                     </div>
                                 ))}
                              </div>
                              <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-200">
                                 <input type="time" onChange={e => setNewExceptionSlot({...newExceptionSlot, time: e.target.value})} className="p-1 border rounded-md text-sm"/>
-                                <select onChange={e => setNewExceptionSlot({...newExceptionSlot, instructorId: parseInt(e.target.value)})} className="p-1 border rounded-md text-sm">
+                                <select onChange={e => setNewExceptionSlot({...newExceptionSlot, instructorId: parseInt(e.target.value)})} className="p-1 border rounded-md text-sm bg-white">
                                     {instructors.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                                </select>
+                                <select onChange={e => setNewExceptionSlot({...newExceptionSlot, technique: e.target.value as Technique})} className="p-1 border rounded-md text-sm bg-white">
+                                    <option value="potters_wheel">{t('techniques.short_potters_wheel')}</option>
+                                    <option value="molding">{t('techniques.short_molding')}</option>
                                 </select>
                                 <button onClick={handleAddExceptionSlot} className="p-2 bg-brand-primary text-white rounded-md"><PlusIcon className="w-4 h-4"/></button>
                             </div>

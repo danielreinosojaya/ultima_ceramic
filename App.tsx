@@ -7,7 +7,7 @@ import { BookingSummary } from './components/BookingSummary.js';
 import { ClassInfoModal } from './components/ClassInfoModal.js';
 import { UserInfoModal } from './components/UserInfoModal.js';
 import { AdminConsole } from './components/admin/AdminConsole.js';
-import type { Product, ClassPackage, TimeSlot, BookingDetails, UserInfo, Booking, BookingMode, ConfirmationMessage, IntroClassSession, FooterInfo, GroupInquiry, AppView, DayKey, AvailableSlot, ScheduleOverrides, Instructor, ClassCapacity, CapacityMessageSettings, Announcement, AppData, BankDetails, InvoiceRequest } from './types.js';
+import type { Product, ClassPackage, TimeSlot, BookingDetails, UserInfo, Booking, BookingMode, ConfirmationMessage, IntroClassSession, FooterInfo, GroupInquiry, AppView, DayKey, AvailableSlot, ScheduleOverrides, Instructor, ClassCapacity, CapacityMessageSettings, Announcement, AppData, BankDetails, InvoiceRequest, Technique } from './types.js';
 import { generateBookingPDF } from './services/pdfService.js';
 import { useLanguage } from './context/LanguageContext.js';
 import * as dataService from './services/dataService.js';
@@ -23,6 +23,7 @@ import { MailIcon } from './components/icons/MailIcon.js';
 import { GroupInquiryForm } from './components/GroupInquiryForm.js';
 import { PrerequisiteModal } from './components/PrerequisiteModal.js';
 import { NotificationProvider } from './context/NotificationContext.js';
+import { TechniqueSelector } from './components/TechniqueSelector.js';
 
 interface InvoiceData {
     companyName: string;
@@ -45,6 +46,7 @@ const App: React.FC = () => {
   const [appData, setAppData] = useState<AppData | null>(null);
 
   // Booking Flow State
+  const [selectedTechnique, setSelectedTechnique] = useState<Technique | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedSlots, setSelectedSlots] = useState<TimeSlot[]>([]);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
@@ -123,6 +125,7 @@ const App: React.FC = () => {
     setConfirmedBooking(null);
     setBookingError(null);
     setInquirySubmitted(false);
+    setSelectedTechnique(null);
   }, []);
 
   const handleProductSelect = useCallback((product: Product) => {
@@ -415,8 +418,16 @@ const App: React.FC = () => {
               if (type === 'group_experience') navigateTo('group_experience');
               if (type === 'couples_experience') navigateTo('couples_experience');
             }} />;
+        case 'techniques':
+            return <TechniqueSelector 
+                onSelect={(technique) => {
+                    setSelectedTechnique(technique);
+                    navigateTo('packages');
+                }}
+                onBack={navigateBack}
+            />;
         case 'packages':
-            return <PackageSelector onSelect={handleProductSelect} />;
+            return <PackageSelector onSelect={handleProductSelect} technique={selectedTechnique} />;
         case 'intro_classes':
             return <IntroClassSelector onConfirm={handleIntroClassConfirm} appData={appData} onBack={navigateBack} />;
         case 'schedule':
@@ -479,7 +490,7 @@ const App: React.FC = () => {
       {isPrerequisiteModalVisible && (
         <PrerequisiteModal
             onClose={() => setIsPrerequisiteModalVisible(false)}
-            onConfirm={() => { setIsPrerequisiteModalVisible(false); navigateTo('packages'); }}
+            onConfirm={() => { setIsPrerequisiteModalVisible(false); navigateTo('techniques'); }}
             onGoToIntro={() => { setIsPrerequisiteModalVisible(false); navigateTo('intro_classes'); }}
         />
       )}

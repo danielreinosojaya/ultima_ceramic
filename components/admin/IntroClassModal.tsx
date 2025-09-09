@@ -32,9 +32,10 @@ const TextareaField: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement> 
 export const IntroClassModal: React.FC<IntroClassModalProps> = ({ isOpen, onClose, onSave, classToEdit }) => {
   const { t, language } = useLanguage();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // FIX: Added 'technique' to the initial state to satisfy the IntroductoryClassDetails type.
   const [formData, setFormData] = useState<Omit<IntroductoryClass, 'id' | 'isActive' | 'type'>>({
     name: '', price: 0, description: '', imageUrl: '', schedulingRules: [], overrides: [],
-    details: { duration: '', durationHours: 0, activities: [], generalRecommendations: '', materials: '' },
+    details: { duration: '', durationHours: 0, activities: [], generalRecommendations: '', materials: '', technique: 'potters_wheel' },
   });
   const [instructors, setInstructors] = useState<Instructor[]>([]);
   const [newRule, setNewRule] = useState({ dayOfWeek: 1, time: '', instructorId: 0, capacity: 8 });
@@ -48,6 +49,7 @@ export const IntroClassModal: React.FC<IntroClassModalProps> = ({ isOpen, onClos
       }
 
       if (classToEdit) {
+        // FIX: Ensured 'technique' is correctly populated when editing an existing class.
         setFormData({
           name: classToEdit.name,
           price: classToEdit.price,
@@ -61,12 +63,14 @@ export const IntroClassModal: React.FC<IntroClassModalProps> = ({ isOpen, onClos
             activities: classToEdit.details.activities || [],
             generalRecommendations: classToEdit.details.generalRecommendations,
             materials: classToEdit.details.materials,
+            technique: classToEdit.details.technique || 'potters_wheel',
           },
         });
       } else {
+        // FIX: Included 'technique' when resetting the form for a new class.
         setFormData({
           name: '', price: 0, description: '', imageUrl: '', schedulingRules: [], overrides: [],
-          details: { duration: '', durationHours: 0, activities: [], generalRecommendations: '', materials: '' },
+          details: { duration: '', durationHours: 0, activities: [], generalRecommendations: '', materials: '', technique: 'potters_wheel' },
         });
       }
     };
@@ -80,7 +84,7 @@ export const IntroClassModal: React.FC<IntroClassModalProps> = ({ isOpen, onClos
     setFormData(prev => ({ ...prev, [name]: value }));
   };
   
-  const handleDetailChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleDetailChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     const isActivity = name === 'activities';
     setFormData(prev => ({
@@ -195,6 +199,13 @@ export const IntroClassModal: React.FC<IntroClassModalProps> = ({ isOpen, onClos
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <InputField label={t('admin.packageModal.durationLabel')} name="duration" value={formData.details.duration} onChange={handleDetailChange} />
                     <InputField label={t('admin.packageModal.durationHoursLabel')} name="durationHours" type="number" step="0.5" value={formData.details.durationHours} onChange={handleDetailChange} />
+                    <div>
+                        <label htmlFor="technique" className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.packageModal.techniqueLabel')}</label>
+                        <select id="technique" name="technique" value={formData.details.technique} onChange={handleDetailChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
+                            <option value="potters_wheel">{t('techniques.pottersWheelTitle')}</option>
+                            <option value="molding">{t('techniques.moldingTitle')}</option>
+                        </select>
+                    </div>
                     <div className="md:col-span-2">
                         <TextareaField label={t('admin.packageModal.activitiesLabel')} name="activities" value={formData.details.activities.join('\n')} onChange={handleDetailChange} />
                     </div>

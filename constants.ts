@@ -62,6 +62,7 @@ export const DEFAULT_PRODUCTS: Product[] = [
     description: "Una introducción perfecta a los conceptos básicos del torno de alfarero.",
     imageUrl: "https://images.unsplash.com/photo-1554203198-0c19e710032b?q=80&w=1974&auto=format&fit=crop",
     details: {
+      technique: 'potters_wheel',
       duration: "2 horas por clase",
       durationHours: 2,
       activities: ["Amasado y preparación de la arcilla", "Centrado de la pella en el torno", "Creación de cilindros y cuencos básicos", "Técnicas de retoque y acabado"],
@@ -70,20 +71,21 @@ export const DEFAULT_PRODUCTS: Product[] = [
     },
     isActive: true
   },
-  {
+   {
     id: 2,
     type: 'CLASS_PACKAGE',
-    name: "Paquete de 8 Clases Libres",
-    classes: 8,
-    price: 450,
-    description: "Perfecciona tu técnica y desarrolla proyectos personales con más tiempo en el torno.",
-    imageUrl: "https://images.unsplash.com/photo-1605416325121-875b3d3f925c?q=80&w=2070&auto=format&fit=crop",
+    name: "Paquete de 4 Clases de Modelado",
+    classes: 4,
+    price: 220,
+    description: "Explora tu creatividad sin el torno, creando piezas únicas con técnicas manuales.",
+    imageUrl: "https://images.unsplash.com/photo-1565260524946-151243b3b4f9?q=80&w=1974&auto=format&fit=crop",
     details: {
-      duration: "2.5 horas por clase",
-      durationHours: 2.5,
-      activities: ["Desarrollo de proyectos personales", "Técnicas avanzadas de torneado", "Retorneado de piezas complejas", "Introducción al esmaltado"],
-      generalRecommendations: "Ideal para alumnos que ya completaron el curso de principiantes. Traer ideas y bocetos.",
-      materials: "Incluye 1 bolsa de arcilla y acceso a una variedad de esmaltes del taller."
+      technique: 'molding',
+      duration: "2 horas por clase",
+      durationHours: 2,
+      activities: ["Técnica del pellizco", "Construcción con churros", "Creación con planchas", "Esgrafiado y decoración"],
+      generalRecommendations: "Ideal para quienes buscan una experiencia más escultórica y libre. No se requiere experiencia previa.",
+      materials: "Incluye arcilla, herramientas y la quema de hasta 4 piezas medianas."
     },
     isActive: true
   },
@@ -110,6 +112,7 @@ export const DEFAULT_PRODUCTS: Product[] = [
     description: "Una experiencia única para un primer contacto con la arcilla y el torno. ¡Ideal para principiantes!",
     imageUrl: "https://images.unsplash.com/photo-1578701925695-8a0327f495e0?q=80&w=1968&auto=format&fit=crop",
     details: {
+      technique: 'potters_wheel',
       duration: "2.5 horas",
       durationHours: 2.5,
       activities: ["Demostración de amasado y centrado.", "Práctica guiada para crear tu primera pieza.", "Decoración básica con engobes.", "La pieza será esmaltada por el taller y estará lista en 3 semanas."],
@@ -149,12 +152,12 @@ export const DEFAULT_INSTRUCTORS: Instructor[] = [
 
 export const DEFAULT_AVAILABLE_SLOTS_BY_DAY: Record<DayKey, AvailableSlot[]> = {
   Sunday: [],
-  Monday: [{ time: '18:00', instructorId: 1 }, { time: '20:30', instructorId: 2 }],
-  Tuesday: [{ time: '10:00', instructorId: 1 }, { time: '18:00', instructorId: 2 }],
-  Wednesday: [{ time: '18:00', instructorId: 1 }, { time: '20:30', instructorId: 3 }],
-  Thursday: [{ time: '10:00', instructorId: 2 }, { time: '18:00', instructorId: 3 }],
-  Friday: [{ time: '17:00', instructorId: 1 }],
-  Saturday: [{ time: '10:00', instructorId: 3 }, { time: '12:30', instructorId: 1 }],
+  Monday: [{ time: '18:00', instructorId: 1, technique: 'potters_wheel' }, { time: '20:30', instructorId: 2, technique: 'molding' }],
+  Tuesday: [{ time: '10:00', instructorId: 1, technique: 'molding' }, { time: '18:00', instructorId: 2, technique: 'potters_wheel' }],
+  Wednesday: [{ time: '18:00', instructorId: 1, technique: 'potters_wheel' }, { time: '20:30', instructorId: 3, technique: 'potters_wheel' }],
+  Thursday: [{ time: '10:00', instructorId: 2, technique: 'molding' }, { time: '18:00', instructorId: 3, technique: 'molding' }],
+  Friday: [{ time: '17:00', instructorId: 1, technique: 'potters_wheel' }],
+  Saturday: [{ time: '10:00', instructorId: 3, technique: 'potters_wheel' }, { time: '12:30', instructorId: 1, technique: 'molding' }],
 };
 
 export const DEFAULT_POLICIES_TEXT = `Políticas de Cancelación y Reprogramación:
