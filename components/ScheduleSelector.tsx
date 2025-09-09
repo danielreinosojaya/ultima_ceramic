@@ -72,19 +72,19 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
       const data: Record<string, EnrichedAvailableSlot[]> = {};
       dates.forEach(date => {
           const dateStr = formatDateToYYYYMMDD(date);
-          data[dateStr] = dataService.getAllConfiguredTimesForDate(date, appData)
+          data[dateStr] = dataService.getAllConfiguredTimesForDate(date, appData, pkg.details.technique)
             .sort((a, b) => a.time.localeCompare(b.time));
       });
 
       return { weekDates: dates, scheduleData: data };
-  }, [currentDate, appData]);
+  }, [currentDate, appData, pkg.details.technique]);
   
   const handleSlotSelect = (date: Date, slot: EnrichedAvailableSlot) => {
     const dateStr = formatDateToYYYYMMDD(date);
     const isCurrentlySelected = selectedSlots.some(s => s.date === dateStr && s.time === slot.time);
 
     if (bookingMode === 'monthly') {
-      if (dataService.checkMonthlyAvailability(date, slot, appData)) {
+      if (dataService.checkMonthlyAvailability(date, slot, appData, pkg.details.technique)) {
         const newSlots: TimeSlot[] = [];
         for (let i = 0; i < 4; i++) {
             const classDate = new Date(date);
@@ -162,7 +162,7 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                                 const isSelected = selectedSlots.some(s => s.date === dateStr && s.time === slot.time);
                                 const isFull = slot.paidBookingsCount >= slot.maxCapacity;
                                 const isOutsideBookingWindow = bookingMode === 'flexible' && firstSelectionDate && bookingWindowEndDate && (date < firstSelectionDate || date > bookingWindowEndDate);
-                                const isMonthlyStartInvalid = bookingMode === 'monthly' && !dataService.checkMonthlyAvailability(date, slot, appData);
+                                const isMonthlyStartInvalid = bookingMode === 'monthly' && !dataService.checkMonthlyAvailability(date, slot, appData, pkg.details.technique);
                                 const isDisabled = isFull || (!isSelected && isOutsideBookingWindow) || isMonthlyStartInvalid;
 
                                 return (

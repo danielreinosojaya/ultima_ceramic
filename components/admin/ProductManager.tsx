@@ -12,6 +12,7 @@ import { ClassPackageModal } from './ClassPackageModal';
 import { IntroClassModal } from './IntroClassModal';
 import { OpenStudioModal } from './OpenStudioModal';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
+import { DuplicateIcon } from '../icons/DuplicateIcon';
 
 interface ProductManagerProps {
   products: Product[];
@@ -105,6 +106,19 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
     setIsOpenStudioModalOpen(false);
   };
 
+  const handleDuplicateProduct = async (productToDuplicate: Product) => {
+    const newProduct: Product = {
+      ...productToDuplicate,
+      id: Date.now(),
+      name: `${t('admin.productManager.duplicatePrefix')}${productToDuplicate.name}`,
+      isActive: false,
+    };
+
+    const currentProducts = await dataService.getProducts();
+    const updatedProducts = [...currentProducts, newProduct];
+    await dataService.updateProducts(updatedProducts);
+    onDataChange();
+  };
 
   const handleDeleteConfirm = async () => {
     if (productToDelete) {
@@ -270,6 +284,7 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex items-center space-x-2">
                         <button onClick={() => handleOpenEditModal(product)} className="text-brand-accent hover:text-brand-text p-1 rounded-md hover:bg-gray-100" title={t('admin.productManager.editButton')}><EditIcon className="w-5 h-5"/></button>
+                        <button onClick={() => handleDuplicateProduct(product)} className="text-brand-accent hover:text-brand-text p-1 rounded-md hover:bg-gray-100" title={t('admin.productManager.duplicateButton')}><DuplicateIcon className="w-5 h-5"/></button>
                         <button onClick={() => handleOpenDeleteModal(product)} className="text-red-600 hover:text-red-900 p-1 rounded-md hover:bg-red-50" title={t('admin.productManager.deleteButton')}><TrashIcon className="w-5 h-5"/></button>
                     </div>
                 </td>

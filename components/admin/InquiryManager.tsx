@@ -134,7 +134,10 @@ export const InquiryManager: React.FC<InquiryManagerProps> = ({ navigateToId, in
                                     {inquiry.participants}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-text">
-                                    {formatDate(inquiry.tentativeDate, { month: 'long', day: 'numeric', year: 'numeric' })}
+                                    <div>{formatDate(inquiry.tentativeDate, { month: 'long', day: 'numeric', year: 'numeric' })}</div>
+                                    {inquiry.tentativeTime && (
+                                        <div className="text-xs text-brand-secondary font-semibold">{new Date(`1970-01-01T${inquiry.tentativeTime}`).toLocaleTimeString(language, { hour: 'numeric', minute: '2-digit', hour12: true })}</div>
+                                    )}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                                      <select

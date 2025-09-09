@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import type { InvoiceRequest, InvoiceRequestStatus } from '../../types';
+import type { InvoiceRequest, InvoiceRequestStatus, NavigationState } from '../../types';
 import * as dataService from '../../services/dataService';
 import { useLanguage } from '../../context/LanguageContext';
 import { DocumentTextIcon } from '../icons/DocumentTextIcon';
 import { CheckCircleIcon } from '../icons/CheckCircleIcon';
+import { MailIcon } from '../icons/MailIcon';
+import { UserIcon } from '../icons/UserIcon';
 
 type FilterType = 'all' | 'Pending' | 'Processed';
 
@@ -16,9 +18,10 @@ interface InvoiceManagerProps {
     navigateToId?: string;
     invoiceRequests: InvoiceRequest[];
     onDataChange: () => void;
+    setNavigateTo: React.Dispatch<React.SetStateAction<NavigationState | null>>;
 }
 
-export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ navigateToId, invoiceRequests = [], onDataChange }) => {
+export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ navigateToId, invoiceRequests = [], onDataChange, setNavigateTo }) => {
     const { t, language } = useLanguage();
     const [highlightedRequestId, setHighlightedRequestId] = useState<string | null>(null);
     const [filter, setFilter] = useState<FilterType>('all');
@@ -94,13 +97,30 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ navigateToId, in
                                     {formatDate(req.requestedAt)}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="font-bold text-brand-text">{req.userInfo?.firstName} {req.userInfo?.lastName}</div>
-                                    <div className="text-sm text-brand-secondary font-mono">CODE: {req.bookingCode}</div>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <div className="font-bold text-brand-text">{req.userInfo?.firstName} {req.userInfo?.lastName}</div>
+                                            <div className="text-sm text-brand-secondary font-mono">CODE: {req.bookingCode}</div>
+                                        </div>
+                                        <button
+                                            onClick={() => req.userInfo?.email && setNavigateTo({ tab: 'customers', targetId: req.userInfo.email })}
+                                            className="ml-auto p-2 rounded-full text-brand-secondary hover:bg-gray-100 hover:text-brand-accent transition-colors"
+                                            title={t('admin.invoiceManager.goToCustomer')}
+                                        >
+                                            <UserIcon className="w-5 h-5"/>
+                                        </button>
+                                    </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="font-semibold text-brand-text">{req.companyName}</div>
                                     <div className="text-sm text-brand-secondary">RUC/ID: {req.taxId}</div>
                                     <div className="text-sm text-brand-secondary">{req.address}</div>
+                                    {req.email && (
+                                        <div className="flex items-center gap-2 mt-1 text-sm text-brand-accent">
+                                            <MailIcon className="w-4 h-4" />
+                                            <a href={`mailto:${req.email}`} className="hover:underline">{req.email}</a>
+                                        </div>
+                                    )}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="flex flex-col">
