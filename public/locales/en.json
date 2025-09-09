@@ -207,6 +207,33 @@
     "customersTab": "Customers",
     "invoicingTab": "Invoicing",
     "settingsTab": "Settings",
+    "customerDetail": {
+        "backButton": "Back to List",
+        "activePackages": "Active Packages",
+        "historyTitle": "Purchase History",
+        "noActivePackages": "This customer has no active packages.",
+        "progress": "Progress",
+        "progressText": "{{completed}} of {{total}} classes",
+        "nextClass": "Next Class",
+        "expiresOn": "Expires On",
+        "bookedOn": "Booked On",
+        "statusActive": "Active",
+        "statusExpired": "Expired",
+        "statusPendingPayment": "Pending Payment",
+        "statusCompleted": "Completed",
+        "history": {
+            "date": "Date",
+            "product": "Product",
+            "progress": "Progress",
+            "status": "Status",
+            "actions": "Actions",
+            "paid": "Paid",
+            "unpaid": "Unpaid",
+            "acceptPayment": "Accept Payment",
+            "deleteBooking": "Delete Booking"
+        },
+        "deleteConfirmText": "Are you sure you want to delete this booking? This action cannot be undone."
+    },
     "productManager": {
       "duplicateButton": "Duplicate",
       "duplicatePrefix": "Copy of "
