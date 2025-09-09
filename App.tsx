@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { WelcomeSelector } from './components/WelcomeSelector';
@@ -101,18 +102,22 @@ const App: React.FC = () => {
 
     const handleTechniqueSelect = (selectedTechnique: Technique) => {
         setTechnique(selectedTechnique);
-        setIsBookingTypeModalOpen(true);
+        setView('packages');
     };
 
     const handleBookingTypeSelect = (mode: BookingMode) => {
         setBookingMode(mode);
         setIsBookingTypeModalOpen(false);
-        setView('packages');
+        setIsClassInfoModalOpen(true);
     };
 
     const handlePackageSelect = (product: Product) => {
         setBookingDetails(prev => ({ ...prev, product }));
-        setIsClassInfoModalOpen(true);
+        if (product.type === 'CLASS_PACKAGE') {
+            setIsBookingTypeModalOpen(true);
+        } else {
+            setIsClassInfoModalOpen(true);
+        }
     };
 
     const handleClassInfoConfirm = () => {
