@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import type { ClientNotification, ClientNotificationType } from '../../types';
 import * as dataService from '../../services/dataService';
@@ -30,6 +31,15 @@ export const ClientNotificationLog: React.FC = () => {
     useEffect(() => {
         setCurrentPage(1);
     }, [searchTerm, filterType]);
+
+    const formatDate = (dateInput: string | null | undefined): string => {
+        if (!dateInput) return '---';
+        const date = new Date(dateInput);
+        if (isNaN(date.getTime()) || date.getTime() === 0) {
+            return '---';
+        }
+        return date.toLocaleString(language, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    };
 
     const filteredNotifications = useMemo(() => {
         return notifications.filter(n => {
@@ -110,7 +120,7 @@ export const ClientNotificationLog: React.FC = () => {
                         ) : paginatedNotifications.length > 0 ? paginatedNotifications.map((n) => (
                             <tr key={n.id}>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-text">
-                                    {new Date(n.createdAt).toLocaleString(language, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                    {formatDate(n.createdAt)}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="font-bold text-brand-text">{n.clientName}</div>
