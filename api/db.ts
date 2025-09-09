@@ -53,6 +53,7 @@ const SCHEMA_SQL = `
         country_code VARCHAR(10),
         participants INT,
         tentative_date DATE,
+        tentative_time VARCHAR(10),
         event_type VARCHAR(100),
         message TEXT,
         status VARCHAR(50),
@@ -102,6 +103,13 @@ const SCHEMA_SQL = `
 
 export async function ensureTablesExist() {
     await sql.query(SCHEMA_SQL);
+    // This is a simple migration to ensure existing tables are updated.
+    try {
+      await sql`ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS tentative_time VARCHAR(10);`;
+      console.log("Migration check: 'inquiries.tentative_time' column ensured.");
+    } catch (error) {
+      console.error("Error during migration for 'inquiries.tentative_time':", error);
+    }
 }
 
 const seedSetting = async (key: string, value: any) => {
