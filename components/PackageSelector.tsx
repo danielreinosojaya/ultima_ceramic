@@ -1,25 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import type { Product, OpenStudioSubscription, ClassPackage } from '../types';
+import type { Product, OpenStudioSubscription, ClassPackage, Technique } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import * as dataService from '../services/dataService';
 import { KeyIcon } from './icons/KeyIcon';
 
 interface PackageSelectorProps {
   onSelect: (pkg: Product) => void;
+  technique: Technique | null;
 }
 
-export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect }) => {
+export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, technique }) => {
   const { t } = useLanguage();
   const [packages, setPackages] = useState<Product[]>([]);
 
   useEffect(() => {
     const fetchPackages = async () => {
       const allProducts = await dataService.getProducts();
-      const activePackages = allProducts.filter(p => p.isActive && (p.type === 'CLASS_PACKAGE' || p.type === 'OPEN_STUDIO_SUBSCRIPTION'));
+      const activePackages = allProducts.filter(p => 
+        p.isActive && (
+            p.type === 'OPEN_STUDIO_SUBSCRIPTION' || 
+            (p.type === 'CLASS_PACKAGE' && p.details.technique === technique)
+        )
+      );
       setPackages(activePackages);
     };
-    fetchPackages();
-  }, []);
+
+    if (technique) {
+        fetchPackages();
+    }
+  }, [technique]);
 
   return (
     <div className="text-center p-6 bg-brand-surface rounded-xl shadow-subtle">
