@@ -208,6 +208,13 @@
     "customersTab": "Clientes",
     "invoicingTab": "Facturación",
     "settingsTab": "Configuración",
+    "search": {
+      "resultsFor": "Resultados para",
+      "noResults": "Sin resultados",
+      "noResultsMessage": "No se encontró ningún cliente con ese criterio.",
+      "goToWeek": "Ir a la semana",
+      "bookedSlots": "Clases Reservadas"
+    },
     "customerDetail": {
         "backButton": "Volver a la Lista",
         "activePackages": "Paquetes Activos",
@@ -222,6 +229,11 @@
         "statusExpired": "Expirado",
         "statusPendingPayment": "Pago Pendiente",
         "statusCompleted": "Completado",
+        "viewAttendanceButton": "Ver Historial de Asistencia",
+        "attendanceHistoryTitle": "Historial de Asistencia",
+        "attendanceHistorySubtitle": "Viendo la asistencia para {{name}}.",
+        "noAttendanceHistory": "No hay historial de asistencia para este cliente.",
+        "noAttendanceForMonth": "No se encontraron clases pasadas para este mes.",
         "history": {
             "date": "Fecha",
             "product": "Producto",
@@ -235,13 +247,39 @@
         },
         "deleteConfirmText": "¿Estás seguro de que quieres eliminar esta reserva? Esta acción no se puede deshacer."
     },
+    "attendance": {
+      "attended": "Asistió",
+      "noShow": "No Asistió",
+      "dateHeader": "Fecha",
+      "classHeader": "Clase",
+      "statusHeader": "Estado",
+      "statusattended": "Asistió",
+      "statusnoshow": "No Asistió",
+      "statusnotmarked": "Sin Marcar"
+    },
+    "financialDashboard": {
+      "packagesAndClasses": "Paquetes y Clases",
+      "openStudio": "Estudio Abierto",
+      "deleteConfirmTitle": "Eliminar Reserva",
+      "deleteConfirmText": "¿Estás seguro de que quieres eliminar permanentemente la reserva de {{name}}? Esta acción no se puede deshacer."
+    },
     "productManager": {
       "duplicateButton": "Duplicar",
       "duplicatePrefix": "Copia de "
     },
     "crm": {
       "allCustomersTab": "Todos los Clientes",
-      "openStudioTab": "Estudio Abierto"
+      "openStudioTab": "Estudio Abierto",
+      "openStudio": {
+        "status": "Estado",
+        "startDate": "Fecha de Inicio",
+        "remainingTime": "Tiempo Restante",
+        "purchaseDate": "Fecha de Compra",
+        "statusActive": "Activa",
+        "statusExpired": "Expirada",
+        "statusPendingPayment": "Pago Pendiente",
+        "d": "d"
+      }
     },
     "invoiceManager": {
       "title": "Solicitudes de Factura",
