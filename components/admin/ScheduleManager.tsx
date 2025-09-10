@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import type { Instructor, Booking, IntroductoryClass, Product, EditableBooking, RescheduleSlotInfo, PaymentDetails, AppData, InvoiceRequest, AdminTab } from '../../types';
+import type { Instructor, Booking, IntroductoryClass, Product, EditableBooking, RescheduleSlotInfo, PaymentDetails, AppData, InvoiceRequest, AdminTab, Customer } from '../../types';
 import * as dataService from '../../services/dataService';
 import { useLanguage } from '../../context/LanguageContext';
 import { DAY_NAMES, PALETTE_COLORS } from '../../constants.js';
@@ -11,6 +11,8 @@ import { AcceptPaymentModal } from './AcceptPaymentModal';
 import { EditBookingModal } from './EditBookingModal';
 import { RescheduleModal } from './RescheduleModal';
 import { InvoiceReminderModal } from './InvoiceReminderModal';
+import { MagnifyingGlassIcon } from '../icons/MagnifyingGlassIcon';
+import { CustomerSearchResultsPanel } from './CustomerSearchResultsPanel';
 
 const colorMap = PALETTE_COLORS.reduce((acc, color) => {
     acc[color.name] = { bg: color.bg.replace('bg-', ''), text: color.text.replace('text-', '') };
@@ -65,13 +67,24 @@ interface ScheduleManagerProps extends AppData {
     setNavigateTo: React.Dispatch<React.SetStateAction<NavigationState | null>>;
 }
 
-export const ScheduleManager: React.FC<ScheduleManagerProps> = ({ initialDate, onBackToMonth, onDataChange, invoiceRequests, setNavigateTo, ...appData }) => {
+// FIX: Refactored component to destructure props directly in the function signature.
+// This ensures correct type inference for the `...appData` rest parameter, resolving property access errors.
+export const ScheduleManager: React.FC<ScheduleManagerProps> = ({ 
+    initialDate, onBackToMonth, onDataChange, invoiceRequests, setNavigateTo, ...appData 
+}) => {
     const { t, language } = useLanguage();
     const [currentDate, setCurrentDate] = useState(getWeekStartDate(initialDate));
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [modalData, setModalData] = useState<{ date: string, time: string, attendees: any[], instructorId: number } | null>(null);
     const [showUnpaidOnly, setShowUnpaidOnly] = useState(false);
     const [now, setNow] = useState(new Date());
+
+    // State for search
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isSearchPanelOpen, setIsSearchPanelOpen] = useState(false);
+    const [searchCustomer, setSearchCustomer] = useState<Customer | null>(null);
+    const [bookingToHighlight, setBookingToHighlight] = useState<Booking | null>(null);
+
 
     // State for action modals
     const [bookingToManageId, setBookingToManageId] = useState<string | null>(null);
@@ -308,6 +321,48 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({ initialDate, o
         const subtitle = showUnpaidOnly ? t('admin.pdfReport.filteredSubtitle') : undefined;
         generateWeeklySchedulePDF(weekDates, dataToExport, language, showUnpaidOnly, subtitle);
     };
+    
+    const handleSearch = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!searchTerm.trim()) {
+            setIsSearchPanelOpen(false);
+            setSearchCustomer(null);
+            return;
+        }
+        const lowercasedTerm = searchTerm.toLowerCase();
+        const customers = dataService.getCustomers(appData.bookings);
+        
+        const foundCustomer = customers.find(customer => {
+            const userInfo = customer.userInfo;
+            return (
+                userInfo.firstName.toLowerCase().includes(lowercasedTerm) ||
+                userInfo.lastName.toLowerCase().includes(lowercasedTerm) ||
+                userInfo.email.toLowerCase().includes(lowercasedTerm) ||
+                customer.bookings.some(b => b.bookingCode?.toLowerCase().includes(lowercasedTerm))
+            );
+        });
+
+        setSearchCustomer(foundCustomer || null);
+        setIsSearchPanelOpen(true);
+    };
+
+    const handleNavigateFromSearch = (booking: Booking) => {
+        if (!booking.slots || booking.slots.length === 0) {
+            setIsSearchPanelOpen(false);
+            return;
+        }
+        const firstSlot = booking.slots.sort((a,b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))[0];
+        if (firstSlot) {
+            const firstSlotDate = new Date(firstSlot.date + 'T00:00:00');
+            setCurrentDate(getWeekStartDate(firstSlotDate));
+            setBookingToHighlight(booking);
+            setIsSearchPanelOpen(false);
+
+            setTimeout(() => {
+                setBookingToHighlight(null);
+            }, 4000); 
+        }
+    };
 
     const weekStart = weekDates[0];
     const weekEnd = weekDates[6];
@@ -403,6 +458,13 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({ initialDate, o
                 onGoToInvoicing={handleGoToInvoicing}
             />
         )}
+        {isSearchPanelOpen && (
+            <CustomerSearchResultsPanel 
+                customer={searchCustomer}
+                onClose={() => setIsSearchPanelOpen(false)}
+                onNavigate={handleNavigateFromSearch}
+            />
+        )}
 
         <div className="flex justify-between items-center mb-6">
             <div>
@@ -412,6 +474,18 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({ initialDate, o
                 <h2 className="text-2xl font-serif text-brand-text">Vista Semanal</h2>
             </div>
             <div className="flex items-center gap-4">
+                 <form onSubmit={handleSearch} className="relative">
+                    <input 
+                        type="text"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        placeholder={t('admin.weeklyView.searchPlaceholder')}
+                        className="w-64 pl-4 pr-10 py-2 text-sm border border-gray-300 rounded-full focus:ring-2 focus:ring-brand-primary focus:border-transparent"
+                    />
+                    <button type="submit" className="absolute top-1/2 right-3 -translate-y-1/2 text-gray-400 hover:text-brand-primary">
+                        <MagnifyingGlassIcon className="w-5 h-5" />
+                    </button>
+                </form>
                  <button 
                     onClick={handleDownloadPdf}
                     className="flex items-center justify-center gap-2 bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-4 rounded-lg hover:bg-brand-secondary hover:text-white transition-colors text-sm"
@@ -494,11 +568,12 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({ initialDate, o
                                                 {slots.map((slot, index) => {
                                                     const unpaidBookingsCount = slot.bookings.filter(b => !b.isPaid).length;
                                                     const hasUnpaidBookings = unpaidBookingsCount > 0;
+                                                    const isHighlighted = bookingToHighlight && slot.bookings.some(b => b.id === bookingToHighlight.id);
                                                     return (
                                                         <button 
                                                             key={index} 
                                                             onClick={() => handleShiftClick(dateStr, slot)}
-                                                            className={`w-full text-left p-2 rounded-md shadow-sm border-l-4 bg-${colorMap[instructor.colorScheme]?.bg || colorMap[defaultColorName].bg} border-${colorMap[instructor.colorScheme]?.text || colorMap[defaultColorName].text}/50 hover:shadow-md transition-shadow relative overflow-hidden`}>
+                                                            className={`w-full text-left p-2 rounded-md shadow-sm border-l-4 bg-${colorMap[instructor.colorScheme]?.bg || colorMap[defaultColorName].bg} border-${colorMap[instructor.colorScheme]?.text || colorMap[defaultColorName].text}/50 hover:shadow-md transition-shadow relative overflow-hidden ${isHighlighted ? 'animate-pulse-border' : ''}`}>
                                                             {hasUnpaidBookings && <div className="absolute inset-0 unpaid-booking-stripe opacity-70"></div>}
                                                             <div className="relative z-10">
                                                                 <div className={`font-bold text-xs text-${colorMap[instructor.colorScheme]?.text || colorMap[defaultColorName].text}`}>
@@ -570,11 +645,12 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({ initialDate, o
                                 {slots.map((slot, index) => {
                                     const unpaidBookingsCount = slot.bookings.filter(b => !b.isPaid).length;
                                     const hasUnpaidBookings = unpaidBookingsCount > 0;
+                                    const isHighlighted = bookingToHighlight && slot.bookings.some(b => b.id === bookingToHighlight.id);
                                     return (
                                         <button
                                             key={index}
                                             onClick={() => handleShiftClick(dateStr, slot)}
-                                            className="w-full text-left p-3 rounded-lg shadow-sm bg-white hover:shadow-md transition-shadow relative overflow-hidden border border-gray-200"
+                                            className={`w-full text-left p-3 rounded-lg shadow-sm bg-white hover:shadow-md transition-shadow relative overflow-hidden border border-gray-200 ${isHighlighted ? 'animate-pulse-border' : ''}`}
                                         >
                                             {hasUnpaidBookings && <div className="absolute inset-0 unpaid-booking-stripe opacity-70"></div>}
                                             <div className="relative z-10">

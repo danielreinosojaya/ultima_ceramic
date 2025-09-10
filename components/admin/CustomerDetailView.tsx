@@ -10,6 +10,7 @@ import { CurrencyDollarIcon } from '../icons/CurrencyDollarIcon.js';
 import { TrashIcon } from '../icons/TrashIcon.js';
 import { UserIcon } from '../icons/UserIcon.js';
 import { InvoiceReminderModal } from './InvoiceReminderModal.js';
+import { CustomerAttendanceHistory } from './CustomerAttendanceHistory.js';
 
 
 interface NavigationState {
@@ -61,6 +62,7 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer
   const [bookingToPay, setBookingToPay] = useState<Booking | null>(null);
   const [isInvoiceReminderOpen, setIsInvoiceReminderOpen] = useState(false);
   const [bookingForReminder, setBookingForReminder] = useState<Booking | null>(null);
+  const [isViewingAttendance, setIsViewingAttendance] = useState(false);
 
   const { totalValue, totalBookings, lastBookingDate } = useMemo(() => {
     const paidBookings = customer.bookings.filter(b => b.isPaid);
@@ -191,6 +193,14 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer
       }
   }
 
+  if (isViewingAttendance) {
+      return (
+        <CustomerAttendanceHistory 
+            customer={customer}
+            onBack={() => setIsViewingAttendance(false)}
+        />
+      );
+  }
 
   return (
     <div className="animate-fade-in">
@@ -238,6 +248,15 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer
       </div>
 
       <ActivePackagesDisplay packages={augmentedPackages} />
+      
+       <div className="mt-8">
+            <button
+                onClick={() => setIsViewingAttendance(true)}
+                className="w-full bg-white border-2 border-brand-primary text-brand-primary font-bold py-3 px-6 rounded-lg hover:bg-brand-primary hover:text-white transition-colors duration-300"
+            >
+                {t('admin.customerDetail.viewAttendanceButton')}
+            </button>
+        </div>
 
       <div className="mt-8">
         <h3 className="text-xl font-bold text-brand-text mb-4">{t('admin.customerDetail.historyTitle')}</h3>
