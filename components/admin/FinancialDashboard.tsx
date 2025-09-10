@@ -7,6 +7,8 @@ import { AcceptPaymentModal } from './AcceptPaymentModal.js';
 import { CurrencyDollarIcon } from '../icons/CurrencyDollarIcon.js';
 import { UserIcon } from '../icons/UserIcon.js';
 import { InvoiceReminderModal } from './InvoiceReminderModal.js';
+import { DeleteConfirmationModal } from './DeleteConfirmationModal.js';
+import { TrashIcon } from '../icons/TrashIcon.js';
 
 
 type FilterPeriod = 'today' | 'week' | 'month' | 'custom';
@@ -130,10 +132,11 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
     const [pendingPeriod, setPendingPeriod] = useState<FilterPeriod>('month');
     const [pendingCustomRange, setPendingCustomRange] = useState({ start: '', end: '' });
 
-    // State for payment modal
+    // State for action modals
     const [bookingToPay, setBookingToPay] = useState<Booking | null>(null);
     const [isInvoiceReminderOpen, setIsInvoiceReminderOpen] = useState(false);
     const [bookingForReminder, setBookingForReminder] = useState<Booking | null>(null);
+    const [bookingToDelete, setBookingToDelete] = useState<Booking | null>(null);
 
     const formatDate = (dateInput: Date | string | undefined | null, options: Intl.DateTimeFormatOptions = {}): string => {
         if (!dateInput) return '---';
@@ -299,6 +302,14 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
             onDataChange();
         }
     };
+    
+    const handleDeleteBooking = async () => {
+        if (bookingToDelete) {
+            await dataService.deleteBooking(bookingToDelete.id);
+            setBookingToDelete(null);
+            onDataChange();
+        }
+    };
 
     const handleGoToInvoicing = () => {
         if (!bookingForReminder) return;
@@ -357,6 +368,15 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                     onClose={() => setIsInvoiceReminderOpen(false)}
                     onProceed={handleProceedWithPayment}
                     onGoToInvoicing={handleGoToInvoicing}
+                />
+            )}
+            {bookingToDelete && (
+                <DeleteConfirmationModal
+                    isOpen={!!bookingToDelete}
+                    onClose={() => setBookingToDelete(null)}
+                    onConfirm={handleDeleteBooking}
+                    title={t('admin.financialDashboard.deleteConfirmTitle')}
+                    message={t('admin.financialDashboard.deleteConfirmText', { name: `${bookingToDelete.userInfo.firstName} ${bookingToDelete.userInfo.lastName}`})}
                 />
             )}
             
@@ -481,18 +501,25 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-right">
                                                 <div className="flex items-center justify-end gap-2">
                                                     <button 
-                                                        onClick={() => setNavigateTo({ tab: 'customers', targetId: b.userInfo.email })}
+                                                        onClick={(e) => { e.stopPropagation(); setNavigateTo({ tab: 'customers', targetId: b.userInfo.email }); }}
                                                         title="View Customer Profile"
                                                         className="flex items-center gap-1.5 bg-gray-100 text-gray-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-gray-200 transition-colors"
                                                     >
                                                         <UserIcon className="w-4 h-4" />
                                                     </button>
                                                     <button 
-                                                        onClick={() => handleAcceptPaymentClick(b)}
+                                                        onClick={(e) => { e.stopPropagation(); handleAcceptPaymentClick(b); }}
                                                         className="flex items-center gap-1.5 bg-green-100 text-green-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-green-200 transition-colors"
                                                     >
                                                         <CurrencyDollarIcon className="w-4 h-4" />
                                                         {t('admin.financialDashboard.pendingTable.acceptPayment')}
+                                                    </button>
+                                                     <button 
+                                                        onClick={(e) => { e.stopPropagation(); setBookingToDelete(b); }}
+                                                        title={t('admin.financialDashboard.deleteBooking')}
+                                                        className="flex items-center gap-1.5 bg-red-100 text-red-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-red-200 transition-colors"
+                                                    >
+                                                        <TrashIcon className="w-4 h-4" />
                                                     </button>
                                                 </div>
                                             </td>
