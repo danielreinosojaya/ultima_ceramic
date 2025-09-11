@@ -1,7 +1,6 @@
-
 // Basic Types
 export type DayKey = 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday';
-export type AppView = 'welcome' | 'techniques' | 'packages' | 'intro_classes' | 'schedule' | 'summary' | 'group_experience' | 'couples_experience';
+export type AppView = 'welcome' | 'techniques' | 'packages' | 'intro_classes' | 'schedule' | 'summary' | 'group_experience' | 'couples_experience' | 'confirmation';
 export type BookingMode = 'flexible' | 'monthly';
 export type Technique = 'potters_wheel' | 'molding';
 

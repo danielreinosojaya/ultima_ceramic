@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { WelcomeSelector } from './components/WelcomeSelector';
@@ -17,8 +15,9 @@ import { PrerequisiteModal } from './components/PrerequisiteModal';
 import { AnnouncementsBoard } from './components/AnnouncementsBoard';
 import { AdminConsole } from './components/admin/AdminConsole';
 import { NotificationProvider } from './context/NotificationContext';
+import { ConfirmationPage } from './components/ConfirmationPage';
 
-import type { AppView, Product, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession } from './types';
+import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession } from './types';
 import * as dataService from './services/dataService';
 import { useLanguage } from './context/LanguageContext';
 import { InstagramIcon } from './components/icons/InstagramIcon';
@@ -31,6 +30,7 @@ const App: React.FC = () => {
     const [isAdmin, setIsAdmin] = useState(false);
     const [view, setView] = useState<AppView>('welcome');
     const [bookingDetails, setBookingDetails] = useState<BookingDetails>({ product: null, slots: [], userInfo: null });
+    const [confirmedBooking, setConfirmedBooking] = useState<Booking | null>(null);
     const [technique, setTechnique] = useState<Technique | null>(null);
     const [bookingMode, setBookingMode] = useState<BookingMode | null>(null);
 
@@ -164,9 +164,10 @@ const App: React.FC = () => {
             const submit = async () => {
                 try {
                     const result = await dataService.addBooking(bookingData);
-                    if (result.success) {
+                    if (result.success && result.booking) {
+                        setConfirmedBooking(result.booking);
                         setIsUserInfoModalOpen(false);
-                        setView('summary');
+                        setView('confirmation');
                     } else {
                         alert(`Error: ${result.message}`);
                     }
@@ -185,6 +186,7 @@ const App: React.FC = () => {
         setBookingDetails({ product: null, slots: [], userInfo: null });
         setTechnique(null);
         setBookingMode(null);
+        setConfirmedBooking(null);
     };
 
     const renderView = () => {
@@ -214,7 +216,16 @@ const App: React.FC = () => {
                         />;
             case 'summary':
                 if (!bookingDetails.product) return <WelcomeSelector onSelect={handleWelcomeSelect} />;
-                return <BookingSummary bookingDetails={bookingDetails} onProceedToConfirmation={resetFlow} onBack={() => setView('welcome')} appData={appData} />;
+                return <BookingSummary bookingDetails={bookingDetails} onProceedToConfirmation={resetFlow} onBack={() => setView('schedule')} appData={appData} />;
+            case 'confirmation':
+                if (!confirmedBooking) return <WelcomeSelector onSelect={handleWelcomeSelect} />;
+                return <ConfirmationPage 
+                            booking={confirmedBooking} 
+                            bankDetails={appData.bankDetails}
+                            footerInfo={appData.footerInfo}
+                            policies={appData.policies}
+                            onFinish={resetFlow} 
+                        />;
             case 'group_experience':
             case 'couples_experience':
                 return <GroupInquiryForm 
