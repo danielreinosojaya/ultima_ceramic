@@ -45,7 +45,7 @@ export const IntroClassSelector: React.FC<IntroClassSelectorProps> = ({ onConfir
       
       <div className="space-y-12">
         {introClasses.map(product => {
-            const allSessions = dataService.generateIntroClassSessions(product, { bookings: appData.bookings }, { includeFull: true });
+            const allSessions = dataService.generateIntroClassSessions(product, { bookings: appData.bookings }, { includeFull: true, generationLimitInDays: 90 });
             
             return (
                  <IntroClassWizard 

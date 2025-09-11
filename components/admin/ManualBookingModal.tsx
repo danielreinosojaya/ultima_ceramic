@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { Product, UserInfo, Booking, AddBookingResult, Customer, TimeSlot, EnrichedAvailableSlot, Instructor, ClassPackage, IntroductoryClass, AppData, CapacityMessageSettings, Technique } from '../../types';
 import * as dataService from '../../services/dataService';
 import { useLanguage } from '../../context/LanguageContext';
-import { COUNTRIES } from '@/constants';
+// FIX: Import DAY_NAMES from constants to resolve undefined variable error.
+import { COUNTRIES, DAY_NAMES } from '@/constants';
 import { InstructorTag } from '../InstructorTag';
 import { CapacityIndicator } from '../CapacityIndicator';
 
@@ -128,12 +129,38 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
     const resetCustomerSelection = () => {
         setSelectedCustomer(null);
         setUserInfo({ firstName: '', lastName: '', email: '', phone: '', countryCode: COUNTRIES[0].code });
-        setIsCreatingNewCustomer(false);
+    };
+
+    const handleSubmitBooking = async () => {
+        if (!selectedProduct || !userInfo.firstName) return;
+        
+        const bookingData = {
+            product: selectedProduct!,
+            productId: selectedProduct!.id,
+            productType: selectedProduct!.type,
+            slots: selectedSlots,
+            userInfo,
+            isPaid: false, // Manual bookings are unpaid by default
+            price: Number(price) || 0,
+            bookingMode: 'flexible',
+            bookingDate: new Date().toISOString()
+        };
+
+        const result = await dataService.addBooking(bookingData);
+        if (result.success) {
+            onBookingAdded();
+        } else {
+            alert(`Error: ${result.message}`);
+        }
     };
 
     const handleGoToStep2 = () => {
-        if ((selectedCustomer || isCreatingNewCustomer) && selectedProduct) {
-            setStep(2);
+        if ((selectedCustomer || (isCreatingNewCustomer && userInfo.firstName)) && selectedProduct) {
+             if (selectedProduct.type === 'OPEN_STUDIO_SUBSCRIPTION') {
+                handleSubmitBooking();
+             } else {
+                setStep(2);
+             }
         }
     }
     
@@ -149,242 +176,189 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
     const getTimesForDate = (date: Date): EnrichedAvailableSlot[] => {
         if (!selectedProduct || !appData) return [];
         if (selectedProduct.type === 'CLASS_PACKAGE') {
-            return dataService.getAvailableTimesForDate(date, appData, selectedProduct.details.technique);
+            return dataService.getAvailableTimesForDate(date, appData, (selectedProduct as ClassPackage).details.technique);
         }
         if (selectedProduct.type === 'INTRODUCTORY_CLASS') {
             const dateStr = formatDateToYYYYMMDD(date);
-            const allSessions = dataService.generateIntroClassSessions(selectedProduct, { bookings: appData.bookings });
-            const sessionsForDate = allSessions.filter(s => s.date === dateStr);
-            return sessionsForDate.map(s => ({
-                time: s.time,
-                instructorId: s.instructorId,
-                technique: selectedProduct.details.technique,
-                paidBookingsCount: s.paidBookingsCount,
-                totalBookingsCount: s.totalBookingsCount,
-                maxCapacity: s.capacity
-            }));
+            const sessions = dataService.generateIntroClassSessions(selectedProduct as IntroductoryClass, appData, { includeFull: true, generationLimitInDays: 90 });
+            return sessions
+                .filter(s => s.date === dateStr)
+                .map(s => ({
+                    time: s.time,
+                    instructorId: s.instructorId,
+                    technique: (selectedProduct as IntroductoryClass).details.technique,
+                    paidBookingsCount: s.paidBookingsCount,
+                    totalBookingsCount: s.totalBookingsCount,
+                    maxCapacity: s.capacity,
+                }));
         }
         return [];
     };
 
     const handleDayClick = (day: number) => {
-        if (!selectedProduct) return;
         const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
         date.setHours(0, 0, 0, 0);
+        if (date < today) return;
         
-        const timesForDay = getTimesForDate(date);
-        if (date < today || timesForDay.length === 0) return;
-        
-        const dateStr = formatDateToYYYYMMDD(date);
-        const classesNeeded = selectedProduct.type === 'CLASS_PACKAGE' ? selectedProduct.classes : 1;
-        
-        if (selectedProduct.type === 'CLASS_PACKAGE') {
-            if (selectedSlots.some(s => s.date === dateStr)) {
-                setSelectedSlots(selectedSlots.filter(s => s.date !== dateStr));
-            } else if (selectedSlots.length < classesNeeded) {
-                setAvailableTimesForModal(timesForDay);
-                setModalState({ isOpen: true, date });
-            }
-        } else { // Introductory Class
-            setAvailableTimesForModal(timesForDay);
+        const availableTimes = getTimesForDate(date);
+        if(availableTimes.length > 0) {
+            setAvailableTimesForModal(availableTimes);
             setModalState({ isOpen: true, date });
         }
     };
     
     const handleSlotSelect = (slot: EnrichedAvailableSlot) => {
-        if (!modalState.date || !selectedProduct) return;
+        if (!modalState.date) return;
         const dateStr = formatDateToYYYYMMDD(modalState.date);
         const newSlot: TimeSlot = { date: dateStr, time: slot.time, instructorId: slot.instructorId };
         
-        if (selectedProduct.type === 'CLASS_PACKAGE') {
-            const classesNeeded = (selectedProduct as ClassPackage).classes;
-            if (selectedSlots.length < classesNeeded) {
-                setSelectedSlots([...selectedSlots, newSlot].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)));
+        const isSelected = selectedSlots.some(s => s.date === newSlot.date && s.time === newSlot.time);
+        if(isSelected) {
+            setSelectedSlots(prev => prev.filter(s => s.date !== newSlot.date || s.time !== newSlot.time));
+        } else {
+            if (selectedProduct?.type === 'CLASS_PACKAGE' && selectedSlots.length < (selectedProduct as ClassPackage).classes) {
+                 setSelectedSlots(prev => [...prev, newSlot].sort((a,b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)));
+            } else if (selectedProduct?.type === 'INTRODUCTORY_CLASS' && selectedSlots.length < 1) {
+                setSelectedSlots([newSlot]);
             }
-        } else { // Introductory Class - only one slot is selected
-            setSelectedSlots([newSlot]);
         }
         setModalState({ isOpen: false, date: null });
     };
-    
-    const classesNeeded = selectedProduct ? (selectedProduct.type === 'CLASS_PACKAGE' ? (selectedProduct as ClassPackage).classes : 1) : 0;
-    const classesRemaining = classesNeeded - selectedSlots.length;
-    const translatedDayNames = useMemo(() => [0, 1, 2, 3, 4, 5, 6].map(dayIndex => new Date(2024, 0, dayIndex + 7).toLocaleDateString(language, { weekday: 'short' })), [language]);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const finalPrice = typeof price === 'string' ? parseFloat(price) : price;
-        if (!selectedProduct || !userInfo.firstName || !userInfo.email || isNaN(finalPrice) || (classesNeeded > 0 && selectedSlots.length !== classesNeeded)) {
-            alert('Please complete all steps.');
-            return;
-        }
-
-        const newBookingData = {
-            product: selectedProduct,
-            productId: selectedProduct.id,
-            productType: selectedProduct.type as 'CLASS_PACKAGE' | 'INTRODUCTORY_CLASS' | 'OPEN_STUDIO_SUBSCRIPTION',
-            slots: selectedSlots,
-            userInfo,
-            isPaid: false,
-            price: finalPrice,
-            bookingMode: 'flexible' as const,
-            bookingDate: new Date().toISOString(),
-        };
-
-        const result = await dataService.addBooking(newBookingData);
-        if (result.success) onBookingAdded();
-        else alert(t(`admin.errors.${result.message}`));
+    const handleRemoveSlot = (slotToRemove: TimeSlot) => {
+        setSelectedSlots(prev => prev.filter(s => s !== slotToRemove));
     };
-
-    if (!appData) {
-      return (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-brand-surface rounded-xl p-6">Loading data...</div>
-        </div>
-      );
-    }
-
-    const renderStep1 = () => (
-        <>
-            <h2 className="text-2xl font-serif text-brand-accent mb-6 text-center">{t('admin.manualBookingModal.step1Title')}</h2>
-            <form onSubmit={(e) => { e.preventDefault(); handleGoToStep2(); }} className="space-y-4">
-                 {/* Customer Selection */}
-                 <div className="bg-brand-background p-4 rounded-lg">
-                    {!selectedCustomer && !isCreatingNewCustomer && (
-                         <div>
-                            <input 
-                                type="text"
-                                placeholder={t('admin.manualBookingModal.searchCustomerPlaceholder')}
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                            />
-                            {filteredCustomers.length > 0 && (
-                                <ul className="border border-gray-300 rounded-lg mt-1 max-h-32 overflow-y-auto bg-white">
-                                    {filteredCustomers.map(c => (
-                                        <li key={c.email} onClick={() => handleSelectCustomer(c)} className="p-2 hover:bg-brand-primary/20 cursor-pointer">
-                                            {c.userInfo.firstName} {c.userInfo.lastName} ({c.userInfo.email})
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                            <div className="text-center my-2">
-                                <button type="button" onClick={() => setIsCreatingNewCustomer(true)} className="text-sm font-semibold text-brand-accent hover:underline">
-                                    {t('admin.manualBookingModal.orCreateNew')}
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                    
-                    {(selectedCustomer || isCreatingNewCustomer) && (
-                         <div>
-                            <div className="flex justify-between items-center mb-2">
-                                <h3 className="text-sm font-bold text-brand-secondary">
-                                    {selectedCustomer ? t('admin.manualBookingModal.customerSelected') : t('admin.manualBookingModal.createNewCustomer')}
-                                </h3>
-                                <button type="button" onClick={resetCustomerSelection} className="text-sm font-semibold text-brand-accent hover:underline">
-                                    {t('admin.manualBookingModal.changeCustomer')}
-                                </button>
-                            </div>
-                            <div className="space-y-3 p-3 border border-gray-200 rounded-md bg-white">
-                                <input type="text" name="firstName" value={userInfo.firstName} onChange={handleUserInputChange} placeholder={t('userInfoModal.firstNamePlaceholder')} className="w-full px-3 py-2 border border-gray-300 rounded-lg disabled:bg-gray-100" required disabled={!!selectedCustomer} />
-                                <input type="text" name="lastName" value={userInfo.lastName} onChange={handleUserInputChange} placeholder={t('userInfoModal.lastNamePlaceholder')} className="w-full px-3 py-2 border border-gray-300 rounded-lg disabled:bg-gray-100" required disabled={!!selectedCustomer} />
-                                <input type="email" name="email" value={userInfo.email} onChange={handleUserInputChange} placeholder={t('userInfoModal.emailPlaceholder')} className="w-full px-3 py-2 border border-gray-300 rounded-lg disabled:bg-gray-100" required disabled={!!selectedCustomer} />
-                                <div className="flex gap-2">
-                                    <select name="countryCode" value={userInfo.countryCode} onChange={handleUserInputChange} className="border border-r-0 border-gray-300 rounded-l-lg bg-gray-50 disabled:bg-gray-100" disabled={!!selectedCustomer}>
-                                        {COUNTRIES.map(c => <option key={c.name} value={c.code}>{c.flag} {c.code}</option>)}
-                                    </select>
-                                    <input type="tel" name="phone" value={userInfo.phone} onChange={handleUserInputChange} placeholder={t('userInfoModal.phonePlaceholder')} className="w-full px-3 py-2 border border-gray-300 rounded-r-lg" required disabled={!!selectedCustomer} />
-                                </div>
-                            </div>
-                         </div>
-                    )}
-                </div>
-                {/* Product & Price */}
-                <div>
-                    <label htmlFor="product" className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.manualBookingModal.selectPackage')}</label>
-                    <select id="product" value={selectedProduct?.id || ''} onChange={(e) => setSelectedProduct(products.find(p => p.id === parseInt(e.target.value)) || null)} className="w-full px-3 py-2 border border-gray-300 rounded-lg" required>
-                        <option value="" disabled>-- {t('admin.manualBookingModal.selectPackage')} --</option>
-                        {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                </div>
-                <div>
-                    <label htmlFor="price" className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.manualBookingModal.priceLabel')}</label>
-                    <input type="number" step="0.01" name="price" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" className="w-full px-3 py-2 border border-gray-300 rounded-lg" required />
-                </div>
-
-                <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-gray-200">
-                    <button type="button" onClick={onClose} className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100">
-                        {t('admin.productManager.cancelButton')}
-                    </button>
-                    <button type="submit" disabled={!((selectedCustomer || isCreatingNewCustomer) && selectedProduct)} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent disabled:bg-gray-400">
-                        {t('admin.manualBookingModal.nextButton')}
-                    </button>
-                </div>
-            </form>
-        </>
-    );
     
-    const renderStep2 = () => (
-      selectedProduct && (
-        <>
-            <div className="flex justify-between items-center mb-4">
-                <button onClick={() => setStep(1)} className="text-brand-secondary hover:text-brand-accent transition-colors font-semibold">
-                    &larr; {t('admin.manualBookingModal.backButton')}
-                </button>
-                <h2 className="text-xl font-serif text-brand-accent text-center">{t('admin.manualBookingModal.step2Title')}</h2>
-                <div className="w-20"></div>
-            </div>
-            <div className="text-center mb-4 p-2 bg-brand-background rounded-md">
-                <p className="text-sm text-brand-secondary">{t('admin.manualBookingModal.scheduleFor')} <span className="font-bold">{userInfo.firstName} {userInfo.lastName}</span></p>
-                <p className="text-sm text-brand-secondary">Product: <span className="font-bold">{selectedProduct.name}</span></p>
-                <div className={`mt-2 text-md font-bold ${classesRemaining === 0 ? 'text-brand-success' : 'text-brand-text'}`}>
-                  {classesRemaining > 0 ? t('schedule.classesRemaining', { count: classesRemaining }) : t('schedule.allClassesSelected')}
-                </div>
-            </div>
-
-            {/* Calendar UI */}
-            <div className="w-full max-w-md mx-auto">
-                <div className="flex items-center justify-between mb-2">
-                    <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} disabled={currentDate.getMonth() === today.getMonth() && currentDate.getFullYear() === today.getFullYear()} className="p-2 rounded-full hover:bg-brand-background disabled:opacity-50">&larr;</button>
-                    <h3 className="text-lg font-bold text-brand-text capitalize">{currentDate.toLocaleString(language, { month: 'long', year: 'numeric' })}</h3>
-                    <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-2 rounded-full hover:bg-brand-background">&rarr;</button>
-                </div>
-                <div className="grid grid-cols-7 gap-1 text-center text-xs text-brand-secondary mb-1">
-                  {translatedDayNames.map(day => <div key={day} className="font-bold">{day}</div>)}
-                </div>
-                <div className="grid grid-cols-7 gap-1">
-                    {calendarDays.map((day, index) => {
-                        if (!day) return <div key={`blank-${index}`}></div>;
-                        const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day); date.setHours(0,0,0,0);
-                        const isPast = date < today;
-                        const isUnavailable = getTimesForDate(date).length === 0;
-                        const dayIsSelected = selectedSlots.some(s => s.date === formatDateToYYYYMMDD(date));
-                        const isDisabled = isPast || isUnavailable || (classesNeeded > 0 && selectedSlots.length >= classesNeeded && !dayIsSelected);
-                        return <button key={day} onClick={() => handleDayClick(day)} disabled={isDisabled} className={`w-full aspect-square rounded-full text-sm font-semibold transition-all ${isDisabled && !dayIsSelected ? 'text-gray-400 bg-gray-100 cursor-not-allowed' : 'hover:bg-brand-primary/20'} ${dayIsSelected ? 'bg-brand-primary text-white shadow-md' : 'bg-white'}`}>{day}</button>
-                    })}
-                </div>
-            </div>
-            
-            <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-gray-200">
-                <button type="button" onClick={onClose} className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100">
-                    {t('admin.productManager.cancelButton')}
-                </button>
-                <button type="button" onClick={handleSubmit} disabled={classesRemaining > 0} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent disabled:bg-gray-400">
-                    {t('admin.manualBookingModal.addBookingButton')}
-                </button>
-            </div>
-        </>
-      )
-    );
-
+    const slotsNeeded = selectedProduct?.type === 'CLASS_PACKAGE' ? (selectedProduct as ClassPackage).classes : selectedProduct?.type === 'INTRODUCTORY_CLASS' ? 1 : 0;
+    const areSlotsSelected = slotsNeeded === 0 || selectedSlots.length === slotsNeeded;
+    
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
             {modalState.isOpen && modalState.date && appData && (
-              <TimeSlotModal date={modalState.date} onClose={() => setModalState({ isOpen: false, date: null })} onSelect={handleSlotSelect} availableTimes={availableTimesForModal} instructors={appData.instructors} capacityMessages={appData.capacityMessages} />
+                <TimeSlotModal 
+                    date={modalState.date}
+                    onClose={() => setModalState({ isOpen: false, date: null })}
+                    onSelect={handleSlotSelect}
+                    availableTimes={availableTimesForModal}
+                    instructors={appData.instructors}
+                    capacityMessages={appData.capacityMessages}
+                />
             )}
-            <div className="bg-brand-surface rounded-xl shadow-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-fade-in-up" onClick={(e) => e.stopPropagation()}>
-                {step === 1 ? renderStep1() : renderStep2()}
+            <div className="bg-brand-surface rounded-xl shadow-2xl p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto animate-fade-in-up" onClick={(e) => e.stopPropagation()}>
+                <h2 className="text-2xl font-serif text-brand-accent mb-4 text-center">{t('admin.manualBookingModal.title')}</h2>
+                {step === 1 && (
+                    <div className="space-y-4">
+                        {/* Customer selection */}
+                        <div>
+                             <h3 className="font-bold text-brand-text mb-2">{t('admin.manualBookingModal.customerSectionTitle')}</h3>
+                             <div className="flex items-center gap-4 mb-2">
+                                <button onClick={() => {setIsCreatingNewCustomer(false); resetCustomerSelection();}} className={`px-4 py-2 rounded-md text-sm font-semibold ${!isCreatingNewCustomer ? 'bg-brand-primary text-white' : 'bg-gray-200'}`}>{t('admin.manualBookingModal.existingCustomer')}</button>
+                                <button onClick={() => {setIsCreatingNewCustomer(true); resetCustomerSelection();}} className={`px-4 py-2 rounded-md text-sm font-semibold ${isCreatingNewCustomer ? 'bg-brand-primary text-white' : 'bg-gray-200'}`}>{t('admin.manualBookingModal.newCustomer')}</button>
+                            </div>
+
+                             {isCreatingNewCustomer ? (
+                                <div className="p-4 border rounded-lg bg-gray-50 space-y-3 animate-fade-in-fast">
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <input type="text" name="firstName" value={userInfo.firstName} onChange={handleUserInputChange} placeholder={t('userInfoModal.firstNamePlaceholder')} className="w-full px-3 py-2 border rounded-lg" required />
+                                        <input type="text" name="lastName" value={userInfo.lastName} onChange={handleUserInputChange} placeholder={t('userInfoModal.lastNamePlaceholder')} className="w-full px-3 py-2 border rounded-lg" required />
+                                    </div>
+                                    <input type="email" name="email" value={userInfo.email} onChange={handleUserInputChange} placeholder={t('userInfoModal.emailPlaceholder')} className="w-full px-3 py-2 border rounded-lg" required />
+                                    <div className="flex gap-2">
+                                        <select name="countryCode" value={userInfo.countryCode} onChange={handleUserInputChange} className="border border-gray-300 rounded-lg bg-gray-50">
+                                            {COUNTRIES.map(c => <option key={c.name} value={c.code}>{c.flag} {c.code}</option>)}
+                                        </select>
+                                        <input type="tel" name="phone" value={userInfo.phone} onChange={handleUserInputChange} placeholder={t('userInfoModal.phonePlaceholder')} className="w-full px-3 py-2 border rounded-lg" />
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="relative animate-fade-in-fast">
+                                    <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder={t('admin.manualBookingModal.searchPlaceholder')} className="w-full p-2 border rounded-lg" />
+                                    {filteredCustomers.length > 0 && (
+                                        <ul className="absolute z-10 w-full bg-white border rounded-lg mt-1 shadow-lg max-h-48 overflow-y-auto">
+                                            {filteredCustomers.map(c => (
+                                                <li key={c.email} onClick={() => handleSelectCustomer(c)} className="p-2 hover:bg-gray-100 cursor-pointer">{c.userInfo.firstName} {c.userInfo.lastName} ({c.userInfo.email})</li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                    {selectedCustomer && (
+                                        <div className="mt-2 p-2 bg-blue-100 rounded-lg text-sm flex justify-between items-center">
+                                            <span>{t('admin.manualBookingModal.selected')}: {selectedCustomer.userInfo.firstName} {selectedCustomer.userInfo.lastName}</span>
+                                            <button onClick={resetCustomerSelection} className="text-red-500 font-bold">X</button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Product selection */}
+                        <div>
+                            <h3 className="font-bold text-brand-text mb-2">{t('admin.manualBookingModal.productSectionTitle')}</h3>
+                             <div className="grid grid-cols-2 gap-4">
+                                <select onChange={(e) => setSelectedProduct(products.find(p => p.id === Number(e.target.value)) || null)} className="w-full p-2 border rounded-lg bg-white">
+                                    <option value="">{t('admin.manualBookingModal.selectProduct')}</option>
+                                    {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                </select>
+                                <div>
+                                    <label htmlFor="price" className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.manualBookingModal.priceLabel')}</label>
+                                    <input type="number" step="0.01" name="price" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" className="w-full px-3 py-2 border rounded-lg" required />
+                                </div>
+                            </div>
+                        </div>
+
+                         <div className="mt-6 flex justify-end gap-3">
+                            <button type="button" onClick={onClose} className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100">{t('admin.productManager.cancelButton')}</button>
+                            <button type="button" onClick={handleGoToStep2} disabled={!selectedProduct || (!selectedCustomer && !isCreatingNewCustomer) || (isCreatingNewCustomer && !userInfo.firstName)} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent disabled:bg-gray-400">
+                                { selectedProduct && (selectedProduct.type === 'OPEN_STUDIO_SUBSCRIPTION') ? t('admin.manualBookingModal.saveButton') : t('admin.manualBookingModal.nextButton') }
+                            </button>
+                        </div>
+                    </div>
+                )}
+                {step === 2 && (
+                    <div className="animate-fade-in-fast">
+                         <h3 className="font-bold text-brand-text mb-2 text-center">{t('admin.manualBookingModal.scheduleSectionTitle')}</h3>
+                        <p className="text-center text-sm text-brand-secondary mb-4">{t('schedule.classesRemaining', { count: slotsNeeded - selectedSlots.length })}</p>
+
+                         <div className="flex items-center justify-between mb-2">
+                            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} disabled={currentDate.getMonth() === today.getMonth() && currentDate.getFullYear() === today.getFullYear()} className="p-2 rounded-full hover:bg-brand-background disabled:opacity-50">&larr;</button>
+                            <h4 className="text-lg font-bold text-brand-text capitalize">{currentDate.toLocaleString(language, { month: 'long', year: 'numeric' })}</h4>
+                            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-2 rounded-full hover:bg-brand-background">&rarr;</button>
+                        </div>
+                        <div className="grid grid-cols-7 gap-1 text-center text-xs text-brand-secondary mb-1">
+                            {DAY_NAMES.map(day => <div key={day} className="font-bold">{day.substring(0,3)}</div>)}
+                        </div>
+                        <div className="grid grid-cols-7 gap-1">
+                            {calendarDays.map((day, index) => {
+                                if (!day) return <div key={`blank-${index}`}></div>;
+                                const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+                                date.setHours(0,0,0,0);
+                                const isPast = date < today;
+                                const hasSlots = getTimesForDate(date).length > 0;
+                                const isDisabled = isPast || !hasSlots;
+
+                                return <button key={day} onClick={() => handleDayClick(day)} disabled={isDisabled} className={`w-full aspect-square rounded-full text-sm font-semibold transition-all ${isDisabled ? 'text-gray-400 bg-gray-100 cursor-not-allowed' : 'hover:bg-brand-primary/20 bg-white'}`}>{day}</button>
+                            })}
+                        </div>
+
+                         <div className="mt-4 p-2 bg-brand-background rounded-lg min-h-[50px]">
+                            <h4 className="text-sm font-bold text-brand-secondary mb-2">{t('admin.manualBookingModal.selectedSlots')}</h4>
+                             <div className="space-y-1">
+                                {selectedSlots.map(slot => (
+                                    <div key={`${slot.date}-${slot.time}`} className="flex justify-between items-center bg-white p-2 rounded text-sm">
+                                        <span>{new Date(slot.date + 'T00:00:00').toLocaleDateString(language, { weekday: 'short', month: 'short', day: 'numeric' })} @ {slot.time}</span>
+                                        <button onClick={() => handleRemoveSlot(slot)} className="text-red-500 font-bold">X</button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                         <div className="mt-6 flex justify-between items-center gap-3">
+                            <button type="button" onClick={() => setStep(1)} className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100">{t('admin.manualBookingModal.backButton')}</button>
+                            <button type="button" onClick={handleSubmitBooking} disabled={!areSlotsSelected} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent disabled:bg-gray-400">
+                                {t('admin.manualBookingModal.saveButton')}
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

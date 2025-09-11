@@ -1,3 +1,4 @@
+
 {
   "header": {
     "title": "Reservas CeramicAlma"
@@ -253,6 +254,9 @@
       "goToWeek": "Ir a la semana",
       "bookedSlots": "Clases Reservadas"
     },
+    "weeklyView": {
+      "searchPlaceholder": "Buscar por nombre, email o código..."
+    },
     "customerDetail": {
         "backButton": "Volver a la Lista",
         "activePackages": "Paquetes Activos",
@@ -317,8 +321,15 @@
         "statusActive": "Activa",
         "statusExpired": "Expirada",
         "statusPendingPayment": "Pago Pendiente",
-        "d": "d"
+        "d": "d",
+        "noSubscriptions": "No se encontraron suscripciones de Estudio Abierto."
       }
+    },
+    "invoiceReminderModal": {
+      "title": "Recordatorio de Factura Pendiente",
+      "message": "Este cliente tiene una solicitud de factura pendiente para esta reserva. ¿Deseas ir a la sección de facturación para procesarla antes de registrar el pago?",
+      "goToInvoicingButton": "Ir a Facturación",
+      "proceedButton": "Registrar Pago Igualmente"
     },
     "invoiceManager": {
       "title": "Solicitudes de Factura",
@@ -385,6 +396,10 @@
       "DEFAULT": "Ocurrió un error desconocido."
     },
     "scheduleManager": {
+      "defaultCapacityTitle": "Capacidad por Defecto de Clases",
+      "defaultCapacitySubtitle": "Establece el número máximo de alumnos para cada tipo de clase. Esto se aplicará a menos que se anule para un día específico.",
+      "saveCapacityButton": "Guardar Capacidades",
+      "capacitySavedMessage": "¡Guardado!",
       "capacityOverridePlaceholder": "Sobrescribir (ej. 5)"
     }
   }
