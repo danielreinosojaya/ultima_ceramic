@@ -128,6 +128,23 @@
     "validationEmail": "Please enter a valid email.",
     "validationPhone": "Please enter a valid phone number."
   },
+   "confirmation": {
+    "title": "Pre-Booking Confirmed!",
+    "subtitle": "Your spot is saved. Follow the payment instructions to complete your booking.",
+    "bookingCodeLabel": "Your Booking Code",
+    "copyCode": "Copy code",
+    "paymentInstructionsTitle": "Payment Instructions",
+    "bankName": "Bank",
+    "accountHolder": "Account Holder",
+    "accountNumber": "Account Number",
+    "accountType": "Account Type",
+    "taxId": "Tax ID",
+    "whatsappInstruction": "Please make the transfer and send us the receipt via WhatsApp, including your booking code ({{code}}), to activate your spot.",
+    "whatsappButton": "Send Receipt via WhatsApp",
+    "whatsappPreffiledMessage": "Hello, I just made a pre-booking with the code {{code}}. I'm attaching my proof of payment.",
+    "finishButton": "Back to Home",
+    "downloadTicket": "Download Reservation Ticket"
+  },
   "policyModal": {
     "title": "Studio Policies",
     "closeButton": "Close"
@@ -193,9 +210,31 @@
     "confirmButton": "Let's Go!",
     "activationTitle": "How to Activate Your Subscription",
     "activationStep1": "Complete your purchase and user information.",
-    "activationStep2": "We will confirm your payment within 24 business hours.",
-    "activationStep3": "Once confirmed, your access begins and you can start booking studio time via WhatsApp.",
-    "activationStartInfo": "Your {{duration}} days of access start from the moment your payment is confirmed."
+    "activationStep2": "We will confirm your payment within the next 24 business hours.",
+    "activationStep3": "Once confirmed, your access begins and you can start booking your studio time via WhatsApp.",
+    "activationStartInfo": "Your {{duration}} days of access begin from the moment your payment is confirmed."
+  },
+   "pdf": {
+    "title": "Reservation Ticket",
+    "schoolName": "CeramicAlma",
+    "customerInfoTitle": "Customer Information",
+    "statusNotPaid": "PRE-RESERVATION - PENDING PAYMENT",
+    "bookingCode": "Booking Code",
+    "packageDetailsTitle": "Package Details",
+    "durationLabel": "Duration",
+    "activitiesLabel": "Activities",
+    "generalRecommendationsLabel": "Recommendations",
+    "materialsLabel": "Materials",
+    "scheduleTitle": "Class Schedule",
+    "dateHeader": "Date",
+    "timeHeader": "Time",
+    "instructorHeader": "Instructor",
+    "importantInfoTitle": "Important Information",
+    "addressLabel": "Address",
+    "emailLabel": "Email",
+    "whatsappLabel": "WhatsApp",
+    "googleMapsLabel": "Find us on Google Maps",
+    "instagramLabel": "Instagram"
   },
   "admin": {
     "headerTitle": "Administration Console",

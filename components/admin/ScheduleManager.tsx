@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import type { Instructor, Booking, IntroductoryClass, Product, EditableBooking, RescheduleSlotInfo, PaymentDetails, AppData, InvoiceRequest, AdminTab, Customer } from '../../types';
+import type { Instructor, Booking, IntroductoryClass, Product, EditableBooking, RescheduleSlotInfo, PaymentDetails, AppData, InvoiceRequest, AdminTab, Customer, ClassPackage } from '../../types';
 import * as dataService from '../../services/dataService';
 import { useLanguage } from '../../context/LanguageContext';
 import { DAY_NAMES, PALETTE_COLORS } from '../../constants.js';
@@ -118,7 +118,10 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
 
         const { instructors, bookings, products, availability, scheduleOverrides } = appData;
         const introClassProducts = products.filter(p => p.type === 'INTRODUCTORY_CLASS') as IntroductoryClass[];
-        const packageClassProduct = products.find(p => p.type === 'CLASS_PACKAGE'); 
+        
+        const packageProducts = products.filter(p => p.type === 'CLASS_PACKAGE') as ClassPackage[];
+        const wheelPackage = packageProducts.find(p => p.details.technique === 'potters_wheel');
+        const moldingPackage = packageProducts.find(p => p.details.technique === 'molding');
 
         const data: ScheduleData = new Map();
 
@@ -132,16 +135,19 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 const overrideForDate = scheduleOverrides[dateStr];
                 const hasOverride = overrideForDate !== undefined;
 
-                if (packageClassProduct) {
-                    const packageSlotsSource = hasOverride ? overrideForDate.slots : availability[dayKey];
-                    const capacityForDay = hasOverride && overrideForDate.capacity ? overrideForDate.capacity : appData.classCapacity.max;
+                const packageSlotsSource = hasOverride ? overrideForDate.slots : availability[dayKey];
+                const capacityForDay = hasOverride && overrideForDate.capacity ? overrideForDate.capacity : appData.classCapacity.max;
 
-                    if (packageSlotsSource) {
-                        todaysSlots.push(...packageSlotsSource
-                            .filter(s => s.instructorId === instructor.id)
-                            .map(s => ({ ...s, product: packageClassProduct, isOverride: hasOverride, capacity: capacityForDay }))
-                        );
-                    }
+                if (packageSlotsSource) {
+                    todaysSlots.push(...packageSlotsSource
+                        .filter(s => s.instructorId === instructor.id)
+                        .map(s => {
+                            const productForSlot = s.technique === 'molding' ? moldingPackage : wheelPackage;
+                            if (!productForSlot) return null; // Safety check
+                            return { ...s, product: productForSlot, isOverride: hasOverride, capacity: capacityForDay };
+                        })
+                        .filter(Boolean)
+                    );
                 }
 
                 for (const introProduct of introClassProducts) {

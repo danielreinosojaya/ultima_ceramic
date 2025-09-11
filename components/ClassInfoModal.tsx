@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { Product, OpenStudioSubscription } from '../types.js';
 import { ClockIcon } from './icons/ClockIcon.js';
@@ -52,17 +53,21 @@ export const ClassInfoModal: React.FC<ClassInfoModalProps> = ({ product, onConfi
                 {details.howItWorks.map((item, index) => <li key={index}>{item}</li>)}
             </ul>
           </InfoDetail>
-          <div className="mt-6 border-t pt-6">
-            <InfoDetail icon={<CheckCircleIcon className="w-6 h-6 text-brand-success" />} label={t('modal.activationTitle')}>
-                <ol className="list-decimal list-inside space-y-2 mt-2 text-sm">
-                    <li>{t('modal.activationStep1')}</li>
-                    <li>{t('modal.activationStep2')}</li>
-                    <li>{t('modal.activationStep3')}</li>
-                </ol>
-                <p className="mt-3 font-semibold text-brand-text bg-amber-100 p-3 rounded-md border border-amber-300 text-xs">
+          <div className="mt-6 border-t border-brand-border pt-6 text-left">
+            <div className="flex items-center gap-3 mb-4">
+              <CheckCircleIcon className="w-7 h-7 text-brand-success flex-shrink-0" />
+              <h3 className="text-xl font-semibold text-brand-text">{t('modal.activationTitle')}</h3>
+            </div>
+              <ol className="list-decimal list-inside space-y-2 ml-4 text-brand-secondary">
+                  <li>{t('modal.activationStep1')}</li>
+                  <li>{t('modal.activationStep2')}</li>
+                  <li>{t('modal.activationStep3')}</li>
+              </ol>
+              <div className="mt-4 bg-amber-100 p-3 rounded-md border border-amber-300">
+                <p className="text-sm font-semibold text-amber-800 text-center">
                     {t('modal.activationStartInfo', { duration: details.durationDays })}
                 </p>
-            </InfoDetail>
+              </div>
           </div>
         </>
       )
