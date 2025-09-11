@@ -130,17 +130,45 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
                 <h2 className="text-xl font-serif text-brand-text mb-2">{t('admin.scheduleManager.defaultCapacityTitle')}</h2>
                 <p className="text-brand-secondary text-sm mb-4">{t('admin.scheduleManager.defaultCapacitySubtitle')}</p>
                  <div className="bg-brand-background p-4 rounded-lg">
-                    <label htmlFor="default-capacity" className="block text-sm font-bold text-brand-secondary mb-1">
-                      {t('admin.scheduleManager.defaultCapacityLabel')}
-                    </label>
-                    <div className="flex items-center gap-4">
-                        <input
-                            id="default-capacity"
-                            type="number"
-                            value={defaultCapacity.max}
-                            onChange={(e) => setDefaultCapacity({ max: parseInt(e.target.value, 10) || 0 })}
-                            className="w-full max-w-xs p-2 border rounded-lg"
-                        />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label htmlFor="potters_wheel-capacity" className="block text-sm font-bold text-brand-secondary mb-1">
+                                {t('techniques.pottersWheelTitle')}
+                            </label>
+                            <input
+                                id="potters_wheel-capacity"
+                                type="number"
+                                value={defaultCapacity.potters_wheel || ''}
+                                onChange={(e) => setDefaultCapacity(c => ({...c, potters_wheel: parseInt(e.target.value, 10) || 0 }))}
+                                className="w-full p-2 border rounded-lg"
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="molding-capacity" className="block text-sm font-bold text-brand-secondary mb-1">
+                                {t('techniques.moldingTitle')}
+                            </label>
+                            <input
+                                id="molding-capacity"
+                                type="number"
+                                value={defaultCapacity.molding || ''}
+                                onChange={(e) => setDefaultCapacity(c => ({...c, molding: parseInt(e.target.value, 10) || 0 }))}
+                                className="w-full p-2 border rounded-lg"
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="introductory_class-capacity" className="block text-sm font-bold text-brand-secondary mb-1">
+                                {t('admin.productManager.productType_INTRODUCTORY_CLASS')}
+                            </label>
+                            <input
+                                id="introductory_class-capacity"
+                                type="number"
+                                value={defaultCapacity.introductory_class || ''}
+                                onChange={(e) => setDefaultCapacity(c => ({...c, introductory_class: parseInt(e.target.value, 10) || 0 }))}
+                                className="w-full p-2 border rounded-lg"
+                            />
+                        </div>
+                    </div>
+                    <div className="flex items-center justify-end gap-4 mt-4">
                         <button onClick={handleSaveDefaultCapacity} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent">
                             {t('admin.scheduleManager.saveCapacityButton')}
                         </button>
@@ -210,7 +238,7 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
                                     type="number"
                                     value={exceptionDayCapacity ?? ''}
                                     onChange={handleCapacityOverrideChange}
-                                    placeholder={t('admin.scheduleManager.capacityOverridePlaceholder', { capacity: classCapacity.max })}
+                                    placeholder={t('admin.scheduleManager.capacityOverridePlaceholder')}
                                     className="w-full p-2 border rounded-lg text-sm mb-3"
                                 />
                             </div>
