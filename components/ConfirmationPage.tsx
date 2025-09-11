@@ -66,7 +66,11 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
             emailLabel: t('pdf.emailLabel'),
             whatsappLabel: t('pdf.whatsappLabel'),
             googleMapsLabel: t('pdf.googleMapsLabel'),
-            instagramLabel: t('pdf.instagramLabel')
+            instagramLabel: t('pdf.instagramLabel'),
+            accessDurationLabel: t('pdf.accessDurationLabel'),
+            accessIncludesLabel: t('pdf.accessIncludesLabel'),
+            howItWorksLabel: t('pdf.howItWorksLabel'),
+            days: t('pdf.days'),
         };
         
         await generateBookingPDF(booking, pdfTranslations, footerInfo, language);

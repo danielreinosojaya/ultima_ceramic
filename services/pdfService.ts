@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import type { Booking, FooterInfo, Product, Instructor } from '../types';
+import type { Booking, FooterInfo, Product, Instructor, OpenStudioSubscription } from '../types';
 import * as dataService from './dataService';
 import { DAY_NAMES } from '@/constants';
 
@@ -33,6 +33,10 @@ interface PdfTranslations {
   whatsappLabel: string;
   googleMapsLabel: string;
   instagramLabel: string;
+  accessDurationLabel: string;
+  accessIncludesLabel: string;
+  howItWorksLabel: string;
+  days: string;
 }
 
 interface ScheduleReportPdfTranslations {
@@ -187,14 +191,21 @@ export const generateBookingPDF = async (booking: Booking, translations: PdfTran
     return y + textHeight + 6;
   };
 
-  currentY = detail(translations.durationLabel, translations.durationValue, currentY);
-  currentY = detail(translations.activitiesLabel, translations.activitiesValue, currentY);
-  currentY = detail(translations.generalRecommendationsLabel, translations.generalRecommendationsValue, currentY);
-  currentY = detail(translations.materialsLabel, translations.materialsValue, currentY);
+  if (product.type === 'OPEN_STUDIO_SUBSCRIPTION') {
+      const openStudioDetails = product.details as OpenStudioSubscription['details'];
+      currentY = detail(translations.accessDurationLabel, `${openStudioDetails.durationDays} ${translations.days}`, currentY);
+      currentY = detail(translations.accessIncludesLabel, [openStudioDetails.timeLimit, openStudioDetails.materialsLimit], currentY);
+      currentY = detail(translations.howItWorksLabel, openStudioDetails.howItWorks, currentY);
+  } else {
+      currentY = detail(translations.durationLabel, translations.durationValue, currentY);
+      currentY = detail(translations.activitiesLabel, translations.activitiesValue, currentY);
+      currentY = detail(translations.generalRecommendationsLabel, translations.generalRecommendationsValue, currentY);
+      currentY = detail(translations.materialsLabel, translations.materialsValue, currentY);
+  }
   currentY += 10;
 
   // --- SCHEDULE TABLE ---
-  if (slots.length > 0) {
+  if (product.type !== 'OPEN_STUDIO_SUBSCRIPTION' && slots.length > 0) {
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(brandText);
