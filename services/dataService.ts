@@ -339,10 +339,10 @@ export const getAvailableTimesForDate = (date: Date, appData: Pick<AppData, 'ava
     if (technique) {
         baseSlots = baseSlots.filter(s => s.technique === technique);
     }
-    const maxCapacity = override?.capacity ?? appData.classCapacity.max;
 
     return baseSlots.map(slot => {
         const bookingsForSlot = getBookingsForSlot(date, slot.time, appData);
+        const maxCapacity = override?.capacity ?? (slot.technique === 'molding' ? appData.classCapacity.molding : appData.classCapacity.potters_wheel);
         return {
             ...slot,
             paidBookingsCount: bookingsForSlot.filter(b => b.isPaid).length,
@@ -378,8 +378,6 @@ export const getFutureCapacityMetrics = async (days: number): Promise<{ totalCap
         getClassCapacity()
     ]);
     
-    const appData = { products, bookings, availability, scheduleOverrides, classCapacity, instructors: [], capacityMessages: {} as any, announcements: [], policies: '', confirmationMessage: {} as any, footerInfo: {} as any, bankDetails: {} as any };
-
     let totalCapacity = 0;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -393,9 +391,17 @@ export const getFutureCapacityMetrics = async (days: number): Promise<{ totalCap
         const override = scheduleOverrides[dateStr];
         
         if (!(override && override.slots === null)) {
-            const slots = override ? override.slots! : availability[dayKey];
-            const capacity = override?.capacity ?? classCapacity.max;
-            totalCapacity += slots.length * capacity;
+            const slots = override?.slots ?? availability[dayKey];
+            const dailyOverrideCapacity = override?.capacity;
+
+            if (dailyOverrideCapacity !== undefined) {
+                totalCapacity += slots.length * dailyOverrideCapacity;
+            } else {
+                slots.forEach(slot => {
+                    const capacityForSlot = slot.technique === 'molding' ? classCapacity.molding : classCapacity.potters_wheel;
+                    totalCapacity += capacityForSlot;
+                });
+            }
         }
 
         const introClasses = products.filter(p => p.type === 'INTRODUCTORY_CLASS') as IntroductoryClass[];
