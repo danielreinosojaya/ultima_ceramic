@@ -128,6 +128,23 @@
     "validationEmail": "Por favor, introduce un email válido.",
     "validationPhone": "Por favor, introduce un número de teléfono válido."
   },
+  "confirmation": {
+    "title": "¡Pre-Reserva Confirmada!",
+    "subtitle": "Tu cupo está guardado. Sigue las instrucciones de pago para completar tu reserva.",
+    "bookingCodeLabel": "Tu Código de Reserva",
+    "copyCode": "Copiar código",
+    "paymentInstructionsTitle": "Instrucciones de Pago",
+    "bankName": "Banco",
+    "accountHolder": "Titular de la Cuenta",
+    "accountNumber": "Número de Cuenta",
+    "accountType": "Tipo de Cuenta",
+    "taxId": "Cédula/RUC",
+    "whatsappInstruction": "Por favor, realiza la transferencia y envíanos el comprobante por WhatsApp, incluyendo tu código de reserva ({{code}}), para activar tu cupo.",
+    "whatsappButton": "Enviar Comprobante por WhatsApp",
+    "whatsappPreffiledMessage": "Hola, acabo de hacer una pre-reserva con el código {{code}}. Adjunto mi comprobante de pago.",
+    "finishButton": "Volver al Inicio",
+    "downloadTicket": "Descargar Ticket de Reserva"
+  },
   "policyModal": {
     "title": "Políticas del Taller",
     "closeButton": "Cerrar"
@@ -195,7 +212,29 @@
     "activationStep1": "Completa tu compra y la información de usuario.",
     "activationStep2": "Confirmaremos tu pago dentro de las próximas 24 horas hábiles.",
     "activationStep3": "Una vez confirmado, tu acceso comienza y podrás empezar a reservar tu espacio en el taller vía WhatsApp.",
-    "activationStartInfo": "Tus {{duration}} días de acceso comienzan desde el momento en que se confirma tu pago."
+    "activationStartInfo": "Tus 30 días de acceso comienzan desde el momento en que se confirma tu pago."
+  },
+  "pdf": {
+    "title": "Ticket de Reserva",
+    "schoolName": "CeramicAlma",
+    "customerInfoTitle": "Información del Cliente",
+    "statusNotPaid": "PRE-RESERVA - PAGO PENDIENTE",
+    "bookingCode": "Código de Reserva",
+    "packageDetailsTitle": "Detalles del Paquete",
+    "durationLabel": "Duración",
+    "activitiesLabel": "Actividades",
+    "generalRecommendationsLabel": "Recomendaciones",
+    "materialsLabel": "Materiales",
+    "scheduleTitle": "Horario de Clases",
+    "dateHeader": "Fecha",
+    "timeHeader": "Hora",
+    "instructorHeader": "Instructora",
+    "importantInfoTitle": "Información Importante",
+    "addressLabel": "Dirección",
+    "emailLabel": "Email",
+    "whatsappLabel": "WhatsApp",
+    "googleMapsLabel": "Encuéntranos en Google Maps",
+    "instagramLabel": "Instagram"
   },
   "admin": {
     "headerTitle": "Consola de Administración",
