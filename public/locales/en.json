@@ -1,3 +1,4 @@
+
 {
   "header": {
     "title": "CeramicAlma Reservations"
@@ -253,6 +254,9 @@
       "goToWeek": "Go to week",
       "bookedSlots": "Booked Slots"
     },
+    "weeklyView": {
+      "searchPlaceholder": "Search by name, email, or code..."
+    },
     "customerDetail": {
         "backButton": "Back to List",
         "activePackages": "Active Packages",
@@ -317,8 +321,15 @@
         "statusActive": "Active",
         "statusExpired": "Expired",
         "statusPendingPayment": "Pending Payment",
-        "d": "d"
+        "d": "d",
+        "noSubscriptions": "No Open Studio subscriptions found."
       }
+    },
+    "invoiceReminderModal": {
+      "title": "Pending Invoice Reminder",
+      "message": "This client has a pending invoice request for this booking. Would you like to go to the invoicing section to process it before registering the payment?",
+      "goToInvoicingButton": "Go to Invoicing",
+      "proceedButton": "Register Payment Anyway"
     },
     "invoiceManager": {
       "title": "Invoice Requests",
@@ -385,6 +396,10 @@
       "DEFAULT": "An unknown error occurred."
     },
     "scheduleManager": {
+      "defaultCapacityTitle": "Default Class Capacity",
+      "defaultCapacitySubtitle": "Set the maximum number of students for each class type. This will apply unless overridden for a specific day.",
+      "saveCapacityButton": "Save Capacities",
+      "capacitySavedMessage": "Saved!",
       "capacityOverridePlaceholder": "Override (e.g. 5)"
     }
   }
