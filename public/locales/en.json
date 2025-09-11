@@ -1,4 +1,3 @@
-
 {
   "header": {
     "title": "CeramicAlma Reservations"
@@ -60,7 +59,11 @@
     "perMonth": "per month",
     "savingsCardTitle": "More Classes, More Savings",
     "savingsCardSubtitle": "Committing to a package helps you build a routine and offers a significant discount per class.",
-    "pricePerClass": "/class"
+    "pricePerClass": "/class",
+    "singleClassLabel": "Single Class",
+    "visualizerTitle": "Visualize Your Savings",
+    "visualizerSubtitle": "The price per class decreases as you buy a larger package.",
+    "savingsLabel": "Save {{amount}}"
   },
   "introClass": {
     "title": "Introductory Class",
@@ -137,7 +140,7 @@
     "validationEmail": "Please enter a valid email.",
     "validationPhone": "Please enter a valid phone number."
   },
-   "confirmation": {
+  "confirmation": {
     "title": "Pre-Booking Confirmed!",
     "subtitle": "Your spot is saved. Follow the payment instructions to complete your booking.",
     "bookingCodeLabel": "Your Booking Code",
@@ -224,17 +227,22 @@
     "activationStep3": "Once confirmed, your access begins and you can start booking your studio time via WhatsApp.",
     "activationStartInfo": "Your {{duration}} days of access begin from the moment your payment is confirmed."
   },
-   "pdf": {
+  "pdf": {
     "title": "Reservation Ticket",
     "schoolName": "CeramicAlma",
     "customerInfoTitle": "Customer Information",
     "statusNotPaid": "PRE-RESERVATION - PENDING PAYMENT",
     "bookingCode": "Booking Code",
+    "packageName": "Package Name",
     "packageDetailsTitle": "Package Details",
     "durationLabel": "Duration",
+    "durationValue": "2 hours per class",
     "activitiesLabel": "Activities",
+    "activitiesValue": [],
     "generalRecommendationsLabel": "Recommendations",
+    "generalRecommendationsValue": "",
     "materialsLabel": "Materials",
+    "materialsValue": "",
     "scheduleTitle": "Class Schedule",
     "dateHeader": "Date",
     "timeHeader": "Time",
@@ -245,9 +253,139 @@
     "emailLabel": "Email",
     "whatsappLabel": "WhatsApp",
     "googleMapsLabel": "Find us on Google Maps",
-    "instagramLabel": "Instagram"
+    "instagramLabel": "Instagram",
+    "accessDurationLabel": "Access Duration",
+    "accessIncludesLabel": "Access Includes",
+    "howItWorksLabel": "How It Works",
+    "days": "days"
   },
   "admin": {
-    "headerTitle": "Administration Console"
+    "headerTitle": "Administration Console",
+    "productsTab": "Products",
+    "calendarTab": "Calendar",
+    "scheduleSettingsTab": "Schedule Settings",
+    "inquiriesTab": "Inquiries",
+    "communicationsTab": "Communications",
+    "financialsTab": "Financials",
+    "customersTab": "Customers",
+    "invoicingTab": "Invoicing",
+    "settingsTab": "Settings",
+    "syncButton": {
+      "newData": "New data available. Click to refresh.",
+      "sync": "Sync Data"
+    },
+    "productManager": {
+      "title": "Product Manager",
+      "subtitle": "Manage all class packages, subscriptions, and introductory classes.",
+      "createButton": "Create New",
+      "imageLabel": "Image",
+      "priceLabel": "Price",
+      "statusLabel": "Status",
+      "actionsLabel": "Actions",
+      "changeImageLabel": "Change Image",
+      "productType": "Type",
+      "productType_CLASS_PACKAGE": "Class Package",
+      "productType_OPEN_STUDIO_SUBSCRIPTION": "Open Studio",
+      "productType_INTRODUCTORY_CLASS": "Intro Class",
+      "active": "Active",
+      "inactive": "Inactive",
+      "editButton": "Edit",
+      "duplicateButton": "Duplicate",
+      "duplicatePrefix": "Copy of ",
+      "deleteButton": "Delete",
+      "deleteConfirmTitle": "Confirm Deletion",
+      "deleteConfirmText": "Are you sure you want to delete this product? This action cannot be undone.",
+      "cancelButton": "Cancel",
+      "confirmDeleteButton": "Delete",
+      "introClass": "Introductory Class",
+      "classPackage": "Class Package",
+      "openStudioSubscription": "Open Studio Subscription"
+    },
+    "packageModal": {
+      "editTitle": "Edit Class Package",
+      "createTitle": "Create New Class Package",
+      "nameLabel": "Package Name",
+      "namePlaceholder": "e.g., 4-Class Potter's Wheel",
+      "classesLabel": "Number of Classes",
+      "classesPlaceholder": "e.g., 4",
+      "priceLabel": "Total Price",
+      "pricePlaceholder": "e.g., 250.00",
+      "techniqueLabel": "Technique",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "A short description for the package.",
+      "imageLabel": "Package Image",
+      "uploadImageButton": "Upload Image",
+      "detailsSectionTitle": "Class Details",
+      "durationLabel": "Duration per Class",
+      "durationPlaceholder": "e.g., 2 hours",
+      "durationHoursLabel": "Duration (in hours)",
+      "activitiesLabel": "Activities (one per line)",
+      "activitiesPlaceholder": "Kneading and centering\nCreating cylinders...",
+      "generalRecommendationsLabel": "General Recommendations",
+      "generalRecommendationsPlaceholder": "Wear comfortable clothes...",
+      "materialsLabel": "Materials Included",
+      "materialsPlaceholder": "Includes clay and tools...",
+      "saveButton": "Save Package"
+    },
+    "openStudioModal": {
+      "editTitle": "Edit Open Studio Subscription",
+      "createTitle": "Create Open Studio Subscription",
+      "namePlaceholder": "e.g., Monthly Studio Access",
+      "durationLabel": "Duration (in days)",
+      "timeLimitLabel": "Time Limit",
+      "timeLimitPlaceholder": "e.g., 10 hours per week",
+      "materialsLimitLabel": "Materials Limit",
+      "materialsLimitPlaceholder": "e.g., First bag of clay included",
+      "howItWorksLabel": "How It Works (one point per line)",
+      "howItWorksPlaceholder": "Book your time via WhatsApp..."
+    },
+    "introClassModal": {
+      "editTitle": "Edit Introductory Class",
+      "createTitle": "Create New Introductory Class",
+      "rulesTitle": "Weekly Recurring Schedule",
+      "rulesSubtitle": "Define the standard weekly slots for this class.",
+      "calendarTitle": "Calendar & Overrides",
+      "calendarSubtitle": "Click on a date to add, remove, or modify sessions for a specific day.",
+      "sessionEditor": {
+        "title": "Editing Sessions for",
+        "capacityDetails": "{paid}/{total} ({pending} pending)",
+        "noSessions": "No sessions for this day.",
+        "cancelAll": "Cancel all",
+        "resetToDefault": "Reset to default"
+      }
+    },
+    "inquiryManager": {
+      "title": "Inquiry Manager",
+      "subtitle": "Manage group and couple experience inquiries.",
+      "confirmDelete": "Are you sure you want to delete this inquiry?",
+      "deleteError": "Error deleting inquiry.",
+      "received": "Received",
+      "name": "Name",
+      "participants": "Participants",
+      "date": "Tentative Date",
+      "status": "Status",
+      "delete": "Delete",
+      "type_group": "Group",
+      "type_couple": "Couple",
+      "status_New": "New",
+      "status_Contacted": "Contacted",
+      "status_ProposalSent": "Proposal Sent",
+      "status_Confirmed": "Confirmed",
+      "status_Archived": "Archived",
+      "messageTitle": "Message",
+      "eventType": "Event Type",
+      "notSpecified": "Not specified",
+      "noInquiries": "No inquiries found.",
+      "notApplicable": "N/A",
+      "invalidDate": "Invalid Date"
+    },
+    "notifications": {
+      "title": "Notifications",
+      "newNotificationTitle": "New Notification",
+      "noNotifications": "No new notifications.",
+      "template_new_booking": "{{name}} made a new booking for {{summary}}.",
+      "template_new_inquiry": "{{name}} sent a new inquiry for a {{summary}} experience.",
+      "template_new_invoice_request": "{{name}} requested an invoice for booking {{summary}}."
+    }
   }
 }
