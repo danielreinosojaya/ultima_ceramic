@@ -3,6 +3,7 @@ import type { ClassPackage, TimeSlot, Product, BookingMode } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { CalendarIcon } from './icons/CalendarIcon';
 import { TrashIcon } from './icons/TrashIcon';
+import { SINGLE_CLASS_PRICE, VAT_RATE } from '../constants';
 
 interface BookingSidebarProps {
   product: Product;
@@ -21,6 +22,13 @@ export const BookingSidebar: React.FC<BookingSidebarProps> = ({ product, selecte
   
   const classesRemaining = product.classes - selectedSlots.length;
   
+  const originalPrice = product.classes * SINGLE_CLASS_PRICE;
+  const discount = originalPrice - product.price;
+
+  // Calculate Subtotal and VAT from the final price
+  const subtotal = product.price / (1 + VAT_RATE);
+  const vat = product.price - subtotal;
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     const adjustedDate = new Date(date.valueOf() + date.getTimezoneOffset() * 60 * 1000);
@@ -35,9 +43,36 @@ export const BookingSidebar: React.FC<BookingSidebarProps> = ({ product, selecte
     <div className="bg-brand-background p-6 rounded-lg sticky top-24 h-fit">
       <h3 className="text-xl font-serif text-brand-text mb-1">{t('summary.title')}</h3>
       <div className="border-t border-brand-border pt-4">
-        <div className="flex justify-between items-baseline mb-4">
-            <h4 className="font-bold text-brand-text">{product.name}</h4>
-            <p className="font-semibold text-brand-text">${product.price.toFixed(2)}</p>
+        <div className="space-y-3 mb-4 text-sm">
+            <h4 className="font-bold text-brand-text text-base">{product.name}</h4>
+            
+            {/* Savings Breakdown */}
+            <div className="space-y-1">
+                <div className="flex justify-between">
+                    <span className="text-brand-secondary">{t('summary.originalPrice')} ({product.classes} x ${SINGLE_CLASS_PRICE})</span>
+                    <span className="text-brand-secondary line-through">${originalPrice.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                    <span className="text-brand-success font-semibold">{t('summary.packageDiscount')}</span>
+                    <span className="text-brand-success font-semibold">-${(originalPrice - subtotal).toFixed(2)}</span>
+                </div>
+            </div>
+
+            {/* Final Price Breakdown */}
+            <div className="space-y-1 border-t border-brand-border pt-2 mt-2">
+                 <div className="flex justify-between">
+                    <span className="text-brand-secondary">{t('summary.subtotal')}</span>
+                    <span className="text-brand-secondary">${subtotal.toFixed(2)}</span>
+                </div>
+                 <div className="flex justify-between">
+                    <span className="text-brand-secondary">{t('summary.vat')}</span>
+                    <span className="text-brand-secondary">${vat.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between font-bold text-lg text-brand-text pt-1 mt-1">
+                    <span>{t('summary.totalToPay')}</span>
+                    <span>${product.price.toFixed(2)}</span>
+                </div>
+            </div>
         </div>
 
         <div className="mb-4">
