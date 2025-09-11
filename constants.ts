@@ -174,7 +174,11 @@ export const DEFAULT_CONFIRMATION_MESSAGE: ConfirmationMessage = {
   message: "¡Tu lugar está guardado! Completa el último paso para activar tu reserva."
 };
 
-export const DEFAULT_CLASS_CAPACITY: ClassCapacity = { max: 8 };
+export const DEFAULT_CLASS_CAPACITY: ClassCapacity = {
+    potters_wheel: 8,
+    molding: 8,
+    introductory_class: 6
+};
 
 export const DEFAULT_CAPACITY_MESSAGES: CapacityMessageSettings = {
     thresholds: [
