@@ -1,5 +1,8 @@
 import type { Product, AvailableSlot, Instructor, ConfirmationMessage, ClassCapacity, CapacityMessageSettings, DayKey, FooterInfo, AutomationSettings, BankDetails } from './types.js';
 
+export const SINGLE_CLASS_PRICE = 55;
+export const VAT_RATE = 0.15;
+
 export const PALETTE_COLORS = [
     { name: 'sky', bg: 'bg-sky-200', text: 'text-sky-800' },
     { name: 'teal', bg: 'bg-teal-200', text: 'text-teal-800' },

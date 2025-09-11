@@ -16,12 +16,12 @@
     "returningUserTitle": "Ya Soy Alumna",
     "returningUserSubtitle": "Si ya tomaste la clase de inicio, puedes reservar paquetes de clases o acceso al estudio.",
     "returningUserButton": "Ver Paquetes",
-    "groupExperienceTitle": "Experiencias para Parejas",
-    "groupExperienceSubtitle": "Una cita creativa y diferente. Moldeen una pieza juntos en el torno o creen piezas individuales, con la guía de un instructor.",
-    "groupExperienceButton": "Planifica tu Cita",
-    "couplesExperienceTitle": "Experiencias Grupales",
-    "couplesExperienceSubtitle": "Ideal para cumpleaños, team building o una reunión creativa entre amigos. Contáctanos para crear un evento a tu medida.",
-    "couplesExperienceButton": "Planifica Tu Evento"
+    "groupExperienceTitle": "Experiencias Grupales Privadas",
+    "groupExperienceSubtitle": "Ideal para cumpleaños, team building o una reunión creativa entre amigos. Contáctanos para crear un evento a tu medida.",
+    "groupExperienceButton": "Solicitar Información",
+    "couplesExperienceTitle": "Experiencia de Cerámica para Parejas",
+    "couplesExperienceSubtitle": "Una cita creativa y diferente. Creen algo hermoso juntos en una sesión privada.",
+    "couplesExperienceButton": "Planifica tu Cita"
   },
   "prerequisiteModal": {
     "title": "¡Qué bueno verte de nuevo!",
@@ -55,8 +55,12 @@
     "selectButton": "Seleccionar Paquete",
     "selectSubscriptionButton": "Más Info y Suscripción",
     "classes": "clases",
+    "class": "clase",
     "membershipLabel": "Membresía",
-    "perMonth": "por mes"
+    "perMonth": "por mes",
+    "savingsCardTitle": "Más Clases, Más Ahorro",
+    "savingsCardSubtitle": "Comprometerte con un paquete te ayuda a crear una rutina y ofrece un descuento significativo por clase.",
+    "pricePerClass": "/clase"
   },
   "introClass": {
     "title": "Clases Introductorias",
@@ -99,7 +103,12 @@
     "timeHeader": "Hora",
     "instructorHeader": "Instructor",
     "proceedToConfirmButton": "Proceder al Pago",
-    "activationNotice": "Tu suscripción se activará el día en que se confirme tu pago."
+    "activationNotice": "Tu suscripción se activará el día en que se confirme tu pago.",
+    "originalPrice": "Precio Original",
+    "packageDiscount": "Ahorro del Paquete",
+    "subtotal": "Subtotal",
+    "vat": "IVA (15%)",
+    "totalToPay": "Total a Pagar"
   },
   "userInfoModal": {
     "title": "Tu Información",
@@ -134,6 +143,7 @@
     "bookingCodeLabel": "Tu Código de Reserva",
     "copyCode": "Copiar código",
     "paymentInstructionsTitle": "Instrucciones de Pago",
+    "totalToPay": "Total a Pagar",
     "bankName": "Banco",
     "accountHolder": "Titular de la Cuenta",
     "accountNumber": "Número de Cuenta",
@@ -230,6 +240,7 @@
     "timeHeader": "Hora",
     "instructorHeader": "Instructora",
     "importantInfoTitle": "Información Importante",
+    "policy": "Políticas",
     "addressLabel": "Dirección",
     "emailLabel": "Email",
     "whatsappLabel": "WhatsApp",
@@ -237,170 +248,6 @@
     "instagramLabel": "Instagram"
   },
   "admin": {
-    "headerTitle": "Consola de Administración",
-    "productsTab": "Productos",
-    "calendarTab": "Vista de Calendario",
-    "scheduleSettingsTab": "Config. de Horarios",
-    "inquiriesTab": "Consultas",
-    "communicationsTab": "Comunicaciones",
-    "financialsTab": "Centro Financiero",
-    "customersTab": "Clientes",
-    "invoicingTab": "Facturación",
-    "settingsTab": "Configuración",
-    "search": {
-      "resultsFor": "Resultados para",
-      "noResults": "Sin resultados",
-      "noResultsMessage": "No se encontró ningún cliente con ese criterio.",
-      "goToWeek": "Ir a la semana",
-      "bookedSlots": "Clases Reservadas"
-    },
-    "weeklyView": {
-      "searchPlaceholder": "Buscar por nombre, email o código..."
-    },
-    "customerDetail": {
-        "backButton": "Volver a la Lista",
-        "activePackages": "Paquetes Activos",
-        "historyTitle": "Historial de Compras",
-        "noActivePackages": "Este cliente no tiene paquetes activos.",
-        "progress": "Progreso",
-        "progressText": "{{completed}} de {{total}} clases",
-        "nextClass": "Próxima Clase",
-        "expiresOn": "Expira el",
-        "bookedOn": "Reservado el",
-        "statusActive": "Activo",
-        "statusExpired": "Expirado",
-        "statusPendingPayment": "Pago Pendiente",
-        "statusCompleted": "Completado",
-        "viewAttendanceButton": "Ver Historial de Asistencia",
-        "attendanceHistoryTitle": "Historial de Asistencia",
-        "attendanceHistorySubtitle": "Viendo la asistencia para {{name}}.",
-        "noAttendanceHistory": "No hay historial de asistencia para este cliente.",
-        "noAttendanceForMonth": "No se encontraron clases pasadas para este mes.",
-        "history": {
-            "date": "Fecha",
-            "product": "Producto",
-            "progress": "Progreso",
-            "status": "Estado",
-            "actions": "Acciones",
-            "paid": "Pagado",
-            "unpaid": "No Pagado",
-            "acceptPayment": "Aceptar Pago",
-            "deleteBooking": "Eliminar Reserva"
-        },
-        "deleteConfirmText": "¿Estás seguro de que quieres eliminar esta reserva? Esta acción no se puede deshacer."
-    },
-    "attendance": {
-      "attended": "Asistió",
-      "noShow": "No Asistió",
-      "dateHeader": "Fecha",
-      "classHeader": "Clase",
-      "statusHeader": "Estado",
-      "statusattended": "Asistió",
-      "statusnoshow": "No Asistió",
-      "statusnotmarked": "Sin Marcar"
-    },
-    "financialDashboard": {
-      "packagesAndClasses": "Paquetes y Clases",
-      "openStudio": "Estudio Abierto",
-      "deleteConfirmTitle": "Eliminar Reserva",
-      "deleteConfirmText": "¿Estás seguro de que quieres eliminar permanentemente la reserva de {{name}}? Esta acción no se puede deshacer."
-    },
-    "productManager": {
-      "duplicateButton": "Duplicar",
-      "duplicatePrefix": "Copia de ",
-      "productType_INTRODUCTORY_CLASS": "Clase Introductoria"
-    },
-    "crm": {
-      "allCustomersTab": "Todos los Clientes",
-      "openStudioTab": "Estudio Abierto",
-      "openStudio": {
-        "status": "Estado",
-        "startDate": "Fecha de Inicio",
-        "remainingTime": "Tiempo Restante",
-        "purchaseDate": "Fecha de Compra",
-        "statusActive": "Activa",
-        "statusExpired": "Expirada",
-        "statusPendingPayment": "Pago Pendiente",
-        "d": "d",
-        "noSubscriptions": "No se encontraron suscripciones de Estudio Abierto."
-      }
-    },
-    "invoiceReminderModal": {
-      "title": "Recordatorio de Factura Pendiente",
-      "message": "Este cliente tiene una solicitud de factura pendiente para esta reserva. ¿Deseas ir a la sección de facturación para procesarla antes de registrar el pago?",
-      "goToInvoicingButton": "Ir a Facturación",
-      "proceedButton": "Registrar Pago Igualmente"
-    },
-    "invoiceManager": {
-      "title": "Solicitudes de Factura",
-      "subtitle": "Gestiona y procesa las solicitudes de factura de los clientes.",
-      "filterAll": "Todos",
-      "filterPending": "Pendientes",
-      "filterProcessed": "Procesadas",
-      "requestedAt": "Fecha Solicitud",
-      "customer": "Cliente / Reserva",
-      "company": "Datos de la Empresa",
-      "status": "Estado",
-      "actions": "Acciones",
-      "statusPending": "Pendiente",
-      "statusProcessed": "Procesada",
-      "markAsProcessed": "Marcar como Procesada",
-      "noRequests": "No se encontraron solicitudes de factura.",
-      "goToCustomer": "Ir al Perfil del Cliente"
-    },
-    "inquiryManager": {
-      "title": "Consultas de Eventos",
-      "subtitle": "Gestiona y haz seguimiento a las solicitudes para eventos privados y grupales.",
-      "received": "Recibido",
-      "name": "Nombre",
-      "participants": "Participantes",
-      "date": "Fecha Tentativa",
-      "status": "Estado",
-      "delete": "Eliminar",
-      "confirmDelete": "¿Estás seguro de que quieres eliminar esta consulta?",
-      "deleteError": "Error al eliminar la consulta.",
-      "type_group": "Grupo",
-      "type_couple": "Pareja",
-      "messageTitle": "Mensaje",
-      "eventType": "Tipo de Evento",
-      "notSpecified": "No especificado",
-      "noInquiries": "No se encontraron consultas de eventos.",
-      "invalidDate": "Fecha inválida",
-      "notApplicable": "N/A",
-      "status_New": "Nueva",
-      "status_Contacted": "Contactado",
-      "status_ProposalSent": "Propuesta Enviada",
-      "status_Confirmed": "Confirmado",
-      "status_Archived": "Archivado"
-    },
-    "clientNotificationLog": {
-      "title": "Registro de Comunicaciones",
-      "subtitle": "Revisa el historial de notificaciones enviadas a los clientes.",
-      "searchPlaceholder": "Buscar por nombre o email de cliente...",
-      "allTypes": "Todos los Tipos",
-      "type_PRE_BOOKING_CONFIRMATION": "Confirmación de Pre-reserva",
-      "type_PAYMENT_RECEIPT": "Recibo de Pago",
-      "type_CLASS_REMINDER": "Recordatorio de Clase",
-      "date": "Fecha",
-      "client": "Cliente",
-      "type": "Tipo de Comunicación",
-      "status": "Estado",
-      "status_Sent": "Enviado",
-      "status_Failed": "Fallido",
-      "status_Pending": "Pendiente",
-      "noNotifications": "No se encontraron notificaciones."
-    },
-    "errors": {
-      "DUPLICATE_BOOKING_ERROR": "El alumno ya está inscrito en uno de los horarios seleccionados.",
-      "RESCHEDULE_SLOT_FULL": "El nuevo horario ya está lleno. Por favor, elige otro.",
-      "DEFAULT": "Ocurrió un error desconocido."
-    },
-    "scheduleManager": {
-      "defaultCapacityTitle": "Capacidad por Defecto de Clases",
-      "defaultCapacitySubtitle": "Establece el número máximo de alumnos para cada tipo de clase. Esto se aplicará a menos que se anule para un día específico.",
-      "saveCapacityButton": "Guardar Capacidades",
-      "capacitySavedMessage": "¡Guardado!",
-      "capacityOverridePlaceholder": "Sobrescribir (ej. 5)"
-    }
+    "headerTitle": "Consola de Administración"
   }
 }

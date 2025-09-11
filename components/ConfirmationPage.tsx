@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { Booking, BankDetails, FooterInfo, Product } from '../types';
+import type { Booking, BankDetails, FooterInfo, Product, ClassPackage } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { CheckCircleIcon } from './icons/CheckCircleIcon';
 import { WhatsAppIcon } from './icons/WhatsAppIcon';
@@ -7,6 +7,7 @@ import { DocumentDuplicateIcon } from './icons/DocumentDuplicateIcon';
 import { InfoCircleIcon } from './icons/InfoCircleIcon';
 import { generateBookingPDF } from '../services/pdfService';
 import { DownloadIcon } from './icons/DownloadIcon';
+import { SINGLE_CLASS_PRICE, VAT_RATE } from '../constants';
 
 interface ConfirmationPageProps {
     booking: Booking;
@@ -19,6 +20,12 @@ interface ConfirmationPageProps {
 export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, bankDetails, footerInfo, policies, onFinish }) => {
     const { t, language } = useLanguage();
     const [copied, setCopied] = useState(false);
+
+    const isPackage = booking.product.type === 'CLASS_PACKAGE';
+    const originalPrice = isPackage ? (booking.product as ClassPackage).classes * SINGLE_CLASS_PRICE : booking.price;
+    const subtotal = booking.price / (1 + VAT_RATE);
+    const vat = booking.price - subtotal;
+    const discount = originalPrice - subtotal;
 
     const handleCopy = (text: string) => {
         navigator.clipboard.writeText(text).then(() => {
@@ -89,6 +96,36 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                     <p className="text-xs">{t('summary.activationNotice')}</p>
                 </div>
             )}
+            
+            <div className="mt-8">
+                <div className="mt-4 bg-brand-background p-6 rounded-lg space-y-2 text-sm">
+                    {isPackage && discount > 0 && (
+                        <>
+                            <div className="flex justify-between">
+                                <span className="text-brand-secondary">{t('summary.originalPrice')} ({(booking.product as ClassPackage).classes} x ${SINGLE_CLASS_PRICE})</span>
+                                <span className="text-brand-secondary line-through">${originalPrice.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-green-600 font-semibold">{t('summary.packageDiscount')}</span>
+                                <span className="text-green-600 font-semibold">-${discount.toFixed(2)}</span>
+                            </div>
+                            <div className="border-t border-brand-border/50 my-2"></div>
+                        </>
+                    )}
+                    <div className="flex justify-between">
+                        <span className="text-brand-secondary">{t('summary.subtotal')}</span>
+                        <span className="font-semibold text-brand-text">${subtotal.toFixed(2)}</span>
+                    </div>
+                     <div className="flex justify-between">
+                        <span className="text-brand-secondary">{t('summary.vat')}</span>
+                        <span className="font-semibold text-brand-text">${vat.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-xl border-t-2 border-brand-border pt-2 mt-2">
+                        <span className="text-brand-text">{t('summary.totalToPay')}</span>
+                        <span className="text-brand-text">${booking.price.toFixed(2)}</span>
+                    </div>
+                </div>
+            </div>
 
             <div className="mt-8">
                 <h3 className="text-xl font-bold text-brand-text text-center">{t('confirmation.paymentInstructionsTitle')}</h3>
