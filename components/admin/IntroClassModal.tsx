@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { IntroductoryClass, Instructor, SchedulingRule, SessionOverride } from '../../types';
+import type { IntroductoryClass, Instructor, SchedulingRule, SessionOverride, ClassCapacity } from '../../types';
 import { useLanguage } from '../../context/LanguageContext';
 import * as dataService from '../../services/dataService';
 import { CubeIcon } from '../icons/CubeIcon';
@@ -42,10 +42,13 @@ export const IntroClassModal: React.FC<IntroClassModalProps> = ({ isOpen, onClos
 
   useEffect(() => {
     const initialize = async () => {
-      const currentInstructors = await dataService.getInstructors();
+      const [currentInstructors, classCapacity] = await Promise.all([
+         dataService.getInstructors(),
+         dataService.getClassCapacity()
+      ]);
       setInstructors(currentInstructors);
       if (currentInstructors.length > 0) {
-          setNewRule(s => ({...s, instructorId: currentInstructors[0].id }));
+          setNewRule(s => ({...s, instructorId: currentInstructors[0].id, capacity: classCapacity.introductory_class || 6 }));
       }
 
       if (classToEdit) {

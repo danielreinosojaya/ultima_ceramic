@@ -236,7 +236,9 @@ export interface ConfirmationMessage {
 }
 
 export interface ClassCapacity {
-  max: number;
+  potters_wheel: number;
+  molding: number;
+  introductory_class: number;
 }
 
 export type CapacityLevel = 'available' | 'few' | 'last';

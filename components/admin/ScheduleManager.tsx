@@ -116,7 +116,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             dates.push(date);
         }
 
-        const { instructors, bookings, products, availability, scheduleOverrides } = appData;
+        const { instructors, bookings, products, availability, scheduleOverrides, classCapacity } = appData;
         const introClassProducts = products.filter(p => p.type === 'INTRODUCTORY_CLASS') as IntroductoryClass[];
         
         const packageProducts = products.filter(p => p.type === 'CLASS_PACKAGE') as ClassPackage[];
@@ -136,15 +136,16 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 const hasOverride = overrideForDate !== undefined;
 
                 const packageSlotsSource = hasOverride ? overrideForDate.slots : availability[dayKey];
-                const capacityForDay = hasOverride && overrideForDate.capacity ? overrideForDate.capacity : appData.classCapacity.max;
+                const dailyOverrideCapacity = overrideForDate?.capacity;
 
                 if (packageSlotsSource) {
                     todaysSlots.push(...packageSlotsSource
                         .filter(s => s.instructorId === instructor.id)
                         .map(s => {
                             const productForSlot = s.technique === 'molding' ? moldingPackage : wheelPackage;
-                            if (!productForSlot) return null; // Safety check
-                            return { ...s, product: productForSlot, isOverride: hasOverride, capacity: capacityForDay };
+                            if (!productForSlot) return null;
+                            const capacity = dailyOverrideCapacity ?? (s.technique === 'molding' ? classCapacity.molding : classCapacity.potters_wheel);
+                            return { ...s, product: productForSlot, isOverride: hasOverride, capacity };
                         })
                         .filter(Boolean)
                     );
