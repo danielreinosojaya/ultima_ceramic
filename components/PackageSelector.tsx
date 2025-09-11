@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import type { Product, OpenStudioSubscription, ClassPackage, Technique } from '../types';
+import type { Product, OpenStudioSubscription } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import * as dataService from '../services/dataService';
 import { KeyIcon } from './icons/KeyIcon';
+import { SparklesIcon } from './icons/SparklesIcon';
 
 interface PackageSelectorProps {
   onSelect: (pkg: Product) => void;
-  technique: Technique | null;
+  technique: 'potters_wheel' | 'molding' | null;
 }
 
 export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, technique }) => {
@@ -34,6 +35,16 @@ export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, tech
     <div className="text-center p-6 bg-brand-surface rounded-xl shadow-subtle max-w-5xl mx-auto">
       <h2 className="text-3xl font-semibold text-brand-text mb-2">{t('packages.title')}</h2>
       <p className="text-brand-secondary mb-8">{t('packages.subtitle')}</p>
+      
+      <div className="bg-brand-background/70 border border-brand-border/50 rounded-lg p-6 mb-10 text-left flex items-start gap-4 animate-fade-in">
+        <SparklesIcon className="w-8 h-8 text-brand-accent flex-shrink-0 mt-1" />
+        <div>
+            <h3 className="font-bold text-brand-text text-lg">{t('packages.savingsCardTitle')}</h3>
+            <p className="text-sm text-brand-secondary mt-1">{t('packages.savingsCardSubtitle')}</p>
+        </div>
+      </div>
+
+
       <div className="grid md:grid-cols-3 gap-8">
         {packages.map((pkg) => {
           if (pkg.type === 'OPEN_STUDIO_SUBSCRIPTION') {
@@ -62,10 +73,11 @@ export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, tech
               </div>
             );
           } else if (pkg.type === 'CLASS_PACKAGE') {
+            const pricePerClass = pkg.price / pkg.classes;
             return (
               <div 
                 key={pkg.id} 
-                className="bg-brand-surface rounded-xl overflow-hidden shadow-subtle hover:shadow-lifted transition-all duration-300 cursor-pointer flex flex-col transform hover:-translate-y-1"
+                className="bg-brand-surface rounded-xl overflow-hidden shadow-subtle hover:shadow-lifted transition-shadow duration-300 cursor-pointer flex flex-col transform hover:-translate-y-1"
                 onClick={() => onSelect(pkg)}
               >
                 <div className="aspect-[4/3] w-full bg-brand-background overflow-hidden group">
@@ -83,11 +95,16 @@ export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, tech
                 </div>
                 <div className="p-6 flex-grow flex flex-col text-left">
                   <h3 className="text-2xl font-semibold text-brand-primary">{pkg.name}</h3>
-                  <p className="text-4xl font-bold text-brand-text my-4">${pkg.price}</p>
-                  
-                  <p className="text-brand-secondary font-semibold">{pkg.classes} {t('packages.classes')}</p>
-                  
-                  <p className="text-brand-secondary mt-2 text-sm flex-grow min-h-[3.5rem]">{pkg.description}</p>
+                   <div className="flex items-baseline gap-2 my-4">
+                        <p className="text-4xl font-bold text-brand-text">${pkg.price}</p>
+                        <p className="text-brand-secondary font-semibold text-sm">/ {pkg.classes} {t('packages.classes')}</p>
+                   </div>
+                   
+                  <div className="bg-brand-background/80 p-3 rounded-md text-center mb-4">
+                        <p className="font-bold text-brand-text">${pricePerClass.toFixed(2)} <span className="font-normal text-brand-secondary">{t('packages.pricePerClass')}</span></p>
+                  </div>
+                                    
+                  <p className="text-brand-secondary text-sm flex-grow min-h-[3.5rem]">{pkg.description}</p>
                   <button className="mt-6 bg-brand-primary text-white font-bold py-3 px-6 rounded-lg w-full hover:opacity-90 transition-opacity duration-300">
                     {t('packages.selectButton')}
                   </button>
