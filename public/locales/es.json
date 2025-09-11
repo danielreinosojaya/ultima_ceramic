@@ -1,4 +1,3 @@
-
 {
   "header": {
     "title": "Reservas CeramicAlma"
@@ -18,10 +17,8 @@
     "returningUserButton": "Ver Paquetes",
     "groupExperienceTitle": "Experiencias Grupales Privadas",
     "groupExperienceSubtitle": "Ideal para cumpleaños, team building o una reunión creativa entre amigos. Contáctanos para crear un evento a tu medida.",
-    "groupExperienceButton": "Solicitar Información",
     "couplesExperienceTitle": "Experiencia de Cerámica para Parejas",
-    "couplesExperienceSubtitle": "Una cita creativa y diferente. Creen algo hermoso juntos en una sesión privada.",
-    "couplesExperienceButton": "Planifica tu Cita"
+    "couplesExperienceSubtitle": "Una cita creativa y diferente. Creen algo hermoso juntos en una sesión privada."
   },
   "prerequisiteModal": {
     "title": "¡Qué bueno verte de nuevo!",
@@ -60,7 +57,11 @@
     "perMonth": "por mes",
     "savingsCardTitle": "Más Clases, Más Ahorro",
     "savingsCardSubtitle": "Comprometerte con un paquete te ayuda a crear una rutina y ofrece un descuento significativo por clase.",
-    "pricePerClass": "/clase"
+    "pricePerClass": "/clase",
+    "singleClassLabel": "Clase Individual",
+    "visualizerTitle": "Visualiza tu Ahorro",
+    "visualizerSubtitle": "El precio por clase disminuye a medida que compras un paquete más grande.",
+    "savingsLabel": "Ahorra {{amount}}"
   },
   "introClass": {
     "title": "Clases Introductorias",
@@ -245,9 +246,139 @@
     "emailLabel": "Email",
     "whatsappLabel": "WhatsApp",
     "googleMapsLabel": "Encuéntranos en Google Maps",
-    "instagramLabel": "Instagram"
+    "instagramLabel": "Instagram",
+    "accessDurationLabel": "Duración del Acceso",
+    "accessIncludesLabel": "El Acceso Incluye",
+    "howItWorksLabel": "Cómo Funciona",
+    "days": "días"
   },
   "admin": {
-    "headerTitle": "Consola de Administración"
+    "headerTitle": "Consola de Administración",
+    "productsTab": "Productos",
+    "calendarTab": "Calendario",
+    "scheduleSettingsTab": "Ajustes de Horario",
+    "inquiriesTab": "Consultas",
+    "communicationsTab": "Comunicaciones",
+    "financialsTab": "Finanzas",
+    "customersTab": "Clientes",
+    "invoicingTab": "Facturación",
+    "settingsTab": "Ajustes",
+    "syncButton": {
+      "newData": "Nuevos datos disponibles. Haz clic para refrescar.",
+      "sync": "Sincronizar Datos"
+    },
+    "productManager": {
+      "title": "Gestor de Productos",
+      "subtitle": "Gestiona todos los paquetes de clases, suscripciones y clases introductorias.",
+      "createButton": "Crear Nuevo",
+      "imageLabel": "Imagen",
+      "priceLabel": "Precio",
+      "statusLabel": "Estado",
+      "actionsLabel": "Acciones",
+      "changeImageLabel": "Cambiar Imagen",
+      "productType": "Tipo",
+      "productType_CLASS_PACKAGE": "Paquete de Clases",
+      "productType_OPEN_STUDIO_SUBSCRIPTION": "Estudio Abierto",
+      "productType_INTRODUCTORY_CLASS": "Clase Intro",
+      "active": "Activo",
+      "inactive": "Inactivo",
+      "editButton": "Editar",
+      "duplicateButton": "Duplicar",
+      "duplicatePrefix": "Copia de ",
+      "deleteButton": "Eliminar",
+      "deleteConfirmTitle": "Confirmar Eliminación",
+      "deleteConfirmText": "¿Estás seguro de que quieres eliminar este producto? Esta acción no se puede deshacer.",
+      "cancelButton": "Cancelar",
+      "confirmDeleteButton": "Eliminar",
+      "introClass": "Clase Introductoria",
+      "classPackage": "Paquete de Clases",
+      "openStudioSubscription": "Suscripción Estudio Abierto"
+    },
+    "packageModal": {
+      "editTitle": "Editar Paquete de Clases",
+      "createTitle": "Crear Nuevo Paquete de Clases",
+      "nameLabel": "Nombre del Paquete",
+      "namePlaceholder": "Ej: Torno - 4 Clases",
+      "classesLabel": "Número de Clases",
+      "classesPlaceholder": "Ej: 4",
+      "priceLabel": "Precio Total",
+      "pricePlaceholder": "Ej: 250.00",
+      "techniqueLabel": "Técnica",
+      "descriptionLabel": "Descripción",
+      "descriptionPlaceholder": "Una breve descripción del paquete.",
+      "imageLabel": "Imagen del Paquete",
+      "uploadImageButton": "Subir Imagen",
+      "detailsSectionTitle": "Detalles de la Clase",
+      "durationLabel": "Duración por Clase",
+      "durationPlaceholder": "Ej: 2 horas",
+      "durationHoursLabel": "Duración (en horas)",
+      "activitiesLabel": "Actividades (una por línea)",
+      "activitiesPlaceholder": "Amasado y centrado\nCreación de cilindros...",
+      "generalRecommendationsLabel": "Recomendaciones Generales",
+      "generalRecommendationsPlaceholder": "Traer ropa cómoda...",
+      "materialsLabel": "Materiales Incluidos",
+      "materialsPlaceholder": "Incluye arcilla y herramientas...",
+      "saveButton": "Guardar Paquete"
+    },
+    "openStudioModal": {
+      "editTitle": "Editar Suscripción de Estudio Abierto",
+      "createTitle": "Crear Suscripción de Estudio Abierto",
+      "namePlaceholder": "Ej: Acceso Mensual al Taller",
+      "durationLabel": "Duración (en días)",
+      "timeLimitLabel": "Límite de Tiempo",
+      "timeLimitPlaceholder": "Ej: 10 horas por semana",
+      "materialsLimitLabel": "Límite de Materiales",
+      "materialsLimitPlaceholder": "Ej: Primera pella de barro incluida",
+      "howItWorksLabel": "Cómo Funciona (un punto por línea)",
+      "howItWorksPlaceholder": "Reserva tu horario por WhatsApp..."
+    },
+    "introClassModal": {
+      "editTitle": "Editar Clase Introductoria",
+      "createTitle": "Crear Nueva Clase Introductoria",
+      "rulesTitle": "Horario Semanal Recurrente",
+      "rulesSubtitle": "Define los horarios estándar para esta clase cada semana.",
+      "calendarTitle": "Calendario y Excepciones",
+      "calendarSubtitle": "Haz clic en una fecha para añadir, eliminar o modificar las sesiones de un día específico.",
+      "sessionEditor": {
+        "title": "Editando Sesiones para",
+        "capacityDetails": "{paid}/{total} ({pending} pend.)",
+        "noSessions": "No hay sesiones este día.",
+        "cancelAll": "Cancelar todo",
+        "resetToDefault": "Restaurar"
+      }
+    },
+    "inquiryManager": {
+      "title": "Gestor de Consultas",
+      "subtitle": "Gestiona las consultas para experiencias grupales y de pareja.",
+      "confirmDelete": "¿Estás seguro de que quieres eliminar esta consulta?",
+      "deleteError": "Error al eliminar la consulta.",
+      "received": "Recibido",
+      "name": "Nombre",
+      "participants": "Participantes",
+      "date": "Fecha Tentativa",
+      "status": "Estado",
+      "delete": "Eliminar",
+      "type_group": "Grupo",
+      "type_couple": "Pareja",
+      "status_New": "Nuevo",
+      "status_Contacted": "Contactado",
+      "status_ProposalSent": "Propuesta Enviada",
+      "status_Confirmed": "Confirmado",
+      "status_Archived": "Archivado",
+      "messageTitle": "Mensaje",
+      "eventType": "Tipo de Evento",
+      "notSpecified": "No especificado",
+      "noInquiries": "No se encontraron consultas.",
+      "notApplicable": "N/A",
+      "invalidDate": "Fecha Inválida"
+    },
+    "notifications": {
+      "title": "Notificaciones",
+      "newNotificationTitle": "Nueva Notificación",
+      "noNotifications": "No hay notificaciones nuevas.",
+      "template_new_booking": "{{name}} ha realizado una nueva reserva para {{summary}}.",
+      "template_new_inquiry": "{{name}} ha enviado una consulta para una experiencia de {{summary}}.",
+      "template_new_invoice_request": "{{name}} solicitó una factura para la reserva {{summary}}."
+    }
   }
 }
