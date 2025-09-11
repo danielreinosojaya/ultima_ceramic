@@ -51,6 +51,10 @@ const App: React.FC = () => {
     }, []);
 
     useEffect(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, [view]);
+
+    useEffect(() => {
         const fetchAppData = async () => {
             try {
                 const [
