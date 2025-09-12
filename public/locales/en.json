@@ -22,6 +22,14 @@
     "couplesExperienceSubtitle": "A unique and creative date. Create something beautiful together in a private session.",
     "couplesExperienceButton": "Plan Your Date"
   },
+
+  "welcomeModal": {
+    "title": "Important Notice",
+    "line1": "The official opening of our branch has been delayed.",
+    "line2": "We will have an opening date soon and will announce it on our social media.",
+    "line3": "Thank you for your understanding!",
+    "buttonText": "Got it"
+  },
   "prerequisiteModal": {
     "title": "Welcome Back!",
     "message": "To book class packages, you must have completed our Introductory Class. This ensures everyone has the foundational skills for a great experience.",

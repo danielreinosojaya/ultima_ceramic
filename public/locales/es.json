@@ -20,7 +20,16 @@
     "groupExperienceSubtitle": "Ideal para cumpleaños, team building o una reunión creativa entre amigos. Contáctanos para crear un evento a tu medida.",
     "couplesExperienceTitle": "Experiencia de Cerámica para Parejas",
     "couplesExperienceSubtitle": "Una cita creativa y diferente. Creen algo hermoso juntos en una sesión privada."
+
   },
+"welcomeModal": {
+    "title": "Aviso Importante",
+    "line1": "La apertura oficial de nuestra sucursal se ha retrasado.",
+    "line2": "Pronto tendremos fecha de apertura, te avisaremos a través de nuestras redes sociales.",
+    "line3": "¡Gracias por tu comprensión!",
+    "buttonText": "Entendido"
+  },
+
   "prerequisiteModal": {
     "title": "¡Qué bueno verte de nuevo!",
     "message": "Para reservar paquetes de clases, es necesario haber completado nuestra Clase Introductoria. Esto asegura que todos tengan las habilidades básicas para una gran experiencia.",
