@@ -199,8 +199,9 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                         </div>
                     </div>
                     <div className="mt-6 flex justify-end">
-                        <button type="submit" onClick={handleSubmit} disabled={!isFormValid || !acceptedPolicies}
+                        <button type="submit" onClick={handleSubmit} disabled={true}
                             className="w-full sm:w-auto bg-brand-primary text-white font-bold py-2 px-8 rounded-lg hover:opacity-90 transition-opacity duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                            title={t('userInfoModal.bookingsDisabledTooltip')}
                         >
                             {t('userInfoModal.saveAndContinueButton')}
                         </button>
