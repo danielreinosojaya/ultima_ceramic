@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { BookingDetails, Product, AppData } from '../types.js';
 import { CalendarIcon } from './icons/CalendarIcon.js';

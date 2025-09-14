@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import type { IntroductoryClass, Instructor, EnrichedIntroClassSession } from '../../types';
 import * as dataService from '../../services/dataService';

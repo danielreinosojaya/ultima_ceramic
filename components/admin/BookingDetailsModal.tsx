@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import type { UserInfo, TimeSlot, Booking, PaymentDetails, AttendanceStatus } from '../../types';
 import { useLanguage } from '../../context/LanguageContext';
@@ -77,7 +78,8 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, 
 
   const handleSaveAttendance = () => {
     Object.entries(attendanceData).forEach(([bookingId, status]) => {
-        dataService.updateAttendanceStatus(bookingId, { date, time, instructorId }, status);
+        // FIX: Explicitly cast 'status' to AttendanceStatus to resolve type inference issue.
+        dataService.updateAttendanceStatus(bookingId, { date, time, instructorId }, status as AttendanceStatus);
     });
     setIsAttendanceTaken(true);
     // Give feedback to user

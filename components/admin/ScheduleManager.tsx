@@ -1,5 +1,6 @@
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import type { Instructor, Booking, IntroductoryClass, Product, EditableBooking, RescheduleSlotInfo, PaymentDetails, AppData, InvoiceRequest, AdminTab, Customer, ClassPackage } from '../../types';
+import type { Instructor, Booking, IntroductoryClass, Product, EditableBooking, RescheduleSlotInfo, PaymentDetails, AppData, InvoiceRequest, AdminTab, Customer, ClassPackage, EnrichedAvailableSlot } from '../../types';
 import * as dataService from '../../services/dataService';
 import { useLanguage } from '../../context/LanguageContext';
 import { DAY_NAMES, PALETTE_COLORS } from '../../constants.js';
@@ -152,7 +153,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 }
 
                 for (const introProduct of introClassProducts) {
-                    const introSessions = dataService.generateIntroClassSessions(introProduct, appData, { includeFull: true });
+                    // FIX: Pass an object with the 'bookings' property to satisfy the function's type requirement.
+                    const introSessions = dataService.generateIntroClassSessions(introProduct, { bookings }, { includeFull: true });
                     const sessionsForDay = introSessions.filter(s => s.date === dateStr && s.instructorId === instructor.id);
                     todaysSlots.push(...sessionsForDay.map(s => ({ ...s, product: introProduct, isOverride: s.isOverride })));
                 }
@@ -383,7 +385,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             const newSchedule: Record<string, EnrichedSlot[]> = {};
             let instructorHasUnpaid = false;
             for (const [dateStr, slots] of Object.entries(data.schedule)) {
-                const unpaidSlots = slots.filter(slot => slot.bookings.some(b => !b.isPaid));
+                // FIX: Cast 'slots' to EnrichedSlot[] to ensure .filter method is available.
+                const unpaidSlots = (slots as EnrichedSlot[]).filter(slot => slot.bookings.some(b => !b.isPaid));
                 if (unpaidSlots.length > 0) {
                     newSchedule[dateStr] = unpaidSlots;
                     instructorHasUnpaid = true;
@@ -402,7 +405,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         if (!showUnpaidOnly) return true;
         for (const { schedule } of filteredScheduleData.values()) {
             for (const slots of Object.values(schedule)) {
-                if (slots.length > 0) return true;
+                // FIX: Cast 'slots' to any[] to ensure .length property is available.
+                if ((slots as any[]).length > 0) return true;
             }
         }
         return false;
