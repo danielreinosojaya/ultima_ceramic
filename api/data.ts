@@ -73,13 +73,13 @@ const parseBookingFromDB = (dbRow: any): Booking => {
     if (camelCased.product && camelCased.product.price && typeof camelCased.product.price === 'string') {
         camelCased.product.price = parseFloat(camelCased.product.price);
     }
-     if (camelCased.product && camelCased.product.classes && typeof camelCased.product.classes === 'string') {
+    if (camelCased.product && camelCased.product.classes && typeof camelCased.product.classes === 'string') {
         camelCased.product.classes = parseInt(camelCased.product.classes, 10);
     }
 
     // Safely parse date fields
     camelCased.createdAt = safeParseDate(camelCased.createdAt);
-        camelCased.bookingDate = safeParseDate(camelCased.bookingDate)?.toISOString();
+    camelCased.bookingDate = safeParseDate(camelCased.bookingDate)?.toISOString();
 
     if (camelCased.paymentDetails) {
         camelCased.paymentDetails.receivedAt = safeParseDate(camelCased.paymentDetails.receivedAt)?.toISOString();
@@ -93,17 +93,19 @@ const parseNotificationFromDB = (dbRow: any): Notification => {
     if (!dbRow) return dbRow;
     const camelCased = toCamelCase(dbRow);
     const parsedDate = safeParseDate(camelCased.timestamp);
-     camelCased.timestamp = parsedDate ? parsedDate.toISOString() : new Date().toISOString();
+    camelCased.timestamp = parsedDate ? parsedDate.toISOString() : new Date().toISOString();
     return camelCased as Notification;
 };
 
 const parseClientNotificationFromDB = (dbRow: any): ClientNotification => {
     if (!dbRow) return dbRow;
     const camelCased = toCamelCase(dbRow);
-    const createdAtDate = safeParseDate(camelCased.createdAt);
-    const scheduledAtDate = safeParseDate(camelCased.scheduledAt);
+    
+    // Use the reliable ISO string from the database query
+    camelCased.createdAt = camelCased.createdAtIso || null;
+    delete camelCased.createdAtIso;
 
-    camelCased.createdAt = createdAtDate ? createdAtDate.toISOString() : null;
+    const scheduledAtDate = safeParseDate(camelCased.scheduledAt);
     camelCased.scheduledAt = scheduledAtDate ? scheduledAtDate.toISOString() : undefined;
 
     return camelCased as ClientNotification;
@@ -112,8 +114,9 @@ const parseClientNotificationFromDB = (dbRow: any): ClientNotification => {
 const parseGroupInquiryFromDB = (dbRow: any): GroupInquiry => {
     if (!dbRow) return dbRow;
     const camelCased = toCamelCase(dbRow);
-    const createdAtDate = safeParseDate(camelCased.createdAt);
-    camelCased.createdAt = createdAtDate ? createdAtDate.toISOString() : '';
+    // The DB query now formats the date as an ISO string, so we just pass it through.
+    // If it's null from the DB, it remains null.
+    camelCased.createdAt = camelCased.createdAt || null;
     return camelCased as GroupInquiry;
 }
 
@@ -139,7 +142,7 @@ const generateBookingCode = (): string => {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Set CORS headers for all responses
     res.setHeader('Access-Control-Allow-Origin', '*'); // Adjust in production
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
     if (req.method === 'OPTIONS') {
@@ -154,11 +157,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             await handleGet(req, res);
         } else if (req.method === 'POST') {
             await handlePost(req, res);
-           } else if (req.method === 'DELETE') { // <-- ¡Agrega esta línea!
-            await handleDelete(req, res);    // <-- ¡Agrega esta línea!    
-
+        } else if (req.method === 'DELETE') {
+            await handleDelete(req, res);
         } else {
-            res.setHeader('Allow', ['GET, POST, DELETE']);
+            res.setHeader('Allow', ['GET', 'POST', 'DELETE']);
             res.status(405).end(`Method ${req.method} Not Allowed`);
         }
     } catch (error) {
@@ -192,37 +194,36 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
             break;
             
         case 'groupInquiries':
-    const { rows: inquiries } = await sql`
-        SELECT
-            id,
-            name,
-            email,
-            phone,
-            country_code,
-            participants,
-            TO_CHAR(tentative_date, 'YYYY-MM-DD') as tentative_date,
-            tentative_time,
-            event_type,
-            message,
-            status,
-            TO_CHAR(created_at, 'YYYY-MM-DD') as created_at, -- Agrega esta línea
-            inquiry_type
-        FROM inquiries
-        ORDER BY created_at DESC
-    `;
-    data = inquiries.map(parseGroupInquiryFromDB);
-    break; 
+            // FIX: Explicitly format the timestamp into a standard ISO 8601 string.
+            // This prevents any date parsing ambiguity on the client side.
+            const { rows: inquiries } = await sql`
+                SELECT
+                    id, name, email, phone, country_code, participants,
+                    TO_CHAR(tentative_date, 'YYYY-MM-DD') as tentative_date,
+                    tentative_time, event_type, message, status,
+                    TO_CHAR(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as created_at, 
+                    inquiry_type
+                FROM inquiries ORDER BY created_at DESC
+            `;
+            data = inquiries.map(parseGroupInquiryFromDB);
+            break; 
             
         case 'notifications':
-             const { rows: notifications } = await sql`SELECT * FROM notifications ORDER BY timestamp DESC`;
+            const { rows: notifications } = await sql`SELECT * FROM notifications ORDER BY timestamp DESC`;
             data = notifications.map(parseNotificationFromDB);
             break;
         case 'clientNotifications':
-            const { rows: clientNotifications } = await sql`SELECT * FROM client_notifications ORDER BY created_at DESC`;
+            // FIX: Explicitly format `created_at` to a reliable ISO string to fix display issues.
+            const { rows: clientNotifications } = await sql`
+                SELECT 
+                    *,
+                    TO_CHAR(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as created_at_iso
+                FROM client_notifications ORDER BY created_at DESC
+            `;
             data = clientNotifications.map(parseClientNotificationFromDB);
             break;
         case 'invoiceRequests':
-             const { rows: invoiceRequests } = await sql`
+            const { rows: invoiceRequests } = await sql`
                 SELECT 
                     i.*, 
                     to_char(i.requested_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as requested_at_iso,
@@ -263,7 +264,7 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
             await sql`BEGIN`;
             await sql`DELETE FROM products`;
             for (const p of value) {
-                 await sql`
+                await sql`
                     INSERT INTO products (id, type, name, classes, price, description, image_url, details, is_active, scheduling_rules, overrides) 
                     VALUES (
                         ${p.id}, 
@@ -278,7 +279,17 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
                         ${p.schedulingRules ? JSON.stringify(p.schedulingRules) : null}, 
                         ${p.overrides ? JSON.stringify(p.overrides) : null}
                     )
-                ON CONFLICT (id) DO NOTHING;
+                ON CONFLICT (id) DO UPDATE SET
+                    type = EXCLUDED.type,
+                    name = EXCLUDED.name,
+                    classes = EXCLUDED.classes,
+                    price = EXCLUDED.price,
+                    description = EXCLUDED.description,
+                    image_url = EXCLUDED.image_url,
+                    details = EXCLUDED.details,
+                    is_active = EXCLUDED.is_active,
+                    scheduling_rules = EXCLUDED.scheduling_rules,
+                    overrides = EXCLUDED.overrides;
             `;
             }
             await sql`COMMIT`;
@@ -299,33 +310,18 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ success: true });
 }
 
-// Nuevo Handler para las solicitudes DELETE
 async function handleDelete(req: VercelRequest, res: VercelResponse) {
     const { key, id } = req.query;
 
     if (key === 'inquiry') {
-        // Validación básica
         if (!id || typeof id !== 'string') {
             return res.status(400).json({ error: 'Inquiry ID is required for deletion.' });
         }
-
-        try {
-            const { rowCount } = await sql`
-                DELETE FROM inquiries
-                WHERE id = ${id};
-            `;
-
-            if (rowCount > 0) {
-                // Si se eliminó al menos una fila, la operación fue exitosa
-                return res.status(204).end(); // 204 No Content es la respuesta estándar para DELETE exitosos
-            } else {
-                // Si rowCount es 0, no se encontró el ID
-                return res.status(404).json({ error: 'Inquiry not found.' });
-            }
-        } catch (error) {
-            console.error('Error deleting inquiry:', error);
-            const errorMessage = (error instanceof Error) ? error.message : 'An internal server error occurred.';
-            return res.status(500).json({ error: errorMessage });
+        const { rowCount } = await sql`DELETE FROM inquiries WHERE id = ${id};`;
+        if (rowCount > 0) {
+            return res.status(204).end();
+        } else {
+            return res.status(404).json({ error: 'Inquiry not found.' });
         }
     } else {
         return res.status(400).json({ error: 'Unknown deletion key.' });
@@ -351,16 +347,11 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             const deleteBookingBody = req.body;
             await sql`DELETE FROM bookings WHERE id = ${deleteBookingBody.bookingId}`;
             break;
-
-         case 'deleteProduct':
-            // Asegúrate de que el ID del producto es del tipo correcto (integer)
+        case 'deleteProduct':
             const productId = parseInt(id as string, 10);
-            if (isNaN(productId)) {
-                return res.status(400).json({ error: 'Product ID must be a valid number.' });
-            }
+            if (isNaN(productId)) return res.status(400).json({ error: 'Product ID must be a valid number.' });
             await sql`DELETE FROM products WHERE id = ${productId}`;
-            break;    
-
+            break;
         case 'removeBookingSlot':
             const removeBookingBody = req.body;
             const { bookingId: removeId, slotToRemove } = removeBookingBody;
@@ -382,26 +373,26 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             `;
             
             try {
-              if (updatedBookingRow) {
-                  const { rows: settingsRows } = await sql`SELECT value FROM settings WHERE key = 'automationSettings'`;
-                  const automationSettings = settingsRows[0]?.value as AutomationSettings;
-                  if (automationSettings?.paymentReceipt?.enabled) {
-                      const fullyParsedBooking = parseBookingFromDB(updatedBookingRow);
-                      await emailService.sendPaymentReceiptEmail(fullyParsedBooking);
-                      await sql`
-                          INSERT INTO client_notifications (created_at, client_name, client_email, type, channel, status, booking_code)
-                          VALUES (
-                              ${new Date().toISOString()}, 
-                              ${`${fullyParsedBooking.userInfo.firstName} ${fullyParsedBooking.userInfo.lastName}`},
-                              ${fullyParsedBooking.userInfo.email},
-                              'PAYMENT_RECEIPT', 'Email', 'Sent',
-                              ${fullyParsedBooking.bookingCode}
-                          );
-                      `;
-                  }
-              }
+            if (updatedBookingRow) {
+                const { rows: settingsRows } = await sql`SELECT value FROM settings WHERE key = 'automationSettings'`;
+                const automationSettings = settingsRows[0]?.value as AutomationSettings;
+                if (automationSettings?.paymentReceipt?.enabled) {
+                    const fullyParsedBooking = parseBookingFromDB(updatedBookingRow);
+                    await emailService.sendPaymentReceiptEmail(fullyParsedBooking);
+                    await sql`
+                        INSERT INTO client_notifications (created_at, client_name, client_email, type, channel, status, booking_code)
+                        VALUES (
+                            ${new Date().toISOString()}, 
+                            ${`${fullyParsedBooking.userInfo.firstName} ${fullyParsedBooking.userInfo.lastName}`},
+                            ${fullyParsedBooking.userInfo.email},
+                            'PAYMENT_RECEIPT', 'Email', 'Sent',
+                            ${fullyParsedBooking.bookingCode}
+                        );
+                    `;
+                }
+            }
             } catch (emailError) {
-              console.warn(`Booking ${updatedBookingRow.booking_code} marked as paid, but receipt email failed to send:`, emailError);
+            console.warn(`Booking ${updatedBookingRow.booking_code} marked as paid, but receipt email failed to send:`, emailError);
             }
             break;
         case 'markBookingAsUnpaid':
@@ -490,9 +481,9 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             await sql`COMMIT`;
             break;
         case 'deleteInstructor':
-             const deleteInstructorBody = req.body;
-             await sql`DELETE FROM instructors WHERE id = ${deleteInstructorBody.id}`;
-             break;
+            const deleteInstructorBody = req.body;
+            await sql`DELETE FROM instructors WHERE id = ${deleteInstructorBody.id}`;
+            break;
         case 'markAllNotificationsAsRead':
             await sql`UPDATE notifications SET read = true`;
             const { rows: notifications } = await sql`SELECT * FROM notifications ORDER BY timestamp DESC`;
@@ -541,19 +532,19 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                             const slotIdentifier = `${booking.bookingCode}_${slot.date}_${slot.time}`;
                             if (!sentReminderCodes.has(slotIdentifier)) {
                                 try {
-                                  await emailService.sendClassReminderEmail(booking, slot);
-                                  await sql`
-                                      INSERT INTO client_notifications (created_at, client_name, client_email, type, channel, status, booking_code, scheduled_at)
-                                      VALUES (
-                                          ${new Date().toISOString()}, 
-                                          ${`${booking.userInfo.firstName} ${booking.userInfo.lastName}`},
-                                          ${booking.userInfo.email},
-                                          'CLASS_REMINDER', 'Email', 'Sent',
-                                          ${slotIdentifier}, ${new Date().toISOString()}
-                                      );
-                                  `;
+                                await emailService.sendClassReminderEmail(booking, slot);
+                                await sql`
+                                    INSERT INTO client_notifications (created_at, client_name, client_email, type, channel, status, booking_code, scheduled_at)
+                                    VALUES (
+                                        ${new Date().toISOString()}, 
+                                        ${`${booking.userInfo.firstName} ${booking.userInfo.lastName}`},
+                                        ${booking.userInfo.email},
+                                        'CLASS_REMINDER', 'Email', 'Sent',
+                                        ${slotIdentifier}, ${new Date().toISOString()}
+                                    );
+                                `;
                                 } catch (emailError) {
-                                  console.warn(`Reminder email for booking ${slotIdentifier} failed to send:`, emailError);
+                                console.warn(`Reminder email for booking ${slotIdentifier} failed to send:`, emailError);
                                 }
                             }
                         }
@@ -571,7 +562,6 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
 async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookingCode'> & { invoiceData?: Omit<InvoiceRequest, 'id' | 'bookingId' | 'status' | 'requestedAt' | 'processedAt'> }): Promise<AddBookingResult> {
     const { productId, slots, userInfo, productType, invoiceData, bookingDate } = body;
-    // ^^^ ADD 'bookingDate' HERE ^^^
     
     // Server-side validation
     if (productType === 'INTRODUCTORY_CLASS' || productType === 'CLASS_PACKAGE') {
@@ -589,9 +579,9 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
     
     // Create new booking
     const newBooking: Omit<Booking, 'id'> = {
-      ...body,
-      bookingCode: generateBookingCode(),
-      createdAt: new Date(),
+    ...body,
+    bookingCode: generateBookingCode(),
+    createdAt: new Date(),
     };
 
     const { rows: [insertedRow] } = await sql`
@@ -630,33 +620,33 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
 
     // Create admin notification for new booking
     await sql`
-      INSERT INTO notifications (type, target_id, user_name, summary)
-      VALUES ('new_booking', ${fullyParsedBooking.id}, ${`${userInfo.firstName} ${userInfo.lastName}`}, ${newBooking.product.name});
+    INSERT INTO notifications (type, target_id, user_name, summary)
+    VALUES ('new_booking', ${fullyParsedBooking.id}, ${`${userInfo.firstName} ${userInfo.lastName}`}, ${newBooking.product.name});
     `;
     
     // Send pre-booking confirmation email, but don't fail the whole request if it errors out
     try {
-      const { rows: settingsRows } = await sql`SELECT key, value FROM settings WHERE key = 'automationSettings' OR key = 'bankDetails'`;
-      const automationSettings = settingsRows.find(r => r.key === 'automationSettings')?.value as AutomationSettings;
-      const bankDetails = settingsRows.find(r => r.key === 'bankDetails')?.value as BankDetails;
+    const { rows: settingsRows } = await sql`SELECT key, value FROM settings WHERE key = 'automationSettings' OR key = 'bankDetails'`;
+    const automationSettings = settingsRows.find(r => r.key === 'automationSettings')?.value as AutomationSettings;
+    const bankDetails = settingsRows.find(r => r.key === 'bankDetails')?.value as BankDetails;
 
-      if (automationSettings?.preBookingConfirmation?.enabled && bankDetails && bankDetails.accountNumber) {
-          await emailService.sendPreBookingConfirmationEmail(fullyParsedBooking, bankDetails);
-          await sql`
-              INSERT INTO client_notifications (created_at, client_name, client_email, type, channel, status, booking_code)
-              VALUES (
-                  ${new Date().toISOString()}, 
-                  ${`${fullyParsedBooking.userInfo.firstName} ${fullyParsedBooking.userInfo.lastName}`},
-                  ${fullyParsedBooking.userInfo.email},
-                  'PRE_BOOKING_CONFIRMATION', 'Email', 'Sent',
-                  ${fullyParsedBooking.bookingCode}
-              );
-          `;
-      } else if (automationSettings?.preBookingConfirmation?.enabled) {
+    if (automationSettings?.preBookingConfirmation?.enabled && bankDetails && bankDetails.accountNumber) {
+        await emailService.sendPreBookingConfirmationEmail(fullyParsedBooking, bankDetails);
+        await sql`
+            INSERT INTO client_notifications (created_at, client_name, client_email, type, channel, status, booking_code)
+            VALUES (
+                ${new Date().toISOString()}, 
+                ${`${fullyParsedBooking.userInfo.firstName} ${fullyParsedBooking.userInfo.lastName}`},
+                ${fullyParsedBooking.userInfo.email},
+                'PRE_BOOKING_CONFIRMATION', 'Email', 'Sent',
+                ${fullyParsedBooking.bookingCode}
+            );
+        `;
+    } else if (automationSettings?.preBookingConfirmation?.enabled) {
         console.log(`Skipping pre-booking confirmation email for ${fullyParsedBooking.bookingCode}: Bank details are not configured.`);
-      }
+    }
     } catch(emailError) {
-      console.warn(`Booking ${fullyParsedBooking.bookingCode} created, but confirmation email failed to send:`, emailError);
+    console.warn(`Booking ${fullyParsedBooking.bookingCode} created, but confirmation email failed to send:`, emailError);
     }
 
     return { success: true, message: 'Booking added.', booking: fullyParsedBooking };

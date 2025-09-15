@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import type { IntroductoryClass, Instructor, SchedulingRule, SessionOverride, ClassCapacity } from '../../types';
 import { useLanguage } from '../../context/LanguageContext';
