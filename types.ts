@@ -208,7 +208,7 @@ export interface GroupInquiry {
     eventType: string;
     message: string;
     status: InquiryStatus;
-    createdAt: string; // ISO date string
+    createdAt: string | null; // ISO date string
     inquiryType: 'group' | 'couple';
 }
 
