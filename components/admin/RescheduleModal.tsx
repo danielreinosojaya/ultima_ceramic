@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import type { TimeSlot, RescheduleSlotInfo, EnrichedAvailableSlot, AppData } from '../../types';
 import * as dataService from '../../services/dataService';

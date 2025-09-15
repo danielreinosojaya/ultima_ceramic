@@ -1,3 +1,4 @@
+
 import type { 
     Product, Booking, ScheduleOverrides, Notification, Announcement, Instructor, 
     ConfirmationMessage, ClassCapacity, EnrichedAvailableSlot, CapacityMessageSettings, 
@@ -189,7 +190,7 @@ export const addGroupInquiry = async (inquiryData: Omit<GroupInquiry, 'id' | 'st
 export const updateGroupInquiry = (inquiry: GroupInquiry): Promise<{ success: boolean }> => postAction('updateGroupInquiry', inquiry);
 export const deleteGroupInquiry = async (id: string): Promise<void> => {
     // Cambia la URL para incluir el 'key' que usarás en el backend
-    const response = await fetch(`/api?key=inquiry&id=${id}`, {
+    const response = await fetch(`/api/data?key=inquiry&id=${id}`, {
     method: 'DELETE',
 });
 

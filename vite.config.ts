@@ -1,3 +1,4 @@
+
 import path from 'path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -15,9 +16,9 @@ export default defineConfig(() => {
       server: {
         proxy: {
           '/api': {
-            target: 'https://ceraback-psi.vercel.app', // IMPORTANT: Replace with your actual URL
+            target: 'https://ceramicalma-backend.vercel.app', // IMPORTANT: Replace with your actual URL
             changeOrigin: true,
-            rewrite: (path) => path.replace(/^\/api/, ''),
+            secure: false, // You might need this if you are proxying to a HTTPS server with a self-signed certificate
           },
         },
       },
