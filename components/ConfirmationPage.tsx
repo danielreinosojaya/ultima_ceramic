@@ -61,7 +61,7 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
             timeHeader: t('pdf.timeHeader'),
             instructorHeader: t('pdf.instructorHeader'),
             importantInfoTitle: t('pdf.importantInfoTitle'),
-            policy: policies,
+            policyTitle: t('pdf.policyTitle'),
             addressLabel: t('pdf.addressLabel'),
             emailLabel: t('pdf.emailLabel'),
             whatsappLabel: t('pdf.whatsappLabel'),
@@ -73,7 +73,7 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
             days: t('pdf.days'),
         };
         
-        await generateBookingPDF(booking, pdfTranslations, footerInfo, language);
+        await generateBookingPDF(booking, pdfTranslations, footerInfo, policies, language);
     };
 
     return (
