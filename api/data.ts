@@ -1,3 +1,4 @@
+
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { sql } from '@vercel/postgres';
 import { seedDatabase, ensureTablesExist } from './db.js';
@@ -150,8 +151,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        await ensureTablesExist();
-        await seedDatabase();
+        // [REMOVED] These setup functions should not run on every API request.
+        // They cause timeouts and performance issues. They only need to run once.
+        // await ensureTablesExist();
+        // await seedDatabase();
 
         if (req.method === 'GET') {
             await handleGet(req, res);
