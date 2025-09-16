@@ -222,7 +222,7 @@ export const GroupInquiryForm: React.FC<GroupInquiryFormProps> = ({ onBack, inqu
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <input type="date" name="tentativeDate" value={formData.tentativeDate || ''} onChange={handleChange} className="w-full p-3 border border-brand-border rounded-lg"/>
+            <input type="date" name="tentativeDate" value={formData.tentativeDate || ''} onChange={handleChange} required className="w-full p-3 border border-brand-border rounded-lg"/>
             <input type="time" name="tentativeTime" value={formData.tentativeTime || ''} onChange={handleChange} className="w-full p-3 border border-brand-border rounded-lg"/>
         </div>
 
