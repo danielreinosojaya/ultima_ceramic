@@ -27,7 +27,7 @@ interface PdfTranslations {
   timeHeader: string;
   instructorHeader: string;
   importantInfoTitle: string;
-  policy: string;
+  policyTitle: string;
   addressLabel: string;
   emailLabel: string;
   whatsappLabel: string;
@@ -81,7 +81,7 @@ const drawFooter = (docInstance: jsPDF, translations: PdfTranslations, footerInf
 };
 
 
-export const generateBookingPDF = async (booking: Booking, translations: PdfTranslations, footerInfo: FooterInfo, language: string): Promise<void> => {
+export const generateBookingPDF = async (booking: Booking, translations: PdfTranslations, footerInfo: FooterInfo, policiesText: string, language: string): Promise<void> => {
   const doc = new jsPDF({
     orientation: 'p',
     unit: 'mm',
@@ -249,35 +249,41 @@ export const generateBookingPDF = async (booking: Booking, translations: PdfTran
     currentY = (doc as any).lastAutoTable.finalY + 15;
   }
 
-  // --- IMPORTANT INFO ---
-  const policyText = translations.policy;
-  const policyMaxWidth = pageWidth - (pageMargin * 2) - 10;
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  const policyLines = doc.splitTextToSize(policyText, policyMaxWidth);
-  const lineHeight = doc.getLineHeight() / doc.internal.scaleFactor;
-  const policyTextHeight = policyLines.length * lineHeight;
-  const dynamicInfoBoxHeight = 8 + 7 + policyTextHeight + 5;
-  const spaceForFooter = 30;
+  // --- IMPORTANT INFO & POLICIES ---
+  const policyMaxWidth = pageWidth - (pageMargin * 2);
+  const spaceForFooter = 30; // Reserve space for the footer
 
-  if (currentY + dynamicInfoBoxHeight + spaceForFooter > pageHeight) {
-    doc.addPage();
-    currentY = pageMargin + 10;
+  // Check if we have enough space to even start the section, if not, new page.
+  if (currentY + 20 > pageHeight - spaceForFooter) { // 20 is arbitrary height for title
+      doc.addPage();
+      currentY = pageMargin + 10;
   }
-
-  doc.setDrawColor(brandSecondary);
-  doc.setLineWidth(0.25);
-  doc.roundedRect(pageMargin, currentY, pageWidth - (pageMargin * 2), dynamicInfoBoxHeight, 3, 3, 'S');
 
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(brandText);
-  doc.text(translations.importantInfoTitle, pageMargin + 5, currentY + 8);
-  
-  doc.setFontSize(10);
+  doc.text(translations.importantInfoTitle, pageMargin, currentY);
+  currentY += 8;
+  doc.setDrawColor(brandAccent);
+  doc.line(pageMargin, currentY, pageWidth - pageMargin, currentY);
+  currentY += 8;
+
   doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
   doc.setTextColor(brandSecondary);
-  doc.text(policyLines, pageMargin + 5, currentY + 15);
+  
+  const policyLines = doc.splitTextToSize(policiesText, policyMaxWidth);
+  const lineHeight = doc.getLineHeight() / doc.internal.scaleFactor;
+
+  for (const line of policyLines) {
+      // Before printing a line, check if it fits. If not, create a new page.
+      if (currentY + lineHeight > pageHeight - spaceForFooter) {
+          doc.addPage();
+          currentY = pageMargin + 10; // Reset Y for new page
+      }
+      doc.text(line, pageMargin, currentY);
+      currentY += lineHeight;
+  }
   
   // --- FOOTER ---
   const pageCount = (doc.internal as any).pages.length;
