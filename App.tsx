@@ -17,7 +17,6 @@
     import { AdminConsole } from './components/admin/AdminConsole';
     import { NotificationProvider } from './context/NotificationContext';
     import { ConfirmationPage } from './components/ConfirmationPage';
-    import { WelcomeInfoModal } from './components/WelcomeInfoModal';
 
     import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession } from './types';
     import * as dataService from './services/dataService';
@@ -28,7 +27,7 @@
     import { LocationPinIcon } from './components/icons/LocationPinIcon';
 
     const App: React.FC = () => {
-        const { t, isTranslationsReady } = useLanguage();
+        const { t } = useLanguage();
         const [isAdmin, setIsAdmin] = useState(false);
         const [view, setView] = useState<AppView>('welcome');
         const [bookingDetails, setBookingDetails] = useState<BookingDetails>({ product: null, slots: [], userInfo: null });
@@ -41,19 +40,9 @@
         const [isBookingTypeModalOpen, setIsBookingTypeModalOpen] = useState(false);
         const [isClassInfoModalOpen, setIsClassInfoModalOpen] = useState(false);
         const [isPrerequisiteModalOpen, setIsPrerequisiteModalOpen] = useState(false);
-        const [isWelcomeModalOpen, setIsWelcomeModalOpen] = useState(false);
         
         const [appData, setAppData] = useState<AppData | null>(null);
         const [loading, setLoading] = useState(true);
-
-        useEffect(() => {
-            const hasSeenModal = sessionStorage.getItem('welcomeModalShown');
-            // We also check for isTranslationsReady to prevent the modal from flashing with untranslated keys.
-            if (view === 'welcome' && !hasSeenModal && isTranslationsReady) {
-                setIsWelcomeModalOpen(true);
-                sessionStorage.setItem('welcomeModalShown', 'true');
-            }
-        }, [view, isTranslationsReady]);
 
         useEffect(() => {
             const urlParams = new URLSearchParams(window.location.search);
@@ -100,7 +89,7 @@
             fetchAppData();
         }, []);
 
-        const handleWelcomeSelect = (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience') => {
+        const handleWelcomeSelect = (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building') => {
             if (userType === 'new') {
                 setView('intro_classes');
             } else if (userType === 'returning') {
@@ -109,6 +98,8 @@
                 setView('group_experience');
             } else if (userType === 'couples_experience') {
                 setView('couples_experience');
+            } else if (userType === 'team_building') {
+                setView('team_building');
             }
         };
         
@@ -260,9 +251,10 @@
                             />;
                 case 'group_experience':
                 case 'couples_experience':
+                case 'team_building':
                     return <GroupInquiryForm 
                                 onBack={() => setView('welcome')} 
-                                inquiryType={view === 'group_experience' ? 'group' : 'couple'} 
+                                inquiryType={view === 'group_experience' ? 'group' : view === 'couples_experience' ? 'couple' : 'team_building'}
                                 footerInfo={appData.footerInfo}
                             />;
                 default:
@@ -312,10 +304,6 @@
                             </button>
                         </div>
                     </footer>
-                )}
-
-                {isWelcomeModalOpen && isTranslationsReady && (
-                    <WelcomeInfoModal onClose={() => setIsWelcomeModalOpen(false)} />
                 )}
 
                 {isUserInfoModalOpen && (

@@ -3,27 +3,49 @@ import { useLanguage } from '../context/LanguageContext';
 import * as dataService from '../services/dataService';
 import type { GroupInquiry, FooterInfo } from '../types';
 import { WhatsAppIcon } from './icons/WhatsAppIcon';
+import { InfoCircleIcon } from './icons/InfoCircleIcon';
 
 interface GroupInquiryFormProps {
   onBack: () => void;
-  inquiryType: 'group' | 'couple';
+  inquiryType: 'group' | 'couple' | 'team_building';
   footerInfo: FooterInfo;
 }
 
 type FormData = Omit<GroupInquiry, 'id' | 'status' | 'createdAt' | 'inquiryType'>;
 
 const EVENT_TYPE_KEYS = [
-  'birthday', 'anniversary', 'team_building', 'bachelorette_party', 'family_gathering', 'other'
+  'birthday', 'anniversary', 'bachelorette_party', 'family_gathering', 'other'
 ];
 
 export const GroupInquiryForm: React.FC<GroupInquiryFormProps> = ({ onBack, inquiryType, footerInfo }) => {
   const { t } = useLanguage();
+  
+  const formConfig = {
+    group: {
+      minParticipants: 6,
+      titleKey: 'inquiryForm.groupExperienceTitle',
+      subtitleKey: 'inquiryForm.groupExperienceSubtitle',
+    },
+    couple: {
+      minParticipants: 2,
+      titleKey: 'inquiryForm.couplesExperienceTitle',
+      subtitleKey: 'inquiryForm.couplesExperienceSubtitle',
+    },
+    team_building: {
+      minParticipants: 6,
+      titleKey: 'inquiryForm.teamBuildingExperienceTitle',
+      subtitleKey: 'inquiryForm.teamBuildingExperienceSubtitle',
+    }
+  };
+
+  const currentConfig = formConfig[inquiryType];
+
   const [formData, setFormData] = useState<FormData>({
     name: '',
     email: '',
     phone: '',
     countryCode: '+593',
-    participants: inquiryType === 'group' ? 6 : 2,
+    participants: currentConfig.minParticipants,
     tentativeDate: null,
     tentativeTime: null,
     eventType: '',
@@ -34,7 +56,7 @@ export const GroupInquiryForm: React.FC<GroupInquiryFormProps> = ({ onBack, inqu
   const generateWhatsappLink = () => {
     if (!footerInfo?.whatsapp) return '';
 
-    const inquiryTypeText = t(inquiryType === 'group' ? 'groupInquiry.inquiryType_group' : 'groupInquiry.inquiryType_couple');
+    const inquiryTypeText = t(`groupInquiry.inquiryType_${inquiryType}`);
     
     const messageDetails = {
       inquiryType: inquiryTypeText,
@@ -107,12 +129,67 @@ export const GroupInquiryForm: React.FC<GroupInquiryFormProps> = ({ onBack, inqu
       </button>
       <div className="text-center mb-6">
         <h2 className="text-3xl font-semibold text-brand-text">
-          {inquiryType === 'group' ? t('inquiryForm.groupExperienceTitle') : t('inquiryForm.couplesExperienceTitle')}
+          {t(currentConfig.titleKey)}
         </h2>
         <p className="text-brand-secondary mt-2">
-           {inquiryType === 'group' ? t('inquiryForm.groupExperienceSubtitle') : t('inquiryForm.couplesExperienceSubtitle')}
+           {t(currentConfig.subtitleKey)}
         </p>
       </div>
+
+       {inquiryType === 'couple' && (
+            <div className="mb-6 p-4 bg-amber-100 border-l-4 border-amber-500 rounded-r-lg animate-fade-in">
+                <div className="flex">
+                    <div className="flex-shrink-0">
+                        <InfoCircleIcon className="h-5 w-5 text-amber-500" aria-hidden="true" />
+                    </div>
+                    <div className="ml-3">
+                        <h3 className="text-md font-bold text-amber-900">
+                            {t('inquiryForm.couplesPriceInfoTitle')}
+                        </h3>
+                        <div className="mt-2 text-sm text-amber-800">
+                            <p>{t('inquiryForm.couplesPriceInfoText')}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+        
+        {inquiryType === 'group' && (
+            <div className="mb-6 p-4 bg-amber-100 border-l-4 border-amber-500 rounded-r-lg animate-fade-in">
+                <div className="flex">
+                    <div className="flex-shrink-0">
+                        <InfoCircleIcon className="h-5 w-5 text-amber-500" aria-hidden="true" />
+                    </div>
+                    <div className="ml-3">
+                        <h3 className="text-md font-bold text-amber-900">
+                            {t('inquiryForm.groupPriceInfoTitle')}
+                        </h3>
+                        <div className="mt-2 text-sm text-amber-800">
+                            <p>{t('inquiryForm.groupPriceInfoText')}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {inquiryType === 'team_building' && (
+             <div className="mb-6 p-4 bg-blue-100 border-l-4 border-blue-500 rounded-r-lg animate-fade-in">
+                <div className="flex">
+                    <div className="flex-shrink-0">
+                        <InfoCircleIcon className="h-5 w-5 text-blue-500" aria-hidden="true" />
+                    </div>
+                    <div className="ml-3">
+                        <h3 className="text-md font-bold text-blue-900">
+                            {t('inquiryForm.teamBuildingDescriptionTitle')}
+                        </h3>
+                        <div className="mt-2 text-sm text-blue-800">
+                            <p>{t('inquiryForm.teamBuildingDescriptionText')}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <input type="text" name="name" placeholder={t('inquiryForm.namePlaceholder')} value={formData.name} onChange={handleChange} required className="w-full p-3 border border-brand-border rounded-lg"/>
@@ -128,18 +205,20 @@ export const GroupInquiryForm: React.FC<GroupInquiryFormProps> = ({ onBack, inqu
                 value={formData.participants} 
                 onChange={handleChange} 
                 required 
-                min={inquiryType === 'group' ? 6 : 2}
+                min={currentConfig.minParticipants}
                 readOnly={inquiryType === 'couple'}
                 className="w-full p-3 border border-brand-border rounded-lg"
             />
-            {inquiryType === 'group' && <p className="text-xs text-brand-secondary mt-1 ml-1">{t('inquiryForm.minParticipantsInfo')}</p>}
+            {inquiryType !== 'couple' && <p className="text-xs text-brand-secondary mt-1 ml-1">{t('inquiryForm.minParticipantsInfo')}</p>}
           </div>
-          <select name="eventType" value={formData.eventType} onChange={handleChange} className="w-full p-3 border border-brand-border rounded-lg bg-white">
-            <option value="">{t('inquiryForm.eventTypePlaceholder')}</option>
-            {EVENT_TYPE_KEYS.map(key => (
-              <option key={key} value={key}>{t(`groupInquiry.eventTypeOptions.${key}`)}</option>
-            ))}
-          </select>
+          {inquiryType !== 'team_building' && (
+            <select name="eventType" value={formData.eventType} onChange={handleChange} className="w-full p-3 border border-brand-border rounded-lg bg-white">
+              <option value="">{t('inquiryForm.eventTypePlaceholder')}</option>
+              {EVENT_TYPE_KEYS.map(key => (
+                <option key={key} value={key}>{t(`groupInquiry.eventTypeOptions.${key}`)}</option>
+              ))}
+            </select>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

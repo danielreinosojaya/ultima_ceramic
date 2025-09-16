@@ -2,7 +2,7 @@ import React from 'react';
 import { useLanguage } from '../context/LanguageContext';
 
 interface WelcomeSelectorProps {
-  onSelect: (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience') => void;
+  onSelect: (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building') => void;
 }
 
 const ChoiceCard: React.FC<{
@@ -77,6 +77,12 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
             subtitle={t('welcome.groupExperienceSubtitle')}
             buttonText={t('welcome.groupExperienceButton')}
             onClick={() => onSelect('group_experience')}
+          />
+          <ExperienceCard 
+            title={t('welcome.teamBuildingExperienceTitle')}
+            subtitle={t('welcome.teamBuildingExperienceSubtitle')}
+            buttonText={t('welcome.teamBuildingExperienceButton')}
+            onClick={() => onSelect('team_building')}
           />
       </div>
     </div>

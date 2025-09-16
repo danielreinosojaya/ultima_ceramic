@@ -1,6 +1,6 @@
 // Basic Types
 export type DayKey = 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday';
-export type AppView = 'welcome' | 'techniques' | 'packages' | 'intro_classes' | 'schedule' | 'summary' | 'group_experience' | 'couples_experience' | 'confirmation';
+export type AppView = 'welcome' | 'techniques' | 'packages' | 'intro_classes' | 'schedule' | 'summary' | 'group_experience' | 'couples_experience' | 'team_building' | 'confirmation';
 export type BookingMode = 'flexible' | 'monthly';
 export type Technique = 'potters_wheel' | 'molding';
 
@@ -209,7 +209,7 @@ export interface GroupInquiry {
     message: string;
     status: InquiryStatus;
     createdAt: string | null; // ISO date string
-    inquiryType: 'group' | 'couple';
+    inquiryType: 'group' | 'couple' | 'team_building';
 }
 
 export type InvoiceRequestStatus = 'Pending' | 'Processed';

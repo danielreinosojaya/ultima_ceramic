@@ -1,9 +1,11 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { ClientNotification, ClientNotificationType } from '../../types';
 import * as dataService from '../../services/dataService';
 import { useLanguage } from '../../context/LanguageContext';
 import { PaperAirplaneIcon } from '../icons/PaperAirplaneIcon';
+import { TrashIcon } from '../icons/TrashIcon';
 
 const NOTIFICATION_TYPE_OPTIONS: ClientNotificationType[] = ['PRE_BOOKING_CONFIRMATION', 'PAYMENT_RECEIPT', 'CLASS_REMINDER'];
 const ITEMS_PER_PAGE = 15;
@@ -16,21 +18,33 @@ export const ClientNotificationLog: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
 
-    useEffect(() => {
-        const loadNotifications = async () => {
-            setIsLoading(true);
-            // This now triggers the backend to generate and send reminders
-            await dataService.triggerScheduledNotifications();
-            const fetchedNotifications = await dataService.getClientNotifications();
-            setNotifications(fetchedNotifications);
-            setIsLoading(false);
-        };
-        loadNotifications();
+    const loadNotifications = useCallback(async () => {
+        setIsLoading(true);
+        await dataService.triggerScheduledNotifications();
+        const fetchedNotifications = await dataService.getClientNotifications();
+        setNotifications(fetchedNotifications);
+        setIsLoading(false);
     }, []);
+
+    useEffect(() => {
+        loadNotifications();
+    }, [loadNotifications]);
     
     useEffect(() => {
         setCurrentPage(1);
     }, [searchTerm, filterType]);
+    
+    const handleDelete = async (id: string) => {
+        if (window.confirm(t('admin.clientNotificationLog.confirmDelete'))) {
+            try {
+                await dataService.deleteClientNotification(id);
+                setNotifications(prev => prev.filter(n => n.id !== id));
+            } catch (error) {
+                console.error('Failed to delete notification:', error);
+                alert(t('admin.clientNotificationLog.deleteError'));
+            }
+        }
+    };
 
     const formatDate = (dateInput: string | null | undefined): string => {
         if (!dateInput) return '---';
@@ -108,12 +122,13 @@ export const ClientNotificationLog: React.FC = () => {
                             <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.clientNotificationLog.client')}</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.clientNotificationLog.type')}</th>
                             <th className="px-6 py-3 text-center text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.clientNotificationLog.status')}</th>
+                             <th className="px-6 py-3 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.clientNotificationLog.actions')}</th>
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                         {isLoading ? (
                              <tr>
-                                <td colSpan={4} className="text-center py-10 text-brand-secondary">
+                                <td colSpan={5} className="text-center py-10 text-brand-secondary">
                                     {t('app.loading')}...
                                 </td>
                             </tr>
@@ -134,10 +149,19 @@ export const ClientNotificationLog: React.FC = () => {
                                         {t(`admin.clientNotificationLog.status_${n.status}`)}
                                     </span>
                                 </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    <button
+                                        onClick={() => handleDelete(n.id)}
+                                        className="p-1 text-red-500 hover:text-red-700 rounded-md hover:bg-red-50"
+                                        title={t('admin.clientNotificationLog.deleteNotification')}
+                                    >
+                                        <TrashIcon className="w-5 h-5" />
+                                    </button>
+                                </td>
                             </tr>
                         )) : (
                             <tr>
-                                <td colSpan={4} className="text-center py-10 text-brand-secondary">
+                                <td colSpan={5} className="text-center py-10 text-brand-secondary">
                                     {t('admin.clientNotificationLog.noNotifications')}
                                 </td>
                             </tr>
