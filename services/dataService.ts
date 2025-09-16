@@ -1,4 +1,5 @@
 
+
 import type { 
     Product, Booking, ScheduleOverrides, Notification, Announcement, Instructor, 
     ConfirmationMessage, ClassCapacity, EnrichedAvailableSlot, CapacityMessageSettings, 
@@ -226,6 +227,7 @@ export const updateFooterInfo = (info: FooterInfo): Promise<{ success: boolean }
 export const getAutomationSettings = (): Promise<AutomationSettings> => getData('automationSettings');
 export const updateAutomationSettings = (settings: AutomationSettings): Promise<{ success: boolean }> => setData('automationSettings', settings);
 export const getClientNotifications = (): Promise<ClientNotification[]> => getData('clientNotifications');
+export const deleteClientNotification = (id: string): Promise<{ success: boolean }> => postAction('deleteClientNotification', { id });
 export const triggerScheduledNotifications = (): Promise<{ success: boolean }> => postAction('triggerScheduledNotifications', {});
 export const getBackgroundSettings = (): Promise<BackgroundSettings> => getData('backgroundSettings');
 export const updateBackgroundSettings = (settings: BackgroundSettings): Promise<{ success: boolean }> => setData('backgroundSettings', settings);

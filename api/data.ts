@@ -499,6 +499,13 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             `;
             result = parseInvoiceRequestFromDB(processedInvoice);
             break;
+        case 'deleteClientNotification':
+            const { id: notificationIdToDelete } = req.body;
+            if (!notificationIdToDelete) {
+                return res.status(400).json({ error: 'Notification ID is required.' });
+            }
+            await sql`DELETE FROM client_notifications WHERE id = ${notificationIdToDelete}`;
+            break;
         case 'triggerScheduledNotifications':
             const { rows: settingsRows } = await sql`SELECT value FROM settings WHERE key = 'automationSettings'`;
             const automationSettings = settingsRows[0]?.value as AutomationSettings;

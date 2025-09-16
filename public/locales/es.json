@@ -17,9 +17,18 @@
     "returningUserSubtitle": "Si ya tomaste la clase de inicio, puedes reservar paquetes de clases o acceso al estudio.",
     "returningUserButton": "Ver Paquetes",
     "groupExperienceTitle": "Experiencias Grupales Privadas",
+    
+
+
+
+    
     "groupExperienceSubtitle": "Ideal para cumpleaños, team building o una reunión creativa entre amigos. Contáctanos para crear un evento a tu medida.",
     "couplesExperienceTitle": "Experiencia de Cerámica para Parejas",
-    "couplesExperienceSubtitle": "Una cita creativa y diferente. Creen algo hermoso juntos en una sesión privada."
+    "couplesExperienceSubtitle": "Una cita creativa y diferente. Creen algo hermoso juntos en una sesión privada.",
+     "couplesExperienceButton": "Planifica tu Cita",
+    "teamBuildingExperienceTitle": "Team Building Corporativo",
+    "teamBuildingExperienceSubtitle": "Fortalece a tu equipo con un taller de cerámica creativo y colaborativo.",
+    "teamBuildingExperienceButton": "Planifica tu Evento"
 
   },
 "welcomeModal": {
@@ -182,6 +191,7 @@
     "whatsappMessage": "¡Hola! Quisiera más información sobre la {{inquiryType}} para {{participants}} participantes.\n\nNombre: {{name}}\nTipo de Evento: {{eventType}}\nFecha Tentativa: {{date}}\nHora Tentativa: {{time}}\n\n¡Gracias!",
     "inquiryType_group": "Experiencia Grupal",
     "inquiryType_couple": "Experiencia en Pareja",
+     "inquiryType_team_building": "Team Building",
     "eventTypeOptions": {
       "birthday": "Cumpleaños",
       "anniversary": "Aniversario",
@@ -197,6 +207,22 @@
     "groupExperienceSubtitle": "Cuéntanos sobre tu evento y te ayudaremos a crear una experiencia memorable.",
     "couplesExperienceTitle": "Consulta de Experiencia en Pareja",
     "couplesExperienceSubtitle": "Planifiquemos tu cita creativa. Danos algunos detalles para empezar.",
+  "teamBuildingExperienceTitle": "Consulta para Team Building",
+    "teamBuildingExperienceSubtitle": "Cuéntanos sobre tu empresa y equipo, y diseñaremos el taller creativo perfecto.",
+    "groupPriceInfoTitle": "Precio base: Desde $45 por persona",
+    "groupPriceInfoText": "El precio final puede variar según los adicionales o personalizaciones para tu grupo. ¡Contáctanos para una cotización a medida!",
+    "teamBuildingDescriptionTitle": "Un Escape Creativo para tu Equipo",
+    "teamBuildingDescriptionText": "Nuestros talleres de team building están diseñados para fomentar la colaboración, comunicación y creatividad fuera de la oficina. Es una experiencia práctica donde los colegas pueden relajarse, aprender una nueva habilidad y crear algo tangible juntos. Contáctanos para discutir los objetivos de tu equipo y personalizaremos el evento perfecto.",
+
+
+
+
+
+
+
+
+
+    
     "namePlaceholder": "Nombre Completo",
     "emailPlaceholder": "Correo Electrónico",
     "phonePlaceholder": "Teléfono",
@@ -205,7 +231,9 @@
     "eventTypePlaceholder": "Tipo de Evento (Opcional)",
     "messagePlaceholder": "Cuéntanos más sobre tu evento...",
     "submitButton": "Enviar Consulta",
-    "submitError": "Hubo un error al enviar tu consulta. Por favor, inténtalo de nuevo."
+    "submitError": "Hubo un error al enviar tu consulta. Por favor, inténtalo de nuevo.",
+    "couplesPriceInfoTitle": "Precio base: Desde $190",
+    "couplesPriceInfoText": "El precio final puede variar según los adicionales que desees incluir en tu experiencia. ¡Contáctanos para crear una cita perfecta y recibir una cotización personalizada!"
   },
   "footer": {
     "address": "Dirección",
@@ -703,7 +731,13 @@
       "status": "Estado",
       "status_Sent": "Enviado",
       "status_Pending": "Pendiente",
-      "noNotifications": "No se encontraron notificaciones para clientes."
+      "noNotifications": "No se encontraron notificaciones para clientes.",
+      "actions": "Acciones",
+      "deleteNotification": "Eliminar notificación",
+      "confirmDelete": "¿Estás seguro de que quieres eliminar esta notificación de forma permanente?",
+      "deleteError": "No se pudo eliminar la notificación. Por favor, inténtalo de nuevo."
+  
+    
     },
     "manualBookingModal": {
       "title": "Reserva Manual",
@@ -770,5 +804,6 @@
       "noShow": "Ausente",
       "saveAttendance": "Guardar Asistencia"
     }
+
   }
 }

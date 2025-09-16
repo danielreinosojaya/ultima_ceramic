@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import type { UserInfo, InvoiceRequest } from '../types';
+import React, { useState } from 'react';
+import type { UserInfo } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { COUNTRIES } from '@/constants';
 import { UserIcon } from './icons/UserIcon';
@@ -113,12 +113,6 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
         const { name, value } = e.target;
         setInvoiceData(prev => ({ ...prev, [name]: value }));
     }
-    
-    const isFormValid = useMemo(() => {
-        const baseValid = firstName.trim() && lastName.trim() && email.trim() && phone.trim();
-        const invoiceValid = invoiceData.companyName.trim() && invoiceData.taxId.trim() && invoiceData.address.trim();
-        return baseValid && invoiceValid && Object.keys(errors).length === 0;
-    }, [firstName, lastName, email, phone, invoiceData, errors]);
 
     return (
         <div
@@ -199,9 +193,18 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                         </div>
                     </div>
                     <div className="mt-6 flex justify-end">
-                        <button type="submit" onClick={handleSubmit} disabled={true}
+                        <button type="submit"
+                            disabled={
+                                !firstName.trim() ||
+                                !lastName.trim() ||
+                                !/\S+@\S+\.\S+/.test(email) ||
+                                !/^[0-9\s-]{7,15}$/.test(phone) ||
+                                !invoiceData.companyName.trim() ||
+                                !invoiceData.taxId.trim() ||
+                                !invoiceData.address.trim() ||
+                                !acceptedPolicies
+                            }
                             className="w-full sm:w-auto bg-brand-primary text-white font-bold py-2 px-8 rounded-lg hover:opacity-90 transition-opacity duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                            title={t('userInfoModal.bookingsDisabledTooltip')}
                         >
                             {t('userInfoModal.saveAndContinueButton')}
                         </button>
