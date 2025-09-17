@@ -37,25 +37,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         setNotifications(storedNotifications.sort((a, b) => safeGetTime(b.timestamp) - safeGetTime(a.timestamp)));
     }, []);
 
-    // Poll for new data every 30 seconds and on window focus
-    useEffect(() => {
-        const intervalId = setInterval(() => {
-            forceRefresh();
-        }, 30000);
-
-        const handleFocus = () => {
-            forceRefresh();
-        };
-        
-        window.addEventListener('focus', handleFocus);
-
-        return () => {
-            clearInterval(intervalId);
-            window.removeEventListener('focus', handleFocus);
-        };
-    }, [forceRefresh]);
-
-    // Refetch notifications when dataVersion changes
+    // Refetch notifications when dataVersion changes (e.g., manual sync)
     useEffect(() => {
         loadNotifications();
     }, [dataVersion, loadNotifications]);
