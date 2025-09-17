@@ -60,7 +60,7 @@
                 try {
                     const [
                         products, instructors, availability, scheduleOverrides, classCapacity,
-                        capacityMessages, announcements, bookings, policies, confirmationMessage, footerInfo, bankDetails
+                        capacityMessages, announcements, policies, confirmationMessage, footerInfo, bankDetails
                     ] = await Promise.all([
                         dataService.getProducts(),
                         dataService.getInstructors(),
@@ -69,7 +69,6 @@
                         dataService.getClassCapacity(),
                         dataService.getCapacityMessageSettings(),
                         dataService.getAnnouncements(),
-                        dataService.getBookings(),
                         dataService.getPolicies(),
                         dataService.getConfirmationMessage(),
                         dataService.getFooterInfo(),
@@ -78,7 +77,7 @@
 
                     setAppData({
                         products, instructors, availability, scheduleOverrides, classCapacity,
-                        capacityMessages, announcements, bookings, policies, confirmationMessage, footerInfo, bankDetails
+                        capacityMessages, announcements, bookings: [], policies, confirmationMessage, footerInfo, bankDetails
                     });
                 } catch (error) {
                     console.error("Failed to load initial app data:", error);
