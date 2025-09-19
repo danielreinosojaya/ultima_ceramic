@@ -6,6 +6,7 @@ import { UserIcon } from './icons/UserIcon';
 import { MailIcon } from './icons/MailIcon';
 import { PhoneIcon } from './icons/PhoneIcon';
 import { InfoCircleIcon } from './icons/InfoCircleIcon';
+import { GiftIcon } from './icons/GiftIcon';
 
 interface InvoiceData {
     companyName: string;
@@ -30,7 +31,8 @@ const InputField: React.FC<{
     error?: string;
     icon?: React.ReactNode;
     required?: boolean;
-}> = ({ id, name, label, value, onChange, placeholder, type = 'text', error, icon, required }) => (
+    disabled?: boolean;
+}> = ({ id, name, label, value, onChange, placeholder, type = 'text', error, icon, required, disabled }) => (
     <div>
         <label htmlFor={id} className="block text-sm font-semibold text-brand-secondary mb-1">{label}</label>
         <div className="relative">
@@ -46,10 +48,11 @@ const InputField: React.FC<{
                 value={value}
                 onChange={onChange}
                 placeholder={placeholder}
-                className={`w-full ${icon ? 'pl-10' : 'pl-3'} pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-brand-primary transition-colors ${error ? 'border-red-500' : 'border-brand-border'}`}
+                className={`w-full ${icon ? 'pl-10' : 'pl-3'} pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-brand-primary transition-colors ${error ? 'border-red-500' : 'border-brand-border'} disabled:bg-gray-100`}
                 aria-invalid={!!error}
                 aria-describedby={error ? `${id}-error` : undefined}
                 required={required}
+                disabled={disabled}
             />
         </div>
         {error && <p id={`${id}-error`} className="text-red-600 text-xs mt-1">{error}</p>}
@@ -64,6 +67,8 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
     const [country, setCountry] = useState(COUNTRIES[0]);
+    const [birthday, setBirthday] = useState('');
+    const [optOutBirthday, setOptOutBirthday] = useState(false);
     
     // Invoice state
     const [invoiceData, setInvoiceData] = useState<InvoiceData>({
@@ -74,6 +79,30 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [isPhoneFocused, setIsPhoneFocused] = useState(false);
     const [acceptedPolicies, setAcceptedPolicies] = useState(false);
+    
+    const validatePhone = (phoneNum: string): string | null => {
+        const digits = phoneNum.replace(/\D/g, '');
+        if (!digits) {
+            return t('userInfoModal.validationRequired');
+        }
+
+        if (country.code === '+593') {
+            if (digits.length !== 9) {
+                return t('userInfoModal.validationPhoneEcuador');
+            }
+        } else {
+            if (digits.length < 7 || digits.length > 15) {
+                return t('userInfoModal.validationPhone');
+            }
+        }
+        return null;
+    };
+
+    const handlePhoneBlur = () => {
+        const phoneError = validatePhone(phone);
+        setErrors(prev => ({...prev, phone: phoneError || '' }));
+        setIsPhoneFocused(false);
+    }
 
     const validate = () => {
         const newErrors: Record<string, string> = {};
@@ -84,11 +113,9 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
         } else if (!/\S+@\S+\.\S+/.test(email)) {
             newErrors.email = t('userInfoModal.validationEmail');
         }
-        if (!phone.trim()) {
-            newErrors.phone = t('userInfoModal.validationRequired');
-        } else if (!/^[0-9\s-]{7,15}$/.test(phone)) {
-            newErrors.phone = t('userInfoModal.validationPhone');
-        }
+        
+        const phoneError = validatePhone(phone);
+        if (phoneError) newErrors.phone = phoneError;
         
         if (!invoiceData.companyName.trim()) newErrors.companyName = t('userInfoModal.validationRequired');
         if (!invoiceData.taxId.trim()) newErrors.taxId = t('userInfoModal.validationRequired');
@@ -102,7 +129,14 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
         e.preventDefault();
         if (validate()) {
             onSubmit({
-                userInfo: { firstName, lastName, email, phone, countryCode: country.code },
+                userInfo: { 
+                    firstName, 
+                    lastName, 
+                    email, 
+                    phone, 
+                    countryCode: country.code,
+                    birthday: optOutBirthday ? null : birthday
+                },
                 needsInvoice: true,
                 invoiceData: { ...invoiceData, email: invoiceData.email || email }
             });
@@ -113,6 +147,17 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
         const { name, value } = e.target;
         setInvoiceData(prev => ({ ...prev, [name]: value }));
     }
+    
+    const isSaveDisabled = 
+        !firstName.trim() ||
+        !lastName.trim() ||
+        !/\S+@\S+\.\S+/.test(email) ||
+        !!validatePhone(phone) ||
+        !invoiceData.companyName.trim() ||
+        !invoiceData.taxId.trim() ||
+        !invoiceData.address.trim() ||
+        (!birthday && !optOutBirthday) ||
+        !acceptedPolicies;
 
     return (
         <div
@@ -156,13 +201,33 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                                 <div className="relative flex-grow">
                                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-brand-secondary"><PhoneIcon className="w-5 h-5"/></div>
                                     <input id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^0-9\s-]/g, ''))}
-                                        onFocus={() => setIsPhoneFocused(true)} onBlur={() => setIsPhoneFocused(false)} placeholder={t('userInfoModal.phonePlaceholder')}
-                                        className="w-full pl-10 pr-3 py-2 rounded-r-lg focus:outline-none" maxLength={15} required
+                                        onFocus={() => setIsPhoneFocused(true)} onBlur={handlePhoneBlur} placeholder={t('userInfoModal.phonePlaceholder')}
+                                        className="w-full pl-10 pr-3 py-2 rounded-r-lg focus:outline-none" maxLength={20} required
                                     />
                                 </div>
                             </div>
                             {errors.phone && <p className="text-red-600 text-xs mt-1">{errors.phone}</p>}
+                            {country.code === '+593' && !errors.phone && <p className="text-brand-secondary text-xs mt-1 ml-1">{t('userInfoModal.phoneHintEcuador')}</p>}
                         </div>
+
+                         <div className="p-4 border border-rose-200 rounded-lg bg-rose-50/50 space-y-3">
+                            <div className="flex items-center gap-3">
+                                <GiftIcon className="w-6 h-6 text-rose-500" />
+                                <div>
+                                    <h4 className="font-bold text-brand-text">{t('userInfoModal.birthdayTitle')}</h4>
+                                    <p className="text-xs text-brand-secondary">{t('userInfoModal.birthdaySubtitle')}</p>
+                                </div>
+                            </div>
+                            <InputField id="birthday" label="" type="date" value={birthday} onChange={e => setBirthday(e.target.value)} disabled={optOutBirthday} />
+                            <label className="flex items-center gap-2 cursor-pointer text-xs text-brand-secondary">
+                                <div className={`relative inline-flex items-center h-5 rounded-full w-9 transition-colors ${optOutBirthday ? 'bg-brand-primary' : 'bg-gray-300'}`}>
+                                    <span className={`inline-block w-3.5 h-3.5 transform bg-white rounded-full transition-transform ${optOutBirthday ? 'translate-x-5' : 'translate-x-1'}`}/>
+                                </div>
+                                <input type="checkbox" checked={optOutBirthday} onChange={e => setOptOutBirthday(e.target.checked)} className="hidden" />
+                                {t('userInfoModal.birthdayOptOut')}
+                            </label>
+                        </div>
+
                     </div>
                      <div className="mt-6 pt-4 border-t border-brand-border space-y-4">
                         <div className="flex items-start gap-3 bg-blue-50 border-l-4 border-blue-400 p-3 rounded-r-md text-blue-800">
@@ -194,16 +259,7 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                     </div>
                     <div className="mt-6 flex justify-end">
                         <button type="submit"
-                            disabled={
-                                !firstName.trim() ||
-                                !lastName.trim() ||
-                                !/\S+@\S+\.\S+/.test(email) ||
-                                !/^[0-9\s-]{7,15}$/.test(phone) ||
-                                !invoiceData.companyName.trim() ||
-                                !invoiceData.taxId.trim() ||
-                                !invoiceData.address.trim() ||
-                                !acceptedPolicies
-                            }
+                            disabled={isSaveDisabled}
                             className="w-full sm:w-auto bg-brand-primary text-white font-bold py-2 px-8 rounded-lg hover:opacity-90 transition-opacity duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed"
                         >
                             {t('userInfoModal.saveAndContinueButton')}
