@@ -163,14 +163,29 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
 
                 const enrichedSlots = todaysSlots.map(slot => {
                     const normalizedSlotTime = normalizeTime(slot.time);
-                    const bookingsForSlot = bookings.filter(b => 
-                        b.productId === slot.product.id &&
-                        b.slots.some(s => 
+                    
+                    const bookingsForSlot = bookings.filter(b => {
+                        // First, find if this booking has a slot matching the current calendar cell
+                        const slotMatch = b.slots.some(s => 
                             s.date === dateStr && 
                             normalizeTime(s.time) === normalizedSlotTime && 
                             s.instructorId === instructor.id
-                        )
-                    );
+                        );
+
+                        if (!slotMatch) return false;
+
+                        // Then, apply type-specific logic
+                        if (slot.product.type === 'INTRODUCTORY_CLASS') {
+                            // For intro classes, the product ID must match exactly.
+                            return b.productId === slot.product.id;
+                        } else if (slot.product.type === 'CLASS_PACKAGE') {
+                            // For packages, ensure the booking is a class package and its technique matches the slot's technique.
+                            return b.productType === 'CLASS_PACKAGE' && (b.product as ClassPackage).details.technique === slot.technique;
+                        }
+                        
+                        return false; // Don't show other product types here.
+                    });
+
                     return { ...slot, bookings: bookingsForSlot };
                 });
 
