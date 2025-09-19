@@ -29,7 +29,7 @@ export interface EditableBooking {
 }
 
 // Products
-export type ProductType = 'CLASS_PACKAGE' | 'OPEN_STUDIO_SUBSCRIPTION' | 'INTRODUCTORY_CLASS' | 'GROUP_EXPERIENCE' | 'COUPLES_EXPERIENCE';
+export type ProductType = 'CLASS_PACKAGE' | 'OPEN_STUDIO_SUBSCRIPTION' | 'INTRODUCTORY_CLASS' | 'GROUP_EXPERIENCE' | 'COUPLES_EXPERIENCE' | 'SINGLE_CLASS';
 
 export interface ClassPackageDetails {
   duration: string;
@@ -78,6 +78,13 @@ export interface ClassPackage extends BaseProduct {
     details: ClassPackageDetails;
 }
 
+export interface SingleClass extends BaseProduct {
+    type: 'SINGLE_CLASS';
+    classes: 1;
+    price: number;
+    details: ClassPackageDetails;
+}
+
 export interface OpenStudioSubscription extends BaseProduct {
     type: 'OPEN_STUDIO_SUBSCRIPTION';
     price: number;
@@ -100,7 +107,7 @@ export interface CouplesExperience extends BaseProduct {
     type: 'COUPLES_EXPERIENCE';
 }
 
-export type Product = ClassPackage | OpenStudioSubscription | IntroductoryClass | GroupExperience | CouplesExperience;
+export type Product = ClassPackage | OpenStudioSubscription | IntroductoryClass | GroupExperience | CouplesExperience | SingleClass;
 
 
 // Schedule & Booking

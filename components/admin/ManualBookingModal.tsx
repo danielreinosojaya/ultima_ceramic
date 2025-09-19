@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
-import type { Product, UserInfo, Booking, AddBookingResult, Customer, TimeSlot, EnrichedAvailableSlot, Instructor, ClassPackage, IntroductoryClass, AppData, CapacityMessageSettings, Technique } from '../../types';
+import type { Product, UserInfo, Booking, AddBookingResult, Customer, TimeSlot, EnrichedAvailableSlot, Instructor, ClassPackage, IntroductoryClass, AppData, CapacityMessageSettings, Technique, SingleClass } from '../../types';
 import * as dataService from '../../services/dataService';
 import { useLanguage } from '../../context/LanguageContext';
 // FIX: Import DAY_NAMES from constants to resolve undefined variable error.
-import { COUNTRIES, DAY_NAMES } from '@/constants';
+import { COUNTRIES, DAY_NAMES, SINGLE_CLASS_PRICE } from '@/constants';
 import { InstructorTag } from '../InstructorTag';
 import { CapacityIndicator } from '../CapacityIndicator';
 
@@ -81,6 +80,28 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
     const [modalState, setModalState] = useState<{ isOpen: boolean; date: Date | null }>({ isOpen: false, date: null });
     const [availableTimesForModal, setAvailableTimesForModal] = useState<EnrichedAvailableSlot[]>([]);
 
+    const singleClassPottersWheel: SingleClass = useMemo(() => ({
+        id: -1,
+        type: 'SINGLE_CLASS',
+        name: t('admin.manualBookingModal.singleClassPottersWheel'),
+        classes: 1,
+        price: SINGLE_CLASS_PRICE,
+        description: t('admin.manualBookingModal.singleClassDescription'),
+        isActive: true,
+        details: { technique: 'potters_wheel', duration: '', durationHours: 0, activities: [], generalRecommendations: '', materials: '' }
+    }), [t]);
+
+    const singleClassMolding: SingleClass = useMemo(() => ({
+        id: -2,
+        type: 'SINGLE_CLASS',
+        name: t('admin.manualBookingModal.singleClassMolding'),
+        classes: 1,
+        price: SINGLE_CLASS_PRICE,
+        description: t('admin.manualBookingModal.singleClassDescription'),
+        isActive: true,
+        details: { technique: 'molding', duration: '', durationHours: 0, activities: [], generalRecommendations: '', materials: '' }
+    }), [t]);
+
     useEffect(() => {
         const loadData = async () => {
           const [
@@ -91,12 +112,13 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
             dataService.getScheduleOverrides(), dataService.getClassCapacity(),
             dataService.getInstructors(), dataService.getCapacityMessageSettings()
           ]);
-          setProducts(allProducts.filter(p => p.isActive && p.type !== 'GROUP_EXPERIENCE' && p.type !== 'COUPLES_EXPERIENCE'));
+          const availableProducts = allProducts.filter(p => p.isActive && p.type !== 'GROUP_EXPERIENCE' && p.type !== 'COUPLES_EXPERIENCE');
+          setProducts([singleClassPottersWheel, singleClassMolding, ...availableProducts]);
           setAllCustomers(dataService.getCustomers(bookings));
           setAppData({ bookings, availability, scheduleOverrides, classCapacity, instructors, capacityMessages });
         };
         loadData();
-    }, []);
+    }, [singleClassMolding, singleClassPottersWheel]);
     
     useEffect(() => {
         if (selectedProduct && 'price' in selectedProduct) {
@@ -176,8 +198,9 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
     
     const getTimesForDate = (date: Date): EnrichedAvailableSlot[] => {
         if (!selectedProduct || !appData) return [];
-        if (selectedProduct.type === 'CLASS_PACKAGE') {
-            return dataService.getAvailableTimesForDate(date, appData, (selectedProduct as ClassPackage).details.technique);
+        if (selectedProduct.type === 'CLASS_PACKAGE' || selectedProduct.type === 'SINGLE_CLASS') {
+            const productWithTechnique = selectedProduct as ClassPackage | SingleClass;
+            return dataService.getAvailableTimesForDate(date, appData, productWithTechnique.details.technique);
         }
         if (selectedProduct.type === 'INTRODUCTORY_CLASS') {
             const dateStr = formatDateToYYYYMMDD(date);
@@ -219,7 +242,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
         } else {
             if (selectedProduct?.type === 'CLASS_PACKAGE' && selectedSlots.length < (selectedProduct as ClassPackage).classes) {
                  setSelectedSlots(prev => [...prev, newSlot].sort((a,b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)));
-            } else if (selectedProduct?.type === 'INTRODUCTORY_CLASS' && selectedSlots.length < 1) {
+            } else if ((selectedProduct?.type === 'INTRODUCTORY_CLASS' || selectedProduct?.type === 'SINGLE_CLASS') && selectedSlots.length < 1) {
                 setSelectedSlots([newSlot]);
             }
         }
@@ -230,7 +253,10 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
         setSelectedSlots(prev => prev.filter(s => s !== slotToRemove));
     };
     
-    const slotsNeeded = selectedProduct?.type === 'CLASS_PACKAGE' ? (selectedProduct as ClassPackage).classes : selectedProduct?.type === 'INTRODUCTORY_CLASS' ? 1 : 0;
+    const slotsNeeded = selectedProduct?.type === 'CLASS_PACKAGE' 
+        ? (selectedProduct as ClassPackage).classes 
+        : (selectedProduct?.type === 'INTRODUCTORY_CLASS' || selectedProduct?.type === 'SINGLE_CLASS') 
+        ? 1 : 0;
     const areSlotsSelected = slotsNeeded === 0 || selectedSlots.length === slotsNeeded;
     
     return (
