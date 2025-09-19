@@ -1,6 +1,5 @@
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import type { Instructor, Booking, IntroductoryClass, Product, EditableBooking, RescheduleSlotInfo, PaymentDetails, AppData, InvoiceRequest, AdminTab, Customer, ClassPackage, EnrichedAvailableSlot } from '../../types';
+import type { Instructor, Booking, IntroductoryClass, Product, EditableBooking, RescheduleSlotInfo, PaymentDetails, AppData, InvoiceRequest, AdminTab, Customer, ClassPackage, EnrichedAvailableSlot, SingleClass } from '../../types';
 import * as dataService from '../../services/dataService';
 import { useLanguage } from '../../context/LanguageContext';
 import { DAY_NAMES, PALETTE_COLORS } from '../../constants.js';
@@ -165,7 +164,6 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                     const normalizedSlotTime = normalizeTime(slot.time);
                     
                     const bookingsForSlot = bookings.filter(b => {
-                        // First, find if this booking has a slot matching the current calendar cell
                         const slotMatch = b.slots.some(s => 
                             s.date === dateStr && 
                             normalizeTime(s.time) === normalizedSlotTime && 
@@ -174,16 +172,16 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
 
                         if (!slotMatch) return false;
 
-                        // Then, apply type-specific logic
                         if (slot.product.type === 'INTRODUCTORY_CLASS') {
-                            // For intro classes, the product ID must match exactly.
                             return b.productId === slot.product.id;
                         } else if (slot.product.type === 'CLASS_PACKAGE') {
-                            // For packages, ensure the booking is a class package and its technique matches the slot's technique.
-                            return b.productType === 'CLASS_PACKAGE' && (b.product as ClassPackage).details.technique === slot.technique;
+                             if (b.productType === 'CLASS_PACKAGE' || b.productType === 'SINGLE_CLASS') {
+                                const bookingProduct = b.product as (ClassPackage | SingleClass);
+                                return bookingProduct.details.technique === slot.technique;
+                            }
                         }
                         
-                        return false; // Don't show other product types here.
+                        return false;
                     });
 
                     return { ...slot, bookings: bookingsForSlot };
