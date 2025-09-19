@@ -282,6 +282,7 @@
   },
   "admin": {
     "headerTitle": "Administration Console",
+    
     "productsTab": "Products",
     "calendarTab": "Calendar",
     "scheduleSettingsTab": "Schedule Settings",
@@ -398,7 +399,26 @@
       "notSpecified": "Not specified",
       "noInquiries": "No inquiries found.",
       "notApplicable": "N/A",
-      "invalidDate": "Invalid Date"
+      "invalidDate": "Invalid Date",
+
+      "manualBookingModal": {
+      "title": "Manual Booking",
+      "customerSectionTitle": "Step 1: Select Customer",
+      "existingCustomer": "Existing Customer",
+      "newCustomer": "New Customer",
+      "searchPlaceholder": "Search existing customer...",
+      "selected": "Selected",
+      "productSectionTitle": "Step 2: Select Product",
+      "selectProduct": "Select a product...",
+      "priceLabel": "Price (override)",
+      "saveButton": "Save Booking",
+      "nextButton": "Next: Schedule Classes",
+      "scheduleSectionTitle": "Step 3: Schedule Classes",
+      "backButton": "Back",
+      "selectedSlots": "Selected Slots",
+      "singleClassPottersWheel": "Single Class (Potter's Wheel)",
+      "singleClassMolding": "Single Class (Hand-building)",
+      "singleClassDescription": "A single class for one student."
     },
     "notifications": {
       "title": "Notifications",
@@ -428,5 +448,6 @@
       "confirmDelete": "Are you sure you want to permanently delete this notification?",
       "deleteError": "Could not delete the notification. Please try again."
   }
-}
-}
+  }
+}  
+} 

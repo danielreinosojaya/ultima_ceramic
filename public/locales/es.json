@@ -739,7 +739,7 @@
   
     
     },
-    "manualBookingModal": {
+   "manualBookingModal": {
       "title": "Reserva Manual",
       "customerSectionTitle": "Paso 1: Seleccionar Cliente",
       "existingCustomer": "Cliente Existente",
@@ -753,7 +753,18 @@
       "nextButton": "Siguiente: Agendar Clases",
       "scheduleSectionTitle": "Paso 3: Agendar Clases",
       "backButton": "Atrás",
-      "selectedSlots": "Horarios Seleccionados"
+      "selectedSlots": "Horarios Seleccionados",
+      "singleClassPottersWheel": "Clase Suelta (Torno)",
+      "singleClassMolding": "Clase Suelta (Modelado)",
+      "singleClassDescription": "Una única clase para un alumno.",
+      "conflictTitle": "Conflicto de Horario",
+      "conflictMessage": "Ya hay {{count}} alumno(s) agendado(s) en este horario ({{time}}). ¿Deseas sobreagendar y continuar de todas formas?",
+      "overbookButton": "Sobreagendar",
+      "cancelButton": "Cancelar",
+      "dateLabel": "Fecha",
+      "timeLabel": "Hora",
+      "addSlotButton": "Añadir Horario"
+
     },
     "rescheduleModal": {
       "title": "Reagendar Clase para {{name}}",
