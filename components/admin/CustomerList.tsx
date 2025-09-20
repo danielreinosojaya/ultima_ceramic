@@ -1,6 +1,7 @@
 import React from 'react';
 import type { AugmentedCustomer, RemainingClassesInfo } from './CrmDashboard';
 import { useLanguage } from '../../context/LanguageContext';
+import { GiftIcon } from '../icons/GiftIcon';
 
 interface CustomerListProps {
     customers: AugmentedCustomer[];
@@ -57,7 +58,14 @@ export const CustomerList: React.FC<CustomerListProps> = ({ customers, onSelectC
                         {customers.length > 0 ? customers.map((customer) => (
                             <tr key={customer.email} onClick={() => onSelectCustomer(customer)} className="hover:bg-brand-background cursor-pointer">
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="font-bold text-brand-text">{customer.userInfo.firstName} {customer.userInfo.lastName}</div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-bold text-brand-text">{customer.userInfo.firstName} {customer.userInfo.lastName}</span>
+                                        {customer.isBirthdayUpcoming && (
+                                            <span title={t('admin.crm.upcomingBirthday')}>
+                                                <GiftIcon className="w-4 h-4 text-rose-500" />
+                                            </span>
+                                        )}
+                                    </div>
                                     <div className="text-sm text-brand-secondary">{customer.userInfo.email}</div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">

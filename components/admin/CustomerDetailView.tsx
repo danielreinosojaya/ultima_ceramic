@@ -11,6 +11,7 @@ import { TrashIcon } from '../icons/TrashIcon.js';
 import { UserIcon } from '../icons/UserIcon.js';
 import { InvoiceReminderModal } from './InvoiceReminderModal.js';
 import { CustomerAttendanceHistory } from './CustomerAttendanceHistory.js';
+import { CalendarIcon } from '../icons/CalendarIcon.js';
 
 
 interface NavigationState {
@@ -27,16 +28,25 @@ interface CustomerDetailViewProps {
 }
 
 // Add this helper function to your file
-const formatDate = (dateInput: Date | string | undefined | null): string => {
+const formatDate = (dateInput: Date | string | undefined | null, options: Intl.DateTimeFormatOptions = {}): string => {
   if (!dateInput) return '---';
-  const date = new Date(dateInput);
+  // If it's a YYYY-MM-DD string, add time to avoid timezone issues
+  const dateStr = typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput) 
+    ? dateInput + 'T00:00:00' 
+    : dateInput;
+
+  const date = new Date(dateStr);
   if (isNaN(date.getTime()) || date.getTime() === 0) return '---';
-  return date.toLocaleDateString('es', {
+  
+  const defaultOptions: Intl.DateTimeFormatOptions = {
     month: 'short',
     day: 'numeric',
-    year: 'numeric'
-  });
+    year: 'numeric',
+    ...options
+  };
+  return date.toLocaleDateString('es', defaultOptions);
 };
+
 
 // Add this helper function to your file
 const getBookingDisplayDate = (booking: Booking, language: string): string => {
@@ -226,9 +236,15 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer
 
       <div className="bg-brand-background p-6 rounded-lg mb-6">
         <h2 className="text-2xl font-bold text-brand-text">{customer.userInfo.firstName.toUpperCase()} {customer.userInfo.lastName.toUpperCase()}</h2>
-        <div className="flex items-center gap-6 mt-2 text-sm text-brand-secondary">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mt-2 text-sm text-brand-secondary">
           <span className="flex items-center gap-2"><MailIcon className="w-4 h-4" />{customer.userInfo.email}</span>
           <span className="flex items-center gap-2"><PhoneIcon className="w-4 h-4" />{customer.userInfo.countryCode} {customer.userInfo.phone}</span>
+          {customer.userInfo.birthday && (
+            <span className="flex items-center gap-2 font-semibold">
+                <CalendarIcon className="w-4 h-4" />
+                {formatDate(customer.userInfo.birthday, { day: 'numeric', month: 'long' })}
+            </span>
+          )}
         </div>
       </div>
 
