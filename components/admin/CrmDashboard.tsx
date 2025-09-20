@@ -30,6 +30,7 @@ export interface RemainingClassesInfo {
 
 export interface AugmentedCustomer extends Customer {
     remainingClassesInfo: RemainingClassesInfo | null;
+    isBirthdayUpcoming: boolean;
 }
 
 const getSlotDateTime = (slot: TimeSlot) => {
@@ -79,6 +80,28 @@ const getRemainingClassesInfo = (customer: Customer): RemainingClassesInfo | nul
     };
 };
 
+const isBirthdayUpcoming = (birthday: string | null | undefined): boolean => {
+    if (!birthday) return false;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const birthdayDate = new Date(birthday + 'T00:00:00'); // Treat as local timezone
+    if (isNaN(birthdayDate.getTime())) return false;
+    
+    const currentYear = today.getFullYear();
+    const nextBirthday = new Date(currentYear, birthdayDate.getMonth(), birthdayDate.getDate());
+
+    if (nextBirthday < today) {
+        nextBirthday.setFullYear(currentYear + 1);
+    }
+    
+    const diffTime = nextBirthday.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    return diffDays >= 0 && diffDays <= 30;
+};
+
 
 const CrmDashboard: React.FC<CrmDashboardProps> = ({ navigateToEmail, bookings, invoiceRequests, onDataChange, onNavigationComplete, setNavigateTo }) => {
     const { t } = useLanguage();
@@ -120,7 +143,8 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({ navigateToEmail, bookings, 
     const augmentedAndFilteredCustomers = useMemo((): AugmentedCustomer[] => {
         const augmented = customers.map(c => ({
             ...c,
-            remainingClassesInfo: getRemainingClassesInfo(c)
+            remainingClassesInfo: getRemainingClassesInfo(c),
+            isBirthdayUpcoming: isBirthdayUpcoming(c.userInfo.birthday)
         }));
 
         let filtered = augmented;

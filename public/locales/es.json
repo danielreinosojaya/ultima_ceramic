@@ -132,6 +132,9 @@
   },
   "userInfoModal": {
     "title": "Tu Información",
+    "birthdayTitle": "¡Queremos celebrar contigo!",
+    "birthdaySubtitle": "Comparte tu fecha de nacimiento y recibe sorpresas y descuentos especiales de nuestra parte.",
+    "birthdayOptOut": "Prefiero no recibir regalos de cumpleaños.",
     "subtitle": "¡Casi listo! Por favor, danos tus datos para completar la pre-reserva.",
     "firstNameLabel": "Nombre",
     "firstNamePlaceholder": "Tu nombre",
@@ -431,6 +434,7 @@
       "subtitle": "Visualiza el historial de clientes, paquetes activos y datos financieros.",
       "allCustomersTab": "Todos los Clientes",
       "openStudioTab": "Estudio Abierto",
+      "upcomingBirthday": "Cumpleaños Próximo",
       "searchPlaceholder": "Buscar por nombre, email o código de reserva...",
       "filters": {
         "title": "Filtrar",
@@ -464,6 +468,7 @@
     },
     "customerDetail": {
       "backButton": "Volver a la Lista de Clientes",
+      "birthdayLabel": "Cumpleaños",
       "activePackages": "Paquetes y Suscripciones Activas",
       "progress": "Progreso",
       "progressText": "{{completed}} de {{total}} completadas",
