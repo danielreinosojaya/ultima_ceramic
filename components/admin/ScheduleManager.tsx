@@ -67,8 +67,6 @@ interface ScheduleManagerProps extends AppData {
     setNavigateTo: React.Dispatch<React.SetStateAction<NavigationState | null>>;
 }
 
-// FIX: Refactored component to destructure props directly in the function signature.
-// This ensures correct type inference for the `...appData` rest parameter, resolving property access errors.
 export const ScheduleManager: React.FC<ScheduleManagerProps> = ({ 
     initialDate, onBackToMonth, onDataChange, invoiceRequests, setNavigateTo, ...appData 
 }) => {
@@ -152,7 +150,6 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 }
 
                 for (const introProduct of introClassProducts) {
-                    // FIX: Pass an object with the 'bookings' property to satisfy the function's type requirement.
                     const introSessions = dataService.generateIntroClassSessions(introProduct, { bookings }, { includeFull: true });
                     const sessionsForDay = introSessions.filter(s => s.date === dateStr && s.instructorId === instructor.id);
                     todaysSlots.push(...sessionsForDay.map(s => ({ ...s, product: introProduct, isOverride: s.isOverride })));
@@ -398,7 +395,6 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             const newSchedule: Record<string, EnrichedSlot[]> = {};
             let instructorHasUnpaid = false;
             for (const [dateStr, slots] of Object.entries(data.schedule)) {
-                // FIX: Cast 'slots' to EnrichedSlot[] to ensure .filter method is available.
                 const unpaidSlots = (slots as EnrichedSlot[]).filter(slot => slot.bookings.some(b => !b.isPaid));
                 if (unpaidSlots.length > 0) {
                     newSchedule[dateStr] = unpaidSlots;
@@ -418,7 +414,6 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         if (!showUnpaidOnly) return true;
         for (const { schedule } of filteredScheduleData.values()) {
             for (const slots of Object.values(schedule)) {
-                // FIX: Cast 'slots' to any[] to ensure .length property is available.
                 if ((slots as any[]).length > 0) return true;
             }
         }

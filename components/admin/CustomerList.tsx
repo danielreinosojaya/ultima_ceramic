@@ -1,7 +1,8 @@
 import React from 'react';
 import type { AugmentedCustomer, RemainingClassesInfo } from './CrmDashboard';
 import { useLanguage } from '../../context/LanguageContext';
-import { GiftIcon } from '../icons/GiftIcon';
+// FIX: Replaced missing GiftIcon with existing SparklesIcon to prevent build errors.
+import { SparklesIcon } from '../icons/SparklesIcon';
 
 interface CustomerListProps {
     customers: AugmentedCustomer[];
@@ -62,7 +63,7 @@ export const CustomerList: React.FC<CustomerListProps> = ({ customers, onSelectC
                                         <span className="font-bold text-brand-text">{customer.userInfo.firstName} {customer.userInfo.lastName}</span>
                                         {customer.isBirthdayUpcoming && (
                                             <span title={t('admin.crm.upcomingBirthday')}>
-                                                <GiftIcon className="w-4 h-4 text-rose-500" />
+                                                <SparklesIcon className="w-4 h-4 text-rose-500" />
                                             </span>
                                         )}
                                     </div>

@@ -1,4 +1,3 @@
-
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { sql } from '@vercel/postgres';
 import { seedDatabase, ensureTablesExist } from './db.js';
@@ -8,7 +7,7 @@ import type {
     Product, Booking, ScheduleOverrides, Notification, Announcement, Instructor, 
     ConfirmationMessage, ClassCapacity, CapacityMessageSettings, UITexts, FooterInfo, 
     GroupInquiry, AddBookingResult, PaymentDetails, AttendanceStatus,
-    InquiryStatus, DayKey, AvailableSlot, AutomationSettings, UserInfo, BankDetails, TimeSlot, ClientNotification, InvoiceRequest
+    InquiryStatus, DayKey, AvailableSlot, AutomationSettings, UserInfo, BankDetails, TimeSlot, ClientNotification, InvoiceRequest, SingleClass
 } from '../types.js';
 import { 
     DEFAULT_PRODUCTS, DEFAULT_AVAILABLE_SLOTS_BY_DAY, DEFAULT_INSTRUCTORS, 
@@ -574,7 +573,8 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
     const { productId, slots, userInfo, productType, invoiceData, bookingDate } = body;
     
     // Server-side validation
-    if (productType === 'INTRODUCTORY_CLASS' || productType === 'CLASS_PACKAGE') {
+    // FIX: Add SINGLE_CLASS to server-side validation logic.
+    if (productType === 'INTRODUCTORY_CLASS' || productType === 'CLASS_PACKAGE' || productType === 'SINGLE_CLASS') {
         const { rows: existingBookings } = await sql`SELECT slots FROM bookings WHERE user_info->>'email' = ${userInfo.email}`;
         for (const existing of existingBookings) {
             for (const existingSlot of existing.slots) {

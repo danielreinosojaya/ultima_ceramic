@@ -6,7 +6,8 @@ import { UserIcon } from './icons/UserIcon';
 import { MailIcon } from './icons/MailIcon';
 import { PhoneIcon } from './icons/PhoneIcon';
 import { InfoCircleIcon } from './icons/InfoCircleIcon';
-import { GiftIcon } from './icons/GiftIcon';
+// FIX: Replaced missing GiftIcon with existing SparklesIcon to prevent build errors.
+import { SparklesIcon } from './icons/SparklesIcon';
 
 interface InvoiceData {
     companyName: string;
@@ -212,7 +213,7 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
 
                          <div className="p-4 border border-rose-200 rounded-lg bg-rose-50/50 space-y-3">
                             <div className="flex items-center gap-3">
-                                <GiftIcon className="w-6 h-6 text-rose-500" />
+                                <SparklesIcon className="w-6 h-6 text-rose-500" />
                                 <div>
                                     <h4 className="font-bold text-brand-text">{t('userInfoModal.birthdayTitle')}</h4>
                                     <p className="text-xs text-brand-secondary">{t('userInfoModal.birthdaySubtitle')}</p>
