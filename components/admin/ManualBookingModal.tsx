@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-// FIX: Added SingleClass type to support new product variant.
 import type { Product, UserInfo, Booking, AddBookingResult, Customer, TimeSlot, EnrichedAvailableSlot, Instructor, ClassPackage, IntroductoryClass, AppData, CapacityMessageSettings, Technique, SingleClass } from '../../types';
 import * as dataService from '../../services/dataService';
 import { useLanguage } from '../../context/LanguageContext';
 import { COUNTRIES, DAY_NAMES } from '@/constants';
 import { InstructorTag } from '../InstructorTag';
 import { CapacityIndicator } from '../CapacityIndicator';
+import { SparklesIcon } from '../icons/SparklesIcon';
 
 interface ManualBookingModalProps {
     onClose: () => void;
@@ -70,10 +70,12 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
     
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
     const [price, setPrice] = useState<number | string>('');
-    const [userInfo, setUserInfo] = useState<UserInfo>({ firstName: '', lastName: '', email: '', phone: '', countryCode: COUNTRIES[0].code });
+    const [userInfo, setUserInfo] = useState<UserInfo>({ firstName: '', lastName: '', email: '', phone: '', countryCode: COUNTRIES[0].code, birthday: '' });
     const [isCreatingNewCustomer, setIsCreatingNewCustomer] = useState(false);
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [optOutBirthday, setOptOutBirthday] = useState(false);
+
 
     const [selectedSlots, setSelectedSlots] = useState<TimeSlot[]>([]);
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -128,18 +130,20 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
 
     const resetCustomerSelection = () => {
         setSelectedCustomer(null);
-        setUserInfo({ firstName: '', lastName: '', email: '', phone: '', countryCode: COUNTRIES[0].code });
+        setUserInfo({ firstName: '', lastName: '', email: '', phone: '', countryCode: COUNTRIES[0].code, birthday: '' });
     };
 
     const handleSubmitBooking = async () => {
         if (!selectedProduct || !userInfo.firstName) return;
         
+        const finalUserInfo = { ...userInfo, birthday: optOutBirthday ? null : userInfo.birthday };
+
         const bookingData = {
             product: selectedProduct!,
             productId: selectedProduct!.id,
             productType: selectedProduct!.type,
             slots: selectedSlots,
-            userInfo,
+            userInfo: finalUserInfo,
             isPaid: false, // Manual bookings are unpaid by default
             price: Number(price) || 0,
             bookingMode: 'flexible',
@@ -175,7 +179,6 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
     
     const getTimesForDate = (date: Date): EnrichedAvailableSlot[] => {
         if (!selectedProduct || !appData) return [];
-        // FIX: Handle SingleClass type alongside ClassPackage.
         if (selectedProduct.type === 'CLASS_PACKAGE' || selectedProduct.type === 'SINGLE_CLASS') {
             return dataService.getAvailableTimesForDate(date, appData, (selectedProduct as ClassPackage | SingleClass).details.technique);
         }
@@ -217,7 +220,6 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
         if(isSelected) {
             setSelectedSlots(prev => prev.filter(s => s.date !== newSlot.date || s.time !== newSlot.time));
         } else {
-            // FIX: Handle SingleClass type alongside ClassPackage when checking slot limits.
             if ((selectedProduct?.type === 'CLASS_PACKAGE' || selectedProduct?.type === 'SINGLE_CLASS') && selectedSlots.length < selectedProduct.classes) {
                  setSelectedSlots(prev => [...prev, newSlot].sort((a,b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)));
             } else if (selectedProduct?.type === 'INTRODUCTORY_CLASS' && selectedSlots.length < 1) {
@@ -231,11 +233,15 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
         setSelectedSlots(prev => prev.filter(s => s !== slotToRemove));
     };
     
-    // FIX: Handle SingleClass type when determining the number of slots needed.
     const slotsNeeded = (selectedProduct?.type === 'CLASS_PACKAGE' || selectedProduct?.type === 'SINGLE_CLASS')
         ? selectedProduct.classes 
         : selectedProduct?.type === 'INTRODUCTORY_CLASS' ? 1 : 0;
     const areSlotsSelected = slotsNeeded === 0 || selectedSlots.length === slotsNeeded;
+
+    const isNextDisabled = !selectedProduct || 
+                           (!selectedCustomer && !isCreatingNewCustomer) || 
+                           (isCreatingNewCustomer && (!userInfo.firstName || !userInfo.lastName || !userInfo.email)) ||
+                           (isCreatingNewCustomer && !optOutBirthday && !userInfo.birthday);
     
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
@@ -273,6 +279,23 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
                                             {COUNTRIES.map(c => <option key={c.name} value={c.code}>{c.flag} {c.code}</option>)}
                                         </select>
                                         <input type="tel" name="phone" value={userInfo.phone} onChange={handleUserInputChange} placeholder={t('userInfoModal.phonePlaceholder')} className="w-full px-3 py-2 border rounded-lg" />
+                                    </div>
+                                    <div className="p-4 border border-rose-200 rounded-lg bg-rose-50/50 space-y-3">
+                                        <div className="flex items-center gap-3">
+                                            <SparklesIcon className="w-6 h-6 text-rose-500" />
+                                            <div>
+                                                <h4 className="font-bold text-brand-text">{t('admin.manualBookingModal.birthdayTitle')}</h4>
+                                                <p className="text-xs text-brand-secondary">{t('admin.manualBookingModal.birthdaySubtitle')}</p>
+                                            </div>
+                                        </div>
+                                        <input id="birthday" name="birthday" type="date" value={userInfo.birthday || ''} onChange={handleUserInputChange} disabled={optOutBirthday} className="w-full px-3 py-2 border rounded-lg disabled:bg-gray-100" />
+                                        <label className="flex items-center gap-2 cursor-pointer text-xs text-brand-secondary">
+                                            <div className={`relative inline-flex items-center h-5 rounded-full w-9 transition-colors ${optOutBirthday ? 'bg-brand-primary' : 'bg-gray-300'}`}>
+                                                <span className={`inline-block w-3.5 h-3.5 transform bg-white rounded-full transition-transform ${optOutBirthday ? 'translate-x-5' : 'translate-x-1'}`}/>
+                                            </div>
+                                            <input type="checkbox" checked={optOutBirthday} onChange={e => setOptOutBirthday(e.target.checked)} className="hidden" />
+                                            {t('admin.manualBookingModal.birthdayOptOut')}
+                                        </label>
                                     </div>
                                 </div>
                             ) : (
@@ -312,7 +335,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
 
                          <div className="mt-6 flex justify-end gap-3">
                             <button type="button" onClick={onClose} className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100">{t('admin.productManager.cancelButton')}</button>
-                            <button type="button" onClick={handleGoToStep2} disabled={!selectedProduct || (!selectedCustomer && !isCreatingNewCustomer) || (isCreatingNewCustomer && !userInfo.firstName)} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent disabled:bg-gray-400">
+                            <button type="button" onClick={handleGoToStep2} disabled={isNextDisabled} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent disabled:bg-gray-400">
                                 { selectedProduct && (selectedProduct.type === 'OPEN_STUDIO_SUBSCRIPTION') ? t('admin.manualBookingModal.saveButton') : t('admin.manualBookingModal.nextButton') }
                             </button>
                         </div>
