@@ -63,6 +63,29 @@ const formatDateToYYYYMMDD = (d: Date): string => {
     return `${year}-${month}-${day}`;
 };
 
+const normalizeTime = (timeStr: string): string => {
+    if (!timeStr) return '';
+    const date = new Date(`1970-01-01 ${timeStr}`);
+    if (isNaN(date.getTime())) {
+        return timeStr;
+    }
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+};
+
+const formatToAmPm = (time24: string): string => {
+    if (!time24) return '';
+    const [hoursStr, minutesStr] = time24.split(':');
+    let hours = parseInt(hoursStr, 10);
+    const minutes = parseInt(minutesStr, 10);
+    const ampm = hours >= 12 ? 'p.m.' : 'a.m.';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // the hour '0' should be '12'
+    const finalMinutes = minutes < 10 ? '0' + minutes : minutes;
+    return `${hours}:${finalMinutes} ${ampm}`;
+};
+
 export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose, onBookingAdded }) => {
     const { t, language } = useLanguage();
     const [step, setStep] = useState(1);
@@ -293,7 +316,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
     const handleAddSingleClassSlot = () => {
         if (!selectedProduct || !appData || selectedProduct.type !== 'SINGLE_CLASS') return;
 
-        const { instructors, availability, scheduleOverrides } = appData;
+        const { instructors, availability, scheduleOverrides, bookings } = appData;
         const date = new Date(singleClassDate + 'T00:00:00');
         const dayKey = DAY_NAMES[date.getDay()];
         const override = scheduleOverrides[date.toISOString().split('T')[0]];
@@ -303,18 +326,26 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
         const matchingSlots = weeklySlots.filter(s => s.technique === technique);
         
         let instructorId = 0;
-        if(matchingSlots.length > 0) {
-            const slotAtTime = matchingSlots.find(s => s.time === singleClassTime);
+        if (matchingSlots.length > 0) {
+            const normalizedInputTime = normalizeTime(singleClassTime);
+            const slotAtTime = matchingSlots.find(s => normalizeTime(s.time) === normalizedInputTime);
             instructorId = slotAtTime ? slotAtTime.instructorId : matchingSlots[0].instructorId;
         } else if (instructors.length > 0) {
             instructorId = instructors[0].id;
         }
 
-        const newSlot: TimeSlot = { date: singleClassDate, time: singleClassTime, instructorId };
-        const bookingsForSlot = dataService.getBookingsForSlot(date, singleClassTime, appData);
+        const displayTime = formatToAmPm(singleClassTime);
+        const newSlot: TimeSlot = { date: singleClassDate, time: displayTime, instructorId };
+        
+        const normalizedNewSlotTime = normalizeTime(newSlot.time);
+        const bookingsForSlot = bookings.filter(booking => 
+            booking.slots.some(slot => 
+                slot.date === newSlot.date && normalizeTime(slot.time) === normalizedNewSlotTime
+            )
+        );
         
         if (bookingsForSlot.length > 0) {
-            setConflictDetails({ count: bookingsForSlot.length, time: singleClassTime });
+            setConflictDetails({ count: bookingsForSlot.length, time: displayTime });
             setSlotToConfirm(newSlot);
             setIsConflictModalOpen(true);
         } else {
