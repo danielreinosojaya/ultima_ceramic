@@ -748,6 +748,9 @@
     },
    "manualBookingModal": {
       "title": "Reserva Manual",
+      "birthdayTitle": "¡Queremos celebrar contigo!",
+      "birthdaySubtitle": "Comparte su fecha de nacimiento y recibe sorpresas y descuentos especiales de nuestra parte.",
+      "birthdayOptOut": "Prefiere no recibir regalos de cumpleaños.",
       "customerSectionTitle": "Paso 1: Seleccionar Cliente",
       "existingCustomer": "Cliente Existente",
       "newCustomer": "Nuevo Cliente",
