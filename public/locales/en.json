@@ -418,6 +418,12 @@
 
       "manualBookingModal": {
       "title": "Manual Booking",
+       "dateLabel": "Date",
+      "timeLabel": "Time",
+      "addSlotButton": "Add Slot",
+      "birthdayTitle": "We want to celebrate with you!",
+      "birthdaySubtitle": "Share your birthday to receive special gifts and offers from us.",
+      "birthdayOptOut": "I prefer not to receive birthday gifts.",
       "customerSectionTitle": "Step 1: Select Customer",
       "existingCustomer": "Existing Customer",
       "newCustomer": "New Customer",
