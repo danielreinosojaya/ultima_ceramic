@@ -148,7 +148,10 @@
     "saveAndContinueButton": "Save and Continue",
     "validationRequired": "This field is required.",
     "validationEmail": "Please enter a valid email.",
-    "validationPhone": "Please enter a valid phone number."
+    "validationPhone": "Please enter a valid phone number.",
+    "birthdayTitle": "We want to celebrate with you!",
+    "birthdaySubtitle": "Share your birthday to receive special gifts and offers from us.",
+    "birthdayOptOut": "I prefer not to receive birthday gifts."
   },
   "confirmation": {
     "title": "Pre-Booking Confirmed!",
@@ -282,7 +285,17 @@
   },
   "admin": {
     "headerTitle": "Administration Console",
-    
+     "crm": {
+      "upcomingBirthday": "Upcoming Birthday"
+    },
+    "customerDetail": {
+        "birthdayLabel": "Birthday"
+    },
+    "clientNotificationLog": {
+        "title": "Client Communication Log",
+        "upcomingBirthday": "Upcoming Birthday"
+    },
+
     "productsTab": "Products",
     "calendarTab": "Calendar",
     "scheduleSettingsTab": "Schedule Settings",

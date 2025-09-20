@@ -12,6 +12,7 @@ export interface UserInfo {
   email: string;
   phone: string;
   countryCode: string;
+  birthday?: string | null;
 }
 
 export interface Customer {
