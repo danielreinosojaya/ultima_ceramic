@@ -132,6 +132,8 @@
   },
   "userInfoModal": {
     "title": "Tu Información",
+    
+    "phoneHintEcuador": "Ingresa tus 9 dígitos, sin el 0 inicial.",
     "birthdayTitle": "¡Queremos celebrar contigo!",
     "birthdaySubtitle": "Comparte tu fecha de nacimiento y recibe sorpresas y descuentos especiales de nuestra parte.",
     "birthdayOptOut": "Prefiero no recibir regalos de cumpleaños.",

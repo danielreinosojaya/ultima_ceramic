@@ -125,7 +125,9 @@
   },
   "userInfoModal": {
     "title": "Your Information",
-    "subtitle": "Almost there! Please provide your details to complete the pre-booking.",
+   
+    "validationPhoneEcuador": "For Ecuador, please enter your 9 digits (without the leading 0).",
+    "phoneHintEcuador": "Enter your 9 digits, without the leading 0.",    "subtitle": "Almost there! Please provide your details to complete the pre-booking.",
     "firstNameLabel": "First Name",
     "firstNamePlaceholder": "Your first name",
     "lastNameLabel": "Last Name",
