@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import type { Product, UserInfo, Booking, AddBookingResult, Customer, TimeSlot, EnrichedAvailableSlot, Instructor, ClassPackage, IntroductoryClass, AppData, CapacityMessageSettings, Technique, SingleClass } from '../../types';
 import * as dataService from '../../services/dataService';
@@ -6,6 +7,8 @@ import { COUNTRIES, DAY_NAMES } from '@/constants';
 import { InstructorTag } from '../InstructorTag';
 import { CapacityIndicator } from '../CapacityIndicator';
 import { SparklesIcon } from '../icons/SparklesIcon';
+import { ConflictWarningModal } from './ConflictWarningModal';
+
 
 interface ManualBookingModalProps {
     onClose: () => void;
@@ -82,6 +85,52 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
     const [modalState, setModalState] = useState<{ isOpen: boolean; date: Date | null }>({ isOpen: false, date: null });
     const [availableTimesForModal, setAvailableTimesForModal] = useState<EnrichedAvailableSlot[]>([]);
 
+    // For Single Class flexible scheduling
+    const [singleClassDate, setSingleClassDate] = useState(formatDateToYYYYMMDD(new Date()));
+    const [singleClassTime, setSingleClassTime] = useState('10:00');
+    const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
+    const [conflictDetails, setConflictDetails] = useState<{ count: number; time: string } | null>(null);
+    const [slotToConfirm, setSlotToConfirm] = useState<TimeSlot | null>(null);
+
+
+    const virtualProducts: Product[] = useMemo(() => [
+        {
+            id: -1,
+            type: 'SINGLE_CLASS',
+            name: t('admin.manualBookingModal.singleClassPottersWheel'),
+            description: t('admin.manualBookingModal.singleClassDescription'),
+            isActive: true,
+            classes: 1,
+            price: 55, // Or a default price
+            details: {
+                technique: 'potters_wheel',
+                duration: '2 hours',
+                durationHours: 2,
+                activities: [],
+                generalRecommendations: '',
+                materials: ''
+            }
+        },
+        {
+            id: -2,
+            type: 'SINGLE_CLASS',
+            name: t('admin.manualBookingModal.singleClassMolding'),
+            description: t('admin.manualBookingModal.singleClassDescription'),
+            isActive: true,
+            classes: 1,
+            price: 55,
+            details: {
+                technique: 'molding',
+                duration: '2 hours',
+                durationHours: 2,
+                activities: [],
+                generalRecommendations: '',
+                materials: ''
+            }
+        }
+    ], [t]);
+
+
     useEffect(() => {
         const loadData = async () => {
           const [
@@ -92,12 +141,13 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
             dataService.getScheduleOverrides(), dataService.getClassCapacity(),
             dataService.getInstructors(), dataService.getCapacityMessageSettings()
           ]);
-          setProducts(allProducts.filter(p => p.isActive && p.type !== 'GROUP_EXPERIENCE' && p.type !== 'COUPLES_EXPERIENCE'));
+          const activeProducts = allProducts.filter(p => p.isActive && p.type !== 'GROUP_EXPERIENCE' && p.type !== 'COUPLES_EXPERIENCE');
+          setProducts([...virtualProducts, ...activeProducts]);
           setAllCustomers(dataService.getCustomers(bookings));
           setAppData({ bookings, availability, scheduleOverrides, classCapacity, instructors, capacityMessages });
         };
         loadData();
-    }, []);
+    }, [virtualProducts]);
     
     useEffect(() => {
         if (selectedProduct && 'price' in selectedProduct) {
@@ -105,7 +155,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
         } else {
             setPrice('');
         }
-        setSelectedSlots([]); // Reset slots when product changes
+        setSelectedSlots([]);
     }, [selectedProduct]);
 
     const filteredCustomers = useMemo(() => {
@@ -232,6 +282,45 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
     const handleRemoveSlot = (slotToRemove: TimeSlot) => {
         setSelectedSlots(prev => prev.filter(s => s !== slotToRemove));
     };
+
+    const confirmAddSlot = (slot: TimeSlot) => {
+        setSelectedSlots([slot]);
+        setIsConflictModalOpen(false);
+        setConflictDetails(null);
+        setSlotToConfirm(null);
+    };
+
+    const handleAddSingleClassSlot = () => {
+        if (!selectedProduct || !appData || selectedProduct.type !== 'SINGLE_CLASS') return;
+
+        const { instructors, availability, scheduleOverrides } = appData;
+        const date = new Date(singleClassDate + 'T00:00:00');
+        const dayKey = DAY_NAMES[date.getDay()];
+        const override = scheduleOverrides[date.toISOString().split('T')[0]];
+        const weeklySlots = override?.slots ?? availability[dayKey];
+        
+        const technique = (selectedProduct as SingleClass).details.technique;
+        const matchingSlots = weeklySlots.filter(s => s.technique === technique);
+        
+        let instructorId = 0;
+        if(matchingSlots.length > 0) {
+            const slotAtTime = matchingSlots.find(s => s.time === singleClassTime);
+            instructorId = slotAtTime ? slotAtTime.instructorId : matchingSlots[0].instructorId;
+        } else if (instructors.length > 0) {
+            instructorId = instructors[0].id;
+        }
+
+        const newSlot: TimeSlot = { date: singleClassDate, time: singleClassTime, instructorId };
+        const bookingsForSlot = dataService.getBookingsForSlot(date, singleClassTime, appData);
+        
+        if (bookingsForSlot.length > 0) {
+            setConflictDetails({ count: bookingsForSlot.length, time: singleClassTime });
+            setSlotToConfirm(newSlot);
+            setIsConflictModalOpen(true);
+        } else {
+            confirmAddSlot(newSlot);
+        }
+    };
     
     const slotsNeeded = (selectedProduct?.type === 'CLASS_PACKAGE' || selectedProduct?.type === 'SINGLE_CLASS')
         ? selectedProduct.classes 
@@ -255,6 +344,12 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
                     capacityMessages={appData.capacityMessages}
                 />
             )}
+             <ConflictWarningModal
+                isOpen={isConflictModalOpen}
+                onClose={() => setIsConflictModalOpen(false)}
+                onConfirm={() => slotToConfirm && confirmAddSlot(slotToConfirm)}
+                details={conflictDetails}
+            />
             <div className="bg-brand-surface rounded-xl shadow-2xl p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto animate-fade-in-up" onClick={(e) => e.stopPropagation()}>
                 <h2 className="text-2xl font-serif text-brand-accent mb-4 text-center">{t('admin.manualBookingModal.title')}</h2>
                 {step === 1 && (
@@ -322,7 +417,14 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
                         <div>
                             <h3 className="font-bold text-brand-text mb-2">{t('admin.manualBookingModal.productSectionTitle')}</h3>
                              <div className="grid grid-cols-2 gap-4">
-                                <select onChange={(e) => setSelectedProduct(products.find(p => p.id === Number(e.target.value)) || null)} className="w-full p-2 border rounded-lg bg-white">
+                                <select 
+                                    value={selectedProduct?.id ?? ''}
+                                    onChange={(e) => {
+                                        const productId = Number(e.target.value);
+                                        setSelectedProduct(products.find(p => p.id === productId) || null);
+                                    }} 
+                                    className="w-full p-2 border rounded-lg bg-white"
+                                >
                                     <option value="">{t('admin.manualBookingModal.selectProduct')}</option>
                                     {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                 </select>
@@ -344,28 +446,47 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
                 {step === 2 && (
                     <div className="animate-fade-in-fast">
                          <h3 className="font-bold text-brand-text mb-2 text-center">{t('admin.manualBookingModal.scheduleSectionTitle')}</h3>
-                        <p className="text-center text-sm text-brand-secondary mb-4">{t('schedule.classesRemaining', { count: slotsNeeded - selectedSlots.length })}</p>
+                        
+                        {selectedProduct?.type === 'SINGLE_CLASS' ? (
+                            <div className="p-4 bg-brand-background rounded-lg">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                                    <div>
+                                        <label htmlFor="single-class-date" className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.manualBookingModal.dateLabel')}</label>
+                                        <input id="single-class-date" type="date" value={singleClassDate} onChange={e => setSingleClassDate(e.target.value)} className="w-full px-3 py-2 border rounded-lg" />
+                                    </div>
+                                    <div>
+                                        <label htmlFor="single-class-time" className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.manualBookingModal.timeLabel')}</label>
+                                        <input id="single-class-time" type="time" value={singleClassTime} onChange={e => setSingleClassTime(e.target.value)} className="w-full px-3 py-2 border rounded-lg" />
+                                    </div>
+                                    <button onClick={handleAddSingleClassSlot} className="bg-brand-primary text-white font-bold py-2 px-4 rounded-lg h-10">{t('admin.manualBookingModal.addSlotButton')}</button>
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                <p className="text-center text-sm text-brand-secondary mb-4">{t('schedule.classesRemaining', { count: slotsNeeded - selectedSlots.length })}</p>
+                                <div className="flex items-center justify-between mb-2">
+                                    <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} disabled={currentDate.getMonth() === today.getMonth() && currentDate.getFullYear() === today.getFullYear()} className="p-2 rounded-full hover:bg-brand-background disabled:opacity-50">&larr;</button>
+                                    <h4 className="text-lg font-bold text-brand-text capitalize">{currentDate.toLocaleString(language, { month: 'long', year: 'numeric' })}</h4>
+                                    <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-2 rounded-full hover:bg-brand-background">&rarr;</button>
+                                </div>
+                                <div className="grid grid-cols-7 gap-1 text-center text-xs text-brand-secondary mb-1">
+                                    {DAY_NAMES.map(day => <div key={day} className="font-bold">{day.substring(0,3)}</div>)}
+                                </div>
+                                <div className="grid grid-cols-7 gap-1">
+                                    {calendarDays.map((day, index) => {
+                                        if (!day) return <div key={`blank-${index}`}></div>;
+                                        const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+                                        date.setHours(0,0,0,0);
+                                        const isPast = date < today;
+                                        const hasSlots = getTimesForDate(date).length > 0;
+                                        const isDisabled = isPast || !hasSlots;
 
-                         <div className="flex items-center justify-between mb-2">
-                            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} disabled={currentDate.getMonth() === today.getMonth() && currentDate.getFullYear() === today.getFullYear()} className="p-2 rounded-full hover:bg-brand-background disabled:opacity-50">&larr;</button>
-                            <h4 className="text-lg font-bold text-brand-text capitalize">{currentDate.toLocaleString(language, { month: 'long', year: 'numeric' })}</h4>
-                            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-2 rounded-full hover:bg-brand-background">&rarr;</button>
-                        </div>
-                        <div className="grid grid-cols-7 gap-1 text-center text-xs text-brand-secondary mb-1">
-                            {DAY_NAMES.map(day => <div key={day} className="font-bold">{day.substring(0,3)}</div>)}
-                        </div>
-                        <div className="grid grid-cols-7 gap-1">
-                            {calendarDays.map((day, index) => {
-                                if (!day) return <div key={`blank-${index}`}></div>;
-                                const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-                                date.setHours(0,0,0,0);
-                                const isPast = date < today;
-                                const hasSlots = getTimesForDate(date).length > 0;
-                                const isDisabled = isPast || !hasSlots;
-
-                                return <button key={day} onClick={() => handleDayClick(day)} disabled={isDisabled} className={`w-full aspect-square rounded-full text-sm font-semibold transition-all ${isDisabled ? 'text-gray-400 bg-gray-100 cursor-not-allowed' : 'hover:bg-brand-primary/20 bg-white'}`}>{day}</button>
-                            })}
-                        </div>
+                                        return <button key={day} onClick={() => handleDayClick(day)} disabled={isDisabled} className={`w-full aspect-square rounded-full text-sm font-semibold transition-all ${isDisabled ? 'text-gray-400 bg-gray-100 cursor-not-allowed' : 'hover:bg-brand-primary/20 bg-white'}`}>{day}</button>
+                                    })}
+                                </div>
+                            </>
+                        )}
+                        
 
                          <div className="mt-4 p-2 bg-brand-background rounded-lg min-h-[50px]">
                             <h4 className="text-sm font-bold text-brand-secondary mb-2">{t('admin.manualBookingModal.selectedSlots')}</h4>
