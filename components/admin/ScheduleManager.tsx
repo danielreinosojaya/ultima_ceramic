@@ -155,20 +155,15 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                     todaysSlots.push(...sessionsForDay.map(s => ({ ...s, product: introProduct, isOverride: s.isOverride })));
                 }
                 
-                todaysSlots.sort((a,b) => normalizeTime(a.time).localeCompare(normalizeTime(b.time)));
-
-                const enrichedSlots = todaysSlots.map(slot => {
+                const enrichedSlots: EnrichedSlot[] = todaysSlots.map(slot => {
                     const normalizedSlotTime = normalizeTime(slot.time);
-                    
                     const bookingsForSlot = bookings.filter(b => {
                         const slotMatch = b.slots.some(s => 
                             s.date === dateStr && 
                             normalizeTime(s.time) === normalizedSlotTime && 
                             s.instructorId === instructor.id
                         );
-
                         if (!slotMatch) return false;
-
                         if (slot.product.type === 'INTRODUCTORY_CLASS') {
                             return b.productId === slot.product.id;
                         } else if (slot.product.type === 'CLASS_PACKAGE') {
@@ -177,16 +172,53 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                 return bookingProduct.details.technique === slot.technique;
                             }
                         }
-                        
                         return false;
                     });
-
                     return { ...slot, bookings: bookingsForSlot };
                 });
 
                 dailySchedule[dateStr] = enrichedSlots;
             }
             data.set(instructor.id, { instructor, schedule: dailySchedule });
+        }
+        
+        // --- Inject ad-hoc single classes ---
+        const singleClassBookings = bookings.filter(b => b.productType === 'SINGLE_CLASS');
+
+        for (const booking of singleClassBookings) {
+            for (const slot of booking.slots) {
+                const slotDate = new Date(slot.date + "T00:00:00");
+                if (slotDate >= startOfWeek && slotDate <= new Date(startOfWeek.getTime() + 6 * 24 * 60 * 60 * 1000)) {
+                    const instructorData = data.get(slot.instructorId);
+                    if (instructorData) {
+                        const daySchedule = instructorData.schedule[slot.date];
+                        const normalizedSlotTime = normalizeTime(slot.time);
+                        const existingSlot = daySchedule.find(s => normalizeTime(s.time) === normalizedSlotTime);
+
+                        if (existingSlot) {
+                            // Slot exists, just add the booking
+                            existingSlot.bookings.push(booking);
+                        } else {
+                            // Slot does not exist, create it dynamically
+                            daySchedule.push({
+                                time: slot.time,
+                                product: booking.product,
+                                bookings: [booking],
+                                capacity: 1, // Default for single class
+                                instructorId: slot.instructorId,
+                                isOverride: true,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        
+        // --- Sort all day schedules by time ---
+        for (const instructorData of data.values()) {
+            for (const dateStr in instructorData.schedule) {
+                instructorData.schedule[dateStr].sort((a, b) => normalizeTime(a.time).localeCompare(normalizeTime(b.time)));
+            }
         }
 
         return { weekDates: dates, scheduleData: data };
