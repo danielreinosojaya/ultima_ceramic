@@ -153,6 +153,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
             // Verificar si alguno de los pagos se recibió en el rango de fechas
             return b.paymentDetails.some(p => {
                 const receivedAt = new Date(p.receivedAt!);
+                if (isNaN(receivedAt.getTime())) return false;
                 return receivedAt >= startDate && receivedAt <= endDate;
             });
         });
@@ -459,15 +460,15 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
 
                     <div className="border-b border-gray-200 mb-6">
                         <nav className="-mb-px flex space-x-6" aria-label="Pending Tabs">
-                            <PendingSubTabButton 
-                                isActive={pendingSubTab === 'packages'} 
+                            <PendingSubTabButton
+                                isActive={pendingSubTab === 'packages'}
                                 onClick={() => setPendingSubTab('packages')}
                                 count={pendingPackageBookings.length}
                             >
                                 {t('admin.financialDashboard.packagesAndClasses')}
                             </PendingSubTabButton>
-                            <PendingSubTabButton 
-                                isActive={pendingSubTab === 'openStudio'} 
+                            <PendingSubTabButton
+                                isActive={pendingSubTab === 'openStudio'}
                                 onClick={() => setPendingSubTab('openStudio')}
                                 count={pendingOpenStudioBookings.length}
                             >
@@ -517,21 +518,21 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-semibold">${(b.price || 0).toFixed(2)}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-right">
                                                 <div className="flex items-center justify-end gap-2">
-                                                    <button 
+                                                    <button
                                                         onClick={(e) => { e.stopPropagation(); setNavigateTo({ tab: 'customers', targetId: b.userInfo.email }); }}
                                                         title="View Customer Profile"
                                                         className="flex items-center gap-1.5 bg-gray-100 text-gray-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-gray-200 transition-colors"
                                                     >
                                                         <UserIcon className="w-4 h-4" />
                                                     </button>
-                                                    <button 
+                                                    <button
                                                         onClick={(e) => { e.stopPropagation(); handleAcceptPaymentClick(b); }}
                                                         className="flex items-center gap-1.5 bg-green-100 text-green-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-green-200 transition-colors"
                                                     >
                                                         <CurrencyDollarIcon className="w-4 h-4" />
                                                         {t('admin.financialDashboard.pendingTable.acceptPayment')}
                                                     </button>
-                                                     <button 
+                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); setBookingToDelete(b); }}
                                                         title={t('admin.financialDashboard.deleteBooking')}
                                                         className="flex items-center gap-1.5 bg-red-100 text-red-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-red-200 transition-colors"

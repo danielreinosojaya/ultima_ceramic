@@ -2,16 +2,16 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 import { sql } from '@vercel/postgres';
 import { seedDatabase, ensureTablesExist } from './db.js';
 import * as emailService from './emailService.js';
-import type { 
-    Product, Booking, ScheduleOverrides, Notification, Announcement, Instructor, 
-    ConfirmationMessage, ClassCapacity, CapacityMessageSettings, UITexts, FooterInfo, 
+import type {
+    Product, Booking, ScheduleOverrides, Notification, Announcement, Instructor,
+    ConfirmationMessage, ClassCapacity, CapacityMessageSettings, UITexts, FooterInfo,
     GroupInquiry, AddBookingResult, PaymentDetails, AttendanceStatus,
     InquiryStatus, DayKey, AvailableSlot, AutomationSettings, UserInfo, BankDetails, TimeSlot, ClientNotification, InvoiceRequest, ProductType
 } from '../types.js';
-import { 
-    DEFAULT_PRODUCTS, DEFAULT_AVAILABLE_SLOTS_BY_DAY, DEFAULT_INSTRUCTORS, 
-    DEFAULT_POLICIES_TEXT, DEFAULT_CONFIRMATION_MESSAGE, DEFAULT_CLASS_CAPACITY, 
-    DEFAULT_CAPACITY_MESSAGES, DEFAULT_FOOTER_INFO, DEFAULT_AUTOMATION_SETTINGS 
+import {
+    DEFAULT_PRODUCTS, DEFAULT_AVAILABLE_SLOTS_BY_DAY, DEFAULT_INSTRUCTORS,
+    DEFAULT_POLICIES_TEXT, DEFAULT_CONFIRMATION_MESSAGE, DEFAULT_CLASS_CAPACITY,
+    DEFAULT_CAPACITY_MESSAGES, DEFAULT_FOOTER_INFO, DEFAULT_AUTOMATION_SETTINGS
 } from '../constants.js';
 
 
@@ -82,7 +82,7 @@ const parseBookingFromDB = (dbRow: any): Booking => {
                 camelCased.paymentDetails = payments.map((p: any) => ({
                     ...p,
                     amount: typeof p.amount === 'string' ? parseFloat(p.amount) : p.amount,
-                    receivedAt: safeParseDate(p.receivedAt)?.toISOString()
+                    receivedAt: safeParseDate(p.receivedAt)?.toISOString() || p.receivedAt // Keep original if parsing fails
                 }));
             } else {
                 camelCased.paymentDetails = [];
@@ -202,12 +202,12 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     id, name, email, phone, country_code, participants,
                     TO_CHAR(tentative_date, 'YYYY-MM-DD') as tentative_date,
                     tentative_time, event_type, message, status,
-                    TO_CHAR(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as created_at, 
+                    TO_CHAR(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as created_at,
                     inquiry_type
                 FROM inquiries ORDER BY created_at DESC
             `;
             data = inquiries.map(parseGroupInquiryFromDB);
-            break; 
+            break;
             
         case 'notifications':
             const { rows: notifications } = await sql`SELECT * FROM notifications ORDER BY timestamp DESC`;
@@ -215,7 +215,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
             break;
         case 'clientNotifications':
             const { rows: clientNotifications } = await sql`
-                SELECT 
+                SELECT
                     *,
                     TO_CHAR(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as created_at_iso
                 FROM client_notifications ORDER BY created_at DESC
@@ -224,10 +224,10 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
             break;
         case 'invoiceRequests':
             const { rows: invoiceRequests } = await sql`
-                SELECT 
-                    i.*, 
+                SELECT
+                    i.*,
                     to_char(i.requested_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as requested_at_iso,
-                    b.booking_code, 
+                    b.booking_code,
                     b.user_info
                 FROM invoice_requests i
                 JOIN bookings b ON i.booking_id = b.id
@@ -264,18 +264,18 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
             await sql`DELETE FROM products`;
             for (const p of value) {
                 await sql`
-                    INSERT INTO products (id, type, name, classes, price, description, image_url, details, is_active, scheduling_rules, overrides, min_participants, price_per_person) 
+                    INSERT INTO products (id, type, name, classes, price, description, image_url, details, is_active, scheduling_rules, overrides, min_participants, price_per_person)
                     VALUES (
-                        ${p.id}, 
-                        ${p.type}, 
-                        ${p.name}, 
-                        ${p.classes || null}, 
-                        ${p.price || null}, 
-                        ${p.description || null}, 
-                        ${p.imageUrl || null}, 
-                        ${p.details ? JSON.stringify(p.details) : null}, 
-                        ${p.isActive}, 
-                        ${p.schedulingRules ? JSON.stringify(p.schedulingRules) : null}, 
+                        ${p.id},
+                        ${p.type},
+                        ${p.name},
+                        ${p.classes || null},
+                        ${p.price || null},
+                        ${p.description || null},
+                        ${p.imageUrl || null},
+                        ${p.details ? JSON.stringify(p.details) : null},
+                        ${p.isActive},
+                        ${p.schedulingRules ? JSON.stringify(p.schedulingRules) : null},
                         ${p.overrides ? JSON.stringify(p.overrides) : null},
                         ${p.minParticipants || null},
                         ${p.pricePerPerson || null}
@@ -306,7 +306,7 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
             await sql`COMMIT`;
             break;
         default:
-            await sql`INSERT INTO settings (key, value) VALUES (${key}, ${JSON.stringify(value)}) 
+            await sql`INSERT INTO settings (key, value) VALUES (${key}, ${JSON.stringify(value)})
             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;`;
     }
 
@@ -371,12 +371,14 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 return res.status(404).json({ error: 'Booking not found.' });
             }
             
-            // CORRECCIÓN: Asegurar que payment_details es siempre un array antes de usarlo.
             const currentPayments = (bookingRow.payment_details && Array.isArray(bookingRow.payment_details))
                 ? bookingRow.payment_details
                 : [];
 
-            const updatedPayments = [...currentPayments, payment];
+            const updatedPayments = [...currentPayments, {
+                ...payment,
+                receivedAt: new Date().toISOString()
+            }];
             const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
             const isPaid = totalPaid >= bookingRow.price;
 
@@ -406,7 +408,6 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 return res.status(404).json({ error: 'Booking not found.' });
             }
 
-            // CORRECCIÓN: Asegurar que payment_details es siempre un array antes de usarlo.
             const currentPayments = (bookingRow.payment_details && Array.isArray(bookingRow.payment_details))
                 ? bookingRow.payment_details
                 : [];
@@ -577,7 +578,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                                 await sql`
                                     INSERT INTO client_notifications (created_at, client_name, client_email, type, channel, status, booking_code, scheduled_at)
                                     VALUES (
-                                        ${new Date().toISOString()}, 
+                                        ${new Date().toISOString()},
                                         ${`${booking.userInfo.firstName} ${booking.userInfo.lastName}`},
                                         ${booking.userInfo.email},
                                         'CLASS_REMINDER', 'Email', 'Sent',
@@ -626,15 +627,15 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
     const { rows: [insertedRow] } = await sql`
         INSERT INTO bookings (product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_code, booking_date)
         VALUES (
-            ${newBooking.productId}, 
-            ${newBooking.productType}, 
-            ${JSON.stringify(newBooking.slots)}, 
-            ${JSON.stringify(newBooking.userInfo)}, 
-            ${new Date().toISOString()}, 
-            ${newBooking.isPaid}, 
-            ${newBooking.price}, 
-            ${newBooking.bookingMode}, 
-            ${JSON.stringify(newBooking.product)}, 
+            ${newBooking.productId},
+            ${newBooking.productType},
+            ${JSON.stringify(newBooking.slots)},
+            ${JSON.stringify(newBooking.userInfo)},
+            ${new Date().toISOString()},
+            ${newBooking.isPaid},
+            ${newBooking.price},
+            ${newBooking.bookingMode},
+            ${JSON.stringify(newBooking.product)},
             ${newBooking.bookingCode},
             ${bookingDate}
         )
@@ -670,7 +671,7 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
             await sql`
                 INSERT INTO client_notifications (created_at, client_name, client_email, type, channel, status, booking_code)
                 VALUES (
-                    ${new Date().toISOString()}, 
+                    ${new Date().toISOString()},
                     ${`${fullyParsedBooking.userInfo.firstName} ${fullyParsedBooking.userInfo.lastName}`},
                     ${fullyParsedBooking.userInfo.email},
                     'PRE_BOOKING_CONFIRMATION', 'Email', 'Sent',
