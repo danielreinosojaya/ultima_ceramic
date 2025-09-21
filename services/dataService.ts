@@ -76,7 +76,7 @@ const parseBooking = (b: any): Booking => {
     const booking = {
         ...b,
         productId: parseInt(b.productId, 10),
-        price: parseFloat(b.price),
+        price: b.price ? parseFloat(b.price) : 0, // Ensure price is a number, default to 0
         createdAt: new Date(b.createdAt),
         product: parseProduct(b.product)
     };
@@ -89,11 +89,16 @@ const parseBooking = (b: any): Booking => {
                 : b.paymentDetails;
             
             if (Array.isArray(payments)) {
-                booking.paymentDetails = payments.map(p => ({
-                    ...p,
-                    amount: parseFloat(p.amount),
-                    receivedAt: new Date(p.receivedAt).toISOString()
-                }));
+                booking.paymentDetails = payments.map(p => {
+                    const receivedAt = new Date(p.receivedAt);
+                    // FIXED: Check if the date is valid before converting to ISO string
+                    const receivedAtIso = !isNaN(receivedAt.getTime()) ? receivedAt.toISOString() : p.receivedAt;
+                    return {
+                        ...p,
+                        amount: p.amount ? parseFloat(p.amount) : 0, // Ensure amount is a number, default to 0
+                        receivedAt: receivedAtIso
+                    };
+                });
             } else {
                 booking.paymentDetails = [];
             }
@@ -196,6 +201,9 @@ export const rescheduleBookingSlot = async (bookingId: string, oldSlot: any, new
 export const deleteBookingsInDateRange = (startDate: Date, endDate: Date): Promise<{ success: boolean }> => postAction('deleteBookingsInDateRange', { startDate, endDate });
 export const updateAttendanceStatus = (bookingId: string, slot: any, status: AttendanceStatus): Promise<{ success: boolean }> => postAction('updateAttendanceStatus', { bookingId, slot, status });
 export const deleteBooking = (bookingId: string): Promise<{ success: boolean }> => postAction('deleteBooking', { bookingId });
+export const updatePaymentReceivedDate = (bookingId: string, newDate: string): Promise<{ success: boolean }> => {
+    return postAction('updatePaymentReceivedDate', { bookingId, newDate });
+};
 
 // Availability & Schedule
 export const getAvailability = (): Promise<Record<DayKey, AvailableSlot[]>> => getData('availability');
@@ -292,7 +300,10 @@ export const getCustomers = (bookings: Booking[]): Customer[] => {
             bookings: sortedBookings,
             totalBookings: data.bookings.length,
             // CORRECCIÓN: Sumar todos los montos de pago del historial en lugar de solo el precio de la reserva
-            totalSpent: data.bookings.reduce((sum, b) => sum + (b.paymentDetails || []).reduce((paymentSum, p) => paymentSum + p.amount, 0), 0),
+            totalSpent: data.bookings.reduce((sum, b) => {
+                const totalPaidForBooking = (b.paymentDetails || []).reduce((paymentSum, p) => paymentSum + (p.amount || 0), 0);
+                return sum + totalPaidForBooking;
+            }, 0),
             lastBookingDate: sortedBookings.length > 0 ? sortedBookings[0].createdAt : new Date(0),
         };
     });

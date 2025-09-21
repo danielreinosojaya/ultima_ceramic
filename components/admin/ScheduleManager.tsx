@@ -500,6 +500,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 onClose={closeAllModals}
                 onConfirm={handleConfirmPayment}
                 booking={bookingToManage}
+                onDataChange={onDataChange}
             />
         )}
         {isEditModalOpen && bookingToManage && (
