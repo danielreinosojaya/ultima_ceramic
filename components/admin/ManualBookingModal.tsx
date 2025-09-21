@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
-import type { Product, UserInfo, Booking, AddBookingResult, Customer, TimeSlot, EnrichedAvailableSlot, Instructor, ClassPackage, IntroductoryClass, AppData, CapacityMessageSettings, Technique, SingleClass } from '../../types';
+import type { Product, UserInfo, Booking, AddBookingResult, Customer, TimeSlot, EnrichedAvailableSlot, Instructor, ClassPackage, IntroductoryClass, AppData, CapacityMessageSettings, Technique, SingleClass, GroupClass } from '../../types';
 import * as dataService from '../../services/dataService';
 import { useLanguage } from '../../context/LanguageContext';
 import { COUNTRIES, DAY_NAMES } from '@/constants';
@@ -8,7 +7,6 @@ import { InstructorTag } from '../InstructorTag';
 import { CapacityIndicator } from '../CapacityIndicator';
 import { SparklesIcon } from '../icons/SparklesIcon';
 import { ConflictWarningModal } from './ConflictWarningModal';
-
 
 interface ManualBookingModalProps {
     onClose: () => void;
@@ -27,7 +25,7 @@ const TimeSlotModal: React.FC<{
   
   return (
     <div 
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
       onClick={onClose}
     >
       <div 
@@ -81,7 +79,7 @@ const formatToAmPm = (time24: string): string => {
     const minutes = parseInt(minutesStr, 10);
     const ampm = hours >= 12 ? 'p.m.' : 'a.m.';
     hours = hours % 12;
-    hours = hours ? hours : 12; // the hour '0' should be '12'
+    hours = hours ? hours : 12;
     const finalMinutes = minutes < 10 ? '0' + minutes : minutes;
     return `${hours}:${finalMinutes} ${ampm}`;
 };
@@ -108,13 +106,14 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
     const [modalState, setModalState] = useState<{ isOpen: boolean; date: Date | null }>({ isOpen: false, date: null });
     const [availableTimesForModal, setAvailableTimesForModal] = useState<EnrichedAvailableSlot[]>([]);
 
-    // For Single Class flexible scheduling
     const [singleClassDate, setSingleClassDate] = useState(formatDateToYYYYMMDD(new Date()));
     const [singleClassTime, setSingleClassTime] = useState('10:00');
     const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
     const [conflictDetails, setConflictDetails] = useState<{ count: number; time: string } | null>(null);
     const [slotToConfirm, setSlotToConfirm] = useState<TimeSlot | null>(null);
 
+    const [minParticipants, setMinParticipants] = useState<number>(2);
+    const [groupClassPricePerPerson, setGroupClassPricePerPerson] = useState<number | string>('');
 
     const virtualProducts: Product[] = useMemo(() => [
         {
@@ -124,7 +123,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
             description: t('admin.manualBookingModal.singleClassDescription'),
             isActive: true,
             classes: 1,
-            price: 55, // Or a default price
+            price: 55,
             details: {
                 technique: 'potters_wheel',
                 duration: '2 hours',
@@ -150,9 +149,25 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
                 generalRecommendations: '',
                 materials: ''
             }
+        },
+        {
+            id: -3,
+            type: 'GROUP_CLASS',
+            name: t('admin.manualBookingModal.groupClassTitle'),
+            description: t('admin.manualBookingModal.groupClassDescription'),
+            isActive: true,
+            minParticipants: 2,
+            pricePerPerson: 40,
+            details: {
+                technique: 'potters_wheel',
+                duration: '2 hours',
+                durationHours: 2,
+                activities: [],
+                generalRecommendations: '',
+                materials: ''
+            }
         }
     ], [t]);
-
 
     useEffect(() => {
         const loadData = async () => {
@@ -173,7 +188,11 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
     }, [virtualProducts]);
     
     useEffect(() => {
-        if (selectedProduct && 'price' in selectedProduct) {
+        if (selectedProduct?.type === 'GROUP_CLASS') {
+            setPrice(0);
+            setMinParticipants((selectedProduct as GroupClass).minParticipants);
+            setGroupClassPricePerPerson((selectedProduct as GroupClass).pricePerPerson);
+        } else if (selectedProduct && 'price' in selectedProduct) {
             setPrice(selectedProduct.price);
         } else {
             setPrice('');
@@ -211,14 +230,23 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
         
         const finalUserInfo = { ...userInfo, birthday: optOutBirthday ? null : userInfo.birthday };
 
+        let finalPrice = Number(price) || 0;
+        let productToSave = selectedProduct;
+        
+        if (selectedProduct.type === 'GROUP_CLASS') {
+             const pricePerPerson = Number(groupClassPricePerPerson) || 0;
+             finalPrice = pricePerPerson * minParticipants;
+             productToSave = { ...selectedProduct, pricePerPerson, minParticipants, price: finalPrice };
+        }
+
         const bookingData = {
-            product: selectedProduct!,
+            product: productToSave,
             productId: selectedProduct!.id,
             productType: selectedProduct!.type,
             slots: selectedSlots,
             userInfo: finalUserInfo,
-            isPaid: false, // Manual bookings are unpaid by default
-            price: Number(price) || 0,
+            isPaid: false,
+            price: finalPrice,
             bookingMode: 'flexible',
             bookingDate: new Date().toISOString()
         };
@@ -252,9 +280,15 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
     
     const getTimesForDate = (date: Date): EnrichedAvailableSlot[] => {
         if (!selectedProduct || !appData) return [];
-        if (selectedProduct.type === 'CLASS_PACKAGE' || selectedProduct.type === 'SINGLE_CLASS') {
-            return dataService.getAvailableTimesForDate(date, appData, (selectedProduct as ClassPackage | SingleClass).details.technique);
+        let technique: Technique | undefined;
+        if (selectedProduct.type === 'GROUP_CLASS') {
+             technique = (selectedProduct as GroupClass).details.technique;
+        } else if (selectedProduct.type === 'CLASS_PACKAGE' || selectedProduct.type === 'SINGLE_CLASS') {
+            technique = (selectedProduct as ClassPackage | SingleClass).details.technique;
+        } else if (selectedProduct.type === 'INTRODUCTORY_CLASS') {
+            technique = (selectedProduct as IntroductoryClass).details.technique;
         }
+        
         if (selectedProduct.type === 'INTRODUCTORY_CLASS') {
             const dateStr = formatDateToYYYYMMDD(date);
             const sessions = dataService.generateIntroClassSessions(selectedProduct as IntroductoryClass, appData, { includeFull: true, generationLimitInDays: 90 });
@@ -263,11 +297,13 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
                 .map(s => ({
                     time: s.time,
                     instructorId: s.instructorId,
-                    technique: (selectedProduct as IntroductoryClass).details.technique,
+                    technique: technique!,
                     paidBookingsCount: s.paidBookingsCount,
                     totalBookingsCount: s.totalBookingsCount,
                     maxCapacity: s.capacity,
                 }));
+        } else if (technique) {
+            return dataService.getAvailableTimesForDate(date, appData, technique);
         }
         return [];
     };
@@ -293,10 +329,14 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
         if(isSelected) {
             setSelectedSlots(prev => prev.filter(s => s.date !== newSlot.date || s.time !== newSlot.time));
         } else {
-            if ((selectedProduct?.type === 'CLASS_PACKAGE' || selectedProduct?.type === 'SINGLE_CLASS') && selectedSlots.length < selectedProduct.classes) {
-                 setSelectedSlots(prev => [...prev, newSlot].sort((a,b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)));
-            } else if (selectedProduct?.type === 'INTRODUCTORY_CLASS' && selectedSlots.length < 1) {
+            const productType = selectedProduct?.type;
+            if (productType === 'GROUP_CLASS' || productType === 'INTRODUCTORY_CLASS') {
                 setSelectedSlots([newSlot]);
+            } else if (productType === 'CLASS_PACKAGE' || productType === 'SINGLE_CLASS') {
+                const productWithClasses = selectedProduct as ClassPackage | SingleClass;
+                if (selectedSlots.length < productWithClasses.classes) {
+                     setSelectedSlots(prev => [...prev, newSlot].sort((a,b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)));
+                }
             }
         }
         setModalState({ isOpen: false, date: null });
@@ -312,7 +352,50 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
         setConflictDetails(null);
         setSlotToConfirm(null);
     };
+    
+    const handleAddGroupClassSlot = () => {
+        if (!selectedProduct || !appData || selectedProduct.type !== 'GROUP_CLASS') return;
 
+        const { instructors, availability, scheduleOverrides, bookings, classCapacity } = appData;
+        const date = new Date(singleClassDate + 'T00:00:00');
+        const dayKey = DAY_NAMES[date.getDay()];
+        const override = scheduleOverrides[date.toISOString().split('T')[0]];
+        const weeklySlots = override?.slots ?? availability[dayKey];
+        
+        const technique = (selectedProduct as GroupClass).details.technique;
+        const matchingSlots = weeklySlots.filter(s => s.technique === technique);
+        
+        let instructorId = 0;
+        if (matchingSlots.length > 0) {
+            const normalizedInputTime = normalizeTime(singleClassTime);
+            const slotAtTime = matchingSlots.find(s => normalizeTime(s.time) === normalizedInputTime);
+            instructorId = slotAtTime ? slotAtTime.instructorId : matchingSlots[0].instructorId;
+        } else if (instructors.length > 0) {
+            instructorId = instructors[0].id;
+        }
+
+        const displayTime = formatToAmPm(singleClassTime);
+        const newSlot: TimeSlot = { date: singleClassDate, time: displayTime, instructorId };
+        
+        const normalizedNewSlotTime = normalizeTime(newSlot.time);
+        const bookingsForSlot = bookings.filter(booking => 
+            booking.slots.some(slot => 
+                slot.date === newSlot.date && normalizeTime(slot.time) === normalizedNewSlotTime
+            )
+        );
+        
+        const slotConfig = matchingSlots.find(s => normalizeTime(s.time) === normalizedNewSlotTime);
+        const maxCapacity = override?.capacity ?? (slotConfig?.technique === 'molding' ? classCapacity.molding : classCapacity.potters_wheel);
+
+        if (bookingsForSlot.length > 0) {
+             setConflictDetails({ count: bookingsForSlot.length, time: displayTime });
+            setSlotToConfirm(newSlot);
+            setIsConflictModalOpen(true);
+        } else {
+            confirmAddSlot(newSlot);
+        }
+    };
+    
     const handleAddSingleClassSlot = () => {
         if (!selectedProduct || !appData || selectedProduct.type !== 'SINGLE_CLASS') return;
 
@@ -353,9 +436,16 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
         }
     };
     
-    const slotsNeeded = (selectedProduct?.type === 'CLASS_PACKAGE' || selectedProduct?.type === 'SINGLE_CLASS')
-        ? selectedProduct.classes 
-        : selectedProduct?.type === 'INTRODUCTORY_CLASS' ? 1 : 0;
+    const slotsNeeded = useMemo(() => {
+        if (selectedProduct?.type === 'GROUP_CLASS' || selectedProduct?.type === 'INTRODUCTORY_CLASS') {
+            return 1;
+        }
+        if (selectedProduct?.type === 'CLASS_PACKAGE' || selectedProduct?.type === 'SINGLE_CLASS') {
+            return (selectedProduct as ClassPackage | SingleClass).classes;
+        }
+        return 0;
+    }, [selectedProduct]);
+
     const areSlotsSelected = slotsNeeded === 0 || selectedSlots.length === slotsNeeded;
 
     const isNextDisabled = !selectedProduct || 
@@ -478,8 +568,17 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
                     <div className="animate-fade-in-fast">
                          <h3 className="font-bold text-brand-text mb-2 text-center">{t('admin.manualBookingModal.scheduleSectionTitle')}</h3>
                         
-                        {selectedProduct?.type === 'SINGLE_CLASS' ? (
+                        {(selectedProduct?.type === 'SINGLE_CLASS' || selectedProduct?.type === 'GROUP_CLASS') ? (
                             <div className="p-4 bg-brand-background rounded-lg">
+                                 {selectedProduct?.type === 'GROUP_CLASS' && (
+                                     <div className="bg-blue-100 p-2 rounded-md text-sm text-blue-800 mb-4 animate-fade-in-fast">
+                                        {t('admin.manualBookingModal.groupClassInfo', { 
+                                            min: minParticipants,
+                                            price: Number(groupClassPricePerPerson) || 0,
+                                            totalPrice: (Number(groupClassPricePerPerson) || 0) * (minParticipants || 0)
+                                        })}
+                                     </div>
+                                 )}
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
                                     <div>
                                         <label htmlFor="single-class-date" className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.manualBookingModal.dateLabel')}</label>
@@ -489,8 +588,25 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
                                         <label htmlFor="single-class-time" className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.manualBookingModal.timeLabel')}</label>
                                         <input id="single-class-time" type="time" value={singleClassTime} onChange={e => setSingleClassTime(e.target.value)} className="w-full px-3 py-2 border rounded-lg" />
                                     </div>
-                                    <button onClick={handleAddSingleClassSlot} className="bg-brand-primary text-white font-bold py-2 px-4 rounded-lg h-10">{t('admin.manualBookingModal.addSlotButton')}</button>
+                                    <button 
+                                        onClick={selectedProduct?.type === 'GROUP_CLASS' ? handleAddGroupClassSlot : handleAddSingleClassSlot} 
+                                        className="bg-brand-primary text-white font-bold py-2 px-4 rounded-lg h-10"
+                                    >
+                                        {t('admin.manualBookingModal.addSlotButton')}
+                                    </button>
                                 </div>
+                                 {selectedProduct?.type === 'GROUP_CLASS' && (
+                                     <div className="mt-4 grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label htmlFor="min-participants" className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.manualBookingModal.participantsLabel')}</label>
+                                            <input id="min-participants" type="number" min={2} value={minParticipants} onChange={e => setMinParticipants(parseInt(e.target.value) || 2)} className="w-full px-3 py-2 border rounded-lg" />
+                                        </div>
+                                         <div>
+                                            <label htmlFor="price-per-person" className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.manualBookingModal.pricePerPersonLabel')}</label>
+                                            <input id="price-per-person" type="number" step="0.01" value={groupClassPricePerPerson} onChange={e => setGroupClassPricePerPerson(e.target.value)} className="w-full px-3 py-2 border rounded-lg" />
+                                        </div>
+                                     </div>
+                                 )}
                             </div>
                         ) : (
                             <>

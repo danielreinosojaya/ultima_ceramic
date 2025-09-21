@@ -30,7 +30,7 @@ export interface EditableBooking {
 }
 
 // Products
-export type ProductType = 'CLASS_PACKAGE' | 'OPEN_STUDIO_SUBSCRIPTION' | 'INTRODUCTORY_CLASS' | 'GROUP_EXPERIENCE' | 'COUPLES_EXPERIENCE' | 'SINGLE_CLASS';
+export type ProductType = 'CLASS_PACKAGE' | 'OPEN_STUDIO_SUBSCRIPTION' | 'INTRODUCTORY_CLASS' | 'GROUP_EXPERIENCE' | 'COUPLES_EXPERIENCE' | 'SINGLE_CLASS' | 'GROUP_CLASS';
 
 export interface ClassPackageDetails {
   duration: string;
@@ -108,7 +108,14 @@ export interface CouplesExperience extends BaseProduct {
     type: 'COUPLES_EXPERIENCE';
 }
 
-export type Product = ClassPackage | OpenStudioSubscription | IntroductoryClass | GroupExperience | CouplesExperience | SingleClass;
+export interface GroupClass extends BaseProduct {
+    type: 'GROUP_CLASS';
+    minParticipants: number;
+    pricePerPerson: number;
+    details: ClassPackageDetails;
+}
+
+export type Product = ClassPackage | OpenStudioSubscription | IntroductoryClass | GroupExperience | CouplesExperience | SingleClass | GroupClass;
 
 
 // Schedule & Booking
@@ -136,8 +143,11 @@ export interface IntroClassSession {
     instructorId: number;
 }
 
-export interface EnrichedIntroClassSession extends IntroClassSession {
+export interface EnrichedIntroClassSession {
     id: string;
+    date: string;
+    time: string;
+    instructorId: number;
     capacity: number;
     paidBookingsCount: number;
     totalBookingsCount: number;
@@ -164,7 +174,8 @@ export interface Booking {
     price: number;
     bookingCode: string;
     bookingMode: BookingMode;
-    paymentDetails?: PaymentDetails;
+    // FIX: Change to an array of payments
+    paymentDetails?: PaymentDetails[];
     attendance?: Record<string, AttendanceStatus>; // key is `${date}_${time}`
     bookingDate: string;
 }

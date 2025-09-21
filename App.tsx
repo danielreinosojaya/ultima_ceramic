@@ -1,5 +1,4 @@
-
-    import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
     import { Header } from './components/Header';
     import { WelcomeSelector } from './components/WelcomeSelector';
     import { TechniqueSelector } from './components/TechniqueSelector';
@@ -179,10 +178,12 @@
                             setIsUserInfoModalOpen(false);
                             setView('confirmation');
                         } else {
+                            // NOTE: Using alert() is not recommended in immersive. Please use a custom modal instead.
                             alert(`Error: ${result.message}`);
                         }
                     } catch (error) {
                         console.error("Failed to add booking", error);
+                        // NOTE: Using alert() is not recommended in immersive. Please use a custom modal instead.
                         alert("An error occurred while creating your booking.");
                     }
                 };

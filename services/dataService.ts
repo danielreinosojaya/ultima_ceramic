@@ -1,12 +1,10 @@
-
-
 import type { 
     Product, Booking, ScheduleOverrides, Notification, Announcement, Instructor, 
     ConfirmationMessage, ClassCapacity, EnrichedAvailableSlot, CapacityMessageSettings, 
     UITexts, FooterInfo, DayKey, AvailableSlot, GroupInquiry, AddBookingResult, 
     PaymentDetails, AttendanceStatus, ClientNotification, AutomationSettings, ClassPackage, 
     IntroductoryClass, OpenStudioSubscription, UserInfo, Customer, EnrichedIntroClassSession, 
-    BackgroundSettings, AppData, BankDetails, InvoiceRequest, Technique
+    BackgroundSettings, AppData, BankDetails, InvoiceRequest, Technique, GroupClass, SingleClass
 } from '../types';
 import { DAY_NAMES } from '../constants.ts';
 
@@ -65,6 +63,8 @@ const parseProduct = (p: any): Product => ({
     id: parseInt(p.id, 10),
     classes: p.classes ? parseInt(p.classes, 10) : undefined,
     price: p.price ? parseFloat(p.price) : undefined,
+    minParticipants: p.minParticipants ? parseInt(p.minParticipants, 10) : undefined,
+    pricePerPerson: p.pricePerPerson ? parseFloat(p.pricePerPerson) : undefined,
     details: p.details ? {
         ...p.details,
         durationHours: p.details.durationHours ? parseFloat(p.details.durationHours) : undefined,
@@ -72,17 +72,46 @@ const parseProduct = (p: any): Product => ({
     } : undefined
 });
 
-const parseBooking = (b: any): Booking => ({
-    ...b,
-    productId: parseInt(b.productId, 10),
-    price: parseFloat(b.price),
-    createdAt: new Date(b.createdAt),
-    product: parseProduct(b.product), // Also parse the nested product
-    paymentDetails: b.paymentDetails ? {
-        ...b.paymentDetails,
-        amount: parseFloat(b.paymentDetails.amount)
-    } : undefined
-});
+const parseBooking = (b: any): Booking => {
+    const booking = {
+        ...b,
+        productId: parseInt(b.productId, 10),
+        price: b.price ? parseFloat(b.price) : 0, // Ensure price is a number, default to 0
+        createdAt: new Date(b.createdAt),
+        product: parseProduct(b.product)
+    };
+    
+    // CORRECCIÓN: Asegurar que paymentDetails es un array de objetos
+    if (b.paymentDetails) {
+        try {
+            const payments = typeof b.paymentDetails === 'string'
+                ? JSON.parse(b.paymentDetails)
+                : b.paymentDetails;
+            
+            if (Array.isArray(payments)) {
+                booking.paymentDetails = payments.map(p => {
+                    const receivedAt = new Date(p.receivedAt);
+                    // FIXED: Check if the date is valid before converting to ISO string
+                    const receivedAtIso = !isNaN(receivedAt.getTime()) ? receivedAt.toISOString() : p.receivedAt;
+                    return {
+                        ...p,
+                        amount: p.amount ? parseFloat(p.amount) : 0, // Ensure amount is a number, default to 0
+                        receivedAt: receivedAtIso
+                    };
+                });
+            } else {
+                booking.paymentDetails = [];
+            }
+        } catch (e) {
+            console.error('Error parsing paymentDetails:', e);
+            booking.paymentDetails = [];
+        }
+    } else {
+        booking.paymentDetails = [];
+    }
+
+    return booking;
+};
 
 const parseInstructor = (i: any): Instructor => ({
     ...i,
@@ -146,6 +175,20 @@ export const addBooking = async (bookingData: any): Promise<AddBookingResult> =>
 };
 export const updateBooking = (booking: Booking): Promise<{ success: boolean }> => postAction('updateBooking', booking);
 export const removeBookingSlot = (bookingId: string, slotToRemove: any): Promise<{ success: boolean }> => postAction('removeBookingSlot', { bookingId, slotToRemove });
+export const addPaymentToBooking = async (bookingId: string, payment: PaymentDetails): Promise<{ success: boolean; booking?: Booking }> => {
+    const result = await postAction<{ success: boolean; booking?: any }>('addPaymentToBooking', { bookingId, payment });
+    if(result.success && result.booking) {
+        return { ...result, booking: parseBooking(result.booking) };
+    }
+    return result;
+};
+export const deletePaymentFromBooking = async (bookingId: string, paymentIndex: number): Promise<{ success: boolean; booking?: Booking }> => {
+    const result = await postAction<{ success: boolean; booking?: any }>('deletePaymentFromBooking', { bookingId, paymentIndex });
+     if(result.success && result.booking) {
+        return { ...result, booking: parseBooking(result.booking) };
+    }
+    return result;
+};
 export const markBookingAsPaid = (bookingId: string, details: Omit<PaymentDetails, 'receivedAt'>): Promise<{ success: boolean }> => postAction('markBookingAsPaid', { bookingId, details });
 export const markBookingAsUnpaid = (bookingId: string): Promise<{ success: boolean }> => postAction('markBookingAsUnpaid', { bookingId });
 export const rescheduleBookingSlot = async (bookingId: string, oldSlot: any, newSlot: any): Promise<AddBookingResult> => {
@@ -158,6 +201,9 @@ export const rescheduleBookingSlot = async (bookingId: string, oldSlot: any, new
 export const deleteBookingsInDateRange = (startDate: Date, endDate: Date): Promise<{ success: boolean }> => postAction('deleteBookingsInDateRange', { startDate, endDate });
 export const updateAttendanceStatus = (bookingId: string, slot: any, status: AttendanceStatus): Promise<{ success: boolean }> => postAction('updateAttendanceStatus', { bookingId, slot, status });
 export const deleteBooking = (bookingId: string): Promise<{ success: boolean }> => postAction('deleteBooking', { bookingId });
+export const updatePaymentReceivedDate = (bookingId: string, newDate: string): Promise<{ success: boolean }> => {
+    return postAction('updatePaymentReceivedDate', { bookingId, newDate });
+};
 
 // Availability & Schedule
 export const getAvailability = (): Promise<Record<DayKey, AvailableSlot[]>> => getData('availability');
@@ -253,7 +299,11 @@ export const getCustomers = (bookings: Booking[]): Customer[] => {
             userInfo: data.userInfo,
             bookings: sortedBookings,
             totalBookings: data.bookings.length,
-            totalSpent: data.bookings.reduce((sum, b) => sum + (b.isPaid && typeof b.price === 'number' ? b.price : 0), 0),
+            // CORRECCIÓN: Sumar todos los montos de pago del historial en lugar de solo el precio de la reserva
+            totalSpent: data.bookings.reduce((sum, b) => {
+                const totalPaidForBooking = (b.paymentDetails || []).reduce((paymentSum, p) => paymentSum + (p.amount || 0), 0);
+                return sum + totalPaidForBooking;
+            }, 0),
             lastBookingDate: sortedBookings.length > 0 ? sortedBookings[0].createdAt : new Date(0),
         };
     });
@@ -416,12 +466,23 @@ export const getFutureCapacityMetrics = async (days: number): Promise<{ totalCap
         });
     }
 
+    // FIX: Refactor bookedSlots calculation to be more accurate for all booking types
     const futureBookedSlots = bookings.reduce((count, booking) => {
-        return count + booking.slots.filter(slot => {
+        const bookingSlotsCount = booking.slots.filter(slot => {
             const slotDate = new Date(slot.date);
             slotDate.setHours(0,0,0,0);
             return slotDate >= today;
         }).length;
+        
+        if (booking.productType === 'GROUP_CLASS') {
+             // For a Group Class, the booked slots is the number of participants.
+             return count + (booking.product as GroupClass).minParticipants;
+        } else if (booking.productType === 'SINGLE_CLASS' || booking.productType === 'CLASS_PACKAGE' || booking.productType === 'INTRODUCTORY_CLASS') {
+            // For other classes, the booked slots are simply the number of slots selected.
+            return count + bookingSlotsCount;
+        }
+
+        return count;
     }, 0);
 
     return { totalCapacity, bookedSlots: futureBookedSlots };

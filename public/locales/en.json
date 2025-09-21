@@ -285,10 +285,13 @@
     "howItWorksLabel": "How It Works",
     "days": "days"
   },
-  "admin": {
-    "headerTitle": "Administration Console",
-     "crm": {
-      "upcomingBirthday": "Upcoming Birthday"
+ "admin": {
+  "manualBookingModal": {
+    "groupClassTitle": "Ad-Hoc Group Class",
+    "groupClassDescription": "Book an arbitrary time for a group, outside of the regular schedule. The system will dynamically manage capacity.",
+    "groupClassInfo": "A group booking will be created for {{min}} people, at a price of ${{price}} per person. Total: ${{totalPrice}}",
+    "participantsLabel": "Participants",
+    "pricePerPersonLabel": "Price per Person"
     },
     "customerDetail": {
         "birthdayLabel": "Birthday"

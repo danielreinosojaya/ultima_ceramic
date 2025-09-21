@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import type { Customer, Booking, InvoiceRequest, AdminTab, ClassPackage, OpenStudioSubscription, IntroductoryClass, PaymentDetails } from '../../types.js';
 import { useLanguage } from '../../context/LanguageContext.js';
 import { MailIcon } from '../icons/MailIcon.js';
@@ -74,20 +74,29 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer
   const [bookingForReminder, setBookingForReminder] = useState<Booking | null>(null);
   const [isViewingAttendance, setIsViewingAttendance] = useState(false);
 
+  // CORRECCIÓN: El cálculo de `totalValue` debe sumar los montos de `paymentDetails`
+  // en lugar del precio total de la reserva, que podría ser diferente.
   const { totalValue, totalBookings, lastBookingDate } = useMemo(() => {
-    const paidBookings = customer.bookings.filter(b => b.isPaid);
+    const totalSpent = customer.bookings.reduce((sum, b) => 
+        sum + (b.paymentDetails || []).reduce((paymentSum, p) => paymentSum + p.amount, 0), 0
+    );
+    const totalBookingsCount = customer.bookings.length;
+    const lastBooking = customer.bookings.length > 0 ? customer.bookings[0].createdAt : null;
     return {
-      totalValue: paidBookings.reduce((sum, b) => sum + (b.price || 0), 0),
-      totalBookings: customer.bookings.length,
-      lastBookingDate: customer.bookings.length > 0 ? customer.bookings[0].createdAt : null,
+      totalValue: totalSpent,
+      totalBookings: totalBookingsCount,
+      lastBookingDate: lastBooking,
     };
   }, [customer.bookings]);
 
+  // CORRECCIÓN: El estado del paquete activo se debe recalcular en función del total pagado,
+  // no solo de la bandera `isPaid`.
   const augmentedPackages = useMemo((): AugmentedPackage[] => {
     const now = new Date();
     return customer.bookings
         .map(booking => {
-            let status: AugmentedPackage['status'] = 'Pending Payment';
+            const totalPaid = (booking.paymentDetails || []).reduce((sum, p) => sum + p.amount, 0);
+            let status: AugmentedPackage['status'] = totalPaid >= booking.price ? 'Active' : 'Pending Payment';
             let progressPercent = 0;
             let completedCount = 0;
             let totalCount = 0;
@@ -97,7 +106,7 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer
             const isPackageOrIntro = booking.productType === 'CLASS_PACKAGE' || booking.productType === 'INTRODUCTORY_CLASS';
             
             if (isPackageOrIntro || booking.productType === 'OPEN_STUDIO_SUBSCRIPTION') {
-                if (booking.isPaid) {
+                if (totalPaid >= booking.price) { // Usar totalPaid en lugar de isPaid
                     if (isPackageOrIntro) {
                         const pkg = booking.product as ClassPackage | IntroductoryClass;
                         totalCount = 'classes' in pkg ? pkg.classes : 1;
@@ -159,7 +168,8 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer
 
   const handleConfirmPayment = async (details: Omit<PaymentDetails, 'receivedAt'>) => {
     if (bookingToPay) {
-        await dataService.markBookingAsPaid(bookingToPay.id, details);
+        // CORRECCIÓN: Llamar a la función correcta en el servicio de datos
+        await dataService.addPaymentToBooking(bookingToPay.id, details);
         setBookingToPay(null);
         onDataChange();
     }
@@ -218,8 +228,9 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer
             <AcceptPaymentModal
                 isOpen={!!bookingToPay}
                 onClose={() => setBookingToPay(null)}
-                onConfirm={handleConfirmPayment}
+                // CORRECCIÓN: Pasar la reserva completa y la función onDataChange
                 booking={bookingToPay}
+                onDataChange={onDataChange}
             />
         )}
         {isInvoiceReminderOpen && (

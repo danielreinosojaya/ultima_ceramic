@@ -19,7 +19,9 @@ const SCHEMA_SQL = `
         details JSONB,
         is_active BOOLEAN DEFAULT true,
         scheduling_rules JSONB,
-        overrides JSONB
+        overrides JSONB,
+        min_participants INT,
+        price_per_person NUMERIC(10, 2)
     );
 
     CREATE TABLE IF NOT EXISTS bookings (
@@ -34,7 +36,7 @@ const SCHEMA_SQL = `
         booking_mode VARCHAR(50),
         product JSONB,
         booking_code VARCHAR(50) UNIQUE,
-        payment_details JSONB,
+        payment_details JSONB DEFAULT '[]'::jsonb,
         attendance JSONB,
         booking_date TEXT
     );
@@ -103,12 +105,15 @@ const SCHEMA_SQL = `
 
 export async function ensureTablesExist() {
     await sql.query(SCHEMA_SQL);
-    // This is a simple migration to ensure existing tables are updated.
     try {
       await sql`ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS tentative_time VARCHAR(10);`;
-      console.log("Migration check: 'inquiries.tentative_time' column ensured.");
+      await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS min_participants INT;`;
+      await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS price_per_person NUMERIC(10, 2);`;
+      await sql`ALTER TABLE bookings ALTER COLUMN payment_details SET DEFAULT '[]'::jsonb;`;
+      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS is_paid BOOLEAN DEFAULT false;`;
+      console.log("Migration check: new columns ensured.");
     } catch (error) {
-      console.error("Error during migration for 'inquiries.tentative_time':", error);
+      console.error("Error during migration:", error);
     }
 }
 
@@ -121,7 +126,6 @@ const seedSetting = async (key: string, value: any) => {
 };
 
 export async function seedDatabase() {
-    // Seed products only if the table is empty
     const { rows: productCheck } = await sql`SELECT 1 FROM products LIMIT 1`;
     if (productCheck.length === 0) {
         console.log("Seeding products...");
@@ -131,27 +135,31 @@ export async function seedDatabase() {
             let detailsValue = null;
             let schedulingRulesValue = null;
             let overridesValue = null;
+            let minParticipantsValue = null;
+            let pricePerPersonValue = null;
 
             if ('classes' in p) { classesValue = p.classes || null; }
             if ('price' in p) { priceValue = p.price || null; }
             if ('details' in p) { detailsValue = p.details ? JSON.stringify(p.details) : null; }
             if ('schedulingRules' in p) { schedulingRulesValue = p.schedulingRules ? JSON.stringify(p.schedulingRules) : null; }
             if ('overrides' in p) { overridesValue = p.overrides ? JSON.stringify(p.overrides) : null; }
+            if ('minParticipants' in p) { minParticipantsValue = p.minParticipants || null; }
+            if ('pricePerPerson' in p) { pricePerPersonValue = p.pricePerPerson || null; }
 
             await sql`
                 INSERT INTO products (
-                    id, type, name, classes, price, description, image_url, details, is_active, scheduling_rules, overrides
+                    id, type, name, classes, price, description, image_url, details, is_active, scheduling_rules, overrides, min_participants, price_per_person
                 ) 
                 VALUES (
                     ${p.id}, ${p.type}, ${p.name}, ${classesValue}, ${priceValue}, 
                     ${p.description || null}, ${p.imageUrl || null}, ${detailsValue}, 
-                    ${p.isActive}, ${schedulingRulesValue}, ${overridesValue}
+                    ${p.isActive}, ${schedulingRulesValue}, ${overridesValue},
+                    ${minParticipantsValue}, ${pricePerPersonValue}
                 ) ON CONFLICT (id) DO NOTHING;
             `;
         }
     }
 
-    // Seed instructors only if the table is empty
     const { rows: instructorCheck } = await sql`SELECT 1 FROM instructors LIMIT 1`;
     if (instructorCheck.length === 0) {
         console.log("Seeding instructors...");
@@ -160,7 +168,6 @@ export async function seedDatabase() {
         }
     }
 
-    // Seed settings individually to allow for additions over time
     console.log("Seeding settings...");
     await seedSetting('availability', DEFAULT_AVAILABLE_SLOTS_BY_DAY);
     await seedSetting('scheduleOverrides', {});
