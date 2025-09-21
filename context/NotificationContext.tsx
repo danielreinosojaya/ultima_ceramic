@@ -1,5 +1,3 @@
-
-
 import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback } from 'react';
 import type { Notification } from '../types';
 import * as dataService from '../services/dataService';

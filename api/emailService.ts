@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import type { Booking, BankDetails, TimeSlot } from '../types.js';
+import type { Booking, BankDetails, TimeSlot, PaymentDetails } from '../types.js';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const fromEmail = process.env.EMAIL_FROM;
@@ -57,8 +57,8 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
     await sendEmail(userInfo.email, subject, html);
 };
 
-export const sendPaymentReceiptEmail = async (booking: Booking) => {
-    const { userInfo, bookingCode, product, price, paymentDetails } = booking;
+export const sendPaymentReceiptEmail = async (booking: Booking, newPayment: PaymentDetails) => {
+    const { userInfo, bookingCode, product } = booking;
     const subject = `¡Confirmación de Pago para tu reserva en CeramicAlma! (Código: ${bookingCode})`;
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333;">
@@ -68,9 +68,9 @@ export const sendPaymentReceiptEmail = async (booking: Booking) => {
             <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; margin-top: 20px;">
                 <h3 style="color: #D95F43;">Detalles del Pago</h3>
                 <p><strong>Código de Reserva:</strong> ${bookingCode}</p>
-                <p><strong>Monto Pagado:</strong> $${paymentDetails?.amount.toFixed(2)}</p>
-                <p><strong>Método:</strong> ${paymentDetails?.method}</p>
-                <p><strong>Fecha de Pago:</strong> ${new Date(paymentDetails!.receivedAt).toLocaleDateString('es-ES')}</p>
+                <p><strong>Monto Pagado:</strong> $${newPayment.amount.toFixed(2)}</p>
+                <p><strong>Método:</strong> ${newPayment.method}</p>
+                <p><strong>Fecha de Pago:</strong> ${new Date(newPayment.receivedAt).toLocaleDateString('es-ES')}</p>
             </div>
              <p style="margin-top: 20px;">Puedes descargar tu ticket de reserva desde la web en cualquier momento. ¡Nos vemos en clase!</p>
             <p>Saludos,<br/>El equipo de CeramicAlma</p>
