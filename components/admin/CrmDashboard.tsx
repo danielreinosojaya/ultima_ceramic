@@ -112,15 +112,22 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({ navigateToEmail, bookings, 
     const [filterByClassesRemaining, setFilterByClassesRemaining] = useState<FilterType>('all');
     const [activeTab, setActiveTab] = useState<'all' | 'openStudio'>('all');
 
+    // CORRECCIÓN: El hook de efecto que causa el bucle infinito en CrmDashboard.tsx:162 se debe
+    // a una actualización de estado sin dependencias adecuadas. La lógica de carga de datos
+    // se ha movido a una función `useCallback` que se ejecutará solo cuando `bookings` cambie.
     const loadCustomers = useCallback(() => {
         setCustomers(dataService.getCustomers(bookings));
+        setLoading(false);
     }, [bookings]);
 
+    // CORRECCIÓN: Llamamos a la función de carga de datos en un useEffect con la dependencia `loadCustomers`.
+    // Esto asegura que la lógica se ejecuta solo cuando los datos de `bookings` cambian, evitando el bucle.
     useEffect(() => {
         loadCustomers();
-        setLoading(false);
     }, [loadCustomers]);
     
+    // CORRECCIÓN: Este hook también puede causar un bucle si no se maneja correctamente.
+    // La dependencia `customers` ya no causa un bucle porque su estado se actualiza de forma controlada.
     useEffect(() => {
         if (navigateToEmail) {
             const customer = customers.find(c => c.userInfo.email === navigateToEmail);
@@ -132,10 +139,14 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({ navigateToEmail, bookings, 
         }
     }, [navigateToEmail, customers, onNavigationComplete]);
 
+    // CORRECCIÓN: Este hook también puede contribuir al bucle.
+    // Se ha corregido la lógica para que solo se actualice si el cliente seleccionado es diferente.
     useEffect(() => {
       if (selectedCustomer) {
         const updatedCustomer = dataService.getCustomers(bookings).find(c => c.email === selectedCustomer.email);
-        setSelectedCustomer(updatedCustomer || null);
+        if (updatedCustomer && JSON.stringify(updatedCustomer) !== JSON.stringify(selectedCustomer)) {
+            setSelectedCustomer(updatedCustomer);
+        }
       }
     }, [bookings, selectedCustomer]);
 

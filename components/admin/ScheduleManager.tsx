@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import type { Instructor, Booking, IntroductoryClass, Product, EditableBooking, RescheduleSlotInfo, PaymentDetails, AppData, InvoiceRequest, AdminTab, Customer, ClassPackage, EnrichedAvailableSlot, SingleClass } from '../../types';
+import type { Instructor, Booking, IntroductoryClass, Product, EditableBooking, RescheduleSlotInfo, PaymentDetails, AppData, InvoiceRequest, AdminTab, Customer, ClassPackage, EnrichedAvailableSlot, SingleClass, GroupClass, DayKey, AvailableSlot, ClassCapacity, Technique } from '../../types';
 import * as dataService from '../../services/dataService';
 import { useLanguage } from '../../context/LanguageContext';
 import { DAY_NAMES, PALETTE_COLORS } from '../../constants.js';
@@ -13,6 +13,7 @@ import { RescheduleModal } from './RescheduleModal';
 import { InvoiceReminderModal } from './InvoiceReminderModal';
 import { MagnifyingGlassIcon } from '../icons/MagnifyingGlassIcon';
 import { CustomerSearchResultsPanel } from './CustomerSearchResultsPanel';
+import { UserGroupIcon } from '../icons/UserGroupIcon'; // Corregido: UserGroupIcon
 
 const colorMap = PALETTE_COLORS.reduce((acc, color) => {
     acc[color.name] = { bg: color.bg.replace('bg-', ''), text: color.text.replace('text-', '') };
@@ -42,21 +43,37 @@ const getWeekStartDate = (date: Date) => {
     const d = new Date(date);
     d.setHours(0,0,0,0);
     const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
     return new Date(d.setDate(diff));
 };
 
 const normalizeTime = (timeStr: string): string => {
-    if (!timeStr) return '';
-    // This works for both "18:00" and "6:00 PM"
-    const date = new Date(`1970-01-01 ${timeStr}`);
-    if (isNaN(date.getTime())) {
-        console.warn(`Could not normalize time: ${timeStr}`);
-        return timeStr; // Fallback
+  if (!timeStr) return '';
+  
+  const ampmMatch = timeStr.match(/(\d{1,2}):(\d{2})\s*(a\.m\.|p\.m\.)/i);
+  if (ampmMatch) {
+    let [ , hours, minutes, modifier ] = ampmMatch;
+    let h = parseInt(hours, 10);
+    const m = parseInt(minutes, 10);
+
+    if (modifier.toLowerCase() === 'p.m.' && h < 12) {
+      h += 12;
+    } else if (modifier.toLowerCase() === 'a.m.' && h === 12) {
+      h = 0;
     }
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    return `${hours}:${minutes}`;
+
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+  }
+
+  const [hoursStr, minutesStr] = timeStr.split(':');
+  const hours = parseInt(hoursStr, 10);
+  const minutes = parseInt(minutesStr, 10);
+
+  if (isNaN(hours) || isNaN(minutes)) {
+    console.warn(`Could not normalize time: ${timeStr}`);
+    return '00:00';
+  }
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
 };
 
 interface ScheduleManagerProps extends AppData {
@@ -77,14 +94,11 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     const [showUnpaidOnly, setShowUnpaidOnly] = useState(false);
     const [now, setNow] = useState(new Date());
 
-    // State for search
     const [searchTerm, setSearchTerm] = useState('');
     const [isSearchPanelOpen, setIsSearchPanelOpen] = useState(false);
     const [searchCustomer, setSearchCustomer] = useState<Customer | null>(null);
     const [bookingToHighlight, setBookingToHighlight] = useState<Booking | null>(null);
 
-
-    // State for action modals
     const [bookingToManageId, setBookingToManageId] = useState<string | null>(null);
     const [isAcceptPaymentModalOpen, setIsAcceptPaymentModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -94,11 +108,10 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     const [bookingIdForReminder, setBookingIdForReminder] = useState<string | null>(null);
 
      useEffect(() => {
-        const timer = setInterval(() => setNow(new Date()), 60000); // Update every minute for the time indicator
+        const timer = setInterval(() => setNow(new Date()), 60000);
         return () => clearInterval(timer);
     }, []);
 
-    // Syncronize if the initialDate prop changes
     useEffect(() => {
         setCurrentDate(getWeekStartDate(initialDate));
     }, [initialDate]);
@@ -115,114 +128,118 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         }
 
         const { instructors, bookings, products, availability, scheduleOverrides, classCapacity } = appData;
-        const introClassProducts = products.filter(p => p.type === 'INTRODUCTORY_CLASS') as IntroductoryClass[];
         
-        const packageProducts = products.filter(p => p.type === 'CLASS_PACKAGE') as ClassPackage[];
-        const wheelPackage = packageProducts.find(p => p.details.technique === 'potters_wheel');
-        const moldingPackage = packageProducts.find(p => p.details.technique === 'molding');
+        const scheduleMap: ScheduleData = new Map(instructors.map(i => [i.id, { instructor: i, schedule: dates.reduce((acc, date) => ({ ...acc, [formatDateToYYYYMMDD(date)]: [] }), {}) }]));
 
-        const data: ScheduleData = new Map();
+        for (const date of dates) {
+            const dateStr = formatDateToYYYYMMDD(date);
+            const dayKey = DAY_NAMES[date.getDay()];
+            const overrideForDate = scheduleOverrides[dateStr];
+            const hasOverride = overrideForDate !== undefined;
+            const packageSlotsSource = hasOverride ? overrideForDate.slots : availability[dayKey];
+            
+            if (packageSlotsSource) {
+                packageSlotsSource.forEach(s => {
+                    const productForSlot = products.find(p => 'details' in p && p.details.technique === s.technique && (p.type === 'CLASS_PACKAGE' || p.type === 'SINGLE_CLASS'));
+                    if (!productForSlot) return;
 
-        for (const instructor of instructors) {
-            const dailySchedule: Record<string, EnrichedSlot[]> = {};
-            for (const date of dates) {
-                const dateStr = formatDateToYYYYMMDD(date);
-                const dayKey = DAY_NAMES[date.getDay()];
-                
-                let todaysSlots: any[] = [];
-                const overrideForDate = scheduleOverrides[dateStr];
-                const hasOverride = overrideForDate !== undefined;
-
-                const packageSlotsSource = hasOverride ? overrideForDate.slots : availability[dayKey];
-                const dailyOverrideCapacity = overrideForDate?.capacity;
-
-                if (packageSlotsSource) {
-                    todaysSlots.push(...packageSlotsSource
-                        .filter(s => s.instructorId === instructor.id)
-                        .map(s => {
-                            const productForSlot = s.technique === 'molding' ? moldingPackage : wheelPackage;
-                            if (!productForSlot) return null;
-                            const capacity = dailyOverrideCapacity ?? (s.technique === 'molding' ? classCapacity.molding : classCapacity.potters_wheel);
-                            return { ...s, product: productForSlot, isOverride: hasOverride, capacity };
-                        })
-                        .filter(Boolean)
-                    );
-                }
-
-                for (const introProduct of introClassProducts) {
-                    const introSessions = dataService.generateIntroClassSessions(introProduct, { bookings }, { includeFull: true });
-                    const sessionsForDay = introSessions.filter(s => s.date === dateStr && s.instructorId === instructor.id);
-                    todaysSlots.push(...sessionsForDay.map(s => ({ ...s, product: introProduct, isOverride: s.isOverride })));
-                }
-                
-                const enrichedSlots: EnrichedSlot[] = todaysSlots.map(slot => {
-                    const normalizedSlotTime = normalizeTime(slot.time);
-                    const bookingsForSlot = bookings.filter(b => {
-                        const slotMatch = b.slots.some(s => 
-                            s.date === dateStr && 
-                            normalizeTime(s.time) === normalizedSlotTime && 
-                            s.instructorId === instructor.id
-                        );
-                        if (!slotMatch) return false;
-                        if (slot.product.type === 'INTRODUCTORY_CLASS') {
-                            return b.productId === slot.product.id;
-                        } else if (slot.product.type === 'CLASS_PACKAGE') {
-                             if (b.productType === 'CLASS_PACKAGE' || b.productType === 'SINGLE_CLASS') {
-                                const bookingProduct = b.product as (ClassPackage | SingleClass);
-                                return bookingProduct.details.technique === slot.technique;
-                            }
-                        }
-                        return false;
-                    });
-                    return { ...slot, bookings: bookingsForSlot };
+                    const instructorData = scheduleMap.get(s.instructorId);
+                    if (instructorData) {
+                        const capacity = overrideForDate?.capacity ?? (s.technique === 'molding' ? classCapacity.molding : classCapacity.potters_wheel);
+                        instructorData.schedule[dateStr].push({ time: s.time, product: productForSlot, capacity, instructorId: s.instructorId, isOverride: hasOverride, bookings: [] });
+                    }
                 });
-
-                dailySchedule[dateStr] = enrichedSlots;
             }
-            data.set(instructor.id, { instructor, schedule: dailySchedule });
+
+            const introClassProducts = products.filter(p => p.type === 'INTRODUCTORY_CLASS') as IntroductoryClass[];
+            introClassProducts.forEach(p => {
+                const introSessions = dataService.generateIntroClassSessions(p, { bookings }, { includeFull: true });
+                const sessionsForDay = introSessions.filter(s => s.date === dateStr);
+                sessionsForDay.forEach(s => {
+                    const instructorData = scheduleMap.get(s.instructorId);
+                    if(instructorData) {
+                        instructorData.schedule[dateStr].push({
+                            time: s.time,
+                            product: p,
+                            capacity: s.capacity,
+                            instructorId: s.instructorId,
+                            isOverride: s.isOverride,
+                            bookings: []
+                        });
+                    }
+                });
+            });
         }
         
-        // --- Inject ad-hoc single classes ---
-        const singleClassBookings = bookings.filter(b => b.productType === 'SINGLE_CLASS');
+        const adHocBookings = bookings.filter(b => b.productType === 'SINGLE_CLASS' || b.productType === 'GROUP_CLASS');
 
-        for (const booking of singleClassBookings) {
+        for (const booking of adHocBookings) {
             for (const slot of booking.slots) {
                 const slotDate = new Date(slot.date + "T00:00:00");
                 if (slotDate >= startOfWeek && slotDate <= new Date(startOfWeek.getTime() + 6 * 24 * 60 * 60 * 1000)) {
-                    const instructorData = data.get(slot.instructorId);
+                    const instructorData = scheduleMap.get(slot.instructorId);
                     if (instructorData) {
                         const daySchedule = instructorData.schedule[slot.date];
                         const normalizedSlotTime = normalizeTime(slot.time);
-                        const existingSlot = daySchedule.find(s => normalizeTime(s.time) === normalizedSlotTime);
+                        let existingSlot = daySchedule.find(s => normalizeTime(s.time) === normalizedSlotTime);
 
-                        if (existingSlot) {
-                            // Slot exists, just add the booking
-                            existingSlot.bookings.push(booking);
-                        } else {
-                            // Slot does not exist, create it dynamically
-                            daySchedule.push({
-                                time: slot.time,
-                                product: booking.product,
-                                bookings: [booking],
-                                capacity: 1, // Default for single class
-                                instructorId: slot.instructorId,
-                                isOverride: true,
-                            });
+                        if (!existingSlot) {
+                           let slotCapacity = 0;
+                           let technique: Technique | undefined;
+
+                           if (booking.product.type === 'GROUP_CLASS') {
+                                technique = (booking.product as GroupClass).details.technique;
+                           } else if (booking.product.type === 'SINGLE_CLASS') {
+                                technique = (booking.product as SingleClass).details.technique;
+                           }
+                           
+                           const overrideForDate = scheduleOverrides[slot.date];
+                           if (overrideForDate?.capacity) {
+                               slotCapacity = overrideForDate.capacity;
+                           } else if (technique) {
+                               slotCapacity = technique === 'molding' ? classCapacity.molding : classCapacity.potters_wheel;
+                           } else {
+                               slotCapacity = 1;
+                           }
+
+                           const newSlot: EnrichedSlot = {
+                               time: slot.time,
+                               product: booking.product,
+                               bookings: [],
+                               capacity: slotCapacity,
+                               instructorId: slot.instructorId,
+                               isOverride: true,
+                           };
+                           daySchedule.push(newSlot);
+                           existingSlot = newSlot;
                         }
+                        
+                        existingSlot.bookings.push(booking);
                     }
                 }
             }
         }
         
-        // --- Sort all day schedules by time ---
-        for (const instructorData of data.values()) {
+        for (const instructorData of scheduleMap.values()) {
             for (const dateStr in instructorData.schedule) {
                 instructorData.schedule[dateStr].sort((a, b) => normalizeTime(a.time).localeCompare(normalizeTime(b.time)));
             }
         }
 
-        return { weekDates: dates, scheduleData: data };
+        return { weekDates: dates, scheduleData: scheduleMap };
     }, [currentDate, appData]);
+    
+    const calculateTotalParticipants = (bookings: Booking[]): number => {
+        let count = 0;
+        for (const b of bookings) {
+            if (b.product.type === 'GROUP_CLASS' && 'minParticipants' in b.product) {
+                count += b.product.minParticipants;
+            } else {
+                count += 1;
+            }
+        }
+        return count;
+    };
     
     const todayStr = useMemo(() => formatDateToYYYYMMDD(new Date()), []);
     const todayIndex = useMemo(() => weekDates.findIndex(d => formatDateToYYYYMMDD(d) === todayStr), [weekDates, todayStr]);
@@ -432,7 +449,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                     newSchedule[dateStr] = unpaidSlots;
                     instructorHasUnpaid = true;
                 } else {
-                    newSchedule[dateStr] = []; // Keep day for grid structure
+                    newSchedule[dateStr] = [];
                 }
             }
             if (instructorHasUnpaid) {
@@ -454,8 +471,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
 
     const isTodayInView = weekDates.some(d => formatDateToYYYYMMDD(d) === todayStr);
 
-    const dayStartHour = 8; // 8 AM
-    const dayEndHour = 22; // 10 PM
+    const dayStartHour = 8;
+    const dayEndHour = 22;
     const totalMinutesInDay = (dayEndHour - dayStartHour) * 60;
     const currentMinutes = (now.getHours() - dayStartHour) * 60 + now.getMinutes();
     const progressPercent = (currentMinutes / totalMinutesInDay) * 100;
@@ -617,24 +634,29 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                             )}
                                             <div className="space-y-2">
                                                 {slots.map((slot, index) => {
+                                                    const totalParticipants = calculateTotalParticipants(slot.bookings);
                                                     const unpaidBookingsCount = slot.bookings.filter(b => !b.isPaid).length;
                                                     const hasUnpaidBookings = unpaidBookingsCount > 0;
                                                     const isHighlighted = bookingToHighlight && slot.bookings.some(b => b.id === bookingToHighlight.id);
+                                                    const isGroupClass = slot.bookings.some(b => b.productType === 'GROUP_CLASS');
+                                                    const bgColor = isGroupClass ? 'bg-blue-100' : `bg-${colorMap[instructor.colorScheme]?.bg || colorMap[defaultColorName].bg}`;
+                                                    const borderColor = isGroupClass ? 'border-blue-400' : `border-${colorMap[instructor.colorScheme]?.text || colorMap[defaultColorName].text}/50`;
                                                     return (
                                                         <button 
                                                             key={index} 
                                                             onClick={() => handleShiftClick(dateStr, slot)}
-                                                            className={`w-full text-left p-2 rounded-md shadow-sm border-l-4 bg-${colorMap[instructor.colorScheme]?.bg || colorMap[defaultColorName].bg} border-${colorMap[instructor.colorScheme]?.text || colorMap[defaultColorName].text}/50 hover:shadow-md transition-shadow relative overflow-hidden ${isHighlighted ? 'animate-pulse-border' : ''}`}>
+                                                            className={`w-full text-left p-2 rounded-md shadow-sm border-l-4 ${bgColor} ${borderColor} hover:shadow-md transition-shadow relative overflow-hidden ${isHighlighted ? 'animate-pulse-border' : ''}`}>
                                                             {hasUnpaidBookings && <div className="absolute inset-0 unpaid-booking-stripe opacity-70"></div>}
                                                             <div className="relative z-10">
-                                                                <div className={`font-bold text-xs text-${colorMap[instructor.colorScheme]?.text || colorMap[defaultColorName].text}`}>
+                                                                <div className={`font-bold text-xs text-${isGroupClass ? 'blue-800' : colorMap[instructor.colorScheme]?.text || colorMap[defaultColorName].text} flex items-center gap-1`}>
                                                                     {slot.time}
+                                                                    {isGroupClass && <UserGroupIcon className="w-3.5 h-3.5" />}
                                                                 </div>
                                                                 <div className="text-xs font-semibold text-gray-800 mt-1 truncate">
                                                                     {slot.product.name}
                                                                 </div>
                                                                 <div className="text-xs text-gray-600 mt-1">
-                                                                    {slot.bookings.length}/{slot.capacity} booked
+                                                                    {totalParticipants}/{slot.capacity} booked
                                                                     {hasUnpaidBookings && <span className="font-bold text-brand-primary ml-1">({t('admin.weeklyView.unpaid', { count: unpaidBookingsCount })})</span>}
                                                                 </div>
                                                             </div>
@@ -694,24 +716,30 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                             <InstructorTag instructorId={instructor.id} instructors={appData.instructors} />
                             <div className="space-y-2 mt-2 border-l-2 pl-4 ml-3 border-gray-200">
                                 {slots.map((slot, index) => {
+                                    const totalParticipants = calculateTotalParticipants(slot.bookings);
                                     const unpaidBookingsCount = slot.bookings.filter(b => !b.isPaid).length;
                                     const hasUnpaidBookings = unpaidBookingsCount > 0;
                                     const isHighlighted = bookingToHighlight && slot.bookings.some(b => b.id === bookingToHighlight.id);
+                                    const isGroupClass = slot.bookings.some(b => b.productType === 'GROUP_CLASS');
+                                    const bgColor = isGroupClass ? 'bg-blue-100' : 'bg-white';
+                                    const borderColor = isGroupClass ? 'border-blue-400' : 'border-gray-200';
                                     return (
                                         <button
                                             key={index}
                                             onClick={() => handleShiftClick(dateStr, slot)}
-                                            className={`w-full text-left p-3 rounded-lg shadow-sm bg-white hover:shadow-md transition-shadow relative overflow-hidden border border-gray-200 ${isHighlighted ? 'animate-pulse-border' : ''}`}
+                                            className={`w-full text-left p-3 rounded-lg shadow-sm ${bgColor} hover:shadow-md transition-shadow relative overflow-hidden border ${borderColor} ${isHighlighted ? 'animate-pulse-border' : ''}`}
                                         >
                                             {hasUnpaidBookings && <div className="absolute inset-0 unpaid-booking-stripe opacity-70"></div>}
                                             <div className="relative z-10">
                                                 <div className="flex justify-between items-start">
                                                     <div>
-                                                        <div className="font-bold text-sm text-brand-text">{slot.time}</div>
+                                                        <div className="font-bold text-sm text-brand-text flex items-center gap-1">{slot.time}
+                                                        {isGroupClass && <UserGroupIcon className="w-3.5 h-3.5 text-blue-800" />}
+                                                        </div>
                                                         <div className="text-xs font-semibold text-gray-600 mt-1 truncate">{slot.product.name}</div>
                                                     </div>
-                                                    <div className={`text-xs font-bold px-2 py-0.5 rounded-full ${slot.bookings.length >= slot.capacity ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                                                        {slot.bookings.length}/{slot.capacity}
+                                                    <div className={`text-xs font-bold px-2 py-0.5 rounded-full ${totalParticipants >= slot.capacity ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                                                        {totalParticipants}/{slot.capacity}
                                                     </div>
                                                 </div>
                                                 {hasUnpaidBookings && 
