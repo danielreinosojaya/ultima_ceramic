@@ -145,13 +145,17 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
         return date.toLocaleString(language, options);
     };
 
+    // CORRECCIÓN: Filtrar las reservas por la fecha del pago, no la fecha de la reserva.
     const summaryBookings = useMemo(() => {
         const { startDate, endDate } = getDatesForPeriod(summaryPeriod, summaryCustomRange);
         return allBookings.filter(b => {
-            if (!b.isPaid || !b.paymentDetails?.receivedAt) return false;
-            const receivedAt = new Date(b.paymentDetails.receivedAt);
-            if (isNaN(receivedAt.getTime())) return false;
-            return receivedAt >= startDate && receivedAt <= endDate;
+            if (!b.isPaid || !b.paymentDetails) return false;
+            // Verificar si alguno de los pagos se recibió en el rango de fechas
+            return b.paymentDetails.some(p => {
+                const receivedAt = new Date(p.receivedAt!);
+                if (isNaN(receivedAt.getTime())) return false;
+                return receivedAt >= startDate && receivedAt <= endDate;
+            });
         });
     }, [summaryPeriod, summaryCustomRange, allBookings]);
 
@@ -176,17 +180,27 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
     
     const pendingBookingsToDisplay = pendingSubTab === 'packages' ? pendingPackageBookings : pendingOpenStudioBookings;
 
+    // CORRECCIÓN: Calcular el valor total sumando todos los pagos, no el precio de la reserva.
     const kpis = useMemo(() => {
-        const totalRevenue = summaryBookings.reduce((sum, b) => sum + (b.paymentDetails?.amount || 0), 0);
-        const paidBookingsCount = summaryBookings.length;
-        const avgRevenue = paidBookingsCount > 0 ? totalRevenue / paidBookingsCount : 0;
+        let totalRevenue = 0;
+        let lastBookingPaymentDate: Date | null = null;
         
-        const lastBooking = [...summaryBookings].sort((a,b) => new Date(b.paymentDetails!.receivedAt).getTime() - new Date(a.paymentDetails!.receivedAt).getTime())[0];
+        summaryBookings.forEach(booking => {
+            if (booking.paymentDetails) {
+                booking.paymentDetails.forEach(p => {
+                    const receivedAt = new Date(p.receivedAt!);
+                    totalRevenue += p.amount;
+                    if (!lastBookingPaymentDate || receivedAt > lastBookingPaymentDate) {
+                        lastBookingPaymentDate = receivedAt;
+                    }
+                });
+            }
+        });
 
         return {
             totalValue: `$${totalRevenue.toFixed(2)}`,
-            totalBookings: paidBookingsCount,
-            lastBookingDate: lastBooking ? formatDate(lastBooking.paymentDetails!.receivedAt, { month: 'short', day: 'numeric', year: 'numeric' }) : '---',
+            totalBookings: summaryBookings.length,
+            lastBookingDate: lastBookingPaymentDate ? formatDate(lastBookingPaymentDate, { month: 'short', day: 'numeric', year: 'numeric' }) : '---',
         };
     }, [summaryBookings]);
 
@@ -216,9 +230,11 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
 
         // Line Chart Data
         const revenueByDate = summaryBookings.reduce((acc: Record<string, number>, b: Booking) => {
-            if (!b.paymentDetails?.receivedAt) return acc;
-            const date = new Date(b.paymentDetails.receivedAt).toISOString().split('T')[0];
-            acc[date] = (acc[date] || 0) + (b.paymentDetails.amount || 0);
+            if (!b.paymentDetails) return acc;
+            b.paymentDetails.forEach(p => {
+                const date = new Date(p.receivedAt!).toISOString().split('T')[0];
+                acc[date] = (acc[date] || 0) + (p.amount || 0);
+            });
             return acc;
         }, {});
         
@@ -233,9 +249,9 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
 
         // Doughnut Chart Data - Revenue by Package
         const revenueByPackage = summaryBookings.reduce((acc: Record<string, number>, b: Booking) => {
-            if (!b.product) return acc;
+            if (!b.product || !b.paymentDetails) return acc;
             const key = b.product.name;
-            acc[key] = (acc[key] || 0) + (b.paymentDetails?.amount || 0);
+            acc[key] = (acc[key] || 0) + b.paymentDetails.reduce((sum, p) => sum + p.amount, 0);
             return acc;
         }, {} as Record<string, number>);
         
@@ -248,9 +264,11 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
 
         // Doughnut Chart Data - Revenue by Payment Method
         const paymentMethodData = summaryBookings.reduce((acc: Record<string, number>, b: Booking) => {
-            const method = b.paymentDetails?.method || 'Manual';
-            const key = method;
-            acc[key] = (acc[key] || 0) + (b.paymentDetails?.amount || 0);
+            if (!b.paymentDetails) return acc;
+            b.paymentDetails.forEach(p => {
+                const method = p.method || 'Manual';
+                acc[method] = (acc[method] || 0) + (p.amount || 0);
+            });
             return acc;
         }, {});
 
@@ -266,10 +284,10 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
     const exportToCSV = () => {
         const headers = [t('admin.financialDashboard.date'), t('admin.financialDashboard.customer'), t('admin.financialDashboard.package'), t('admin.financialDashboard.amount')];
         const rows = summaryBookings.map(b => [
-            formatDate(b.paymentDetails?.receivedAt, {}),
+            formatDate(b.paymentDetails?.[0].receivedAt, {}),
             `${b.userInfo?.firstName} ${b.userInfo?.lastName}`,
             b.product?.name || 'N/A',
-            (b.paymentDetails?.amount || 0).toFixed(2)
+            (b.paymentDetails?.[0]?.amount || 0).toFixed(2)
         ]);
 
         let csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\r\n" + rows.map(e => e.join(",")).join("\r\n");
@@ -297,7 +315,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
 
     const handleConfirmPayment = async (details: Omit<PaymentDetails, 'receivedAt'>) => {
         if (bookingToPay) {
-            await dataService.markBookingAsPaid(bookingToPay.id, details);
+            await dataService.addPaymentToBooking(bookingToPay.id, details);
             setBookingToPay(null);
             onDataChange();
         }
@@ -358,8 +376,8 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                 <AcceptPaymentModal
                     isOpen={!!bookingToPay}
                     onClose={() => setBookingToPay(null)}
-                    onConfirm={handleConfirmPayment}
                     booking={bookingToPay}
+                    onDataChange={onDataChange}
                 />
             )}
             {isInvoiceReminderOpen && (
@@ -428,7 +446,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                             </div>
                             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                                 <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-brand-text">{t('admin.financialDashboard.detailedReport')}</h3><button onClick={exportToCSV} className="text-sm font-semibold bg-brand-primary text-white py-1 px-3 rounded-md hover:bg-brand-accent transition-colors">{t('admin.financialDashboard.exportCSV')}</button></div>
-                                <div className="overflow-x-auto"><table className="min-w-full divide-y divide-gray-200"><thead className="bg-brand-background"><tr><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.date')}</th><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.customer')}</th><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.package')}</th><th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.amount')}</th></tr></thead><tbody className="bg-white divide-y divide-gray-200">{summaryBookings.map(b => (<tr key={b.id}><td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{formatDate(b.paymentDetails?.receivedAt, {})}</td><td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{b.userInfo?.firstName} {b.userInfo?.lastName}</td><td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{b.product?.name || 'N/A'}</td><td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-semibold">${(b.paymentDetails?.amount || 0).toFixed(2)}</td></tr>))}</tbody></table></div>
+                                <div className="overflow-x-auto"><table className="min-w-full divide-y divide-gray-200"><thead className="bg-brand-background"><tr><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.date')}</th><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.customer')}</th><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.package')}</th><th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.amount')}</th></tr></thead><tbody className="bg-white divide-y divide-gray-200">{summaryBookings.map(b => (<tr key={b.id}><td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{formatDate(b.paymentDetails?.[0].receivedAt, {})}</td><td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{b.userInfo?.firstName} {b.userInfo?.lastName}</td><td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{b.product?.name || 'N/A'}</td><td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-semibold">${(b.paymentDetails?.[0]?.amount || 0).toFixed(2)}</td></tr>))}</tbody></table></div>
                             </div>
                         </>
                     ) : (
@@ -442,15 +460,15 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
 
                     <div className="border-b border-gray-200 mb-6">
                         <nav className="-mb-px flex space-x-6" aria-label="Pending Tabs">
-                            <PendingSubTabButton 
-                                isActive={pendingSubTab === 'packages'} 
+                            <PendingSubTabButton
+                                isActive={pendingSubTab === 'packages'}
                                 onClick={() => setPendingSubTab('packages')}
                                 count={pendingPackageBookings.length}
                             >
                                 {t('admin.financialDashboard.packagesAndClasses')}
                             </PendingSubTabButton>
-                            <PendingSubTabButton 
-                                isActive={pendingSubTab === 'openStudio'} 
+                            <PendingSubTabButton
+                                isActive={pendingSubTab === 'openStudio'}
                                 onClick={() => setPendingSubTab('openStudio')}
                                 count={pendingOpenStudioBookings.length}
                             >
@@ -500,21 +518,21 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-semibold">${(b.price || 0).toFixed(2)}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-right">
                                                 <div className="flex items-center justify-end gap-2">
-                                                    <button 
+                                                    <button
                                                         onClick={(e) => { e.stopPropagation(); setNavigateTo({ tab: 'customers', targetId: b.userInfo.email }); }}
                                                         title="View Customer Profile"
                                                         className="flex items-center gap-1.5 bg-gray-100 text-gray-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-gray-200 transition-colors"
                                                     >
                                                         <UserIcon className="w-4 h-4" />
                                                     </button>
-                                                    <button 
+                                                    <button
                                                         onClick={(e) => { e.stopPropagation(); handleAcceptPaymentClick(b); }}
                                                         className="flex items-center gap-1.5 bg-green-100 text-green-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-green-200 transition-colors"
                                                     >
                                                         <CurrencyDollarIcon className="w-4 h-4" />
                                                         {t('admin.financialDashboard.pendingTable.acceptPayment')}
                                                     </button>
-                                                     <button 
+                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); setBookingToDelete(b); }}
                                                         title={t('admin.financialDashboard.deleteBooking')}
                                                         className="flex items-center gap-1.5 bg-red-100 text-red-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-red-200 transition-colors"

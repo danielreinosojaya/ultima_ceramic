@@ -27,8 +27,7 @@ import { PaperAirplaneIcon } from '../icons/PaperAirplaneIcon';
 import { DocumentTextIcon } from '../icons/DocumentTextIcon';
 import { InvoiceManager } from './InvoiceManager';
 import { formatDistanceToNow } from 'date-fns';
-
-
+import ErrorBoundary from './ErrorBoundary';
 
 interface AdminData {
   products: Product[];
@@ -42,6 +41,22 @@ interface AdminData {
   announcements: Announcement[];
   invoiceRequests: InvoiceRequest[];
 }
+
+const defaultAdminData: AdminData = {
+    products: [],
+    bookings: [],
+    inquiries: [],
+    instructors: [],
+    availability: {
+        Sunday: [], Monday: [], Tuesday: [], Wednesday: [],
+        Thursday: [], Friday: [], Saturday: []
+    },
+    scheduleOverrides: {},
+    classCapacity: { potters_wheel: 0, molding: 0, introductory_class: 0 },
+    capacityMessages: { thresholds: [] },
+    announcements: [],
+    invoiceRequests: []
+};
 
 
 export const AdminConsole: React.FC = () => {
@@ -86,6 +101,7 @@ export const AdminConsole: React.FC = () => {
           });
       } catch (error) {
           console.error("Failed to fetch admin data", error);
+          setAdminData(defaultAdminData);
       } finally {
           setIsLoading(false);
           setIsSyncing(false);
@@ -137,7 +153,14 @@ export const AdminConsole: React.FC = () => {
     const targetId = navigateTo?.tab === activeTab ? navigateTo.targetId : undefined;
 
     const appDataForScheduleManager: AppData = { 
-        ...adminData, 
+        products: adminData.products,
+        instructors: adminData.instructors,
+        availability: adminData.availability,
+        scheduleOverrides: adminData.scheduleOverrides,
+        classCapacity: adminData.classCapacity,
+        capacityMessages: adminData.capacityMessages,
+        announcements: adminData.announcements,
+        bookings: adminData.bookings,
         policies: '', 
         confirmationMessage: { title: '', message: ''}, 
         footerInfo: { address: '', email: '', whatsapp: '', googleMapsLink: '', instagramHandle: '' },
@@ -151,14 +174,18 @@ export const AdminConsole: React.FC = () => {
         if (calendarView === 'month') {
           return <CalendarOverview bookings={adminData.bookings} onDateSelect={handleDateSelect} onDataChange={handleSync} />;
         } else {
-          return <ScheduleManager 
-            initialDate={weekStartDate || new Date()} 
-            onBackToMonth={handleBackToMonth}
-            {...appDataForScheduleManager}
-            invoiceRequests={adminData.invoiceRequests}
-            setNavigateTo={setNavigateTo}
-            onDataChange={handleSync}
-          />;
+          return (
+            <ErrorBoundary fallback={<p className="text-center text-red-500 font-bold p-8">Hubo un error al cargar el calendario. Por favor, intenta de nuevo.</p>}>
+              <ScheduleManager 
+                initialDate={weekStartDate || new Date()} 
+                onBackToMonth={handleBackToMonth}
+                {...appDataForScheduleManager}
+                invoiceRequests={adminData.invoiceRequests}
+                setNavigateTo={setNavigateTo}
+                onDataChange={handleSync}
+              />
+            </ErrorBoundary>
+          );
         }
       case 'schedule-settings':
         return <ScheduleSettingsManager 
