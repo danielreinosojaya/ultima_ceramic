@@ -13,7 +13,7 @@ import { RescheduleModal } from './RescheduleModal';
 import { InvoiceReminderModal } from './InvoiceReminderModal';
 import { MagnifyingGlassIcon } from '../icons/MagnifyingGlassIcon';
 import { CustomerSearchResultsPanel } from './CustomerSearchResultsPanel';
-import { UserGroupIcon } from '../icons/UserGroupIcon'; // Corregido: UserGroupIcon
+import { UserGroupIcon } from '../icons/UserGroupIcon';
 
 const colorMap = PALETTE_COLORS.reduce((acc, color) => {
     acc[color.name] = { bg: color.bg.replace('bg-', ''), text: color.text.replace('text-', '') };
@@ -27,6 +27,7 @@ interface NavigationState {
 }
 
 type EnrichedSlot = {
+    date: string; // Keep date inside the slot for easier processing
     time: string;
     product: Product;
     bookings: Booking[];
@@ -37,11 +38,14 @@ type EnrichedSlot = {
 
 type ScheduleData = Map<number, { instructor: Instructor, schedule: Record<string, EnrichedSlot[]> }>;
 
-const formatDateToYYYYMMDD = (d: Date): string => d.toISOString().split('T')[0];
+const formatDateToYYYYMMDD = (d: Date): string => {
+    if (isNaN(d.getTime())) return 'Invalid Date';
+    return d.toISOString().split('T')[0];
+};
 
 const getWeekStartDate = (date: Date) => {
     const d = new Date(date);
-    d.setHours(0,0,0,0);
+    d.setHours(0, 0, 0, 0);
     const day = d.getDay();
     const diff = d.getDate() - day + (day === 0 ? -6 : 1);
     return new Date(d.setDate(diff));
@@ -128,37 +132,104 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         }
 
         const { instructors, bookings, products, availability, scheduleOverrides, classCapacity } = appData;
-        
-        const scheduleMap: ScheduleData = new Map(instructors.map(i => [i.id, { instructor: i, schedule: dates.reduce((acc, date) => ({ ...acc, [formatDateToYYYYMMDD(date)]: [] }), {}) }]));
+        const scheduleMap: ScheduleData = new Map();
+        instructors.forEach(i => scheduleMap.set(i.id, { instructor: i, schedule: {} }));
 
+        const allSlots = new Map<string, EnrichedSlot>();
+
+        // Step 1: Populate slots from all bookings for the current week.
+        for (const booking of bookings) {
+            for (const slot of booking.slots) {
+                if (!slot.date || !slot.time || !slot.instructorId) continue;
+
+                const slotDate = new Date(slot.date + "T00:00:00");
+                if (isNaN(slotDate.getTime())) continue;
+
+                if (slotDate >= startOfWeek && slotDate <= new Date(startOfWeek.getTime() + 6 * 24 * 60 * 60 * 1000)) {
+                    const dateStr = slot.date;
+                    const normalizedTime = normalizeTime(slot.time);
+                    const slotId = `${dateStr}-${normalizedTime}-${slot.instructorId}`;
+                    
+                    if (!allSlots.has(slotId)) {
+                        let slotCapacity = 0;
+                        let technique: Technique | undefined;
+                        
+                        // Determine technique from product details
+                        if ('details' in booking.product && 'technique' in booking.product.details) {
+                            technique = booking.product.details.technique;
+                        } else if (booking.productType === 'INTRODUCTORY_CLASS') {
+                            technique = 'introductory_class';
+                        }
+                        
+                        // Determine capacity
+                        const overrideForDate = scheduleOverrides[slot.date];
+                        if (overrideForDate?.capacity) {
+                            slotCapacity = overrideForDate.capacity;
+                        } else if (booking.productType === 'INTRODUCTORY_CLASS' && 'schedulingRules' in booking.product) {
+                           // For intro classes, capacity comes from rules or overrides
+                           const introProduct = booking.product as IntroductoryClass;
+                           const matchingRule = introProduct.schedulingRules.find(r => r.dayOfWeek === slotDate.getDay() && r.time === normalizedTime);
+                           slotCapacity = matchingRule?.capacity || classCapacity.introductory_class;
+                        } else if (technique) {
+                             slotCapacity = technique === 'molding' ? classCapacity.molding : classCapacity.potters_wheel;
+                        } else {
+                            slotCapacity = 1; // Default for ad-hoc without clear capacity
+                        }
+
+                        allSlots.set(slotId, {
+                            date: dateStr,
+                            time: slot.time,
+                            product: booking.product,
+                            bookings: [],
+                            capacity: slotCapacity,
+                            instructorId: slot.instructorId,
+                            isOverride: !!scheduleOverrides[dateStr],
+                        });
+                    }
+                    allSlots.get(slotId)!.bookings.push(booking);
+                }
+            }
+        }
+
+        // Step 2: Merge with default availability to show open slots.
         for (const date of dates) {
             const dateStr = formatDateToYYYYMMDD(date);
             const dayKey = DAY_NAMES[date.getDay()];
             const overrideForDate = scheduleOverrides[dateStr];
             const hasOverride = overrideForDate !== undefined;
-            const packageSlotsSource = hasOverride ? overrideForDate.slots : availability[dayKey];
+            const slotsSource = hasOverride ? overrideForDate.slots : availability[dayKey];
             
-            if (packageSlotsSource) {
-                packageSlotsSource.forEach(s => {
-                    const productForSlot = products.find(p => 'details' in p && p.details.technique === s.technique && (p.type === 'CLASS_PACKAGE' || p.type === 'SINGLE_CLASS'));
-                    if (!productForSlot) return;
+            if (slotsSource) {
+                slotsSource.forEach(s => {
+                    const slotId = `${dateStr}-${normalizeTime(s.time)}-${s.instructorId}`;
+                    if (!allSlots.has(slotId)) {
+                        const productForSlot = products.find(p => p.type === 'CLASS_PACKAGE' && p.details.technique === s.technique);
+                        if (!productForSlot) return;
 
-                    const instructorData = scheduleMap.get(s.instructorId);
-                    if (instructorData) {
                         const capacity = overrideForDate?.capacity ?? (s.technique === 'molding' ? classCapacity.molding : classCapacity.potters_wheel);
-                        instructorData.schedule[dateStr].push({ time: s.time, product: productForSlot, capacity, instructorId: s.instructorId, isOverride: hasOverride, bookings: [] });
+
+                        allSlots.set(slotId, {
+                            date: dateStr,
+                            time: s.time,
+                            product: productForSlot,
+                            capacity,
+                            instructorId: s.instructorId,
+                            isOverride: hasOverride,
+                            bookings: []
+                        });
                     }
                 });
             }
 
             const introClassProducts = products.filter(p => p.type === 'INTRODUCTORY_CLASS') as IntroductoryClass[];
             introClassProducts.forEach(p => {
-                const introSessions = dataService.generateIntroClassSessions(p, { bookings }, { includeFull: true });
+                const introSessions = dataService.generateIntroClassSessions(p, { bookings: [] }, { includeFull: true });
                 const sessionsForDay = introSessions.filter(s => s.date === dateStr);
                 sessionsForDay.forEach(s => {
-                    const instructorData = scheduleMap.get(s.instructorId);
-                    if(instructorData) {
-                        instructorData.schedule[dateStr].push({
+                    const slotId = `${dateStr}-${normalizeTime(s.time)}-${s.instructorId}`;
+                    if (!allSlots.has(slotId)) {
+                         allSlots.set(slotId, {
+                            date: dateStr,
                             time: s.time,
                             product: p,
                             capacity: s.capacity,
@@ -171,60 +242,23 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             });
         }
         
-        const adHocBookings = bookings.filter(b => b.productType === 'SINGLE_CLASS' || b.productType === 'GROUP_CLASS');
-
-        for (const booking of adHocBookings) {
-            for (const slot of booking.slots) {
-                const slotDate = new Date(slot.date + "T00:00:00");
-                if (slotDate >= startOfWeek && slotDate <= new Date(startOfWeek.getTime() + 6 * 24 * 60 * 60 * 1000)) {
-                    const instructorData = scheduleMap.get(slot.instructorId);
-                    if (instructorData) {
-                        const daySchedule = instructorData.schedule[slot.date];
-                        const normalizedSlotTime = normalizeTime(slot.time);
-                        let existingSlot = daySchedule.find(s => normalizeTime(s.time) === normalizedSlotTime);
-
-                        if (!existingSlot) {
-                           let slotCapacity = 0;
-                           let technique: Technique | undefined;
-
-                           if (booking.product.type === 'GROUP_CLASS') {
-                                technique = (booking.product as GroupClass).details.technique;
-                           } else if (booking.product.type === 'SINGLE_CLASS') {
-                                technique = (booking.product as SingleClass).details.technique;
-                           }
-                           
-                           const overrideForDate = scheduleOverrides[slot.date];
-                           if (overrideForDate?.capacity) {
-                               slotCapacity = overrideForDate.capacity;
-                           } else if (technique) {
-                               slotCapacity = technique === 'molding' ? classCapacity.molding : classCapacity.potters_wheel;
-                           } else {
-                               slotCapacity = 1;
-                           }
-
-                           const newSlot: EnrichedSlot = {
-                               time: slot.time,
-                               product: booking.product,
-                               bookings: [],
-                               capacity: slotCapacity,
-                               instructorId: slot.instructorId,
-                               isOverride: true,
-                           };
-                           daySchedule.push(newSlot);
-                           existingSlot = newSlot;
-                        }
-                        
-                        existingSlot.bookings.push(booking);
-                    }
-                }
+        // Step 3: Populate the final schedule map from allSlots
+        allSlots.forEach(slot => {
+            const instructorData = scheduleMap.get(slot.instructorId);
+            if (instructorData) {
+                 if (!instructorData.schedule[slot.date]) {
+                    instructorData.schedule[slot.date] = [];
+                 }
+                instructorData.schedule[slot.date].push(slot);
             }
-        }
-        
-        for (const instructorData of scheduleMap.values()) {
-            for (const dateStr in instructorData.schedule) {
-                instructorData.schedule[dateStr].sort((a, b) => normalizeTime(a.time).localeCompare(normalizeTime(b.time)));
-            }
-        }
+        });
+
+        // Step 4: Sort slots for each day
+        scheduleMap.forEach(data => {
+            Object.values(data.schedule).forEach(slots => {
+                slots.sort((a,b) => normalizeTime(a.time).localeCompare(normalizeTime(b.time)));
+            });
+        });
 
         return { weekDates: dates, scheduleData: scheduleMap };
     }, [currentDate, appData]);
@@ -234,7 +268,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         for (const b of bookings) {
             if (b.product.type === 'GROUP_CLASS' && 'minParticipants' in b.product) {
                 count += b.product.minParticipants;
-            } else {
+            } else if (b.product.type === 'INTRODUCTORY_CLASS' || b.product.type === 'SINGLE_CLASS' || b.product.type === 'CLASS_PACKAGE') {
                 count += 1;
             }
         }
@@ -297,9 +331,9 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         }
     };
     
-    const handleConfirmPayment = async (details: Omit<PaymentDetails, 'receivedAt'>) => {
+    const handleConfirmPayment = async (details: PaymentDetails) => {
         if (bookingToManageId) {
-            await dataService.markBookingAsPaid(bookingToManageId, details);
+            await dataService.addPaymentToBooking(bookingToManageId, details);
             closeAllModals();
             onDataChange();
         }
@@ -444,12 +478,14 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             const newSchedule: Record<string, EnrichedSlot[]> = {};
             let instructorHasUnpaid = false;
             for (const [dateStr, slots] of Object.entries(data.schedule)) {
-                const unpaidSlots = (slots as EnrichedSlot[]).filter(slot => slot.bookings.some(b => !b.isPaid));
-                if (unpaidSlots.length > 0) {
-                    newSchedule[dateStr] = unpaidSlots;
+                const slotsWithUnpaid = slots.map(slot => ({
+                    ...slot,
+                    bookings: slot.bookings.filter(b => !b.isPaid)
+                })).filter(slot => slot.bookings.length > 0);
+
+                if (slotsWithUnpaid.length > 0) {
+                    newSchedule[dateStr] = slotsWithUnpaid;
                     instructorHasUnpaid = true;
-                } else {
-                    newSchedule[dateStr] = [];
                 }
             }
             if (instructorHasUnpaid) {
@@ -498,7 +534,6 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             <AcceptPaymentModal
                 isOpen={isAcceptPaymentModalOpen}
                 onClose={closeAllModals}
-                onConfirm={handleConfirmPayment}
                 booking={bookingToManage}
                 onDataChange={onDataChange}
             />
@@ -562,7 +597,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                     <DocumentDownloadIcon className="w-4 h-4" />
                     Descargar PDF
                 </button>
-                 <button onClick={() => setCurrentDate(new Date())} className="text-sm font-bold bg-brand-background py-2 px-4 rounded-lg hover:bg-brand-primary/20 transition-colors">Hoy</button>
+                 <button onClick={() => setCurrentDate(getWeekStartDate(new Date()))} className="text-sm font-bold bg-brand-background py-2 px-4 rounded-lg hover:bg-brand-primary/20 transition-colors">Hoy</button>
                 <button onClick={handlePrevWeek} className="p-2 rounded-full hover:bg-gray-100">
                     &lt;
                 </button>
