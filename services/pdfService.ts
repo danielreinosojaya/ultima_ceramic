@@ -81,7 +81,7 @@ const drawFooter = (docInstance: jsPDF, translations: PdfTranslations, footerInf
 };
 
 
-export const generateBookingPDF = async (booking: Booking, translations: PdfTranslations, footerInfo: FooterInfo, policiesText: string, language: string): Promise<void> => {
+export const generateBookingPDF = async (booking: Booking, translations: PdfTranslations, footerInfo: FooterInfo, policiesText: string, language: string): Promise<Blob> => {
   const doc = new jsPDF({
     orientation: 'p',
     unit: 'mm',
@@ -292,8 +292,9 @@ export const generateBookingPDF = async (booking: Booking, translations: PdfTran
       drawFooter(doc, translations, footerInfo);
   }
 
-  // --- SAVE ---
-  doc.save('CeramicAlma_Reserva.pdf');
+    // --- RETURN PDF AS BLOB ---
+    const pdfArrayBuffer = doc.output('arraybuffer');
+    return new Blob([pdfArrayBuffer], { type: 'application/pdf' });
 };
 
 
