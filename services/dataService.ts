@@ -1,3 +1,13 @@
+// Bulk actions for FinancialDashboard
+export const acceptPaymentForBooking = async (bookingId: string): Promise<{ success: boolean }> => {
+    // Placeholder: Integrate with backend/payment API as needed
+    return postAction('acceptPaymentForBooking', { bookingId });
+};
+
+export const sendReminderForBooking = async (bookingId: string): Promise<{ success: boolean }> => {
+    // Placeholder: Integrate with backend/notification API as needed
+    return postAction('sendReminderForBooking', { bookingId });
+};
 import type { 
     Product, Booking, ScheduleOverrides, Notification, Announcement, Instructor, 
     ConfirmationMessage, ClassCapacity, EnrichedAvailableSlot, CapacityMessageSettings, 
@@ -6,7 +16,7 @@ import type {
     IntroductoryClass, OpenStudioSubscription, UserInfo, Customer, EnrichedIntroClassSession, 
     BackgroundSettings, AppData, BankDetails, InvoiceRequest, Technique, GroupClass, SingleClass
 } from '../types';
-import { DAY_NAMES } from '../constants.ts';
+import { DAY_NAMES } from '../constants';
 
 // --- API Helpers ---
 

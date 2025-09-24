@@ -321,7 +321,7 @@ async function handleDelete(req: VercelRequest, res: VercelResponse) {
             return res.status(400).json({ error: 'Inquiry ID is required for deletion.' });
         }
         const { rowCount } = await sql`DELETE FROM inquiries WHERE id = ${id};`;
-        if (rowCount > 0) {
+    if (rowCount != null && rowCount > 0) {
             return res.status(204).end();
         } else {
             return res.status(404).json({ error: 'Inquiry not found.' });

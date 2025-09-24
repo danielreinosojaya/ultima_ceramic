@@ -669,7 +669,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                                 </div>
                                             )}
                                             <div className="space-y-2">
-                                                {slots.map((slot, index) => {
+                                                {slots.map((slot) => {
                                                     const totalParticipants = calculateTotalParticipants(slot.bookings);
                                                     const unpaidBookingsCount = slot.bookings.filter(b => !b.isPaid).length;
                                                     const hasUnpaidBookings = unpaidBookingsCount > 0;
@@ -677,11 +677,13 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                                     const isGroupClass = slot.bookings.some(b => b.productType === 'GROUP_CLASS');
                                                     const bgColor = isGroupClass ? 'bg-blue-100' : `bg-${colorMap[instructor.colorScheme]?.bg || colorMap[defaultColorName].bg}`;
                                                     const borderColor = isGroupClass ? 'border-blue-400' : `border-${colorMap[instructor.colorScheme]?.text || colorMap[defaultColorName].text}/50`;
+                                                    const slotKey = `${slot.date}-${normalizeTime(slot.time)}-${slot.instructorId}`;
                                                     return (
                                                         <button 
-                                                            key={index} 
+                                                            key={slotKey} 
                                                             onClick={() => handleShiftClick(dateStr, slot)}
-                                                            className={`w-full text-left p-2 rounded-md shadow-sm border-l-4 ${bgColor} ${borderColor} hover:shadow-md transition-shadow relative overflow-hidden ${isHighlighted ? 'animate-pulse-border' : ''}`}>
+                                                            aria-label={hasUnpaidBookings ? t('admin.weeklyView.unpaidSlotLabel', { default: 'Unpaid slot' }) : t('admin.weeklyView.slotLabel', { default: 'Slot' })}
+                                                            className={`w-full text-left p-2 rounded-md shadow-sm border-l-4 ${bgColor} ${borderColor} hover:shadow-md transition-shadow relative overflow-hidden ${isHighlighted ? 'animate-pulse-border' : ''}`}> 
                                                             {hasUnpaidBookings && <div className="absolute inset-0 unpaid-booking-stripe opacity-70"></div>}
                                                             <div className="relative z-10">
                                                                 <div className={`font-bold text-xs text-${isGroupClass ? 'blue-800' : colorMap[instructor.colorScheme]?.text || colorMap[defaultColorName].text} flex items-center gap-1`}>
@@ -751,7 +753,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                         <div key={instructor.id}>
                             <InstructorTag instructorId={instructor.id} instructors={appData.instructors} />
                             <div className="space-y-2 mt-2 border-l-2 pl-4 ml-3 border-gray-200">
-                                {slots.map((slot, index) => {
+                                {slots.map((slot) => {
                                     const totalParticipants = calculateTotalParticipants(slot.bookings);
                                     const unpaidBookingsCount = slot.bookings.filter(b => !b.isPaid).length;
                                     const hasUnpaidBookings = unpaidBookingsCount > 0;
@@ -759,10 +761,12 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                     const isGroupClass = slot.bookings.some(b => b.productType === 'GROUP_CLASS');
                                     const bgColor = isGroupClass ? 'bg-blue-100' : 'bg-white';
                                     const borderColor = isGroupClass ? 'border-blue-400' : 'border-gray-200';
+                                    const slotKey = `${slot.date}-${normalizeTime(slot.time)}-${slot.instructorId}`;
                                     return (
                                         <button
-                                            key={index}
+                                            key={slotKey}
                                             onClick={() => handleShiftClick(dateStr, slot)}
+                                            aria-label={hasUnpaidBookings ? t('admin.weeklyView.unpaidSlotLabel', { default: 'Unpaid slot' }) : t('admin.weeklyView.slotLabel', { default: 'Slot' })}
                                             className={`w-full text-left p-3 rounded-lg shadow-sm ${bgColor} hover:shadow-md transition-shadow relative overflow-hidden border ${borderColor} ${isHighlighted ? 'animate-pulse-border' : ''}`}
                                         >
                                             {hasUnpaidBookings && <div className="absolute inset-0 unpaid-booking-stripe opacity-70"></div>}
@@ -774,7 +778,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                                         </div>
                                                         <div className="text-xs font-semibold text-gray-600 mt-1 truncate">{slot.product.name}</div>
                                                     </div>
-                                                    <div className={`text-xs font-bold px-2 py-0.5 rounded-full ${totalParticipants >= slot.capacity ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                                                    <div className={`text-xs font-bold px-2 py-0.5 rounded-full ${totalParticipants >= slot.capacity ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}> 
                                                         {totalParticipants}/{slot.capacity}
                                                     </div>
                                                 </div>
