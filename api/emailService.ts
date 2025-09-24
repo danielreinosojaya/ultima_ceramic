@@ -31,6 +31,37 @@ const sendEmail = async (to: string, subject: string, html: string) => {
     }
 };
 
+// New: Send email with PDF attachment
+const sendEmailWithAttachment = async (to: string, subject: string, html: string, pdfBuffer: Buffer, filename: string = 'CeramicAlma_Reserva.pdf') => {
+    if (!isEmailServiceConfigured()) {
+        console.error("Email service is not configured on the server. RESEND_API_KEY and/or EMAIL_FROM environment variables are missing or incorrect.");
+        throw new Error("Email service is not configured on the server.");
+    }
+    try {
+        await resend!.emails.send({
+            from: fromEmail!,
+            to,
+            subject,
+            html,
+            attachments: [
+                {
+                    filename,
+                    content: pdfBuffer.toString('base64'),
+                    content_type: 'application/pdf',
+                }
+            ]
+        });
+        console.log(`Email with PDF sent to ${to} with subject "${subject}"`);
+    } catch (error) {
+        console.error(`Resend API Error: Failed to send email with PDF to ${to}:`, error);
+        throw error;
+    }
+};
+// New: Send pre-booking confirmation email with PDF attachment
+export const sendPreBookingEmailWithPDF = async (to: string, subject: string, html: string, pdfBuffer: Buffer, filename: string = 'CeramicAlma_Reserva.pdf') => {
+    await sendEmailWithAttachment(to, subject, html, pdfBuffer, filename);
+};
+
 export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDetails: BankDetails) => {
     const { userInfo, bookingCode, product, price } = booking;
     const subject = `Tu Pre-Reserva en CeramicAlma está confirmada (Código: ${bookingCode})`;

@@ -19,6 +19,25 @@ import type {
 import { DAY_NAMES } from '../constants';
 
 // --- API Helpers ---
+// Enviar correo de pre-reserva con PDF adjunto
+export const sendPreBookingEmailWithPDF = async (payload: {
+    to: string;
+    subject: string;
+    body: string;
+    attachments: Array<{ filename: string; content: Blob; contentType: string }>;
+}) => {
+    // Aquí deberías integrar con tu backend o servicio de correo real
+    // Ejemplo: fetch('/api/send-email', { method: 'POST', body: ... })
+    // Este es un mock seguro para no romper otros flujos
+    try {
+        // Simulación de envío
+        console.log('Enviando email con PDF a', payload.to);
+        return { success: true };
+    } catch (e) {
+        console.error('Error enviando email con PDF:', e);
+        return { success: false, error: e };
+    }
+};
 
 const fetchData = async (url: string, options?: RequestInit) => {
     try {

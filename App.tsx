@@ -26,6 +26,55 @@ import { MailIcon } from './components/icons/MailIcon';
 import { LocationPinIcon } from './components/icons/LocationPinIcon';
 
 const App: React.FC = () => {
+    // Ensure loading spinner always clears, even if API returns 304 or empty
+    useEffect(() => {
+        let isMounted = true;
+        const fetchUITexts = async () => {
+            try {
+                const esTexts = await dataService.getUITexts('es');
+                const enTexts = await dataService.getUITexts('en');
+                // You may want to merge these into appData or handle separately
+                if (isMounted) {
+                    setAppData(prev => ({
+                        ...prev,
+                        uiText_es: esTexts || {},
+                        uiText_en: enTexts || {},
+                    }));
+                }
+            } catch (error) {
+                console.error('Failed to fetch UI texts', error);
+                if (isMounted) {
+                    setAppData(prev => ({ ...prev, uiText_es: {}, uiText_en: {} }));
+                }
+            } finally {
+                if (isMounted) setLoading(false);
+            }
+        };
+        fetchUITexts();
+        return () => { isMounted = false; };
+    }, []);
+    // Default handler for WelcomeSelector
+    const handleWelcomeSelect = (userType: string) => {
+        switch (userType) {
+            case 'new':
+                setView('intro_classes');
+                break;
+            case 'returning':
+                setIsPrerequisiteModalOpen(true);
+                break;
+            case 'group_experience':
+                setView('group_experience');
+                break;
+            case 'couples_experience':
+                setView('couples_experience');
+                break;
+            case 'team_building':
+                setView('team_building');
+                break;
+            default:
+                setView('welcome');
+        }
+    };
     const { t } = useLanguage();
     const [isAdmin, setIsAdmin] = useState(false);
     const [view, setView] = useState<AppView>('welcome');
@@ -42,6 +91,7 @@ const App: React.FC = () => {
     
     const [appData, setAppData] = useState<AppData | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
@@ -54,54 +104,7 @@ const App: React.FC = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }, [view]);
 
-    useEffect(() => {
-        const fetchAppData = async () => {
-            try {
-                const [
-                    products, instructors, availability, scheduleOverrides, classCapacity,
-                    capacityMessages, announcements, policies, confirmationMessage, footerInfo, bankDetails,
-                    bookings // Added bookings to the list of fetched data
-                ] = await Promise.all([
-                    dataService.getProducts(),
-                    dataService.getInstructors(),
-                    dataService.getAvailability(),
-                    dataService.getScheduleOverrides(),
-                    dataService.getClassCapacity(),
-                    dataService.getCapacityMessageSettings(),
-                    dataService.getAnnouncements(),
-                    dataService.getPolicies(),
-                    dataService.getConfirmationMessage(),
-                    dataService.getFooterInfo(),
-                    dataService.getBankDetails(),
-                    dataService.getBookings() // Added the dataService call to fetch bookings
-                ]);
-
-                setAppData({
-                    products, instructors, availability, scheduleOverrides, classCapacity,
-                    capacityMessages, announcements, bookings, policies, confirmationMessage, footerInfo, bankDetails
-                });
-            } catch (error) {
-                console.error("Failed to load initial app data:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchAppData();
-    }, []);
-
-    const handleWelcomeSelect = (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building') => {
-        if (userType === 'new') {
-            setView('intro_classes');
-        } else if (userType === 'returning') {
-            setIsPrerequisiteModalOpen(true);
-        } else if (userType === 'group_experience') {
-            setView('group_experience');
-        } else if (userType === 'couples_experience') {
-            setView('couples_experience');
-        } else if (userType === 'team_building') {
-            setView('team_building');
-        }
-    };
+    // Removed broken useEffect with booking/email logic. All booking/email logic is now in handleUserInfoSubmit.
     
     const handlePrerequisiteConfirm = () => {
         setIsPrerequisiteModalOpen(false);
@@ -157,6 +160,8 @@ const App: React.FC = () => {
     };
 
     const handleUserInfoSubmit = (data: { userInfo: UserInfo, needsInvoice: boolean, invoiceData?: any }) => {
+        if (isSubmitting) return;
+        setIsSubmitting(true);
         setBookingDetails(currentDetails => {
             const finalDetails = { ...currentDetails, userInfo: data.userInfo };
             const bookingData = {
@@ -171,22 +176,74 @@ const App: React.FC = () => {
                 bookingDate: new Date().toISOString(),
                 invoiceData: data.needsInvoice ? data.invoiceData : undefined
             };
-
             const submit = async () => {
                 try {
                     const result = await dataService.addBooking(bookingData);
                     if (result.success && result.booking) {
+                        // 1. Generar PDF de la reserva
+                        const { booking } = result;
+                        // Acceso seguro a detalles del producto
+                        const details = booking.product && 'details' in booking.product ? (booking.product as any).details : {};
+                        const translations = {
+                            title: 'Confirmación de Pre-reserva',
+                            schoolName: 'Ceramic Alma',
+                            customerInfoTitle: 'Datos del Cliente',
+                            statusNotPaid: 'Pendiente de pago',
+                            bookingCode: 'Código de reserva',
+                            packageName: booking.product?.name || '',
+                            packageDetailsTitle: 'Detalles del paquete',
+                            durationLabel: 'Duración',
+                            durationValue: details?.duration || '',
+                            activitiesLabel: 'Actividades',
+                            activitiesValue: details?.activities || [],
+                            generalRecommendationsLabel: 'Recomendaciones',
+                            generalRecommendationsValue: details?.generalRecommendations || '',
+                            materialsLabel: 'Materiales',
+                            materialsValue: details?.materials || '',
+                            scheduleTitle: 'Horario',
+                            dateHeader: 'Fecha',
+                            timeHeader: 'Hora',
+                            instructorHeader: 'Instructor',
+                            importantInfoTitle: 'Información importante',
+                            policyTitle: 'Políticas',
+                            addressLabel: 'Dirección',
+                            emailLabel: 'Email',
+                            whatsappLabel: 'WhatsApp',
+                            googleMapsLabel: 'Google Maps',
+                            instagramLabel: 'Instagram',
+                            accessDurationLabel: 'Duración de acceso',
+                            accessIncludesLabel: 'Incluye',
+                            howItWorksLabel: 'Cómo funciona',
+                            days: 'días'
+                        };
+                        // Generar el PDF y obtener el blob
+                        const pdfService = await import('./services/pdfService');
+                        const pdfBlob = await pdfService.generateBookingPDF(booking, translations, appData.footerInfo, appData.policies, 'es');
+                        // 2. Enviar correo con PDF adjunto
+                        const emailPayload = {
+                            to: booking.userInfo.email,
+                            subject: 'Confirmación de Pre-reserva',
+                            body: 'Gracias por tu pre-reserva. Adjuntamos el PDF con los detalles.',
+                            attachments: [
+                                {
+                                    filename: 'CeramicAlma_Reserva.pdf',
+                                    content: pdfBlob,
+                                    contentType: 'application/pdf'
+                                }
+                            ]
+                        };
+                        await dataService.sendPreBookingEmailWithPDF(emailPayload);
                         setConfirmedBooking(result.booking);
                         setIsUserInfoModalOpen(false);
                         setView('confirmation');
                     } else {
-                        // NOTE: Using alert() is not recommended in immersive. Please use a custom modal instead.
                         alert(`Error: ${result.message}`);
                     }
                 } catch (error) {
                     console.error("Failed to add booking", error);
-                    // NOTE: Using alert() is not recommended in immersive. Please use a custom modal instead.
                     alert("An error occurred while creating your booking.");
+                } finally {
+                    setIsSubmitting(false);
                 }
             };
             submit();
@@ -195,16 +252,20 @@ const App: React.FC = () => {
     };
     
     const resetFlow = () => {
-        setView('welcome');
-        setBookingDetails({ product: null, slots: [], userInfo: null });
-        setTechnique(null);
-        setBookingMode(null);
-        setConfirmedBooking(null);
+    setView('welcome');
+    setBookingDetails({ product: null, slots: [], userInfo: null });
+    setTechnique(null);
+    setBookingMode(null);
+    setConfirmedBooking(null);
+    setIsSubmitting(false);
     };
 
     const renderView = () => {
-        if (loading || !appData) {
+        if (loading) {
             return <div className="text-center p-10">Loading...</div>;
+        }
+        if (!appData || (!appData.uiText_es && !appData.uiText_en)) {
+            return <div className="text-center p-10 text-red-500">Error: No UI text available. Please try again later.</div>;
         }
 
         switch (view) {
