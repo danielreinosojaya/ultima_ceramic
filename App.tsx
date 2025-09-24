@@ -26,6 +26,33 @@ import { MailIcon } from './components/icons/MailIcon';
 import { LocationPinIcon } from './components/icons/LocationPinIcon';
 
 const App: React.FC = () => {
+    // Ensure loading spinner always clears, even if API returns 304 or empty
+    useEffect(() => {
+        let isMounted = true;
+        const fetchUITexts = async () => {
+            try {
+                const esTexts = await dataService.getUITexts('es');
+                const enTexts = await dataService.getUITexts('en');
+                // You may want to merge these into appData or handle separately
+                if (isMounted) {
+                    setAppData(prev => ({
+                        ...prev,
+                        uiText_es: esTexts || {},
+                        uiText_en: enTexts || {},
+                    }));
+                }
+            } catch (error) {
+                console.error('Failed to fetch UI texts', error);
+                if (isMounted) {
+                    setAppData(prev => ({ ...prev, uiText_es: {}, uiText_en: {} }));
+                }
+            } finally {
+                if (isMounted) setLoading(false);
+            }
+        };
+        fetchUITexts();
+        return () => { isMounted = false; };
+    }, []);
     // Default handler for WelcomeSelector
     const handleWelcomeSelect = (userType: string) => {
         switch (userType) {
@@ -234,8 +261,11 @@ const App: React.FC = () => {
     };
 
     const renderView = () => {
-        if (loading || !appData) {
+        if (loading) {
             return <div className="text-center p-10">Loading...</div>;
+        }
+        if (!appData || (!appData.uiText_es && !appData.uiText_en)) {
+            return <div className="text-center p-10 text-red-500">Error: No UI text available. Please try again later.</div>;
         }
 
         switch (view) {
