@@ -1,11 +1,4 @@
 {
-  "header": {
-    "title": "CeramicAlma Reservations"
-  },
-  "app": {
-    "loading": "Loading",
-    "soldOut": "SOLD OUT"
-  },
   "welcome": {
     "title": "Welcome to CeramicAlma",
     "subtitle": "Your creative journey begins here. Are you new or returning?",
@@ -13,10 +6,7 @@
     "newUserSubtitle": "Start with our introductory class to learn the basics of pottery.",
     "newUserButton": "View Intro Class",
     "returningUserTitle": "I'm a Returning Student",
-    "returningUserSubtitle": "If you've taken our intro class, you can book class packages or open studio time.",
-    "returningUserButton": "Book a Package",
-    "groupExperienceTitle": "Private Group Experiences",
-"groupExperienceSubtitle": "Perfect for birthdays, bachelorette parties, or a creative get-together with friends.",    "groupExperienceButton": "Request Info",
+    
     "couplesExperienceTitle": "Couples' Pottery Experience",
     "couplesExperienceSubtitle": "A unique and creative date. Create something beautiful together in a private session.",
     "couplesExperienceButton": "Plan Your Date",
@@ -37,7 +27,7 @@
     "message": "To book class packages, you must have completed our Introductory Class. This ensures everyone has the foundational skills for a great experience.",
     "confirmButton": "Yes, I've taken the Intro Class",
     "goToIntroButton": "I need to take the Intro Class"
-  },
+    },
   "techniques": {
     "title": "Choose a Technique",
     "subtitle": "What would you like to focus on today?",
@@ -87,7 +77,7 @@
       "stepDay": "Day",
       "stepTime": "Time",
       "backButton": "Back"
-    }
+  }
   },
   "schedule": {
     "title": "Schedule Your Classes",
@@ -102,7 +92,11 @@
     "allClassesSelected": "All classes scheduled!",
     "confirmButton": "Confirm {{selected}}/{{total}} Classes",
     "bookingWindowMessage": "Please book all your classes before",
-    "monthlyNotAvailableError": "This slot is not available for 4 consecutive weeks. Please choose another."
+    "monthlyNotAvailableError": "This slot is not available for 4 consecutive weeks. Please choose another.",
+      "fullLabel": "Fully Booked",
+      "slotLabel": "Available Time Slot",
+      "dayAvailableLabel": "Available Day",
+      "dayUnavailableLabel": "Unavailable Day"
   },
   "summary": {
     "title": "Booking Summary",
@@ -285,13 +279,41 @@
     "howItWorksLabel": "How It Works",
     "days": "days"
   },
- "admin": {
+  "admin": {
   "manualBookingModal": {
     "groupClassTitle": "Ad-Hoc Group Class",
     "groupClassDescription": "Book an arbitrary time for a group, outside of the regular schedule. The system will dynamically manage capacity.",
     "groupClassInfo": "A group booking will be created for {{min}} people, at a price of ${{price}} per person. Total: ${{totalPrice}}",
     "participantsLabel": "Participants",
     "pricePerPersonLabel": "Price per Person"
+    },
+    "financialDashboard": {
+      "title": "Financial Dashboard",
+      "subtitle": "View and analyze all financial activity.",
+      "totalRevenue": "Total Revenue",
+      "date": "Date",
+      "customer": "Customer",
+      "package": "Package",
+      "amount": "Amount",
+      "lastBooking": "Last Booking",
+      "exportCSV": "Export to CSV"
+    },
+    "invoiceManager": {
+      "title": "Invoice Requests",
+      "subtitle": "Manage and process customer invoice requests.",
+      "filterAll": "All",
+      "filterPending": "Pending",
+      "filterProcessed": "Processed",
+      "requestedAt": "Requested At",
+      "customer": "Customer",
+      "company": "Company",
+      "status": "Status",
+      "actions": "Actions",
+      "markAsProcessed": "Mark as Processed",
+      "noRequests": "No invoice requests found.",
+      "goToCustomer": "Go to Customer",
+      "statusPending": "Pending",
+      "statusProcessed": "Processed"
     },
     "customerDetail": {
         "birthdayLabel": "Birthday"
@@ -469,7 +491,7 @@
       "deleteNotification": "Delete notification",
       "confirmDelete": "Are you sure you want to permanently delete this notification?",
       "deleteError": "Could not delete the notification. Please try again."
-  }
-  }
-}  
-} 
+    }
+}
+}
+}
