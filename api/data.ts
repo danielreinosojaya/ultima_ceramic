@@ -264,11 +264,11 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: 'A "key" query parameter is required for data updates.' });
     }
 
-}
+
 
 
 async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookingCode'> & { invoiceData?: Omit<InvoiceRequest, 'id' | 'bookingId' | 'status' | 'requestedAt' | 'processedAt'> }): Promise<AddBookingResult> {
     const { productId, slots, userInfo, productType, invoiceData, bookingDate } = body;
     // ...existing code for addBookingAction...
     return { success: false, message: 'NOT_IMPLEMENTED' };
-}
+}}
