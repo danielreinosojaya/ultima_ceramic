@@ -111,6 +111,9 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({ navigateToEmail, bookings, 
     const [searchTerm, setSearchTerm] = useState('');
     const [filterByClassesRemaining, setFilterByClassesRemaining] = useState<FilterType>('all');
     const [activeTab, setActiveTab] = useState<'all' | 'openStudio'>('all');
+    // FIX: Move these hooks to top level to avoid hook order errors
+    const [studioFilter, setStudioFilter] = useState<'all' | 'active' | 'expiring' | 'unpaid'>('all');
+    const [studioSort, setStudioSort] = useState<'expiry' | 'name'>('expiry');
 
     // CORRECCIÓN: El hook de efecto que causa el bucle infinito en CrmDashboard.tsx:162 se debe
     // a una actualización de estado sin dependencias adecuadas. La lógica de carga de datos
@@ -273,7 +276,90 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({ navigateToEmail, bookings, 
                 )}
                 
                 {activeTab === 'openStudio' && (
-                    <OpenStudioView bookings={bookings} onNavigateToCustomer={handleNavigateToCustomer} />
+                    <div className="animate-fade-in">
+                        {/* --- Open Studio Summary & Controls --- */}
+                        {(() => {
+                            // Calculate summary metrics for open studio subscriptions
+                            const openStudioBookings = bookings.filter(b => b.productType === 'OPEN_STUDIO_SUBSCRIPTION');
+                            const now = new Date();
+                            const active = openStudioBookings.filter(b => {
+                                if (!b.paymentDetails?.receivedAt) return false;
+                                const start = new Date(b.paymentDetails.receivedAt);
+                                const duration = b.product.details.durationDays;
+                                const expiry = new Date(start);
+                                expiry.setDate(expiry.getDate() + duration);
+                                return now <= expiry;
+                            });
+                            const expiringSoon = active.filter(b => {
+                                const start = new Date(b.paymentDetails.receivedAt);
+                                const duration = b.product.details.durationDays;
+                                const expiry = new Date(start);
+                                expiry.setDate(expiry.getDate() + duration);
+                                const daysLeft = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                                return daysLeft <= 7 && daysLeft > 0;
+                            });
+                            const unpaid = openStudioBookings.filter(b => !b.isPaid);
+
+                            // --- Filtered and Sorted Bookings ---
+                            let filteredBookings = openStudioBookings;
+                            if (studioFilter === 'active') filteredBookings = active;
+                            if (studioFilter === 'expiring') filteredBookings = expiringSoon;
+                            if (studioFilter === 'unpaid') filteredBookings = unpaid;
+
+                            filteredBookings = [...filteredBookings];
+                            if (studioSort === 'expiry') {
+                                filteredBookings.sort((a, b) => {
+                                    const aStart = a.paymentDetails?.receivedAt ? new Date(a.paymentDetails.receivedAt) : new Date(0);
+                                    const aDuration = a.product.details.durationDays;
+                                    const aExpiry = new Date(aStart);
+                                    aExpiry.setDate(aExpiry.getDate() + aDuration);
+                                    const bStart = b.paymentDetails?.receivedAt ? new Date(b.paymentDetails.receivedAt) : new Date(0);
+                                    const bDuration = b.product.details.durationDays;
+                                    const bExpiry = new Date(bStart);
+                                    bExpiry.setDate(bExpiry.getDate() + bDuration);
+                                    return aExpiry.getTime() - bExpiry.getTime();
+                                });
+                            } else if (studioSort === 'name') {
+                                filteredBookings.sort((a, b) => {
+                                    const aName = a.customer?.userInfo?.firstName || '';
+                                    const bName = b.customer?.userInfo?.firstName || '';
+                                    return aName.localeCompare(bName);
+                                });
+                            }
+
+                            // --- Controls UI ---
+                            return (
+                                <>
+                                    <div className="flex flex-wrap gap-4 mb-6">
+                                        <div className="bg-brand-background p-4 rounded-lg">
+                                            <div className="text-xs font-semibold text-brand-secondary">Active Subscriptions</div>
+                                            <div className="text-2xl font-bold text-brand-text">{active.length}</div>
+                                        </div>
+                                        <div className="bg-brand-background p-4 rounded-lg">
+                                            <div className="text-xs font-semibold text-brand-secondary">Expiring Soon (&le;7 days)</div>
+                                            <div className="text-2xl font-bold text-brand-text">{expiringSoon.length}</div>
+                                        </div>
+                                        <div className="bg-brand-background p-4 rounded-lg">
+                                            <div className="text-xs font-semibold text-brand-secondary">Unpaid</div>
+                                            <div className="text-2xl font-bold text-brand-text">{unpaid.length}</div>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-4 mb-4 flex-wrap items-center">
+                                        <span className="text-sm font-bold text-brand-secondary">Filter:</span>
+                                        <button className={`px-3 py-1.5 text-sm rounded-md ${studioFilter === 'all' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioFilter('all')}>All</button>
+                                        <button className={`px-3 py-1.5 text-sm rounded-md ${studioFilter === 'active' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioFilter('active')}>Active</button>
+                                        <button className={`px-3 py-1.5 text-sm rounded-md ${studioFilter === 'expiring' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioFilter('expiring')}>Expiring Soon</button>
+                                        <button className={`px-3 py-1.5 text-sm rounded-md ${studioFilter === 'unpaid' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioFilter('unpaid')}>Unpaid</button>
+                                        <span className="ml-6 text-sm font-bold text-brand-secondary">Sort by:</span>
+                                        <button className={`px-3 py-1.5 text-sm rounded-md ${studioSort === 'expiry' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioSort('expiry')}>Expiry</button>
+                                        <button className={`px-3 py-1.5 text-sm rounded-md ${studioSort === 'name' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioSort('name')}>Name</button>
+                                    </div>
+                                    {/* --- Open Studio List --- */}
+                                    <OpenStudioView bookings={filteredBookings} onNavigateToCustomer={handleNavigateToCustomer} />
+                                </>
+                            );
+                        })()}
+                    </div>
                 )}
               </>
             )}

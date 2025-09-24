@@ -89,15 +89,28 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onNotificati
 
     return (
         <div className="relative" ref={dropdownRef}>
-            <button onClick={handleToggle} className="relative p-2 rounded-full hover:bg-brand-background text-brand-secondary hover:text-brand-accent transition-colors">
+            <button 
+                onClick={handleToggle} 
+                className="relative p-2 rounded-full hover:bg-brand-background text-brand-secondary hover:text-brand-accent transition-colors"
+                aria-label={t('admin.notifications.bellLabel', { default: 'Notifications' })}
+                aria-haspopup="true"
+                aria-expanded={isOpen}
+            >
                 <BellIcon className="w-6 h-6" />
                 {unreadCount > 0 && (
-                    <span className="absolute top-1 right-1 block h-3 w-3 rounded-full bg-red-500 border-2 border-brand-surface"></span>
+                    <span className="absolute top-1 right-1 block h-3 w-3 rounded-full bg-red-500 border-2 border-brand-surface flex items-center justify-center text-[10px] font-bold text-white">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
                 )}
             </button>
 
             {isOpen && (
-                <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-2xl border border-gray-200 z-30 animate-fade-in-fast">
+                <div 
+                    className="absolute right-0 mt-2 w-80 max-w-xs sm:max-w-sm bg-white rounded-lg shadow-2xl border border-gray-200 z-30 animate-fade-in-fast"
+                    role="menu"
+                    aria-label={t('admin.notifications.dropdownLabel', { default: 'Notification list' })}
+                    tabIndex={-1}
+                >
                     <div className="p-3 border-b border-gray-200">
                         <h3 className="font-bold text-brand-text">{t('admin.notifications.title')}</h3>
                     </div>
@@ -107,14 +120,16 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onNotificati
                                 <button
                                   key={notif.id}
                                   onClick={() => handleItemClick(notif)}
+                                  role="menuitem"
+                                  tabIndex={0}
                                   className={`w-full text-left p-3 border-b border-gray-100 transition-colors ${!notif.read ? 'bg-brand-background' : 'hover:bg-gray-50'}`}
+                                  aria-label={t(`admin.notifications.template_${notif.type}`, { name: notif.userName, summary: notif.summary, default: 'Notification' })}
                                 >
-                                                                
                                 <div className="text-xs text-gray-500">
-                                    {formatDistanceToNow(new Date(notif.timestamp), { addSuffix: true })}
+                                    {notif.timestamp ? formatDistanceToNow(new Date(notif.timestamp), { addSuffix: true }) : t('admin.notifications.unknownTime', { default: 'Unknown time' })}
                                 </div>
                                     <p className="text-xs text-brand-secondary mt-1">
-                                        {t(`admin.notifications.template_${notif.type}`, { name: notif.userName, summary: notif.summary })}
+                                        {t(`admin.notifications.template_${notif.type}`, { name: notif.userName, summary: notif.summary, default: notif.summary || 'Notification' })}
                                     </p>
                                 </button>
                             ))

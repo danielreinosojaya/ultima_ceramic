@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Chart from 'chart.js/auto';
+import Papa from 'papaparse';
 import type { Booking, Product, PaymentDetails, AdminTab, InvoiceRequest } from '../../types.js';
 import * as dataService from '../../services/dataService.js';
 import { useLanguage } from '../../context/LanguageContext.js';
@@ -120,6 +121,16 @@ const CapacityHealthView: React.FC = () => {
 };
 
 export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings: allBookings, invoiceRequests, onDataChange, setNavigateTo }) => {
+    // Feedback state
+    const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
+    const [feedbackType, setFeedbackType] = useState<'success' | 'error' | null>(null);
+    const [loadingBulk, setLoadingBulk] = useState(false);
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
+    // Bulk selection state
+    const [selectedBookings, setSelectedBookings] = useState<string[]>([]);
+
     const { t, language } = useLanguage();
     const [activeTab, setActiveTab] = useState<FinancialTab>('summary');
     const [pendingSubTab, setPendingSubTab] = useState<PendingSubTab>('packages');
@@ -127,7 +138,11 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
     // State for Summary Tab
     const [summaryPeriod, setSummaryPeriod] = useState<FilterPeriod>('month');
     const [summaryCustomRange, setSummaryCustomRange] = useState({ start: '', end: '' });
-    
+    // Advanced filters
+    const [productTypeFilter, setProductTypeFilter] = useState<string>('all');
+    const [paymentMethodFilter, setPaymentMethodFilter] = useState<string>('all');
+    const [bookingStatusFilter, setBookingStatusFilter] = useState<string>('all');
+
     // State for Pending Tab
     const [pendingPeriod, setPendingPeriod] = useState<FilterPeriod>('month');
     const [pendingCustomRange, setPendingCustomRange] = useState({ start: '', end: '' });
@@ -148,7 +163,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
     // CORRECCIÓN: Filtrar las reservas por la fecha del pago, no la fecha de la reserva.
     const summaryBookings = useMemo(() => {
         const { startDate, endDate } = getDatesForPeriod(summaryPeriod, summaryCustomRange);
-        return allBookings.filter(b => {
+        let filtered = allBookings.filter(b => {
             if (!b.isPaid || !b.paymentDetails) return false;
             // Verificar si alguno de los pagos se recibió en el rango de fechas
             return b.paymentDetails.some(p => {
@@ -157,7 +172,22 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                 return receivedAt >= startDate && receivedAt <= endDate;
             });
         });
-    }, [summaryPeriod, summaryCustomRange, allBookings]);
+        // Advanced filters
+        if (productTypeFilter !== 'all') {
+            filtered = filtered.filter(b => b.product?.type === productTypeFilter);
+        }
+        if (paymentMethodFilter !== 'all') {
+            filtered = filtered.filter(b => b.paymentDetails?.some(p => p.method === paymentMethodFilter));
+        }
+        if (bookingStatusFilter !== 'all') {
+            filtered = filtered.filter(b => {
+                if (bookingStatusFilter === 'paid') return b.isPaid;
+                if (bookingStatusFilter === 'pending') return !b.isPaid;
+                return true;
+            });
+        }
+        return filtered;
+    }, [summaryPeriod, summaryCustomRange, allBookings, productTypeFilter, paymentMethodFilter, bookingStatusFilter]);
 
 
     const { pendingPackageBookings, pendingOpenStudioBookings } = useMemo(() => {
@@ -179,6 +209,10 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
     }, [pendingPeriod, pendingCustomRange, allBookings]);
     
     const pendingBookingsToDisplay = pendingSubTab === 'packages' ? pendingPackageBookings : pendingOpenStudioBookings;
+    // Pagination logic
+    const totalRows = pendingBookingsToDisplay.length;
+    const totalPages = Math.ceil(totalRows / rowsPerPage);
+    const paginatedBookings = pendingBookingsToDisplay.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
 
     // CORRECCIÓN: Calcular el valor total sumando todos los pagos, no el precio de la reserva.
     const kpis = useMemo(() => {
@@ -283,18 +317,17 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
 
     const exportToCSV = () => {
         const headers = [t('admin.financialDashboard.date'), t('admin.financialDashboard.customer'), t('admin.financialDashboard.package'), t('admin.financialDashboard.amount')];
-        const rows = summaryBookings.map(b => [
-            formatDate(b.paymentDetails?.[0].receivedAt, {}),
-            `${b.userInfo?.firstName} ${b.userInfo?.lastName}`,
-            b.product?.name || 'N/A',
-            (b.paymentDetails?.[0]?.amount || 0).toFixed(2)
-        ]);
-
-        let csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\r\n" + rows.map(e => e.join(",")).join("\r\n");
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", "financial_report.csv");
+        const rows = summaryBookings.map(b => ({
+            [headers[0]]: formatDate(b.paymentDetails?.[0].receivedAt, {}),
+            [headers[1]]: `${b.userInfo?.firstName} ${b.userInfo?.lastName}`,
+            [headers[2]]: b.product?.name || 'N/A',
+            [headers[3]]: (b.paymentDetails?.[0]?.amount || 0).toFixed(2)
+        }));
+        const csv = Papa.unparse(rows, { quotes: true });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.setAttribute('download', 'financial_report.csv');
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -315,7 +348,12 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
 
     const handleConfirmPayment = async (details: Omit<PaymentDetails, 'receivedAt'>) => {
         if (bookingToPay) {
-            await dataService.addPaymentToBooking(bookingToPay.id, details);
+            // Add receivedAt as now for PaymentDetails
+            const payment: PaymentDetails = {
+                ...details,
+                receivedAt: new Date().toISOString()
+            };
+            await dataService.addPaymentToBooking(bookingToPay.id, payment);
             setBookingToPay(null);
             onDataChange();
         }
@@ -370,6 +408,66 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
         </button>
     );
 
+    // Bulk actions
+    const handleSelectBooking = (id: string) => {
+        setSelectedBookings(selected => selected.includes(id) ? selected.filter(bid => bid !== id) : [...selected, id]);
+    };
+    const handleSelectAll = () => {
+        if (selectedBookings.length === paginatedBookings.length) {
+            setSelectedBookings([]);
+        } else {
+            setSelectedBookings(paginatedBookings.map(b => b.id));
+        }
+    };
+    const handleBulkDelete = async () => {
+        setLoadingBulk(true);
+        try {
+            for (const id of selectedBookings) {
+                await dataService.deleteBooking(id);
+            }
+            setSelectedBookings([]);
+            setFeedbackMsg(t('admin.financialDashboard.feedback.bulkDeleteSuccess'));
+            setFeedbackType('success');
+            onDataChange();
+        } catch (e) {
+            setFeedbackMsg(t('admin.financialDashboard.feedback.bulkDeleteError'));
+            setFeedbackType('error');
+        }
+        setLoadingBulk(false);
+    };
+    const handleBulkAcceptPayment = async () => {
+        setLoadingBulk(true);
+        try {
+            for (const id of selectedBookings) {
+                await dataService.acceptPaymentForBooking(id);
+            }
+            setSelectedBookings([]);
+            setFeedbackMsg(t('admin.financialDashboard.feedback.bulkPaymentSuccess'));
+            setFeedbackType('success');
+            onDataChange();
+        } catch (e) {
+            setFeedbackMsg(t('admin.financialDashboard.feedback.bulkPaymentError'));
+            setFeedbackType('error');
+        }
+        setLoadingBulk(false);
+    };
+    const handleBulkSendReminder = async () => {
+        setLoadingBulk(true);
+        try {
+            for (const id of selectedBookings) {
+                await dataService.sendReminderForBooking(id);
+            }
+            setSelectedBookings([]);
+            setFeedbackMsg(t('admin.financialDashboard.feedback.bulkReminderSuccess'));
+            setFeedbackType('success');
+            onDataChange();
+        } catch (e) {
+            setFeedbackMsg(t('admin.financialDashboard.feedback.bulkReminderError'));
+            setFeedbackType('error');
+        }
+        setLoadingBulk(false);
+    };
+
     return (
         <div>
             {bookingToPay && (
@@ -397,9 +495,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                     message={t('admin.financialDashboard.deleteConfirmText', { name: `${bookingToDelete.userInfo.firstName} ${bookingToDelete.userInfo.lastName}`})}
                 />
             )}
-            
             <h2 className="text-2xl font-serif text-brand-text mb-2">{t('admin.financialDashboard.title')}</h2>
-            
             <div className="border-b border-gray-200 mb-6">
                 <nav className="-mb-px flex space-x-6" aria-label="Tabs">
                     <TabButton isActive={activeTab === 'summary'} onClick={() => setActiveTab('summary')}>
@@ -413,7 +509,6 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                     </TabButton>
                 </nav>
             </div>
-
             {activeTab === 'summary' && (
                 <div className="animate-fade-in">
                     <p className="text-brand-secondary mb-6">{t('admin.financialDashboard.subtitle')}</p>
@@ -426,14 +521,36 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                             <span className="text-sm">to</span>
                             <input type="date" value={summaryCustomRange.end} onChange={e => {setSummaryCustomRange(c => ({...c, end: e.target.value})); setSummaryPeriod('custom');}} className="text-sm p-1 border rounded-md"/>
                         </div>
+                        {/* Advanced filters */}
+                        <select value={productTypeFilter} onChange={e => setProductTypeFilter(e.target.value)} className="text-sm p-1 border rounded-md" title="Filtrar por tipo de producto">
+                            <option value="all">{t('admin.financialDashboard.filters.allProducts')}</option>
+                            <option value="CLASS_PACKAGE">{t('admin.financialDashboard.filters.classPackage')}</option>
+                            <option value="INTRODUCTORY_CLASS">{t('admin.financialDashboard.filters.introClass')}</option>
+                            <option value="OPEN_STUDIO_SUBSCRIPTION">{t('admin.financialDashboard.filters.openStudio')}</option>
+                        </select>
+                        <select value={paymentMethodFilter} onChange={e => setPaymentMethodFilter(e.target.value)} className="text-sm p-1 border rounded-md" title="Filtrar por método de pago">
+                            <option value="all">{t('admin.financialDashboard.filters.allMethods')}</option>
+                            <option value="Manual">{t('admin.financialDashboard.filters.manual')}</option>
+                            <option value="Card">{t('admin.financialDashboard.filters.card')}</option>
+                            <option value="Transfer">{t('admin.financialDashboard.filters.transfer')}</option>
+                        </select>
+                        <select value={bookingStatusFilter} onChange={e => setBookingStatusFilter(e.target.value)} className="text-sm p-1 border rounded-md" title="Filtrar por estado de reserva">
+                            <option value="all">{t('admin.financialDashboard.filters.allStatus')}</option>
+                            <option value="paid">{t('admin.financialDashboard.filters.paid')}</option>
+                            <option value="pending">{t('admin.financialDashboard.filters.pending')}</option>
+                        </select>
                     </div>
-
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                         <KPICard title={t('admin.crm.lifetimeValue')} value={kpis.totalValue} />
-                         <KPICard title={t('admin.crm.totalBookings')} value={kpis.totalBookings} />
-                         <KPICard title={t('admin.crm.lastBooking')} value={kpis.lastBookingDate} />
+                         <div title={t('admin.financialDashboard.tooltips.lifetimeValue')}>
+                             <KPICard title={t('admin.crm.lifetimeValue')} value={kpis.totalValue} />
+                         </div>
+                         <div title={t('admin.financialDashboard.tooltips.totalBookings')}>
+                             <KPICard title={t('admin.crm.totalBookings')} value={kpis.totalBookings} />
+                         </div>
+                         <div title={t('admin.financialDashboard.tooltips.lastBooking')}>
+                             <KPICard title={t('admin.crm.lastBooking')} value={kpis.lastBookingDate} />
+                         </div>
                     </div>
-
                     {summaryBookings.length > 0 ? (
                         <>
                             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
@@ -455,9 +572,8 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                 </div>
             )}
             {activeTab === 'pending' && (
-                 <div className="animate-fade-in">
+                <div className="animate-fade-in">
                     <p className="text-brand-secondary mb-6">{t('admin.financialDashboard.pendingSubtitle')}</p>
-
                     <div className="border-b border-gray-200 mb-6">
                         <nav className="-mb-px flex space-x-6" aria-label="Pending Tabs">
                             <PendingSubTabButton
@@ -476,7 +592,6 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                             </PendingSubTabButton>
                         </nav>
                     </div>
-
                     <div className={`bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6 flex items-center gap-2 flex-wrap transition-opacity ${pendingSubTab === 'openStudio' ? 'opacity-50 pointer-events-none' : ''}`}>
                         <button onClick={() => setPendingPeriod('today')} className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors ${pendingPeriod === 'today' ? 'bg-brand-primary text-white' : 'bg-white hover:bg-brand-background'}`}>{t('admin.financialDashboard.today')}</button>
                         <button onClick={() => setPendingPeriod('week')} className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors ${pendingPeriod === 'week' ? 'bg-brand-primary text-white' : 'bg-white hover:bg-brand-background'}`}>{t('admin.financialDashboard.thisWeek')}</button>
@@ -487,47 +602,62 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                             <input type="date" value={pendingCustomRange.end} onChange={e => {setPendingCustomRange(c => ({...c, end: e.target.value})); setPendingPeriod('custom');}} className="text-sm p-1 border rounded-md"/>
                         </div>
                     </div>
-                    
                     {pendingSubTab === 'openStudio' && (
                         <div className="text-center text-sm text-brand-secondary -mt-4 mb-6">
                             {t('admin.financialDashboard.openStudioDateFilterInfo')}
                         </div>
                     )}
-
                     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                         <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-brand-background">
-                                    <tr>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.financialDashboard.pendingTable.date')}</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.financialDashboard.pendingTable.customer')}</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.financialDashboard.pendingTable.product')}</th>
-                                        <th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.financialDashboard.pendingTable.amount')}</th>
-                                        <th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.financialDashboard.pendingTable.actions')}</th>
+                         <div className="mb-4 flex gap-2 items-center">
+                             <button onClick={handleBulkAcceptPayment} disabled={selectedBookings.length === 0} className="px-3 py-1 text-sm font-semibold rounded-md bg-green-100 text-green-800 disabled:opacity-50">{t('admin.financialDashboard.bulkAcceptPayment')}</button>
+                             <button onClick={handleBulkSendReminder} disabled={selectedBookings.length === 0} className="px-3 py-1 text-sm font-semibold rounded-md bg-yellow-100 text-yellow-800 disabled:opacity-50">{t('admin.financialDashboard.bulkSendReminder')}</button>
+                             <button onClick={handleBulkDelete} disabled={selectedBookings.length === 0} className="px-3 py-1 text-sm font-semibold rounded-md bg-red-100 text-red-800 disabled:opacity-50">{t('admin.financialDashboard.bulkDelete')}</button>
+                             <span className="ml-auto text-xs text-brand-secondary">{t('admin.financialDashboard.selectedCount', { count: selectedBookings.length })}</span>
+                         </div>
+                         <div className="overflow-x-auto" role="region" aria-label="Tabla de reservas pendientes">
+                            {loadingBulk && (
+                                <div className="absolute inset-0 bg-white bg-opacity-60 flex items-center justify-center z-10">
+                                    <span className="text-brand-primary font-bold">{t('admin.financialDashboard.feedback.loading')}</span>
+                                </div>
+                            )}
+                            <table className="min-w-full divide-y divide-gray-200" role="table">
+                                <thead className="bg-brand-background" role="rowgroup">
+                                    <tr role="row">
+                                        <th className="px-2 py-2" role="columnheader"><input type="checkbox" checked={selectedBookings.length === paginatedBookings.length && paginatedBookings.length > 0} onChange={handleSelectAll} aria-label="Seleccionar todos" /></th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">{t('admin.financialDashboard.pendingTable.date')}</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">{t('admin.financialDashboard.pendingTable.customer')}</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">{t('admin.financialDashboard.pendingTable.product')}</th>
+                                        <th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">{t('admin.financialDashboard.pendingTable.amount')}</th>
+                                        <th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">{t('admin.financialDashboard.pendingTable.actions')}</th>
                                     </tr>
                                 </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {pendingBookingsToDisplay.length > 0 ? pendingBookingsToDisplay.map(b => (
-                                        <tr key={b.id}>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{formatDate(b.createdAt, { year: 'numeric', month: 'short', day: 'numeric'})}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">
+                                <tbody className="bg-white divide-y divide-gray-200" role="rowgroup">
+                                    {paginatedBookings.length > 0 ? paginatedBookings.map(b => (
+                                        <tr key={b.id} role="row">
+                                            <td className="px-2 py-2" role="cell"><input type="checkbox" checked={selectedBookings.includes(b.id)} onChange={() => handleSelectBooking(b.id)} aria-label={`Seleccionar reserva ${b.id}`} /></td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text" role="cell">{formatDate(b.createdAt, { year: 'numeric', month: 'short', day: 'numeric'})}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text" role="cell">
                                                 <div className="font-semibold">{b.userInfo?.firstName} {b.userInfo?.lastName}</div>
                                                 <div className="text-xs text-brand-secondary">{b.userInfo?.email}</div>
                                             </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{b.product?.name || 'N/A'}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-semibold">${(b.price || 0).toFixed(2)}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-right">
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text" role="cell">{b.product?.name || 'N/A'}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-semibold" role="cell">${(b.price || 0).toFixed(2)}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-right" role="cell">
                                                 <div className="flex items-center justify-end gap-2">
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); setNavigateTo({ tab: 'customers', targetId: b.userInfo.email }); }}
                                                         title="View Customer Profile"
                                                         className="flex items-center gap-1.5 bg-gray-100 text-gray-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-gray-200 transition-colors"
+                                                        tabIndex={0}
+                                                        aria-label={t('admin.financialDashboard.pendingTable.viewCustomer')}
                                                     >
                                                         <UserIcon className="w-4 h-4" />
                                                     </button>
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleAcceptPaymentClick(b); }}
                                                         className="flex items-center gap-1.5 bg-green-100 text-green-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-green-200 transition-colors"
+                                                        tabIndex={0}
+                                                        aria-label={t('admin.financialDashboard.pendingTable.acceptPayment')}
                                                     >
                                                         <CurrencyDollarIcon className="w-4 h-4" />
                                                         {t('admin.financialDashboard.pendingTable.acceptPayment')}
@@ -536,6 +666,8 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                                         onClick={(e) => { e.stopPropagation(); setBookingToDelete(b); }}
                                                         title={t('admin.financialDashboard.deleteBooking')}
                                                         className="flex items-center gap-1.5 bg-red-100 text-red-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-red-200 transition-colors"
+                                                        tabIndex={0}
+                                                        aria-label={t('admin.financialDashboard.pendingTable.deleteBooking')}
                                                     >
                                                         <TrashIcon className="w-4 h-4" />
                                                     </button>
@@ -543,19 +675,46 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                             </td>
                                         </tr>
                                     )) : (
-                                        <tr>
-                                            <td colSpan={5} className="text-center py-10 text-brand-secondary">
+                                        <tr role="row">
+                                            <td colSpan={6} className="text-center py-10 text-brand-secondary" role="cell">
                                                 {t('admin.financialDashboard.pendingTable.noPending')}
                                             </td>
                                         </tr>
                                     )}
                                 </tbody>
                             </table>
+                            {/* Pagination controls */}
+                            <div className="flex justify-between items-center mt-4">
+                                <div className="flex gap-2 items-center">
+                                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2 py-1 rounded bg-gray-100 text-gray-800 disabled:opacity-50" tabIndex={0} aria-label={t('admin.financialDashboard.prevPage')}>
+                                        {t('admin.financialDashboard.prevPage')}
+                                    </button>
+                                    <span className="text-sm">{t('admin.financialDashboard.page', { current: currentPage, total: totalPages })}</span>
+                                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-2 py-1 rounded bg-gray-100 text-gray-800 disabled:opacity-50" tabIndex={0} aria-label={t('admin.financialDashboard.nextPage')}>
+                                        {t('admin.financialDashboard.nextPage')}
+                                    </button>
+                                </div>
+                                <div className="flex gap-2 items-center">
+                                    <span className="text-sm">{t('admin.financialDashboard.rowsPerPage')}</span>
+                                    <select value={rowsPerPage} onChange={e => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="text-sm p-1 border rounded-md" aria-label={t('admin.financialDashboard.rowsPerPage')}> 
+                                        <option value={5}>5</option>
+                                        <option value={10}>10</option>
+                                        <option value={25}>25</option>
+                                        <option value={50}>50</option>
+                                    </select>
+                                </div>
+                            </div>
+                            {/* Feedback message */}
+                            {feedbackMsg && (
+                                <div className={`mt-4 p-2 rounded text-sm font-bold ${feedbackType === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`} role="alert">
+                                    {feedbackMsg}
+                                </div>
+                            )}
                         </div>
                     </div>
-                 </div>
+                </div>
             )}
-             {activeTab === 'capacity' && <CapacityHealthView />}
+            {activeTab === 'capacity' && <CapacityHealthView />}
         </div>
     );
-};
+}

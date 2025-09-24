@@ -76,18 +76,24 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer
 
   // CORRECCIÓN: El cálculo de `totalValue` debe sumar los montos de `paymentDetails`
   // en lugar del precio total de la reserva, que podría ser diferente.
-  const { totalValue, totalBookings, lastBookingDate } = useMemo(() => {
-    const totalSpent = customer.bookings.reduce((sum, b) => 
-        sum + (b.paymentDetails || []).reduce((paymentSum, p) => paymentSum + p.amount, 0), 0
-    );
-    const totalBookingsCount = customer.bookings.length;
-    const lastBooking = customer.bookings.length > 0 ? customer.bookings[0].createdAt : null;
-    return {
-      totalValue: totalSpent,
-      totalBookings: totalBookingsCount,
-      lastBookingDate: lastBooking,
-    };
-  }, [customer.bookings]);
+    const { totalValue, totalBookings, lastBookingDate } = useMemo(() => {
+        const totalSpent = customer.bookings.reduce((sum, b) => 
+                sum + (b.paymentDetails || []).reduce((paymentSum, p) => paymentSum + p.amount, 0), 0
+        );
+        const totalBookingsCount = customer.bookings.length;
+        // Find the most recent booking date
+        const lastBooking = customer.bookings.length > 0
+            ? customer.bookings.reduce((latest, b) => {
+                    const date = b.createdAt ? new Date(b.createdAt) : null;
+                    return (!latest || (date && date > latest)) ? date : latest;
+                }, null)
+            : null;
+        return {
+            totalValue: totalSpent,
+            totalBookings: totalBookingsCount,
+            lastBookingDate: lastBooking,
+        };
+    }, [customer.bookings]);
 
   // CORRECCIÓN: El estado del paquete activo se debe recalcular en función del total pagado,
   // no solo de la bandera `isPaid`.
@@ -163,7 +169,8 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer
                 totalCount, expiryDate, nextClassDate
             };
         })
-        .filter(p => p.status === 'Active' || p.status === 'Pending Payment');
+        // Show all statuses for admin context
+        .filter(p => ['Active', 'Pending Payment', 'Expired', 'Completed'].includes(p.status));
   }, [customer.bookings]);
 
   const handleConfirmPayment = async (details: Omit<PaymentDetails, 'receivedAt'>) => {
@@ -274,7 +281,31 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer
         </div>
       </div>
 
-      <ActivePackagesDisplay packages={augmentedPackages} />
+            <ActivePackagesDisplay packages={augmentedPackages} />
+            {/* Show expiry and next class info for each package */}
+            <div className="mt-4 grid gap-4">
+                {augmentedPackages.map(pkg => (
+                    <div key={pkg.id} className="bg-white rounded-lg shadow p-4 border border-gray-100">
+                        <div className="flex items-center gap-2 mb-2">
+                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${pkg.status === 'Active' ? 'bg-green-100 text-green-800' : pkg.status === 'Pending Payment' ? 'bg-yellow-100 text-yellow-800' : pkg.status === 'Expired' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}
+                                title={t(`admin.customerDetail.packageStatusTooltip.${pkg.status.toLowerCase()}`, { default: pkg.status })}
+                            >
+                                {t(`admin.customerDetail.packageStatus.${pkg.status.toLowerCase()}`, { default: pkg.status })}
+                            </span>
+                            {pkg.expiryDate && (
+                                <span className="text-xs text-brand-secondary" title={t('admin.customerDetail.packageExpiryTooltip')}>{t('admin.customerDetail.packageExpiryLabel')}: {formatDate(pkg.expiryDate)}</span>
+                            )}
+                            {pkg.nextClassDate && (
+                                <span className="text-xs text-brand-secondary" title={t('admin.customerDetail.packageNextClassTooltip')}>{t('admin.customerDetail.packageNextClassLabel')}: {formatDate(pkg.nextClassDate)}</span>
+                            )}
+                        </div>
+                        <div className="w-full bg-gray-100 rounded-full h-2 mb-2">
+                            <div className="bg-brand-primary h-2 rounded-full" style={{ width: `${pkg.progressPercent}%` }}></div>
+                        </div>
+                        <div className="text-xs text-brand-secondary">{t('admin.customerDetail.packageProgressLabel')}: {pkg.completedCount}/{pkg.totalCount}</div>
+                    </div>
+                ))}
+            </div>
       
        <div className="mt-8">
             <button
@@ -307,9 +338,18 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer
                                 <div className="text-xs text-gray-500">{booking.bookingCode}</div>
                             </td>
                             <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{booking.product.name}</td>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">N/A</td>
+                                                        <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">
+                                                            {booking.productType === 'CLASS_PACKAGE' || booking.productType === 'INTRODUCTORY_CLASS' ? (
+                                                                (() => {
+                                                                    const pkg = augmentedPackages.find(p => p.id === booking.id);
+                                                                    return pkg ? `${pkg.completedCount}/${pkg.totalCount}` : 'N/A';
+                                                                })()
+                                                            ) : 'N/A'}
+                                                        </td>
                             <td className="px-4 py-2 whitespace-nowrap">
-                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${booking.isPaid ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${booking.isPaid ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}
+                                  title={booking.isPaid ? t('admin.customerDetail.history.paidTooltip') : t('admin.customerDetail.history.unpaidTooltip')}
+                                >
                                     {booking.isPaid ? t('admin.customerDetail.history.paid') : t('admin.customerDetail.history.unpaid')}
                                 </span>
                             </td>
@@ -320,6 +360,7 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer
                                             onClick={() => handleAcceptPaymentClick(booking)}
                                             className="p-1.5 text-green-600 hover:text-green-800 bg-green-100 rounded-full hover:bg-green-200 transition-colors"
                                             title={t('admin.customerDetail.history.acceptPayment')}
+                                            aria-label={t('admin.customerDetail.history.acceptPaymentAria')}
                                         >
                                             <CurrencyDollarIcon className="w-4 h-4"/>
                                         </button>
@@ -328,6 +369,7 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer
                                         onClick={() => handleDeleteBooking(booking.id)}
                                         className="p-1.5 text-red-600 hover:text-red-800 bg-red-100 rounded-full hover:bg-red-200 transition-colors"
                                         title={t('admin.customerDetail.history.deleteBooking')}
+                                        aria-label={t('admin.customerDetail.history.deleteBookingAria')}
                                     >
                                         <TrashIcon className="w-4 h-4"/>
                                     </button>

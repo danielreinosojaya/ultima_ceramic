@@ -40,11 +40,14 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const dayRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
-  const today = useMemo(() => {
-    const d = new Date();
+  // Always normalize dates for comparison
+  const normalizeDate = (date: Date) => {
+    const d = new Date(date);
     d.setHours(0, 0, 0, 0);
+    d.setMilliseconds(0);
     return d;
-  }, []);
+  };
+  const today = useMemo(() => normalizeDate(new Date()), []);
 
   const firstSelectionDate = useMemo(() => {
     if (selectedSlots.length === 0 || bookingMode === 'monthly') return null;
@@ -83,7 +86,16 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
     const isCurrentlySelected = selectedSlots.some(s => s.date === dateStr && s.time === slot.time);
 
     if (bookingMode === 'monthly') {
-      if (dataService.checkMonthlyAvailability(date, slot, appData, pkg.details.technique)) {
+      // Check all 4 weeks for availability and show specific feedback
+      let unavailableWeeks: number[] = [];
+      for (let i = 0; i < 4; i++) {
+        const classDate = new Date(date);
+        classDate.setDate(classDate.getDate() + (i * 7));
+        if (!dataService.checkMonthlyAvailability(classDate, slot, appData, pkg.details.technique)) {
+          unavailableWeeks.push(i + 1);
+        }
+      }
+      if (unavailableWeeks.length === 0) {
         const newSlots: TimeSlot[] = [];
         for (let i = 0; i < 4; i++) {
             const classDate = new Date(date);
@@ -96,7 +108,8 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
         }
         setSelectedSlots(newSlots);
       } else {
-        alert(t('schedule.monthlyNotAvailableError', { default: 'This slot is not available for 4 consecutive weeks. Please choose another.'}));
+        // Use a custom error modal or toast here in production
+        alert(t('schedule.monthlyNotAvailableError', { default: `This slot is not available for week(s): ${unavailableWeeks.join(', ')}. Please choose another.` }));
       }
     } else { // Flexible mode
       if (isCurrentlySelected) {
@@ -126,7 +139,7 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
 
   // Effect to scroll the selected day into view on mobile
   useEffect(() => {
-    if (dayRefs.current[selectedDayIndex]) {
+    if (selectedDayIndex >= 0 && selectedDayIndex < dayRefs.current.length && dayRefs.current[selectedDayIndex]) {
         dayRefs.current[selectedDayIndex]?.scrollIntoView({
             behavior: 'smooth',
             block: 'nearest',
@@ -187,7 +200,12 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                                   const isDisabled = isFull || (!isSelected && isOutsideBookingWindow) || isMonthlyStartInvalid;
 
                                   return (
-                                    <button key={slot.time} onClick={() => handleSlotSelect(date, slot)} disabled={isDisabled}
+                                    <button 
+                                      key={slot.time} 
+                                      onClick={() => handleSlotSelect(date, slot)} 
+                                      disabled={isDisabled}
+                                      aria-disabled={isDisabled}
+                                      aria-label={isFull ? t('schedule.fullLabel', { default: 'Full' }) : t('schedule.slotLabel', { default: 'Available slot' })}
                                       className={`relative p-2 rounded-md text-left transition-all duration-200 border w-full flex flex-col gap-1.5 ${
                                         isSelected ? 'bg-brand-primary/10 ring-2 ring-brand-primary border-transparent' : 
                                         isDisabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-70' :
@@ -197,7 +215,7 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                                       <span className="font-semibold text-sm text-brand-text">{slot.time}</span>
                                       <InstructorTag instructorId={slot.instructorId} instructors={appData.instructors} />
                                       <CapacityIndicator count={slot.totalBookingsCount} max={slot.maxCapacity} capacityMessages={appData.capacityMessages} />
-                                      {isFull && <div className="absolute top-1 right-1 text-[8px] font-bold bg-red-500 text-white px-1 rounded-sm">LLENO</div>}
+                                      {isFull && <div className="absolute top-1 right-1 text-[8px] font-bold bg-red-500 text-white px-1 rounded-sm">{t('schedule.fullLabel', { default: 'LLENO' })}</div>}
                                     </button>
                                   )
                               })
@@ -230,6 +248,8 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                           ref={el => { dayRefs.current[index] = el; }}
                           onClick={() => hasAvailableSlots && setSelectedDayIndex(index)}
                           disabled={!hasAvailableSlots}
+                          aria-disabled={!hasAvailableSlots}
+                          aria-label={hasAvailableSlots ? t('schedule.dayAvailableLabel', { default: 'Available day' }) : t('schedule.dayUnavailableLabel', { default: 'Unavailable day' })}
                           className={`flex-shrink-0 w-16 h-20 rounded-lg flex flex-col items-center justify-center transition-all duration-300 relative border-2 ${
                             isSelected
                               ? 'bg-brand-primary text-white border-brand-primary shadow-lg'
@@ -265,7 +285,12 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                         const isMonthlyStartInvalid = bookingMode === 'monthly' && !dataService.checkMonthlyAvailability(selectedDate, slot, appData, pkg.details.technique);
                         const isDisabled = isFull || (!isSelected && isOutsideBookingWindow) || isMonthlyStartInvalid;
                         return (
-                          <button key={slot.time} onClick={() => handleSlotSelect(selectedDate, slot)} disabled={isDisabled}
+                          <button 
+                            key={slot.time} 
+                            onClick={() => handleSlotSelect(selectedDate, slot)} 
+                            disabled={isDisabled}
+                            aria-disabled={isDisabled}
+                            aria-label={isFull ? t('schedule.fullLabel', { default: 'Full' }) : t('schedule.slotLabel', { default: 'Available slot' })}
                             className={`relative p-3 rounded-md text-left transition-all duration-200 border w-full flex items-center justify-between gap-4 ${
                               isSelected ? 'bg-brand-primary/10 ring-2 ring-brand-primary border-transparent' : 
                               isDisabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-70' :
@@ -277,7 +302,7 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                               <InstructorTag instructorId={slot.instructorId} instructors={appData.instructors} />
                             </div>
                             <CapacityIndicator count={slot.totalBookingsCount} max={slot.maxCapacity} capacityMessages={appData.capacityMessages} />
-                            {isFull && <div className="absolute top-1 right-1 text-[8px] font-bold bg-red-500 text-white px-1 rounded-sm">LLENO</div>}
+                            {isFull && <div className="absolute top-1 right-1 text-[8px] font-bold bg-red-500 text-white px-1 rounded-sm">{t('schedule.fullLabel', { default: 'LLENO' })}</div>}
                           </button>
                         )
                       })
@@ -286,13 +311,13 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                 </div>
             </div>
             <div className="lg:w-1/3">
-                <BookingSidebar 
-                    product={pkg} 
-                    selectedSlots={selectedSlots}
-                    onRemoveSlot={(slotToRemove) => setSelectedSlots(prev => prev.filter(s => s !== slotToRemove))}
-                    onConfirm={() => onConfirm(selectedSlots)}
-                    bookingMode={bookingMode}
-                />
+        <BookingSidebar 
+          product={pkg} 
+          selectedSlots={selectedSlots}
+          onRemoveSlot={(slotToRemove) => setSelectedSlots(prev => prev.filter(s => s.date !== slotToRemove.date || s.time !== slotToRemove.time))}
+          onConfirm={() => onConfirm(selectedSlots)}
+          bookingMode={bookingMode}
+        />
             </div>
         </div>
       </div>
