@@ -60,6 +60,13 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
 export const sendPaymentReceiptEmail = async (booking: Booking, newPayment: PaymentDetails) => {
     const { userInfo, bookingCode, product } = booking;
     const subject = `¡Confirmación de Pago para tu reserva en CeramicAlma! (Código: ${bookingCode})`;
+    let fechaPago;
+    if (newPayment.receivedAt && new Date(newPayment.receivedAt).toString() !== 'Invalid Date') {
+        fechaPago = new Date(newPayment.receivedAt).toLocaleDateString('es-ES');
+    } else {
+        // Si no hay fecha, usamos la fecha actual (cuando el admin presiona el botón)
+        fechaPago = new Date().toLocaleDateString('es-ES');
+    }
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333;">
             <h2>¡Hola, ${userInfo.firstName}!</h2>
@@ -70,7 +77,7 @@ export const sendPaymentReceiptEmail = async (booking: Booking, newPayment: Paym
                 <p><strong>Código de Reserva:</strong> ${bookingCode}</p>
                 <p><strong>Monto Pagado:</strong> $${newPayment.amount.toFixed(2)}</p>
                 <p><strong>Método:</strong> ${newPayment.method}</p>
-                <p><strong>Fecha de Pago:</strong> ${new Date(newPayment.receivedAt).toLocaleDateString('es-ES')}</p>
+                <p><strong>Fecha de Pago:</strong> ${fechaPago}</p>
             </div>
              <p style="margin-top: 20px;">Puedes descargar tu ticket de reserva desde la web en cualquier momento. ¡Nos vemos en clase!</p>
             <p>Saludos,<br/>El equipo de CeramicAlma</p>
