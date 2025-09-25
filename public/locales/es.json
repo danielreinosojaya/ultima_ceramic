@@ -427,6 +427,7 @@
       "packageStatus": {
         "active": "Activo",
        "pending payment": "Pendiente de Pago",
+       "pendingpayment": "Pendiente de Pago",
         "expired": "Expirado",
         "completed": "Completado"
       },
