@@ -332,7 +332,9 @@
       "saveButton": "Guardar Reserva",
       "cancelButton": "Cancelar",
       "backToDetails": "Volver a Detalles",
-      "nextScheduleClasses": "Siguiente: Agendar Clases"
+      "nextScheduleClasses": "Siguiente: Agendar Clases",
+      "birthdayTitle": "¡Queremos celebrar contigo!",
+      "birthdaySubtitle": "Comparte tu fecha de nacimiento para recibir sorpresas especiales."
     },
     "calendar": {
       "title": "Vista de Calendario",
