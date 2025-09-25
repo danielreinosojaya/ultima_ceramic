@@ -191,14 +191,12 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
 
 
     const { pendingPackageBookings, pendingOpenStudioBookings } = useMemo(() => {
-        const { startDate, endDate } = getDatesForPeriod(pendingPeriod, pendingCustomRange);
+        // Get all unpaid bookings, regardless of date range for pending payments
+        // The date filter should only apply to the summary view, not pending payments
         
         const packages = allBookings.filter(b => {
-            if (b.isPaid || (b.productType !== 'CLASS_PACKAGE' && b.productType !== 'INTRODUCTORY_CLASS')) return false;
-            return b.slots.some(slot => {
-                const slotDate = new Date(slot.date + 'T00:00:00');
-                return slotDate >= startDate && slotDate <= endDate;
-            });
+            // Include ALL unpaid bookings except Open Studio subscriptions
+            return !b.isPaid && b.productType !== 'OPEN_STUDIO_SUBSCRIPTION';
         }).sort((a,b) => (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0));
 
         const openStudio = allBookings.filter(b => {
@@ -206,7 +204,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
         }).sort((a,b) => (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0));
         
         return { pendingPackageBookings: packages, pendingOpenStudioBookings: openStudio };
-    }, [pendingPeriod, pendingCustomRange, allBookings]);
+    }, [allBookings]); // Remove date dependencies since pending payments should show all unpaid bookings
     
     const pendingBookingsToDisplay = pendingSubTab === 'packages' ? pendingPackageBookings : pendingOpenStudioBookings;
     // Pagination logic
@@ -592,21 +590,14 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                             </PendingSubTabButton>
                         </nav>
                     </div>
-                    <div className={`bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6 flex items-center gap-2 flex-wrap transition-opacity ${pendingSubTab === 'openStudio' ? 'opacity-50 pointer-events-none' : ''}`}>
-                        <button onClick={() => setPendingPeriod('today')} className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors ${pendingPeriod === 'today' ? 'bg-brand-primary text-white' : 'bg-white hover:bg-brand-background'}`}>{t('admin.financialDashboard.today')}</button>
-                        <button onClick={() => setPendingPeriod('week')} className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors ${pendingPeriod === 'week' ? 'bg-brand-primary text-white' : 'bg-white hover:bg-brand-background'}`}>{t('admin.financialDashboard.thisWeek')}</button>
-                        <button onClick={() => setPendingPeriod('month')} className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors ${pendingPeriod === 'month' ? 'bg-brand-primary text-white' : 'bg-white hover:bg-brand-background'}`}>{t('admin.financialDashboard.thisMonth')}</button>
-                        <div className="flex items-center gap-2">
-                            <input type="date" value={pendingCustomRange.start} onChange={e => {setPendingCustomRange(c => ({...c, start: e.target.value})); setPendingPeriod('custom');}} className="text-sm p-1 border rounded-md"/>
-                            <span className="text-sm">to</span>
-                            <input type="date" value={pendingCustomRange.end} onChange={e => {setPendingCustomRange(c => ({...c, end: e.target.value})); setPendingPeriod('custom');}} className="text-sm p-1 border rounded-md"/>
+                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
+                        <div className="p-3 bg-blue-50 border-l-4 border-blue-400 mb-4">
+                            <p className="text-sm text-blue-800">
+                                <strong>📋 Todas las reservas pendientes:</strong> Se muestran TODAS las reservas sin pagar, independientemente de la fecha. 
+                                Incluye clases individuales, paquetes, introducciones y clases grupales.
+                            </p>
                         </div>
                     </div>
-                    {pendingSubTab === 'openStudio' && (
-                        <div className="text-center text-sm text-brand-secondary -mt-4 mb-6">
-                            {t('admin.financialDashboard.openStudioDateFilterInfo')}
-                        </div>
-                    )}
                     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                          <div className="mb-4 flex gap-2 items-center">
                              <button onClick={handleBulkAcceptPayment} disabled={selectedBookings.length === 0} className="px-3 py-1 text-sm font-semibold rounded-md bg-green-100 text-green-800 disabled:opacity-50">{t('admin.financialDashboard.bulkAcceptPayment')}</button>
