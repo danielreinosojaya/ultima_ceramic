@@ -426,8 +426,16 @@
       "noAttendanceForMonth": "No hay registros de asistencia para este mes.",
       "packageStatus": {
         "active": "Activo",
-        "pendingPayment": "Pendiente de Pago", 
-        "pending Payment": "Pendiente de Pago" 
+       "pending payment": "Pendiente de Pago",
+        "expired": "Expirado",
+        "completed": "Completado"
+      },
+      "packageStatusTooltip": {
+        "active": "Este paquete está activo y las clases pueden ser tomadas",
+        "pending payment": "Esperando confirmación de pago",
+        "expired": "Este paquete ha expirado",
+        "completed": "Todas las clases han sido completadas"
+ 
       },
       "packageExpiryLabel": "Expira el",
       "packageProgressLabel": "Progreso"
