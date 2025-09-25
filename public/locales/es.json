@@ -384,7 +384,8 @@
         "status": "Estado",
         "statusActive": "Activo",
         "statusExpired": "Expirado",
-        "StatusPendingPayment": "Pendiente de Pago",
+        "statusPendingPayment": "Pendiente de Pago",
+        
         "startDate": "Fecha de Inicio",
         "remainingTime": "Tiempo Restante",
         "purchaseDate": "Fecha de Compra",
@@ -425,7 +426,8 @@
       "noAttendanceForMonth": "No hay registros de asistencia para este mes.",
       "packageStatus": {
         "active": "Activo",
-        "pendingPayment": "Pendiente de Pago"  
+        "pendingPayment": "Pendiente de Pago", 
+        "pending Payment": "Pendiente de Pago" 
       },
       "packageExpiryLabel": "Expira el",
       "packageProgressLabel": "Progreso"
