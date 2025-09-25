@@ -294,13 +294,45 @@
       "sync": "Sincronizar Datos"
     },
     "notifications": {
-  "title": "Notificaciones",
-  "bellLabel": "Ver notificaciones",
+      "title": "Notificaciones",
+      "bellLabel": "Ver notificaciones",
       "newNotificationTitle": "Nueva Notificación",
       "noNotifications": "No hay notificaciones nuevas.",
       "template_new_booking": "{{name}} ha realizado una nueva reserva para {{summary}}.",
       "template_new_inquiry": "{{name}} ha enviado una consulta para una experiencia de {{summary}}.",
       "template_new_invoice_request": "{{name}} solicitó una factura para la reserva {{summary}}."
+    },
+    "clientNotificationLog": {
+      "title": "Centro de Comunicaciones con Clientes",
+      "subtitle": "Un registro de todas las comunicaciones automáticas enviadas a los clientes.",
+      "searchPlaceholder": "Buscar por nombre o email de cliente...",
+      "allTypes": "Todos los Tipos",
+      "typeOfCommunication": "Tipo de Comunicación",
+      "status": "Estado",
+      "actions": "Acciones",
+      "status_Sent": "Enviado"
+    },
+    "weeklyView": {
+      "searchPlaceholder": "Buscar clases..."
+    },
+    "manualBookingModal": {
+      "title": "Añadir Reserva Manual",
+      "customerSectionTitle": "Información del Cliente",
+      "existingCustomer": "Cliente Existente",
+      "newCustomer": "Cliente Nuevo",
+      "searchPlaceholder": "Buscar cliente existente...",
+      "productSectionTitle": "Seleccionar Producto",
+      "selectProduct": "Seleccionar producto...",
+      "singleClassPottersWheel": "Clase Individual de Torno Alfarero",
+      "singleClassMolding": "Clase Individual de Modelado",
+      "scheduleSectionTitle": "Agendar Clases",
+      "dateLabel": "Fecha",
+      "timeLabel": "Hora",
+      "selectedSlots": "Horarios Seleccionados",
+      "saveButton": "Guardar Reserva",
+      "cancelButton": "Cancelar",
+      "backToDetails": "Volver a Detalles",
+      "nextScheduleClasses": "Siguiente: Agendar Clases"
     },
     "calendar": {
       "title": "Vista de Calendario",
