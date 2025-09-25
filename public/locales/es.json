@@ -324,6 +324,7 @@
       "productSectionTitle": "Seleccionar Producto",
       "selectProduct": "Seleccionar producto...",
       "singleClassPottersWheel": "Clase Individual - Torno Alfarero",
+      "admin.manualBookingModal.singleClassPottersWheel": "Clase Individual - Torno Alfarero",
       "singleClassMolding": "Clase Individual de Modelado",
       "scheduleSectionTitle": "Agendar Clases",
       "dateLabel": "Fecha",
@@ -423,7 +424,8 @@
       "attendanceHistorySubtitle": "Vista de calendario y lista de clases pasadas para",
       "noAttendanceForMonth": "No hay registros de asistencia para este mes.",
       "packageStatus": {
-        "active": "Activo"
+        "active": "Activo",
+        "pendingPayment": "Pendiente de Pago"  
       },
       "packageExpiryLabel": "Expira el",
       "packageProgressLabel": "Progreso"
