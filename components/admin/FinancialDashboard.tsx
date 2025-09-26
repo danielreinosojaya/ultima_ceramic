@@ -10,6 +10,7 @@ import { UserIcon } from '../icons/UserIcon.js';
 import { InvoiceReminderModal } from './InvoiceReminderModal.js';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal.js';
 import { TrashIcon } from '../icons/TrashIcon.js';
+import { CalendarIcon } from '../icons/CalendarIcon.js';
 import { EditPaymentModal } from './EditPaymentModal';
 
 
@@ -681,7 +682,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                                         <CurrencyDollarIcon className="w-4 h-4" />
                                                         {t('admin.financialDashboard.pendingTable.acceptPayment')}
                                                     </button>
-                                                     <button
+                                                    <button
                                                         onClick={(e) => { e.stopPropagation(); setBookingToDelete(b); }}
                                                         title={t('admin.financialDashboard.deleteBooking')}
                                                         className="flex items-center gap-1.5 bg-red-100 text-red-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-red-200 transition-colors"
@@ -689,6 +690,16 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                                         aria-label={t('admin.financialDashboard.pendingTable.deleteBooking')}
                                                     >
                                                         <TrashIcon className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setNavigateTo({ tab: 'schedule', targetId: b.id }); }}
+                                                        title={t('admin.financialDashboard.pendingTable.viewCalendar')}
+                                                        className="flex items-center gap-1.5 bg-blue-100 text-blue-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-blue-200 transition-colors"
+                                                        tabIndex={0}
+                                                        aria-label={t('admin.financialDashboard.pendingTable.viewCalendar')}
+                                                    >
+                                                        <CalendarIcon className="w-4 h-4" />
+                                                        {t('admin.financialDashboard.pendingTable.viewCalendar')}
                                                     </button>
                                                 </div>
                                             </td>

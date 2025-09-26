@@ -289,6 +289,9 @@
     },
     "financialDashboard": {
       "title": "Financial Dashboard",
+      "pendingTable": {
+        "viewCalendar": "View in Calendar"
+      },
       "subtitle": "View and analyze all financial activity.",
       "totalRevenue": "Total Revenue",
       "date": "Date",
