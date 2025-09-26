@@ -155,6 +155,8 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
     const [isInvoiceReminderOpen, setIsInvoiceReminderOpen] = useState(false);
     const [bookingForReminder, setBookingForReminder] = useState<Booking | null>(null);
     const [bookingToDelete, setBookingToDelete] = useState<Booking | null>(null);
+        // Modal para ver fechas reservadas
+        const [bookingToViewDates, setBookingToViewDates] = useState<Booking | null>(null);
 
     const formatDate = (dateInput: Date | string | undefined | null, options: Intl.DateTimeFormatOptions = {}): string => {
         if (!dateInput) return '---';
@@ -469,8 +471,30 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
         setLoadingBulk(false);
     };
 
-    return (
+        return (
         <div>
+            {/* Modal para ver fechas reservadas */}
+            {bookingToViewDates && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+                    <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md relative animate-fade-in">
+                        <button className="absolute top-2 right-2 text-gray-500 hover:text-gray-700" onClick={() => setBookingToViewDates(null)} aria-label="Cerrar">
+                            &times;
+                        </button>
+                        <h3 className="text-lg font-bold mb-4 text-brand-text">Fechas pre-seleccionadas</h3>
+                        {(bookingToViewDates.slots && bookingToViewDates.slots.length > 0) ? (
+                            <ul className="list-disc pl-5">
+                                {bookingToViewDates.slots.map((slot, idx) => (
+                                    <li key={idx} className="mb-2 text-brand-secondary">
+                                        {formatDate(slot.date, { year: 'numeric', month: 'short', day: 'numeric' })} @ {slot.time}
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <p className="text-brand-secondary">No hay fechas pre-seleccionadas para esta reserva.</p>
+                        )}
+                    </div>
+                </div>
+            )}
             {bookingToPay && (
                 <AcceptPaymentModal
                     isOpen={!!bookingToPay}
@@ -681,6 +705,15 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                                     >
                                                         <CurrencyDollarIcon className="w-4 h-4" />
                                                         {t('admin.financialDashboard.pendingTable.acceptPayment')}
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setBookingToViewDates(b); }}
+                                                        className="flex items-center gap-1.5 bg-blue-100 text-blue-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-blue-200 transition-colors"
+                                                        tabIndex={0}
+                                                        aria-label="Ver Fechas Reservadas"
+                                                    >
+                                                        <CalendarIcon className="w-4 h-4" />
+                                                        Ver Fechas
                                                     </button>
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); setBookingToDelete(b); }}
