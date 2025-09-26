@@ -1,3 +1,13 @@
+// Edit payment details for a booking (amount, method, date)
+// import type { PaymentDetails } from '../types';
+
+export const updatePaymentDetails = async (
+    bookingId: string,
+    paymentIndex: number,
+    updatedDetails: Partial<PaymentDetails>
+): Promise<{ success: boolean }> => {
+    return postAction('updatePaymentDetails', { bookingId, paymentIndex, updatedDetails });
+};
 // Bulk actions for FinancialDashboard
 export const acceptPaymentForBooking = async (bookingId: string): Promise<{ success: boolean }> => {
     // Placeholder: Integrate with backend/payment API as needed

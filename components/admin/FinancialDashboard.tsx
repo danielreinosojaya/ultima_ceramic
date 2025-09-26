@@ -10,6 +10,7 @@ import { UserIcon } from '../icons/UserIcon.js';
 import { InvoiceReminderModal } from './InvoiceReminderModal.js';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal.js';
 import { TrashIcon } from '../icons/TrashIcon.js';
+import { EditPaymentModal } from './EditPaymentModal';
 
 
 type FilterPeriod = 'today' | 'week' | 'month' | 'custom';
@@ -130,6 +131,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
     const [rowsPerPage, setRowsPerPage] = useState(10);
     // Bulk selection state
     const [selectedBookings, setSelectedBookings] = useState<string[]>([]);
+    const [paymentToEdit, setPaymentToEdit] = useState<{ payment: PaymentDetails, bookingId: string, index: number } | null>(null);
 
     const { t, language } = useLanguage();
     const [activeTab, setActiveTab] = useState<FinancialTab>('summary');
@@ -493,6 +495,20 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                     message={t('admin.financialDashboard.deleteConfirmText', { name: `${bookingToDelete.userInfo.firstName} ${bookingToDelete.userInfo.lastName}`})}
                 />
             )}
+                        {paymentToEdit && (
+                            <EditPaymentModal
+                                isOpen={!!paymentToEdit}
+                                payment={paymentToEdit.payment}
+                                paymentIndex={paymentToEdit.index}
+                                bookingId={paymentToEdit.bookingId}
+                                onClose={() => setPaymentToEdit(null)}
+                                onSave={async (updated) => {
+                                    await dataService.updatePaymentDetails(paymentToEdit.bookingId, paymentToEdit.index, updated);
+                                    setPaymentToEdit(null);
+                                    onDataChange();
+                                }}
+                            />
+                        )}
             <h2 className="text-2xl font-serif text-brand-text mb-2">{t('admin.financialDashboard.title')}</h2>
             <div className="border-b border-gray-200 mb-6">
                 <nav className="-mb-px flex space-x-6" aria-label="Tabs">
@@ -561,7 +577,19 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                             </div>
                             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                                 <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-brand-text">{t('admin.financialDashboard.detailedReport')}</h3><button onClick={exportToCSV} className="text-sm font-semibold bg-brand-primary text-white py-1 px-3 rounded-md hover:bg-brand-accent transition-colors">{t('admin.financialDashboard.exportCSV')}</button></div>
-                                <div className="overflow-x-auto"><table className="min-w-full divide-y divide-gray-200"><thead className="bg-brand-background"><tr><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.date')}</th><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.customer')}</th><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.package')}</th><th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.amount')}</th></tr></thead><tbody className="bg-white divide-y divide-gray-200">{summaryBookings.map(b => (<tr key={b.id}><td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{formatDate(b.paymentDetails?.[0].receivedAt, {})}</td><td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{b.userInfo?.firstName} {b.userInfo?.lastName}</td><td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{b.product?.name || 'N/A'}</td><td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-semibold">${(b.paymentDetails?.[0]?.amount || 0).toFixed(2)}</td></tr>))}</tbody></table></div>
+                                                                <div className="overflow-x-auto"><table className="min-w-full divide-y divide-gray-200"><thead className="bg-brand-background"><tr><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.date')}</th><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.customer')}</th><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.package')}</th><th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.amount')}</th><th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase">Editar</th></tr></thead><tbody className="bg-white divide-y divide-gray-200">{summaryBookings.map(b => (
+                                                                    b.paymentDetails?.map((p, idx) => (
+                                                                        <tr key={b.id + '-' + idx}>
+                                                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{formatDate(p.receivedAt, {})}</td>
+                                                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{b.userInfo?.firstName} {b.userInfo?.lastName}</td>
+                                                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{b.product?.name || 'N/A'}</td>
+                                                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-semibold">${(p.amount || 0).toFixed(2)}</td>
+                                                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right">
+                                                                                <button className="bg-brand-primary text-white px-2 py-1 rounded text-xs" onClick={() => setPaymentToEdit({ payment: p, bookingId: b.id, index: idx })}>Editar pago</button>
+                                                                            </td>
+                                                                        </tr>
+                                                                    ))
+                                                                ))}</tbody></table></div>
                             </div>
                         </>
                     ) : (

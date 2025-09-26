@@ -261,53 +261,53 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
     switch (key) {
         case 'products':
             await sql`BEGIN`;
-            await sql`DELETE FROM products`;
+                await sql.query('DELETE FROM products');
             for (const p of value) {
-                await sql`
-                    INSERT INTO products (id, type, name, classes, price, description, image_url, details, is_active, scheduling_rules, overrides, min_participants, price_per_person)
-                    VALUES (
-                        ${p.id},
-                        ${p.type},
-                        ${p.name},
-                        ${p.classes || null},
-                        ${p.price || null},
-                        ${p.description || null},
-                        ${p.imageUrl || null},
-                        ${p.details ? JSON.stringify(p.details) : null},
-                        ${p.isActive},
-                        ${p.schedulingRules ? JSON.stringify(p.schedulingRules) : null},
-                        ${p.overrides ? JSON.stringify(p.overrides) : null},
-                        ${p.minParticipants || null},
-                        ${p.pricePerPerson || null}
-                    )
-                ON CONFLICT (id) DO UPDATE SET
-                    type = EXCLUDED.type,
-                    name = EXCLUDED.name,
-                    classes = EXCLUDED.classes,
-                    price = EXCLUDED.price,
-                    description = EXCLUDED.description,
-                    image_url = EXCLUDED.image_url,
-                    details = EXCLUDED.details,
-                    is_active = EXCLUDED.is_active,
-                    scheduling_rules = EXCLUDED.scheduling_rules,
-                    overrides = EXCLUDED.overrides,
-                    min_participants = EXCLUDED.min_participants,
-                    price_per_person = EXCLUDED.price_per_person;
-            `;
+                    await sql.query(
+                        `INSERT INTO products (id, type, name, classes, price, description, image_url, details, is_active, scheduling_rules, overrides, min_participants, price_per_person)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                        ON CONFLICT (id) DO UPDATE SET
+                            type = EXCLUDED.type,
+                            name = EXCLUDED.name,
+                            classes = EXCLUDED.classes,
+                            price = EXCLUDED.price,
+                            description = EXCLUDED.description,
+                            image_url = EXCLUDED.image_url,
+                            details = EXCLUDED.details,
+                            is_active = EXCLUDED.is_active,
+                            scheduling_rules = EXCLUDED.scheduling_rules,
+                            overrides = EXCLUDED.overrides,
+                            min_participants = EXCLUDED.min_participants,
+                            price_per_person = EXCLUDED.price_per_person;`,
+                        [
+                            p.id,
+                            p.type,
+                            p.name,
+                            p.classes || null,
+                            p.price || null,
+                            p.description || null,
+                            p.imageUrl || null,
+                            p.details ? JSON.stringify(p.details) : null,
+                            p.isActive,
+                            p.schedulingRules ? JSON.stringify(p.schedulingRules) : null,
+                            p.overrides ? JSON.stringify(p.overrides) : null,
+                            p.minParticipants || null,
+                            p.pricePerPerson || null
+                        ]
+                    );
             }
             await sql`COMMIT`;
             break;
         case 'instructors':
             await sql`BEGIN`;
-            await sql`DELETE FROM instructors`;
+                await sql.query('DELETE FROM instructors');
             for (const i of value) {
-                await sql`INSERT INTO instructors (id, name, color_scheme) VALUES (${i.id}, ${i.name}, ${i.colorScheme});`;
+                    await sql.query('INSERT INTO instructors (id, name, color_scheme) VALUES ($1, $2, $3);', [i.id, i.name, i.colorScheme]);
             }
             await sql`COMMIT`;
             break;
         default:
-            await sql`INSERT INTO settings (key, value) VALUES (${key}, ${JSON.stringify(value)})
-            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;`;
+                await sql.query('INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;', [key, JSON.stringify(value)]);
     }
 
     return res.status(200).json({ success: true });
@@ -320,7 +320,7 @@ async function handleDelete(req: VercelRequest, res: VercelResponse) {
         if (!id || typeof id !== 'string') {
             return res.status(400).json({ error: 'Inquiry ID is required for deletion.' });
         }
-        const { rowCount } = await sql`DELETE FROM inquiries WHERE id = ${id};`;
+    const { rowCount } = await sql.query('DELETE FROM inquiries WHERE id = $1;', [id]);
     if (rowCount != null && rowCount > 0) {
             return res.status(204).end();
         } else {
@@ -343,16 +343,16 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             break;
         case 'updateBooking':
             const updateBookingBody = req.body;
-            await sql`UPDATE bookings SET user_info = ${JSON.stringify(updateBookingBody.userInfo)}, price = ${updateBookingBody.price} WHERE id = ${updateBookingBody.id}`;
+            await sql.query('UPDATE bookings SET user_info = $1, price = $2 WHERE id = $3', [JSON.stringify(updateBookingBody.userInfo), updateBookingBody.price, updateBookingBody.id]);
             break;
         case 'deleteBooking':
             const deleteBookingBody = req.body;
-            await sql`DELETE FROM bookings WHERE id = ${deleteBookingBody.bookingId}`;
+            await sql.query('DELETE FROM bookings WHERE id = $1', [deleteBookingBody.bookingId]);
             break;
         case 'deleteProduct':
             const productId = parseInt(id as string, 10);
             if (isNaN(productId)) return res.status(400).json({ error: 'Product ID must be a valid number.' });
-            await sql`DELETE FROM products WHERE id = ${productId}`;
+            await sql.query('DELETE FROM products WHERE id = $1', [productId]);
             break;
         case 'removeBookingSlot':
             const removeBookingBody = req.body;
@@ -416,17 +416,49 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 const updatedPayments = currentPayments.filter((_, i) => i !== paymentIndex);
                 const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
                 const isPaid = totalPaid >= bookingRow.price;
-                
                 const { rows: [updatedBookingRow] } = await sql`
                     UPDATE bookings
                     SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
                     WHERE id = ${bookingId}
                     RETURNING *;
                 `;
-                 const updatedBooking = parseBookingFromDB(updatedBookingRow);
-                 result = { success: true, booking: updatedBooking };
+                const updatedBooking = parseBookingFromDB(updatedBookingRow);
+                result = { success: true, booking: updatedBooking };
             } else {
-                 return res.status(400).json({ error: 'Invalid payment index.' });
+                return res.status(400).json({ error: 'Invalid payment index.' });
+            }
+            break;
+        }
+        case 'updatePaymentDetails': {
+            const { bookingId, paymentIndex, updatedDetails } = req.body;
+            const { rows: [bookingRow] } = await sql`SELECT payment_details, price FROM bookings WHERE id = ${bookingId}`;
+
+            if (!bookingRow) {
+                return res.status(404).json({ error: 'Booking not found.' });
+            }
+
+            const currentPayments = (bookingRow.payment_details && Array.isArray(bookingRow.payment_details))
+                ? bookingRow.payment_details
+                : [];
+
+            if (paymentIndex >= 0 && paymentIndex < currentPayments.length) {
+                // Actualiza solo los campos enviados en updatedDetails
+                const updatedPayments = currentPayments.map((p: any, i: number) =>
+                    i === paymentIndex ? { ...p, ...updatedDetails } : p
+                );
+                const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
+                const isPaid = totalPaid >= bookingRow.price;
+
+                const { rows: [updatedBookingRow] } = await sql`
+                    UPDATE bookings
+                    SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
+                    WHERE id = ${bookingId}
+                    RETURNING *;
+                `;
+                const updatedBooking = parseBookingFromDB(updatedBookingRow);
+                result = { success: true, booking: updatedBooking };
+            } else {
+                return res.status(400).json({ error: 'Invalid payment index.' });
             }
             break;
         }
