@@ -401,7 +401,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         }
 
         case 'deletePaymentFromBooking': {
-            const { bookingId, paymentIndex } = req.body;
+            const { bookingId, paymentIndex, cancelReason } = req.body;
             const { rows: [bookingRow] } = await sql`SELECT payment_details, price FROM bookings WHERE id = ${bookingId}`;
 
             if (!bookingRow) {
@@ -413,6 +413,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 : [];
 
             if (paymentIndex >= 0 && paymentIndex < currentPayments.length) {
+                const deletedPayment = currentPayments[paymentIndex];
                 const updatedPayments = currentPayments.filter((_, i) => i !== paymentIndex);
                 const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
                 const isPaid = totalPaid >= bookingRow.price;
@@ -424,6 +425,11 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 `;
                 const updatedBooking = parseBookingFromDB(updatedBookingRow);
                 result = { success: true, booking: updatedBooking };
+                // Audit log: guardar cancelación en notifications
+                await sql`
+                    INSERT INTO notifications (type, target_id, user_name, summary)
+                    VALUES ('payment_deleted', ${bookingId}, ${deletedPayment.method || 'N/A'}, ${cancelReason || 'Deleted by admin'});
+                `;
             } else {
                 return res.status(400).json({ error: 'Invalid payment index.' });
             }

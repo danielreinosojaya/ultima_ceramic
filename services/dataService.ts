@@ -202,9 +202,9 @@ export const addPaymentToBooking = async (bookingId: string, payment: PaymentDet
     }
     return result;
 };
-export const deletePaymentFromBooking = async (bookingId: string, paymentIndex: number): Promise<{ success: boolean; booking?: Booking }> => {
-    const result = await postAction<{ success: boolean; booking?: any }>('deletePaymentFromBooking', { bookingId, paymentIndex });
-     if(result.success && result.booking) {
+export const deletePaymentFromBooking = async (bookingId: string, paymentIndex: number, cancelReason?: string): Promise<{ success: boolean; booking?: Booking }> => {
+    const result = await postAction<{ success: boolean; booking?: any }>('deletePaymentFromBooking', { bookingId, paymentIndex, cancelReason });
+    if(result.success && result.booking) {
         return { ...result, booking: parseBooking(result.booking) };
     }
     return result;
