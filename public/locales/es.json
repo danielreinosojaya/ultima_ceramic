@@ -456,7 +456,9 @@
     "financialDashboard": {
       "title": "Centro Financiero",
       "pendingTable": {
-        "viewCalendar": "Ver en Calendario"
+  "viewCalendar": "Ver en Calendario",
+  "viewCustomer": "Ver Cliente",
+  "deleteBooking": "Eliminar Reserva"
       },
       "subtitle": "Visualiza y analiza toda la actividad financiera.",
       "totalRevenue": "Ingresos Totales",

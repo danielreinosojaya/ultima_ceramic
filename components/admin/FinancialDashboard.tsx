@@ -691,16 +691,6 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                                     >
                                                         <TrashIcon className="w-4 h-4" />
                                                     </button>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); setNavigateTo({ tab: 'schedule', targetId: b.id }); }}
-                                                        title={t('admin.financialDashboard.pendingTable.viewCalendar')}
-                                                        className="flex items-center gap-1.5 bg-blue-100 text-blue-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-blue-200 transition-colors"
-                                                        tabIndex={0}
-                                                        aria-label={t('admin.financialDashboard.pendingTable.viewCalendar')}
-                                                    >
-                                                        <CalendarIcon className="w-4 h-4" />
-                                                        {t('admin.financialDashboard.pendingTable.viewCalendar')}
-                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
