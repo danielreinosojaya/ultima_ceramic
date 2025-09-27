@@ -318,6 +318,8 @@
       "searchPlaceholder": "Buscar clases..."
     },
     "manualBookingModal": {
+  "clientNoteLabel": "Novedad / Comentario sobre el cliente",
+  "clientNotePlaceholder": "Escribe cualquier novedad, comentario o información relevante sobre el cliente...",
       "title": "Añadir Reserva Manual",
       "customerSectionTitle": "Información del Cliente",
       "existingCustomer": "Cliente Existente",

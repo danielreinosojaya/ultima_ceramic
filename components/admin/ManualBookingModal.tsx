@@ -85,6 +85,8 @@ const formatToAmPm = (time24: string): string => {
 };
 
 export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose, onBookingAdded }) => {
+    // Campo para novedad/comentario
+    const [clientNote, setClientNote] = useState('');
     // Validation state
     const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
     const [submitDisabled, setSubmitDisabled] = useState(false);
@@ -589,6 +591,20 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
                 )}
                 {step === 2 && (
                     <div className="animate-fade-in-fast">
+                        {/* Campo para novedad/comentario del cliente */}
+                        <div className="mb-4">
+                            <label htmlFor="clientNote" className="block text-sm font-bold text-brand-secondary mb-1">
+                                {t('admin.manualBookingModal.clientNoteLabel') || 'Novedad / Comentario sobre el cliente'}
+                            </label>
+                            <textarea
+                                id="clientNote"
+                                value={clientNote}
+                                onChange={e => setClientNote(e.target.value)}
+                                className="w-full p-2 border rounded-lg"
+                                rows={3}
+                                placeholder={t('admin.manualBookingModal.clientNotePlaceholder') || 'Escribe cualquier novedad, comentario o información relevante sobre el cliente...'}
+                            />
+                        </div>
                          <h3 className="font-bold text-brand-text mb-2 text-center">{t('admin.manualBookingModal.scheduleSectionTitle')}</h3>
                         
                         {(selectedProduct?.type === 'SINGLE_CLASS' || selectedProduct?.type === 'GROUP_CLASS') ? (
