@@ -167,6 +167,10 @@ const parseGroupInquiry = (i: any): GroupInquiry => {
 
 
 // --- Service Functions ---
+// Update customer info (name, email, phone, birthday, etc)
+export const updateCustomerInfo = async (email: string, info: Partial<UserInfo>): Promise<{ success: boolean }> => {
+    return postAction('updateCustomerInfo', { email, info });
+};
 
 // Products
 export const getProducts = async (): Promise<Product[]> => {
