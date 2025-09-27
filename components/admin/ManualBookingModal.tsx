@@ -231,15 +231,12 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
     };
 
     const handleSubmitBooking = async () => {
-        // Validación de campos obligatorios
+        // Validación de campos obligatorios para reserva manual
         const requiredFields = [
             { key: 'firstName', label: 'Nombre' },
             { key: 'lastName', label: 'Apellidos' },
             { key: 'email', label: 'Correo Electrónico' },
-            { key: 'phone', label: 'Número de Teléfono' },
-            { key: 'companyName', label: 'Razón Social o Nombre Completo' },
-            { key: 'taxId', label: 'RUC / Cédula' },
-            { key: 'address', label: 'Dirección Fiscal' }
+            { key: 'phone', label: 'Número de Teléfono' }
         ];
         let errors: { [key: string]: string } = {};
         requiredFields.forEach(field => {
@@ -278,7 +275,9 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
             isPaid: false,
             price: finalPrice,
             bookingMode: 'flexible',
-            bookingDate: new Date().toISOString()
+            bookingDate: new Date().toISOString(),
+            participants: selectedProduct.type === 'GROUP_CLASS' ? minParticipants : 1,
+            clientNote: clientNote || null
         };
         const result = await dataService.addBooking(bookingData);
         if (result.success) {

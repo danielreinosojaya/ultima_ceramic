@@ -51,6 +51,9 @@ const safeParseDate = (value: any): Date | null => {
 const parseBookingFromDB = (dbRow: any): Booking => {
     if (!dbRow) return dbRow;
     const camelCased = toCamelCase(dbRow);
+    // Incluir client_note y participants explícitamente
+    camelCased.clientNote = dbRow.client_note || null;
+    camelCased.participants = dbRow.participants !== undefined ? dbRow.participants : null;
     
     if (camelCased.price && typeof camelCased.price === 'string') {
         camelCased.price = parseFloat(camelCased.price);
@@ -641,7 +644,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
 
 async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookingCode'> & { invoiceData?: Omit<InvoiceRequest, 'id' | 'bookingId' | 'status' | 'requestedAt' | 'processedAt'> }): Promise<AddBookingResult> {
-    const { productId, slots, userInfo, productType, invoiceData, bookingDate } = body;
+    const { productId, slots, userInfo, productType, invoiceData, bookingDate, participants, clientNote } = body;
     
     if (productType === 'INTRODUCTORY_CLASS' || productType === 'CLASS_PACKAGE' || productType === 'SINGLE_CLASS' || productType === 'GROUP_CLASS') {
         const { rows: existingBookings } = await sql`SELECT slots FROM bookings WHERE user_info->>'email' = ${userInfo.email}`;
@@ -663,7 +666,7 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
     };
 
     const { rows: [insertedRow] } = await sql`
-        INSERT INTO bookings (product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_code, booking_date)
+        INSERT INTO bookings (product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_code, booking_date, participants, client_note)
         VALUES (
             ${newBooking.productId},
             ${newBooking.productType},
@@ -675,7 +678,9 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
             ${newBooking.bookingMode},
             ${JSON.stringify(newBooking.product)},
             ${newBooking.bookingCode},
-            ${bookingDate}
+            ${bookingDate},
+            ${participants || 1},
+            ${clientNote || null}
         )
         RETURNING *;
     `;
