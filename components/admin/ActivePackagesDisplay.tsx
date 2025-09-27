@@ -46,16 +46,23 @@ const StatusTag: React.FC<{ status: AugmentedPackage['status'] }> = ({ status })
 export const ActivePackagesDisplay: React.FC<ActivePackagesDisplayProps> = ({ packages }) => {
     const { t, language } = useLanguage();
     
-    const formatFullDateTime = (date: Date | null) => {
+    const formatFullDateTime = (date: Date | string | null, time?: string) => {
         if (!date) return '---';
-        return date.toLocaleString(language, {
-            month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+        let d = typeof date === 'string' ? new Date(date) : date;
+        if (time) {
+            // If time is provided, combine date and time
+            const [hour, minute] = time.split(':');
+            d.setHours(Number(hour), Number(minute), 0, 0);
+        }
+        return d.toLocaleString(language, {
+            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
         });
     };
 
-    const formatDate = (date: Date | null) => {
+    const formatDate = (date: Date | string | null) => {
         if (!date) return '---';
-        return date.toLocaleDateString(language, {
+        let d = typeof date === 'string' ? new Date(date) : date;
+        return d.toLocaleDateString(language, {
              month: 'long', day: 'numeric', year: 'numeric'
         });
     }
@@ -89,7 +96,6 @@ export const ActivePackagesDisplay: React.FC<ActivePackagesDisplayProps> = ({ pa
                                         <ProgressBar percent={pkg.progressPercent} />
                                     </div>
                                 )}
-                                
                                 <div className="text-xs bg-gray-50 p-3 rounded-md grid grid-cols-2 gap-3">
                                     <div className="flex items-start gap-2">
                                         <CalendarIcon className="w-4 h-4 text-gray-400 mt-0.5" />
@@ -106,9 +112,23 @@ export const ActivePackagesDisplay: React.FC<ActivePackagesDisplayProps> = ({ pa
                                         </div>
                                     </div>
                                 </div>
+                                {/* Show all class dates/times for this package */}
+                                {isPackageOrIntro && pkg.slots && pkg.slots.length > 0 && (
+                                  <div className="mt-2">
+                                    <div className="font-bold text-xs text-brand-secondary mb-1">{t('admin.customerDetail.allClasses')}</div>
+                                    <ul className="text-xs text-brand-text grid grid-cols-2 gap-2">
+                                      {pkg.slots.map((slot, idx) => (
+                                        <li key={idx} className="flex gap-2 items-center">
+                                          <CalendarIcon className="w-3 h-3 text-gray-400" />
+                                          <span>{formatFullDateTime(slot.date, slot.time)}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
                                 <div className="text-right text-[10px] text-gray-400 border-t pt-2 mt-auto">
-        {t('admin.customerDetail.bookedOn')} {new Date(pkg.bookingDate).toLocaleDateString(language)}
-    </div>
+                                  {t('admin.customerDetail.bookedOn')} {formatDate(pkg.bookingDate)}
+                                </div>
                             </div>
                         )
                     })}
