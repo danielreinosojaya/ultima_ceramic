@@ -178,6 +178,8 @@ export interface Booking {
     paymentDetails?: PaymentDetails[];
     attendance?: Record<string, AttendanceStatus>; // key is `${date}_${time}`
     bookingDate: string;
+    participants?: number;
+    clientNote?: string;
 }
 
 export interface BookingDetails {
