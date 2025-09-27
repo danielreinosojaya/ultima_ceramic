@@ -276,6 +276,22 @@
     "DUPLICATE_BOOKING_ERROR": "Ya tienes una clase agendada en este horario."
   },
   "admin": {
+    "bookingModal": {
+      "title": "Reservas para las",
+      "removeConfirmText": "¿Estás seguro de que quieres eliminar a {{name}} de esta clase? Su reserva será actualizada.",
+      "noAttendees": "No hay asistentes para este horario.",
+      "paidStatus": "Pagado",
+      "unpaidStatus": "Pendiente de pago",
+      "editAttendee": "Editar Info de Asistente",
+      "rescheduleAttendee": "Reagendar Asistente",
+      "removeAttendee": "Eliminar Asistente",
+      "attendance": "Asistencia",
+      "attended": "Asistió",
+      "noShow": "Ausente",
+      "saveAttendance": "Guardar Asistencia",
+      "participantCount": "Participantes: {{count}}",
+      "preselectedDates": "Fechas y horarios seleccionados"
+    },
     "headerTitle": "Consola de Administración",
     "inquiryManager": {
       "notApplicable": "No aplica",
@@ -548,20 +564,6 @@
       "message": "Esta reserva tiene una solicitud de factura pendiente. Marcarla como pagada ahora puede complicar la contabilidad. ¿Deseas procesar la factura primero o continuar con el pago?",
       "goToInvoicingButton": "Ir a Facturación",
       "proceedButton": "Continuar con el Pago"
-    },
-    "bookingModal": {
-      "title": "Reservas para las",
-      "removeConfirmText": "¿Estás seguro de que quieres eliminar a {{name}} de esta clase? Su reserva será actualizada.",
-      "noAttendees": "No hay asistentes para este horario.",
-      "paidStatus": "Pagado",
-      "unpaidStatus": "Pendiente de pago",
-      "editAttendee": "Editar Info de Asistente",
-      "rescheduleAttendee": "Reagendar Asistente",
-      "removeAttendee": "Eliminar Asistente",
-      "attendance": "Asistencia",
-      "attended": "Asistió",
-      "noShow": "Ausente",
-      "saveAttendance": "Guardar Asistencia"
     },
     "scheduleManager": {
       "instructorManagerTitle": "Gestor de Instructores",
