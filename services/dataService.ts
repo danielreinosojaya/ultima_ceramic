@@ -1,3 +1,13 @@
+// Edit payment details for a booking (amount, method, date)
+// import type { PaymentDetails } from '../types';
+
+export const updatePaymentDetails = async (
+    bookingId: string,
+    paymentIndex: number,
+    updatedDetails: Partial<PaymentDetails>
+): Promise<{ success: boolean }> => {
+    return postAction('updatePaymentDetails', { bookingId, paymentIndex, updatedDetails });
+};
 // Bulk actions for FinancialDashboard
 export const acceptPaymentForBooking = async (bookingId: string): Promise<{ success: boolean }> => {
     // Placeholder: Integrate with backend/payment API as needed
@@ -192,9 +202,9 @@ export const addPaymentToBooking = async (bookingId: string, payment: PaymentDet
     }
     return result;
 };
-export const deletePaymentFromBooking = async (bookingId: string, paymentIndex: number): Promise<{ success: boolean; booking?: Booking }> => {
-    const result = await postAction<{ success: boolean; booking?: any }>('deletePaymentFromBooking', { bookingId, paymentIndex });
-     if(result.success && result.booking) {
+export const deletePaymentFromBooking = async (bookingId: string, paymentIndex: number, cancelReason?: string): Promise<{ success: boolean; booking?: Booking }> => {
+    const result = await postAction<{ success: boolean; booking?: any }>('deletePaymentFromBooking', { bookingId, paymentIndex, cancelReason });
+    if(result.success && result.booking) {
         return { ...result, booking: parseBooking(result.booking) };
     }
     return result;

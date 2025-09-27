@@ -324,7 +324,6 @@
       "productSectionTitle": "Seleccionar Producto",
       "selectProduct": "Seleccionar producto...",
       "singleClassPottersWheel": "Clase Individual - Torno Alfarero",
-      "admin.manualBookingModal.singleClassPottersWheel": "Clase Individual - Torno Alfarero",
       "singleClassMolding": "Clase Individual de Modelado",
       "scheduleSectionTitle": "Agendar Clases",
       "dateLabel": "Fecha",
@@ -347,7 +346,10 @@
       "addSlotButton": "Agregar Horario",
       "participantsLabel": "Participantes",
       "pricePerPersonLabel": "Precio por Persona",
-      "backButton": "Volver a Detalles"
+  "backButton": "Volver a Detalles",
+  "conflictTitle": "Conflicto de horario",
+  "conflictMessage": "Ya existen reservas en este horario. ¿Deseas sobrepasar la capacidad y agendar de todas formas?",
+  "overbookButton": "Agendar de todas formas"
     },
     "calendar": {
       "title": "Vista de Calendario",
@@ -453,6 +455,11 @@
     },
     "financialDashboard": {
       "title": "Centro Financiero",
+      "pendingTable": {
+  "viewCalendar": "Ver en Calendario",
+  "viewCustomer": "Ver Cliente",
+  "deleteBooking": "Eliminar Reserva"
+      },
       "subtitle": "Visualiza y analiza toda la actividad financiera.",
       "totalRevenue": "Ingresos Totales",
       "date": "Fecha",
