@@ -482,13 +482,17 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                         </button>
                         <h3 className="text-lg font-bold mb-4 text-brand-text">Fechas pre-seleccionadas</h3>
                         {(bookingToViewDates.slots && bookingToViewDates.slots.length > 0) ? (
-                            <ul className="list-disc pl-5">
-                                {bookingToViewDates.slots.map((slot, idx) => (
-                                    <li key={idx} className="mb-2 text-brand-secondary">
-                                        {formatDate(slot.date, { year: 'numeric', month: 'short', day: 'numeric' })} @ {slot.time}
-                                    </li>
-                                ))}
-                            </ul>
+                                                        <ul className="list-disc pl-5">
+                                                                {bookingToViewDates.slots.map((slot, idx) => {
+                                                                    // Fix: use T12:00:00 to avoid timezone offset
+                                                                    const localDate = new Date(slot.date + 'T12:00:00');
+                                                                    return (
+                                                                        <li key={idx} className="mb-2 text-brand-secondary">
+                                                                            {localDate.toLocaleDateString(language, { year: 'numeric', month: 'short', day: 'numeric' })} @ {slot.time}
+                                                                        </li>
+                                                                    );
+                                                                })}
+                                                        </ul>
                         ) : (
                             <p className="text-brand-secondary">No hay fechas pre-seleccionadas para esta reserva.</p>
                         )}
