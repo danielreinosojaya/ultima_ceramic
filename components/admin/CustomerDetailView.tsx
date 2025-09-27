@@ -68,6 +68,27 @@ const getBookingDisplayDate = (booking: Booking, language: string): string => {
 
 
 export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer, onBack, onDataChange, invoiceRequests, setNavigateTo }) => {
+    const [editMode, setEditMode] = useState(false);
+    const [editInfo, setEditInfo] = useState({
+        firstName: customer.userInfo.firstName,
+        lastName: customer.userInfo.lastName,
+        email: customer.userInfo.email,
+        phone: customer.userInfo.phone,
+        countryCode: customer.userInfo.countryCode,
+        birthday: customer.userInfo.birthday || ''
+    });
+
+    const handleEditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setEditInfo(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleSaveEdit = async () => {
+        // Save edited info using dataService
+        await dataService.updateCustomerInfo(customer.email, editInfo);
+        setEditMode(false);
+        onDataChange();
+    };
   const { t, language } = useLanguage();
   const [bookingToPay, setBookingToPay] = useState<Booking | null>(null);
   const [isInvoiceReminderOpen, setIsInvoiceReminderOpen] = useState(false);
@@ -230,7 +251,17 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer
   }
 
   return (
-    <div className="animate-fade-in">
+        <div className="animate-fade-in">
+            <div className="flex justify-end mb-2">
+                {!editMode ? (
+                    <button onClick={() => setEditMode(true)} className="px-3 py-1 bg-brand-primary text-white rounded hover:bg-brand-secondary font-semibold text-xs">Editar Cliente</button>
+                ) : (
+                    <>
+                        <button onClick={handleSaveEdit} className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 font-semibold text-xs mr-2">Guardar</button>
+                        <button onClick={() => setEditMode(false)} className="px-3 py-1 bg-gray-300 text-gray-700 rounded font-semibold text-xs">Cancelar</button>
+                    </>
+                )}
+            </div>
        {bookingToPay && (
             <AcceptPaymentModal
                 isOpen={!!bookingToPay}
@@ -253,17 +284,48 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer
       </button>
 
       <div className="bg-brand-background p-6 rounded-lg mb-6">
-        <h2 className="text-2xl font-bold text-brand-text">{customer.userInfo.firstName.toUpperCase()} {customer.userInfo.lastName.toUpperCase()}</h2>
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mt-2 text-sm text-brand-secondary">
-          <span className="flex items-center gap-2"><MailIcon className="w-4 h-4" />{customer.userInfo.email}</span>
-          <span className="flex items-center gap-2"><PhoneIcon className="w-4 h-4" />{customer.userInfo.countryCode} {customer.userInfo.phone}</span>
-          {customer.userInfo.birthday && (
-            <span className="flex items-center gap-2 font-semibold">
-                <CalendarIcon className="w-4 h-4" />
-                {formatDate(customer.userInfo.birthday, { day: 'numeric', month: 'long' })}
-            </span>
-          )}
-        </div>
+                {!editMode ? (
+                    <>
+                        <h2 className="text-2xl font-bold text-brand-text">{customer.userInfo.firstName.toUpperCase()} {customer.userInfo.lastName.toUpperCase()}</h2>
+                        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mt-2 text-sm text-brand-secondary">
+                            <span className="flex items-center gap-2"><MailIcon className="w-4 h-4" />{customer.userInfo.email}</span>
+                            <span className="flex items-center gap-2"><PhoneIcon className="w-4 h-4" />{customer.userInfo.countryCode} {customer.userInfo.phone}</span>
+                            {customer.userInfo.birthday && (
+                                <span className="flex items-center gap-2 font-semibold">
+                                        <CalendarIcon className="w-4 h-4" />
+                                        {formatDate(customer.userInfo.birthday, { day: 'numeric', month: 'long' })}
+                                </span>
+                            )}
+                        </div>
+                    </>
+                ) : (
+                    <form className="grid grid-cols-2 gap-4 mt-2">
+                        <div>
+                            <label className="block text-xs font-semibold mb-1">Nombre</label>
+                            <input name="firstName" value={editInfo.firstName} onChange={handleEditChange} className="w-full border rounded px-2 py-1" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold mb-1">Apellido</label>
+                            <input name="lastName" value={editInfo.lastName} onChange={handleEditChange} className="w-full border rounded px-2 py-1" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold mb-1">Correo</label>
+                            <input name="email" value={editInfo.email} onChange={handleEditChange} className="w-full border rounded px-2 py-1" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold mb-1">Teléfono</label>
+                            <input name="phone" value={editInfo.phone} onChange={handleEditChange} className="w-full border rounded px-2 py-1" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold mb-1">Código País</label>
+                            <input name="countryCode" value={editInfo.countryCode} onChange={handleEditChange} className="w-full border rounded px-2 py-1" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold mb-1">Cumpleaños</label>
+                            <input name="birthday" type="date" value={editInfo.birthday || ''} onChange={handleEditChange} className="w-full border rounded px-2 py-1" />
+                        </div>
+                    </form>
+                )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
