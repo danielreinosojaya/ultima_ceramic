@@ -97,11 +97,33 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     const [modalData, setModalData] = useState<{ date: string, time: string, attendees: any[], instructorId: number } | null>(null);
     const [showUnpaidOnly, setShowUnpaidOnly] = useState(false);
     const [now, setNow] = useState(new Date());
+    const [bookingToHighlight, setBookingToHighlight] = useState<Booking | null>(null);
+         // Panel lateral eliminado para restaurar el layout clásico
+    
+        useEffect(() => {
+            // Highlight booking slot if navigated from dashboard
+            const navState = (window as any).navigateToState || null;
+            if (navState && navState.tab === 'schedule' && navState.targetId) {
+                const booking = appData.bookings.find(b => b.id === navState.targetId);
+                if (booking) {
+                    // Set week to booking's first slot
+                    if (booking.slots && booking.slots.length > 0) {
+                        const firstSlot = booking.slots[0];
+                        const slotDate = new Date(firstSlot.date + 'T00:00:00');
+                        setCurrentDate(getWeekStartDate(slotDate));
+                    }
+                    setBookingToHighlight(booking);
+                    setTimeout(() => setBookingToHighlight(null), 4000);
+                }
+                // Clear navigation state to avoid repeated highlight
+                (window as any).navigateToState = null;
+            }
+        }, [appData.bookings]);
 
     const [searchTerm, setSearchTerm] = useState('');
     const [isSearchPanelOpen, setIsSearchPanelOpen] = useState(false);
     const [searchCustomer, setSearchCustomer] = useState<Customer | null>(null);
-    const [bookingToHighlight, setBookingToHighlight] = useState<Booking | null>(null);
+    // ...existing code...
 
     const [bookingToManageId, setBookingToManageId] = useState<string | null>(null);
     const [isAcceptPaymentModalOpen, setIsAcceptPaymentModalOpen] = useState(false);
@@ -115,6 +137,60 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         const timer = setInterval(() => setNow(new Date()), 60000);
         return () => clearInterval(timer);
     }, []);
+
+    // Abrir modal de detalles al navegar desde el dashboard
+    useEffect(() => {
+        const navState = (window as any).navigateToState || null;
+        if (navState && navState.tab === 'schedule' && navState.targetId) {
+            const booking = appData.bookings.find(b => b.id === navState.targetId);
+            if (booking) {
+                // Set week to booking's first slot
+                if (booking.slots && booking.slots.length > 0) {
+                    const firstSlot = booking.slots[0];
+                    const slotDate = new Date(firstSlot.date + 'T00:00:00');
+                    setCurrentDate(getWeekStartDate(slotDate));
+                }
+                setBookingToHighlight(booking);
+                // Abrir modal de detalles
+                setModalData({
+                    date: booking.slots[0]?.date || '',
+                    time: booking.slots[0]?.time || '',
+                    instructorId: booking.slots[0]?.instructorId || 0,
+                    attendees: booking.slots.map(b => ({
+                        userInfo: booking.userInfo,
+                        bookingId: booking.id,
+                        isPaid: booking.isPaid,
+                        bookingCode: booking.bookingCode,
+                        paymentDetails: booking.paymentDetails
+                    }))
+                });
+                setIsDetailsModalOpen(true);
+                setTimeout(() => setBookingToHighlight(null), 4000);
+            }
+            // Limpiar navigation state para evitar highlight repetido
+            (window as any).navigateToState = null;
+        }
+    }, [appData.bookings]);
+
+    // Highlight booking slot if navigated from dashboard
+    useEffect(() => {
+        const navState = (window as any).navigateToState || null;
+        if (navState && navState.tab === 'schedule' && navState.targetId) {
+            const booking = appData.bookings.find(b => b.id === navState.targetId);
+            if (booking) {
+                // Set week to booking's first slot
+                if (booking.slots && booking.slots.length > 0) {
+                    const firstSlot = booking.slots[0];
+                    const slotDate = new Date(firstSlot.date + 'T00:00:00');
+                    setCurrentDate(getWeekStartDate(slotDate));
+                }
+                setBookingToHighlight(booking);
+                setTimeout(() => setBookingToHighlight(null), 4000);
+            }
+            // Clear navigation state to avoid repeated highlight
+            (window as any).navigateToState = null;
+        }
+    }, [appData.bookings]);
 
     useEffect(() => {
         setCurrentDate(getWeekStartDate(initialDate));
@@ -158,7 +234,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                         if ('details' in booking.product && 'technique' in booking.product.details) {
                             technique = booking.product.details.technique;
                         } else if (booking.productType === 'INTRODUCTORY_CLASS') {
-                            technique = 'introductory_class';
+                            technique = 'molding'; // Valor válido según type Technique
                         }
                         
                         // Determine capacity
@@ -332,35 +408,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     };
     
     const handleConfirmPayment = async (details: PaymentDetails) => {
-        if (bookingToManageId) {
-            await dataService.addPaymentToBooking(bookingToManageId, details);
-            closeAllModals();
-            onDataChange();
-        }
-    };
-
-    const handleMarkAsUnpaid = async (bookingId: string) => {
-        await dataService.markBookingAsUnpaid(bookingId);
-        closeAllModals();
-        onDataChange();
-    };
-
-    const handleEditAttendee = (bookingId: string) => {
-        setBookingToManageId(bookingId);
-        setIsEditModalOpen(true);
-    };
-
-    const handleSaveEditedBooking = async (updatedData: EditableBooking) => {
-        if (bookingToManage) {
-            const updatedBooking = { ...bookingToManage, ...updatedData };
-            await dataService.updateBooking(updatedBooking);
-            closeAllModals();
-            onDataChange();
-        }
-    };
-    
-    const handleRescheduleAttendee = (bookingId: string, slot: any, attendeeName: string) => {
-        setRescheduleInfo({ bookingId, slot, attendeeName });
+                        {/* Panel lateral eliminado para restaurar el layout clásico */}
         setIsRescheduleModalOpen(true);
     };
 
@@ -478,7 +526,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             const newSchedule: Record<string, EnrichedSlot[]> = {};
             let instructorHasUnpaid = false;
             for (const [dateStr, slots] of Object.entries(data.schedule)) {
-                const slotsWithUnpaid = slots.map(slot => ({
+                const slotsArr = Array.isArray(slots) ? slots : [];
+                const slotsWithUnpaid = slotsArr.map(slot => ({
                     ...slot,
                     bookings: slot.bookings.filter(b => !b.isPaid)
                 })).filter(slot => slot.bookings.length > 0);
@@ -515,7 +564,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     const showTimeIndicator = isTodayInView && progressPercent >= 0 && progressPercent <= 100;
 
     return (
-      <div className="animate-fade-in">
+                    <div className="animate-fade-in">
+                        {/* Panel lateral eliminado para restaurar el layout clásico */}
         {isDetailsModalOpen && modalData && (
             <BookingDetailsModal
                 date={modalData.date}
@@ -525,9 +575,6 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 onClose={closeAllModals}
                 onRemoveAttendee={handleRemoveAttendee}
                 onAcceptPayment={handleAcceptPayment}
-                onMarkAsUnpaid={handleMarkAsUnpaid}
-                onEditAttendee={handleEditAttendee}
-                onRescheduleAttendee={handleRescheduleAttendee}
             />
         )}
         {isAcceptPaymentModalOpen && bookingToManage && (
@@ -542,7 +589,6 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             <EditBookingModal
                 booking={bookingToManage}
                 onClose={closeAllModals}
-                onSave={handleSaveEditedBooking}
             />
         )}
         {isRescheduleModalOpen && rescheduleInfo && (
@@ -644,7 +690,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                             <tr key={instructor.id} className="divide-x divide-gray-200">
                                 <th scope="row" className="sticky left-0 bg-white px-4 py-3 text-left w-48 align-top">
                                     <div className="flex items-center gap-2">
-                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm bg-${colorMap[instructor.colorScheme]?.bg || colorMap[defaultColorName].bg} text-${colorMap[instructor.colorScheme]?.text || colorMap[defaultColorName].text}`}>
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm bg-${colorMap[instructor.colorScheme]?.bg || colorMap[defaultColorName].bg} text-${colorMap[instructor.colorScheme]?.text || colorMap[defaultColorName].text}`}> 
                                             {instructor.name.charAt(0)}
                                         </div>
                                         <div>
@@ -658,16 +704,6 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                     const slots = schedule[dateStr] || [];
                                     return (
                                         <td key={dateStr} className={`px-2 py-2 align-top w-1/7 min-h-[100px] relative transition-colors ${isToday ? 'bg-brand-primary/5' : ''}`}>
-                                            {isToday && showTimeIndicator && instructorIndex === 0 && (
-                                                <div className="absolute inset-x-0" style={{ top: `${progressPercent}%`, zIndex: 10 }} aria-hidden="true">
-                                                    <div className="relative h-px bg-red-500">
-                                                        <div className="absolute -left-1.5 -top-1.5 w-3 h-3 rounded-full bg-red-500"></div>
-                                                        <div className="absolute left-2 -top-2.5 text-xs font-bold text-red-600 bg-white/80 backdrop-blur-sm px-1 rounded">
-                                                            {now.toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit' })}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
                                             <div className="space-y-2">
                                                 {slots.map((slot) => {
                                                     const totalParticipants = calculateTotalParticipants(slot.bookings);
@@ -709,11 +745,12 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                        ))}
                     </tbody>
                 </table>
-                {!hasVisibleSlotsInFilter && (
-                    <div className="text-center py-10 text-brand-secondary">
-                        {t('admin.weeklyView.noUnpaidFound')}
-                    </div>
-                )}
+                    {/* Mensaje si no hay slots visibles en el filtro */}
+                    {/* {hasVisibleSlotsInFilter ? null : (
+                        <div className="text-center py-10 text-brand-secondary">
+                            {t('admin.weeklyView.noUnpaidFound')}
+                        </div>
+                    )} */}
             </div>
         </div>
         

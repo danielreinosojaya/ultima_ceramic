@@ -22,9 +22,10 @@ export const AcceptPaymentModal: React.FC<AcceptPaymentModalProps> = ({ isOpen, 
     const handleAddPayment = async () => {
         setIsProcessing(true);
         try {
-            const paymentDetails: Omit<PaymentDetails, 'receivedAt'> = {
+            const paymentDetails: PaymentDetails = {
                 amount: amount,
                 method: paymentMethod,
+                receivedAt: new Date().toISOString(),
             };
             await dataService.addPaymentToBooking(booking.id, paymentDetails);
             onDataChange(); // The core fix is here. This prop must be a function.

@@ -115,9 +115,17 @@ export const AdminConsole: React.FC = () => {
   const handleSync = forceRefresh;
 
   useEffect(() => {
-    if (navigateTo) {
-        setActiveTab(navigateTo.tab);
+  if (navigateTo) {
+    // Si la navegación viene de 'schedule', activa el tab 'calendar' y modo 'week'
+    if (navigateTo.tab === 'schedule') {
+      setActiveTab('calendar');
+      setCalendarView('week');
+      // Opcional: buscar el booking y setear la semana si tienes la fecha
+      // Esto se puede mejorar si tienes acceso a la fecha del slot
+    } else {
+      setActiveTab(navigateTo.tab);
     }
+  }
   }, [navigateTo]);
 
   const handleNotificationClick = async (notification: Notification) => {
@@ -150,7 +158,8 @@ export const AdminConsole: React.FC = () => {
         return <div>Loading admin data...</div>;
     }
 
-    const targetId = navigateTo?.tab === activeTab ? navigateTo.targetId : undefined;
+  // targetId para ScheduleManager si la navegación viene de 'schedule' o 'calendar'
+  const targetId = (navigateTo && (navigateTo.tab === 'schedule' || navigateTo.tab === 'calendar')) ? navigateTo.targetId : undefined;
 
     const appDataForScheduleManager: AppData = { 
         products: adminData.products,

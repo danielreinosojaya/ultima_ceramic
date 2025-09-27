@@ -10,6 +10,8 @@ import { UserIcon } from '../icons/UserIcon.js';
 import { InvoiceReminderModal } from './InvoiceReminderModal.js';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal.js';
 import { TrashIcon } from '../icons/TrashIcon.js';
+import { CalendarIcon } from '../icons/CalendarIcon.js';
+import { EditPaymentModal } from './EditPaymentModal';
 
 
 type FilterPeriod = 'today' | 'week' | 'month' | 'custom';
@@ -130,6 +132,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
     const [rowsPerPage, setRowsPerPage] = useState(10);
     // Bulk selection state
     const [selectedBookings, setSelectedBookings] = useState<string[]>([]);
+    const [paymentToEdit, setPaymentToEdit] = useState<{ payment: PaymentDetails, bookingId: string, index: number } | null>(null);
 
     const { t, language } = useLanguage();
     const [activeTab, setActiveTab] = useState<FinancialTab>('summary');
@@ -152,6 +155,8 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
     const [isInvoiceReminderOpen, setIsInvoiceReminderOpen] = useState(false);
     const [bookingForReminder, setBookingForReminder] = useState<Booking | null>(null);
     const [bookingToDelete, setBookingToDelete] = useState<Booking | null>(null);
+        // Modal para ver fechas reservadas
+        const [bookingToViewDates, setBookingToViewDates] = useState<Booking | null>(null);
 
     const formatDate = (dateInput: Date | string | undefined | null, options: Intl.DateTimeFormatOptions = {}): string => {
         if (!dateInput) return '---';
@@ -466,8 +471,30 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
         setLoadingBulk(false);
     };
 
-    return (
+        return (
         <div>
+            {/* Modal para ver fechas reservadas */}
+            {bookingToViewDates && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+                    <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md relative animate-fade-in">
+                        <button className="absolute top-2 right-2 text-gray-500 hover:text-gray-700" onClick={() => setBookingToViewDates(null)} aria-label="Cerrar">
+                            &times;
+                        </button>
+                        <h3 className="text-lg font-bold mb-4 text-brand-text">Fechas pre-seleccionadas</h3>
+                        {(bookingToViewDates.slots && bookingToViewDates.slots.length > 0) ? (
+                            <ul className="list-disc pl-5">
+                                {bookingToViewDates.slots.map((slot, idx) => (
+                                    <li key={idx} className="mb-2 text-brand-secondary">
+                                        {formatDate(slot.date, { year: 'numeric', month: 'short', day: 'numeric' })} @ {slot.time}
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <p className="text-brand-secondary">No hay fechas pre-seleccionadas para esta reserva.</p>
+                        )}
+                    </div>
+                </div>
+            )}
             {bookingToPay && (
                 <AcceptPaymentModal
                     isOpen={!!bookingToPay}
@@ -493,6 +520,20 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                     message={t('admin.financialDashboard.deleteConfirmText', { name: `${bookingToDelete.userInfo.firstName} ${bookingToDelete.userInfo.lastName}`})}
                 />
             )}
+                        {paymentToEdit && (
+                            <EditPaymentModal
+                                isOpen={!!paymentToEdit}
+                                payment={paymentToEdit.payment}
+                                paymentIndex={paymentToEdit.index}
+                                bookingId={paymentToEdit.bookingId}
+                                onClose={() => setPaymentToEdit(null)}
+                                onSave={async (updated) => {
+                                    await dataService.updatePaymentDetails(paymentToEdit.bookingId, paymentToEdit.index, updated);
+                                    setPaymentToEdit(null);
+                                    onDataChange();
+                                }}
+                            />
+                        )}
             <h2 className="text-2xl font-serif text-brand-text mb-2">{t('admin.financialDashboard.title')}</h2>
             <div className="border-b border-gray-200 mb-6">
                 <nav className="-mb-px flex space-x-6" aria-label="Tabs">
@@ -561,7 +602,19 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                             </div>
                             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                                 <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-brand-text">{t('admin.financialDashboard.detailedReport')}</h3><button onClick={exportToCSV} className="text-sm font-semibold bg-brand-primary text-white py-1 px-3 rounded-md hover:bg-brand-accent transition-colors">{t('admin.financialDashboard.exportCSV')}</button></div>
-                                <div className="overflow-x-auto"><table className="min-w-full divide-y divide-gray-200"><thead className="bg-brand-background"><tr><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.date')}</th><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.customer')}</th><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.package')}</th><th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.amount')}</th></tr></thead><tbody className="bg-white divide-y divide-gray-200">{summaryBookings.map(b => (<tr key={b.id}><td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{formatDate(b.paymentDetails?.[0].receivedAt, {})}</td><td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{b.userInfo?.firstName} {b.userInfo?.lastName}</td><td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{b.product?.name || 'N/A'}</td><td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-semibold">${(b.paymentDetails?.[0]?.amount || 0).toFixed(2)}</td></tr>))}</tbody></table></div>
+                                                                <div className="overflow-x-auto"><table className="min-w-full divide-y divide-gray-200"><thead className="bg-brand-background"><tr><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.date')}</th><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.customer')}</th><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.package')}</th><th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.amount')}</th><th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase">Editar</th></tr></thead><tbody className="bg-white divide-y divide-gray-200">{summaryBookings.map(b => (
+                                                                    b.paymentDetails?.map((p, idx) => (
+                                                                        <tr key={b.id + '-' + idx}>
+                                                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{formatDate(p.receivedAt, {})}</td>
+                                                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{b.userInfo?.firstName} {b.userInfo?.lastName}</td>
+                                                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{b.product?.name || 'N/A'}</td>
+                                                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-semibold">${(p.amount || 0).toFixed(2)}</td>
+                                                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right">
+                                                                                <button className="bg-brand-primary text-white px-2 py-1 rounded text-xs" onClick={() => setPaymentToEdit({ payment: p, bookingId: b.id, index: idx })}>Editar pago</button>
+                                                                            </td>
+                                                                        </tr>
+                                                                    ))
+                                                                ))}</tbody></table></div>
                             </div>
                         </>
                     ) : (
@@ -653,7 +706,16 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                                         <CurrencyDollarIcon className="w-4 h-4" />
                                                         {t('admin.financialDashboard.pendingTable.acceptPayment')}
                                                     </button>
-                                                     <button
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setBookingToViewDates(b); }}
+                                                        className="flex items-center gap-1.5 bg-blue-100 text-blue-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-blue-200 transition-colors"
+                                                        tabIndex={0}
+                                                        aria-label="Ver Fechas Reservadas"
+                                                    >
+                                                        <CalendarIcon className="w-4 h-4" />
+                                                        Ver Fechas
+                                                    </button>
+                                                    <button
                                                         onClick={(e) => { e.stopPropagation(); setBookingToDelete(b); }}
                                                         title={t('admin.financialDashboard.deleteBooking')}
                                                         className="flex items-center gap-1.5 bg-red-100 text-red-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-red-200 transition-colors"
