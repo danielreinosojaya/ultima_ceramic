@@ -231,58 +231,63 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
     };
 
     const handleSubmitBooking = async () => {
-                // Validación de campos obligatorios
-                const requiredFields = [
-                    { key: 'firstName', label: 'Nombre' },
-                    { key: 'lastName', label: 'Apellidos' },
-                    { key: 'email', label: 'Correo Electrónico' },
-                    { key: 'phone', label: 'Número de Teléfono' },
-                    { key: 'companyName', label: 'Razón Social o Nombre Completo' },
-                    { key: 'taxId', label: 'RUC / Cédula' },
-                    { key: 'address', label: 'Dirección Fiscal' }
-                ];
-                let errors: { [key: string]: string } = {};
-                requiredFields.forEach(field => {
-                    if (!userInfo[field.key] || userInfo[field.key].trim() === '') {
-                        errors[field.key] = `El campo "${field.label}" es obligatorio.`;
-                    }
-                });
-                if (!selectedProduct) {
-                    errors['product'] = 'Debes seleccionar un producto.';
-                }
-                if (Object.keys(errors).length > 0) {
-                    setFormErrors(errors);
-                    return;
-                }
-                setFormErrors({});
-                setSubmitDisabled(true);
-                const finalUserInfo = { ...userInfo, birthday: optOutBirthday ? null : userInfo.birthday };
-                let finalPrice = Number(price) || 0;
-                let productToSave = selectedProduct;
-                if (selectedProduct.type === 'GROUP_CLASS') {
-                         const pricePerPerson = Number(groupClassPricePerPerson) || 0;
-                         finalPrice = pricePerPerson * minParticipants;
-                         productToSave = { ...selectedProduct, pricePerPerson, minParticipants, price: finalPrice };
-                }
-                const bookingData = {
-                        product: productToSave,
-                        productId: selectedProduct!.id,
-                        productType: selectedProduct!.type,
-                        slots: selectedSlots,
-                        userInfo: finalUserInfo,
-                        isPaid: false,
-                        price: finalPrice,
-                        bookingMode: 'flexible',
-                        bookingDate: new Date().toISOString()
-                };
-                const result = await dataService.addBooking(bookingData);
-                if (result.success) {
-                        onBookingAdded();
-                } else {
-                        alert(`Error: ${result.message}`);
-                        setSubmitDisabled(false);
-                }
+        // Validación de campos obligatorios
+        const requiredFields = [
+            { key: 'firstName', label: 'Nombre' },
+            { key: 'lastName', label: 'Apellidos' },
+            { key: 'email', label: 'Correo Electrónico' },
+            { key: 'phone', label: 'Número de Teléfono' },
+            { key: 'companyName', label: 'Razón Social o Nombre Completo' },
+            { key: 'taxId', label: 'RUC / Cédula' },
+            { key: 'address', label: 'Dirección Fiscal' }
+        ];
+        let errors: { [key: string]: string } = {};
+        requiredFields.forEach(field => {
+            if (!userInfo[field.key] || userInfo[field.key].trim() === '') {
+                errors[field.key] = `El campo "${field.label}" es obligatorio.`;
+            }
+        });
+        if (!selectedProduct) {
+            errors['product'] = 'Debes seleccionar un producto.';
+        }
+        // Validar slots seleccionados
+        if (selectedSlots.length === 0) {
+            errors['slots'] = 'Debes seleccionar al menos un horario.';
+        }
+        if (Object.keys(errors).length > 0) {
+            setFormErrors(errors);
+            setSubmitDisabled(false);
+            return;
+        }
+        setFormErrors({});
+        setSubmitDisabled(true);
+        const finalUserInfo = { ...userInfo, birthday: optOutBirthday ? null : userInfo.birthday };
+        let finalPrice = Number(price) || 0;
+        let productToSave = selectedProduct;
+        if (selectedProduct.type === 'GROUP_CLASS') {
+            const pricePerPerson = Number(groupClassPricePerPerson) || 0;
+            finalPrice = pricePerPerson * minParticipants;
+            productToSave = { ...selectedProduct, pricePerPerson, minParticipants, price: finalPrice };
+        }
+        const bookingData = {
+            product: productToSave,
+            productId: selectedProduct!.id,
+            productType: selectedProduct!.type,
+            slots: selectedSlots,
+            userInfo: finalUserInfo,
+            isPaid: false,
+            price: finalPrice,
+            bookingMode: 'flexible',
+            bookingDate: new Date().toISOString()
         };
+        const result = await dataService.addBooking(bookingData);
+        if (result.success) {
+            onBookingAdded();
+        } else {
+            alert(`Error: ${result.message}`);
+            setSubmitDisabled(false);
+        }
+    };
 
     const handleGoToStep2 = () => {
         if ((selectedCustomer || (isCreatingNewCustomer && userInfo.firstName)) && selectedProduct) {
@@ -679,7 +684,12 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
                              <div className="space-y-1">
                                 {selectedSlots.map(slot => (
                                     <div key={`${slot.date}-${slot.time}`} className="flex justify-between items-center bg-white p-2 rounded text-sm">
-                                        <span>{new Date(slot.date + 'T00:00:00').toLocaleDateString(language, { weekday: 'short', month: 'short', day: 'numeric' })} @ {slot.time}</span>
+                                        <span>
+                                            {new Date(slot.date + 'T00:00:00').toLocaleDateString(language, { weekday: 'short', month: 'short', day: 'numeric' })} @ {slot.time}
+                                            {selectedProduct?.type === 'GROUP_CLASS' && (
+                                                <span className="ml-2 text-brand-accent font-bold">({minParticipants} personas)</span>
+                                            )}
+                                        </span>
                                         <button onClick={() => handleRemoveSlot(slot)} className="text-red-500 font-bold">X</button>
                                     </div>
                                 ))}
