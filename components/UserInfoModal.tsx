@@ -79,6 +79,7 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [isPhoneFocused, setIsPhoneFocused] = useState(false);
     const [acceptedPolicies, setAcceptedPolicies] = useState(false);
+    const [submitDisabled, setSubmitDisabled] = useState(false);
     
     const validatePhone = (phoneNum: string): string | null => {
         const digits = phoneNum.replace(/\D/g, '');
@@ -113,21 +114,28 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
         } else if (!/\S+@\S+\.\S+/.test(email)) {
             newErrors.email = t('userInfoModal.validationEmail');
         }
-        
+
         const phoneError = validatePhone(phone);
         if (phoneError) newErrors.phone = phoneError;
-        
+
+        if (!birthday && !optOutBirthday) newErrors.birthday = t('userInfoModal.validationRequired');
+
         if (!invoiceData.companyName.trim()) newErrors.companyName = t('userInfoModal.validationRequired');
         if (!invoiceData.taxId.trim()) newErrors.taxId = t('userInfoModal.validationRequired');
         if (!invoiceData.address.trim()) newErrors.address = t('userInfoModal.validationRequired');
-        
+        if (invoiceData.email && !/\S+@\S+\.\S+/.test(invoiceData.email)) newErrors.invoiceEmail = t('userInfoModal.validationEmail');
+
+        if (!acceptedPolicies) newErrors.acceptedPolicies = t('userInfoModal.validationPolicies');
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
     
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (validate()) {
+            if (submitDisabled) return;
+            if (validate()) {
+            setSubmitDisabled(true);
             onSubmit({
                 userInfo: { 
                     firstName, 
@@ -148,16 +156,8 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
         setInvoiceData(prev => ({ ...prev, [name]: value }));
     }
     
-    const isSaveDisabled = 
-        !firstName.trim() ||
-        !lastName.trim() ||
-        !/\S+@\S+\.\S+/.test(email) ||
-        !!validatePhone(phone) ||
-        !invoiceData.companyName.trim() ||
-        !invoiceData.taxId.trim() ||
-        !invoiceData.address.trim() ||
-        (!birthday && !optOutBirthday) ||
-        !acceptedPolicies;
+        // El botón solo se deshabilita tras submit exitoso
+        const isSaveDisabled = submitDisabled;
 
     return (
         <div
@@ -172,6 +172,12 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                     <h2 className="text-2xl font-semibold text-brand-primary">{t('userInfoModal.title')}</h2>
                     <p className="text-brand-secondary mt-1">{t('userInfoModal.subtitle')}</p>
                 </div>
+                {/* Mensaje de error general */}
+                {Object.keys(errors).length > 0 && (
+                  <div className="mb-4 p-3 rounded bg-red-100 text-red-800 font-semibold text-center">
+                    {t('userInfoModal.validationGeneral') || 'Por favor completa los campos obligatorios marcados en rojo.'}
+                  </div>
+                )}
                 <form onSubmit={handleSubmit} noValidate>
                     <div className="space-y-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -218,7 +224,7 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                                     <p className="text-xs text-brand-secondary">{t('userInfoModal.birthdaySubtitle')}</p>
                                 </div>
                             </div>
-                            <InputField id="birthday" label="" type="date" value={birthday} onChange={e => setBirthday(e.target.value)} disabled={optOutBirthday} />
+                            <InputField id="birthday" label="" type="date" value={birthday} onChange={e => setBirthday(e.target.value)} disabled={optOutBirthday} error={errors.birthday} />
                             <label className="flex items-center gap-2 cursor-pointer text-xs text-brand-secondary">
                                 <div className={`relative inline-flex items-center h-5 rounded-full w-9 transition-colors ${optOutBirthday ? 'bg-brand-primary' : 'bg-gray-300'}`}>
                                     <span className={`inline-block w-3.5 h-3.5 transform bg-white rounded-full transition-transform ${optOutBirthday ? 'translate-x-5' : 'translate-x-1'}`}/>
@@ -256,10 +262,11 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                                 </button>.
                             </label>
                         </div>
+                        {errors.acceptedPolicies && <p className="text-red-600 text-xs mt-1 ml-1">{errors.acceptedPolicies}</p>}
                     </div>
                     <div className="mt-6 flex justify-end">
                         <button type="submit"
-                            disabled={isSaveDisabled}
+                                disabled={isSaveDisabled}
                             className="w-full sm:w-auto bg-brand-primary text-white font-bold py-2 px-8 rounded-lg hover:opacity-90 transition-opacity duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed"
                         >
                             {t('userInfoModal.saveAndContinueButton')}

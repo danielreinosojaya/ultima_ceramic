@@ -85,6 +85,9 @@ const formatToAmPm = (time24: string): string => {
 };
 
 export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose, onBookingAdded }) => {
+    // Validation state
+    const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
+    const [submitDisabled, setSubmitDisabled] = useState(false);
     const { t, language } = useLanguage();
     const [step, setStep] = useState(1);
 
@@ -226,38 +229,58 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
     };
 
     const handleSubmitBooking = async () => {
-        if (!selectedProduct || !userInfo.firstName) return;
-        
-        const finalUserInfo = { ...userInfo, birthday: optOutBirthday ? null : userInfo.birthday };
-
-        let finalPrice = Number(price) || 0;
-        let productToSave = selectedProduct;
-        
-        if (selectedProduct.type === 'GROUP_CLASS') {
-             const pricePerPerson = Number(groupClassPricePerPerson) || 0;
-             finalPrice = pricePerPerson * minParticipants;
-             productToSave = { ...selectedProduct, pricePerPerson, minParticipants, price: finalPrice };
-        }
-
-        const bookingData = {
-            product: productToSave,
-            productId: selectedProduct!.id,
-            productType: selectedProduct!.type,
-            slots: selectedSlots,
-            userInfo: finalUserInfo,
-            isPaid: false,
-            price: finalPrice,
-            bookingMode: 'flexible',
-            bookingDate: new Date().toISOString()
+                // Validación de campos obligatorios
+                const requiredFields = [
+                    { key: 'firstName', label: 'Nombre' },
+                    { key: 'lastName', label: 'Apellidos' },
+                    { key: 'email', label: 'Correo Electrónico' },
+                    { key: 'phone', label: 'Número de Teléfono' },
+                    { key: 'companyName', label: 'Razón Social o Nombre Completo' },
+                    { key: 'taxId', label: 'RUC / Cédula' },
+                    { key: 'address', label: 'Dirección Fiscal' }
+                ];
+                let errors: { [key: string]: string } = {};
+                requiredFields.forEach(field => {
+                    if (!userInfo[field.key] || userInfo[field.key].trim() === '') {
+                        errors[field.key] = `El campo "${field.label}" es obligatorio.`;
+                    }
+                });
+                if (!selectedProduct) {
+                    errors['product'] = 'Debes seleccionar un producto.';
+                }
+                if (Object.keys(errors).length > 0) {
+                    setFormErrors(errors);
+                    return;
+                }
+                setFormErrors({});
+                setSubmitDisabled(true);
+                const finalUserInfo = { ...userInfo, birthday: optOutBirthday ? null : userInfo.birthday };
+                let finalPrice = Number(price) || 0;
+                let productToSave = selectedProduct;
+                if (selectedProduct.type === 'GROUP_CLASS') {
+                         const pricePerPerson = Number(groupClassPricePerPerson) || 0;
+                         finalPrice = pricePerPerson * minParticipants;
+                         productToSave = { ...selectedProduct, pricePerPerson, minParticipants, price: finalPrice };
+                }
+                const bookingData = {
+                        product: productToSave,
+                        productId: selectedProduct!.id,
+                        productType: selectedProduct!.type,
+                        slots: selectedSlots,
+                        userInfo: finalUserInfo,
+                        isPaid: false,
+                        price: finalPrice,
+                        bookingMode: 'flexible',
+                        bookingDate: new Date().toISOString()
+                };
+                const result = await dataService.addBooking(bookingData);
+                if (result.success) {
+                        onBookingAdded();
+                } else {
+                        alert(`Error: ${result.message}`);
+                        setSubmitDisabled(false);
+                }
         };
-
-        const result = await dataService.addBooking(bookingData);
-        if (result.success) {
-            onBookingAdded();
-        } else {
-            alert(`Error: ${result.message}`);
-        }
-    };
 
     const handleGoToStep2 = () => {
         if ((selectedCustomer || (isCreatingNewCustomer && userInfo.firstName)) && selectedProduct) {
@@ -649,7 +672,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
 
                          <div className="mt-6 flex justify-between items-center gap-3">
                             <button type="button" onClick={() => setStep(1)} className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100">{t('admin.manualBookingModal.backButton')}</button>
-                            <button type="button" onClick={handleSubmitBooking} disabled={!areSlotsSelected} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent disabled:bg-gray-400">
+                            <button type="button" onClick={handleSubmitBooking} disabled={!areSlotsSelected || submitDisabled} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent disabled:bg-gray-400">
                                 {t('admin.manualBookingModal.saveButton')}
                             </button>
                         </div>
