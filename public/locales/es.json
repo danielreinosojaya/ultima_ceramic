@@ -120,7 +120,8 @@
     "totalToPay": "Total a Pagar"
   },
   "userInfoModal": {
-    "title": "Tu Información",
+  "validationPolicies": "Debes aceptar las políticas internas y el proceso de devoluciones para continuar.",
+  "title": "Tu Información",
     "phoneHintEcuador": "Ingresa tus 9 dígitos, sin el 0 inicial.",
     "birthdayTitle": "¡Queremos celebrar contigo!",
     "birthdaySubtitle": "Comparte tu fecha de nacimiento y recibe sorpresas y descuentos especiales de nuestra parte.",
@@ -146,9 +147,10 @@
     "acceptPolicies": "He leído y acepto las",
     "readPoliciesLink": "políticas del taller",
     "saveAndContinueButton": "Guardar y Continuar",
-    "validationRequired": "Este campo es obligatorio.",
-    "validationEmail": "Por favor, introduce un email válido.",
-    "validationPhone": "Por favor, introduce un número de teléfono válido."
+  "validationRequired": "Este campo es obligatorio.",
+  "validationEmail": "Por favor, introduce un email válido.",
+  "validationPhone": "Por favor, introduce un número de teléfono válido.",
+  "validationGeneral": "Por favor completa todos los campos obligatorios y corrige los errores marcados en rojo para continuar."
   },
   "confirmation": {
     "title": "¡Pre-reserva Confirmada!",
@@ -316,6 +318,8 @@
       "searchPlaceholder": "Buscar clases..."
     },
     "manualBookingModal": {
+  "clientNoteLabel": "Novedad / Comentario sobre el cliente",
+  "clientNotePlaceholder": "Escribe cualquier novedad, comentario o información relevante sobre el cliente...",
       "title": "Añadir Reserva Manual",
       "customerSectionTitle": "Información del Cliente",
       "existingCustomer": "Cliente Existente",

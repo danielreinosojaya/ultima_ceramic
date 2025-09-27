@@ -85,6 +85,11 @@ const formatToAmPm = (time24: string): string => {
 };
 
 export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose, onBookingAdded }) => {
+    // Campo para novedad/comentario
+    const [clientNote, setClientNote] = useState('');
+    // Validation state
+    const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
+    const [submitDisabled, setSubmitDisabled] = useState(false);
     const { t, language } = useLanguage();
     const [step, setStep] = useState(1);
 
@@ -226,19 +231,44 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
     };
 
     const handleSubmitBooking = async () => {
-        if (!selectedProduct || !userInfo.firstName) return;
-        
+        // Validación de campos obligatorios
+        const requiredFields = [
+            { key: 'firstName', label: 'Nombre' },
+            { key: 'lastName', label: 'Apellidos' },
+            { key: 'email', label: 'Correo Electrónico' },
+            { key: 'phone', label: 'Número de Teléfono' },
+            { key: 'companyName', label: 'Razón Social o Nombre Completo' },
+            { key: 'taxId', label: 'RUC / Cédula' },
+            { key: 'address', label: 'Dirección Fiscal' }
+        ];
+        let errors: { [key: string]: string } = {};
+        requiredFields.forEach(field => {
+            if (!userInfo[field.key] || userInfo[field.key].trim() === '') {
+                errors[field.key] = `El campo "${field.label}" es obligatorio.`;
+            }
+        });
+        if (!selectedProduct) {
+            errors['product'] = 'Debes seleccionar un producto.';
+        }
+        // Validar slots seleccionados
+        if (selectedSlots.length === 0) {
+            errors['slots'] = 'Debes seleccionar al menos un horario.';
+        }
+        if (Object.keys(errors).length > 0) {
+            setFormErrors(errors);
+            setSubmitDisabled(false);
+            return;
+        }
+        setFormErrors({});
+        setSubmitDisabled(true);
         const finalUserInfo = { ...userInfo, birthday: optOutBirthday ? null : userInfo.birthday };
-
         let finalPrice = Number(price) || 0;
         let productToSave = selectedProduct;
-        
         if (selectedProduct.type === 'GROUP_CLASS') {
-             const pricePerPerson = Number(groupClassPricePerPerson) || 0;
-             finalPrice = pricePerPerson * minParticipants;
-             productToSave = { ...selectedProduct, pricePerPerson, minParticipants, price: finalPrice };
+            const pricePerPerson = Number(groupClassPricePerPerson) || 0;
+            finalPrice = pricePerPerson * minParticipants;
+            productToSave = { ...selectedProduct, pricePerPerson, minParticipants, price: finalPrice };
         }
-
         const bookingData = {
             product: productToSave,
             productId: selectedProduct!.id,
@@ -250,12 +280,12 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
             bookingMode: 'flexible',
             bookingDate: new Date().toISOString()
         };
-
         const result = await dataService.addBooking(bookingData);
         if (result.success) {
             onBookingAdded();
         } else {
             alert(`Error: ${result.message}`);
+            setSubmitDisabled(false);
         }
     };
 
@@ -566,6 +596,20 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
                 )}
                 {step === 2 && (
                     <div className="animate-fade-in-fast">
+                        {/* Campo para novedad/comentario del cliente */}
+                        <div className="mb-4">
+                            <label htmlFor="clientNote" className="block text-sm font-bold text-brand-secondary mb-1">
+                                {t('admin.manualBookingModal.clientNoteLabel') || 'Novedad / Comentario sobre el cliente'}
+                            </label>
+                            <textarea
+                                id="clientNote"
+                                value={clientNote}
+                                onChange={e => setClientNote(e.target.value)}
+                                className="w-full p-2 border rounded-lg"
+                                rows={3}
+                                placeholder={t('admin.manualBookingModal.clientNotePlaceholder') || 'Escribe cualquier novedad, comentario o información relevante sobre el cliente...'}
+                            />
+                        </div>
                          <h3 className="font-bold text-brand-text mb-2 text-center">{t('admin.manualBookingModal.scheduleSectionTitle')}</h3>
                         
                         {(selectedProduct?.type === 'SINGLE_CLASS' || selectedProduct?.type === 'GROUP_CLASS') ? (
@@ -640,7 +684,12 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
                              <div className="space-y-1">
                                 {selectedSlots.map(slot => (
                                     <div key={`${slot.date}-${slot.time}`} className="flex justify-between items-center bg-white p-2 rounded text-sm">
-                                        <span>{new Date(slot.date + 'T00:00:00').toLocaleDateString(language, { weekday: 'short', month: 'short', day: 'numeric' })} @ {slot.time}</span>
+                                        <span>
+                                            {new Date(slot.date + 'T00:00:00').toLocaleDateString(language, { weekday: 'short', month: 'short', day: 'numeric' })} @ {slot.time}
+                                            {selectedProduct?.type === 'GROUP_CLASS' && (
+                                                <span className="ml-2 text-brand-accent font-bold">({minParticipants} personas)</span>
+                                            )}
+                                        </span>
                                         <button onClick={() => handleRemoveSlot(slot)} className="text-red-500 font-bold">X</button>
                                     </div>
                                 ))}
@@ -649,7 +698,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
 
                          <div className="mt-6 flex justify-between items-center gap-3">
                             <button type="button" onClick={() => setStep(1)} className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100">{t('admin.manualBookingModal.backButton')}</button>
-                            <button type="button" onClick={handleSubmitBooking} disabled={!areSlotsSelected} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent disabled:bg-gray-400">
+                            <button type="button" onClick={handleSubmitBooking} disabled={!areSlotsSelected || submitDisabled} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent disabled:bg-gray-400">
                                 {t('admin.manualBookingModal.saveButton')}
                             </button>
                         </div>
