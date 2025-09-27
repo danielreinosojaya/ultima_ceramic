@@ -37,10 +37,22 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, 
   const [isAttendanceTaken, setIsAttendanceTaken] = useState(false);
 
   const slotIdentifier = useMemo(() => `${date}_${time}`, [date, time]);
-  
   const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString(language, {
     weekday: 'long', month: 'long', day: 'numeric',
   });
+
+  // Find the booking object for the first attendee (all attendees share the same booking)
+  const booking = useMemo(() => {
+    if (attendees.length === 0) return null;
+    return attendees[0]?.bookingId ? appBooking(attendees[0].bookingId) : null;
+    function appBooking(id: string) {
+      // Try to get from window if available (ScheduleManager passes appData.bookings)
+      if (window && (window as any).appData && (window as any).appData.bookings) {
+        return (window as any).appData.bookings.find((b: any) => b.id === id);
+      }
+      return null;
+    }
+  }, [attendees]);
 
   useEffect(() => {
     const init = async () => {
@@ -106,6 +118,19 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, 
           <h2 className="text-xl font-serif text-brand-accent">{t('admin.bookingModal.title')} {time}</h2>
           <p className="text-brand-secondary">{formattedDate}</p>
         </div>
+        {/* Nueva sección: mostrar todas las fechas y horarios pre-seleccionados */}
+        {booking && booking.slots && booking.slots.length > 0 && (
+          <div className="mb-4">
+            <h3 className="text-md font-bold text-brand-text mb-2">{t('admin.bookingModal.preselectedDates')}</h3>
+            <ul className="list-disc pl-5">
+              {booking.slots.map((slot: any, idx: number) => (
+                <li key={idx} className="mb-1 text-brand-secondary">
+                  {new Date(slot.date + 'T00:00:00').toLocaleDateString(language, { year: 'numeric', month: 'short', day: 'numeric' })} @ {slot.time}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {attendees.length > 0 ? (
           <ul className="space-y-3">
