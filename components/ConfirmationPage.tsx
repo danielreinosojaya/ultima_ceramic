@@ -78,8 +78,8 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
         await generateBookingPDF(booking, pdfTranslations, footerInfo, policies, language);
     };
 
-        // Use the array from admin settings
-        const bankAccounts = bankDetails;
+    // Use the array from admin settings, fallback to [] if not array
+    const bankAccounts = Array.isArray(bankDetails) ? bankDetails : (bankDetails ? [bankDetails] : []);
 
         return (
             <div className="max-w-2xl mx-auto p-6 sm:p-8 bg-brand-surface rounded-xl shadow-lifted animate-fade-in-up">
