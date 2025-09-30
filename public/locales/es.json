@@ -426,7 +426,7 @@
       "bookedOn": "Reservado el",
       "statusActive": "Activo",
       "statusExpired": "Expirado",
-      "StatusPendingPayment": "Pendiente de Pago",
+  "statusPendingPayment": "Pendiente de pago",
       "statusCompleted": "Completado",
       "noActivePackages": "Este cliente no tiene paquetes o suscripciones activas.",
       "historyTitle": "Historial de Reservas",
@@ -439,7 +439,11 @@
         "unpaid": "No Pagado",
         "actions": "Acciones",
         "acceptPayment": "Aceptar Pago",
-        "deleteBooking": "Eliminar Reserva"
+        "deleteBooking": "Eliminar Reserva",
+        "statusPendingPayment": "Pendiente de pago",
+        "unpaidTooltip": "Esta reserva está pendiente de pago.",
+        "acceptPaymentAria": "Aceptar pago de esta reserva",
+        "deleteBookingAria": "Eliminar esta reserva"
       },
       "deleteConfirmText": "¿Estás seguro de que quieres eliminar esta reserva? Se eliminarán todos sus horarios asociados.",
       "viewAttendanceButton": "Ver Historial de Asistencia Completo",
