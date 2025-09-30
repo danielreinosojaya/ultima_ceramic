@@ -450,6 +450,14 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 await sql`UPDATE bookings SET slots = ${JSON.stringify(updatedSlots)} WHERE id = ${rescheduleId}`;
             }
             break;
+        case 'deleteBooking': {
+            const { bookingId } = req.body;
+            if (!bookingId) {
+                return res.status(400).json({ error: 'bookingId is required' });
+            }
+            await sql`DELETE FROM bookings WHERE id = ${bookingId}`;
+            return res.status(200).json({ success: true });
+        }
         case 'deleteBookingsInDateRange':
             const deleteRangeBody = req.body;
             const { startDate, endDate } = deleteRangeBody;
