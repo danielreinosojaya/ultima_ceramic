@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import { BankAccountsModal } from './BankAccountsModal';
 import type { Booking, BankDetails, FooterInfo, Product, ClassPackage } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { CheckCircleIcon } from './icons/CheckCircleIcon';
+import { BankIcon } from './icons/BankIcon';
 import { WhatsAppIcon } from './icons/WhatsAppIcon';
 import { DocumentDuplicateIcon } from './icons/DocumentDuplicateIcon';
 import { InfoCircleIcon } from './icons/InfoCircleIcon';
@@ -11,7 +13,7 @@ import { SINGLE_CLASS_PRICE, VAT_RATE } from '../constants';
 
 interface ConfirmationPageProps {
     booking: Booking;
-    bankDetails: BankDetails;
+    bankDetails: BankDetails[];
     footerInfo: FooterInfo;
     policies: string;
     onFinish: () => void;
@@ -20,6 +22,7 @@ interface ConfirmationPageProps {
 export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, bankDetails, footerInfo, policies, onFinish }) => {
     const { t, language } = useLanguage();
     const [copied, setCopied] = useState(false);
+    const [modalOpen, setModalOpen] = useState(false);
 
     const isPackage = booking.product.type === 'CLASS_PACKAGE';
     const originalPrice = isPackage ? (booking.product as ClassPackage).classes * SINGLE_CLASS_PRICE : booking.price;
@@ -76,8 +79,11 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
         await generateBookingPDF(booking, pdfTranslations, footerInfo, policies, language);
     };
 
-    return (
-        <div className="max-w-2xl mx-auto p-6 sm:p-8 bg-brand-surface rounded-xl shadow-lifted animate-fade-in-up">
+    // Use the array from admin settings, fallback to [] if not array
+    const bankAccounts = Array.isArray(bankDetails) ? bankDetails : (bankDetails ? [bankDetails] : []);
+
+        return (
+            <div className="max-w-2xl mx-auto p-6 sm:p-8 bg-brand-surface rounded-xl shadow-lifted animate-fade-in-up">
             <div className="text-center">
                 <CheckCircleIcon className="w-16 h-16 text-brand-success mx-auto" />
                 <h2 className="text-3xl font-semibold text-brand-text mt-4">{t('confirmation.title')}</h2>
@@ -131,32 +137,17 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                 </div>
             </div>
 
-            <div className="mt-8">
-                <h3 className="text-xl font-bold text-brand-text text-center">{t('confirmation.paymentInstructionsTitle')}</h3>
-                <div className="mt-4 bg-brand-background p-6 rounded-lg space-y-3 text-sm">
-                    <div className="flex justify-between">
-                        <span className="text-brand-secondary">{t('confirmation.bankName')}:</span>
-                        <span className="font-semibold text-brand-text">{bankDetails.bankName}</span>
-                    </div>
-                    <div className="flex justify-between">
-                        <span className="text-brand-secondary">{t('confirmation.accountHolder')}:</span>
-                        <span className="font-semibold text-brand-text">{bankDetails.accountHolder}</span>
-                    </div>
-                    <div className="flex justify-between">
-                        <span className="text-brand-secondary">{t('confirmation.accountNumber')}:</span>
-                        <span className="font-semibold text-brand-text">{bankDetails.accountNumber}</span>
-                    </div>
-                    <div className="flex justify-between">
-                        <span className="text-brand-secondary">{t('confirmation.accountType')}:</span>
-                        <span className="font-semibold text-brand-text">{bankDetails.accountType}</span>
-                    </div>
-                     <div className="flex justify-between">
-                        <span className="text-brand-secondary">{t('confirmation.taxId')}:</span>
-                        <span className="font-semibold text-brand-text">{bankDetails.taxId}</span>
-                    </div>
-                </div>
-                 <p className="text-center text-sm text-brand-secondary mt-4 italic">{t('confirmation.whatsappInstruction', { code: booking.bookingCode })}</p>
-            </div>
+                        <div className="mt-8 flex flex-col items-center justify-center">
+                        <button
+                            onClick={() => setModalOpen(true)}
+                            className="w-full sm:w-auto flex items-center justify-center gap-3 bg-gradient-to-r from-brand-primary via-brand-secondary to-brand-accent text-white font-bold py-4 px-8 rounded-2xl shadow-xl hover:scale-105 transition-transform text-lg mb-2"
+                            style={{ aspectRatio: '4/1', minHeight: '64px' }}
+                        >
+                            <BankIcon className="w-7 h-7" />
+                            Ver todas las cuentas bancarias
+                        </button>
+                                <BankAccountsModal open={modalOpen} onClose={() => setModalOpen(false)} accounts={bankAccounts} />
+                        </div>
             
             <div className="mt-8 flex flex-col items-center gap-4">
                  <div className="w-full flex flex-col sm:flex-row items-center justify-center gap-4">
