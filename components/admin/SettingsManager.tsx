@@ -1,6 +1,83 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import * as dataService from '../../services/dataService';
+// ...other existing imports...
+
+const BankAccountsManager: React.FC = () => {
+    const { t } = useLanguage();
+    const [accounts, setAccounts] = useState([]);
+    const [editing, setEditing] = useState(null);
+    const [form, setForm] = useState({ bankName: '', accountHolder: '', accountNumber: '', accountType: '', taxId: '' });
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        async function fetchAccounts() {
+            setLoading(true);
+            const details = await dataService.getBankDetails();
+            setAccounts(Array.isArray(details) ? details : [details]);
+            setLoading(false);
+        }
+        fetchAccounts();
+    }, []);
+
+    const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+    const handleEdit = (acc, idx) => { setEditing(idx); setForm(acc); };
+    const handleDelete = async (idx) => {
+        const updated = accounts.filter((_, i) => i !== idx);
+        setAccounts(updated);
+        await dataService.updateBankDetails(updated);
+    };
+    const handleSave = async () => {
+        let updated;
+        if (editing !== null) {
+            updated = accounts.map((acc, i) => (i === editing ? form : acc));
+        } else {
+            updated = [...accounts, form];
+        }
+        setAccounts(updated);
+        await dataService.updateBankDetails(updated);
+        setEditing(null);
+        setForm({ bankName: '', accountHolder: '', accountNumber: '', accountType: '', taxId: '' });
+    };
+    return (
+        <div className="bg-brand-background p-4 rounded-lg">
+            <h3 className="block text-sm font-bold text-brand-secondary mb-1">Cuentas Bancarias</h3>
+            <p className="text-xs text-brand-secondary mb-4">Administra las cuentas bancarias que se mostrarán a los clientes.</p>
+            <div className="space-y-4">
+                {accounts.map((acc, idx) => (
+                    <div key={idx} className="bg-white rounded-lg shadow p-4 flex flex-col gap-2 border border-brand-border">
+                        <div className="flex justify-between items-center">
+                            <span className="font-bold text-brand-primary">{acc.bankName}</span>
+                            <div className="flex gap-2">
+                                <button className="text-xs text-brand-accent underline" onClick={() => handleEdit(acc, idx)}>Editar</button>
+                                <button className="text-xs text-red-500 underline" onClick={() => handleDelete(idx)}>Eliminar</button>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div><span className="font-semibold text-brand-secondary">Titular:</span> {acc.accountHolder}</div>
+                            <div><span className="font-semibold text-brand-secondary">Número:</span> {acc.accountNumber}</div>
+                            <div><span className="font-semibold text-brand-secondary">Tipo:</span> {acc.accountType}</div>
+                            <div><span className="font-semibold text-brand-secondary">RUC:</span> {acc.taxId}</div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+            <div className="mt-6">
+                <h4 className="font-bold text-brand-text mb-2">{editing !== null ? 'Editar Cuenta' : 'Agregar Nueva Cuenta'}</h4>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                    <input name="bankName" value={form.bankName} onChange={handleChange} placeholder="Banco" className="p-2 rounded border border-brand-border" />
+                    <input name="accountHolder" value={form.accountHolder} onChange={handleChange} placeholder="Titular" className="p-2 rounded border border-brand-border" />
+                    <input name="accountNumber" value={form.accountNumber} onChange={handleChange} placeholder="Número" className="p-2 rounded border border-brand-border" />
+                    <input name="accountType" value={form.accountType} onChange={handleChange} placeholder="Tipo" className="p-2 rounded border border-brand-border" />
+                    <input name="taxId" value={form.taxId} onChange={handleChange} placeholder="RUC" className="p-2 rounded border border-brand-border" />
+                </div>
+                <button onClick={handleSave} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent mt-2">{editing !== null ? 'Guardar Cambios' : 'Agregar Cuenta'}</button>
+                {editing !== null && <button onClick={() => { setEditing(null); setForm({ bankName: '', accountHolder: '', accountNumber: '', accountType: '', taxId: '' }); }} className="ml-4 text-xs text-brand-secondary underline">Cancelar</button>}
+            </div>
+        </div>
+    );
+};
+// ...existing code...
 import { CogIcon } from '../icons/CogIcon';
 import type { ConfirmationMessage, ClassCapacity, CapacityMessageSettings, CapacityThreshold, UITexts, FooterInfo, AutomationSettings, BankDetails } from '../../types';
 import { DocumentTextIcon } from '../icons/DocumentTextIcon';
@@ -550,6 +627,7 @@ export const SettingsManager: React.FC = () => {
                             <div className="relative pl-6">
                                 <div className="absolute top-0 left-0 h-full w-0.5 bg-brand-primary/20 rounded-full"></div>
                                 <div className="space-y-6">
+                                    <BankAccountsManager />
                                     <PoliciesEditor />
                                     <ConfirmationEditor />
                                     <CapacityEditor />

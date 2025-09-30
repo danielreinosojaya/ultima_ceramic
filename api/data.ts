@@ -1,4 +1,7 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
+// ...existing code...
+
+// ...existing code...
 import { sql } from '@vercel/postgres';
 import { seedDatabase, ensureTablesExist } from './db.js';
 import * as emailService from './emailService.js';
@@ -179,72 +182,75 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 async function handleGet(req: VercelRequest, res: VercelResponse) {
     const { key } = req.query;
-    
-    if (!key || typeof key !== 'string') {
-        return res.status(400).json({ error: 'A "key" query parameter is required.' });
-    }
-
     let data;
-    switch (key) {
-        case 'products':
-            const { rows: products } = await sql`SELECT * FROM products ORDER BY id ASC`;
-            data = toCamelCase(products);
-            break;
-        case 'bookings':
-            const { rows: bookings } = await sql`SELECT * FROM bookings ORDER BY created_at DESC`;
-            data = bookings.map(parseBookingFromDB);
-            break;
-        case 'instructors':
-            const { rows: instructors } = await sql`SELECT * FROM instructors ORDER BY id ASC`;
-            data = toCamelCase(instructors);
-            break;
-            
-        case 'groupInquiries':
-            const { rows: inquiries } = await sql`
-                SELECT
-                    id, name, email, phone, country_code, participants,
-                    TO_CHAR(tentative_date, 'YYYY-MM-DD') as tentative_date,
-                    tentative_time, event_type, message, status,
-                    TO_CHAR(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as created_at,
-                    inquiry_type
-                FROM inquiries ORDER BY created_at DESC
-            `;
-            data = inquiries.map(parseGroupInquiryFromDB);
-            break;
-            
-        case 'notifications':
-            const { rows: notifications } = await sql`SELECT * FROM notifications ORDER BY timestamp DESC`;
-            data = notifications.map(parseNotificationFromDB);
-            break;
-        case 'clientNotifications':
-            const { rows: clientNotifications } = await sql`
-                SELECT
-                    *,
-                    TO_CHAR(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as created_at_iso
-                FROM client_notifications ORDER BY created_at DESC
-            `;
-            data = clientNotifications.map(parseClientNotificationFromDB);
-            break;
-        case 'invoiceRequests':
-            const { rows: invoiceRequests } = await sql`
-                SELECT
-                    i.*,
-                    to_char(i.requested_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as requested_at_iso,
-                    b.booking_code,
-                    b.user_info
-                FROM invoice_requests i
-                JOIN bookings b ON i.booking_id = b.id
-                ORDER BY i.requested_at DESC
-            `;
-            data = invoiceRequests.map(parseInvoiceRequestFromDB);
-            break;
-        default:
-            const { rows: settings } = await sql`SELECT value FROM settings WHERE key = ${key}`;
-            if (settings.length > 0) {
-                data = settings[0].value;
-            } else {
-                return res.status(404).json({ error: `Setting with key "${key}" not found.` });
+    const action = req.query.action as string | undefined;
+    if (action) {
+        switch (action) {
+            case 'inquiries': {
+                const { rows: inquiries } = await sql`
+                    SELECT
+                        id, name, email, phone, country_code, participants,
+                        TO_CHAR(tentative_date, 'YYYY-MM-DD') as tentative_date,
+                        tentative_time, event_type, message, status,
+                        TO_CHAR(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as created_at,
+                        inquiry_type
+                    FROM inquiries ORDER BY created_at DESC
+                `;
+                data = inquiries.map(parseGroupInquiryFromDB);
+                break;
             }
+            case 'notifications': {
+                const { rows: notifications } = await sql`SELECT * FROM notifications ORDER BY timestamp DESC`;
+                data = notifications.map(parseNotificationFromDB);
+                break;
+            }
+            case 'clientNotifications': {
+                const { rows: clientNotifications } = await sql`
+                    SELECT
+                        *,
+                        TO_CHAR(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as created_at_iso
+                    FROM client_notifications ORDER BY created_at DESC
+                `;
+                data = clientNotifications.map(parseClientNotificationFromDB);
+                break;
+            }
+            case 'invoiceRequests': {
+                const { rows: invoiceRequests } = await sql`
+                    SELECT
+                        i.*,
+                        to_char(i.requested_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as requested_at_iso,
+                        b.booking_code,
+                        b.user_info
+                    FROM invoice_requests i
+                    JOIN bookings b ON i.booking_id = b.id
+                    ORDER BY i.requested_at DESC
+                `;
+                data = invoiceRequests.map(parseInvoiceRequestFromDB);
+                break;
+            }
+                case 'instructors': {
+                    const { rows: instructors } = await sql`SELECT * FROM instructors ORDER BY name ASC`;
+                    data = instructors.map(toCamelCase);
+                    break;
+                }
+                case 'bookings': {
+                    const { rows: bookings } = await sql`SELECT * FROM bookings ORDER BY created_at DESC`;
+                    data = bookings.map(parseBookingFromDB);
+                    break;
+                }
+            default:
+                return res.status(400).json({ error: `Unknown action: ${action}` });
+        }
+    } else {
+        if (!key || typeof key !== 'string') {
+            return res.status(400).json({ error: 'A "key" query parameter is required.' });
+        }
+        const { rows: settings } = await sql`SELECT value FROM settings WHERE key = ${key}`;
+        if (settings.length > 0) {
+            data = settings[0].value;
+        } else {
+            return res.status(404).json({ error: `Setting with key "${key}" not found.` });
+        }
     }
     return res.status(200).json(data);
 }
@@ -264,124 +270,83 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
     switch (key) {
         case 'products':
             await sql`BEGIN`;
-                await sql.query('DELETE FROM products');
+            await sql.query('DELETE FROM products');
             for (const p of value) {
-                    await sql.query(
-                        `INSERT INTO products (id, type, name, classes, price, description, image_url, details, is_active, scheduling_rules, overrides, min_participants, price_per_person)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-                        ON CONFLICT (id) DO UPDATE SET
-                            type = EXCLUDED.type,
-                            name = EXCLUDED.name,
-                            classes = EXCLUDED.classes,
-                            price = EXCLUDED.price,
-                            description = EXCLUDED.description,
-                            image_url = EXCLUDED.image_url,
-                            details = EXCLUDED.details,
-                            is_active = EXCLUDED.is_active,
-                            scheduling_rules = EXCLUDED.scheduling_rules,
-                            overrides = EXCLUDED.overrides,
-                            min_participants = EXCLUDED.min_participants,
-                            price_per_person = EXCLUDED.price_per_person;`,
-                        [
-                            p.id,
-                            p.type,
-                            p.name,
-                            p.classes || null,
-                            p.price || null,
-                            p.description || null,
-                            p.imageUrl || null,
-                            p.details ? JSON.stringify(p.details) : null,
-                            p.isActive,
-                            p.schedulingRules ? JSON.stringify(p.schedulingRules) : null,
-                            p.overrides ? JSON.stringify(p.overrides) : null,
-                            p.minParticipants || null,
-                            p.pricePerPerson || null
-                        ]
-                    );
+                await sql.query(
+                    `INSERT INTO products (id, type, name, classes, price, description, image_url, details, is_active, scheduling_rules, overrides, min_participants, price_per_person)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                    ON CONFLICT (id) DO UPDATE SET
+                        type = EXCLUDED.type,
+                        name = EXCLUDED.name,
+                        classes = EXCLUDED.classes,
+                        price = EXCLUDED.price,
+                        description = EXCLUDED.description,
+                        image_url = EXCLUDED.image_url,
+                        details = EXCLUDED.details,
+                        is_active = EXCLUDED.is_active,
+                        scheduling_rules = EXCLUDED.scheduling_rules,
+                        overrides = EXCLUDED.overrides,
+                        min_participants = EXCLUDED.min_participants,
+                        price_per_person = EXCLUDED.price_per_person;`,
+                    [
+                        p.id,
+                        p.type,
+                        p.name,
+                        p.classes || null,
+                        p.price || null,
+                        p.description || null,
+                        p.imageUrl || null,
+                        p.details ? JSON.stringify(p.details) : null,
+                        p.isActive,
+                        p.schedulingRules ? JSON.stringify(p.schedulingRules) : null,
+                        p.overrides ? JSON.stringify(p.overrides) : null,
+                        p.minParticipants || null,
+                        p.pricePerPerson || null
+                    ]
+                );
             }
             await sql`COMMIT`;
             break;
         case 'instructors':
             await sql`BEGIN`;
-                await sql.query('DELETE FROM instructors');
+            await sql.query('DELETE FROM instructors');
             for (const i of value) {
-                    await sql.query('INSERT INTO instructors (id, name, color_scheme) VALUES ($1, $2, $3);', [i.id, i.name, i.colorScheme]);
+                await sql.query('INSERT INTO instructors (id, name, color_scheme) VALUES ($1, $2, $3);', [i.id, i.name, i.colorScheme]);
             }
             await sql`COMMIT`;
             break;
         default:
-                await sql.query('INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;', [key, JSON.stringify(value)]);
-    }
-
-    return res.status(200).json({ success: true });
-}
-
-async function handleDelete(req: VercelRequest, res: VercelResponse) {
-    const { key, id } = req.query;
-
-    if (key === 'inquiry') {
-        if (!id || typeof id !== 'string') {
-            return res.status(400).json({ error: 'Inquiry ID is required for deletion.' });
-        }
-    const { rowCount } = await sql.query('DELETE FROM inquiries WHERE id = $1;', [id]);
-    if (rowCount != null && rowCount > 0) {
-            return res.status(204).end();
-        } else {
-            return res.status(404).json({ error: 'Inquiry not found.' });
-        }
-    } else {
-        return res.status(400).json({ error: 'Unknown deletion key.' });
+            await sql.query('INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;', [key, JSON.stringify(value)]);
     }
 }
 
 async function handleAction(action: string, req: VercelRequest, res: VercelResponse) {
-    const { id } = req.query;
-    
     let result: any = { success: true };
-
     switch (action) {
-        case 'addBooking':
-            const addBookingBody = req.body;
-            result = await addBookingAction(addBookingBody);
-            break;
-        case 'updateBooking':
-            const updateBookingBody = req.body;
-            await sql.query('UPDATE bookings SET user_info = $1, price = $2 WHERE id = $3', [JSON.stringify(updateBookingBody.userInfo), updateBookingBody.price, updateBookingBody.id]);
-            break;
-        case 'deleteBooking':
-            const deleteBookingBody = req.body;
-            await sql.query('DELETE FROM bookings WHERE id = $1', [deleteBookingBody.bookingId]);
-            break;
-        case 'deleteProduct':
-            const productId = parseInt(id as string, 10);
-            if (isNaN(productId)) return res.status(400).json({ error: 'Product ID must be a valid number.' });
-            await sql.query('DELETE FROM products WHERE id = $1', [productId]);
-            break;
-        case 'removeBookingSlot':
-            const removeBookingBody = req.body;
-            const { bookingId: removeId, slotToRemove } = removeBookingBody;
-            const { rows: [bookingToRemoveFrom] } = await sql`SELECT slots FROM bookings WHERE id = ${removeId}`;
-            if (bookingToRemoveFrom) {
-                const updatedSlots = bookingToRemoveFrom.slots.filter((s: any) => s.date !== slotToRemove.date || s.time !== slotToRemove.time);
-                await sql`UPDATE bookings SET slots = ${JSON.stringify(updatedSlots)} WHERE id = ${removeId}`;
+        case 'updateCustomerInfo': {
+            const { email, info } = req.body;
+            if (!email || !info) {
+                return res.status(400).json({ error: 'Email and info are required.' });
             }
-            break;
+            const { rows: bookings } = await sql.query('SELECT id, user_info FROM bookings WHERE user_info->>\'email\' = $1', [email]);
+            for (const booking of bookings) {
+                const currentInfo = typeof booking.user_info === 'string' ? JSON.parse(booking.user_info) : booking.user_info;
+                const updatedInfo = { ...currentInfo, ...info };
+                await sql.query('UPDATE bookings SET user_info = $1 WHERE id = $2', [JSON.stringify(updatedInfo), booking.id]);
+            }
+            return res.status(200).json({ success: true });
+        }
+        // Only one switch block should exist here. All cases including updateCustomerInfo are already present above.
         case 'addPaymentToBooking': {
             const { bookingId, payment } = req.body;
             const { rows: [bookingRow] } = await sql`SELECT payment_details, price FROM bookings WHERE id = ${bookingId}`;
-            
             if (!bookingRow) {
                 return res.status(404).json({ error: 'Booking not found.' });
             }
-            
             const currentPayments = (bookingRow.payment_details && Array.isArray(bookingRow.payment_details))
                 ? bookingRow.payment_details
                 : [];
-
-            const updatedPayments = [...currentPayments, {
-                ...payment,
-                receivedAt: new Date().toISOString()
-            }];
+            const updatedPayments = [...currentPayments, payment];
             const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
             const isPaid = totalPaid >= bookingRow.price;
 
@@ -417,8 +382,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
             if (paymentIndex >= 0 && paymentIndex < currentPayments.length) {
                 const deletedPayment = currentPayments[paymentIndex];
-                const updatedPayments = currentPayments.filter((_, i) => i !== paymentIndex);
-                const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
+                const updatedPayments = currentPayments.filter((_: any, i: number) => i !== paymentIndex);
+                const totalPaid = updatedPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
                 const isPaid = totalPaid >= bookingRow.price;
                 const { rows: [updatedBookingRow] } = await sql`
                     UPDATE bookings
@@ -455,7 +420,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 const updatedPayments = currentPayments.map((p: any, i: number) =>
                     i === paymentIndex ? { ...p, ...updatedDetails } : p
                 );
-                const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
+                const totalPaid = updatedPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
                 const isPaid = totalPaid >= bookingRow.price;
 
                 const { rows: [updatedBookingRow] } = await sql`
@@ -584,7 +549,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         case 'triggerScheduledNotifications':
             const { rows: settingsRows } = await sql`SELECT key, value FROM settings WHERE key = 'automationSettings' OR key = 'bankDetails'`;
             const automationSettings = settingsRows.find(r => r.key === 'automationSettings')?.value as AutomationSettings;
-            const bankDetails = settingsRows.find(r => r.key === 'bankDetails')?.value as BankDetails;
+            const bankDetails = settingsRows.find(r => r.key === 'bankDetails')?.value as BankDetails[];
 
             if (automationSettings?.classReminder?.enabled) {
                 const { value, unit } = automationSettings.classReminder;
@@ -635,6 +600,14 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 }
             }
             break;
+        case 'addBooking': {
+            // Call the addBookingAction function with request body
+            const bookingResult = await addBookingAction(req.body);
+            if (!bookingResult.success) {
+                return res.status(400).json({ error: bookingResult.message || 'Failed to add booking.' });
+            }
+            return res.status(200).json(bookingResult);
+        }
         default:
             return res.status(400).json({ error: `Unknown action: ${action}` });
     }
@@ -707,10 +680,10 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
     try {
         const { rows: settingsRows } = await sql`SELECT key, value FROM settings WHERE key = 'automationSettings' OR key = 'bankDetails'`;
         const automationSettings = settingsRows.find(r => r.key === 'automationSettings')?.value as AutomationSettings;
-        const bankDetails = settingsRows.find(r => r.key === 'bankDetails')?.value as BankDetails;
+    const bankDetails = settingsRows.find(r => r.key === 'bankDetails')?.value as BankDetails[];
 
-        if (automationSettings?.preBookingConfirmation?.enabled && bankDetails && bankDetails.accountNumber) {
-            await emailService.sendPreBookingConfirmationEmail(fullyParsedBooking, bankDetails);
+        if (automationSettings?.preBookingConfirmation?.enabled && bankDetails && bankDetails.length > 0 && bankDetails[0].accountNumber) {
+            await emailService.sendPreBookingConfirmationEmail(fullyParsedBooking, bankDetails[0]);
             await sql`
                 INSERT INTO client_notifications (created_at, client_name, client_email, type, channel, status, booking_code)
                 VALUES (
@@ -729,4 +702,44 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
     }
 
     return { success: true, message: 'Booking added.', booking: fullyParsedBooking };
+}
+async function handleDelete(req: VercelRequest, res: VercelResponse) {
+    const { key, id } = req.query;
+
+    if (!key || typeof key !== 'string') {
+        return res.status(400).json({ error: 'A "key" query parameter is required for deletion.' });
+    }
+    if (!id) {
+        return res.status(400).json({ error: 'An "id" query parameter is required for deletion.' });
+    }
+
+    try {
+        switch (key) {
+            case 'booking':
+                await sql`DELETE FROM bookings WHERE id = ${Array.isArray(id) ? id[0] : id}`;
+                break;
+            case 'inquiry':
+                await sql`DELETE FROM inquiries WHERE id = ${Array.isArray(id) ? id[0] : id}`;
+                break;
+            case 'notification':
+                await sql`DELETE FROM notifications WHERE id = ${Array.isArray(id) ? id[0] : id}`;
+                break;
+            case 'clientNotification':
+                await sql`DELETE FROM client_notifications WHERE id = ${Array.isArray(id) ? id[0] : id}`;
+                break;
+            case 'invoiceRequest':
+                await sql`DELETE FROM invoice_requests WHERE id = ${Array.isArray(id) ? id[0] : id}`;
+                break;
+            case 'instructor':
+                await sql`DELETE FROM instructors WHERE id = ${Array.isArray(id) ? id[0] : id}`;
+                break;
+            default:
+                return res.status(400).json({ error: `Unknown key for deletion: ${key}` });
+        }
+        return res.status(200).json({ success: true });
+    } catch (error) {
+        console.error('Delete Error:', error);
+        const errorMessage = (error instanceof Error) ? error.message : 'An internal server error occurred.';
+        return res.status(500).json({ error: errorMessage });
+    }
 }

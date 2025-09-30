@@ -187,7 +187,7 @@ export const deleteProduct = (id: number): Promise<{ success: boolean }> => fetc
 
 // Bookings
 export const getBookings = async (): Promise<Booking[]> => {
-    const rawBookings = await getData<any[]>('bookings');
+    const rawBookings = await fetchData('/api/data?action=bookings');
     return rawBookings.map(parseBooking);
 };
 export const addBooking = async (bookingData: any): Promise<AddBookingResult> => {
@@ -237,7 +237,7 @@ export const updateScheduleOverrides = (overrides: ScheduleOverrides): Promise<{
 
 // Instructors
 export const getInstructors = async (): Promise<Instructor[]> => {
-    const rawInstructors = await getData<any[]>('instructors');
+    const rawInstructors = await fetchData('/api/data?action=instructors');
     return rawInstructors.map(parseInstructor);
 };
 export const updateInstructors = (instructors: Instructor[]): Promise<{ success: boolean }> => setData('instructors', instructors);
@@ -248,7 +248,7 @@ export const checkInstructorUsage = (instructorId: number): Promise<{ hasUsage: 
 
 // Inquiries
 export const getGroupInquiries = async (): Promise<GroupInquiry[]> => {
-    const rawInquiries = await getData<any[] | null>('groupInquiries');
+    const rawInquiries = await fetchData('/api/data?action=inquiries');
     if (!rawInquiries) {
         return [];
     }
@@ -271,11 +271,17 @@ export const deleteGroupInquiry = async (id: string): Promise<void> => {
 };
 
 // Invoicing
-export const getInvoiceRequests = (): Promise<InvoiceRequest[]> => getData('invoiceRequests');
+export const getInvoiceRequests = async (): Promise<InvoiceRequest[]> => {
+    const rawInvoices = await fetchData('/api/data?action=invoiceRequests');
+    return rawInvoices || [];
+};
 export const markInvoiceAsProcessed = (invoiceId: string): Promise<InvoiceRequest> => postAction('markInvoiceAsProcessed', { invoiceId });
 
 // Notifications & Announcements
-export const getNotifications = (): Promise<Notification[]> => getData('notifications');
+export const getNotifications = async (): Promise<Notification[]> => {
+    const rawNotifications = await fetchData('/api/data?action=notifications');
+    return rawNotifications || [];
+};
 export const markAllNotificationsAsRead = (): Promise<Notification[]> => postAction('markAllNotificationsAsRead', {});
 export const getAnnouncements = (): Promise<Announcement[]> => getData('announcements');
 export const updateAnnouncements = (announcements: Announcement[]): Promise<{ success: boolean }> => setData('announcements', announcements);
@@ -301,8 +307,8 @@ export const deleteClientNotification = (id: string): Promise<{ success: boolean
 export const triggerScheduledNotifications = (): Promise<{ success: boolean }> => postAction('triggerScheduledNotifications', {});
 export const getBackgroundSettings = (): Promise<BackgroundSettings> => getData('backgroundSettings');
 export const updateBackgroundSettings = (settings: BackgroundSettings): Promise<{ success: boolean }> => setData('backgroundSettings', settings);
-export const getBankDetails = (): Promise<BankDetails> => getData('bankDetails');
-export const updateBankDetails = (details: BankDetails): Promise<{ success: boolean }> => setData('bankDetails', details);
+export const getBankDetails = (): Promise<BankDetails[]> => getData('bankDetails');
+export const updateBankDetails = (details: BankDetails[]): Promise<{ success: boolean }> => setData('bankDetails', details);
 
 // --- Client-side Calculations and Utilities ---
 
