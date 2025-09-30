@@ -298,6 +298,9 @@ export interface BankDetails {
     details?: string;
 }
 
+// For settings, allow multiple accounts
+export type BankDetailsArray = BankDetails[];
+
 export interface UITexts {
     [key: string]: any;
 }

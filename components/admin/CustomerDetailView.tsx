@@ -196,8 +196,12 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer
 
   const handleConfirmPayment = async (details: Omit<PaymentDetails, 'receivedAt'>) => {
     if (bookingToPay) {
-        // CORRECCIÓN: Llamar a la función correcta en el servicio de datos
-        await dataService.addPaymentToBooking(bookingToPay.id, details);
+        // Add receivedAt property as current ISO date string
+        const paymentDetails: PaymentDetails = {
+            ...details,
+            receivedAt: new Date().toISOString(),
+        };
+        await dataService.addPaymentToBooking(bookingToPay.id, paymentDetails);
         setBookingToPay(null);
         onDataChange();
     }
