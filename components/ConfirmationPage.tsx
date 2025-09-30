@@ -3,6 +3,7 @@ import { BankAccountsModal } from './BankAccountsModal';
 import type { Booking, BankDetails, FooterInfo, Product, ClassPackage } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { CheckCircleIcon } from './icons/CheckCircleIcon';
+import { BankIcon } from './icons/BankIcon';
 import { WhatsAppIcon } from './icons/WhatsAppIcon';
 import { DocumentDuplicateIcon } from './icons/DocumentDuplicateIcon';
 import { InfoCircleIcon } from './icons/InfoCircleIcon';
@@ -137,14 +138,14 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
             </div>
 
                         <div className="mt-8 flex flex-col items-center justify-center">
-                                                <button
-                                                    onClick={() => setModalOpen(true)}
-                                                    className="w-full sm:w-auto flex items-center justify-center gap-3 bg-gradient-to-r from-brand-primary via-brand-secondary to-brand-accent text-white font-bold py-4 px-8 rounded-2xl shadow-xl hover:scale-105 transition-transform text-lg mb-2"
-                                                    style={{ aspectRatio: '4/1', minHeight: '64px' }}
-                                                >
-                                                    <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3" /></svg>
-                                                    Ver todas las cuentas bancarias
-                                                </button>
+                        <button
+                            onClick={() => setModalOpen(true)}
+                            className="w-full sm:w-auto flex items-center justify-center gap-3 bg-gradient-to-r from-brand-primary via-brand-secondary to-brand-accent text-white font-bold py-4 px-8 rounded-2xl shadow-xl hover:scale-105 transition-transform text-lg mb-2"
+                            style={{ aspectRatio: '4/1', minHeight: '64px' }}
+                        >
+                            <BankIcon className="w-7 h-7" />
+                            Ver todas las cuentas bancarias
+                        </button>
                                 <BankAccountsModal open={modalOpen} onClose={() => setModalOpen(false)} accounts={bankAccounts} />
                         </div>
             
