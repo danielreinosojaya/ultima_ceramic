@@ -1,5 +1,5 @@
 import React from 'react';
-import { useLanguage } from '../context/LanguageContext';
+// Traducción eliminada, usar texto en español directamente
 import type { Technique } from '../types';
 
 interface TechniqueSelectorProps {
@@ -22,27 +22,25 @@ const TechniqueCard: React.FC<{ title: string; subtitle: string; buttonText: str
 
 
 export const TechniqueSelector: React.FC<TechniqueSelectorProps> = ({ onSelect, onBack }) => {
-  const { t } = useLanguage();
-
   return (
     <div className="text-center p-6 bg-transparent animate-fade-in-up max-w-4xl mx-auto">
-      <button onClick={onBack} className="text-brand-secondary hover:text-brand-text mb-4 transition-colors font-semibold">
-        &larr; {t('summary.backButton')}
+      <button onClick={onBack} className="text-brand-secondary hover:text-brand-text mb-4 transition-colors font-semibold text-lg" style={{ background: 'none', border: 'none' }}>
+        &larr; Editar Selección
       </button>
-      <h2 className="text-3xl font-semibold text-brand-text mb-2">{t('techniques.title')}</h2>
-      <p className="text-brand-secondary mb-10">{t('techniques.subtitle')}</p>
+      <h2 className="text-4xl font-bold text-brand-text mb-2">Elige una Técnica</h2>
+      <p className="text-brand-secondary mb-10 text-xl">¿En qué te gustaría enfocarte hoy?</p>
       <div className="grid md:grid-cols-2 gap-8">
         <TechniqueCard
-            title={t('techniques.pottersWheelTitle')}
-            subtitle={t('techniques.pottersWheelSubtitle')}
-            buttonText={t('techniques.selectButton')}
+            title="Torno Alfarero"
+            subtitle="Aprende a levantar piezas en el torno, creando tazas, cuencos y jarrones."
+            buttonText="Seleccionar"
             onClick={() => onSelect('potters_wheel')}
         />
         <TechniqueCard
-            title={t('techniques.moldingTitle')}
-            subtitle={t('techniques.moldingSubtitle')}
-            buttonText={t('techniques.selectButton')}
-            onClick={() => onSelect('molding')}
+            title="Modelado a Mano"
+            subtitle="Explora técnicas escultóricas como el pellizco, los churros y las planchas."
+            buttonText="Seleccionar"
+              onClick={() => onSelect('molding')}
         />
       </div>
     </div>

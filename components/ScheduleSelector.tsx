@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type { ClassPackage, TimeSlot, EnrichedAvailableSlot, BookingMode, AppData } from '../types.js';
 import * as dataService from '../services/dataService.js';
-import { useLanguage } from '../context/LanguageContext.js';
+// Eliminado useLanguage, la app ahora es monolingüe en español
 import { BookingSidebar } from './BookingSidebar.js';
 import { CapacityIndicator } from './CapacityIndicator.js';
 import { InstructorTag } from './InstructorTag.js';
@@ -32,8 +32,11 @@ interface ScheduleSelectorProps {
 }
 
 export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfirm, initialSlots, onBack, bookingMode, appData }) => {
-  const { t, language } = useLanguage();
-  const [selectedSlots, setSelectedSlots] = useState<TimeSlot[]>(initialSlots);
+  // Eliminado useLanguage, la app ahora es monolingüe en español
+  const language = 'es-ES';
+  // Inicializar sin slots seleccionados por defecto
+  const [selectedSlots, setSelectedSlots] = useState<TimeSlot[]>([]);
+  // Inicializar la vista en la semana del día actual
   const [currentDate, setCurrentDate] = useState(getWeekStartDate(new Date()));
 
   // Refs for mobile day carousel
@@ -109,7 +112,7 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
         setSelectedSlots(newSlots);
       } else {
         // Use a custom error modal or toast here in production
-        alert(t('schedule.monthlyNotAvailableError', { default: `This slot is not available for week(s): ${unavailableWeeks.join(', ')}. Please choose another.` }));
+  alert(`Este horario no está disponible para la(s) semana(s): ${unavailableWeeks.join(', ')}. Por favor elige otro.`);
       }
     } else { // Flexible mode
       if (isCurrentlySelected) {
@@ -150,17 +153,17 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
 
   return (
     <div className="bg-brand-surface p-4 sm:p-6 rounded-xl shadow-subtle animate-fade-in-up">
-        <button onClick={onBack} className="text-brand-secondary hover:text-brand-text mb-4 transition-colors font-semibold">
-            &larr; {t('schedule.backButton')}
-        </button>
+    <button onClick={onBack} className="text-brand-secondary hover:text-brand-text mb-4 transition-colors font-semibold">
+      &larr; Atrás
+    </button>
         <div className="flex flex-col lg:flex-row gap-8">
             <div className="lg:w-2/3">
                 <p className="text-brand-secondary mb-2">
-                  {bookingMode === 'monthly' ? t('schedule.monthlySubtitle') : t('schedule.subtitle')} <span className="font-bold text-brand-text">{pkg.name}</span>.
+                  {bookingMode === 'monthly' ? 'Selecciona el horario para tus clases mensuales' : 'Selecciona el horario para tus clases'} <span className="font-bold text-brand-text">{pkg.name}</span>.
                 </p>
                 {bookingMode === 'flexible' && firstSelectionDate && bookingWindowEndDate && (
                     <div className="text-xs text-center font-semibold bg-amber-100 text-amber-800 p-2 rounded-md mb-4 animate-fade-in-fast">
-                      {t('schedule.bookingWindowMessage')} {bookingWindowEndDate.toLocaleDateString(language, { month: 'long', day: 'numeric' })}.
+                      {`Puedes seleccionar clases hasta el ${bookingWindowEndDate.toLocaleDateString(language, { month: 'long', day: 'numeric' })}.`}
                     </div>
                 )}
                 <div className="flex justify-between items-center mb-4">
@@ -205,7 +208,7 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                                       onClick={() => handleSlotSelect(date, slot)} 
                                       disabled={isDisabled}
                                       aria-disabled={isDisabled}
-                                      aria-label={isFull ? t('schedule.fullLabel', { default: 'Full' }) : t('schedule.slotLabel', { default: 'Available slot' })}
+                                      aria-label={isFull ? 'Lleno' : 'Horario disponible'}
                                       className={`relative p-2 rounded-md text-left transition-all duration-200 border w-full flex flex-col gap-1.5 ${
                                         isSelected ? 'bg-brand-primary/10 ring-2 ring-brand-primary border-transparent' : 
                                         isDisabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-70' :
@@ -215,7 +218,7 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                                       <span className="font-semibold text-sm text-brand-text">{slot.time}</span>
                                       <InstructorTag instructorId={slot.instructorId} instructors={appData.instructors} />
                                       <CapacityIndicator count={slot.totalBookingsCount} max={slot.maxCapacity} capacityMessages={appData.capacityMessages} />
-                                      {isFull && <div className="absolute top-1 right-1 text-[8px] font-bold bg-red-500 text-white px-1 rounded-sm">{t('schedule.fullLabel', { default: 'LLENO' })}</div>}
+                                      {isFull && <div className="absolute top-1 right-1 text-[8px] font-bold bg-red-500 text-white px-1 rounded-sm">LLENO</div>}
                                     </button>
                                   )
                               })
@@ -249,7 +252,7 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                           onClick={() => hasAvailableSlots && setSelectedDayIndex(index)}
                           disabled={!hasAvailableSlots}
                           aria-disabled={!hasAvailableSlots}
-                          aria-label={hasAvailableSlots ? t('schedule.dayAvailableLabel', { default: 'Available day' }) : t('schedule.dayUnavailableLabel', { default: 'Unavailable day' })}
+                          aria-label={hasAvailableSlots ? 'Día disponible' : 'Día no disponible'}
                           className={`flex-shrink-0 w-16 h-20 rounded-lg flex flex-col items-center justify-center transition-all duration-300 relative border-2 ${
                             isSelected
                               ? 'bg-brand-primary text-white border-brand-primary shadow-lg'
@@ -276,7 +279,7 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                       const isPast = selectedDate < today;
 
                       if (isPast) return <div className="text-center py-10 text-brand-secondary">-</div>;
-                      if (slotsForDay.length === 0) return <div className="text-center py-10 text-brand-secondary">{t('schedule.modal.noClasses')}</div>;
+                      if (slotsForDay.length === 0) return <div className="text-center py-10 text-brand-secondary">No hay clases disponibles</div>;
                       
                       return slotsForDay.map(slot => {
                         const isSelected = selectedSlots.some(s => s.date === dateStr && s.time === slot.time);
@@ -290,7 +293,7 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                             onClick={() => handleSlotSelect(selectedDate, slot)} 
                             disabled={isDisabled}
                             aria-disabled={isDisabled}
-                            aria-label={isFull ? t('schedule.fullLabel', { default: 'Full' }) : t('schedule.slotLabel', { default: 'Available slot' })}
+                            aria-label={isFull ? 'Lleno' : 'Horario disponible'}
                             className={`relative p-3 rounded-md text-left transition-all duration-200 border w-full flex items-center justify-between gap-4 ${
                               isSelected ? 'bg-brand-primary/10 ring-2 ring-brand-primary border-transparent' : 
                               isDisabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-70' :
@@ -302,7 +305,7 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                               <InstructorTag instructorId={slot.instructorId} instructors={appData.instructors} />
                             </div>
                             <CapacityIndicator count={slot.totalBookingsCount} max={slot.maxCapacity} capacityMessages={appData.capacityMessages} />
-                            {isFull && <div className="absolute top-1 right-1 text-[8px] font-bold bg-red-500 text-white px-1 rounded-sm">{t('schedule.fullLabel', { default: 'LLENO' })}</div>}
+                            {isFull && <div className="absolute top-1 right-1 text-[8px] font-bold bg-red-500 text-white px-1 rounded-sm">LLENO</div>}
                           </button>
                         )
                       })

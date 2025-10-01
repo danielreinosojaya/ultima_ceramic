@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { UserInfo, TimeSlot, PaymentDetails, AttendanceStatus } from '../../types';
-import { useLanguage } from '../../context/LanguageContext';
 import * as dataService from '../../services/dataService';
 import { UserIcon } from '../icons/UserIcon';
 import { MailIcon } from '../icons/MailIcon';
@@ -34,13 +33,13 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, 
   // Fallbacks para evitar errores si no se pasan como función
   const safeOnEditAttendee = typeof onEditAttendee === 'function' ? onEditAttendee : () => {};
   const safeOnRescheduleAttendee = typeof onRescheduleAttendee === 'function' ? onRescheduleAttendee : () => {};
-  const { t, language } = useLanguage();
   const [attendanceData, setAttendanceData] = useState<Record<string, AttendanceStatus>>({});
   const [isPastClass, setIsPastClass] = useState(false);
   const [isAttendanceTaken, setIsAttendanceTaken] = useState(false);
 
   const slotIdentifier = useMemo(() => `${date}_${time}`, [date, time]);
-  const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString(language, {
+  // Fecha en formato español
+  const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString('es-ES', {
     weekday: 'long', month: 'long', day: 'numeric',
   });
 
@@ -104,7 +103,7 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, 
   };
 
   const handleRemoveClick = (bookingId: string, userName: string) => {
-    const confirmationMessage = t('admin.bookingModal.removeConfirmText', { name: userName });
+    const confirmationMessage = `¿Seguro que quieres eliminar la reserva de ${userName}?`;
     if (window.confirm(confirmationMessage)) {
       onRemoveAttendee(bookingId);
     }
@@ -139,7 +138,7 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, 
                 </div>
                 {attendee.bookingCode && (
                 <div className="text-xs font-mono text-brand-accent mb-2">
-                  Code: {attendee.bookingCode}
+                  Código: {attendee.bookingCode}
                 </div>
                 )}
                 <div className="flex items-center text-sm">
@@ -152,38 +151,38 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, 
                 </div>
                 {/* Participant count and manual note inside card */}
                 <div className="mt-2 text-xs font-bold text-brand-secondary">
-                  {t('admin.bookingModal.participantCount', { count: participantCount }) || `Participantes: ${participantCount}`}
+                  {`Participantes: ${participantCount}`}
                 </div>
                 {manualNote && (
                   <div className="mt-1 p-1 bg-yellow-50 border-l-4 border-yellow-400 text-yellow-900 text-xs rounded">
-                  <span className="font-bold">{t('admin.manualBookingModal.clientNoteLabel') || 'Nota'}: </span>{manualNote}
+                  <span className="font-bold">Nota: </span>{manualNote}
                   </div>
                 )}
                 <div className={`mt-2 text-xs font-bold px-2 py-0.5 rounded-full inline-block ${attendee.isPaid ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}> 
-                  {attendee.isPaid ? t('admin.bookingModal.paidStatus') : t('admin.bookingModal.unpaidStatus')}
+                  {attendee.isPaid ? 'Pagado' : 'Pendiente de pago'}
                 </div>
                 {firstPayment && (
                   <div className="text-xs text-gray-500 mt-1">
-                    {t('admin.bookingModal.paidDetails', { amount: totalPaid.toFixed(2), method: firstPayment.method, date: new Date(firstPayment.receivedAt).toLocaleDateString(language)})}
+                    {`Pagado: $${totalPaid.toFixed(2)} | Método: ${firstPayment.method} | Fecha: ${new Date(firstPayment.receivedAt).toLocaleDateString('es-ES')}`}
                   </div>
                 )}
               </div>
               <div className="flex flex-col items-end gap-1">
-                <button onClick={() => safeOnEditAttendee(attendee.bookingId)} title={t('admin.bookingModal.editAttendee')} className="text-brand-secondary hover:text-brand-accent p-2 rounded-full hover:bg-gray-200 transition-colors">
+                <button onClick={() => safeOnEditAttendee(attendee.bookingId)} title="Editar asistente" className="text-brand-secondary hover:text-brand-accent p-2 rounded-full hover:bg-gray-200 transition-colors">
                 <EditIcon className="w-5 h-5" />
                 </button>
-                <button onClick={() => safeOnRescheduleAttendee(attendee.bookingId, { date, time, instructorId }, `${attendee.userInfo.firstName} ${attendee.userInfo.lastName}`)} title={t('admin.bookingModal.rescheduleAttendee')} className="text-brand-secondary hover:text-brand-accent p-2 rounded-full hover:bg-gray-200 transition-colors">
+                <button onClick={() => safeOnRescheduleAttendee(attendee.bookingId, { date, time, instructorId }, `${attendee.userInfo.firstName} ${attendee.userInfo.lastName}`)} title="Reagendar asistente" className="text-brand-secondary hover:text-brand-accent p-2 rounded-full hover:bg-gray-200 transition-colors">
                 <CalendarEditIcon className="w-5 h-5" />
                 </button>
-                <button onClick={() => handleRemoveClick(attendee.bookingId, `${attendee.userInfo.firstName} ${attendee.userInfo.lastName}`)} title={t('admin.bookingModal.removeAttendee')} className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-100 transition-colors">
+                <button onClick={() => handleRemoveClick(attendee.bookingId, `${attendee.userInfo.firstName} ${attendee.userInfo.lastName}`)} title="Eliminar asistente" className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-100 transition-colors">
                   <TrashIcon className="w-5 h-5" />
                 </button>
                 {attendee.isPaid ? (
-                  <button onClick={() => onMarkAsUnpaid(attendee.bookingId)} title="Mark as Unpaid" className="p-2 rounded-full text-brand-success hover:bg-green-100 transition-colors">
+                  <button onClick={() => onMarkAsUnpaid(attendee.bookingId)} title="Marcar como no pagado" className="p-2 rounded-full text-brand-success hover:bg-green-100 transition-colors">
                     <CurrencyDollarIcon className="w-5 h-5"/>
                   </button>
                 ) : (
-                  <button onClick={() => onAcceptPayment(attendee.bookingId)} title="Accept Payment" className="p-2 rounded-full text-gray-400 hover:text-brand-success hover:bg-green-100 transition-colors">
+                  <button onClick={() => onAcceptPayment(attendee.bookingId)} title="Aceptar pago" className="p-2 rounded-full text-gray-400 hover:text-brand-success hover:bg-green-100 transition-colors">
                     <CurrencyDollarIcon className="w-5 h-5"/>
                   </button>
                 )}
@@ -192,21 +191,21 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, 
             {isPastClass && (
               <div className="mt-3 pt-3 border-t border-gray-200">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-brand-secondary">{t('admin.bookingModal.attendance')}:</span>
+                  <span className="text-sm font-bold text-brand-secondary">Asistencia:</span>
                   {isAttendanceTaken ? (
                     <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${attendanceData[attendee.bookingId] === 'attended' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}> 
-                      {attendanceData[attendee.bookingId] === 'attended' ? t('admin.bookingModal.attended') : t('admin.bookingModal.noShow')}
+                      {attendanceData[attendee.bookingId] === 'attended' ? 'Asistió' : 'No asistió'}
                     </span>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <span className={`text-sm font-semibold ${attendanceData[attendee.bookingId] === 'no-show' ? 'text-gray-400' : 'text-brand-text'}`}>{t('admin.bookingModal.attended')}</span>
+                      <span className={`text-sm font-semibold ${attendanceData[attendee.bookingId] === 'no-show' ? 'text-gray-400' : 'text-brand-text'}`}>Asistió</span>
                       <button
                         onClick={() => handleAttendanceChange(attendee.bookingId, attendanceData[attendee.bookingId] === 'attended' ? 'no-show' : 'attended')}
                         className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${attendanceData[attendee.bookingId] === 'attended' ? 'bg-brand-success' : 'bg-gray-300'}`}
                       >
                         <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${attendanceData[attendee.bookingId] === 'attended' ? 'translate-x-6' : 'translate-x-1'}`} />
                       </button>
-                      <span className={`text-sm font-semibold ${attendanceData[attendee.bookingId] === 'attended' ? 'text-gray-400' : 'text-brand-text'}`}>{t('admin.bookingModal.noShow')}</span>
+                      <span className={`text-sm font-semibold ${attendanceData[attendee.bookingId] === 'attended' ? 'text-gray-400' : 'text-brand-text'}`}>No asistió</span>
                     </div>
                   )}
                 </div>
@@ -217,7 +216,7 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, 
       })}
       </ul>
         ) : (
-          <p className="text-center text-brand-secondary py-4">{t('admin.bookingModal.noAttendees')}</p>
+          <p className="text-center text-brand-secondary py-4">No hay asistentes</p>
         )}
 
         <div className="mt-6 flex justify-end gap-3">
@@ -226,14 +225,14 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, 
                 onClick={handleSaveAttendance}
                 className="bg-brand-secondary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-text transition-colors"
              >
-                {t('admin.bookingModal.saveAttendance')}
+                Guardar asistencia
              </button>
            )}
           <button
             onClick={onClose}
             className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent transition-colors"
           >
-            Close
+            Cerrar
           </button>
         </div>
       </div>

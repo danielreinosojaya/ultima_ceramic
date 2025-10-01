@@ -2,7 +2,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import type { TimeSlot, RescheduleSlotInfo, EnrichedAvailableSlot, AppData } from '../../types';
 import * as dataService from '../../services/dataService';
-import { useLanguage } from '../../context/LanguageContext';
 import { InstructorTag } from '../InstructorTag';
 import { CapacityIndicator } from '../CapacityIndicator';
 
@@ -22,7 +21,7 @@ interface RescheduleModalProps {
 }
 
 export const RescheduleModal: React.FC<RescheduleModalProps> = ({ isOpen, onClose, onSave, slotInfo, appData }) => {
-    const { t, language } = useLanguage();
+    const language = 'es-ES';
     
     const [currentDate, setCurrentDate] = useState(new Date(slotInfo.slot.date + 'T00:00:00'));
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -74,16 +73,16 @@ export const RescheduleModal: React.FC<RescheduleModalProps> = ({ isOpen, onClos
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
             <div className="bg-brand-surface rounded-xl shadow-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-fade-in-up" onClick={(e) => e.stopPropagation()}>
-                <h2 className="text-xl font-serif text-brand-accent mb-2 text-center">{t('admin.rescheduleModal.title', { name: slotInfo.attendeeName })}</h2>
+                <h2 className="text-xl font-serif text-brand-accent mb-2 text-center">Reagendar para {slotInfo.attendeeName}</h2>
                 <div className="text-center bg-brand-background p-2 rounded-md mb-4">
-                    <p className="text-sm font-bold text-brand-secondary">{t('admin.rescheduleModal.currentSlot')}:</p>
+                    <p className="text-sm font-bold text-brand-secondary">Clase actual:</p>
                     <p className="text-md font-semibold text-brand-text">{formattedCurrentSlotDate} @ {slotInfo.slot.time}</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Calendar */}
+                    {/* Calendario */}
                     <div>
-                        <h3 className="font-bold text-brand-text mb-2 text-center">{t('admin.rescheduleModal.selectNewSlot')}</h3>
+                        <h3 className="font-bold text-brand-text mb-2 text-center">Selecciona nueva fecha</h3>
                         <div className="flex items-center justify-between mb-2">
                             <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} disabled={currentDate.getMonth() === today.getMonth() && currentDate.getFullYear() === today.getFullYear()} className="p-2 rounded-full hover:bg-brand-background disabled:opacity-50">&larr;</button>
                             <h4 className="text-lg font-bold text-brand-text capitalize">{currentDate.toLocaleString(language, { month: 'long', year: 'numeric' })}</h4>
@@ -107,7 +106,7 @@ export const RescheduleModal: React.FC<RescheduleModalProps> = ({ isOpen, onClos
                             })}
                         </div>
                     </div>
-                    {/* Time Slots */}
+                    {/* Horarios */}
                     <div className="bg-brand-background p-3 rounded-lg">
                        {selectedDate ? (
                          <>
@@ -125,12 +124,12 @@ export const RescheduleModal: React.FC<RescheduleModalProps> = ({ isOpen, onClos
                                             <CapacityIndicator count={slot.paidBookingsCount} max={slot.maxCapacity} capacityMessages={appData.capacityMessages} />
                                        </div>
                                    </button>
-                               )) : <p className="text-center text-brand-secondary text-sm p-4">{t('schedule.modal.noClasses')}</p>}
+                               )) : <p className="text-center text-brand-secondary text-sm p-4">No hay clases disponibles.</p>}
                            </div>
                          </>
                        ) : (
                          <div className="flex items-center justify-center h-full">
-                            <p className="text-brand-secondary text-center">Select a day to see available times.</p>
+                            <p className="text-brand-secondary text-center">Selecciona un día para ver los horarios disponibles.</p>
                          </div>
                        )}
                     </div>
@@ -138,10 +137,10 @@ export const RescheduleModal: React.FC<RescheduleModalProps> = ({ isOpen, onClos
 
                 <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-gray-200">
                     <button type="button" onClick={onClose} className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100">
-                        {t('admin.productManager.cancelButton')}
+                        Cancelar
                     </button>
                     <button type="button" onClick={handleSubmit} disabled={!selectedDate || !selectedTime} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent disabled:bg-gray-400">
-                        {t('admin.rescheduleModal.saveButton')}
+                        Guardar
                     </button>
                 </div>
             </div>

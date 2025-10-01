@@ -1,5 +1,5 @@
 import React from 'react';
-import { useLanguage } from '../context/LanguageContext';
+// ...existing code...
 
 interface PolicyModalProps {
     onClose: () => void;
@@ -7,7 +7,7 @@ interface PolicyModalProps {
 }
 
 export const PolicyModal: React.FC<PolicyModalProps> = ({ onClose, policiesText }) => {
-    const { t } = useLanguage();
+    // Traducción eliminada, usar texto en español directamente
 
     return (
         <div
@@ -19,7 +19,7 @@ export const PolicyModal: React.FC<PolicyModalProps> = ({ onClose, policiesText 
                 onClick={(e) => e.stopPropagation()}
             >
                 <h2 className="text-2xl font-serif text-brand-accent mb-4 text-center">
-                    {t('policyModal.title')}
+                    Políticas de Devoluciones
                 </h2>
                 <div className="flex-grow overflow-y-auto pr-4 -mr-4 text-brand-secondary whitespace-pre-wrap">
                    {policiesText}
@@ -29,7 +29,7 @@ export const PolicyModal: React.FC<PolicyModalProps> = ({ onClose, policiesText 
                         onClick={onClose}
                         className="bg-brand-primary text-white font-bold py-2 px-8 rounded-lg hover:bg-brand-accent transition-colors"
                     >
-                        {t('policyModal.closeButton')}
+                        Cerrar
                     </button>
                 </div>
             </div>

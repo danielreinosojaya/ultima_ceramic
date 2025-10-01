@@ -19,14 +19,13 @@ import { ConfirmationPage } from './components/ConfirmationPage';
 
 import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession } from './types';
 import * as dataService from './services/dataService';
-import { useLanguage } from './context/LanguageContext';
 import { InstagramIcon } from './components/icons/InstagramIcon';
 import { WhatsAppIcon } from './components/icons/WhatsAppIcon';
 import { MailIcon } from './components/icons/MailIcon';
 import { LocationPinIcon } from './components/icons/LocationPinIcon';
 
 const App: React.FC = () => {
-    const { t } = useLanguage();
+    // Traducciones eliminadas, usar texto en español directamente
     const [isAdmin, setIsAdmin] = useState(false);
     const [view, setView] = useState<AppView>('welcome');
     const [bookingDetails, setBookingDetails] = useState<BookingDetails>({ product: null, slots: [], userInfo: null });
@@ -291,18 +290,18 @@ const App: React.FC = () => {
                             </a>
                         </div>
                         <div className="flex items-center justify-center gap-6 mt-2">
-                            <a href={`https://wa.me/${appData.footerInfo.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" aria-label={t('footer.whatsapp')} className="hover:text-brand-primary transition-colors">
+                            <a href={`https://wa.me/${appData.footerInfo.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp" className="hover:text-brand-primary transition-colors">
                                 <WhatsAppIcon className="w-6 h-6" />
                             </a>
-                            <a href={`mailto:${appData.footerInfo.email}`} aria-label={t('footer.email')} className="hover:text-brand-primary transition-colors">
+                            <a href={`mailto:${appData.footerInfo.email}`} aria-label="Correo" className="hover:text-brand-primary transition-colors">
                                 <MailIcon className="w-6 h-6" />
                             </a>
-                            <a href={`https://instagram.com/${appData.footerInfo.instagramHandle}`} target="_blank" rel="noopener noreferrer" aria-label={t('footer.instagram')} className="hover:text-brand-primary transition-colors">
+                            <a href={`https://instagram.com/${appData.footerInfo.instagramHandle}`} target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="hover:text-brand-primary transition-colors">
                                 <InstagramIcon className="w-6 h-6" />
                             </a>
                         </div>
                         <button onClick={() => setIsPolicyModalOpen(true)} className="mt-4 text-xs hover:underline text-brand-secondary transition-colors">
-                            {t('footer.returnPolicies')}
+                            Políticas de Devoluciones
                         </button>
                     </div>
                 </footer>

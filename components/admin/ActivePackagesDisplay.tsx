@@ -1,7 +1,7 @@
 
 import React from 'react';
 import type { Booking, ClassPackage, IntroductoryClass, OpenStudioSubscription } from '../../types.js';
-import { useLanguage } from '../../context/LanguageContext.js';
+// Eliminado useLanguage, la app ahora es monolingüe en español
 import { CalendarIcon } from '../icons/CalendarIcon.js';
 import { ClockIcon } from '../icons/ClockIcon.js';
 
@@ -28,23 +28,23 @@ const ProgressBar: React.FC<{ percent: number }> = ({ percent }) => (
 );
 
 const StatusTag: React.FC<{ status: AugmentedPackage['status'] }> = ({ status }) => {
-    const { t } = useLanguage();
+    // Eliminado useLanguage, la app ahora es monolingüe en español
     const styles = {
         'Active': 'bg-green-100 text-green-800',
         'Pending Payment': 'bg-yellow-100 text-yellow-800',
         'Expired': 'bg-red-100 text-red-800',
         'Completed': 'bg-blue-100 text-blue-800'
     };
-    const key = status.replace(/\s/g, '');
     return (
          <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${styles[status]}`}>
-            {t(`admin.customerDetail.status${key}`)}
+            {status === 'Active' ? 'Activo' : status === 'Pending Payment' ? 'Pago pendiente' : status === 'Expired' ? 'Vencido' : 'Completado'}
         </span>
     );
 }
 
 export const ActivePackagesDisplay: React.FC<ActivePackagesDisplayProps> = ({ packages }) => {
-    const { t, language } = useLanguage();
+    // Eliminado useLanguage, la app ahora es monolingüe en español
+    const language = 'es-ES';
     
     const formatFullDateTime = (date: Date | string | null, time?: string) => {
         if (!date) return '---';
@@ -69,7 +69,7 @@ export const ActivePackagesDisplay: React.FC<ActivePackagesDisplayProps> = ({ pa
 
     return (
         <div>
-            <h3 className="text-xl font-bold text-brand-text mb-4">{t('admin.customerDetail.activePackages')}</h3>
+            <h3 className="text-xl font-bold text-brand-text mb-4">Paquetes activos</h3>
             {packages.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {packages.map(pkg => {
@@ -88,9 +88,9 @@ export const ActivePackagesDisplay: React.FC<ActivePackagesDisplayProps> = ({ pa
                                 {(isPackageOrIntro && pkg.status !== 'Pending Payment') && (
                                     <div>
                                         <div className="flex justify-between items-baseline text-sm mb-1">
-                                            <span className="font-semibold text-brand-secondary">{t('admin.customerDetail.progress')}</span>
+                                            <span className="font-semibold text-brand-secondary">Progreso</span>
                                             <span className="font-bold text-brand-text">
-                                                {t('admin.customerDetail.progressText', { completed: pkg.completedCount, total: pkg.totalCount })}
+                                                {`Completadas: ${pkg.completedCount} / ${pkg.totalCount}`}
                                             </span>
                                         </div>
                                         <ProgressBar percent={pkg.progressPercent} />
@@ -100,14 +100,14 @@ export const ActivePackagesDisplay: React.FC<ActivePackagesDisplayProps> = ({ pa
                                     <div className="flex items-start gap-2">
                                         <CalendarIcon className="w-4 h-4 text-gray-400 mt-0.5" />
                                         <div>
-                                            <p className="font-bold text-gray-500 uppercase tracking-wider">{isPackageOrIntro ? t('admin.customerDetail.nextClass') : t('admin.customerDetail.nextClass')}</p>
+                                            <p className="font-bold text-gray-500 uppercase tracking-wider">Próxima clase</p>
                                             <p className="font-semibold text-brand-text">{formatFullDateTime(pkg.nextClassDate)}</p>
                                         </div>
                                     </div>
                                      <div className="flex items-start gap-2">
                                         <ClockIcon className="w-4 h-4 text-gray-400 mt-0.5" />
                                         <div>
-                                            <p className="font-bold text-gray-500 uppercase tracking-wider">{t('admin.customerDetail.expiresOn')}</p>
+                                            <p className="font-bold text-gray-500 uppercase tracking-wider">Vence el</p>
                                             <p className="font-semibold text-brand-text">{formatDate(pkg.expiryDate)}</p>
                                         </div>
                                     </div>
@@ -115,7 +115,7 @@ export const ActivePackagesDisplay: React.FC<ActivePackagesDisplayProps> = ({ pa
                                 {/* Show all class dates/times for this package */}
                                 {isPackageOrIntro && pkg.slots && pkg.slots.length > 0 && (
                                   <div className="mt-2">
-                                    <div className="font-bold text-xs text-brand-secondary mb-1">{t('admin.customerDetail.allClasses')}</div>
+                                    <div className="font-bold text-xs text-brand-secondary mb-1">Todas las clases</div>
                                     <ul className="text-xs text-brand-text grid grid-cols-2 gap-2">
                                       {pkg.slots.map((slot, idx) => (
                                         <li key={idx} className="flex gap-2 items-center">
@@ -127,7 +127,7 @@ export const ActivePackagesDisplay: React.FC<ActivePackagesDisplayProps> = ({ pa
                                   </div>
                                 )}
                                 <div className="text-right text-[10px] text-gray-400 border-t pt-2 mt-auto">
-                                  {t('admin.customerDetail.bookedOn')} {formatDate(pkg.bookingDate)}
+                                  {`Reservado el ${formatDate(pkg.bookingDate)}`}
                                 </div>
                             </div>
                         )
@@ -135,7 +135,7 @@ export const ActivePackagesDisplay: React.FC<ActivePackagesDisplayProps> = ({ pa
                 </div>
             ) : (
                 <div className="text-center py-8 bg-brand-background rounded-lg">
-                    <p className="text-brand-secondary">{t('admin.customerDetail.noActivePackages')}</p>
+                    <p className="text-brand-secondary">No hay paquetes activos</p>
                 </div>
             )}
         </div>

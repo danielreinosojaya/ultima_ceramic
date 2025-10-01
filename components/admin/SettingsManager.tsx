@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useLanguage } from '../../context/LanguageContext';
+// import { useLanguage } from '../../context/LanguageContext';
 import * as dataService from '../../services/dataService';
 // ...other existing imports...
 
 const BankAccountsManager: React.FC = () => {
-    const { t } = useLanguage();
+    // const { t } = useLanguage();
     const [accounts, setAccounts] = useState([]);
     const [editing, setEditing] = useState(null);
     const [form, setForm] = useState({ bankName: '', accountHolder: '', accountNumber: '', accountType: '', taxId: '' });
@@ -98,7 +98,7 @@ const SettingsInputField: React.FC<React.InputHTMLAttributes<HTMLInputElement> &
 );
 
 const CommunicationAutomationManager: React.FC = () => {
-    const { t } = useLanguage();
+    // const { t } = useLanguage();
     const [settings, setSettings] = useState<AutomationSettings | null>(null);
     const [saved, setSaved] = useState(false);
 
@@ -135,10 +135,10 @@ const CommunicationAutomationManager: React.FC = () => {
     return (
         <div className="bg-brand-background p-4 rounded-lg">
             <h3 className="block text-sm font-bold text-brand-secondary mb-1">
-                {t('admin.settingsManager.automation.title')}
+                Automatización de Comunicaciones
             </h3>
             <p className="text-xs text-brand-secondary mb-4">
-                {t('admin.settingsManager.automation.subtitle')}
+                Configura los recordatorios y notificaciones automáticas para los clientes.
             </p>
 
             <div className="bg-amber-100 border-l-4 border-amber-500 text-amber-800 p-4 rounded-r-lg mb-6">
@@ -147,9 +147,9 @@ const CommunicationAutomationManager: React.FC = () => {
                         <ExclamationTriangleIcon className="h-5 w-5" aria-hidden="true" />
                     </div>
                     <div className="ml-3">
-                        <h3 className="text-sm font-bold">{t('admin.settingsManager.automation.envVarTitle')}</h3>
+                        <h3 className="text-sm font-bold">Variables de entorno necesarias</h3>
                         <div className="mt-2 text-sm">
-                            <p>{t('admin.settingsManager.automation.envVarMessage')}</p>
+                            <p>Para enviar correos automáticos, asegúrate de definir las siguientes variables de entorno:</p>
                             <ul className="list-disc list-inside mt-2 space-y-1 font-mono text-xs">
                                 <li>RESEND_API_KEY</li>
                                 <li>EMAIL_FROM</li>
@@ -162,27 +162,27 @@ const CommunicationAutomationManager: React.FC = () => {
 
             <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                    <span className="font-semibold text-sm">{t('admin.settingsManager.automation.preBookingConfirmation')}</span>
+                    <span className="font-semibold text-sm">Confirmación de pre-reserva</span>
                     <button onClick={() => handleToggle('preBookingConfirmation')} className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${settings.preBookingConfirmation.enabled ? 'bg-brand-success' : 'bg-gray-300'}`}>
                         <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${settings.preBookingConfirmation.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
                     </button>
                 </div>
                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-sm">{t('admin.settingsManager.automation.paymentReceipt')}</span>
+                    <span className="font-semibold text-sm">Recibo de pago</span>
                     <button onClick={() => handleToggle('paymentReceipt')} className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${settings.paymentReceipt.enabled ? 'bg-brand-success' : 'bg-gray-300'}`}>
                         <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${settings.paymentReceipt.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
                     </button>
                 </div>
                  <div>
                     <div className="flex items-center justify-between">
-                        <span className="font-semibold text-sm">{t('admin.settingsManager.automation.classReminder')}</span>
+                        <span className="font-semibold text-sm">Recordatorio de clase</span>
                         <button onClick={() => handleToggle('classReminder')} className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${settings.classReminder.enabled ? 'bg-brand-success' : 'bg-gray-300'}`}>
                             <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${settings.classReminder.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
                         </button>
                     </div>
                     {settings.classReminder.enabled && (
                         <div className="flex items-center gap-2 mt-2 pl-4 animate-fade-in-fast">
-                            <span className="text-sm">{t('admin.settingsManager.automation.sendReminder')}</span>
+                            <span className="text-sm">Enviar recordatorio</span>
                             <input
                                 type="number"
                                 value={settings.classReminder.value}
@@ -194,10 +194,10 @@ const CommunicationAutomationManager: React.FC = () => {
                                 onChange={e => handleReminderChange('unit', e.target.value)}
                                 className="p-1 border rounded-md text-sm bg-white"
                             >
-                                <option value="hours">{t('admin.settingsManager.automation.hours')}</option>
-                                <option value="days">{t('admin.settingsManager.automation.days')}</option>
+                                <option value="hours">Horas</option>
+                                <option value="days">Días</option>
                             </select>
-                             <span className="text-sm">{t('admin.settingsManager.automation.beforeClass')}</span>
+                             <span className="text-sm">antes de la clase</span>
                         </div>
                     )}
                 </div>
@@ -205,14 +205,14 @@ const CommunicationAutomationManager: React.FC = () => {
              <div className="mt-4 flex justify-end items-center gap-4">
                 {saved && (
                     <p className="text-sm font-semibold text-brand-success animate-fade-in">
-                        {t('admin.settingsManager.automation.savedMessage')}
+                        Guardado correctamente
                     </p>
                 )}
                 <button
                     onClick={handleSave}
                     className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent"
                 >
-                    {t('admin.settingsManager.automation.saveButton')}
+                    Guardar
                 </button>
             </div>
         </div>
@@ -220,7 +220,7 @@ const CommunicationAutomationManager: React.FC = () => {
 };
 
 const BankDetailsEditor: React.FC = () => {
-    const { t } = useLanguage();
+    // const { t } = useLanguage();
     const [details, setDetails] = useState<BankDetails | null>(null);
     const [saved, setSaved] = useState(false);
 
@@ -248,41 +248,41 @@ const BankDetailsEditor: React.FC = () => {
 
     return (
         <div className="bg-brand-background p-4 rounded-lg">
-            <h3 className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.settingsManager.bankDetails.title')}</h3>
-            <p className="text-xs text-brand-secondary mb-4">{t('admin.settingsManager.bankDetails.subtitle')}</p>
+            <h3 className="block text-sm font-bold text-brand-secondary mb-1">Detalles Bancarios</h3>
+            <p className="text-xs text-brand-secondary mb-4">Edita los detalles bancarios que se mostrarán a los clientes.</p>
             <div className="space-y-4">
-                <SettingsInputField name="bankName" label={`${t('admin.settingsManager.bankDetails.bankName')} ${t('admin.settingsManager.requiredFieldIndicator')}`} value={details.bankName} onChange={handleChange} required />
-                <SettingsInputField name="accountHolder" label={`${t('admin.settingsManager.bankDetails.accountHolder')} ${t('admin.settingsManager.requiredFieldIndicator')}`} value={details.accountHolder} onChange={handleChange} required />
-                <SettingsInputField name="accountNumber" label={`${t('admin.settingsManager.bankDetails.accountNumber')} ${t('admin.settingsManager.requiredFieldIndicator')}`} value={details.accountNumber} onChange={handleChange} required />
-                <SettingsInputField name="accountType" label={t('admin.settingsManager.bankDetails.accountType')} value={details.accountType} onChange={handleChange} />
-                <SettingsInputField name="taxId" label={t('admin.settingsManager.bankDetails.taxId')} value={details.taxId} onChange={handleChange} />
+                <SettingsInputField name="bankName" label="Banco *" value={details.bankName} onChange={handleChange} required />
+                <SettingsInputField name="accountHolder" label="Titular *" value={details.accountHolder} onChange={handleChange} required />
+                <SettingsInputField name="accountNumber" label="Número *" value={details.accountNumber} onChange={handleChange} required />
+                <SettingsInputField name="accountType" label="Tipo" value={details.accountType} onChange={handleChange} />
+                <SettingsInputField name="taxId" label="RUC" value={details.taxId} onChange={handleChange} />
                 <div>
-                    <label htmlFor="details" className="block text-xs font-bold text-gray-500 mb-1">{t('admin.settingsManager.bankDetails.details')}</label>
+                    <label htmlFor="details" className="block text-xs font-bold text-gray-500 mb-1">Detalles adicionales</label>
                     <textarea id="details" name="details" value={details.details || ''} onChange={handleChange} rows={3} className="w-full p-2 border border-gray-300 rounded-lg"/>
                 </div>
             </div>
             <div className="mt-4 flex justify-end items-center gap-4">
-                {saved && (<p className="text-sm font-semibold text-brand-success animate-fade-in">{t('admin.settingsManager.bankDetails.savedMessage')}</p>)}
-                <button 
-                  onClick={handleSave} 
-                  disabled={isSaveDisabled}
-                  className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                    {t('admin.settingsManager.bankDetails.saveButton')}
-                </button>
+                {saved && (<p className="text-sm font-semibold text-brand-success animate-fade-in">Guardado correctamente</p>)}
+                                <button 
+                                    onClick={handleSave} 
+                                    disabled={isSaveDisabled}
+                                    className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                >
+                                        Guardar
+                                </button>
             </div>
         </div>
     );
 };
 
 const PrerequisiteMessageEditor: React.FC = () => {
-    const { t, language } = useLanguage();
+    // const { t, language } = useLanguage();
     const [texts, setTexts] = useState({ title: '', message: '', confirmButton: '', goToIntroButton: '' });
     const [saved, setSaved] = useState(false);
 
     useEffect(() => {
         const fetchTexts = async () => {
-            const uiTexts = await dataService.getUITexts(language);
+            const uiTexts = await dataService.getUITexts('es');
             const prerequisiteTexts = (uiTexts as any)?.prerequisiteModal || {};
             setTexts({
                 title: prerequisiteTexts.title || '',
@@ -292,10 +292,10 @@ const PrerequisiteMessageEditor: React.FC = () => {
             });
         };
         fetchTexts();
-    }, [language]);
+    }, []);
 
     const handleSave = async () => {
-        const allTexts = await dataService.getUITexts(language);
+    const allTexts = await dataService.getUITexts('es');
         if (!allTexts.prerequisiteModal || typeof allTexts.prerequisiteModal !== 'object') {
             allTexts.prerequisiteModal = {};
         }
@@ -304,7 +304,7 @@ const PrerequisiteMessageEditor: React.FC = () => {
         (allTexts.prerequisiteModal as any).confirmButton = texts.confirmButton;
         (allTexts.prerequisiteModal as any).goToIntroButton = texts.goToIntroButton;
 
-        await dataService.updateUITexts(language, allTexts);
+    await dataService.updateUITexts('es', allTexts);
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
         window.dispatchEvent(new CustomEvent('ui-text-changed'));
@@ -312,20 +312,20 @@ const PrerequisiteMessageEditor: React.FC = () => {
 
     return (
         <div className="bg-brand-background p-4 rounded-lg">
-            <h3 className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.settingsManager.prerequisiteMessageTitle')}</h3>
-            <p className="text-xs text-brand-secondary mb-4">{t('admin.settingsManager.prerequisiteMessageSubtitle')}</p>
+            <h3 className="block text-sm font-bold text-brand-secondary mb-1">Mensaje de prerrequisito</h3>
+            <p className="text-xs text-brand-secondary mb-4">Edita el mensaje que se muestra cuando un usuario no cumple los requisitos.</p>
             <div className="space-y-4">
-                <SettingsInputField name="prereq_title" label={t('admin.settingsManager.prerequisiteModalTitleLabel')} value={texts.title} onChange={(e) => setTexts(t => ({...t, title: e.target.value}))}/>
+                <SettingsInputField name="prereq_title" label="Título" value={texts.title} onChange={(e) => setTexts(t => ({...t, title: e.target.value}))}/>
                 <div>
-                    <label htmlFor="prereq_message" className="block text-xs font-bold text-gray-500 mb-1">{t('admin.settingsManager.prerequisiteModalMessageLabel')}</label>
+                    <label htmlFor="prereq_message" className="block text-xs font-bold text-gray-500 mb-1">Mensaje</label>
                     <textarea id="prereq_message" value={texts.message} onChange={(e) => setTexts(t => ({...t, message: e.target.value}))} rows={5} className="w-full p-2 border border-gray-300 rounded-lg"/>
                 </div>
-                <SettingsInputField name="prereq_confirm_button" label={t('admin.settingsManager.prerequisiteConfirmButtonLabel')} value={texts.confirmButton} onChange={(e) => setTexts(t => ({...t, confirmButton: e.target.value}))}/>
-                <SettingsInputField name="prereq_redirect_button" label={t('admin.settingsManager.prerequisiteGoToIntroButtonLabel')} value={texts.goToIntroButton} onChange={(e) => setTexts(t => ({...t, goToIntroButton: e.target.value}))}/>
+                <SettingsInputField name="prereq_confirm_button" label="Botón de confirmación" value={texts.confirmButton} onChange={(e) => setTexts(t => ({...t, confirmButton: e.target.value}))}/>
+                <SettingsInputField name="prereq_redirect_button" label="Botón para ir a introducción" value={texts.goToIntroButton} onChange={(e) => setTexts(t => ({...t, goToIntroButton: e.target.value}))}/>
             </div>
             <div className="mt-4 flex justify-end items-center gap-4">
-                {saved && (<p className="text-sm font-semibold text-brand-success animate-fade-in">{t('admin.settingsManager.prerequisiteSavedMessage')}</p>)}
-                <button onClick={handleSave} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent">{t('admin.settingsManager.savePrerequisiteButton')}</button>
+                {saved && (<p className="text-sm font-semibold text-brand-success animate-fade-in">Guardado correctamente</p>)}
+                <button onClick={handleSave} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent">Guardar</button>
             </div>
         </div>
     )
@@ -333,22 +333,22 @@ const PrerequisiteMessageEditor: React.FC = () => {
 
 
 const NotificationTemplateEditor: React.FC = () => {
-    const { t, language } = useLanguage();
+    // const { t, language } = useLanguage();
     const [templates, setTemplates] = useState({ booking: '', inquiry: '' });
     const [saved, setSaved] = useState(false);
 
     useEffect(() => {
         const fetchTemplates = async () => {
-            const texts = await dataService.getUITexts(language);
+            const texts = await dataService.getUITexts('es');
             const bookingTemplate = (texts as any)?.admin?.notifications?.template_new_booking || '';
             const inquiryTemplate = (texts as any)?.admin?.notifications?.template_new_inquiry || '';
             setTemplates({ booking: bookingTemplate, inquiry: inquiryTemplate });
         };
         fetchTemplates();
-    }, [language]);
+    }, []);
     
     const handleSave = async () => {
-        const allTexts = await dataService.getUITexts(language);
+    const allTexts = await dataService.getUITexts('es');
         if (!allTexts.admin) allTexts.admin = {};
         if (typeof allTexts.admin !== 'object') allTexts.admin = {};
         if (!allTexts.admin.notifications) allTexts.admin.notifications = {};
@@ -356,7 +356,7 @@ const NotificationTemplateEditor: React.FC = () => {
         (allTexts.admin.notifications as any).template_new_booking = templates.booking;
         (allTexts.admin.notifications as any).template_new_inquiry = templates.inquiry;
         
-        await dataService.updateUITexts(language, allTexts);
+    await dataService.updateUITexts('es', allTexts);
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
         window.dispatchEvent(new CustomEvent('ui-text-changed'));
@@ -364,22 +364,22 @@ const NotificationTemplateEditor: React.FC = () => {
 
     return (
         <div className="bg-brand-background p-4 rounded-lg">
-            <h3 className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.settingsManager.notificationTemplatesTitle')}</h3>
-            <p className="text-xs text-brand-secondary mb-4">{t('admin.settingsManager.notificationTemplatesSubtitle')}</p>
+            <h3 className="block text-sm font-bold text-brand-secondary mb-1">Plantillas de notificación</h3>
+            <p className="text-xs text-brand-secondary mb-4">Edita las plantillas de notificación para reservas y consultas.</p>
             <div className="space-y-4">
-                <SettingsInputField name="booking_template" label={t('admin.settingsManager.bookingTemplateLabel')} value={templates.booking} onChange={(e) => setTemplates(t => ({...t, booking: e.target.value}))}/>
-                <SettingsInputField name="inquiry_template" label={t('admin.settingsManager.inquiryTemplateLabel')} value={templates.inquiry} onChange={(e) => setTemplates(t => ({...t, inquiry: e.target.value}))}/>
+                <SettingsInputField name="booking_template" label="Plantilla de reserva" value={templates.booking} onChange={(e) => setTemplates(t => ({...t, booking: e.target.value}))}/>
+                <SettingsInputField name="inquiry_template" label="Plantilla de consulta" value={templates.inquiry} onChange={(e) => setTemplates(t => ({...t, inquiry: e.target.value}))}/>
             </div>
             <div className="mt-4 flex justify-end items-center gap-4">
-                {saved && (<p className="text-sm font-semibold text-brand-success animate-fade-in">{t('admin.settingsManager.notificationTemplatesSavedMessage')}</p>)}
-                <button onClick={handleSave} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent">{t('admin.settingsManager.saveNotificationTemplatesButton')}</button>
+                {saved && (<p className="text-sm font-semibold text-brand-success animate-fade-in">Guardado correctamente</p>)}
+                <button onClick={handleSave} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent">Guardar</button>
             </div>
         </div>
     )
 }
 
 const PoliciesEditor: React.FC = () => {
-    const { t } = useLanguage();
+    // const { t } = useLanguage();
     const [policiesText, setPoliciesText] = useState('');
     const [saved, setSaved] = useState(false);
     
@@ -396,18 +396,18 @@ const PoliciesEditor: React.FC = () => {
 
     return (
         <div className="bg-brand-background p-4 rounded-lg">
-            <label htmlFor="policies" className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.settingsManager.policiesLabel')}</label>
+            <label htmlFor="policies" className="block text-sm font-bold text-brand-secondary mb-1">Políticas</label>
             <textarea id="policies" value={policiesText} onChange={(e) => setPoliciesText(e.target.value)} rows={10} className="w-full p-2 border border-gray-300 rounded-lg"/>
             <div className="mt-4 flex justify-end items-center gap-4">
-                {saved && (<p className="text-sm font-semibold text-brand-success animate-fade-in">{t('admin.settingsManager.savedMessage')}</p>)}
-                <button onClick={handleSave} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent">{t('admin.settingsManager.saveButton')}</button>
+                {saved && (<p className="text-sm font-semibold text-brand-success animate-fade-in">Guardado correctamente</p>)}
+                <button onClick={handleSave} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent">Guardar</button>
             </div>
         </div>
     );
 };
 
 const FooterInfoEditor: React.FC = () => {
-    const { t } = useLanguage();
+    // const { t } = useLanguage();
     const [footerInfo, setFooterInfo] = useState<FooterInfo | null>(null);
     const [saved, setSaved] = useState(false);
 
@@ -433,18 +433,18 @@ const FooterInfoEditor: React.FC = () => {
 
     return (
         <div className="bg-brand-background p-4 rounded-lg">
-            <h3 className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.settingsManager.footerInfoTitle')}</h3>
-            <p className="text-xs text-brand-secondary mb-4">{t('admin.settingsManager.footerInfoSubtitle')}</p>
+            <h3 className="block text-sm font-bold text-brand-secondary mb-1">Información de pie de página</h3>
+            <p className="text-xs text-brand-secondary mb-4">Edita la información de contacto y redes sociales que aparece en el pie de página.</p>
             <div className="space-y-4">
-                <SettingsInputField name="address" label={t('admin.settingsManager.addressLabel')} value={footerInfo.address} onChange={handleChange} />
-                <SettingsInputField name="email" label={t('admin.settingsManager.emailLabel')} value={footerInfo.email} onChange={handleChange} />
-                <SettingsInputField name="whatsapp" label={t('admin.settingsManager.whatsappLabel')} value={footerInfo.whatsapp} onChange={handleChange} />
-                <SettingsInputField name="googleMapsLink" label={t('admin.settingsManager.googleMapsLabel')} value={footerInfo.googleMapsLink} onChange={handleChange} />
-                <SettingsInputField name="instagramHandle" label={t('admin.settingsManager.instagramLabel')} value={footerInfo.instagramHandle} onChange={handleChange} />
+                <SettingsInputField name="address" label="Dirección" value={footerInfo.address} onChange={handleChange} />
+                <SettingsInputField name="email" label="Correo electrónico" value={footerInfo.email} onChange={handleChange} />
+                <SettingsInputField name="whatsapp" label="WhatsApp" value={footerInfo.whatsapp} onChange={handleChange} />
+                <SettingsInputField name="googleMapsLink" label="Enlace de Google Maps" value={footerInfo.googleMapsLink} onChange={handleChange} />
+                <SettingsInputField name="instagramHandle" label="Instagram" value={footerInfo.instagramHandle} onChange={handleChange} />
             </div>
             <div className="mt-4 flex justify-end items-center gap-4">
-                {saved && (<p className="text-sm font-semibold text-brand-success animate-fade-in">{t('admin.settingsManager.footerSavedMessage')}</p>)}
-                <button onClick={handleSave} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent">{t('admin.settingsManager.saveFooterButton')}</button>
+                {saved && (<p className="text-sm font-semibold text-brand-success animate-fade-in">Guardado correctamente</p>)}
+                <button onClick={handleSave} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent">Guardar</button>
             </div>
         </div>
     );
@@ -452,22 +452,22 @@ const FooterInfoEditor: React.FC = () => {
 
 
 const UITextEditor: React.FC = () => {
-    const { t, language } = useLanguage();
+    // const { t, language } = useLanguage();
     const [texts, setTexts] = useState<UITexts>({});
     const [saved, setSaved] = useState(false);
 
     useEffect(() => {
         const loadTexts = async () => {
             try {
-                const response = await fetch(`./locales/${language}.json`);
+                const response = await fetch(`./locales/es-ES.json`);
                 const defaultTexts = await response.json();
-                const storedTexts = await dataService.getUITexts(language);
+                const storedTexts = await dataService.getUITexts('es');
                 const mergedTexts = { ...defaultTexts, ...storedTexts };
                 setTexts(mergedTexts);
             } catch (error) { console.error("Failed to load texts:", error); }
         };
         loadTexts();
-    }, [language]);
+    }, []);
     
     const handleTextChange = (keyPath: string, value: string) => {
         setTexts(prev => {
@@ -481,7 +481,7 @@ const UITextEditor: React.FC = () => {
     };
 
     const handleSave = async () => {
-        await dataService.updateUITexts(language, texts);
+    await dataService.updateUITexts('es', texts);
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
         window.dispatchEvent(new CustomEvent('ui-text-changed'));
@@ -507,19 +507,19 @@ const UITextEditor: React.FC = () => {
 
     return (
         <div className="bg-brand-background p-4 rounded-lg">
-             <h3 className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.settingsManager.uiTextTitle')}</h3>
-             <p className="text-xs text-brand-secondary mb-4">{t('admin.settingsManager.uiTextSubtitle')}</p>
+             <h3 className="block text-sm font-bold text-brand-secondary mb-1">Textos de la interfaz</h3>
+             <p className="text-xs text-brand-secondary mb-4">Edita los textos personalizados de la interfaz de usuario.</p>
              <div className="max-h-96 overflow-y-auto pr-4 -mr-4">{renderFields(texts)}</div>
              <div className="mt-4 flex justify-end items-center gap-4">
-                {saved && (<p className="text-sm font-semibold text-brand-success animate-fade-in">{t('admin.settingsManager.uiTextSavedMessage')}</p>)}
-                <button onClick={handleSave} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent">{t('admin.settingsManager.saveUiTextButton')}</button>
+                {saved && (<p className="text-sm font-semibold text-brand-success animate-fade-in">Guardado correctamente</p>)}
+                <button onClick={handleSave} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent">Guardar</button>
             </div>
         </div>
     );
 };
 
 const ConfirmationEditor: React.FC = () => {
-    const { t } = useLanguage();
+    // const { t } = useLanguage();
     const [message, setMessage] = useState<ConfirmationMessage | null>(null);
     const [saved, setSaved] = useState(false);
 
@@ -539,21 +539,21 @@ const ConfirmationEditor: React.FC = () => {
 
     return (
         <div className="bg-brand-background p-4 rounded-lg">
-            <h3 className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.settingsManager.confirmationMessageTitle')}</h3>
+            <h3 className="block text-sm font-bold text-brand-secondary mb-1">Mensaje de confirmación</h3>
             <div className="space-y-4">
-                <SettingsInputField name="confirmation_title" label={t('admin.settingsManager.confirmationHeaderLabel')} value={message.title} onChange={(e) => setMessage(m => ({...m!, title: e.target.value}))}/>
-                <SettingsInputField name="confirmation_message" label={t('admin.settingsManager.confirmationMessageLabel')} value={message.message} onChange={(e) => setMessage(m => ({...m!, message: e.target.value}))}/>
+                <SettingsInputField name="confirmation_title" label="Título" value={message.title} onChange={(e) => setMessage(m => ({...m!, title: e.target.value}))}/>
+                <SettingsInputField name="confirmation_message" label="Mensaje" value={message.message} onChange={(e) => setMessage(m => ({...m!, message: e.target.value}))}/>
             </div>
             <div className="mt-4 flex justify-end items-center gap-4">
-                {saved && (<p className="text-sm font-semibold text-brand-success animate-fade-in">{t('admin.settingsManager.confirmationSavedMessage')}</p>)}
-                <button onClick={handleSave} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent">{t('admin.settingsManager.saveConfirmationButton')}</button>
+                {saved && (<p className="text-sm font-semibold text-brand-success animate-fade-in">Guardado correctamente</p>)}
+                <button onClick={handleSave} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent">Guardar</button>
             </div>
         </div>
     );
 };
 
 const CapacityEditor: React.FC = () => {
-    const { t } = useLanguage();
+    // const { t } = useLanguage();
     const [messages, setMessages] = useState<CapacityMessageSettings | null>(null);
     const [saved, setSaved] = useState(false);
 
@@ -580,11 +580,11 @@ const CapacityEditor: React.FC = () => {
 
     return (
         <div className="bg-brand-background p-4 rounded-lg">
-            <h3 className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.settingsManager.capacityMessagesTitle')}</h3>
+            <h3 className="block text-sm font-bold text-brand-secondary mb-1">Mensajes de capacidad</h3>
             <div className="space-y-3">
                 {messages.thresholds.map((tItem, index) => (
                     <div key={index} className="grid grid-cols-12 gap-2 items-center">
-                        <span className="col-span-2 text-xs font-semibold capitalize">{t(`admin.settingsManager.level${tItem.level.charAt(0).toUpperCase() + tItem.level.slice(1)}`)}:</span>
+                        <span className="col-span-2 text-xs font-semibold capitalize">{tItem.level === 'low' ? 'Bajo' : tItem.level === 'medium' ? 'Medio' : 'Alto'}:</span>
                         <div className="col-span-3">
                             <input type="number" value={tItem.threshold} onChange={(e) => handleThresholdChange(index, 'threshold', parseInt(e.target.value, 10) || 0)} className="w-full p-1 border border-gray-300 rounded-md text-xs" max="100" min="0"/>
                         </div>
@@ -595,25 +595,23 @@ const CapacityEditor: React.FC = () => {
                 ))}
             </div>
             <div className="mt-4 flex justify-end items-center gap-4">
-                {saved && (<p className="text-sm font-semibold text-brand-success animate-fade-in">{t('admin.settingsManager.messagesSavedMessage')}</p>)}
-                <button onClick={handleSave} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent">{t('admin.settingsManager.saveMessagesButton')}</button>
+                {saved && (<p className="text-sm font-semibold text-brand-success animate-fade-in">Guardado correctamente</p>)}
+                <button onClick={handleSave} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent">Guardar</button>
             </div>
         </div>
     );
 };
 
 export const SettingsManager: React.FC = () => {
-    const { t } = useLanguage();
-
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h2 className="text-2xl font-serif text-brand-text mb-2 flex items-center gap-3">
                         <CogIcon className="w-6 h-6 text-brand-accent" />
-                        {t('admin.settingsManager.title')}
+                        Configuración
                     </h2>
-                    <p className="text-brand-secondary">{t('admin.settingsManager.subtitle')}</p>
+                    <p className="text-brand-secondary">Administra la configuración general del sistema.</p>
                 </div>
             </div>
 
@@ -622,8 +620,8 @@ export const SettingsManager: React.FC = () => {
                     <div className="flex items-start gap-4">
                         <DocumentTextIcon className="w-8 h-8 text-brand-primary mt-1" />
                         <div className="flex-grow">
-                            <h3 className="text-xl font-semibold text-brand-text">{t('admin.settingsManager.contentManagerTitle')}</h3>
-                            <p className="text-brand-secondary text-sm mb-6">{t('admin.settingsManager.contentManagerSubtitle')}</p>
+                            <h3 className="text-xl font-semibold text-brand-text">Gestión de contenido</h3>
+                            <p className="text-brand-secondary text-sm mb-6">Administra los textos, políticas y mensajes que se muestran a los usuarios.</p>
                             <div className="relative pl-6">
                                 <div className="absolute top-0 left-0 h-full w-0.5 bg-brand-primary/20 rounded-full"></div>
                                 <div className="space-y-6">
@@ -644,8 +642,8 @@ export const SettingsManager: React.FC = () => {
                     <div className="flex items-start gap-4">
                         <SparklesIcon className="w-8 h-8 text-brand-primary mt-1" />
                         <div className="flex-grow">
-                            <h3 className="text-xl font-semibold text-brand-text">{t('admin.settingsManager.automation.managerTitle')}</h3>
-                             <p className="text-brand-secondary text-sm mb-6">{t('admin.settingsManager.automation.managerSubtitle')}</p>
+                            <h3 className="text-xl font-semibold text-brand-text">Automatización</h3>
+                             <p className="text-brand-secondary text-sm mb-6">Configura los recordatorios y notificaciones automáticas.</p>
                             <div className="relative pl-6">
                                 <div className="absolute top-0 left-0 h-full w-0.5 bg-brand-primary/20 rounded-full"></div>
                                 <div className="space-y-6">
@@ -659,8 +657,8 @@ export const SettingsManager: React.FC = () => {
                     <div className="flex items-start gap-4">
                         <CurrencyDollarIcon className="w-8 h-8 text-brand-primary mt-1" />
                         <div className="flex-grow">
-                            <h3 className="text-xl font-semibold text-brand-text">{t('admin.settingsManager.paymentSettings.title')}</h3>
-                             <p className="text-brand-secondary text-sm mb-6">{t('admin.settingsManager.paymentSettings.subtitle')}</p>
+                            <h3 className="text-xl font-semibold text-brand-text">Pagos</h3>
+                             <p className="text-brand-secondary text-sm mb-6">Edita la información bancaria y métodos de pago.</p>
                             <div className="relative pl-6">
                                 <div className="absolute top-0 left-0 h-full w-0.5 bg-brand-primary/20 rounded-full"></div>
                                 <div className="space-y-6">

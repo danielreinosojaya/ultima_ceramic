@@ -34,6 +34,34 @@ const sendEmail = async (to: string, subject: string, html: string) => {
 export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDetails: BankDetails) => {
     const { userInfo, bookingCode, product, price } = booking;
     const subject = `Tu Pre-Reserva en CeramicAlma está confirmada (Código: ${bookingCode})`;
+    // Mostrar todas las cuentas en una tabla compacta y profesional
+    const accounts = Array.isArray(bankDetails) ? bankDetails : [bankDetails];
+    const accountsHtml = `
+        <table style="width:100%; font-size:15px; color:#333; border-collapse:collapse; background:#f9f9f9; border-radius:12px; margin-top:20px;">
+            <thead>
+                <tr style="background:#eaeaea;">
+                    <th style="padding:10px; text-align:left; font-size:16px; color:#7c868e;">Banco</th>
+                    <th style="padding:10px; text-align:left;">Titular</th>
+                    <th style="padding:10px; text-align:left;">Número</th>
+                    <th style="padding:10px; text-align:left;">Tipo</th>
+                    <th style="padding:10px; text-align:left;">Cédula</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${accounts.map(acc => `
+                    <tr>
+                        <td style="padding:8px; font-weight:bold; color:#7c868e;">${acc.bankName}</td>
+                        <td style="padding:8px;">${acc.accountHolder}</td>
+                        <td style="padding:8px;">${acc.accountNumber}</td>
+                        <td style="padding:8px;">${acc.accountType}</td>
+                        <td style="padding:8px;">${acc.taxId}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+        <div style="margin-top: 10px; font-style: italic; color:#555;"><strong>Importante:</strong> Usa tu código de reserva <strong>${bookingCode}</strong> como referencia en la transferencia.</div>
+    `;
+
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333;">
             <h2>¡Hola, ${userInfo.firstName}!</h2>
@@ -41,15 +69,7 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
             <p style="font-size: 24px; font-weight: bold; color: #D95F43; margin: 20px 0;">${bookingCode}</p>
             <p>El monto a pagar es de <strong>$${price.toFixed(2)}</strong>.</p>
             <p>Para confirmar tu asistencia, por favor realiza una transferencia bancaria con los siguientes datos y envíanos el comprobante por WhatsApp.</p>
-            <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; margin-top: 20px;">
-                <h3 style="color: #D95F43;">Datos para la Transferencia</h3>
-                <p><strong>Banco:</strong> ${bankDetails.bankName}</p>
-                <p><strong>Titular:</strong> ${bankDetails.accountHolder}</p>
-                <p><strong>Número de Cuenta:</strong> ${bankDetails.accountNumber}</p>
-                <p><strong>Tipo de Cuenta:</strong> ${bankDetails.accountType}</p>
-                <p><strong>RUT/Identificador:</strong> ${bankDetails.taxId}</p>
-                <p style="margin-top: 15px; font-style: italic;"><strong>Importante:</strong> Usa tu código de reserva <strong>${bookingCode}</strong> como referencia en la transferencia.</p>
-            </div>
+            ${accountsHtml}
             <p style="margin-top: 20px;">¡Esperamos verte pronto en el taller!</p>
             <p>Saludos,<br/>El equipo de CeramicAlma</p>
         </div>

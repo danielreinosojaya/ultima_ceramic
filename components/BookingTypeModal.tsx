@@ -1,6 +1,6 @@
 import React from 'react';
 import type { BookingMode } from '../types';
-import { useLanguage } from '../context/LanguageContext';
+// ...existing code...
 
 interface BookingTypeModalProps {
   onSelect: (mode: BookingMode) => void;
@@ -26,7 +26,7 @@ const OptionCard: React.FC<{
 );
 
 export const BookingTypeModal: React.FC<BookingTypeModalProps> = ({ onSelect, onClose }) => {
-  const { t } = useLanguage();
+  // Traducción eliminada, usar texto en español directamente
 
   return (
     <div
@@ -38,23 +38,23 @@ export const BookingTypeModal: React.FC<BookingTypeModalProps> = ({ onSelect, on
         onClick={(e) => e.stopPropagation()}
       >
         <div className="text-center mb-8">
-          <h2 className="text-3xl font-serif text-brand-accent">{t('bookingTypeModal.title')}</h2>
-          <p className="text-brand-secondary mt-2">{t('bookingTypeModal.subtitle')}</p>
+          <h2 className="text-4xl font-bold text-brand-accent mb-2">¿Cómo quieres agendar tus clases?</h2>
+          <p className="text-brand-secondary text-xl">Elige la opción que mejor se adapte a tu horario.</p>
         </div>
 
         <div className="grid md:grid-cols-2 gap-8">
-           <OptionCard 
-                title={t('bookingTypeModal.monthlyTitle')}
-                description={t('bookingTypeModal.monthlyDescription')}
-                onSelect={() => onSelect('monthly')}
-                buttonText={t('bookingTypeModal.selectButton')}
-           />
-           <OptionCard 
-                title={t('bookingTypeModal.flexibleTitle')}
-                description={t('bookingTypeModal.flexibleDescription')}
-                onSelect={() => onSelect('flexible')}
-                buttonText={t('bookingTypeModal.selectButton')}
-           />
+          <OptionCard 
+            title="Horario Fijo Mensual"
+            description="Asiste a clase el mismo día y a la misma hora durante 4 semanas seguidas. Perfecto para crear una rutina."
+            onSelect={() => onSelect('monthly')}
+            buttonText="Seleccionar"
+          />
+          <OptionCard 
+            title="Horario Flexible"
+            description="Elige 4 fechas y horas de clase disponibles en un período de 30 días. Flexibilidad total."
+            onSelect={() => onSelect('flexible')}
+            buttonText="Seleccionar"
+          />
         </div>
       </div>
     </div>
