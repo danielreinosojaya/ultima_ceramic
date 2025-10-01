@@ -328,6 +328,20 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
 async function handleAction(action: string, req: VercelRequest, res: VercelResponse) {
     let result: any = { success: true };
     switch (action) {
+        case 'updateBooking': {
+            const { id, userInfo, price } = req.body;
+            if (!id || !userInfo || typeof price === 'undefined') {
+                return res.status(400).json({ error: 'id, userInfo, and price are required.' });
+            }
+            const { rows: [updatedBookingRow] } = await sql`
+                UPDATE bookings
+                SET user_info = ${JSON.stringify(userInfo)}, price = ${price}
+                WHERE id = ${id}
+                RETURNING *;
+            `;
+            const updatedBooking = parseBookingFromDB(updatedBookingRow);
+            return res.status(200).json({ success: true, booking: updatedBooking });
+        }
         case 'updateCustomerInfo': {
             const { email, info } = req.body;
             if (!email || !info) {
@@ -632,15 +646,19 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookingCode'> & { invoiceData?: Omit<InvoiceRequest, 'id' | 'bookingId' | 'status' | 'requestedAt' | 'processedAt'> }): Promise<AddBookingResult> {
     const { productId, slots, userInfo, productType, invoiceData, bookingDate, participants, clientNote } = body;
     
+    // Atomic deduplication: check for existing booking and slot, prevent race conditions
     if (productType === 'INTRODUCTORY_CLASS' || productType === 'CLASS_PACKAGE' || productType === 'SINGLE_CLASS' || productType === 'GROUP_CLASS') {
-        const { rows: existingBookings } = await sql`SELECT slots FROM bookings WHERE user_info->>'email' = ${userInfo.email}`;
-        for (const existing of existingBookings) {
-            for (const existingSlot of existing.slots) {
-                for (const newSlot of slots) {
-                    if (existingSlot.date === newSlot.date && existingSlot.time === newSlot.time) {
-                        return { success: false, message: 'DUPLICATE_BOOKING_ERROR' };
-                    }
-                }
+        // For each slot, check if a booking exists for this user and slot
+        for (const newSlot of slots) {
+            const { rows: existingBookings } = await sql`
+                SELECT * FROM bookings 
+                WHERE user_info->>'email' = ${userInfo.email}
+                AND slots @> ${JSON.stringify([newSlot])}
+            `;
+            if (existingBookings.length > 0) {
+                // Duplicate found, return existing booking
+                const parsedExisting = parseBookingFromDB(existingBookings[0]);
+                return { success: true, message: 'Booking already exists.', booking: parsedExisting };
             }
         }
     }

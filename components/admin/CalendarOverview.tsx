@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import type { Booking, TimeSlot, UserInfo, EditableBooking, RescheduleSlotInfo, PaymentDetails } from '../../types';
 import * as dataService from '../../services/dataService';
-import { useLanguage } from '../../context/LanguageContext';
+// Eliminado useLanguage, la app ahora es monolingüe en español
 import { ManualBookingModal } from './ManualBookingModal';
 import { ScheduleReportModal } from './ScheduleReportModal';
 import { ClearScheduleModal } from './ClearScheduleModal';
@@ -21,7 +21,8 @@ interface CalendarOverviewProps {
 }
 
 export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect, bookings, onDataChange }) => {
-  const { t, language } = useLanguage();
+  // Monolingüe español, textos hardcodeados
+  const language = 'es-ES';
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isManualBookingModalOpen, setIsManualBookingModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
@@ -95,8 +96,8 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
       )}
       <div className="flex justify-between items-center flex-wrap gap-4 mb-6">
         <div>
-            <h2 className="text-2xl font-serif text-brand-text mb-2">{t('admin.calendar.title')}</h2>
-            <p className="text-brand-secondary">{t('admin.calendar.subtitle')}</p>
+            <h2 className="text-2xl font-serif text-brand-text mb-2">Calendario de Reservas</h2>
+            <p className="text-brand-secondary">Visualiza y gestiona las reservas del mes. Haz clic en un día para ver el detalle semanal.</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
             <button 
@@ -104,21 +105,21 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
               className="flex items-center justify-center gap-2 bg-red-100 border border-red-500 text-red-600 font-bold py-2 px-4 rounded-lg hover:bg-red-600 hover:text-white transition-colors"
             >
               <CalendarClearIcon className="w-5 h-5" />
-              {t('admin.calendar.clearSchedule')}
+              Limpiar Horario
             </button>
             <button 
               onClick={() => setIsReportModalOpen(true)}
               className="flex items-center justify-center gap-2 bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-4 rounded-lg hover:bg-brand-secondary hover:text-white transition-colors"
             >
               <DocumentDownloadIcon className="w-5 h-5" />
-              {t('admin.calendar.downloadSchedule')}
+              Descargar Reporte
             </button>
             <button 
               onClick={() => setIsManualBookingModalOpen(true)}
               className="flex items-center justify-center gap-2 bg-brand-primary text-white font-bold py-2 px-4 rounded-lg hover:bg-brand-accent transition-colors"
             >
               <UserPlusIcon className="w-5 h-5" />
-              {t('admin.calendar.addManualBooking')}
+              Agregar Reserva Manual
             </button>
         </div>
       </div>
@@ -138,7 +139,7 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
           >&rarr;</button>
         </div>
         <div className="grid grid-cols-7 gap-1 text-center text-sm text-brand-secondary">
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => <div key={day} className="font-bold">{day}</div>)}
+          {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(day => <div key={day} className="font-bold">{day}</div>)}
         </div>
         <div className="grid grid-cols-7 gap-1 mt-2">
           {calendarDays.map((day, index) => {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Product, ClassPackage, IntroductoryClass, OpenStudioSubscription } from '../../types';
 import * as dataService from '../../services/dataService';
-import { useLanguage } from '../../context/LanguageContext';
+// Eliminado useLanguage, la app ahora es monolingüe en español
 import { ToggleLeftIcon } from '../icons/ToggleLeftIcon';
 import { ToggleRightIcon } from '../icons/ToggleRightIcon';
 import { PlusIcon } from '../icons/PlusIcon';
@@ -20,7 +20,7 @@ interface ProductManagerProps {
 }
 
 export const ProductManager: React.FC<ProductManagerProps> = ({ products, onDataChange }) => {
-  const { t } = useLanguage();
+  // Monolingüe español, textos hardcodeados
   
   const [isClassPackageModalOpen, setIsClassPackageModalOpen] = useState(false);
   const [classPackageToEdit, setClassPackageToEdit] = useState<ClassPackage | null>(null);
@@ -110,7 +110,7 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
     const newProduct: Product = {
       ...productToDuplicate,
       id: Date.now(),
-      name: `${t('admin.productManager.duplicatePrefix')}${productToDuplicate.name}`,
+  name: `Copia de ${productToDuplicate.name}`,
       isActive: false,
     };
 
@@ -197,44 +197,44 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
           />
       )}
       {isDeleteModalOpen && productToDelete && (
-        <DeleteConfirmationModal
-            isOpen={isDeleteModalOpen}
-            onClose={() => setIsDeleteModalOpen(false)}
-            onConfirm={handleDeleteConfirm}
-            title={t('admin.productManager.deleteConfirmTitle')}
-            message={t('admin.productManager.deleteConfirmText')}
-        />
+    <DeleteConfirmationModal
+      isOpen={isDeleteModalOpen}
+      onClose={() => setIsDeleteModalOpen(false)}
+      onConfirm={handleDeleteConfirm}
+      title="¿Eliminar producto?"
+      message="Esta acción no se puede deshacer. ¿Estás seguro de que deseas eliminar este producto?"
+    />
       )}
       <div className="flex justify-between items-center mb-6">
-        <div>
-            <h2 className="text-2xl font-serif text-brand-text mb-2">{t('admin.productManager.title')}</h2>
-            <p className="text-brand-secondary">{t('admin.productManager.subtitle')}</p>
-        </div>
+    <div>
+      <h2 className="text-2xl font-serif text-brand-text mb-2">Gestión de Productos</h2>
+      <p className="text-brand-secondary">Administra los productos y experiencias disponibles para reserva.</p>
+    </div>
         <div className="relative group">
             <button
                 className="flex items-center gap-2 bg-brand-primary text-white font-bold py-2 px-4 rounded-lg hover:bg-brand-accent transition-colors"
             >
                 <PlusIcon className="w-5 h-5"/>
-                {t('admin.productManager.createButton')}
+                Agregar producto
             </button>
             <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-md shadow-lg z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none group-hover:pointer-events-auto">
                 <button 
                   onClick={() => handleCreateNew('INTRODUCTORY_CLASS')} 
                   className="block w-full text-left px-4 py-3 text-sm text-brand-text hover:bg-gray-100"
                 >
-                  {t('admin.productManager.introClass')}
+                  Clase Introductoria
                 </button>
                 <button 
                   onClick={() => handleCreateNew('CLASS_PACKAGE')} 
                   className="block w-full text-left px-4 py-3 text-sm text-brand-text hover:bg-gray-100"
                 >
-                  {t('admin.productManager.classPackage')}
+                  Paquete de Clases
                 </button>
                 <button 
                   onClick={() => handleCreateNew('OPEN_STUDIO_SUBSCRIPTION')} 
                   className="block w-full text-left px-4 py-3 text-sm text-brand-text hover:bg-gray-100"
                 >
-                  {t('admin.productManager.openStudioSubscription')}
+                  Suscripción Open Studio
                 </button>
             </div>
         </div>
@@ -244,19 +244,19 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-brand-background">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.productManager.imageLabel')}</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Product</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.productManager.productType')}</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.productManager.priceLabel')}</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.productManager.statusLabel')}</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.productManager.actionsLabel')}</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Imagen</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Producto</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Tipo</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider">Precio</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Estado</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Acciones</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {products.map((product) => (
               <tr key={product.id}>
                 <td className="px-6 py-4 whitespace-nowrap">
-                   <button onClick={() => handleTriggerImageUpload(product.id)} className="w-12 h-12 rounded-md overflow-hidden focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary group relative" title={t('admin.productManager.changeImageLabel')}>
+                   <button onClick={() => handleTriggerImageUpload(product.id)} className="w-12 h-12 rounded-md overflow-hidden focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary group relative" title="Cambiar imagen">
                     {product.imageUrl ? <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover group-hover:opacity-50 transition-opacity" /> : <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400 group-hover:bg-gray-300 transition-colors"><CubeIcon className="w-6 h-6"/></div>}
                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><EditIcon className="w-5 h-5 text-white" /></div>
                   </button>
@@ -266,7 +266,7 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
                   <div className="text-sm text-brand-secondary">{product.description}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-secondary">
-                    {t(`admin.productManager.productType_${product.type}`)}
+                    {product.type === 'CLASS_PACKAGE' ? 'Paquete de Clases' : product.type === 'INTRODUCTORY_CLASS' ? 'Clase Introductoria' : product.type === 'OPEN_STUDIO_SUBSCRIPTION' ? 'Suscripción Open Studio' : 'Otro'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right font-semibold text-brand-text">
                   {'price' in product && product.price ? `$${product.price.toFixed(2)}` : 'N/A'}
@@ -277,15 +277,15 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
                       {product.isActive ? <ToggleRightIcon className="w-10 h-10 text-brand-success" /> : <ToggleLeftIcon className="w-10 h-10 text-gray-400" />}
                     </button>
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${product.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                      {product.isActive ? t('admin.productManager.active') : t('admin.productManager.inactive')}
+                      {product.isActive ? 'Activo' : 'Inactivo'}
                     </span>
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex items-center space-x-2">
-                        <button onClick={() => handleOpenEditModal(product)} className="text-brand-accent hover:text-brand-text p-1 rounded-md hover:bg-gray-100" title={t('admin.productManager.editButton')}><EditIcon className="w-5 h-5"/></button>
-                        <button onClick={() => handleDuplicateProduct(product)} className="text-brand-accent hover:text-brand-text p-1 rounded-md hover:bg-gray-100" title={t('admin.productManager.duplicateButton')}><DuplicateIcon className="w-5 h-5"/></button>
-                        <button onClick={() => handleOpenDeleteModal(product)} className="text-red-600 hover:text-red-900 p-1 rounded-md hover:bg-red-50" title={t('admin.productManager.deleteButton')}><TrashIcon className="w-5 h-5"/></button>
+                        <button onClick={() => handleOpenEditModal(product)} className="text-brand-accent hover:text-brand-text p-1 rounded-md hover:bg-gray-100" title="Editar"><EditIcon className="w-5 h-5"/></button>
+                        <button onClick={() => handleDuplicateProduct(product)} className="text-brand-accent hover:text-brand-text p-1 rounded-md hover:bg-gray-100" title="Duplicar"><DuplicateIcon className="w-5 h-5"/></button>
+                        <button onClick={() => handleOpenDeleteModal(product)} className="text-red-600 hover:text-red-900 p-1 rounded-md hover:bg-red-50" title="Eliminar"><TrashIcon className="w-5 h-5"/></button>
                     </div>
                 </td>
               </tr>

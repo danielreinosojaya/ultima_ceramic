@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { Booking } from '../../types';
-import { useLanguage } from '../../context/LanguageContext';
+// import { useLanguage } from '../../context/LanguageContext';
 import { generateScheduleReportPDF } from '../../services/pdfService';
 
 interface ScheduleReportModalProps {
@@ -43,7 +43,7 @@ const getDatesForPeriod = (period: FilterPeriod, customRange: { start: string, e
 };
 
 export const ScheduleReportModal: React.FC<ScheduleReportModalProps> = ({ isOpen, onClose, allBookings }) => {
-    const { t, language } = useLanguage();
+    const language = 'es-ES';
     const [period, setPeriod] = useState<FilterPeriod>('week');
     const [customRange, setCustomRange] = useState({ start: '', end: '' });
 
@@ -51,16 +51,16 @@ export const ScheduleReportModal: React.FC<ScheduleReportModalProps> = ({ isOpen
         const { startDate, endDate } = getDatesForPeriod(period, customRange);
 
         const pdfTranslations = {
-            reportTitle: t('admin.pdfReport.reportTitle'),
-            dateRange: t('admin.pdfReport.dateRange'),
-            generatedOn: t('admin.pdfReport.generatedOn'),
-            time: t('admin.pdfReport.time'),
-            attendee: t('admin.pdfReport.attendee'),
-            contact: t('admin.pdfReport.contact'),
-            package: t('admin.pdfReport.package'),
-            paymentStatus: t('admin.pdfReport.paymentStatus'),
-            paid: t('admin.pdfReport.paid'),
-            unpaid: t('admin.pdfReport.unpaid')
+            reportTitle: 'Reporte de reservas',
+            dateRange: 'Rango de fechas',
+            generatedOn: 'Generado el',
+            time: 'Hora',
+            attendee: 'Asistente',
+            contact: 'Contacto',
+            package: 'Paquete',
+            paymentStatus: 'Estado de pago',
+            paid: 'Pagado',
+            unpaid: 'Pendiente'
         };
         
         generateScheduleReportPDF(allBookings, { start: startDate, end: endDate }, pdfTranslations, language);
@@ -81,13 +81,13 @@ export const ScheduleReportModal: React.FC<ScheduleReportModalProps> = ({ isOpen
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
             <div className="bg-brand-surface rounded-xl shadow-2xl p-6 w-full max-w-md animate-fade-in-up" onClick={(e) => e.stopPropagation()}>
-                <h2 className="text-2xl font-serif text-brand-accent mb-2 text-center">{t('admin.scheduleReportModal.title')}</h2>
-                <p className="text-brand-secondary mb-6 text-center">{t('admin.scheduleReportModal.subtitle')}</p>
+                <h2 className="text-2xl font-serif text-brand-accent mb-2 text-center">Reporte de reservas</h2>
+                <p className="text-brand-secondary mb-6 text-center">Genera un PDF con el resumen de reservas para el periodo seleccionado.</p>
                 
                 <div className="grid grid-cols-3 gap-2 mb-4">
-                    <FilterButton filter="today">{t('admin.scheduleReportModal.today')}</FilterButton>
-                    <FilterButton filter="week">{t('admin.scheduleReportModal.thisWeek')}</FilterButton>
-                    <FilterButton filter="month">{t('admin.scheduleReportModal.thisMonth')}</FilterButton>
+                    <FilterButton filter="today">Hoy</FilterButton>
+                    <FilterButton filter="week">Esta semana</FilterButton>
+                    <FilterButton filter="month">Este mes</FilterButton>
                 </div>
                 
                 <div className="relative my-4">
@@ -95,7 +95,7 @@ export const ScheduleReportModal: React.FC<ScheduleReportModalProps> = ({ isOpen
                         <span className="w-full border-t border-gray-200" />
                     </div>
                     <div className="relative flex justify-center text-xs uppercase">
-                        <span className="bg-brand-surface px-2 text-brand-secondary">{t('admin.scheduleReportModal.customRange')}</span>
+                        <span className="bg-brand-surface px-2 text-brand-secondary">Rango personalizado</span>
                     </div>
                 </div>
 
@@ -106,7 +106,7 @@ export const ScheduleReportModal: React.FC<ScheduleReportModalProps> = ({ isOpen
                         onChange={e => {setCustomRange(c => ({...c, start: e.target.value})); setPeriod('custom');}} 
                         className="text-sm p-2 border border-gray-300 rounded-md w-full focus:ring-brand-primary focus:border-brand-primary"
                     />
-                    <span className="text-sm text-brand-secondary">to</span>
+                    <span className="text-sm text-brand-secondary">a</span>
                     <input 
                         type="date" 
                         value={customRange.end} 
@@ -117,10 +117,10 @@ export const ScheduleReportModal: React.FC<ScheduleReportModalProps> = ({ isOpen
                 
                 <div className="mt-6 flex flex-col sm:flex-row justify-end gap-3">
                     <button type="button" onClick={onClose} className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100">
-                        {t('admin.productManager.cancelButton')}
+                        Cancelar
                     </button>
                     <button type="button" onClick={handleGenerateReport} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent">
-                        {t('admin.scheduleReportModal.generateReport')}
+                        Generar reporte
                     </button>
                 </div>
             </div>

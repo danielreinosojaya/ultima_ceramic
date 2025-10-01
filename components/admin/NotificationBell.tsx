@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNotifications } from '../../context/NotificationContext.js';
-import { useLanguage } from '../../context/LanguageContext.js';
+// ...existing code...
 import { BellIcon } from '../icons/BellIcon.js';
 import type { Notification } from '../../types.js';
 import { formatDistanceToNow } from 'date-fns';
@@ -61,7 +61,7 @@ interface NotificationBellProps {
 
 export const NotificationBell: React.FC<NotificationBellProps> = ({ onNotificationClick }) => {
     const { notifications, unreadCount, markAllAsRead } = useNotifications();
-    const { t } = useLanguage();
+    // Traducción eliminada, usar texto en español directamente
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -92,7 +92,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onNotificati
             <button 
                 onClick={handleToggle} 
                 className="relative p-2 rounded-full hover:bg-brand-background text-brand-secondary hover:text-brand-accent transition-colors"
-                aria-label={t('admin.notifications.bellLabel', { default: 'Notifications' })}
+                aria-label="Notificaciones"
                 aria-haspopup="true"
                 aria-expanded={isOpen}
             >
@@ -108,11 +108,11 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onNotificati
                 <div 
                     className="absolute right-0 mt-2 w-80 max-w-xs sm:max-w-sm bg-white rounded-lg shadow-2xl border border-gray-200 z-30 animate-fade-in-fast"
                     role="menu"
-                    aria-label={t('admin.notifications.dropdownLabel', { default: 'Notification list' })}
+                    aria-label="Lista de notificaciones"
                     tabIndex={-1}
                 >
                     <div className="p-3 border-b border-gray-200">
-                        <h3 className="font-bold text-brand-text">{t('admin.notifications.title')}</h3>
+                        <h3 className="font-bold text-brand-text">Notificaciones</h3>
                     </div>
                     <div className="max-h-96 overflow-y-auto">
                         {notifications.length > 0 ? (
@@ -123,18 +123,18 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onNotificati
                                   role="menuitem"
                                   tabIndex={0}
                                   className={`w-full text-left p-3 border-b border-gray-100 transition-colors ${!notif.read ? 'bg-brand-background' : 'hover:bg-gray-50'}`}
-                                  aria-label={t(`admin.notifications.template_${notif.type}`, { name: notif.userName, summary: notif.summary, default: 'Notification' })}
+                                  aria-label={notif.summary || 'Notificación'}
                                 >
                                 <div className="text-xs text-gray-500">
-                                    {notif.timestamp ? formatDistanceToNow(new Date(notif.timestamp), { addSuffix: true }) : t('admin.notifications.unknownTime', { default: 'Unknown time' })}
+                                    {notif.timestamp ? formatDistanceToNow(new Date(notif.timestamp), { addSuffix: true }) : 'Hora desconocida'}
                                 </div>
                                     <p className="text-xs text-brand-secondary mt-1">
-                                        {t(`admin.notifications.template_${notif.type}`, { name: notif.userName, summary: notif.summary, default: notif.summary || 'Notification' })}
+                                        {notif.summary || 'Notificación'}
                                     </p>
                                 </button>
                             ))
                         ) : (
-                            <p className="text-center text-brand-secondary text-sm p-6">{t('admin.notifications.noNotifications')}</p>
+                            <p className="text-center text-brand-secondary text-sm p-6">No hay notificaciones.</p>
                         )}
                     </div>
                 </div>

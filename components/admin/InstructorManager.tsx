@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import * as dataService from '../../services/dataService';
-import { useLanguage } from '../../context/LanguageContext';
+// Eliminado useLanguage, la app ahora es monolingüe en español
 import type { Instructor } from '../../types';
 import { PlusIcon } from '../icons/PlusIcon';
 import { EditIcon } from '../icons/EditIcon';
@@ -16,7 +16,7 @@ interface InstructorManagerProps {
 }
 
 export const InstructorManager: React.FC<InstructorManagerProps> = ({ onInstructorsUpdate, instructors: initialInstructors }) => {
-    const { t } = useLanguage();
+    // Monolingüe español, textos hardcodeados
     const [instructors, setInstructors] = useState<Instructor[]>(initialInstructors);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [instructorToEdit, setInstructorToEdit] = useState<Instructor | null>(null);
@@ -95,8 +95,8 @@ export const InstructorManager: React.FC<InstructorManagerProps> = ({ onInstruct
                     isOpen={isDeleteModalOpen}
                     onClose={() => setIsDeleteModalOpen(false)}
                     onConfirm={handleDeleteConfirm}
-                    title={t('admin.packageManager.deleteConfirmTitle')}
-                    message={`Are you sure you want to delete ${instructorToDelete.name}?`}
+                    title="¿Eliminar instructor?"
+                    message={`¿Estás seguro de que deseas eliminar a ${instructorToDelete.name}?`}
                 />
             )}
             {isReassignModalOpen && instructorToDelete && (
@@ -109,13 +109,13 @@ export const InstructorManager: React.FC<InstructorManagerProps> = ({ onInstruct
             )}
 
             <div className="flex justify-between items-center mb-4">
-                <h3 className="font-bold text-lg text-brand-accent">{t('admin.scheduleManager.instructorManagerTitle')}</h3>
+                <h3 className="font-bold text-lg text-brand-accent">Gestión de instructores</h3>
                 <button 
                     onClick={handleOpenCreateModal}
                     className="flex items-center gap-1 bg-white text-brand-secondary font-bold py-1 px-3 rounded-md border border-brand-secondary hover:bg-brand-secondary hover:text-white text-sm transition-colors"
                 >
                     <PlusIcon className="w-4 h-4" />
-                    {t('admin.scheduleManager.addInstructor')}
+                    Agregar instructor
                 </button>
             </div>
             <div className="space-y-2">
@@ -136,7 +136,7 @@ export const InstructorManager: React.FC<InstructorManagerProps> = ({ onInstruct
                         </div>
                     ))
                 ) : (
-                    <p className="text-sm text-brand-secondary text-center p-2">No instructors configured.</p>
+                    <p className="text-sm text-brand-secondary text-center p-2">No hay instructores configurados.</p>
                 )}
             </div>
         </div>

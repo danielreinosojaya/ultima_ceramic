@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import * as dataService from '../../services/dataService';
-import { useLanguage } from '../../context/LanguageContext';
+// Eliminado useLanguage, la app ahora es monolingüe en español
 import type { AvailableSlot, Instructor, ScheduleOverrides, DayKey, ClassCapacity, Technique } from '../../types';
 import { DAY_NAMES } from '@/constants';
 import { PlusIcon } from '../icons/PlusIcon';
@@ -18,7 +18,8 @@ interface ScheduleSettingsManagerProps {
 }
 
 export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = ({ availability, overrides, instructors, classCapacity, onDataChange }) => {
-    const { t, language } = useLanguage();
+    // Monolingüe español, textos hardcodeados
+    const language = 'es-ES';
     
     const [newSlot, setNewSlot] = useState<{ day: DayKey, time: string, instructorId: number, technique: Technique }>({ day: 'Monday', time: '', instructorId: instructors[0]?.id || 0, technique: 'potters_wheel' });
     const [selectedExceptionDate, setSelectedExceptionDate] = useState<Date | null>(null);
@@ -127,13 +128,13 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
             <InstructorManager onInstructorsUpdate={onDataChange} instructors={instructors} />
 
             <div>
-                <h2 className="text-xl font-serif text-brand-text mb-2">{t('admin.scheduleManager.defaultCapacityTitle')}</h2>
-                <p className="text-brand-secondary text-sm mb-4">{t('admin.scheduleManager.defaultCapacitySubtitle')}</p>
+                <h2 className="text-xl font-serif text-brand-text mb-2">Capacidad por defecto</h2>
+                <p className="text-brand-secondary text-sm mb-4">Configura la capacidad máxima para cada tipo de clase.</p>
                  <div className="bg-brand-background p-4 rounded-lg">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                             <label htmlFor="potters_wheel-capacity" className="block text-sm font-bold text-brand-secondary mb-1">
-                                {t('techniques.pottersWheelTitle')}
+                                Torno de alfarero
                             </label>
                             <input
                                 id="potters_wheel-capacity"
@@ -145,7 +146,7 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
                         </div>
                         <div>
                             <label htmlFor="molding-capacity" className="block text-sm font-bold text-brand-secondary mb-1">
-                                {t('techniques.moldingTitle')}
+                                Modelado manual
                             </label>
                             <input
                                 id="molding-capacity"
@@ -157,7 +158,7 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
                         </div>
                         <div>
                             <label htmlFor="introductory_class-capacity" className="block text-sm font-bold text-brand-secondary mb-1">
-                                {t('admin.productManager.productType_INTRODUCTORY_CLASS')}
+                                Clase Introductoria
                             </label>
                             <input
                                 id="introductory_class-capacity"
@@ -170,11 +171,11 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
                     </div>
                     <div className="flex items-center justify-end gap-4 mt-4">
                         <button onClick={handleSaveDefaultCapacity} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent">
-                            {t('admin.scheduleManager.saveCapacityButton')}
+                            Guardar capacidad
                         </button>
                         {isCapacitySaved && (
                             <p className="text-sm font-semibold text-brand-success animate-fade-in">
-                                {t('admin.scheduleManager.capacitySavedMessage')}
+                                ¡Capacidad guardada!
                             </p>
                         )}
                     </div>
@@ -182,8 +183,8 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
             </div>
 
             <div>
-                <h2 className="text-xl font-serif text-brand-text mb-2">{t('admin.scheduleManager.title')}</h2>
-                <p className="text-brand-secondary text-sm mb-4">{t('admin.scheduleManager.subtitle')}</p>
+                <h2 className="text-xl font-serif text-brand-text mb-2">Configuración de horarios</h2>
+                <p className="text-brand-secondary text-sm mb-4">Administra los horarios disponibles para cada día.</p>
                 <div className="space-y-4">
                     {DAY_NAMES.map(day => (
                         <div key={day} className="bg-brand-background p-3 rounded-lg">
@@ -191,11 +192,11 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
                             <div className="space-y-2">
                                 {availability[day]?.map(slot => (
                                     <div key={`${slot.time}-${slot.instructorId}-${slot.technique}`} className="flex items-center justify-between bg-white p-2 rounded-md text-sm">
-                                        <span>{slot.time} - {instructors.find(i => i.id === slot.instructorId)?.name || 'N/A'} ({t(`techniques.short_${slot.technique}`)})</span>
+                                        <span>{slot.time} - {instructors.find(i => i.id === slot.instructorId)?.name || 'N/A'} ({slot.technique === 'potters_wheel' ? 'Torno' : 'Modelado'})</span>
                                         <button onClick={() => handleRemoveSlot(day, slot)} className="text-red-500 hover:text-red-700"><TrashIcon className="w-4 h-4" /></button>
                                     </div>
                                 ))}
-                                {availability[day]?.length === 0 && <p className="text-xs text-brand-secondary text-center">{t('admin.scheduleManager.noSlots')}</p>}
+                                {availability[day]?.length === 0 && <p className="text-xs text-brand-secondary text-center">No hay horarios disponibles.</p>}
                             </div>
                             <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-200">
                                 <input type="time" onChange={e => setNewSlot({...newSlot, time: e.target.value})} className="p-1 border rounded-md text-sm"/>
@@ -203,8 +204,8 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
                                     {instructors.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
                                 </select>
                                 <select onChange={e => setNewSlot({...newSlot, technique: e.target.value as Technique})} className="p-1 border rounded-md text-sm bg-white">
-                                    <option value="potters_wheel">{t('techniques.short_potters_wheel')}</option>
-                                    <option value="molding">{t('techniques.short_molding')}</option>
+                                    <option value="potters_wheel">Torno</option>
+                                    <option value="molding">Modelado</option>
                                 </select>
                                 <button onClick={() => handleAddSlot(day)} className="p-2 bg-brand-primary text-white rounded-md"><PlusIcon className="w-4 h-4"/></button>
                             </div>
@@ -214,11 +215,11 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
             </div>
 
             <div>
-                 <h2 className="text-xl font-serif text-brand-text mb-2">{t('admin.scheduleManager.overridesTitle')}</h2>
-                 <p className="text-brand-secondary text-sm mb-4">{t('admin.scheduleManager.overridesSubtitle')}</p>
+                 <h2 className="text-xl font-serif text-brand-text mb-2">Excepciones de horario</h2>
+                 <p className="text-brand-secondary text-sm mb-4">Configura excepciones para días específicos.</p>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                         <label htmlFor="exception-date" className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.scheduleManager.selectDatePrompt')}</label>
+                         <label htmlFor="exception-date" className="block text-sm font-bold text-brand-secondary mb-1">Selecciona una fecha</label>
                          <input
                             id="exception-date"
                             type="date"
@@ -229,23 +230,23 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
                     {selectedExceptionDate && (
                         <div className="bg-brand-background p-3 rounded-lg animate-fade-in-fast">
                             <div className="flex justify-between items-center mb-2">
-                                <h4 className="font-bold text-brand-text">{t('admin.scheduleManager.editingFor')} {selectedExceptionDate.toLocaleDateString(language)}</h4>
-                                <button onClick={handleResetExceptionDay} className="text-xs font-semibold text-brand-accent hover:underline">{t('admin.scheduleManager.resetToDefaultButton')}</button>
+                                <h4 className="font-bold text-brand-text">Editando para {selectedExceptionDate.toLocaleDateString(language)}</h4>
+                                <button onClick={handleResetExceptionDay} className="text-xs font-semibold text-brand-accent hover:underline">Restablecer a horario por defecto</button>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 mb-1">{t('admin.scheduleManager.capacityOverrideLabel')}</label>
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Capacidad máxima para este día</label>
                                 <input
                                     type="number"
                                     value={exceptionDayCapacity ?? ''}
                                     onChange={handleCapacityOverrideChange}
-                                    placeholder={t('admin.scheduleManager.capacityOverridePlaceholder')}
+                                    placeholder="Ej: 10"
                                     className="w-full p-2 border rounded-lg text-sm mb-3"
                                 />
                             </div>
                              <div className="space-y-2">
                                 {exceptionDaySlots.map(slot => (
                                     <div key={`${slot.time}-${slot.instructorId}-${slot.technique}`} className="flex items-center justify-between bg-white p-2 rounded-md text-sm">
-                                        <span>{slot.time} - {instructors.find(i => i.id === slot.instructorId)?.name || 'N/A'} ({t(`techniques.short_${slot.technique}`)})</span>
+                                        <span>{slot.time} - {instructors.find(i => i.id === slot.instructorId)?.name || 'N/A'} ({slot.technique === 'potters_wheel' ? 'Torno' : 'Modelado'})</span>
                                         <button onClick={() => handleRemoveExceptionSlot(slot)} className="text-red-500 hover:text-red-700"><TrashIcon className="w-4 h-4" /></button>
                                     </div>
                                 ))}
@@ -256,8 +257,8 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
                                     {instructors.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
                                 </select>
                                 <select onChange={e => setNewExceptionSlot({...newExceptionSlot, technique: e.target.value as Technique})} className="p-1 border rounded-md text-sm bg-white">
-                                    <option value="potters_wheel">{t('techniques.short_potters_wheel')}</option>
-                                    <option value="molding">{t('techniques.short_molding')}</option>
+                                    <option value="potters_wheel">Torno</option>
+                                    <option value="molding">Modelado</option>
                                 </select>
                                 <button onClick={handleAddExceptionSlot} className="p-2 bg-brand-primary text-white rounded-md"><PlusIcon className="w-4 h-4"/></button>
                             </div>
