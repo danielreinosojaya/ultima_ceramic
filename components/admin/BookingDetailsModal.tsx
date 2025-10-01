@@ -31,6 +31,9 @@ const formatTimeForInput = (time12h: string): string => {
 };
 
 export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, time, attendees, instructorId, onClose, onRemoveAttendee, onAcceptPayment, onMarkAsUnpaid, onEditAttendee, onRescheduleAttendee }) => {
+  // Fallbacks para evitar errores si no se pasan como función
+  const safeOnEditAttendee = typeof onEditAttendee === 'function' ? onEditAttendee : () => {};
+  const safeOnRescheduleAttendee = typeof onRescheduleAttendee === 'function' ? onRescheduleAttendee : () => {};
   const { t, language } = useLanguage();
   const [attendanceData, setAttendanceData] = useState<Record<string, AttendanceStatus>>({});
   const [isPastClass, setIsPastClass] = useState(false);
@@ -166,10 +169,10 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, 
                 )}
               </div>
               <div className="flex flex-col items-end gap-1">
-                <button onClick={() => onEditAttendee(attendee.bookingId)} title={t('admin.bookingModal.editAttendee')} className="text-brand-secondary hover:text-brand-accent p-2 rounded-full hover:bg-gray-200 transition-colors">
+                <button onClick={() => safeOnEditAttendee(attendee.bookingId)} title={t('admin.bookingModal.editAttendee')} className="text-brand-secondary hover:text-brand-accent p-2 rounded-full hover:bg-gray-200 transition-colors">
                 <EditIcon className="w-5 h-5" />
                 </button>
-                <button onClick={() => onRescheduleAttendee(attendee.bookingId, { date, time, instructorId }, `${attendee.userInfo.firstName} ${attendee.userInfo.lastName}`)} title={t('admin.bookingModal.rescheduleAttendee')} className="text-brand-secondary hover:text-brand-accent p-2 rounded-full hover:bg-gray-200 transition-colors">
+                <button onClick={() => safeOnRescheduleAttendee(attendee.bookingId, { date, time, instructorId }, `${attendee.userInfo.firstName} ${attendee.userInfo.lastName}`)} title={t('admin.bookingModal.rescheduleAttendee')} className="text-brand-secondary hover:text-brand-accent p-2 rounded-full hover:bg-gray-200 transition-colors">
                 <CalendarEditIcon className="w-5 h-5" />
                 </button>
                 <button onClick={() => handleRemoveClick(attendee.bookingId, `${attendee.userInfo.firstName} ${attendee.userInfo.lastName}`)} title={t('admin.bookingModal.removeAttendee')} className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-100 transition-colors">
