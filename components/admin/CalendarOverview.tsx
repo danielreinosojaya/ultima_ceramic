@@ -144,12 +144,12 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
         <div className="grid grid-cols-7 gap-1 mt-2">
           {calendarDays.map((day, index) => {
             if (!day) return <div key={`blank-${index}`} className="border rounded-md border-gray-100 bg-gray-50 aspect-square"></div>;
-            
             const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
             const dateStr = formatDateToYYYYMMDD(date);
             const hasBookings = !!bookingsByDate[dateStr];
             const hasUnpaidBookings = unpaidDates.has(dateStr);
-            
+            // Check if any booking for this day is a group class (manual booking or not)
+            const isGroupClassDay = hasBookings && Object.values(bookingsByDate[dateStr]).some(slotInfo => (slotInfo as SlotInfo).attendees.some(att => att.bookingId && bookings.find(b => b.id === att.bookingId && b.productType === 'GROUP_CLASS')));
             return (
               <div 
                 key={day}
@@ -158,7 +158,7 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
                 <button
                   onClick={() => onDateSelect(date)}
                   className={`w-full aspect-square border rounded-md flex flex-col items-center justify-center text-sm font-semibold transition-all duration-200 p-1 group
-                    ${hasBookings ? 'bg-brand-primary/20 hover:bg-brand-primary/30 cursor-pointer' : 'bg-white'}
+                    ${hasBookings ? (isGroupClassDay ? 'bg-blue-100 hover:bg-blue-200 cursor-pointer' : 'bg-brand-primary/20 hover:bg-brand-primary/30 cursor-pointer') : 'bg-white'}
                   `}
                 >
                   <span className="transition-transform duration-200 group-hover:scale-110">{day}</span>

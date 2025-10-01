@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Booking, OpenStudioSubscription } from '../../types';
-import { useLanguage } from '../../context/LanguageContext';
 
 // Define a consistent type for the status
 export type SubscriptionStatus = 'Active' | 'Expired' | 'Pending Payment';
@@ -15,7 +14,6 @@ export interface AugmentedOpenStudioSubscription extends Booking {
 
 // Countdown Timer Component: Calculates and displays remaining time
 const CountdownTimer: React.FC<{ expiryDate: Date | null }> = ({ expiryDate }) => {
-    const { t } = useLanguage();
 
     const calculateTimeLeft = useCallback(() => {
         if (!expiryDate) {
@@ -57,7 +55,7 @@ const CountdownTimer: React.FC<{ expiryDate: Date | null }> = ({ expiryDate }) =
 
     return (
         <div className="font-mono text-sm tracking-tighter text-brand-text">
-            <span>{pad(timeLeft.days)}{t('admin.crm.openStudio.d')} </span>
+            <span>{pad(timeLeft.days)}d </span>
             <span className="tabular-nums">{pad(timeLeft.hours)}:{pad(timeLeft.minutes)}:{pad(timeLeft.seconds)}</span>
         </div>
     );
@@ -91,7 +89,6 @@ const formatTimestamp = (dateInput: Date | string | null | undefined): string =>
 };
 
 export const OpenStudioView: React.FC<OpenStudioViewProps> = ({ bookings, onNavigateToCustomer }) => {
-    const { t } = useLanguage();
     const [now, setNow] = useState(new Date());
 
     useEffect(() => {
@@ -136,11 +133,11 @@ export const OpenStudioView: React.FC<OpenStudioViewProps> = ({ bookings, onNavi
             <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-brand-background">
                     <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.crm.customer')}</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.crm.openStudio.status')}</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.crm.openStudio.startDate')}</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.crm.openStudio.remainingTime')}</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.crm.openStudio.purchaseDate')}</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Customer</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Start Date</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Remaining Time</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Purchase Date</th>
                     </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -152,7 +149,7 @@ export const OpenStudioView: React.FC<OpenStudioViewProps> = ({ bookings, onNavi
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                                 <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${STATUS_COLORS[sub.status]}`}>
-                                    {t(`admin.crm.openStudio.status${sub.status.replace(/ /g, '')}`)}
+                                    {sub.status}
                                 </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-text">
@@ -168,7 +165,7 @@ export const OpenStudioView: React.FC<OpenStudioViewProps> = ({ bookings, onNavi
                     )) : (
                         <tr>
                             <td colSpan={5} className="text-center py-8 text-brand-secondary">
-                                {t('admin.crm.openStudio.noSubscriptions')}
+                                No open studio subscriptions found.
                             </td>
                         </tr>
                     )}
