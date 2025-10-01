@@ -98,6 +98,22 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     const [showUnpaidOnly, setShowUnpaidOnly] = useState(false);
     const [now, setNow] = useState(new Date());
     const [bookingToHighlight, setBookingToHighlight] = useState<Booking | null>(null);
+        // Handlers for BookingDetailsModal
+        const handleMarkAsUnpaid = async (bookingId: string) => {
+            await dataService.markBookingAsUnpaid(bookingId);
+            closeAllModals();
+            onDataChange();
+        };
+
+        const handleEditAttendee = (bookingId: string) => {
+            setBookingToManageId(bookingId);
+            setIsEditModalOpen(true);
+        };
+
+        const handleRescheduleAttendee = (bookingId: string, slot: any, attendeeName: string) => {
+            setRescheduleInfo({ bookingId, slot, attendeeName });
+            setIsRescheduleModalOpen(true);
+        };
          // Panel lateral eliminado para restaurar el layout clásico
     
         useEffect(() => {
@@ -575,6 +591,9 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 onClose={closeAllModals}
                 onRemoveAttendee={handleRemoveAttendee}
                 onAcceptPayment={handleAcceptPayment}
+                    onMarkAsUnpaid={handleMarkAsUnpaid}
+                    onEditAttendee={handleEditAttendee}
+                    onRescheduleAttendee={handleRescheduleAttendee}
             />
         )}
         {isAcceptPaymentModalOpen && bookingToManage && (
