@@ -740,7 +740,15 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                                     const hasUnpaidBookings = unpaidBookingsCount > 0;
                                                     const isHighlighted = bookingToHighlight && slot.bookings.some(b => b.id === bookingToHighlight.id);
                                                     const isGroupClass = slot.bookings.some(b => b.productType === 'GROUP_CLASS');
-                                                    const bgColor = isGroupClass ? 'bg-blue-100' : `bg-${colorMap[instructor.colorScheme]?.bg || colorMap[defaultColorName].bg}`;
+                                                    const hasPaidBooking = slot.bookings.some(b => b.isPaid);
+                                                    const isEmptySlot = slot.bookings.length === 0;
+                                                    const bgColor = isEmptySlot
+                                                        ? 'bg-gray-50'
+                                                        : isGroupClass
+                                                        ? 'bg-blue-100'
+                                                        : hasPaidBooking
+                                                        ? 'bg-green-100'
+                                                        : `bg-${colorMap[instructor.colorScheme]?.bg || colorMap[defaultColorName].bg}`;
                                                     const borderColor = isGroupClass ? 'border-blue-400' : `border-${colorMap[instructor.colorScheme]?.text || colorMap[defaultColorName].text}/50`;
                                                     const slotKey = `${slot.date}-${normalizeTime(slot.time)}-${slot.instructorId}`;
                                                     return (
@@ -825,7 +833,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                     const hasUnpaidBookings = unpaidBookingsCount > 0;
                                     const isHighlighted = bookingToHighlight && slot.bookings.some(b => b.id === bookingToHighlight.id);
                                     const isGroupClass = slot.bookings.some(b => b.productType === 'GROUP_CLASS');
-                                    const bgColor = isGroupClass ? 'bg-blue-100' : 'bg-white';
+                                    const hasPaidBooking = slot.bookings.some(b => b.isPaid);
+                                    const bgColor = isGroupClass ? 'bg-blue-100' : hasPaidBooking ? 'bg-green-50' : 'bg-white';
                                     const borderColor = isGroupClass ? 'border-blue-400' : 'border-gray-200';
                                     const slotKey = `${slot.date}-${normalizeTime(slot.time)}-${slot.instructorId}`;
                                     return (
