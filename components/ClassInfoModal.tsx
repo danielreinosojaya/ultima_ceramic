@@ -1,4 +1,3 @@
-
 import React from 'react';
 import type { Product, OpenStudioSubscription } from '../types.js';
 import { ClockIcon } from './icons/ClockIcon.js';
@@ -6,7 +5,6 @@ import { SparklesIcon } from './icons/SparklesIcon.js';
 import { InfoCircleIcon } from './icons/InfoCircleIcon.js';
 import { PaintBrushIcon } from './icons/PaintBrushIcon.js';
 import { KeyIcon } from './icons/KeyIcon.js';
-import { useLanguage } from '../context/LanguageContext.js';
 import { CheckCircleIcon } from './icons/CheckCircleIcon.js';
 
 
@@ -28,7 +26,6 @@ const InfoDetail: React.FC<{ icon: React.ReactNode; label: string; children: Rea
 
 
 export const ClassInfoModal: React.FC<ClassInfoModalProps> = ({ product, onConfirm, onClose }) => {
-  const { t } = useLanguage();
 
   const renderProductDetails = () => {
     if (product.type === 'GROUP_EXPERIENCE' || product.type === 'COUPLES_EXPERIENCE') {
@@ -36,36 +33,40 @@ export const ClassInfoModal: React.FC<ClassInfoModalProps> = ({ product, onConfi
     }
 
     if (product.type === 'OPEN_STUDIO_SUBSCRIPTION') {
-      const details = product.details as OpenStudioSubscription['details'];
+      // wording exacto de la imagen
       return (
         <>
-          <InfoDetail icon={<ClockIcon className="w-6 h-6" />} label={t('modal.durationLabel')}>
-            <p>{t('modal.daysDuration', { count: details.durationDays })}</p>
+          <InfoDetail icon={<ClockIcon className="w-6 h-6" />} label="Duración">
+            <p>30 días de acceso</p>
           </InfoDetail>
-          <InfoDetail icon={<KeyIcon className="w-6 h-6" />} label={t('modal.accessIncludes')}>
+          <InfoDetail icon={<KeyIcon className="w-6 h-6" />} label="El Acceso Incluye">
             <ul className="list-disc list-inside space-y-1">
-                <li>{details.timeLimit}</li>
-                <li>{details.materialsLimit}</li>
+                <li>Sin limites de horarios (según disponibilidad))</li>
+                <li>12.5 libras de pasta cerámica (Material adicional a la venta en nuestro estudio)</li>
             </ul>
           </InfoDetail>
-          <InfoDetail icon={<InfoCircleIcon className="w-6 h-6" />} label={t('modal.howItWorks')}>
+          <InfoDetail icon={<InfoCircleIcon className="w-6 h-6" />} label="Cómo Funciona">
             <ul className="list-disc list-inside space-y-1">
-                {details.howItWorks.map((item, index) => <li key={index}>{item}</li>)}
+                <li>Uso de equipos : acceso a torno alfarero , mesas de trabajo para modelado a mano , extrusora y áreas de secado para tus piezas.</li>
+                <li>Herramientas: alambres de corte, esponjas, estecas, agujas, espátulas, raspadores, tornetas, variedad de sellos y cortadores.</li>
+                <li>Esmaltes : Variedad de esmaltes de alta temperatura ( que cubran las 12.5 libras de pasta cerámica adquirida). Puedes traer tus propios esmaltes.</li>
+                <li>Servicio de horno: Cocción de bizcocho y esmalte de alta temperatura.</li>
+                <li>Comunidad: Un ambiente colaborativo donde puedes compartir ideas , técnicas y experiencias con otros ceramistas.</li>
             </ul>
           </InfoDetail>
           <div className="mt-6 border-t border-brand-border pt-6 text-left">
             <div className="flex items-center gap-3 mb-4">
               <CheckCircleIcon className="w-7 h-7 text-brand-success flex-shrink-0" />
-              <h3 className="text-xl font-semibold text-brand-text">{t('modal.activationTitle')}</h3>
+              <h3 className="text-xl font-semibold text-brand-text">Cómo Activar Tu Suscripción</h3>
             </div>
               <ol className="list-decimal list-inside space-y-2 ml-4 text-brand-secondary">
-                  <li>{t('modal.activationStep1')}</li>
-                  <li>{t('modal.activationStep2')}</li>
-                  <li>{t('modal.activationStep3')}</li>
+                  <li>Completa tu compra y la información de usuario.</li>
+                  <li>Confirmaremos tu pago dentro de las próximas 24 horas hábiles.</li>
+                  <li>Una vez confirmado, tu acceso comienza y podrás empezar a reservar tu espacio en el taller vía WhatsApp.</li>
               </ol>
               <div className="mt-4 bg-amber-100 p-3 rounded-md border border-amber-300">
                 <p className="text-sm font-semibold text-amber-800 text-center">
-                    {t('modal.activationStartInfo', { duration: details.durationDays })}
+                    Tus 30 días de acceso comienzan desde el momento en que se confirma tu pago.
                 </p>
               </div>
           </div>
@@ -77,18 +78,18 @@ export const ClassInfoModal: React.FC<ClassInfoModalProps> = ({ product, onConfi
     if ('details' in product) {
       return (
         <>
-          <InfoDetail icon={<ClockIcon className="w-6 h-6" />} label={t('modal.durationLabel')}>
+          <InfoDetail icon={<ClockIcon className="w-6 h-6" />} label="Duración">
               <p>{product.details.duration}</p>
           </InfoDetail>
-           <InfoDetail icon={<SparklesIcon className="w-6 h-6" />} label={t('modal.activitiesLabel')}>
+           <InfoDetail icon={<SparklesIcon className="w-6 h-6" />} label="Actividades">
               <ul className="list-disc list-inside space-y-1">
                   {product.details.activities.map((activity, index) => <li key={index}>{activity}</li>)}
               </ul>
           </InfoDetail>
-          <InfoDetail icon={<InfoCircleIcon className="w-6 h-6" />} label={t('modal.generalRecommendationsLabel')}>
+          <InfoDetail icon={<InfoCircleIcon className="w-6 h-6" />} label="Recomendaciones Generales">
               <p>{product.details.generalRecommendations}</p>
           </InfoDetail>
-          <InfoDetail icon={<PaintBrushIcon className="w-6 h-6" />} label={t('modal.materialsLabel')}>
+          <InfoDetail icon={<PaintBrushIcon className="w-6 h-6" />} label="Materiales">
               <p>{product.details.materials}</p>
           </InfoDetail>
         </>
@@ -107,8 +108,8 @@ export const ClassInfoModal: React.FC<ClassInfoModalProps> = ({ product, onConfi
         onClick={(e) => e.stopPropagation()}
       >
         <div className="text-center mb-6">
-          <h2 className="text-3xl font-semibold text-brand-text">{t('modal.title')}: {product.name}</h2>
-          <p className="text-brand-secondary mt-2">{t('modal.subtitle')}</p>
+          <h2 className="text-3xl font-semibold text-brand-text">{product.name}</h2>
+          <p className="text-brand-secondary mt-2">Información y detalles del curso</p>
         </div>
 
         <div className="space-y-6">
@@ -120,13 +121,13 @@ export const ClassInfoModal: React.FC<ClassInfoModalProps> = ({ product, onConfi
                 onClick={onClose}
                 className="w-full sm:w-auto bg-brand-surface border border-brand-secondary text-brand-secondary font-bold py-2 px-6 rounded-lg hover:border-brand-text transition-colors duration-300"
             >
-                {t('modal.backButton')}
+                Volver
             </button>
             <button
                 onClick={onConfirm}
                 className="w-full sm:w-auto bg-brand-primary text-white font-bold py-2 px-8 rounded-lg hover:opacity-90 transition-opacity duration-300"
             >
-                {t('modal.confirmButton')}
+                Confirmar
             </button>
         </div>
       </div>

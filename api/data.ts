@@ -1,24 +1,5 @@
-import { VercelRequest, VercelResponse } from '@vercel/node';
-// ...existing code...
-
-// ...existing code...
-import { sql } from '@vercel/postgres';
-import { seedDatabase, ensureTablesExist } from './db.js';
-import * as emailService from './emailService.js';
-import type {
-    Product, Booking, ScheduleOverrides, Notification, Announcement, Instructor,
-    ConfirmationMessage, ClassCapacity, CapacityMessageSettings, UITexts, FooterInfo,
-    GroupInquiry, AddBookingResult, PaymentDetails, AttendanceStatus,
-    InquiryStatus, DayKey, AvailableSlot, AutomationSettings, UserInfo, BankDetails, TimeSlot, ClientNotification, InvoiceRequest, ProductType
-} from '../types.js';
-import {
-    DEFAULT_PRODUCTS, DEFAULT_AVAILABLE_SLOTS_BY_DAY, DEFAULT_INSTRUCTORS,
-    DEFAULT_POLICIES_TEXT, DEFAULT_CONFIRMATION_MESSAGE, DEFAULT_CLASS_CAPACITY,
-    DEFAULT_CAPACITY_MESSAGES, DEFAULT_FOOTER_INFO, DEFAULT_AUTOMATION_SETTINGS
-} from '../constants.js';
-
-
-const toCamelCase = (obj: any): any => {
+// Convierte claves snake_case a camelCase en objetos y arrays
+function toCamelCase(obj: any): any {
     if (Array.isArray(obj)) {
         return obj.map(v => toCamelCase(v));
     } else if (obj !== null && typeof obj === 'object') {
@@ -29,9 +10,25 @@ const toCamelCase = (obj: any): any => {
         }, {} as any);
     }
     return obj;
-};
+}
+import { sql } from '@vercel/postgres';
+import { seedDatabase, ensureTablesExist } from './db.js';
+import * as emailService from './emailService.js';
+import { VercelRequest, VercelResponse } from '@vercel/node';
+import type {
+    Booking,
+    ClientNotification,
+    GroupInquiry,
+    InvoiceRequest,
+    Notification,
+    AddBookingResult,
+    AutomationSettings,
+    BankDetails,
+    TimeSlot
+} from '../types';
 
-const safeParseDate = (value: any): Date | null => {
+// Función auxiliar para parsear fechas de forma segura
+function safeParseDate(value: any): Date | null {
     if (value === null || value === undefined) {
         return null;
     }
@@ -46,10 +43,8 @@ const safeParseDate = (value: any): Date | null => {
     if (typeof value === 'object' && Object.keys(value).length === 0) {
         return null;
     }
-
-    console.warn(`Could not parse date from unexpected type: ${typeof value}`, value);
     return null;
-};
+}
 
 const parseBookingFromDB = (dbRow: any): Booking => {
     if (!dbRow) return dbRow;
@@ -245,11 +240,21 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
         if (!key || typeof key !== 'string') {
             return res.status(400).json({ error: 'A "key" query parameter is required.' });
         }
-        const { rows: settings } = await sql`SELECT value FROM settings WHERE key = ${key}`;
-        if (settings.length > 0) {
-            data = settings[0].value;
+        if (key === 'clientNotifications') {
+            const { rows: clientNotifications } = await sql`
+                SELECT
+                    *,
+                    TO_CHAR(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as created_at_iso
+                FROM client_notifications ORDER BY created_at DESC
+            `;
+            data = clientNotifications.map(parseClientNotificationFromDB);
         } else {
-            return res.status(404).json({ error: `Setting with key "${key}" not found.` });
+            const { rows: settings } = await sql`SELECT value FROM settings WHERE key = ${key}`;
+            if (settings.length > 0) {
+                data = settings[0].value;
+            } else {
+                return res.status(404).json({ error: `Setting with key "${key}" not found.` });
+            }
         }
     }
     return res.status(200).json(data);
@@ -323,6 +328,20 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
 async function handleAction(action: string, req: VercelRequest, res: VercelResponse) {
     let result: any = { success: true };
     switch (action) {
+        case 'updateBooking': {
+            const { id, userInfo, price } = req.body;
+            if (!id || !userInfo || typeof price === 'undefined') {
+                return res.status(400).json({ error: 'id, userInfo, and price are required.' });
+            }
+            const { rows: [updatedBookingRow] } = await sql`
+                UPDATE bookings
+                SET user_info = ${JSON.stringify(userInfo)}, price = ${price}
+                WHERE id = ${id}
+                RETURNING *;
+            `;
+            const updatedBooking = parseBookingFromDB(updatedBookingRow);
+            return res.status(200).json({ success: true, booking: updatedBooking });
+        }
         case 'updateCustomerInfo': {
             const { email, info } = req.body;
             if (!email || !info) {
@@ -627,15 +646,19 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookingCode'> & { invoiceData?: Omit<InvoiceRequest, 'id' | 'bookingId' | 'status' | 'requestedAt' | 'processedAt'> }): Promise<AddBookingResult> {
     const { productId, slots, userInfo, productType, invoiceData, bookingDate, participants, clientNote } = body;
     
+    // Atomic deduplication: check for existing booking and slot, prevent race conditions
     if (productType === 'INTRODUCTORY_CLASS' || productType === 'CLASS_PACKAGE' || productType === 'SINGLE_CLASS' || productType === 'GROUP_CLASS') {
-        const { rows: existingBookings } = await sql`SELECT slots FROM bookings WHERE user_info->>'email' = ${userInfo.email}`;
-        for (const existing of existingBookings) {
-            for (const existingSlot of existing.slots) {
-                for (const newSlot of slots) {
-                    if (existingSlot.date === newSlot.date && existingSlot.time === newSlot.time) {
-                        return { success: false, message: 'DUPLICATE_BOOKING_ERROR' };
-                    }
-                }
+        // For each slot, check if a booking exists for this user and slot
+        for (const newSlot of slots) {
+            const { rows: existingBookings } = await sql`
+                SELECT * FROM bookings 
+                WHERE user_info->>'email' = ${userInfo.email}
+                AND slots @> ${JSON.stringify([newSlot])}
+            `;
+            if (existingBookings.length > 0) {
+                // Duplicate found, return existing booking
+                const parsedExisting = parseBookingFromDB(existingBookings[0]);
+                return { success: true, message: 'Booking already exists.', booking: parsedExisting };
             }
         }
     }

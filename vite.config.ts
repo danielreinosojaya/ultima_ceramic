@@ -1,26 +1,24 @@
-
-import path from 'path';
+import * as path from 'path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'url';
 
-export default defineConfig(() => {
-    return {
-      plugins: [react()],
-      resolve: {
-        alias: {
-          '@': path.resolve(path.dirname(fileURLToPath(import.meta.url)), '.'),
-        },
+const isDev = process.env.VERCEL_DEV === '1' || process.env.NODE_ENV === 'development';
+
+export default defineConfig({
+  plugins: [react()],
+  resolve: {
+    alias: {
+      '@': path.resolve(path.dirname(fileURLToPath(import.meta.url)), '.'),
+    },
+  },
+  server: {
+    proxy: {
+      '/api': {
+        target: isDev ? 'http://localhost:3000' : 'https://ceramicalma-backend.vercel.app',
+        changeOrigin: true,
+        secure: false,
       },
-      // ADD THIS 'server' BLOCK
-      server: {
-        proxy: {
-          '/api': {
-            target: 'https://ceramicalma-backend.vercel.app', // IMPORTANT: Replace with your actual URL
-            changeOrigin: true,
-            secure: false, // You might need this if you are proxying to a HTTPS server with a self-signed certificate
-          },
-        },
-      },
-    };
+    },
+  },
 });

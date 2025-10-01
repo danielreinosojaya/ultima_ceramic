@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { GroupInquiry, InquiryStatus } from '../../types';
 import * as dataService from '../../services/dataService';
-import { useLanguage } from '../../context/LanguageContext';
 import { ChatBubbleLeftRightIcon } from '../icons/ChatBubbleLeftRightIcon';
 
 const STATUS_OPTIONS: InquiryStatus[] = ['New', 'Contacted', 'Proposal Sent', 'Confirmed', 'Archived'];
@@ -20,7 +19,7 @@ interface InquiryManagerProps {
 }
 
 export const InquiryManager: React.FC<InquiryManagerProps> = ({ navigateToId, inquiries = [], onDataChange }) => {
-    const { t, language } = useLanguage();
+    const language = 'es-ES';
     const [expandedInquiryId, setExpandedInquiryId] = useState<string | null>(null);
     const [highlightedInquiryId, setHighlightedInquiryId] = useState<string | null>(null);
 
@@ -42,17 +41,15 @@ export const InquiryManager: React.FC<InquiryManagerProps> = ({ navigateToId, in
             onDataChange();
         }
     };
-        const handleDelete = async (id: string) => {
-        const confirmed = window.confirm(t('admin.inquiryManager.confirmDelete'));
+    const handleDelete = async (id: string) => {
+        const confirmed = window.confirm('¿Seguro que quieres eliminar esta consulta?');
         if (confirmed) {
             try {
-                // Aquí usamos dataService.deleteGroupInquiry que crearemos en el siguiente paso
                 await dataService.deleteGroupInquiry(id);
-                // Llamamos a onDataChange para que el componente padre se refresque
                 onDataChange();
             } catch (error) {
                 console.error('Error al eliminar la consulta:', error);
-                alert(t('admin.inquiryManager.deleteError'));
+                alert('Error al eliminar la consulta.');
             }
         }
     };
@@ -62,25 +59,22 @@ export const InquiryManager: React.FC<InquiryManagerProps> = ({ navigateToId, in
     };
 
     const formatDate = (dateInput: string | Date | null | undefined, options: Intl.DateTimeFormatOptions): string => {
-        const notApplicableText = t('admin.inquiryManager.notApplicable') || 'N/A';
+        const notApplicableText = 'N/A';
         if (!dateInput) {
             return notApplicableText;
         }
 
         let date: Date;
 
-        // Handle date-only strings like "YYYY-MM-DD" which can be misinterpreted as UTC.
         if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
             const [year, month, day] = dateInput.split('-').map(Number);
-            // Construct in local time zone by specifying parts
             date = new Date(year, month - 1, day);
         } else {
             date = new Date(dateInput);
         }
 
-        // Final check for validity
         if (isNaN(date.getTime())) {
-            return t('admin.inquiryManager.invalidDate') || 'Invalid Date';
+            return 'Fecha inválida';
         }
 
         return date.toLocaleDateString(language, options);
@@ -92,9 +86,9 @@ export const InquiryManager: React.FC<InquiryManagerProps> = ({ navigateToId, in
                 <div>
                     <h2 className="text-2xl font-serif text-brand-text mb-2 flex items-center gap-3">
                         <ChatBubbleLeftRightIcon className="w-6 h-6 text-brand-accent" />
-                        {t('admin.inquiryManager.title')}
+                        Consultas grupales
                     </h2>
-                    <p className="text-brand-secondary">{t('admin.inquiryManager.subtitle')}</p>
+                    <p className="text-brand-secondary">Gestión de consultas recibidas</p>
                 </div>
             </div>
 
@@ -102,11 +96,11 @@ export const InquiryManager: React.FC<InquiryManagerProps> = ({ navigateToId, in
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-brand-background">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.inquiryManager.received')}</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.inquiryManager.name')}</th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.inquiryManager.participants')}</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.inquiryManager.date')}</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.inquiryManager.status')}</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Recibido</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Nombre</th>
+                            <th className="px-6 py-3 text-center text-xs font-medium text-brand-secondary uppercase tracking-wider">Participantes</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Fecha</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Estado</th>
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
@@ -123,8 +117,8 @@ export const InquiryManager: React.FC<InquiryManagerProps> = ({ navigateToId, in
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="flex items-center gap-2">
                                         <span className="font-bold text-brand-text">{inquiry.name}</span>
-                                        <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${inquiry.inquiryType === 'couple' ? 'bg-rose-100 text-rose-800' : 'bg-indigo-100 text-indigo-800'}`}>
-                                            {t(`admin.inquiryManager.type_${inquiry.inquiryType}`)}
+                                        <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${inquiry.inquiryType === 'couple' ? 'bg-rose-100 text-rose-800' : 'bg-indigo-100 text-indigo-800'}`}> 
+                                            {inquiry.inquiryType === 'couple' ? 'Pareja' : 'Grupo'}
                                         </span>
                                     </div>
                                     <div className="text-sm text-brand-secondary">{inquiry.email}</div>
@@ -143,12 +137,12 @@ export const InquiryManager: React.FC<InquiryManagerProps> = ({ navigateToId, in
                                      <select
                                         value={inquiry.status}
                                         onChange={(e) => handleStatusChange(inquiry.id, e.target.value as InquiryStatus)}
-                                        onClick={(e) => e.stopPropagation()} // Prevent row click from firing
+                                        onClick={(e) => e.stopPropagation()}
                                         className={`p-1.5 rounded-md text-xs font-semibold border-0 focus:ring-2 focus:ring-brand-accent ${STATUS_COLORS[inquiry.status]}`}
                                     >
                                         {STATUS_OPTIONS.map(status => (
                                             <option key={status} value={status}>
-                                                {t(`admin.inquiryManager.status_${status.replace(' ', '')}`)}
+                                                {status === 'New' ? 'Nueva' : status === 'Contacted' ? 'Contactado' : status === 'Proposal Sent' ? 'Propuesta enviada' : status === 'Confirmed' ? 'Confirmada' : 'Archivada'}
                                             </option>
                                         ))}
                                     </select>
@@ -156,12 +150,12 @@ export const InquiryManager: React.FC<InquiryManagerProps> = ({ navigateToId, in
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium">
     <button
         onClick={(e) => {
-            e.stopPropagation(); // Previene que la fila se expanda
+            e.stopPropagation();
             handleDelete(inquiry.id);
         }}
         className="text-red-600 hover:text-red-900"
     >
-        {t('admin.inquiryManager.delete')}
+        Eliminar
     </button>
 </td>
 
@@ -171,15 +165,15 @@ export const InquiryManager: React.FC<InquiryManagerProps> = ({ navigateToId, in
                                     <td colSpan={5} className="px-6 py-4">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                                             <div>
-                                                <h5 className="font-bold text-brand-secondary mb-1">{t('admin.inquiryManager.messageTitle')}</h5>
-                                                <p className="text-brand-text whitespace-pre-wrap">{inquiry.message || 'No message provided.'}</p>
+                                                <h5 className="font-bold text-brand-secondary mb-1">Mensaje</h5>
+                                                <p className="text-brand-text whitespace-pre-wrap">{inquiry.message || 'Sin mensaje.'}</p>
                                             </div>
                                              <div>
-                                                <h5 className="font-bold text-brand-secondary mb-1">{t('admin.inquiryManager.eventType')}</h5>
+                                                <h5 className="font-bold text-brand-secondary mb-1">Tipo de evento</h5>
                                                 <p className="text-brand-text">
                                                     {inquiry.eventType 
-                                                        ? t(`groupInquiry.eventTypeOptions.${inquiry.eventType}`) 
-                                                        : t('admin.inquiryManager.notSpecified')
+                                                        ? inquiry.eventType 
+                                                        : 'No especificado'
                                                     }
                                                 </p>
                                             </div>
@@ -191,7 +185,7 @@ export const InquiryManager: React.FC<InquiryManagerProps> = ({ navigateToId, in
                         )) : (
                             <tr>
                                 <td colSpan={5} className="text-center py-10 text-brand-secondary">
-                                    {t('admin.inquiryManager.noInquiries')}
+                                    No hay consultas.
                                 </td>
                             </tr>
                         )}

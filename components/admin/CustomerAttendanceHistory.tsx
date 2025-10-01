@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import type { Customer, Booking, TimeSlot, AttendanceStatus } from '../../types';
-import { useLanguage } from '../../context/LanguageContext';
 import { ArrowLeftIcon } from '../icons/ArrowLeftIcon';
 import { ArrowRightIcon } from '../icons/ArrowRightIcon';
 
@@ -18,7 +17,6 @@ type PastSlot = {
 const formatDateToYYYYMMDD = (d: Date): string => d.toISOString().split('T')[0];
 
 export const CustomerAttendanceHistory: React.FC<CustomerAttendanceHistoryProps> = ({ customer, onBack }) => {
-    const { t, language } = useLanguage();
     const [currentDate, setCurrentDate] = useState(new Date());
 
     const allPastSlots = useMemo((): PastSlot[] => {
@@ -70,23 +68,21 @@ export const CustomerAttendanceHistory: React.FC<CustomerAttendanceHistoryProps>
     }, [currentDate]);
 
     const translatedDayNames = useMemo(() => 
-        ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((_, i) => 
-            new Date(2024, 0, i + 7).toLocaleDateString(language, { weekday: 'short' })
-        ), [language]);
+        ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], []);
 
     return (
         <div className="animate-fade-in">
             <button onClick={onBack} className="text-brand-secondary hover:text-brand-text mb-4 transition-colors font-semibold">
-                &larr; {t('admin.customerDetail.backButton')}
+                &larr; Back
             </button>
-            <h2 className="text-2xl font-bold text-brand-text mb-1">{t('admin.customerDetail.attendanceHistoryTitle')}</h2>
-            <p className="text-brand-secondary mb-6">{t('admin.customerDetail.attendanceHistorySubtitle', { name: `${customer.userInfo.firstName} ${customer.userInfo.lastName}` })}</p>
+            <h2 className="text-2xl font-bold text-brand-text mb-1">Attendance History</h2>
+            <p className="text-brand-secondary mb-6">Attendance history for {customer.userInfo.firstName} {customer.userInfo.lastName}</p>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div className="bg-brand-background p-4 rounded-lg">
                     <div className="flex items-center justify-between mb-4">
                         <button onClick={() => setCurrentDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))} className="p-2 rounded-full hover:bg-gray-200"><ArrowLeftIcon className="w-5 h-5" /></button>
-                        <h4 className="text-lg font-bold text-brand-text capitalize">{currentDate.toLocaleString(language, { month: 'long', year: 'numeric' })}</h4>
+                        <h4 className="text-lg font-bold text-brand-text capitalize">{currentDate.toLocaleString('en', { month: 'long', year: 'numeric' })}</h4>
                         <button onClick={() => setCurrentDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))} className="p-2 rounded-full hover:bg-gray-200"><ArrowRightIcon className="w-5 h-5" /></button>
                     </div>
                     <div className="grid grid-cols-7 gap-1 text-center text-xs text-brand-secondary mb-2">
@@ -112,8 +108,8 @@ export const CustomerAttendanceHistory: React.FC<CustomerAttendanceHistoryProps>
                         })}
                     </div>
                      <div className="flex items-center justify-center gap-4 mt-4 text-xs">
-                        <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-500"></span>{t('admin.attendance.attended')}</div>
-                        <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500"></span>{t('admin.attendance.noShow')}</div>
+                        <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-500"></span>Attended</div>
+                        <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500"></span>No Show</div>
                     </div>
                 </div>
                 <div className="h-96 overflow-y-auto">
@@ -121,17 +117,17 @@ export const CustomerAttendanceHistory: React.FC<CustomerAttendanceHistoryProps>
                         <table className="min-w-full">
                              <thead className="sticky top-0 bg-brand-background z-10">
                                 <tr>
-                                    <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.attendance.dateHeader')}</th>
-                                    <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.attendance.classHeader')}</th>
-                                    <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.attendance.statusHeader')}</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">Date</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">Class</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">Status</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
                                 {slotsForCurrentMonth.map((slot, index) => (
                                     <tr key={index}>
                                         <td className="px-4 py-3 whitespace-nowrap text-sm text-brand-text">
-                                            {slot.date.toLocaleDateString(language, { month: 'short', day: 'numeric' })}
-                                            <div className="text-xs text-gray-500">{slot.date.toLocaleTimeString(language, { hour: 'numeric', minute: '2-digit'})}</div>
+                                            {slot.date.toLocaleDateString('en', { month: 'short', day: 'numeric' })}
+                                            <div className="text-xs text-gray-500">{slot.date.toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit'})}</div>
                                         </td>
                                         <td className="px-4 py-3 whitespace-nowrap text-sm text-brand-text">{slot.productName}</td>
                                         <td className="px-4 py-3 whitespace-nowrap">
@@ -139,7 +135,7 @@ export const CustomerAttendanceHistory: React.FC<CustomerAttendanceHistoryProps>
                                                 slot.status === 'attended' ? 'bg-green-100 text-green-800' :
                                                 slot.status === 'no-show' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
                                             }`}>
-                                                {t(`admin.attendance.status${slot.status.replace('-', '')}`)}
+                                                {slot.status === 'attended' ? 'Attended' : slot.status === 'no-show' ? 'No Show' : 'Not Marked'}
                                             </span>
                                         </td>
                                     </tr>
@@ -148,7 +144,7 @@ export const CustomerAttendanceHistory: React.FC<CustomerAttendanceHistoryProps>
                         </table>
                     ) : (
                         <div className="h-full flex items-center justify-center text-brand-secondary">
-                            {t('admin.customerDetail.noAttendanceForMonth')}
+                            No attendance records for this month.
                         </div>
                     )}
                 </div>

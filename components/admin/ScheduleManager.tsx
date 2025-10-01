@@ -91,13 +91,38 @@ interface ScheduleManagerProps extends AppData {
 export const ScheduleManager: React.FC<ScheduleManagerProps> = ({ 
     initialDate, onBackToMonth, onDataChange, invoiceRequests, setNavigateTo, ...appData 
 }) => {
-    const { t, language } = useLanguage();
+    // Monolingüe español, textos hardcodeados
+    const language = 'es-ES';
     const [currentDate, setCurrentDate] = useState(getWeekStartDate(initialDate));
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [modalData, setModalData] = useState<{ date: string, time: string, attendees: any[], instructorId: number } | null>(null);
     const [showUnpaidOnly, setShowUnpaidOnly] = useState(false);
     const [now, setNow] = useState(new Date());
     const [bookingToHighlight, setBookingToHighlight] = useState<Booking | null>(null);
+        // Handlers for BookingDetailsModal
+        const handleMarkAsUnpaid = async (bookingId: string) => {
+            await dataService.markBookingAsUnpaid(bookingId);
+            closeAllModals();
+            onDataChange();
+        };
+
+        const handleEditAttendee = (bookingId: string) => {
+            setBookingToManageId(bookingId);
+            setIsEditModalOpen(true);
+        };
+
+        const handleRescheduleAttendee = (bookingId: string, slot: any, attendeeName: string) => {
+            setRescheduleInfo({ bookingId, slot, attendeeName });
+            setIsRescheduleModalOpen(true);
+        };
+            // Handler for saving edited booking
+            const handleSaveEditBooking = async (updatedData: EditableBooking) => {
+          if (!bookingToManage) return;
+          const updatedBooking = { ...bookingToManage, ...updatedData };
+          await dataService.updateBooking(updatedBooking);
+          setIsEditModalOpen(false);
+          onDataChange();
+            };
          // Panel lateral eliminado para restaurar el layout clásico
     
         useEffect(() => {
@@ -416,7 +441,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         if (rescheduleInfo) {
             const result = await dataService.rescheduleBookingSlot(rescheduleInfo.bookingId, rescheduleInfo.slot, newSlot);
             if (!result.success) {
-                alert(t(`admin.errors.${result.message}`));
+                alert('Error al reprogramar la reserva: ' + result.message);
             }
             closeAllModals();
             onDataChange();
@@ -467,9 +492,9 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     };
 
     const handleDownloadPdf = () => {
-        const dataToExport = showUnpaidOnly ? filteredScheduleData : scheduleData;
-        const subtitle = showUnpaidOnly ? t('admin.pdfReport.filteredSubtitle') : undefined;
-        generateWeeklySchedulePDF(weekDates, dataToExport, language, showUnpaidOnly, subtitle);
+    const dataToExport = showUnpaidOnly ? filteredScheduleData : scheduleData;
+    const subtitle = showUnpaidOnly ? 'Solo reservas no pagadas' : undefined;
+    generateWeeklySchedulePDF(weekDates, dataToExport, language, showUnpaidOnly, subtitle);
     };
     
     const handleSearch = (e: React.FormEvent) => {
@@ -575,6 +600,9 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 onClose={closeAllModals}
                 onRemoveAttendee={handleRemoveAttendee}
                 onAcceptPayment={handleAcceptPayment}
+                    onMarkAsUnpaid={handleMarkAsUnpaid}
+                    onEditAttendee={handleEditAttendee}
+                    onRescheduleAttendee={handleRescheduleAttendee}
             />
         )}
         {isAcceptPaymentModalOpen && bookingToManage && (
@@ -589,6 +617,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             <EditBookingModal
                 booking={bookingToManage}
                 onClose={closeAllModals}
+                    onSave={handleSaveEditBooking}
             />
         )}
         {isRescheduleModalOpen && rescheduleInfo && (
@@ -629,7 +658,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                         type="text"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder={t('admin.weeklyView.searchPlaceholder')}
+                        placeholder="Buscar cliente, correo o código de reserva"
                         className="w-64 pl-4 pr-10 py-2 text-sm border border-gray-300 rounded-full focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                     />
                     <button type="submit" className="absolute top-1/2 right-3 -translate-y-1/2 text-gray-400 hover:text-brand-primary">
@@ -662,7 +691,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                     <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${showUnpaidOnly ? 'translate-x-6' : 'translate-x-1'}`}/>
                 </div>
                 <input type="checkbox" checked={showUnpaidOnly} onChange={() => setShowUnpaidOnly(!showUnpaidOnly)} className="hidden" />
-                {t('admin.weeklyView.filterUnpaid')}
+                Mostrar solo reservas no pagadas
             </label>
         </div>
 
@@ -711,14 +740,22 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                                     const hasUnpaidBookings = unpaidBookingsCount > 0;
                                                     const isHighlighted = bookingToHighlight && slot.bookings.some(b => b.id === bookingToHighlight.id);
                                                     const isGroupClass = slot.bookings.some(b => b.productType === 'GROUP_CLASS');
-                                                    const bgColor = isGroupClass ? 'bg-blue-100' : `bg-${colorMap[instructor.colorScheme]?.bg || colorMap[defaultColorName].bg}`;
+                                                    const hasPaidBooking = slot.bookings.some(b => b.isPaid);
+                                                    const isEmptySlot = slot.bookings.length === 0;
+                                                    const bgColor = isEmptySlot
+                                                        ? 'bg-gray-50'
+                                                        : isGroupClass
+                                                        ? 'bg-blue-100'
+                                                        : hasPaidBooking
+                                                        ? 'bg-green-100'
+                                                        : `bg-${colorMap[instructor.colorScheme]?.bg || colorMap[defaultColorName].bg}`;
                                                     const borderColor = isGroupClass ? 'border-blue-400' : `border-${colorMap[instructor.colorScheme]?.text || colorMap[defaultColorName].text}/50`;
                                                     const slotKey = `${slot.date}-${normalizeTime(slot.time)}-${slot.instructorId}`;
                                                     return (
                                                         <button 
                                                             key={slotKey} 
                                                             onClick={() => handleShiftClick(dateStr, slot)}
-                                                            aria-label={hasUnpaidBookings ? t('admin.weeklyView.unpaidSlotLabel', { default: 'Unpaid slot' }) : t('admin.weeklyView.slotLabel', { default: 'Slot' })}
+                                                            aria-label={hasUnpaidBookings ? 'Slot no pagado' : 'Slot'}
                                                             className={`w-full text-left p-2 rounded-md shadow-sm border-l-4 ${bgColor} ${borderColor} hover:shadow-md transition-shadow relative overflow-hidden ${isHighlighted ? 'animate-pulse-border' : ''}`}> 
                                                             {hasUnpaidBookings && <div className="absolute inset-0 unpaid-booking-stripe opacity-70"></div>}
                                                             <div className="relative z-10">
@@ -731,7 +768,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                                                 </div>
                                                                 <div className="text-xs text-gray-600 mt-1">
                                                                     {totalParticipants}/{slot.capacity} booked
-                                                                    {hasUnpaidBookings && <span className="font-bold text-brand-primary ml-1">({t('admin.weeklyView.unpaid', { count: unpaidBookingsCount })})</span>}
+                                                                    {hasUnpaidBookings && <span className="font-bold text-brand-primary ml-1">({unpaidBookingsCount} sin pagar)</span>}
                                                                 </div>
                                                             </div>
                                                         </button>
@@ -796,14 +833,15 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                     const hasUnpaidBookings = unpaidBookingsCount > 0;
                                     const isHighlighted = bookingToHighlight && slot.bookings.some(b => b.id === bookingToHighlight.id);
                                     const isGroupClass = slot.bookings.some(b => b.productType === 'GROUP_CLASS');
-                                    const bgColor = isGroupClass ? 'bg-blue-100' : 'bg-white';
+                                    const hasPaidBooking = slot.bookings.some(b => b.isPaid);
+                                    const bgColor = isGroupClass ? 'bg-blue-100' : hasPaidBooking ? 'bg-green-50' : 'bg-white';
                                     const borderColor = isGroupClass ? 'border-blue-400' : 'border-gray-200';
                                     const slotKey = `${slot.date}-${normalizeTime(slot.time)}-${slot.instructorId}`;
                                     return (
                                         <button
                                             key={slotKey}
                                             onClick={() => handleShiftClick(dateStr, slot)}
-                                            aria-label={hasUnpaidBookings ? t('admin.weeklyView.unpaidSlotLabel', { default: 'Unpaid slot' }) : t('admin.weeklyView.slotLabel', { default: 'Slot' })}
+                                            aria-label={hasUnpaidBookings ? 'Slot no pagado' : 'Slot'}
                                             className={`w-full text-left p-3 rounded-lg shadow-sm ${bgColor} hover:shadow-md transition-shadow relative overflow-hidden border ${borderColor} ${isHighlighted ? 'animate-pulse-border' : ''}`}
                                         >
                                             {hasUnpaidBookings && <div className="absolute inset-0 unpaid-booking-stripe opacity-70"></div>}
@@ -821,7 +859,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                                 </div>
                                                 {hasUnpaidBookings && 
                                                     <div className="text-xs text-brand-primary font-bold mt-2">
-                                                        {t('admin.weeklyView.unpaid', { count: unpaidBookingsCount })}
+                                                        {unpaidBookingsCount} sin pagar
                                                     </div>
                                                 }
                                             </div>
@@ -835,7 +873,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
 
                 {!hasVisibleSlotsInFilter && (
                     <div className="text-center py-10 text-brand-secondary">
-                        {t('admin.weeklyView.noUnpaidFound')}
+                        No se encontraron reservas no pagadas.
                     </div>
                 )}
                 

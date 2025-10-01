@@ -21,7 +21,7 @@ const TimeSlotModal: React.FC<{
   instructors: Instructor[];
   capacityMessages: CapacityMessageSettings;
 }> = ({ date, onClose, onSelect, availableTimes, instructors, capacityMessages }) => {
-  const { t, language } = useLanguage();
+    const language = 'es-ES';
   
   return (
     <div 
@@ -32,7 +32,7 @@ const TimeSlotModal: React.FC<{
         className="bg-white rounded-lg shadow-xl p-6 w-96 animate-fade-in-up"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-xl font-serif text-brand-text mb-2 text-center">{t('schedule.modal.title')}</h3>
+    <h3 className="text-xl font-serif text-brand-text mb-2 text-center">Selecciona horario</h3>
         <p className="text-center text-brand-secondary mb-4">{date.toLocaleDateString(language, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
         <div className="flex flex-col gap-2 max-h-80 overflow-y-auto pr-2 -mr-2">
           {availableTimes.length > 0 ? availableTimes.map(slot => (
@@ -47,7 +47,7 @@ const TimeSlotModal: React.FC<{
                 <CapacityIndicator count={slot.paidBookingsCount} max={slot.maxCapacity} capacityMessages={capacityMessages} />
               </div>
             </button>
-          )) : <p className="text-center text-brand-secondary">{t('schedule.modal.noClasses')}</p>}
+          )) : <p className="text-center text-brand-secondary">No hay clases disponibles</p>}
         </div>
       </div>
     </div>
@@ -90,7 +90,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
     // Validation state
     const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
     const [submitDisabled, setSubmitDisabled] = useState(false);
-    const { t, language } = useLanguage();
+    const language = 'es-ES';
     const [step, setStep] = useState(1);
 
     const [products, setProducts] = useState<Product[]>([]);
@@ -124,14 +124,14 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
         {
             id: -1,
             type: 'SINGLE_CLASS',
-            name: t('admin.manualBookingModal.singleClassPottersWheel'),
-            description: t('admin.manualBookingModal.singleClassDescription'),
+            name: 'Clase individual torno',
+            description: 'Clase individual de 2 horas en torno o modelado. Incluye materiales y horneada.',
             isActive: true,
             classes: 1,
             price: 55,
             details: {
                 technique: 'potters_wheel',
-                duration: '2 hours',
+                duration: '2 horas',
                 durationHours: 2,
                 activities: [],
                 generalRecommendations: '',
@@ -141,14 +141,14 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
         {
             id: -2,
             type: 'SINGLE_CLASS',
-            name: t('admin.manualBookingModal.singleClassMolding'),
-            description: t('admin.manualBookingModal.singleClassDescription'),
+            name: 'Clase individual modelado',
+            description: 'Clase individual de 2 horas en torno o modelado. Incluye materiales y horneada.',
             isActive: true,
             classes: 1,
             price: 55,
             details: {
                 technique: 'molding',
-                duration: '2 hours',
+                duration: '2 horas',
                 durationHours: 2,
                 activities: [],
                 generalRecommendations: '',
@@ -158,21 +158,21 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
         {
             id: -3,
             type: 'GROUP_CLASS',
-            name: t('admin.manualBookingModal.groupClassTitle'),
-            description: t('admin.manualBookingModal.groupClassDescription'),
+            name: 'Clase grupal',
+            description: 'Clase grupal de 2 horas en torno. Incluye materiales y horneada. Precio por persona.',
             isActive: true,
             minParticipants: 2,
             pricePerPerson: 40,
             details: {
                 technique: 'potters_wheel',
-                duration: '2 hours',
+                duration: '2 horas',
                 durationHours: 2,
                 activities: [],
                 generalRecommendations: '',
                 materials: ''
             }
         }
-    ], [t]);
+    ], []);
 
     useEffect(() => {
         const loadData = async () => {
@@ -501,36 +501,36 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
                 details={conflictDetails}
             />
             <div className="bg-brand-surface rounded-xl shadow-2xl p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto animate-fade-in-up" onClick={(e) => e.stopPropagation()}>
-                <h2 className="text-2xl font-serif text-brand-accent mb-4 text-center">{t('admin.manualBookingModal.title')}</h2>
+                <h2 className="text-2xl font-serif text-brand-accent mb-4 text-center">Reserva manual</h2>
                 {step === 1 && (
                     <div className="space-y-4">
                         {/* Customer selection */}
                         <div>
-                             <h3 className="font-bold text-brand-text mb-2">{t('admin.manualBookingModal.customerSectionTitle')}</h3>
+                             <h3 className="font-bold text-brand-text mb-2">Cliente</h3>
                              <div className="flex items-center gap-4 mb-2">
-                                <button onClick={() => {setIsCreatingNewCustomer(false); resetCustomerSelection();}} className={`px-4 py-2 rounded-md text-sm font-semibold ${!isCreatingNewCustomer ? 'bg-brand-primary text-white' : 'bg-gray-200'}`}>{t('admin.manualBookingModal.existingCustomer')}</button>
-                                <button onClick={() => {setIsCreatingNewCustomer(true); resetCustomerSelection();}} className={`px-4 py-2 rounded-md text-sm font-semibold ${isCreatingNewCustomer ? 'bg-brand-primary text-white' : 'bg-gray-200'}`}>{t('admin.manualBookingModal.newCustomer')}</button>
+                                <button onClick={() => {setIsCreatingNewCustomer(false); resetCustomerSelection();}} className={`px-4 py-2 rounded-md text-sm font-semibold ${!isCreatingNewCustomer ? 'bg-brand-primary text-white' : 'bg-gray-200'}`}>Cliente existente</button>
+                                <button onClick={() => {setIsCreatingNewCustomer(true); resetCustomerSelection();}} className={`px-4 py-2 rounded-md text-sm font-semibold ${isCreatingNewCustomer ? 'bg-brand-primary text-white' : 'bg-gray-200'}`}>Nuevo cliente</button>
                             </div>
 
                              {isCreatingNewCustomer ? (
                                 <div className="p-4 border rounded-lg bg-gray-50 space-y-3 animate-fade-in-fast">
                                     <div className="grid grid-cols-2 gap-3">
-                                        <input type="text" name="firstName" value={userInfo.firstName} onChange={handleUserInputChange} placeholder={t('userInfoModal.firstNamePlaceholder')} className="w-full px-3 py-2 border rounded-lg" required />
-                                        <input type="text" name="lastName" value={userInfo.lastName} onChange={handleUserInputChange} placeholder={t('userInfoModal.lastNamePlaceholder')} className="w-full px-3 py-2 border rounded-lg" required />
+                                        <input type="text" name="firstName" value={userInfo.firstName} onChange={handleUserInputChange} placeholder="Nombre" className="w-full px-3 py-2 border rounded-lg" required />
+                                        <input type="text" name="lastName" value={userInfo.lastName} onChange={handleUserInputChange} placeholder="Apellidos" className="w-full px-3 py-2 border rounded-lg" required />
                                     </div>
-                                    <input type="email" name="email" value={userInfo.email} onChange={handleUserInputChange} placeholder={t('userInfoModal.emailPlaceholder')} className="w-full px-3 py-2 border rounded-lg" required />
+                                    <input type="email" name="email" value={userInfo.email} onChange={handleUserInputChange} placeholder="Correo electrónico" className="w-full px-3 py-2 border rounded-lg" required />
                                     <div className="flex gap-2">
                                         <select name="countryCode" value={userInfo.countryCode} onChange={handleUserInputChange} className="border border-gray-300 rounded-lg bg-gray-50">
                                             {COUNTRIES.map(c => <option key={c.name} value={c.code}>{c.flag} {c.code}</option>)}
                                         </select>
-                                        <input type="tel" name="phone" value={userInfo.phone} onChange={handleUserInputChange} placeholder={t('userInfoModal.phonePlaceholder')} className="w-full px-3 py-2 border rounded-lg" />
+                                        <input type="tel" name="phone" value={userInfo.phone} onChange={handleUserInputChange} placeholder="Teléfono" className="w-full px-3 py-2 border rounded-lg" />
                                     </div>
                                     <div className="p-4 border border-rose-200 rounded-lg bg-rose-50/50 space-y-3">
                                         <div className="flex items-center gap-3">
                                             <SparklesIcon className="w-6 h-6 text-rose-500" />
                                             <div>
-                                                <h4 className="font-bold text-brand-text">{t('admin.manualBookingModal.birthdayTitle')}</h4>
-                                                <p className="text-xs text-brand-secondary">{t('admin.manualBookingModal.birthdaySubtitle')}</p>
+                                                <h4 className="font-bold text-brand-text">Fecha de nacimiento</h4>
+                                                <p className="text-xs text-brand-secondary">Opcional para clientes nuevos</p>
                                             </div>
                                         </div>
                                         <input id="birthday" name="birthday" type="date" value={userInfo.birthday || ''} onChange={handleUserInputChange} disabled={optOutBirthday} className="w-full px-3 py-2 border rounded-lg disabled:bg-gray-100" />
@@ -539,13 +539,13 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
                                                 <span className={`inline-block w-3.5 h-3.5 transform bg-white rounded-full transition-transform ${optOutBirthday ? 'translate-x-5' : 'translate-x-1'}`}/>
                                             </div>
                                             <input type="checkbox" checked={optOutBirthday} onChange={e => setOptOutBirthday(e.target.checked)} className="hidden" />
-                                            {t('admin.manualBookingModal.birthdayOptOut')}
+                                            {'No quiero ingresar fecha de nacimiento'}
                                         </label>
                                     </div>
                                 </div>
                             ) : (
                                 <div className="relative animate-fade-in-fast">
-                                    <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder={t('admin.manualBookingModal.searchPlaceholder')} className="w-full p-2 border rounded-lg" />
+                                    <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Buscar cliente por nombre, apellido o correo" className="w-full p-2 border rounded-lg" />
                                     {filteredCustomers.length > 0 && (
                                         <ul className="absolute z-10 w-full bg-white border rounded-lg mt-1 shadow-lg max-h-48 overflow-y-auto">
                                             {filteredCustomers.map(c => (
@@ -555,7 +555,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
                                     )}
                                     {selectedCustomer && (
                                         <div className="mt-2 p-2 bg-blue-100 rounded-lg text-sm flex justify-between items-center">
-                                            <span>{t('admin.manualBookingModal.selected')}: {selectedCustomer.userInfo.firstName} {selectedCustomer.userInfo.lastName}</span>
+                                            <span>Seleccionado: {selectedCustomer.userInfo.firstName} {selectedCustomer.userInfo.lastName}</span>
                                             <button onClick={resetCustomerSelection} className="text-red-500 font-bold">X</button>
                                         </div>
                                     )}
@@ -565,7 +565,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
 
                         {/* Product selection */}
                         <div>
-                            <h3 className="font-bold text-brand-text mb-2">{t('admin.manualBookingModal.productSectionTitle')}</h3>
+                            <h3 className="font-bold text-brand-text mb-2">Producto</h3>
                              <div className="grid grid-cols-2 gap-4">
                                 <select 
                                     value={selectedProduct?.id ?? ''}
@@ -575,20 +575,20 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
                                     }} 
                                     className="w-full p-2 border rounded-lg bg-white"
                                 >
-                                    <option value="">{t('admin.manualBookingModal.selectProduct')}</option>
+                                    <option value="">Selecciona un producto</option>
                                     {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                 </select>
                                 <div>
-                                    <label htmlFor="price" className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.manualBookingModal.priceLabel')}</label>
+                                    <label htmlFor="price" className="block text-sm font-bold text-brand-secondary mb-1">Precio</label>
                                     <input type="number" step="0.01" name="price" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" className="w-full px-3 py-2 border rounded-lg" required />
                                 </div>
                             </div>
                         </div>
 
                          <div className="mt-6 flex justify-end gap-3">
-                            <button type="button" onClick={onClose} className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100">{t('admin.productManager.cancelButton')}</button>
+                            <button type="button" onClick={onClose} className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100">Cancelar</button>
                             <button type="button" onClick={handleGoToStep2} disabled={isNextDisabled} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent disabled:bg-gray-400">
-                                { selectedProduct && (selectedProduct.type === 'OPEN_STUDIO_SUBSCRIPTION') ? t('admin.manualBookingModal.saveButton') : t('admin.manualBookingModal.nextButton') }
+                                { selectedProduct && (selectedProduct.type === 'OPEN_STUDIO_SUBSCRIPTION') ? 'Guardar' : 'Siguiente' }
                             </button>
                         </div>
                     </div>
@@ -598,7 +598,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
                         {/* Campo para novedad/comentario del cliente */}
                         <div className="mb-4">
                             <label htmlFor="clientNote" className="block text-sm font-bold text-brand-secondary mb-1">
-                                {t('admin.manualBookingModal.clientNoteLabel') || 'Novedad / Comentario sobre el cliente'}
+                                Novedad / Comentario sobre el cliente
                             </label>
                             <textarea
                                 id="clientNote"
@@ -606,46 +606,42 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
                                 onChange={e => setClientNote(e.target.value)}
                                 className="w-full p-2 border rounded-lg"
                                 rows={3}
-                                placeholder={t('admin.manualBookingModal.clientNotePlaceholder') || 'Escribe cualquier novedad, comentario o información relevante sobre el cliente...'}
+                                placeholder="Escribe cualquier novedad, comentario o información relevante sobre el cliente..."
                             />
                         </div>
-                         <h3 className="font-bold text-brand-text mb-2 text-center">{t('admin.manualBookingModal.scheduleSectionTitle')}</h3>
+                        <h3 className="font-bold text-brand-text mb-2 text-center">Horarios</h3>
                         
                         {(selectedProduct?.type === 'SINGLE_CLASS' || selectedProduct?.type === 'GROUP_CLASS') ? (
                             <div className="p-4 bg-brand-background rounded-lg">
                                  {selectedProduct?.type === 'GROUP_CLASS' && (
-                                     <div className="bg-blue-100 p-2 rounded-md text-sm text-blue-800 mb-4 animate-fade-in-fast">
-                                        {t('admin.manualBookingModal.groupClassInfo', { 
-                                            min: minParticipants,
-                                            price: Number(groupClassPricePerPerson) || 0,
-                                            totalPrice: (Number(groupClassPricePerPerson) || 0) * (minParticipants || 0)
-                                        })}
-                                     </div>
+                                    <div className="bg-blue-100 p-2 rounded-md text-sm text-blue-800 mb-4 animate-fade-in-fast">
+                                        {`Grupo: mínimo ${minParticipants} personas, precio por persona: $${Number(groupClassPricePerPerson) || 0}, total: $${(Number(groupClassPricePerPerson) || 0) * (minParticipants || 0)}`}
+                                    </div>
                                  )}
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
                                     <div>
-                                        <label htmlFor="single-class-date" className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.manualBookingModal.dateLabel')}</label>
+                                        <label htmlFor="single-class-date" className="block text-sm font-bold text-brand-secondary mb-1">Fecha</label>
                                         <input id="single-class-date" type="date" value={singleClassDate} onChange={e => setSingleClassDate(e.target.value)} className="w-full px-3 py-2 border rounded-lg" />
                                     </div>
                                     <div>
-                                        <label htmlFor="single-class-time" className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.manualBookingModal.timeLabel')}</label>
+                                        <label htmlFor="single-class-time" className="block text-sm font-bold text-brand-secondary mb-1">Hora</label>
                                         <input id="single-class-time" type="time" value={singleClassTime} onChange={e => setSingleClassTime(e.target.value)} className="w-full px-3 py-2 border rounded-lg" />
                                     </div>
                                     <button 
                                         onClick={selectedProduct?.type === 'GROUP_CLASS' ? handleAddGroupClassSlot : handleAddSingleClassSlot} 
                                         className="bg-brand-primary text-white font-bold py-2 px-4 rounded-lg h-10"
                                     >
-                                        {t('admin.manualBookingModal.addSlotButton')}
+                                        Agregar horario
                                     </button>
                                 </div>
                                  {selectedProduct?.type === 'GROUP_CLASS' && (
                                      <div className="mt-4 grid grid-cols-2 gap-4">
                                         <div>
-                                            <label htmlFor="min-participants" className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.manualBookingModal.participantsLabel')}</label>
+                                            <label htmlFor="min-participants" className="block text-sm font-bold text-brand-secondary mb-1">Participantes</label>
                                             <input id="min-participants" type="number" min={2} value={minParticipants} onChange={e => setMinParticipants(parseInt(e.target.value) || 2)} className="w-full px-3 py-2 border rounded-lg" />
                                         </div>
                                          <div>
-                                            <label htmlFor="price-per-person" className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.manualBookingModal.pricePerPersonLabel')}</label>
+                                            <label htmlFor="price-per-person" className="block text-sm font-bold text-brand-secondary mb-1">Precio por persona</label>
                                             <input id="price-per-person" type="number" step="0.01" value={groupClassPricePerPerson} onChange={e => setGroupClassPricePerPerson(e.target.value)} className="w-full px-3 py-2 border rounded-lg" />
                                         </div>
                                      </div>
@@ -653,7 +649,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
                             </div>
                         ) : (
                             <>
-                                <p className="text-center text-sm text-brand-secondary mb-4">{t('schedule.classesRemaining', { count: slotsNeeded - selectedSlots.length })}</p>
+                                <p className="text-center text-sm text-brand-secondary mb-4">{`Clases restantes: ${slotsNeeded - selectedSlots.length}`}</p>
                                 <div className="flex items-center justify-between mb-2">
                                     <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} disabled={currentDate.getMonth() === today.getMonth() && currentDate.getFullYear() === today.getFullYear()} className="p-2 rounded-full hover:bg-brand-background disabled:opacity-50">&larr;</button>
                                     <h4 className="text-lg font-bold text-brand-text capitalize">{currentDate.toLocaleString(language, { month: 'long', year: 'numeric' })}</h4>
@@ -679,7 +675,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
                         
 
                          <div className="mt-4 p-2 bg-brand-background rounded-lg min-h-[50px]">
-                            <h4 className="text-sm font-bold text-brand-secondary mb-2">{t('admin.manualBookingModal.selectedSlots')}</h4>
+                            <h4 className="text-sm font-bold text-brand-secondary mb-2">Horarios seleccionados</h4>
                              <div className="space-y-1">
                                 {selectedSlots.map(slot => (
                                     <div key={`${slot.date}-${slot.time}`} className="flex justify-between items-center bg-white p-2 rounded text-sm">
@@ -696,9 +692,9 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
                         </div>
 
                          <div className="mt-6 flex justify-between items-center gap-3">
-                            <button type="button" onClick={() => setStep(1)} className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100">{t('admin.manualBookingModal.backButton')}</button>
+                            <button type="button" onClick={() => setStep(1)} className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100">Atrás</button>
                             <button type="button" onClick={handleSubmitBooking} disabled={!areSlotsSelected || submitDisabled} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent disabled:bg-gray-400">
-                                {t('admin.manualBookingModal.saveButton')}
+                                Guardar
                             </button>
                         </div>
                     </div>

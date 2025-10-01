@@ -89,7 +89,47 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer
         setEditMode(false);
         onDataChange();
     };
-  const { t, language } = useLanguage();
+    // Hardcoded language and translation function
+    const language = 'es';
+    const t = (key: string, opts?: any) => {
+        // Simple hardcoded translation function
+        const translations: Record<string, string> = {
+            'admin.customerDetail.deleteConfirmText': '¿Seguro que deseas eliminar esta reserva?',
+            'admin.customerDetail.backButton': 'Volver',
+            'admin.crm.lifetimeValue': 'Valor total',
+            'admin.crm.totalBookings': 'Reservas totales',
+            'admin.crm.lastBooking': 'Última reserva',
+            'admin.customerDetail.packageStatus.active': 'Activo',
+            'admin.customerDetail.packageStatus.pending payment': 'Pago pendiente',
+            'admin.customerDetail.packageStatus.expired': 'Expirado',
+            'admin.customerDetail.packageStatus.completed': 'Completado',
+            'admin.customerDetail.packageStatusTooltip.active': 'Paquete activo',
+            'admin.customerDetail.packageStatusTooltip.pending payment': 'Pago pendiente',
+            'admin.customerDetail.packageStatusTooltip.expired': 'Paquete expirado',
+            'admin.customerDetail.packageStatusTooltip.completed': 'Paquete completado',
+            'admin.customerDetail.packageExpiryTooltip': 'Fecha de expiración',
+            'admin.customerDetail.packageExpiryLabel': 'Expira',
+            'admin.customerDetail.packageNextClassTooltip': 'Próxima clase',
+            'admin.customerDetail.packageNextClassLabel': 'Próxima clase',
+            'admin.customerDetail.packageProgressLabel': 'Progreso',
+            'admin.customerDetail.viewAttendanceButton': 'Ver asistencia',
+            'admin.customerDetail.historyTitle': 'Historial de reservas',
+            'admin.customerDetail.history.date': 'Fecha',
+            'admin.customerDetail.history.product': 'Producto',
+            'admin.customerDetail.history.progress': 'Progreso',
+            'admin.customerDetail.history.status': 'Estado',
+            'admin.customerDetail.history.actions': 'Acciones',
+            'admin.customerDetail.history.paidTooltip': 'Pagado',
+            'admin.customerDetail.history.unpaidTooltip': 'No pagado',
+            'admin.customerDetail.history.paid': 'Pagado',
+            'admin.customerDetail.history.unpaid': 'No pagado',
+            'admin.customerDetail.history.acceptPayment': 'Aceptar pago',
+            'admin.customerDetail.history.acceptPaymentAria': 'Aceptar pago',
+            'admin.customerDetail.history.deleteBooking': 'Eliminar reserva',
+            'admin.customerDetail.history.deleteBookingAria': 'Eliminar reserva',
+        };
+        return translations[key] || opts?.default || key;
+    };
   const [bookingToPay, setBookingToPay] = useState<Booking | null>(null);
   const [isInvoiceReminderOpen, setIsInvoiceReminderOpen] = useState(false);
   const [bookingForReminder, setBookingForReminder] = useState<Booking | null>(null);
