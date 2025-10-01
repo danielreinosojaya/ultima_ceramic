@@ -3,7 +3,6 @@ import Chart from 'chart.js/auto';
 import Papa from 'papaparse';
 import type { Booking, Product, PaymentDetails, AdminTab, InvoiceRequest } from '../../types.js';
 import * as dataService from '../../services/dataService.js';
-import { useLanguage } from '../../context/LanguageContext.js';
 import { AcceptPaymentModal } from './AcceptPaymentModal.js';
 import { CurrencyDollarIcon } from '../icons/CurrencyDollarIcon.js';
 import { UserIcon } from '../icons/UserIcon.js';
@@ -70,7 +69,7 @@ const KPICard: React.FC<{ title: string; value: string | number; subtext?: strin
 );
 
 const CapacityHealthView: React.FC = () => {
-    const { t } = useLanguage();
+    // Idioma fijo español
     const [metrics, setMetrics] = useState({ totalCapacity: 0, bookedSlots: 0 });
     const [loading, setLoading] = useState(true);
 
@@ -93,33 +92,33 @@ const CapacityHealthView: React.FC = () => {
     }
 
     if (loading) {
-        return <div>Loading capacity data...</div>;
+        return <div>Cargando datos de capacidad...</div>;
     }
 
-    return (
-      <div className="animate-fade-in">
-        <p className="text-brand-secondary mb-6">{t('admin.financialDashboard.capacityHealth.subtitle')}</p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <KPICard title={t('admin.financialDashboard.capacityHealth.totalCapacity')} value={metrics.totalCapacity} />
-          <KPICard title={t('admin.financialDashboard.capacityHealth.bookedSlots')} value={metrics.bookedSlots} />
-          <KPICard title={t('admin.financialDashboard.capacityHealth.occupancyRate')} value={`${occupancy.toFixed(1)}%`} />
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-            <h3 className="font-bold text-brand-text mb-2">{t('admin.financialDashboard.capacityHealth.occupancyRate')}</h3>
-            <div className="w-full bg-gray-200 rounded-full h-4 relative overflow-hidden">
-                <div 
-                    className={`${progressBarColor} h-4 rounded-full transition-all duration-500 ease-out`} 
-                    style={{ width: `${occupancy}%` }}
-                ></div>
+        return (
+            <div className="animate-fade-in">
+                <p className="text-brand-secondary mb-6">Salud de la capacidad de clases</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <KPICard title="Capacidad total" value={metrics.totalCapacity} />
+                    <KPICard title="Clases reservadas" value={metrics.bookedSlots} />
+                    <KPICard title="Ocupación" value={`${occupancy.toFixed(1)}%`} />
+                </div>
+                <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                        <h3 className="font-bold text-brand-text mb-2">Ocupación</h3>
+                        <div className="w-full bg-gray-200 rounded-full h-4 relative overflow-hidden">
+                                <div 
+                                        className={`${progressBarColor} h-4 rounded-full transition-all duration-500 ease-out`} 
+                                        style={{ width: `${occupancy}%` }}
+                                ></div>
+                        </div>
+                        <div className="flex justify-between text-xs font-semibold text-gray-500 mt-1">
+                                <span>0%</span>
+                                <span>50%</span>
+                                <span>100%</span>
+                        </div>
+                </div>
             </div>
-            <div className="flex justify-between text-xs font-semibold text-gray-500 mt-1">
-                <span>0%</span>
-                <span>50%</span>
-                <span>100%</span>
-            </div>
-        </div>
-      </div>
-    );
+        );
 };
 
 export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings: allBookings, invoiceRequests, onDataChange, setNavigateTo }) => {
@@ -134,7 +133,8 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
     const [selectedBookings, setSelectedBookings] = useState<string[]>([]);
     const [paymentToEdit, setPaymentToEdit] = useState<{ payment: PaymentDetails, bookingId: string, index: number } | null>(null);
 
-    const { t, language } = useLanguage();
+    // Idioma fijo español
+    const language = 'es-ES';
     const [activeTab, setActiveTab] = useState<FinancialTab>('summary');
     const [pendingSubTab, setPendingSubTab] = useState<PendingSubTab>('packages');
 
@@ -158,11 +158,13 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
         // Modal para ver fechas reservadas
         const [bookingToViewDates, setBookingToViewDates] = useState<Booking | null>(null);
 
-    const formatDate = (dateInput: Date | string | undefined | null, options: Intl.DateTimeFormatOptions = {}): string => {
+    // Formato de fecha fijo en español
+    const formatDate = (dateInput: Date | string | undefined | null, options: Intl.DateTimeFormatOptions = {}) => {
         if (!dateInput) return '---';
         const date = new Date(dateInput);
         if (isNaN(date.getTime()) || date.getTime() === 0) return '---';
-        return date.toLocaleString(language, options);
+        // Hardcode Spanish format
+        return date.toLocaleDateString('es-ES', { ...options });
     };
 
     // CORRECCIÓN: Filtrar las reservas por la fecha del pago, no la fecha de la reserva.
@@ -280,7 +282,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
         new Chart(lineCtx, {
             type: 'line', data: {
                 labels: sortedDates.map(d => new Date(d + 'T12:00:00').toLocaleDateString(language, { month: 'short', day: 'numeric' })),
-                datasets: [{ label: t('admin.financialDashboard.totalRevenue'), data: sortedDates.map(date => revenueByDate[date]), borderColor: '#828E98', backgroundColor: 'rgba(130, 142, 152, 0.2)', fill: true, tension: 0.3 }]
+                datasets: [{ label: 'Ingresos totales', data: sortedDates.map(date => revenueByDate[date]), borderColor: '#828E98', backgroundColor: 'rgba(130, 142, 152, 0.2)', fill: true, tension: 0.3 }]
             }
         });
 
@@ -316,10 +318,10 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
             }, options: { responsive: true, maintainAspectRatio: false }
         });
 
-    }, [summaryBookings, language, t, activeTab]);
+    }, [summaryBookings, language, activeTab]);
 
     const exportToCSV = () => {
-        const headers = [t('admin.financialDashboard.date'), t('admin.financialDashboard.customer'), t('admin.financialDashboard.package'), t('admin.financialDashboard.amount')];
+        const headers = ['Fecha', 'Cliente', 'Paquete', 'Monto'];
         const rows = summaryBookings.map(b => ({
             [headers[0]]: formatDate(b.paymentDetails?.[0].receivedAt, {}),
             [headers[1]]: `${b.userInfo?.firstName} ${b.userInfo?.lastName}`,
@@ -330,7 +332,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.setAttribute('download', 'financial_report.csv');
+        link.setAttribute('download', 'reporte_financiero.csv');
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -397,29 +399,12 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
       </button>
     );
 
-    const PendingSubTabButton: React.FC<{ isActive: boolean; onClick: () => void; count: number; children: React.ReactNode; }> = ({ isActive, onClick, count, children }) => (
-        <button
-          onClick={onClick}
-          className={`flex items-center px-1 py-2 text-sm font-semibold border-b-2 transition-colors ${isActive ? 'border-brand-primary text-brand-primary' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
-        >
-          {children}
-          {count > 0 && (
-            <span className="ml-2 bg-brand-primary text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-              {count}
-            </span>
-          )}
-        </button>
-    );
-
-    // Bulk actions
     const handleSelectBooking = (id: string) => {
         setSelectedBookings(selected => selected.includes(id) ? selected.filter(bid => bid !== id) : [...selected, id]);
     };
     const handleSelectAll = () => {
         if (selectedBookings.length === paginatedBookings.length) {
             setSelectedBookings([]);
-        } else {
-            setSelectedBookings(paginatedBookings.map(b => b.id));
         }
     };
     const handleBulkDelete = async () => {
@@ -429,11 +414,11 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                 await dataService.deleteBooking(id);
             }
             setSelectedBookings([]);
-            setFeedbackMsg(t('admin.financialDashboard.feedback.bulkDeleteSuccess'));
+            setFeedbackMsg('Reservas eliminadas correctamente');
             setFeedbackType('success');
             onDataChange();
         } catch (e) {
-            setFeedbackMsg(t('admin.financialDashboard.feedback.bulkDeleteError'));
+            setFeedbackMsg('Error al eliminar reservas');
             setFeedbackType('error');
         }
         setLoadingBulk(false);
@@ -445,11 +430,11 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                 await dataService.acceptPaymentForBooking(id);
             }
             setSelectedBookings([]);
-            setFeedbackMsg(t('admin.financialDashboard.feedback.bulkPaymentSuccess'));
+            setFeedbackMsg('Pagos aceptados correctamente');
             setFeedbackType('success');
             onDataChange();
         } catch (e) {
-            setFeedbackMsg(t('admin.financialDashboard.feedback.bulkPaymentError'));
+            setFeedbackMsg('Error al aceptar pagos');
             setFeedbackType('error');
         }
         setLoadingBulk(false);
@@ -461,11 +446,11 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                 await dataService.sendReminderForBooking(id);
             }
             setSelectedBookings([]);
-            setFeedbackMsg(t('admin.financialDashboard.feedback.bulkReminderSuccess'));
+            setFeedbackMsg('Recordatorios enviados correctamente');
             setFeedbackType('success');
             onDataChange();
         } catch (e) {
-            setFeedbackMsg(t('admin.financialDashboard.feedback.bulkReminderError'));
+            setFeedbackMsg('Error al enviar recordatorios');
             setFeedbackType('error');
         }
         setLoadingBulk(false);
@@ -520,8 +505,8 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                     isOpen={!!bookingToDelete}
                     onClose={() => setBookingToDelete(null)}
                     onConfirm={handleDeleteBooking}
-                    title={t('admin.financialDashboard.deleteConfirmTitle')}
-                    message={t('admin.financialDashboard.deleteConfirmText', { name: `${bookingToDelete.userInfo.firstName} ${bookingToDelete.userInfo.lastName}`})}
+                    title="¿Eliminar reserva?"
+                    message={`¿Estás seguro que deseas eliminar la reserva de ${bookingToDelete.userInfo.firstName} ${bookingToDelete.userInfo.lastName}? Esta acción no se puede deshacer.`}
                 />
             )}
                         {paymentToEdit && (
@@ -538,27 +523,27 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                 }}
                             />
                         )}
-            <h2 className="text-2xl font-serif text-brand-text mb-2">{t('admin.financialDashboard.title')}</h2>
+            <h2 className="text-2xl font-serif text-brand-text mb-2">Panel financiero</h2>
             <div className="border-b border-gray-200 mb-6">
                 <nav className="-mb-px flex space-x-6" aria-label="Tabs">
                     <TabButton isActive={activeTab === 'summary'} onClick={() => setActiveTab('summary')}>
-                        {t('admin.financialDashboard.incomeSummaryTab')}
+                        {'Resumen de ingresos'}
                     </TabButton>
-                    <TabButton isActive={activeTab === 'pending'} onClick={() => setActiveTab('pending')}>
-                        {t('admin.financialDashboard.pendingPreservationsTab')}
-                    </TabButton>
+                        <TabButton isActive={activeTab === 'pending'} onClick={() => setActiveTab('pending')}>
+                            {'Pre-reservas Pendientes'}
+                        </TabButton>
                     <TabButton isActive={activeTab === 'capacity'} onClick={() => setActiveTab('capacity')}>
-                        {t('admin.financialDashboard.capacityHealthTab')}
+                        {'Salud de capacidad'}
                     </TabButton>
                 </nav>
             </div>
             {activeTab === 'summary' && (
                 <div className="animate-fade-in">
-                    <p className="text-brand-secondary mb-6">{t('admin.financialDashboard.subtitle')}</p>
+                    <p className="text-brand-secondary mb-6">Resumen de ingresos y pagos recibidos</p>
                     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6 flex items-center gap-2 flex-wrap">
-                        <button onClick={() => setSummaryPeriod('today')} className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors ${summaryPeriod === 'today' ? 'bg-brand-primary text-white' : 'bg-white hover:bg-brand-background'}`}>{t('admin.financialDashboard.today')}</button>
-                        <button onClick={() => setSummaryPeriod('week')} className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors ${summaryPeriod === 'week' ? 'bg-brand-primary text-white' : 'bg-white hover:bg-brand-background'}`}>{t('admin.financialDashboard.thisWeek')}</button>
-                        <button onClick={() => setSummaryPeriod('month')} className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors ${summaryPeriod === 'month' ? 'bg-brand-primary text-white' : 'bg-white hover:bg-brand-background'}`}>{t('admin.financialDashboard.thisMonth')}</button>
+                        <button onClick={() => setSummaryPeriod('today')} className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors ${summaryPeriod === 'today' ? 'bg-brand-primary text-white' : 'bg-white hover:bg-brand-background'}`}>Hoy</button>
+                        <button onClick={() => setSummaryPeriod('week')} className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors ${summaryPeriod === 'week' ? 'bg-brand-primary text-white' : 'bg-white hover:bg-brand-background'}`}>Semana</button>
+                        <button onClick={() => setSummaryPeriod('month')} className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors ${summaryPeriod === 'month' ? 'bg-brand-primary text-white' : 'bg-white hover:bg-brand-background'}`}>Mes</button>
                         <div className="flex items-center gap-2">
                             <input type="date" value={summaryCustomRange.start} onChange={e => {setSummaryCustomRange(c => ({...c, start: e.target.value})); setSummaryPeriod('custom');}} className="text-sm p-1 border rounded-md"/>
                             <span className="text-sm">to</span>
@@ -566,47 +551,47 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                         </div>
                         {/* Advanced filters */}
                         <select value={productTypeFilter} onChange={e => setProductTypeFilter(e.target.value)} className="text-sm p-1 border rounded-md" title="Filtrar por tipo de producto">
-                            <option value="all">{t('admin.financialDashboard.filters.allProducts')}</option>
-                            <option value="CLASS_PACKAGE">{t('admin.financialDashboard.filters.classPackage')}</option>
-                            <option value="INTRODUCTORY_CLASS">{t('admin.financialDashboard.filters.introClass')}</option>
-                            <option value="OPEN_STUDIO_SUBSCRIPTION">{t('admin.financialDashboard.filters.openStudio')}</option>
+                            <option value="all">Todos los productos</option>
+                            <option value="classPackage">Paquete de clases</option>
+                            <option value="introClass">Clase introductoria</option>
+                            <option value="openStudio">Open Studio</option>
                         </select>
                         <select value={paymentMethodFilter} onChange={e => setPaymentMethodFilter(e.target.value)} className="text-sm p-1 border rounded-md" title="Filtrar por método de pago">
-                            <option value="all">{t('admin.financialDashboard.filters.allMethods')}</option>
-                            <option value="Manual">{t('admin.financialDashboard.filters.manual')}</option>
-                            <option value="Card">{t('admin.financialDashboard.filters.card')}</option>
-                            <option value="Transfer">{t('admin.financialDashboard.filters.transfer')}</option>
+                            <option value="all">Todos los métodos</option>
+                            <option value="manual">Manual</option>
+                            <option value="card">Tarjeta</option>
+                            <option value="transfer">Transferencia</option>
                         </select>
                         <select value={bookingStatusFilter} onChange={e => setBookingStatusFilter(e.target.value)} className="text-sm p-1 border rounded-md" title="Filtrar por estado de reserva">
-                            <option value="all">{t('admin.financialDashboard.filters.allStatus')}</option>
-                            <option value="paid">{t('admin.financialDashboard.filters.paid')}</option>
-                            <option value="pending">{t('admin.financialDashboard.filters.pending')}</option>
+                            <option value="all">Todos los estados</option>
+                            <option value="paid">Pagado</option>
+                            <option value="pending">Pendiente</option>
                         </select>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                         <div title={t('admin.financialDashboard.tooltips.lifetimeValue')}>
-                             <KPICard title={t('admin.crm.lifetimeValue')} value={kpis.totalValue} />
+                         <div title={'Valor total de vida del cliente'}>
+                             <KPICard title={'Valor total'} value={kpis.totalValue} />
                          </div>
-                         <div title={t('admin.financialDashboard.tooltips.totalBookings')}>
-                             <KPICard title={t('admin.crm.totalBookings')} value={kpis.totalBookings} />
+                         <div title={'Total de reservas'}>
+                             <KPICard title={'Reservas totales'} value={kpis.totalBookings} />
                          </div>
-                         <div title={t('admin.financialDashboard.tooltips.lastBooking')}>
-                             <KPICard title={t('admin.crm.lastBooking')} value={kpis.lastBookingDate} />
+                         <div title={'Última reserva'}>
+                             <KPICard title={'Última reserva'} value={kpis.lastBookingDate} />
                          </div>
                     </div>
                     {summaryBookings.length > 0 ? (
                         <>
                             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
-                                <h3 className="font-bold text-brand-text mb-2">{t('admin.financialDashboard.revenueOverTime')}</h3>
+                                <h3 className="font-bold text-brand-text mb-2">Ingresos a lo largo del tiempo</h3>
                                 <canvas ref={lineChartRef}></canvas>
                             </div>
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                                <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200"><h3 className="font-bold text-brand-text mb-2">{t('admin.financialDashboard.revenueByPackage')}</h3><div className="relative h-64"><canvas ref={doughnutChartRef}></canvas></div></div>
-                                <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200"><h3 className="font-bold text-brand-text mb-2">{t('admin.financialDashboard.revenueByPaymentMethod')}</h3><div className="relative h-64"><canvas ref={paymentMethodChartRef}></canvas></div></div>
+                                <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200"><h3 className="font-bold text-brand-text mb-2">Ingresos por paquete</h3><div className="relative h-64"><canvas ref={doughnutChartRef}></canvas></div></div>
+                                <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200"><h3 className="font-bold text-brand-text mb-2">Ingresos por método de pago</h3><div className="relative h-64"><canvas ref={paymentMethodChartRef}></canvas></div></div>
                             </div>
                             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                                <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-brand-text">{t('admin.financialDashboard.detailedReport')}</h3><button onClick={exportToCSV} className="text-sm font-semibold bg-brand-primary text-white py-1 px-3 rounded-md hover:bg-brand-accent transition-colors">{t('admin.financialDashboard.exportCSV')}</button></div>
-                                                                <div className="overflow-x-auto"><table className="min-w-full divide-y divide-gray-200"><thead className="bg-brand-background"><tr><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.date')}</th><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.customer')}</th><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.package')}</th><th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase">{t('admin.financialDashboard.amount')}</th><th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase">Editar</th></tr></thead><tbody className="bg-white divide-y divide-gray-200">{summaryBookings.map(b => (
+                                <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-brand-text">Reporte detallado</h3><button onClick={exportToCSV} className="text-sm font-semibold bg-brand-primary text-white py-1 px-3 rounded-md hover:bg-brand-accent transition-colors">Exportar CSV</button></div>
+                                                                <div className="overflow-x-auto"><table className="min-w-full divide-y divide-gray-200"><thead className="bg-brand-background"><tr><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">Fecha</th><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">Cliente</th><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">Paquete</th><th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase">Monto</th><th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase">Editar</th></tr></thead><tbody className="bg-white divide-y divide-gray-200">{summaryBookings.map(b => (
                                                                     b.paymentDetails?.map((p, idx) => (
                                                                         <tr key={b.id + '-' + idx}>
                                                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{formatDate(p.receivedAt, {})}</td>
@@ -622,61 +607,63 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                             </div>
                         </>
                     ) : (
-                        <div className="text-center py-12 bg-white rounded-lg shadow-sm border border-gray-200"><p className="text-brand-secondary">{t('admin.financialDashboard.noData')}</p></div>
+                        <div className="text-center py-12 bg-white rounded-lg shadow-sm border border-gray-200"><p className="text-brand-secondary">No hay datos disponibles.</p></div>
                     )}
                 </div>
             )}
             {activeTab === 'pending' && (
                 <div className="animate-fade-in">
-                    <p className="text-brand-secondary mb-6">{t('admin.financialDashboard.pendingSubtitle')}</p>
+                    <p className="text-brand-secondary mb-6">Rastrea y gestiona todas las pre-reservas pendientes de pago.</p>
                     <div className="border-b border-gray-200 mb-6">
-                        <nav className="-mb-px flex space-x-6" aria-label="Pending Tabs">
-                            <PendingSubTabButton
-                                isActive={pendingSubTab === 'packages'}
+                        <nav className="-mb-px flex space-x-8" aria-label="Pending Tabs">
+                            <button
+                                className={`relative flex items-center pb-2 transition-colors font-serif text-[1.5rem] font-bold leading-tight ${pendingSubTab === 'packages' ? 'text-[#7B8692] border-b-4 border-[#7B8692]' : 'text-[#434A54] border-b-4 border-transparent hover:text-[#7B8692]'} `}
+                                style={{ outline: 'none', background: 'none' }}
                                 onClick={() => setPendingSubTab('packages')}
-                                count={pendingPackageBookings.length}
                             >
-                                {t('admin.financialDashboard.packagesAndClasses')}
-                            </PendingSubTabButton>
-                            <PendingSubTabButton
-                                isActive={pendingSubTab === 'openStudio'}
+                                <span className="mr-2">Paquetes y Clases</span>
+                                <span className={`flex items-center justify-center font-sans text-sm font-bold ${pendingSubTab === 'packages' ? 'bg-[#7B8692] text-white' : 'bg-[#B0B7BE] text-white'} rounded-full w-9 h-9`} style={{lineHeight:'2.2rem'}}>
+                                    {pendingPackageBookings.length}
+                                </span>
+                            </button>
+                            <button
+                                className={`relative flex items-center pb-2 transition-colors font-serif text-[1.5rem] font-bold leading-tight ${pendingSubTab === 'openStudio' ? 'text-[#7B8692] border-b-4 border-[#7B8692]' : 'text-[#434A54] border-b-4 border-transparent hover:text-[#7B8692]'} `}
+                                style={{ outline: 'none', background: 'none' }}
                                 onClick={() => setPendingSubTab('openStudio')}
-                                count={pendingOpenStudioBookings.length}
                             >
-                                {t('admin.financialDashboard.openStudio')}
-                            </PendingSubTabButton>
+                                <span>Open Studio</span>
+                            </button>
                         </nav>
                     </div>
                     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
-                        <div className="p-3 bg-blue-50 border-l-4 border-blue-400 mb-4">
-                            <p className="text-sm text-blue-800">
-                                <strong>📋 Todas las reservas pendientes:</strong> Se muestran TODAS las reservas sin pagar, independientemente de la fecha. 
-                                Incluye clases individuales, paquetes, introducciones y clases grupales.
+                        <div className="p-3 bg-blue-50 border-l-4 border-blue-400 mb-4" style={{marginBottom:'0'}}>
+                            <p className="text-sm text-blue-800" style={{marginBottom:'0'}}>
+                                <strong>📋 Todas las reservas pendientes:</strong> Se muestran TODAS las reservas sin pagar, independientemente de la fecha. Incluye clases individuales, paquetes, introducciones y clases grupales.
                             </p>
                         </div>
                     </div>
                     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                          <div className="mb-4 flex gap-2 items-center">
-                             <button onClick={handleBulkAcceptPayment} disabled={selectedBookings.length === 0} className="px-3 py-1 text-sm font-semibold rounded-md bg-green-100 text-green-800 disabled:opacity-50">{t('admin.financialDashboard.bulkAcceptPayment')}</button>
-                             <button onClick={handleBulkSendReminder} disabled={selectedBookings.length === 0} className="px-3 py-1 text-sm font-semibold rounded-md bg-yellow-100 text-yellow-800 disabled:opacity-50">{t('admin.financialDashboard.bulkSendReminder')}</button>
-                             <button onClick={handleBulkDelete} disabled={selectedBookings.length === 0} className="px-3 py-1 text-sm font-semibold rounded-md bg-red-100 text-red-800 disabled:opacity-50">{t('admin.financialDashboard.bulkDelete')}</button>
-                             <span className="ml-auto text-xs text-brand-secondary">{t('admin.financialDashboard.selectedCount', { count: selectedBookings.length })}</span>
+                             <button onClick={handleBulkAcceptPayment} disabled={selectedBookings.length === 0} className="px-3 py-1 text-sm font-semibold rounded-md bg-green-100 text-green-800 disabled:opacity-50">Aceptar pagos</button>
+                             <button onClick={handleBulkSendReminder} disabled={selectedBookings.length === 0} className="px-3 py-1 text-sm font-semibold rounded-md bg-yellow-100 text-yellow-800 disabled:opacity-50">Enviar recordatorio</button>
+                             <button onClick={handleBulkDelete} disabled={selectedBookings.length === 0} className="px-3 py-1 text-sm font-semibold rounded-md bg-red-100 text-red-800 disabled:opacity-50">Eliminar</button>
+                             <span className="ml-auto text-xs text-brand-secondary">Seleccionados: {selectedBookings.length}</span>
                          </div>
                          <div className="overflow-x-auto" role="region" aria-label="Tabla de reservas pendientes">
                             {loadingBulk && (
                                 <div className="absolute inset-0 bg-white bg-opacity-60 flex items-center justify-center z-10">
-                                    <span className="text-brand-primary font-bold">{t('admin.financialDashboard.feedback.loading')}</span>
+                                    <span className="text-brand-primary font-bold">Cargando...</span>
                                 </div>
                             )}
                             <table className="min-w-full divide-y divide-gray-200" role="table">
                                 <thead className="bg-brand-background" role="rowgroup">
                                     <tr role="row">
                                         <th className="px-2 py-2" role="columnheader"><input type="checkbox" checked={selectedBookings.length === paginatedBookings.length && paginatedBookings.length > 0} onChange={handleSelectAll} aria-label="Seleccionar todos" /></th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">{t('admin.financialDashboard.pendingTable.date')}</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">{t('admin.financialDashboard.pendingTable.customer')}</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">{t('admin.financialDashboard.pendingTable.product')}</th>
-                                        <th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">{t('admin.financialDashboard.pendingTable.amount')}</th>
-                                        <th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">{t('admin.financialDashboard.pendingTable.actions')}</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">Fecha</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">Cliente</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">Producto</th>
+                                        <th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">Monto</th>
+                                        <th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200" role="rowgroup">
@@ -697,7 +684,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                                         title="View Customer Profile"
                                                         className="flex items-center gap-1.5 bg-gray-100 text-gray-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-gray-200 transition-colors"
                                                         tabIndex={0}
-                                                        aria-label={t('admin.financialDashboard.pendingTable.viewCustomer')}
+                                                        aria-label="Ver perfil del cliente"
                                                     >
                                                         <UserIcon className="w-4 h-4" />
                                                     </button>
@@ -705,10 +692,10 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                                         onClick={(e) => { e.stopPropagation(); handleAcceptPaymentClick(b); }}
                                                         className="flex items-center gap-1.5 bg-green-100 text-green-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-green-200 transition-colors"
                                                         tabIndex={0}
-                                                        aria-label={t('admin.financialDashboard.pendingTable.acceptPayment')}
+                                                           aria-label="Aceptar pago"
                                                     >
                                                         <CurrencyDollarIcon className="w-4 h-4" />
-                                                        {t('admin.financialDashboard.pendingTable.acceptPayment')}
+                                                           Aceptar pago
                                                     </button>
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); setBookingToViewDates(b); }}
@@ -721,10 +708,10 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                                     </button>
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); setBookingToDelete(b); }}
-                                                        title={t('admin.financialDashboard.deleteBooking')}
+                                                        title="Eliminar reserva"
                                                         className="flex items-center gap-1.5 bg-red-100 text-red-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-red-200 transition-colors"
                                                         tabIndex={0}
-                                                        aria-label={t('admin.financialDashboard.pendingTable.deleteBooking')}
+                                                        aria-label="Eliminar reserva"
                                                     >
                                                         <TrashIcon className="w-4 h-4" />
                                                     </button>
@@ -734,7 +721,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                     )) : (
                                         <tr role="row">
                                             <td colSpan={6} className="text-center py-10 text-brand-secondary" role="cell">
-                                                {t('admin.financialDashboard.pendingTable.noPending')}
+                                                No hay reservas pendientes
                                             </td>
                                         </tr>
                                     )}
@@ -743,17 +730,17 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                             {/* Pagination controls */}
                             <div className="flex justify-between items-center mt-4">
                                 <div className="flex gap-2 items-center">
-                                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2 py-1 rounded bg-gray-100 text-gray-800 disabled:opacity-50" tabIndex={0} aria-label={t('admin.financialDashboard.prevPage')}>
-                                        {t('admin.financialDashboard.prevPage')}
+                                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2 py-1 rounded bg-gray-100 text-gray-800 disabled:opacity-50" tabIndex={0} aria-label="Página anterior">
+                                        Página anterior
                                     </button>
-                                    <span className="text-sm">{t('admin.financialDashboard.page', { current: currentPage, total: totalPages })}</span>
-                                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-2 py-1 rounded bg-gray-100 text-gray-800 disabled:opacity-50" tabIndex={0} aria-label={t('admin.financialDashboard.nextPage')}>
-                                        {t('admin.financialDashboard.nextPage')}
+                                    <span className="text-sm">Página {currentPage} de {totalPages}</span>
+                                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-2 py-1 rounded bg-gray-100 text-gray-800 disabled:opacity-50" tabIndex={0} aria-label="Página siguiente">
+                                        Página siguiente
                                     </button>
                                 </div>
                                 <div className="flex gap-2 items-center">
-                                    <span className="text-sm">{t('admin.financialDashboard.rowsPerPage')}</span>
-                                    <select value={rowsPerPage} onChange={e => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="text-sm p-1 border rounded-md" aria-label={t('admin.financialDashboard.rowsPerPage')}> 
+                                    <span className="text-sm">Filas por página</span>
+                                    <select value={rowsPerPage} onChange={e => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="text-sm p-1 border rounded-md" aria-label="Filas por página"> 
                                         <option value={5}>5</option>
                                         <option value={10}>10</option>
                                         <option value={25}>25</option>

@@ -1,7 +1,7 @@
 
 import React, { useMemo } from 'react';
 import type { CapacityMessageSettings } from '../types';
-import { useLanguage } from '../context/LanguageContext';
+// Eliminado useLanguage, la app ahora es monolingüe en español
 
 interface CapacityIndicatorProps {
     count: number;
@@ -10,7 +10,6 @@ interface CapacityIndicatorProps {
 }
 
 export const CapacityIndicator: React.FC<CapacityIndicatorProps> = ({ count, max, capacityMessages }) => {
-    const { t } = useLanguage();
     const percentage = max > 0 ? (count / max) * 100 : 0;
 
     const { colorClass, textColorClass } = useMemo(() => {

@@ -1,6 +1,6 @@
 import React from 'react';
 import type { ClassPackage, TimeSlot, Product, BookingMode } from '../types';
-import { useLanguage } from '../context/LanguageContext';
+// Eliminado useLanguage, la app ahora es monolingüe en español
 import { CalendarIcon } from './icons/CalendarIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { SINGLE_CLASS_PRICE, VAT_RATE } from '../constants';
@@ -14,7 +14,8 @@ interface BookingSidebarProps {
 }
 
 export const BookingSidebar: React.FC<BookingSidebarProps> = ({ product, selectedSlots, onRemoveSlot, onConfirm, bookingMode }) => {
-  const { t, language } = useLanguage();
+  // Eliminado useLanguage, la app ahora es monolingüe en español
+  const language = 'es-ES';
 
   if (product.type !== 'CLASS_PACKAGE') {
     return null; // This sidebar is only for class packages
@@ -41,7 +42,7 @@ export const BookingSidebar: React.FC<BookingSidebarProps> = ({ product, selecte
 
   return (
     <div className="bg-brand-background p-6 rounded-lg sticky top-24 h-fit">
-      <h3 className="text-xl font-serif text-brand-text mb-1">{t('summary.title')}</h3>
+  <h3 className="text-xl font-serif text-brand-text mb-1">Resumen de compra</h3>
       <div className="border-t border-brand-border pt-4">
         <div className="space-y-3 mb-4 text-sm">
             <h4 className="font-bold text-brand-text text-base">{product.name}</h4>
@@ -49,11 +50,11 @@ export const BookingSidebar: React.FC<BookingSidebarProps> = ({ product, selecte
             {/* Savings Breakdown */}
             <div className="space-y-1">
                 <div className="flex justify-between">
-                    <span className="text-brand-secondary">{t('summary.originalPrice')} ({product.classes} x ${SINGLE_CLASS_PRICE})</span>
+                    <span className="text-brand-secondary">Precio original ({product.classes} x ${SINGLE_CLASS_PRICE})</span>
                     <span className="text-brand-secondary line-through">${originalPrice.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
-                    <span className="text-brand-success font-semibold">{t('summary.packageDiscount')}</span>
+                    <span className="text-brand-success font-semibold">Descuento de paquete</span>
                     <span className="text-brand-success font-semibold">-${(originalPrice - subtotal).toFixed(2)}</span>
                 </div>
             </div>
@@ -61,15 +62,15 @@ export const BookingSidebar: React.FC<BookingSidebarProps> = ({ product, selecte
             {/* Final Price Breakdown */}
             <div className="space-y-1 border-t border-brand-border pt-2 mt-2">
                  <div className="flex justify-between">
-                    <span className="text-brand-secondary">{t('summary.subtotal')}</span>
+                    <span className="text-brand-secondary">Subtotal</span>
                     <span className="text-brand-secondary">${subtotal.toFixed(2)}</span>
                 </div>
                  <div className="flex justify-between">
-                    <span className="text-brand-secondary">{t('summary.vat')}</span>
+                    <span className="text-brand-secondary">IVA</span>
                     <span className="text-brand-secondary">${vat.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between font-bold text-lg text-brand-text pt-1 mt-1">
-                    <span>{t('summary.totalToPay')}</span>
+                    <span>Total a pagar</span>
                     <span>${product.price.toFixed(2)}</span>
                 </div>
             </div>
@@ -77,10 +78,10 @@ export const BookingSidebar: React.FC<BookingSidebarProps> = ({ product, selecte
 
         <div className="mb-4">
             <p className={`text-sm font-bold ${classesRemaining === 0 ? 'text-brand-success' : 'text-brand-text'}`}>
-                 {classesRemaining > 0
-                    ? t('schedule.classesRemaining', { count: classesRemaining })
-                    : t('schedule.allClassesSelected')
-                 }
+            {classesRemaining > 0
+              ? `Te faltan ${classesRemaining} clases por seleccionar`
+              : 'Todas las clases seleccionadas'
+            }
             </p>
         </div>
 
@@ -105,7 +106,7 @@ export const BookingSidebar: React.FC<BookingSidebarProps> = ({ product, selecte
           disabled={classesRemaining > 0}
           className="mt-6 w-full bg-brand-primary text-white font-bold py-3 px-6 rounded-lg disabled:bg-stone-400 disabled:cursor-not-allowed hover:bg-brand-text transition-colors duration-300"
         >
-          {t('schedule.confirmButton', { selected: selectedSlots.length, total: product.classes })}
+          {`Confirmar (${selectedSlots.length}/${product.classes})`}
         </button>
       </div>
     </div>

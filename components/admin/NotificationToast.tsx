@@ -1,13 +1,13 @@
 import React from 'react';
 import { useNotifications } from '../../context/NotificationContext';
-import { useLanguage } from '../../context/LanguageContext';
+// ...existing code...
 import { BellIcon } from '../icons/BellIcon';
 import { XCircleIcon } from '../icons/XCircleIcon';
 import type { Notification } from '../../types';
 
 export const NotificationToast: React.FC = () => {
     const { activeToast, clearToast } = useNotifications();
-    const { t } = useLanguage();
+    // Traducción eliminada, usar texto en español directamente
 
     if (!activeToast) {
         return null;
@@ -27,10 +27,10 @@ export const NotificationToast: React.FC = () => {
                 </div>
                 <div className="ml-3 w-0 flex-1">
                     <p className="text-sm font-bold text-brand-text">
-                        {t('admin.notifications.newNotificationTitle')}
+                        ¡Nueva notificación!
                     </p>
                     <p className="mt-1 text-sm text-brand-secondary">
-                        {t(`admin.notifications.template_${activeToast.type}`, { name: activeToast.userName, summary: activeToast.summary })}
+                        {activeToast.summary || 'Tienes una nueva actualización.'}
                     </p>
                 </div>
                 <div className="ml-4 flex-shrink-0 flex">

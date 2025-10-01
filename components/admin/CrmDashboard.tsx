@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Customer, Booking, ClassPackage, TimeSlot, InvoiceRequest, AdminTab } from '../../types';
 import * as dataService from '../../services/dataService';
-import { useLanguage } from '../../context/LanguageContext';
 import { CustomerList } from './CustomerList';
 import { CustomerDetailView } from './CustomerDetailView';
 import { UserGroupIcon } from '../icons/UserGroupIcon';
@@ -104,7 +103,6 @@ const isBirthdayUpcoming = (birthday: string | null | undefined): boolean => {
 
 
 const CrmDashboard: React.FC<CrmDashboardProps> = ({ navigateToEmail, bookings, invoiceRequests, onDataChange, onNavigationComplete, setNavigateTo }) => {
-    const { t } = useLanguage();
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
     const [loading, setLoading] = useState(true);
@@ -220,9 +218,9 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({ navigateToEmail, bookings, 
                 <div>
                     <h2 className="text-2xl font-serif text-brand-text mb-2 flex items-center gap-3">
                         <UserGroupIcon className="w-6 h-6 text-brand-accent" />
-                        {t('admin.crm.title')}
+                        CRM de clientes
                     </h2>
-                    <p className="text-brand-secondary">{t('admin.crm.subtitle')}</p>
+                    <p className="text-brand-secondary">Gestión y seguimiento de clientes, clases y paquetes.</p>
                 </div>
             </div>
 
@@ -242,13 +240,13 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({ navigateToEmail, bookings, 
                             onClick={() => setActiveTab('all')}
                             className={`px-1 py-3 text-sm font-semibold border-b-2 ${activeTab === 'all' ? 'border-brand-primary text-brand-primary' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                         >
-                            {t('admin.crm.allCustomersTab')}
+                            Todos los clientes
                         </button>
                         <button
                             onClick={() => setActiveTab('openStudio')}
                             className={`px-1 py-3 text-sm font-semibold border-b-2 ${activeTab === 'openStudio' ? 'border-brand-primary text-brand-primary' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                         >
-                            {t('admin.crm.openStudioTab')}
+                            Suscripciones Open Studio
                         </button>
                     </nav>
                 </div>
@@ -258,17 +256,17 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({ navigateToEmail, bookings, 
                         <div className="md:flex justify-between items-center mb-4 gap-4">
                             <input 
                                 type="text"
-                                placeholder={t('admin.crm.searchPlaceholder')}
+                                placeholder="Buscar cliente por nombre, apellido, correo o código de reserva"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="w-full max-w-sm px-4 py-2 border border-gray-300 rounded-lg focus:ring-brand-primary focus:border-brand-primary"
                             />
                             <div className="bg-white p-2 rounded-lg border border-gray-200 flex items-center gap-2 flex-wrap mt-4 md:mt-0">
-                                <span className="text-sm font-bold text-brand-secondary mr-2">{t('admin.crm.filters.title')}:</span>
-                                <FilterButton filter="all">{t('admin.crm.filters.all')}</FilterButton>
-                                <FilterButton filter="2-left">{t('admin.crm.filters.2left')}</FilterButton>
-                                <FilterButton filter="1-left">{t('admin.crm.filters.1left')}</FilterButton>
-                                <FilterButton filter="completed">{t('admin.crm.filters.completed')}</FilterButton>
+                                <span className="text-sm font-bold text-brand-secondary mr-2">Filtrar:</span>
+                                <FilterButton filter="all">Todos</FilterButton>
+                                <FilterButton filter="2-left">2 clases restantes</FilterButton>
+                                <FilterButton filter="1-left">1 clase restante</FilterButton>
+                                <FilterButton filter="completed">Completados</FilterButton>
                             </div>
                         </div>
                         <CustomerList customers={augmentedAndFilteredCustomers} onSelectCustomer={handleSelectCustomer} />
@@ -332,27 +330,27 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({ navigateToEmail, bookings, 
                                 <>
                                     <div className="flex flex-wrap gap-4 mb-6">
                                         <div className="bg-brand-background p-4 rounded-lg">
-                                            <div className="text-xs font-semibold text-brand-secondary">Active Subscriptions</div>
+                                            <div className="text-xs font-semibold text-brand-secondary">Suscripciones activas</div>
                                             <div className="text-2xl font-bold text-brand-text">{active.length}</div>
                                         </div>
                                         <div className="bg-brand-background p-4 rounded-lg">
-                                            <div className="text-xs font-semibold text-brand-secondary">Expiring Soon (&le;7 days)</div>
+                                            <div className="text-xs font-semibold text-brand-secondary">Por vencer (&le;7 días)</div>
                                             <div className="text-2xl font-bold text-brand-text">{expiringSoon.length}</div>
                                         </div>
                                         <div className="bg-brand-background p-4 rounded-lg">
-                                            <div className="text-xs font-semibold text-brand-secondary">Unpaid</div>
+                                            <div className="text-xs font-semibold text-brand-secondary">Pendientes de pago</div>
                                             <div className="text-2xl font-bold text-brand-text">{unpaid.length}</div>
                                         </div>
                                     </div>
                                     <div className="flex gap-4 mb-4 flex-wrap items-center">
-                                        <span className="text-sm font-bold text-brand-secondary">Filter:</span>
-                                        <button className={`px-3 py-1.5 text-sm rounded-md ${studioFilter === 'all' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioFilter('all')}>All</button>
-                                        <button className={`px-3 py-1.5 text-sm rounded-md ${studioFilter === 'active' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioFilter('active')}>Active</button>
-                                        <button className={`px-3 py-1.5 text-sm rounded-md ${studioFilter === 'expiring' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioFilter('expiring')}>Expiring Soon</button>
-                                        <button className={`px-3 py-1.5 text-sm rounded-md ${studioFilter === 'unpaid' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioFilter('unpaid')}>Unpaid</button>
-                                        <span className="ml-6 text-sm font-bold text-brand-secondary">Sort by:</span>
-                                        <button className={`px-3 py-1.5 text-sm rounded-md ${studioSort === 'expiry' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioSort('expiry')}>Expiry</button>
-                                        <button className={`px-3 py-1.5 text-sm rounded-md ${studioSort === 'name' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioSort('name')}>Name</button>
+                                        <span className="text-sm font-bold text-brand-secondary">Filtrar:</span>
+                                        <button className={`px-3 py-1.5 text-sm rounded-md ${studioFilter === 'all' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioFilter('all')}>Todos</button>
+                                        <button className={`px-3 py-1.5 text-sm rounded-md ${studioFilter === 'active' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioFilter('active')}>Activos</button>
+                                        <button className={`px-3 py-1.5 text-sm rounded-md ${studioFilter === 'expiring' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioFilter('expiring')}>Por vencer</button>
+                                        <button className={`px-3 py-1.5 text-sm rounded-md ${studioFilter === 'unpaid' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioFilter('unpaid')}>Pendientes de pago</button>
+                                        <span className="ml-6 text-sm font-bold text-brand-secondary">Ordenar por:</span>
+                                        <button className={`px-3 py-1.5 text-sm rounded-md ${studioSort === 'expiry' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioSort('expiry')}>Vencimiento</button>
+                                        <button className={`px-3 py-1.5 text-sm rounded-md ${studioSort === 'name' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioSort('name')}>Nombre</button>
                                     </div>
                                     {/* --- Open Studio List --- */}
                                     <OpenStudioView bookings={filteredBookings} onNavigateToCustomer={handleNavigateToCustomer} />

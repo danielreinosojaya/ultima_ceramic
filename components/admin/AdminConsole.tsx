@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useLanguage } from '../../context/LanguageContext';
+// ...existing code...
 import { Logo } from '../Logo';
 import { ProductManager } from './ProductManager';
 import { CalendarOverview } from './CalendarOverview';
@@ -60,7 +60,7 @@ const defaultAdminData: AdminData = {
 
 
 export const AdminConsole: React.FC = () => {
-  const { t } = useLanguage();
+  // Traducción eliminada, usar texto en español directamente
   const [activeTab, setActiveTab] = useState<AdminTab>('calendar');
   const [calendarView, setCalendarView] = useState<'month' | 'week'>('month');
   const [weekStartDate, setWeekStartDate] = useState<Date | null>(null);
@@ -155,7 +155,7 @@ export const AdminConsole: React.FC = () => {
 
   const renderContent = () => {
     if (isLoading || !adminData) {
-        return <div>Loading admin data...</div>;
+  return <div>Cargando datos de administración...</div>;
     }
 
   // targetId para ScheduleManager si la navegación viene de 'schedule' o 'calendar'
@@ -259,7 +259,7 @@ export const AdminConsole: React.FC = () => {
             <Logo />
           </div>
           <h1 className="text-xl sm:text-2xl font-serif text-brand-accent text-center">
-            {t('admin.headerTitle')}
+            Panel de Administración
           </h1>
           <div className="w-24 flex justify-end items-center gap-2">
               <SyncButton hasNewData={false} isSyncing={isSyncing} onClick={handleSync} />
@@ -271,15 +271,15 @@ export const AdminConsole: React.FC = () => {
         <div className="max-w-screen-xl mx-auto">
           <div className="bg-brand-surface rounded-lg shadow-lg p-4 mb-6">
             <div className="flex items-center space-x-2 flex-wrap gap-2">
-              <TabButton tab="products" icon={<CubeIcon className="w-4 h-4" />}>{t('admin.productsTab')}</TabButton>
-              <TabButton tab="calendar" icon={<CalendarIcon className="w-4 h-4" />}>{t('admin.calendarTab')}</TabButton>
-              <TabButton tab="schedule-settings" icon={<CalendarEditIcon className="w-4 h-4" />}>{t('admin.scheduleSettingsTab')}</TabButton>
-              <TabButton tab="inquiries" icon={<ChatBubbleLeftRightIcon className="w-4 h-4" />}>{t('admin.inquiriesTab')}</TabButton>
-              <TabButton tab="communications" icon={<PaperAirplaneIcon className="w-4 h-4" />}>{t('admin.communicationsTab')}</TabButton>
-              <TabButton tab="financials" icon={<ChartBarIcon className="w-4 h-4" />}>{t('admin.financialsTab')}</TabButton>
-              <TabButton tab="customers" icon={<UserGroupIcon className="w-4 h-4" />}>{t('admin.customersTab')}</TabButton>
-              <TabButton tab="invoicing" icon={<DocumentTextIcon className="w-4 h-4" />}>{t('admin.invoicingTab')}</TabButton>
-              <TabButton tab="settings" icon={<CogIcon className="w-4 h-4" />}>{t('admin.settingsTab')}</TabButton>
+              <TabButton tab="products" icon={<CubeIcon className="w-4 h-4" />}>Productos</TabButton>
+              <TabButton tab="calendar" icon={<CalendarIcon className="w-4 h-4" />}>Calendario</TabButton>
+              <TabButton tab="schedule-settings" icon={<CalendarEditIcon className="w-4 h-4" />}>Configuración de Horarios</TabButton>
+              <TabButton tab="inquiries" icon={<ChatBubbleLeftRightIcon className="w-4 h-4" />}>Consultas</TabButton>
+              <TabButton tab="communications" icon={<PaperAirplaneIcon className="w-4 h-4" />}>Comunicaciones</TabButton>
+              <TabButton tab="financials" icon={<ChartBarIcon className="w-4 h-4" />}>Finanzas</TabButton>
+              <TabButton tab="customers" icon={<UserGroupIcon className="w-4 h-4" />}>Clientes</TabButton>
+              <TabButton tab="invoicing" icon={<DocumentTextIcon className="w-4 h-4" />}>Facturación</TabButton>
+              <TabButton tab="settings" icon={<CogIcon className="w-4 h-4" />}>Ajustes</TabButton>
             </div>
           </div>
           <div className="bg-brand-surface rounded-lg shadow-lg p-6">

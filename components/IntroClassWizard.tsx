@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import type { Product, IntroductoryClass, EnrichedIntroClassSession, IntroClassSession, AppData } from '../types.js';
-import { useLanguage } from '../context/LanguageContext.js';
+// Eliminado useLanguage, la app ahora es monolingüe en español
 import { InstructorTag } from './InstructorTag.js';
 import { CapacityIndicator } from './CapacityIndicator.js';
 import { ClockIcon } from './icons/ClockIcon.js';
@@ -40,7 +40,6 @@ const StepIndicator: React.FC<{ currentStep: number, totalSteps: number, stepTit
 );
 
 export const IntroClassWizard: React.FC<IntroClassWizardProps> = ({ product, sessions, onConfirm, appData, onBack }) => {
-    const { t, language } = useLanguage();
     
     const [step, setStep] = useState<WizardStep>('month');
     const [selectedMonth, setSelectedMonth] = useState<string | null>(null); // YYYY-MM format
@@ -93,11 +92,17 @@ export const IntroClassWizard: React.FC<IntroClassWizardProps> = ({ product, ses
             case 'month':
                 return (
                     <div className="space-y-3 animate-fade-in-fast">
-                        {availableMonths.map(month => (
-                            <button key={month} onClick={() => handleMonthSelect(month)} className="w-full text-center p-4 bg-white rounded-lg font-semibold text-brand-text shadow-sm hover:shadow-md hover:bg-brand-primary/10 border border-brand-border transition-all">
-                                {new Date(`${month}-02T00:00:00`).toLocaleString(language, { month: 'long', year: 'numeric' })}
-                            </button>
-                        ))}
+                        {availableMonths.map(month => {
+                            const dateObj = new Date(`${month}-02T00:00:00`);
+                            const meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+                            const mes = meses[dateObj.getMonth()];
+                            const año = dateObj.getFullYear();
+                            return (
+                                <button key={month} onClick={() => handleMonthSelect(month)} className="w-full text-center p-4 bg-white rounded-lg font-semibold text-brand-text shadow-sm hover:shadow-md hover:bg-brand-primary/10 border border-brand-border transition-all">
+                                    {`${mes.charAt(0).toUpperCase() + mes.slice(1)} ${año}`}
+                                </button>
+                            );
+                        })}
                     </div>
                 );
             case 'day':
@@ -148,7 +153,7 @@ export const IntroClassWizard: React.FC<IntroClassWizardProps> = ({ product, ses
                                 >
                                      {isFull && (
                                         <div className="absolute -top-1 -right-7 bg-red-600 text-white text-[10px] font-bold px-6 py-0.5 transform rotate-45">
-                                            {t('app.soldOut')}
+                                            Agotado
                                         </div>
                                     )}
                                     <p className={`font-semibold text-lg ${isSelected ? 'text-brand-primary' : 'text-brand-text'}`}>{session.time}</p>
@@ -164,7 +169,7 @@ export const IntroClassWizard: React.FC<IntroClassWizardProps> = ({ product, ses
         }
     }
 
-    const stepTitles = [t('introClass.wizard.stepMonth'), t('introClass.wizard.stepDay'), t('introClass.wizard.stepTime')];
+    const stepTitles = ["Mes", "Día", "Hora"];
     const currentStepIndex = step === 'month' ? 1 : step === 'day' ? 2 : 3;
     
     const goBack = () => {
@@ -187,17 +192,17 @@ export const IntroClassWizard: React.FC<IntroClassWizardProps> = ({ product, ses
             <p className="text-center text-brand-secondary text-sm my-4">{product.description}</p>
             
             <div className="space-y-4 text-sm mb-6 text-left border-t border-b border-gray-200 py-4">
-                <div className="flex items-start"><ClockIcon className="w-5 h-5 mr-3 mt-0.5 text-brand-primary flex-shrink-0" /> <div><span className="font-bold text-brand-text">{t('modal.durationLabel')}:</span> {product.details.duration}</div></div>
+                <div className="flex items-start"><ClockIcon className="w-5 h-5 mr-3 mt-0.5 text-brand-primary flex-shrink-0" /> <div><span className="font-bold text-brand-text">Duración:</span> {product.details.duration}</div></div>
                  <div className="flex items-start"><SparklesIcon className="w-5 h-5 mr-3 mt-0.5 text-brand-primary flex-shrink-0" />
                     <div>
-                        <span className="font-bold text-brand-text">{t('modal.activitiesLabel')}:</span>
+                        <span className="font-bold text-brand-text">Qué Haremos:</span>
                         <ul className="list-disc list-inside ml-1">
                             {product.details.activities.map((activity, index) => <li key={index}>{activity}</li>)}
                         </ul>
                     </div>
                 </div>
-                <div className="flex items-start"><InfoCircleIcon className="w-5 h-5 mr-3 mt-0.5 text-brand-primary flex-shrink-0" /> <div><span className="font-bold text-brand-text">{t('modal.generalRecommendationsLabel')}:</span> {product.details.generalRecommendations}</div></div>
-                <div className="flex items-start"><PaintBrushIcon className="w-5 h-5 mr-3 mt-0.5 text-brand-primary flex-shrink-0" /> <div><span className="font-bold text-brand-text">{t('modal.materialsLabel')}:</span> {product.details.materials}</div></div>
+                <div className="flex items-start"><InfoCircleIcon className="w-5 h-5 mr-3 mt-0.5 text-brand-primary flex-shrink-0" /> <div><span className="font-bold text-brand-text">Recomendaciones Generales:</span> {product.details.generalRecommendations}</div></div>
+                <div className="flex items-start"><PaintBrushIcon className="w-5 h-5 mr-3 mt-0.5 text-brand-primary flex-shrink-0" /> <div><span className="font-bold text-brand-text">Materiales:</span> {product.details.materials}</div></div>
             </div>
             
             <StepIndicator currentStep={currentStepIndex} totalSteps={3} stepTitles={stepTitles} />
@@ -208,14 +213,14 @@ export const IntroClassWizard: React.FC<IntroClassWizardProps> = ({ product, ses
 
             <div className="mt-6 pt-4 border-t border-gray-200 flex items-center justify-between">
                  <button onClick={goBack} className="text-brand-secondary font-semibold hover:underline">
-                    {t('introClass.wizard.backButton')}
+                    Atrás
                 </button>
                  <button
                     onClick={handleConfirm}
                     disabled={!selectedTime}
                     className="bg-brand-primary text-white font-bold py-3 px-6 rounded-lg hover:bg-brand-accent transition-colors duration-300 disabled:bg-gray-400"
                 >
-                    {t('introClass.continueButton')}
+                    Continuar con la Selección
                 </button>
             </div>
         </div>

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { ClientNotification, ClientNotificationType } from '../../types';
 import * as dataService from '../../services/dataService';
-import { useLanguage } from '../../context/LanguageContext';
+// ...existing code...
 import { PaperAirplaneIcon } from '../icons/PaperAirplaneIcon';
 import { TrashIcon } from '../icons/TrashIcon';
 
@@ -11,7 +11,7 @@ const NOTIFICATION_TYPE_OPTIONS: ClientNotificationType[] = ['PRE_BOOKING_CONFIR
 const ITEMS_PER_PAGE = 15;
 
 export const ClientNotificationLog: React.FC = () => {
-    const { t, language } = useLanguage();
+    // Traducción eliminada, usar texto en español directamente
     const [notifications, setNotifications] = useState<ClientNotification[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterType, setFilterType] = useState<ClientNotificationType | 'all'>('all');
@@ -35,13 +35,13 @@ export const ClientNotificationLog: React.FC = () => {
     }, [searchTerm, filterType]);
     
     const handleDelete = async (id: string) => {
-        if (window.confirm(t('admin.clientNotificationLog.confirmDelete'))) {
+    if (window.confirm('¿Seguro que deseas eliminar esta notificación?')) {
             try {
                 await dataService.deleteClientNotification(id);
                 setNotifications(prev => prev.filter(n => n.id !== id));
             } catch (error) {
                 console.error('Failed to delete notification:', error);
-                alert(t('admin.clientNotificationLog.deleteError'));
+                alert('Error al eliminar la notificación.');
             }
         }
     };
@@ -52,7 +52,7 @@ export const ClientNotificationLog: React.FC = () => {
         if (isNaN(date.getTime()) || date.getTime() === 0) {
             return '---';
         }
-        return date.toLocaleString(language, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleString('es-EC', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
 
     const filteredNotifications = useMemo(() => {
@@ -86,16 +86,16 @@ export const ClientNotificationLog: React.FC = () => {
                 <div>
                     <h2 className="text-2xl font-serif text-brand-text mb-2 flex items-center gap-3">
                         <PaperAirplaneIcon className="w-6 h-6 text-brand-accent" />
-                        {t('admin.clientNotificationLog.title')}
+                        Historial de Notificaciones
                     </h2>
-                    <p className="text-brand-secondary">{t('admin.clientNotificationLog.subtitle')}</p>
+                    <p className="text-brand-secondary">Registro de todas las notificaciones enviadas a los clientes.</p>
                 </div>
             </div>
 
             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6 flex items-center gap-4 flex-wrap">
                 <input
                     type="text"
-                    placeholder={t('admin.clientNotificationLog.searchPlaceholder')}
+                    placeholder="Buscar por cliente, tipo o estado"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full max-w-sm px-4 py-2 border border-gray-300 rounded-lg focus:ring-brand-primary focus:border-brand-primary"
@@ -105,10 +105,10 @@ export const ClientNotificationLog: React.FC = () => {
                     onChange={(e) => setFilterType(e.target.value as any)}
                     className="px-4 py-2 border border-gray-300 rounded-lg bg-white focus:ring-brand-primary focus:border-brand-primary"
                 >
-                    <option value="all">{t('admin.clientNotificationLog.allTypes')}</option>
+                    <option value="all">Todos los tipos</option>
                     {NOTIFICATION_TYPE_OPTIONS.map(type => (
                         <option key={type} value={type}>
-                            {t(`admin.clientNotificationLog.type_${type}`)}
+                            {String(type) === 'booking' ? 'Reserva' : String(type) === 'inquiry' ? 'Consulta' : 'Otro'}
                         </option>
                     ))}
                 </select>
@@ -118,18 +118,18 @@ export const ClientNotificationLog: React.FC = () => {
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-brand-background">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.clientNotificationLog.date')}</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.clientNotificationLog.client')}</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.clientNotificationLog.type')}</th>
-                            <th className="px-6 py-3 text-center text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.clientNotificationLog.status')}</th>
-                             <th className="px-6 py-3 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.clientNotificationLog.actions')}</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Fecha</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Cliente</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Tipo</th>
+                            <th className="px-6 py-3 text-center text-xs font-medium text-brand-secondary uppercase tracking-wider">Estado</th>
+                             <th className="px-6 py-3 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider">Acciones</th>
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                         {isLoading ? (
                              <tr>
                                 <td colSpan={5} className="text-center py-10 text-brand-secondary">
-                                    {t('app.loading')}...
+                                    Cargando...
                                 </td>
                             </tr>
                         ) : paginatedNotifications.length > 0 ? paginatedNotifications.map((n) => (
@@ -142,18 +142,18 @@ export const ClientNotificationLog: React.FC = () => {
                                     <div className="text-sm text-brand-secondary">{n.clientEmail}</div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-text">
-                                    {t(`admin.clientNotificationLog.type_${n.type}`)}
+                                    {n.type === 'booking' ? 'Reserva' : n.type === 'inquiry' ? 'Consulta' : 'Otro'}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
                                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${n.status === 'Sent' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                                        {t(`admin.clientNotificationLog.status_${n.status}`)}
+                                        {n.status === 'sent' ? 'Enviada' : n.status === 'failed' ? 'Fallida' : 'Pendiente'}
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                     <button
                                         onClick={() => handleDelete(n.id)}
                                         className="p-1 text-red-500 hover:text-red-700 rounded-md hover:bg-red-50"
-                                        title={t('admin.clientNotificationLog.deleteNotification')}
+                                        title="Eliminar notificación"
                                     >
                                         <TrashIcon className="w-5 h-5" />
                                     </button>
@@ -162,7 +162,7 @@ export const ClientNotificationLog: React.FC = () => {
                         )) : (
                             <tr>
                                 <td colSpan={5} className="text-center py-10 text-brand-secondary">
-                                    {t('admin.clientNotificationLog.noNotifications')}
+                                    No hay notificaciones.
                                 </td>
                             </tr>
                         )}
@@ -172,13 +172,13 @@ export const ClientNotificationLog: React.FC = () => {
              {totalPages > 1 && (
                 <div className="mt-4 flex justify-between items-center text-sm">
                     <button onClick={handlePrevPage} disabled={currentPage === 1} className="font-semibold text-brand-primary disabled:text-gray-400 disabled:cursor-not-allowed">
-                        &larr; {t('admin.crm.previous')}
+                        &larr; Anterior
                     </button>
                     <span className="text-brand-secondary font-semibold">
-                        {t('admin.crm.page')} {currentPage} {t('admin.crm.of')} {totalPages}
+                        Página {currentPage} de {totalPages}
                     </span>
                     <button onClick={handleNextPage} disabled={currentPage >= totalPages} className="font-semibold text-brand-primary disabled:text-gray-400 disabled:cursor-not-allowed">
-                        {t('admin.crm.next')} &rarr;
+                        Siguiente &rarr;
                     </button>
                 </div>
             )}

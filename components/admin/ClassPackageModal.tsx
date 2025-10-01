@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { ClassPackage, Technique } from '../../types';
-import { useLanguage } from '../../context/LanguageContext';
+// Eliminado useLanguage, la app ahora es monolingüe en español
 import { CubeIcon } from '../icons/CubeIcon';
 
 interface ClassPackageModalProps {
@@ -33,7 +33,7 @@ const TextareaField: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement> 
 
 
 export const ClassPackageModal: React.FC<ClassPackageModalProps> = ({ isOpen, onClose, onSave, packageToEdit }) => {
-  const { t } = useLanguage();
+  // Monolingüe español, textos hardcodeados
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -126,7 +126,7 @@ export const ClassPackageModal: React.FC<ClassPackageModalProps> = ({ isOpen, on
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-2xl font-serif text-brand-accent mb-4 text-center">
-          {packageToEdit ? t('admin.packageModal.editTitle') : t('admin.packageModal.createTitle')}
+          {packageToEdit ? 'Editar paquete de clases' : 'Crear paquete de clases'}
         </h2>
         <form onSubmit={handleSubmit}>
           <input
@@ -137,23 +137,23 @@ export const ClassPackageModal: React.FC<ClassPackageModalProps> = ({ isOpen, on
             className="hidden"
           />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <InputField label={t('admin.packageModal.nameLabel')} id="name" name="name" value={formData.name} onChange={handleChange} placeholder={t('admin.packageModal.namePlaceholder')} required />
-            <InputField label={t('admin.packageModal.classesLabel')} id="classes" name="classes" type="number" value={formData.classes} onChange={handleChange} placeholder={t('admin.packageModal.classesPlaceholder')} required />
-            <InputField label={t('admin.packageModal.priceLabel')} id="price" name="price" type="number" value={formData.price} onChange={handleChange} placeholder={t('admin.packageModal.pricePlaceholder')} required />
+            <InputField label="Nombre del paquete" id="name" name="name" value={formData.name} onChange={handleChange} placeholder="Ej: Paquete de 4 clases" required />
+            <InputField label="Cantidad de clases" id="classes" name="classes" type="number" value={formData.classes} onChange={handleChange} placeholder="Ej: 4" required />
+            <InputField label="Precio" id="price" name="price" type="number" value={formData.price} onChange={handleChange} placeholder="Ej: 180" required />
             
             <div>
-              <label htmlFor="technique" className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.packageModal.techniqueLabel')}</label>
+              <label htmlFor="technique" className="block text-sm font-bold text-brand-secondary mb-1">Técnica</label>
               <select id="technique" name="technique" value={formData.technique} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
-                  <option value="potters_wheel">{t('techniques.pottersWheelTitle')}</option>
-                  <option value="molding">{t('techniques.moldingTitle')}</option>
+                  <option value="potters_wheel">Torno de alfarero</option>
+                  <option value="molding">Modelado manual</option>
               </select>
             </div>
             
             <div className="md:col-span-2">
-                <TextareaField label={t('admin.packageModal.descriptionLabel')} id="description" name="description" value={formData.description} onChange={handleChange} placeholder={t('admin.packageModal.descriptionPlaceholder')} />
+                <TextareaField label="Descripción" id="description" name="description" value={formData.description} onChange={handleChange} placeholder="Describe el paquete y lo que incluye" />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.packageModal.imageLabel')}</label>
+              <label className="block text-sm font-bold text-brand-secondary mb-1">Imagen</label>
               <div className="mt-1 flex items-center gap-4 p-2 border-2 border-dashed border-gray-300 rounded-lg">
                 {formData.imageUrl ? (
                   <img src={formData.imageUrl} alt="Preview" className="w-24 h-24 object-cover rounded-md" />
@@ -167,26 +167,26 @@ export const ClassPackageModal: React.FC<ClassPackageModalProps> = ({ isOpen, on
                   onClick={() => fileInputRef.current?.click()}
                   className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-4 rounded-lg hover:bg-gray-100 transition-colors"
                 >
-                  {t('admin.packageModal.uploadImageButton')}
+                  Subir imagen
                 </button>
               </div>
             </div>
-            <InputField label={t('admin.packageModal.durationLabel')} id="duration" name="duration" value={formData.duration} onChange={handleChange} placeholder={t('admin.packageModal.durationPlaceholder')} />
-            <InputField label={t('admin.packageModal.durationHoursLabel')} id="durationHours" name="durationHours" type="number" step="0.5" value={formData.durationHours} onChange={handleChange} placeholder="e.g. 2.5" required />
+            <InputField label="Duración" id="duration" name="duration" value={formData.duration} onChange={handleChange} placeholder="Ej: 2 horas por clase" />
+            <InputField label="Duración total (horas)" id="durationHours" name="durationHours" type="number" step="0.5" value={formData.durationHours} onChange={handleChange} placeholder="Ej: 8" required />
             <div className="md:col-span-2">
-                <TextareaField label={t('admin.packageModal.activitiesLabel')} id="activities" name="activities" value={formData.activities} onChange={handleChange} placeholder={t('admin.packageModal.activitiesPlaceholder')} />
+                <TextareaField label="Actividades" id="activities" name="activities" value={formData.activities} onChange={handleChange} placeholder="Lista de actividades, una por línea" />
             </div>
-            <TextareaField label={t('admin.packageModal.generalRecommendationsLabel')} id="generalRecommendations" name="generalRecommendations" value={formData.generalRecommendations} onChange={handleChange} placeholder={t('admin.packageModal.generalRecommendationsPlaceholder')} />
-            <TextareaField label={t('admin.packageModal.materialsLabel')} id="materials" name="materials" value={formData.materials} onChange={handleChange} placeholder={t('admin.packageModal.materialsPlaceholder')} />
+            <TextareaField label="Recomendaciones generales" id="generalRecommendations" name="generalRecommendations" value={formData.generalRecommendations} onChange={handleChange} placeholder="Ej: Traer ropa cómoda" />
+            <TextareaField label="Materiales incluidos" id="materials" name="materials" value={formData.materials} onChange={handleChange} placeholder="Ej: Arcilla, esmaltes, herramientas" />
           </div>
-          <div className="mt-6 flex justify-end gap-3">
-             <button type="button" onClick={onClose} className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100 transition-colors">
-                 {t('admin.productManager.cancelButton')}
-             </button>
-             <button type="submit" className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent transition-colors">
-                {t('admin.packageModal.saveButton')}
-             </button>
-          </div>
+       <div className="mt-6 flex justify-end gap-3">
+         <button type="button" onClick={onClose} className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100 transition-colors">
+            Cancelar
+         </button>
+         <button type="submit" className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent transition-colors">
+           Guardar
+         </button>
+       </div>
         </form>
       </div>
     </div>

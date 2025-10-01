@@ -1,5 +1,5 @@
 import React from 'react';
-import { useLanguage } from '../context/LanguageContext';
+// ...existing code...
 
 interface WelcomeSelectorProps {
   onSelect: (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building') => void;
@@ -45,45 +45,45 @@ const ExperienceCard: React.FC<{
 
 
 export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) => {
-  const { t } = useLanguage();
+  // Traducción eliminada, usar texto en español directamente
 
   return (
     <div className="text-center p-6 bg-transparent animate-fade-in-up max-w-4xl mx-auto">
-      <h2 className="text-3xl font-semibold text-brand-text mb-2">{t('welcome.title')}</h2>
-      <p className="text-brand-secondary mb-10">{t('welcome.subtitle')}</p>
+  <h2 className="text-3xl font-serif font-bold text-brand-text mb-2">Bienvenido a Ceramicalma</h2>
+  <p className="text-brand-secondary mb-10">¿Es tu primera vez con nosotros?</p>
       <div className="grid md:grid-cols-2 gap-8">
-        <ChoiceCard
-            title={t('welcome.newUserTitle')}
-            subtitle={t('welcome.newUserSubtitle')}
-            buttonText={t('welcome.newUserButton')}
-            onClick={() => onSelect('new')}
-        />
-        <ChoiceCard
-            title={t('welcome.returningUserTitle')}
-            subtitle={t('welcome.returningUserSubtitle')}
-            buttonText={t('welcome.returningUserButton')}
-            onClick={() => onSelect('returning')}
-        />
+    <ChoiceCard
+      title="Soy Nuevo Aquí"
+      subtitle="Comienza tu aventura con nuestra Clase Introductoria, diseñada para principiantes absolutos."
+      buttonText="¡Quiero Empezar!"
+      onClick={() => onSelect('new')}
+    />
+    <ChoiceCard
+      title="Ya Soy Alumno"
+      subtitle="Continúa tu práctica seleccionando uno de nuestros paquetes de clases continuas."
+      buttonText="Ver Paquetes"
+      onClick={() => onSelect('returning')}
+    />
       </div>
       <div className="mt-8 space-y-8">
-          <ExperienceCard 
-            title={t('welcome.couplesExperienceTitle')}
-            subtitle={t('welcome.couplesExperienceSubtitle')}
-            buttonText={t('welcome.couplesExperienceButton')}
-            onClick={() => onSelect('couples_experience')}
-          />
-          <ExperienceCard 
-            title={t('welcome.groupExperienceTitle')}
-            subtitle={t('welcome.groupExperienceSubtitle')}
-            buttonText={t('welcome.groupExperienceButton')}
-            onClick={() => onSelect('group_experience')}
-          />
-          <ExperienceCard 
-            title={t('welcome.teamBuildingExperienceTitle')}
-            subtitle={t('welcome.teamBuildingExperienceSubtitle')}
-            buttonText={t('welcome.teamBuildingExperienceButton')}
-            onClick={() => onSelect('team_building')}
-          />
+        <ExperienceCard 
+          title="Experiencias para Parejas"
+          subtitle="Una cita creativa y diferente. Moldeen una pieza juntos en el torno o creen piezas individuales, con la guía de un instructor."
+          buttonText="Planifica tu Cita"
+          onClick={() => onSelect('couples_experience')}
+        />
+        <ExperienceCard 
+          title="Experiencias Grupales"
+          subtitle="Ideal para cumpleaños, team building o una reunión creativa entre amigos. Contáctanos para crear un evento a tu medida."
+          buttonText="Planifica Tu Evento"
+          onClick={() => onSelect('group_experience')}
+        />
+        <ExperienceCard 
+          title="Team Building Corporativo"
+          subtitle="Fortalece a tu equipo con un taller de cerámica creativo y colaborativo."
+          buttonText="Planifica tu Evento"
+          onClick={() => onSelect('team_building')}
+        />
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import React from 'react';
-import { useLanguage } from '../../context/LanguageContext';
+// ...existing code...
 import { ArrowPathIcon } from '../icons/ArrowPathIcon';
 
 interface SyncButtonProps {
@@ -9,8 +9,8 @@ interface SyncButtonProps {
 }
 
 export const SyncButton: React.FC<SyncButtonProps> = ({ hasNewData, isSyncing, onClick }) => {
-    const { t } = useLanguage();
-    const title = hasNewData ? t('admin.syncButton.newData') : t('admin.syncButton.sync');
+    // Traducción eliminada, usar texto en español directamente
+    const title = hasNewData ? '¡Datos nuevos disponibles!' : 'Sincronizar';
 
     return (
         <div className="relative" title={title}>

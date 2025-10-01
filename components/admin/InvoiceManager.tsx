@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { InvoiceRequest, InvoiceRequestStatus, NavigationState } from '../../types';
 import * as dataService from '../../services/dataService';
-import { useLanguage } from '../../context/LanguageContext';
+// Eliminado useLanguage, la app ahora es monolingüe en español
 import { DocumentTextIcon } from '../icons/DocumentTextIcon';
 import { CheckCircleIcon } from '../icons/CheckCircleIcon';
 import { MailIcon } from '../icons/MailIcon';
@@ -22,7 +22,8 @@ interface InvoiceManagerProps {
 }
 
 export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ navigateToId, invoiceRequests = [], onDataChange, setNavigateTo }) => {
-    const { t, language } = useLanguage();
+    // Eliminado useLanguage, la app ahora es monolingüe en español
+    const language = 'es-ES';
     const [highlightedRequestId, setHighlightedRequestId] = useState<string | null>(null);
     const [filter, setFilter] = useState<FilterType>('all');
 
@@ -67,27 +68,27 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ navigateToId, in
                 <div>
                     <h2 className="text-2xl font-serif text-brand-text mb-2 flex items-center gap-3">
                         <DocumentTextIcon className="w-6 h-6 text-brand-accent" />
-                        {t('admin.invoiceManager.title')}
+                        Solicitudes de Factura
                     </h2>
-                    <p className="text-brand-secondary">{t('admin.invoiceManager.subtitle')}</p>
+                    <p className="text-brand-secondary">Solicitudes de facturación para clientes empresariales</p>
                 </div>
             </div>
 
             <div className="bg-white p-2 rounded-lg border border-gray-200 flex items-center gap-2 flex-wrap mb-4">
-                <FilterButton filterType="all">{t('admin.invoiceManager.filterAll')}</FilterButton>
-                <FilterButton filterType="Pending">{t('admin.invoiceManager.filterPending')}</FilterButton>
-                <FilterButton filterType="Processed">{t('admin.invoiceManager.filterProcessed')}</FilterButton>
+                <FilterButton filterType="all">Todas</FilterButton>
+                <FilterButton filterType="Pending">Pendientes</FilterButton>
+                <FilterButton filterType="Processed">Procesadas</FilterButton>
             </div>
 
             <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-brand-background">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.invoiceManager.requestedAt')}</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.invoiceManager.customer')}</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.invoiceManager.company')}</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.invoiceManager.status')}</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">{t('admin.invoiceManager.actions')}</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Solicitada el</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Cliente</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Empresa</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Estado</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Acciones</th>
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
@@ -105,7 +106,7 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ navigateToId, in
                                         <button
                                             onClick={() => req.userInfo?.email && setNavigateTo({ tab: 'customers', targetId: req.userInfo.email })}
                                             className="ml-auto p-2 rounded-full text-brand-secondary hover:bg-gray-100 hover:text-brand-accent transition-colors"
-                                            title={t('admin.invoiceManager.goToCustomer')}
+                                            title={"Ir al cliente"}
                                         >
                                             <UserIcon className="w-5 h-5"/>
                                         </button>
@@ -125,7 +126,7 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ navigateToId, in
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="flex flex-col">
                                         <span className={`px-2 py-1 text-xs font-semibold rounded-full inline-block text-center ${STATUS_COLORS[req.status]}`}>
-                                            {t(`admin.invoiceManager.status${req.status}`)}
+                                            {req.status === 'Pending' ? 'Pendiente' : 'Procesada'}
                                         </span>
                                         {req.processedAt && (
                                             <span className="text-xs text-gray-500 mt-1">{formatDate(req.processedAt)}</span>
@@ -139,7 +140,7 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ navigateToId, in
                                             className="flex items-center gap-1.5 bg-green-100 text-green-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-green-200 transition-colors"
                                         >
                                             <CheckCircleIcon className="w-4 h-4"/>
-                                            {t('admin.invoiceManager.markAsProcessed')}
+                                            Marcar como procesada
                                         </button>
                                     )}
                                 </td>
@@ -147,7 +148,7 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ navigateToId, in
                         )) : (
                             <tr>
                                 <td colSpan={5} className="text-center py-10 text-brand-secondary">
-                                    {t('admin.invoiceManager.noRequests')}
+                                    No hay solicitudes de factura
                                 </td>
                             </tr>
                         )}

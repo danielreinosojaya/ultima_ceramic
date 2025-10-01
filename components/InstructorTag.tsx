@@ -2,7 +2,7 @@
 import React, { useMemo } from 'react';
 import type { Instructor } from '../types';
 import { PALETTE_COLORS } from '../constants';
-import { useLanguage } from '../context/LanguageContext';
+// Eliminado useLanguage, la app ahora es monolingüe en español
 
 interface InstructorTagProps {
   instructorId: number;
@@ -16,7 +16,6 @@ const colorMap = PALETTE_COLORS.reduce((acc, color) => {
 const defaultColors = { bg: 'bg-gray-400' };
 
 export const InstructorTag: React.FC<InstructorTagProps> = ({ instructorId, instructors }) => {
-  const { t } = useLanguage();
   const instructor = useMemo(() => {
     return instructors.find(i => i.id === instructorId);
   }, [instructorId, instructors]);
@@ -31,7 +30,7 @@ export const InstructorTag: React.FC<InstructorTagProps> = ({ instructorId, inst
     <div className="flex items-center gap-2">
       <span className={`w-2 h-2 rounded-full ${color}`}></span>
       <div>
-        <p className="text-xs font-medium text-brand-secondary leading-tight">{t('summary.instructorHeader')}</p>
+        <p className="text-xs font-medium text-brand-secondary leading-tight">Instructor</p>
         <p className="text-sm font-semibold text-brand-text leading-tight">{instructor.name}</p>
       </div>
     </div>
