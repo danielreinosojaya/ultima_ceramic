@@ -480,7 +480,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             const markUnpaidBody = req.body;
             await sql`UPDATE bookings SET is_paid = false, payment_details = NULL WHERE id = ${markUnpaidBody.bookingId}`;
             break;
-        case 'rescheduleBookingSlot':
+        case 'rescheduleBookingSlot': {
             const rescheduleBody = req.body;
             const { bookingId: rescheduleId, oldSlot, newSlot } = rescheduleBody;
             const { rows: [bookingToReschedule] } = await sql`SELECT slots FROM bookings WHERE id = ${rescheduleId}`;
@@ -490,6 +490,31 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 await sql`UPDATE bookings SET slots = ${JSON.stringify(updatedSlots)} WHERE id = ${rescheduleId}`;
             }
             break;
+        }
+        case 'removeBookingSlot': {
+            const { bookingId, slotToRemove } = req.body;
+            if (!bookingId || !slotToRemove) {
+                return res.status(400).json({ error: 'bookingId and slotToRemove are required.' });
+            }
+            // Fetch current slots
+            const { rows: [bookingRow] } = await sql`SELECT slots FROM bookings WHERE id = ${bookingId}`;
+            if (!bookingRow) {
+                return res.status(404).json({ error: 'Booking not found.' });
+            }
+            const currentSlots = Array.isArray(bookingRow.slots) ? bookingRow.slots : [];
+            // Remove the slot matching date, time, instructorId
+            const updatedSlots = currentSlots.filter((s: any) => {
+                return !(s.date === slotToRemove.date && s.time === slotToRemove.time && s.instructorId === slotToRemove.instructorId);
+            });
+            if (updatedSlots.length === 0) {
+                // If no slots left, delete the booking
+                await sql`DELETE FROM bookings WHERE id = ${bookingId}`;
+                return res.status(200).json({ success: true, deleted: true });
+            } else {
+                await sql`UPDATE bookings SET slots = ${JSON.stringify(updatedSlots)} WHERE id = ${bookingId}`;
+                return res.status(200).json({ success: true, updatedSlots });
+            }
+        }
         case 'deleteBooking': {
             const { bookingId } = req.body;
             if (!bookingId) {
