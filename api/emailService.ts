@@ -78,13 +78,16 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
     await sendEmail(userInfo.email, subject, html);
 };
 
+
+// Envía el recibo de pago al cliente
+export const sendPaymentReceiptEmail = async (booking: Booking, payment: PaymentDetails) => {
     const { userInfo, bookingCode, product } = booking;
     const subject = `¡Confirmación de Pago para tu reserva en CeramicAlma! (Código: ${bookingCode})`;
     // Usar zona horaria de Ecuador
     const timeZone = 'America/Guayaquil';
     let fechaPago;
-    if (newPayment.receivedAt && new Date(newPayment.receivedAt).toString() !== 'Invalid Date') {
-        const zonedDate = utcToZonedTime(new Date(newPayment.receivedAt), timeZone);
+    if (payment.receivedAt && new Date(payment.receivedAt).toString() !== 'Invalid Date') {
+        const zonedDate = utcToZonedTime(new Date(payment.receivedAt), timeZone);
         fechaPago = format(zonedDate, 'd/M/yyyy', { timeZone });
     } else {
         const zonedDate = utcToZonedTime(new Date(), timeZone);
@@ -98,8 +101,8 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
             <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; margin-top: 20px;">
                 <h3 style="color: #D95F43;">Detalles del Pago</h3>
                 <p><strong>Código de Reserva:</strong> ${bookingCode}</p>
-                <p><strong>Monto Pagado:</strong> $${newPayment.amount.toFixed(2)}</p>
-                <p><strong>Método:</strong> ${newPayment.method}</p>
+                <p><strong>Monto Pagado:</strong> $${payment.amount.toFixed(2)}</p>
+                <p><strong>Método:</strong> ${payment.method}</p>
                 <p><strong>Fecha de Pago:</strong> ${fechaPago}</p>
             </div>
              <p style="margin-top: 20px;">Puedes descargar tu ticket de reserva desde la web en cualquier momento. ¡Nos vemos en clase!</p>
