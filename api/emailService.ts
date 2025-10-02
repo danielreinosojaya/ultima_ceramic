@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { utcToZonedTime, format } from 'date-fns-tz';
+import { toZonedTime, format } from 'date-fns-tz';
 import type { Booking, BankDetails, TimeSlot, PaymentDetails } from '../types.js';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -87,10 +87,10 @@ export const sendPaymentReceiptEmail = async (booking: Booking, payment: Payment
     const timeZone = 'America/Guayaquil';
     let fechaPago;
     if (payment.receivedAt && new Date(payment.receivedAt).toString() !== 'Invalid Date') {
-        const zonedDate = utcToZonedTime(new Date(payment.receivedAt), timeZone);
+        const zonedDate = toZonedTime(new Date(payment.receivedAt), timeZone);
         fechaPago = format(zonedDate, 'd/M/yyyy', { timeZone });
     } else {
-        const zonedDate = utcToZonedTime(new Date(), timeZone);
+        const zonedDate = toZonedTime(new Date(), timeZone);
         fechaPago = format(zonedDate, 'd/M/yyyy', { timeZone });
     }
     const html = `
