@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { utcToZonedTime, format } from 'date-fns-tz';
 import type { Booking, BankDetails, TimeSlot, PaymentDetails } from '../types.js';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -77,15 +78,17 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
     await sendEmail(userInfo.email, subject, html);
 };
 
-export const sendPaymentReceiptEmail = async (booking: Booking, newPayment: PaymentDetails) => {
     const { userInfo, bookingCode, product } = booking;
     const subject = `¡Confirmación de Pago para tu reserva en CeramicAlma! (Código: ${bookingCode})`;
+    // Usar zona horaria de Ecuador
+    const timeZone = 'America/Guayaquil';
     let fechaPago;
     if (newPayment.receivedAt && new Date(newPayment.receivedAt).toString() !== 'Invalid Date') {
-        fechaPago = new Date(newPayment.receivedAt).toLocaleDateString('es-ES');
+        const zonedDate = utcToZonedTime(new Date(newPayment.receivedAt), timeZone);
+        fechaPago = format(zonedDate, 'd/M/yyyy', { timeZone });
     } else {
-        // Si no hay fecha, usamos la fecha actual (cuando el admin presiona el botón)
-        fechaPago = new Date().toLocaleDateString('es-ES');
+        const zonedDate = utcToZonedTime(new Date(), timeZone);
+        fechaPago = format(zonedDate, 'd/M/yyyy', { timeZone });
     }
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333;">
@@ -103,7 +106,7 @@ export const sendPaymentReceiptEmail = async (booking: Booking, newPayment: Paym
             <p>Saludos,<br/>El equipo de CeramicAlma</p>
         </div>
     `;
-     await sendEmail(userInfo.email, subject, html);
+    await sendEmail(userInfo.email, subject, html);
 };
 
 export const sendClassReminderEmail = async (booking: Booking, slot: TimeSlot) => {
