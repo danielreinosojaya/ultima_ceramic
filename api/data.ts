@@ -253,7 +253,28 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
             if (settings.length > 0) {
                 data = settings[0].value;
             } else {
-                return res.status(404).json({ error: `Setting with key "${key}" not found.` });
+                // Si el key no existe, devuelve un valor por defecto según el tipo esperado
+                switch (key) {
+                    case 'bankDetails':
+                    case 'announcements':
+                    case 'capacityMessages':
+                        data = [];
+                        break;
+                    case 'availability':
+                    case 'scheduleOverrides':
+                    case 'classCapacity':
+                    case 'automationSettings':
+                    case 'footerInfo':
+                    case 'backgroundSettings':
+                        data = {};
+                        break;
+                    case 'policies':
+                    case 'confirmationMessage':
+                        data = '';
+                        break;
+                    default:
+                        data = null;
+                }
             }
         }
     }
