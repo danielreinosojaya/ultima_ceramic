@@ -10,6 +10,7 @@ interface InvoiceReminderModalProps {
 }
 
 export const InvoiceReminderModal: React.FC<InvoiceReminderModalProps> = ({ isOpen, onClose, onProceed, onGoToInvoicing }) => {
+  const { t } = useLanguage();
 
   if (!isOpen) return null;
 
@@ -28,13 +29,13 @@ export const InvoiceReminderModal: React.FC<InvoiceReminderModalProps> = ({ isOp
             </div>
             <div className="ml-4 text-left">
                 <h3 className="text-lg leading-6 font-bold text-brand-text" id="modal-title">
-                    Recordatorio de Facturación
+                    {t('admin.invoiceReminderModal.title')}
                 </h3>
             </div>
         </div>
         <div className="mt-4">
           <p className="text-sm text-brand-secondary">
-            Hay una solicitud de factura pendiente para esta reserva. ¿Deseas ir a facturación o continuar con el proceso de pago?
+            {t('admin.invoiceReminderModal.message')}
           </p>
         </div>
         <div className="mt-6 flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-3 gap-3 sm:gap-0">
@@ -43,14 +44,14 @@ export const InvoiceReminderModal: React.FC<InvoiceReminderModalProps> = ({ isOp
             onClick={onGoToInvoicing}
             className="w-full sm:w-auto inline-flex justify-center rounded-md border border-brand-secondary bg-white text-base font-medium text-brand-secondary hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary sm:text-sm"
           >
-            Ir a Facturación
+            {t('admin.invoiceReminderModal.goToInvoicingButton')}
           </button>
            <button
             type="button"
             onClick={onProceed}
             className="w-full sm:w-auto inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-brand-primary text-base font-medium text-white hover:bg-brand-accent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary sm:text-sm"
           >
-            Continuar con Pago
+            {t('admin.invoiceReminderModal.proceedButton')}
           </button>
         </div>
       </div>
