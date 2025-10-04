@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import type { Customer, Booking, InvoiceRequest, AdminTab, ClassPackage, OpenStudioSubscription, IntroductoryClass, PaymentDetails } from '../../types.js';
+import type { Customer, Booking, InvoiceRequest, AdminTab, ClassPackage, OpenStudioSubscription, IntroductoryClass, PaymentDetails, Delivery } from '../../types.js';
 import { useLanguage } from '../../context/LanguageContext.js';
 import { MailIcon } from '../icons/MailIcon.js';
 import { PhoneIcon } from '../icons/PhoneIcon.js';
@@ -12,6 +12,7 @@ import { UserIcon } from '../icons/UserIcon.js';
 import { InvoiceReminderModal } from './InvoiceReminderModal.js';
 import { CustomerAttendanceHistory } from './CustomerAttendanceHistory.js';
 import { CalendarIcon } from '../icons/CalendarIcon.js';
+import { NewDeliveryModal } from './NewDeliveryModal.js';
 
 
 interface NavigationState {
@@ -29,22 +30,60 @@ interface CustomerDetailViewProps {
 
 // Add this helper function to your file
 const formatDate = (dateInput: Date | string | undefined | null, options: Intl.DateTimeFormatOptions = {}): string => {
-  if (!dateInput) return '---';
-  // If it's a YYYY-MM-DD string, add time to avoid timezone issues
-  const dateStr = typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput) 
-    ? dateInput + 'T00:00:00' 
-    : dateInput;
-
-  const date = new Date(dateStr);
-  if (isNaN(date.getTime()) || date.getTime() === 0) return '---';
+  if (!dateInput) return 'No especificada';
   
-  const defaultOptions: Intl.DateTimeFormatOptions = {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    ...options
-  };
-  return date.toLocaleDateString('es', defaultOptions);
+  let date: Date;
+  
+  try {
+    if (typeof dateInput === 'string') {
+      // Handle different string formats
+      if (dateInput === '' || dateInput === 'null' || dateInput === 'undefined') {
+        return 'No especificada';
+      }
+      
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+        // YYYY-MM-DD format - add time to avoid timezone issues
+        date = new Date(dateInput + 'T12:00:00.000Z');
+      } else if (/^\d{4}-\d{2}-\d{2}T/.test(dateInput)) {
+        // ISO format
+        date = new Date(dateInput);
+      } else {
+        // Try parsing as-is
+        date = new Date(dateInput);
+      }
+    } else if (dateInput instanceof Date) {
+      date = dateInput;
+    } else {
+      // Fallback for other types
+      date = new Date(dateInput as any);
+    }
+    
+    if (isNaN(date.getTime()) || date.getTime() === 0) {
+      // Try one more fallback: maybe it's a timestamp
+      if (typeof dateInput === 'string' && /^\d+$/.test(dateInput)) {
+        date = new Date(parseInt(dateInput));
+        if (isNaN(date.getTime()) || date.getTime() <= 0) {
+          return 'Fecha no guardada';
+        }
+      } else {
+        return 'Fecha no guardada';
+      }
+    }
+    
+    const defaultOptions: Intl.DateTimeFormatOptions = {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+      ...options
+    };
+    
+    return date.toLocaleDateString('es', defaultOptions);
+    
+  } catch (error) {
+    console.error('❌ Error in formatDate:', error, 'Input was:', dateInput);
+    return 'Error al formatear fecha';
+  }
 };
 
 
@@ -68,6 +107,12 @@ const getBookingDisplayDate = (booking: Booking, language: string): string => {
 
 
 export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer, onBack, onDataChange, invoiceRequests, setNavigateTo }) => {
+    const [activeTab, setActiveTab] = useState<'info' | 'history' | 'deliveries'>('info');
+    const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+    const [isNewDeliveryModalOpen, setIsNewDeliveryModalOpen] = useState(false);
+    const [deliveryToDelete, setDeliveryToDelete] = useState<string | null>(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [deliveriesPerPage] = useState(5);
     const [editMode, setEditMode] = useState(false);
     const [editInfo, setEditInfo] = useState({
         firstName: customer.userInfo.firstName,
@@ -88,6 +133,80 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer
         await dataService.updateCustomerInfo(customer.email, editInfo);
         setEditMode(false);
         onDataChange();
+    };
+
+    // Load customer deliveries
+    useEffect(() => {
+        const loadDeliveries = async () => {
+            try {
+                const customerDeliveries = await dataService.getDeliveriesByCustomer(customer.userInfo.email);
+                setDeliveries(customerDeliveries);
+            } catch (error) {
+                console.error('Error loading deliveries:', error);
+            }
+        };
+        loadDeliveries();
+    }, [customer.userInfo.email]);
+
+    const handleCreateDelivery = async (deliveryData: Omit<Delivery, 'id' | 'createdAt'>) => {
+        try {
+            await dataService.createDelivery(deliveryData);
+            // Reload deliveries after creation
+            const customerDeliveries = await dataService.getDeliveriesByCustomer(customer.userInfo.email);
+            setDeliveries(customerDeliveries);
+        } catch (error) {
+            console.error('Error creating delivery:', error);
+            throw error; // Re-throw so the modal can handle the error
+        }
+    };
+
+    const handleMarkDeliveryCompleted = async (deliveryId: string) => {
+        try {
+            const result = await dataService.markDeliveryAsCompleted(deliveryId);
+            if (result.success && result.delivery) {
+                setDeliveries(prev => 
+                    prev.map(d => d.id === deliveryId ? result.delivery! : d)
+                );
+                onDataChange();
+            }
+        } catch (error) {
+            console.error('Error marking delivery as completed:', error);
+        }
+    };
+
+    const handleRevertDelivery = async (deliveryId: string) => {
+        try {
+            const result = await dataService.updateDelivery(deliveryId, { 
+                status: 'pending',
+                deliveredAt: null
+            });
+            if (result.success && result.delivery) {
+                setDeliveries(prev => 
+                    prev.map(d => d.id === deliveryId ? result.delivery! : d)
+                );
+                onDataChange();
+            }
+        } catch (error) {
+            console.error('Error reverting delivery:', error);
+        }
+    };
+
+    const handleDeleteDelivery = async (deliveryId: string) => {
+        try {
+            const result = await dataService.deleteDelivery(deliveryId);
+            if (result.success) {
+                setDeliveries(prev => prev.filter(d => d.id !== deliveryId));
+                setDeliveryToDelete(null);
+                // Ajustar página si es necesario
+                const totalPages = Math.ceil((deliveries.length - 1) / deliveriesPerPage);
+                if (currentPage > totalPages && totalPages > 0) {
+                    setCurrentPage(totalPages);
+                }
+                onDataChange();
+            }
+        } catch (error) {
+            console.error('Error deleting delivery:', error);
+        }
     };
     // Hardcoded language and translation function
     const language = 'es';
@@ -387,106 +506,389 @@ export const CustomerDetailView: React.FC<CustomerDetailViewProps> = ({ customer
         </div>
       </div>
 
-            <ActivePackagesDisplay packages={augmentedPackages} />
-            {/* Show expiry and next class info for each package */}
-            <div className="mt-4 grid gap-4">
-                {augmentedPackages.map(pkg => (
-                    <div key={pkg.id} className="bg-white rounded-lg shadow p-4 border border-gray-100">
-                        <div className="flex items-center gap-2 mb-2">
-                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${pkg.status === 'Active' ? 'bg-green-100 text-green-800' : pkg.status === 'Pending Payment' ? 'bg-yellow-100 text-yellow-800' : pkg.status === 'Expired' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}
-                                title={t(`admin.customerDetail.packageStatusTooltip.${pkg.status.toLowerCase()}`, { default: pkg.status })}
-                            >
-                                {t(`admin.customerDetail.packageStatus.${pkg.status.toLowerCase()}`, { default: pkg.status })}
-                            </span>
-                            {pkg.expiryDate && (
-                                <span className="text-xs text-brand-secondary" title={t('admin.customerDetail.packageExpiryTooltip')}>{t('admin.customerDetail.packageExpiryLabel')}: {formatDate(pkg.expiryDate)}</span>
-                            )}
-                            {pkg.nextClassDate && (
-                                <span className="text-xs text-brand-secondary" title={t('admin.customerDetail.packageNextClassTooltip')}>{t('admin.customerDetail.packageNextClassLabel')}: {formatDate(pkg.nextClassDate)}</span>
-                            )}
-                        </div>
-                        <div className="w-full bg-gray-100 rounded-full h-2 mb-2">
-                            <div className="bg-brand-primary h-2 rounded-full" style={{ width: `${pkg.progressPercent}%` }}></div>
-                        </div>
-                        <div className="text-xs text-brand-secondary">{t('admin.customerDetail.packageProgressLabel')}: {pkg.completedCount}/{pkg.totalCount}</div>
-                    </div>
-                ))}
-            </div>
-      
-       <div className="mt-8">
-            <button
-                onClick={() => setIsViewingAttendance(true)}
-                className="w-full bg-white border-2 border-brand-primary text-brand-primary font-bold py-3 px-6 rounded-lg hover:bg-brand-primary hover:text-white transition-colors duration-300"
-            >
-                {t('admin.customerDetail.viewAttendanceButton')}
-            </button>
-        </div>
+      {/* Tab Navigation */}
+      <div className="border-b border-gray-200 mb-6">
+        <nav className="-mb-px flex space-x-6" aria-label="Tabs">
+          <button
+            onClick={() => setActiveTab('info')}
+            className={`px-1 py-3 text-sm font-semibold border-b-2 ${
+              activeTab === 'info' 
+                ? 'border-brand-primary text-brand-primary' 
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Información
+          </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`px-1 py-3 text-sm font-semibold border-b-2 ${
+              activeTab === 'history' 
+                ? 'border-brand-primary text-brand-primary' 
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Historial de reservas
+          </button>
+          <button
+            onClick={() => setActiveTab('deliveries')}
+            className={`px-1 py-3 text-sm font-semibold border-b-2 ${
+              activeTab === 'deliveries' 
+                ? 'border-brand-primary text-brand-primary' 
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Entregas
+            {deliveries.filter(d => d.status === 'pending' || d.status === 'overdue').length > 0 && (
+              <span className="ml-2 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-red-500 rounded-full">
+                {deliveries.filter(d => d.status === 'pending' || d.status === 'overdue').length}
+              </span>
+            )}
+          </button>
+        </nav>
+      </div>
 
-      <div className="mt-8">
-        <h3 className="text-xl font-bold text-brand-text mb-4">{t('admin.customerDetail.historyTitle')}</h3>
-        <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-brand-background">
-                    <tr>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.customerDetail.history.date')}</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.customerDetail.history.product')}</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.customerDetail.history.progress')}</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.customerDetail.history.status')}</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.customerDetail.history.actions')}</th>
-                    </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                    {customer.bookings.map(booking => (
-                        <tr key={booking.id}>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">
-                                {/* Corrected date display logic */}
-                                {getBookingDisplayDate(booking, language)}
-                                <div className="text-xs text-gray-500">{booking.bookingCode}</div>
-                            </td>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{booking.product.name}</td>
-                                                        <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">
-                                                            {booking.productType === 'CLASS_PACKAGE' || booking.productType === 'INTRODUCTORY_CLASS' ? (
-                                                                (() => {
-                                                                    const pkg = augmentedPackages.find(p => p.id === booking.id);
-                                                                    return pkg ? `${pkg.completedCount}/${pkg.totalCount}` : 'N/A';
-                                                                })()
-                                                            ) : 'N/A'}
-                                                        </td>
-                            <td className="px-4 py-2 whitespace-nowrap">
-                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${booking.isPaid ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}
-                                  title={booking.isPaid ? t('admin.customerDetail.history.paidTooltip') : t('admin.customerDetail.history.unpaidTooltip')}
+      {/* Tab Content */}
+      {activeTab === 'info' && (
+            <div className="animate-fade-in">
+                <ActivePackagesDisplay packages={augmentedPackages} />
+                {/* Show expiry and next class info for each package */}
+                <div className="mt-4 grid gap-4">
+                    {augmentedPackages.map(pkg => (
+                        <div key={pkg.id} className="bg-white rounded-lg shadow p-4 border border-gray-100">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${pkg.status === 'Active' ? 'bg-green-100 text-green-800' : pkg.status === 'Pending Payment' ? 'bg-yellow-100 text-yellow-800' : pkg.status === 'Expired' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}
+                                    title={t(`admin.customerDetail.packageStatusTooltip.${pkg.status.toLowerCase()}`, { default: pkg.status })}
                                 >
-                                    {booking.isPaid ? t('admin.customerDetail.history.paid') : t('admin.customerDetail.history.unpaid')}
+                                    {t(`admin.customerDetail.packageStatus.${pkg.status.toLowerCase()}`, { default: pkg.status })}
                                 </span>
-                            </td>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm">
-                                <div className="flex items-center gap-2">
-                                    {!booking.isPaid && (
-                                        <button 
-                                            onClick={() => handleAcceptPaymentClick(booking)}
-                                            className="p-1.5 text-green-600 hover:text-green-800 bg-green-100 rounded-full hover:bg-green-200 transition-colors"
-                                            title={t('admin.customerDetail.history.acceptPayment')}
-                                            aria-label={t('admin.customerDetail.history.acceptPaymentAria')}
+                                {pkg.expiryDate && (
+                                    <span className="text-xs text-brand-secondary" title={t('admin.customerDetail.packageExpiryTooltip')}>{t('admin.customerDetail.packageExpiryLabel')}: {formatDate(pkg.expiryDate)}</span>
+                                )}
+                                {pkg.nextClassDate && (
+                                    <span className="text-xs text-brand-secondary" title={t('admin.customerDetail.packageNextClassTooltip')}>{t('admin.customerDetail.packageNextClassLabel')}: {formatDate(pkg.nextClassDate)}</span>
+                                )}
+                            </div>
+                            <div className="w-full bg-gray-100 rounded-full h-2 mb-2">
+                                <div className="bg-brand-primary h-2 rounded-full" style={{ width: `${pkg.progressPercent}%` }}></div>
+                            </div>
+                            <div className="text-xs text-brand-secondary">{t('admin.customerDetail.packageProgressLabel')}: {pkg.completedCount}/{pkg.totalCount}</div>
+                        </div>
+                    ))}
+                </div>
+          
+               <div className="mt-8">
+                    <button
+                        onClick={() => setIsViewingAttendance(true)}
+                        className="w-full bg-white border-2 border-brand-primary text-brand-primary font-bold py-3 px-6 rounded-lg hover:bg-brand-primary hover:text-white transition-colors duration-300"
+                    >
+                        {t('admin.customerDetail.viewAttendanceButton')}
+                    </button>
+                </div>
+            </div>
+        )}
+
+        {activeTab === 'history' && (
+            <div className="animate-fade-in">
+                <h3 className="text-xl font-bold text-brand-text mb-4">{t('admin.customerDetail.historyTitle')}</h3>
+                <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-brand-background">
+                            <tr>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.customerDetail.history.date')}</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.customerDetail.history.product')}</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.customerDetail.history.progress')}</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.customerDetail.history.status')}</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">{t('admin.customerDetail.history.actions')}</th>
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                            {customer.bookings.map(booking => (
+                                <tr key={booking.id}>
+                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">
+                                        {/* Corrected date display logic */}
+                                        {getBookingDisplayDate(booking, language)}
+                                        <div className="text-xs text-gray-500">{booking.bookingCode}</div>
+                                    </td>
+                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{booking.product.name}</td>
+                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">
+                                        {booking.productType === 'CLASS_PACKAGE' || booking.productType === 'INTRODUCTORY_CLASS' ? (
+                                            (() => {
+                                                const pkg = augmentedPackages.find(p => p.id === booking.id);
+                                                return pkg ? `${pkg.completedCount}/${pkg.totalCount}` : 'N/A';
+                                            })()
+                                        ) : 'N/A'}
+                                    </td>
+                                    <td className="px-4 py-2 whitespace-nowrap">
+                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${booking.isPaid ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}
+                                          title={booking.isPaid ? t('admin.customerDetail.history.paidTooltip') : t('admin.customerDetail.history.unpaidTooltip')}
                                         >
-                                            <CurrencyDollarIcon className="w-4 h-4"/>
-                                        </button>
-                                    )}
-                                     <button 
-                                        onClick={() => handleDeleteBooking(booking.id)}
-                                        className="p-1.5 text-red-600 hover:text-red-800 bg-red-100 rounded-full hover:bg-red-200 transition-colors"
-                                        title={t('admin.customerDetail.history.deleteBooking')}
-                                        aria-label={t('admin.customerDetail.history.deleteBookingAria')}
+                                            {booking.isPaid ? t('admin.customerDetail.history.paid') : t('admin.customerDetail.history.unpaid')}
+                                        </span>
+                                    </td>
+                                    <td className="px-4 py-2 whitespace-nowrap text-sm">
+                                        <div className="flex items-center gap-2">
+                                            {!booking.isPaid && (
+                                                <button 
+                                                    onClick={() => handleAcceptPaymentClick(booking)}
+                                                    className="p-1.5 text-green-600 hover:text-green-800 bg-green-100 rounded-full hover:bg-green-200 transition-colors"
+                                                    title={t('admin.customerDetail.history.acceptPayment')}
+                                                    aria-label={t('admin.customerDetail.history.acceptPaymentAria')}
+                                                >
+                                                    <CurrencyDollarIcon className="w-4 h-4"/>
+                                                </button>
+                                            )}
+                                             <button 
+                                                onClick={() => handleDeleteBooking(booking.id)}
+                                                className="p-1.5 text-red-600 hover:text-red-800 bg-red-100 rounded-full hover:bg-red-200 transition-colors"
+                                                title={t('admin.customerDetail.history.deleteBooking')}
+                                                aria-label={t('admin.customerDetail.history.deleteBookingAria')}
+                                            >
+                                                <TrashIcon className="w-4 h-4"/>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        )}
+
+        {activeTab === 'deliveries' && (() => {
+            // Lógica de paginación
+            const indexOfLastDelivery = currentPage * deliveriesPerPage;
+            const indexOfFirstDelivery = indexOfLastDelivery - deliveriesPerPage;
+            const currentDeliveries = deliveries.slice(indexOfFirstDelivery, indexOfLastDelivery);
+            const totalPages = Math.ceil(deliveries.length / deliveriesPerPage);
+
+            return (
+                <div className="animate-fade-in">
+                    <div className="flex justify-between items-center mb-4">
+                        <div className="flex items-center gap-4">
+                            <h3 className="text-xl font-bold text-brand-text">Entregas</h3>
+                            {deliveries.length > 0 && (
+                                <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                                    {deliveries.length} total{deliveries.length !== 1 ? 'es' : ''}
+                                </span>
+                            )}
+                        </div>
+                        <button 
+                            onClick={() => setIsNewDeliveryModalOpen(true)}
+                            className="bg-brand-primary text-white px-4 py-2 rounded-lg hover:bg-brand-secondary transition-colors font-semibold text-sm"
+                        >
+                            + Nueva entrega
+                        </button>
+                    </div>
+                    
+                    {deliveries.length > 0 ? (
+                        <>
+                            <div className="space-y-4 mb-6">
+                                {currentDeliveries.map(delivery => (
+                                    <div key={delivery.id} className="bg-white rounded-lg shadow-md p-4 border border-gray-100 hover:shadow-lg transition-shadow">
+                                        <div className="flex justify-between items-start mb-3">
+                                            <div className="flex-1">
+                                                <h4 className="font-semibold text-brand-text text-lg">{delivery.description}</h4>
+                                                <div className="space-y-1 mt-2">
+                                                    <p className="text-sm text-brand-secondary">
+                                                        <span className="font-medium">Programada para:</span> 
+                                                        <span className={`ml-1 ${
+                                                            !delivery.scheduledDate || delivery.scheduledDate === 'No especificada' || delivery.scheduledDate === 'Fecha no guardada'
+                                                                ? 'text-orange-600 font-medium' 
+                                                                : ''
+                                                        }`}>
+                                                            {formatDate(delivery.scheduledDate)}
+                                                        </span>
+                                                        {(!delivery.scheduledDate || delivery.scheduledDate === 'No especificada' || delivery.scheduledDate === 'Fecha no guardada') && (
+                                                            <span className="ml-2 text-xs bg-orange-100 text-orange-800 px-2 py-0.5 rounded">
+                                                                Editar para agregar fecha
+                                                            </span>
+                                                        )}
+                                                    </p>
+                                                    {delivery.status === 'completed' && delivery.deliveredAt && (
+                                                        <p className="text-sm text-green-700">
+                                                            <span className="font-medium">Entregada el:</span> {formatDate(delivery.deliveredAt)}
+                                                        </p>
+                                                    )}
+                                                    {delivery.notes && (
+                                                        <p className="text-sm text-gray-600 mt-2 italic">"{delivery.notes}"</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 ml-4">
+                                                <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                                                    delivery.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                                    delivery.status === 'overdue' ? 'bg-red-100 text-red-800' :
+                                                    'bg-yellow-100 text-yellow-800'
+                                                }`}>
+                                                    {delivery.status === 'completed' ? '✓ Entregada' :
+                                                     delivery.status === 'overdue' ? '⚠ Vencida' : '⏳ Pendiente'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Fotos de referencia */}
+                                        {delivery.photos && delivery.photos.length > 0 && (
+                                            <div className="mb-3">
+                                                <p className="text-sm font-medium text-brand-text mb-2">
+                                                    📸 Fotos de referencia ({delivery.photos.length}):
+                                                </p>
+                                                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                                                    {delivery.photos.map((photo, index) => (
+                                                        <div key={index} className="relative group">
+                                                            <img 
+                                                                src={photo} 
+                                                                alt={`Referencia ${index + 1}`}
+                                                                className="w-full h-16 object-cover rounded-lg border border-gray-200 hover:scale-105 transition-transform cursor-pointer shadow-sm"
+                                                                onClick={() => window.open(photo, '_blank')}
+                                                                onError={(e) => {
+                                                                    console.error('Error loading image:', e);
+                                                                    const target = e.target as HTMLImageElement;
+                                                                    target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0yMCAyMEg0NFY0NEgyMFYyMFoiIHN0cm9rZT0iIzlDQTNBRiIgc3Ryb2tlLXdpZHRoPSIyIiBmaWxsPSJub25lIi8+CjxjaXJjbGUgY3g9IjI4IiBjeT0iMjgiIHI9IjMiIGZpbGw9IiM5Q0EzQUYiLz4KPHBhdGggZD0iTTIwIDM2TDI4IDI4TDM2IDM2TDQ0IDI4IiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPgo8L3N2Zz4=';
+                                                                }}
+                                                            />
+                                                            <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-10 rounded-lg transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                                                <span className="text-white text-xs font-bold bg-black bg-opacity-50 px-2 py-1 rounded">Ver</span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Botones de acción */}
+                                        <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+                                            <button 
+                                                onClick={() => setDeliveryToDelete(delivery.id)}
+                                                className="px-3 py-1.5 text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition-colors flex items-center gap-1"
+                                            >
+                                                🗑️ Eliminar
+                                            </button>
+                                            
+                                            <div className="flex gap-2">
+                                                {delivery.status !== 'completed' ? (
+                                                    <button 
+                                                        onClick={() => handleMarkDeliveryCompleted(delivery.id)}
+                                                        className="px-3 py-1.5 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-md transition-colors"
+                                                    >
+                                                        ✓ Marcar como entregada
+                                                    </button>
+                                                ) : (
+                                                    <button 
+                                                        onClick={() => handleRevertDelivery(delivery.id)}
+                                                        className="px-3 py-1.5 text-sm font-semibold text-orange-700 bg-orange-100 hover:bg-orange-200 rounded-md transition-colors"
+                                                    >
+                                                        ↶ Revertir entrega
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Paginación elegante */}
+                            {totalPages > 1 && (
+                                <div className="flex justify-center items-center space-x-2 py-4">
+                                    <button
+                                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                        disabled={currentPage === 1}
+                                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                            currentPage === 1 
+                                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                                                : 'bg-white text-brand-text border border-gray-200 hover:bg-brand-primary hover:text-white'
+                                        }`}
                                     >
-                                        <TrashIcon className="w-4 h-4"/>
+                                        ← Anterior
+                                    </button>
+                                    
+                                    <div className="flex space-x-1">
+                                        {[...Array(totalPages)].map((_, index) => {
+                                            const pageNumber = index + 1;
+                                            return (
+                                                <button
+                                                    key={pageNumber}
+                                                    onClick={() => setCurrentPage(pageNumber)}
+                                                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                                        currentPage === pageNumber
+                                                            ? 'bg-brand-primary text-white'
+                                                            : 'bg-white text-brand-text border border-gray-200 hover:bg-brand-primary hover:text-white'
+                                                    }`}
+                                                >
+                                                    {pageNumber}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    
+                                    <button
+                                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                        disabled={currentPage === totalPages}
+                                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                            currentPage === totalPages 
+                                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                                                : 'bg-white text-brand-text border border-gray-200 hover:bg-brand-primary hover:text-white'
+                                        }`}
+                                    >
+                                        Siguiente →
                                     </button>
                                 </div>
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
-      </div>
+                            )}
+
+                            {/* Información de paginación */}
+                            <div className="text-center text-sm text-gray-500 mt-2">
+                                Mostrando {indexOfFirstDelivery + 1}-{Math.min(indexOfLastDelivery, deliveries.length)} de {deliveries.length} entregas
+                            </div>
+                        </>
+                    ) : (
+                        <div className="text-center py-12 text-brand-secondary bg-gray-50 rounded-lg">
+                            <div className="text-4xl mb-4">📦</div>
+                            <p className="text-lg font-medium mb-2">No hay entregas programadas</p>
+                            <p className="text-sm">Crea la primera entrega para este cliente usando el botón de arriba.</p>
+                        </div>
+                    )}
+                </div>
+            );
+        })()}
+
+        {/* New Delivery Modal */}
+        <NewDeliveryModal
+            isOpen={isNewDeliveryModalOpen}
+            onClose={() => setIsNewDeliveryModalOpen(false)}
+            onSave={handleCreateDelivery}
+            customerEmail={customer.userInfo.email}
+        />
+
+        {/* Delete Delivery Confirmation Modal */}
+        {deliveryToDelete && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+                    <div className="text-center">
+                        <div className="text-4xl mb-4">⚠️</div>
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">
+                            ¿Eliminar entrega?
+                        </h3>
+                        <p className="text-gray-600 mb-6">
+                            Esta acción no se puede deshacer. La entrega será eliminada permanentemente.
+                        </p>
+                        <div className="flex justify-center gap-3">
+                            <button
+                                onClick={() => setDeliveryToDelete(null)}
+                                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={() => handleDeleteDelivery(deliveryToDelete)}
+                                className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                            >
+                                Eliminar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
   );
 };

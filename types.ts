@@ -15,6 +15,22 @@ export interface UserInfo {
   birthday?: string | null;
 }
 
+// Delivery System Types
+export type DeliveryStatus = 'pending' | 'completed' | 'overdue';
+
+export interface Delivery {
+    id: string;
+    customerEmail: string;
+    description: string;
+    scheduledDate: string; // ISO date string - fecha programada tentativa
+    status: DeliveryStatus;
+    createdAt: string; // ISO date string
+    completedAt?: string | null; // ISO date string - fecha real de entrega
+    deliveredAt?: string | null; // ISO date string - fecha cuando se marcó como entregada
+    notes?: string | null;
+    photos?: string[] | null; // Array de URLs de fotos
+}
+
 export interface Customer {
     email: string;
     userInfo: UserInfo;
@@ -22,6 +38,7 @@ export interface Customer {
     totalBookings: number;
     totalSpent: number;
     lastBookingDate: Date;
+    deliveries?: Delivery[];
 }
 
 export interface EditableBooking {
