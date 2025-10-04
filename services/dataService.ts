@@ -24,7 +24,8 @@ import type {
     UITexts, FooterInfo, DayKey, AvailableSlot, GroupInquiry, AddBookingResult, 
     PaymentDetails, AttendanceStatus, ClientNotification, AutomationSettings, ClassPackage, 
     IntroductoryClass, OpenStudioSubscription, UserInfo, Customer, EnrichedIntroClassSession, 
-    BackgroundSettings, AppData, BankDetails, InvoiceRequest, Technique, GroupClass, SingleClass
+    BackgroundSettings, AppData, BankDetails, InvoiceRequest, Technique, GroupClass, SingleClass,
+    Delivery, DeliveryStatus
 } from '../types';
 import { DAY_NAMES } from '../constants';
 
@@ -340,6 +341,28 @@ export const getCustomers = (bookings: Booking[]): Customer[] => {
     return customers.sort((a, b) => b.lastBookingDate.getTime() - a.lastBookingDate.getTime());
 };
 
+export const getCustomersWithDeliveries = async (bookings: Booking[]): Promise<Customer[]> => {
+    // Get customers from bookings first
+    const customers = getCustomers(bookings);
+    
+    // Get all deliveries
+    const allDeliveries = await getDeliveries();
+    
+    // Add deliveries to each customer
+    const customersWithDeliveries = customers.map(customer => {
+        const customerDeliveries = allDeliveries.filter(d => 
+            d.customerEmail.toLowerCase() === customer.email.toLowerCase()
+        );
+        
+        return {
+            ...customer,
+            deliveries: customerDeliveries
+        };
+    });
+    
+    return customersWithDeliveries;
+};
+
 const formatDateToYYYYMMDD = (d: Date): string => d.toISOString().split('T')[0];
 
 export const generateIntroClassSessions = (
@@ -516,4 +539,69 @@ export const getFutureCapacityMetrics = async (days: number): Promise<{ totalCap
     }, 0);
 
     return { totalCapacity, bookedSlots: futureBookedSlots };
+};
+
+// --- Delivery System Functions ---
+
+const parseDelivery = (d: any): Delivery => {
+    const parsedPhotos = d.photos ? (Array.isArray(d.photos) ? d.photos : JSON.parse(d.photos || '[]')) : [];
+    
+    return {
+        id: d.id,
+        customerEmail: d.customerEmail || d.customer_email,
+        description: d.description,
+        scheduledDate: d.scheduledDate || d.scheduled_date,
+        status: d.status as DeliveryStatus,
+        createdAt: d.createdAt || d.created_at,
+        completedAt: d.completedAt || d.completed_at || null,
+        deliveredAt: d.deliveredAt || d.delivered_at || null,
+        notes: d.notes || null,
+        photos: parsedPhotos
+    };
+};
+
+export const getDeliveries = async (): Promise<Delivery[]> => {
+    const rawDeliveries = await fetchData('/api/data?action=deliveries');
+    return rawDeliveries ? rawDeliveries.map(parseDelivery) : [];
+};
+
+export const getDeliveriesByCustomer = async (customerEmail: string): Promise<Delivery[]> => {
+    const allDeliveries = await getDeliveries();
+    return allDeliveries.filter(d => d.customerEmail === customerEmail);
+};
+
+export const createDelivery = async (deliveryData: Omit<Delivery, 'id' | 'createdAt'>): Promise<{ success: boolean; delivery?: Delivery }> => {
+    const result = await postAction<{ success: boolean; delivery?: any }>('createDelivery', deliveryData);
+    if (result.success && result.delivery) {
+        return { ...result, delivery: parseDelivery(result.delivery) };
+    }
+    return result;
+};
+
+export const updateDelivery = async (deliveryId: string, updates: Partial<Omit<Delivery, 'id' | 'customerEmail' | 'createdAt'>>): Promise<{ success: boolean; delivery?: Delivery }> => {
+    const result = await postAction<{ success: boolean; delivery?: any }>('updateDelivery', { deliveryId, updates });
+    if (result.success && result.delivery) {
+        return { ...result, delivery: parseDelivery(result.delivery) };
+    }
+    return result;
+};
+
+export const markDeliveryAsCompleted = async (deliveryId: string, notes?: string): Promise<{ success: boolean; delivery?: Delivery }> => {
+    const result = await postAction<{ success: boolean; delivery?: any }>('markDeliveryAsCompleted', { 
+        deliveryId, 
+        notes,
+        deliveredAt: new Date().toISOString()
+    });
+    if (result.success && result.delivery) {
+        return { ...result, delivery: parseDelivery(result.delivery) };
+    }
+    return result;
+};
+
+export const deleteDelivery = async (deliveryId: string): Promise<{ success: boolean }> => {
+    return postAction('deleteDelivery', { deliveryId });
+};
+
+export const updateDeliveryStatuses = async (): Promise<{ success: boolean; updated: number }> => {
+    return postAction('updateDeliveryStatuses', {});
 };
