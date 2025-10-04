@@ -1,5 +1,6 @@
 import React from 'react';
 import type { AugmentedCustomer, RemainingClassesInfo } from './CrmDashboard';
+import type { Delivery } from '../../types';
 import { GiftIcon } from '../icons/GiftIcon';
 
 interface CustomerListProps {
@@ -35,6 +36,39 @@ const StatusTag: React.FC<{ info: RemainingClassesInfo }> = ({ info }) => {
     return null;
 }
 
+const DeliveryBadges: React.FC<{ deliveries?: Delivery[] }> = ({ deliveries }) => {
+    if (!deliveries || deliveries.length === 0) {
+        return null;
+    }
+
+    const pendingCount = deliveries.filter(d => d.status === 'pending').length;
+    const overdueCount = deliveries.filter(d => {
+        const today = new Date();
+        const scheduledDate = new Date(d.scheduledDate);
+        return d.status === 'pending' && scheduledDate < today;
+    }).length;
+    const completedCount = deliveries.filter(d => d.status === 'completed').length;
+
+    return (
+        <div className="flex items-center gap-1 ml-2">
+            {overdueCount > 0 && (
+                <span className="px-1.5 py-0.5 text-xs font-bold rounded-full bg-red-100 text-red-800">
+                    {overdueCount} vencida{overdueCount > 1 ? 's' : ''}
+                </span>
+            )}
+            {pendingCount > 0 && (
+                <span className="px-1.5 py-0.5 text-xs font-bold rounded-full bg-yellow-100 text-yellow-800">
+                    {pendingCount} pendiente{pendingCount > 1 ? 's' : ''}
+                </span>
+            )}
+            {completedCount > 0 && (
+                <span className="px-1.5 py-0.5 text-xs font-bold rounded-full bg-green-100 text-green-800">
+                    {completedCount} entregada{completedCount > 1 ? 's' : ''}
+                </span>
+            )}
+        </div>
+    );
+};
 
 export const CustomerList: React.FC<CustomerListProps> = ({ customers, onSelectCustomer }) => {
     return (
@@ -45,6 +79,7 @@ export const CustomerList: React.FC<CustomerListProps> = ({ customers, onSelectC
                         <tr>
                             <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Cliente</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Estado</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Entregas</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider">Reservas</th>
                             <th className="px-6 py-3 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider">Total gastado</th>
                         </tr>
@@ -60,11 +95,15 @@ export const CustomerList: React.FC<CustomerListProps> = ({ customers, onSelectC
                                                 <GiftIcon className="w-4 h-4 text-rose-500" />
                                             </span>
                                         )}
+                                        <DeliveryBadges deliveries={customer.deliveries} />
                                     </div>
                                     <div className="text-sm text-brand-secondary">{customer.userInfo.email}</div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     {customer.remainingClassesInfo && <StatusTag info={customer.remainingClassesInfo} />}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-text">
+                                    {customer.deliveries?.length || 0} entrega{(customer.deliveries?.length || 0) !== 1 ? 's' : ''}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-text">
                                     {customer.totalBookings}
@@ -75,7 +114,7 @@ export const CustomerList: React.FC<CustomerListProps> = ({ customers, onSelectC
                             </tr>
                         )) : (
                             <tr>
-                                <td colSpan={4} className="text-center py-8 text-brand-secondary">
+                                <td colSpan={5} className="text-center py-8 text-brand-secondary">
                                     No hay clientes registrados
                                 </td>
                             </tr>

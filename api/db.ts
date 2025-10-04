@@ -101,16 +101,48 @@ const SCHEMA_SQL = `
         requested_at TIMESTAMPTZ DEFAULT NOW(),
         processed_at TIMESTAMPTZ
     );
+    
+    CREATE TABLE IF NOT EXISTS deliveries (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        customer_email VARCHAR(255) NOT NULL,
+        description TEXT NOT NULL,
+        scheduled_date DATE NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'overdue')),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        completed_at TIMESTAMPTZ,
+        delivered_at TIMESTAMPTZ,
+        notes TEXT,
+        photos JSONB DEFAULT '[]'::jsonb
+    );
+    
+    CREATE INDEX IF NOT EXISTS idx_deliveries_customer_email ON deliveries(customer_email);
+    CREATE INDEX IF NOT EXISTS idx_deliveries_status ON deliveries(status);
+    CREATE INDEX IF NOT EXISTS idx_deliveries_scheduled_date ON deliveries(scheduled_date);
 `;
 
 export async function ensureTablesExist() {
-    await sql.query(SCHEMA_SQL);
+    try {
+        await sql.query(SCHEMA_SQL);
+    } catch (error: any) {
+        // Ignore duplicate constraint errors as they indicate the tables already exist
+        if (error.code !== '23505') {
+            throw error;
+        }
+        console.log('Tables already exist, continuing with column checks...');
+    }
+    
     try {
       await sql`ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS tentative_time VARCHAR(10);`;
       await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS min_participants INT;`;
       await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS price_per_person NUMERIC(10, 2);`;
       await sql`ALTER TABLE bookings ALTER COLUMN payment_details SET DEFAULT '[]'::jsonb;`;
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS is_paid BOOLEAN DEFAULT false;`;
+      // Add participants and client_note columns to bookings table
+      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS participants INT DEFAULT 1;`;
+      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS client_note TEXT;`;
+      // Add new columns to deliveries table
+      await sql`ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMPTZ;`;
+      await sql`ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS photos JSONB DEFAULT '[]'::jsonb;`;
       console.log("Migration check: new columns ensured.");
     } catch (error) {
       console.error("Error during migration:", error);

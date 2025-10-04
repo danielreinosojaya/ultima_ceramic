@@ -3,9 +3,20 @@ function toCamelCase(obj: any): any {
     if (Array.isArray(obj)) {
         return obj.map(v => toCamelCase(v));
     } else if (obj !== null && typeof obj === 'object') {
+        // Handle Date objects specially
+        if (obj instanceof Date) {
+            return obj.toISOString().split('T')[0]; // Return YYYY-MM-DD format
+        }
         return Object.keys(obj).reduce((acc, key) => {
             const camelKey = key.replace(/_([a-z])/g, g => g[1].toUpperCase());
-            acc[camelKey] = toCamelCase(obj[key]);
+            let value = obj[key];
+            // Convert Date objects to strings
+            if (value instanceof Date) {
+                value = value.toISOString().split('T')[0];
+            } else {
+                value = toCamelCase(value);
+            }
+            acc[camelKey] = value;
             return acc;
         }, {} as any);
     }
@@ -24,7 +35,9 @@ import type {
     AddBookingResult,
     AutomationSettings,
     BankDetails,
-    TimeSlot
+    TimeSlot,
+    Delivery,
+    DeliveryStatus
 } from '../types';
 
 // Función auxiliar para parsear fechas de forma segura
@@ -157,6 +170,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).end();
     }
 
+    // Ensure database tables exist (including the deliveries table)
+    try {
+        await ensureTablesExist();
+    } catch (error) {
+        console.log('Table creation encountered an issue, but continuing...', error);
+    }
+
     try {
         if (req.method === 'GET') {
             await handleGet(req, res);
@@ -231,6 +251,11 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                 case 'bookings': {
                     const { rows: bookings } = await sql`SELECT * FROM bookings ORDER BY created_at DESC`;
                     data = bookings.map(parseBookingFromDB);
+                    break;
+                }
+                case 'deliveries': {
+                    const { rows: deliveries } = await sql`SELECT * FROM deliveries ORDER BY scheduled_date ASC, created_at DESC`;
+                    data = deliveries.map(toCamelCase);
                     break;
                 }
             default:
@@ -680,6 +705,101 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 return res.status(400).json({ error: bookingResult.message || 'Failed to add booking.' });
             }
             return res.status(200).json(bookingResult);
+        }
+        case 'createDelivery': {
+            const { customerEmail, description, scheduledDate, status = 'pending', notes, photos } = req.body;
+            
+            if (!customerEmail || !description || !scheduledDate) {
+                return res.status(400).json({ error: 'customerEmail, description, and scheduledDate are required.' });
+            }
+            
+            // Convert photos array to JSON string for storage
+            const photosJson = photos && Array.isArray(photos) ? JSON.stringify(photos) : null;
+            
+            const { rows: [newDelivery] } = await sql`
+                INSERT INTO deliveries (customer_email, description, scheduled_date, status, notes, photos)
+                VALUES (${customerEmail}, ${description}, ${scheduledDate}, ${status}, ${notes || null}, ${photosJson})
+                RETURNING *;
+            `;
+            
+            return res.status(200).json({ success: true, delivery: toCamelCase(newDelivery) });
+        }
+        case 'updateDelivery': {
+            const { deliveryId, updates } = req.body;
+            if (!deliveryId || !updates) {
+                return res.status(400).json({ error: 'deliveryId and updates are required.' });
+            }
+            const setClause = Object.entries(updates)
+                .filter(([key, value]) => value !== undefined)
+                .map(([key, value]) => {
+                    const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+                    return `${snakeKey} = $${Object.keys(updates).indexOf(key) + 2}`;
+                })
+                .join(', ');
+            
+            if (!setClause) {
+                return res.status(400).json({ error: 'No valid updates provided.' });
+            }
+            
+            const values = [deliveryId, ...Object.values(updates).filter(v => v !== undefined)];
+            const { rows: [updatedDelivery] } = await sql.query(
+                `UPDATE deliveries SET ${setClause} WHERE id = $1 RETURNING *`,
+                values
+            );
+            
+            if (!updatedDelivery) {
+                return res.status(404).json({ error: 'Delivery not found.' });
+            }
+            
+            return res.status(200).json({ success: true, delivery: toCamelCase(updatedDelivery) });
+        }
+        case 'markDeliveryAsCompleted': {
+            const { deliveryId, notes, deliveredAt } = req.body;
+            if (!deliveryId) {
+                return res.status(400).json({ error: 'deliveryId is required.' });
+            }
+            const { rows: [completedDelivery] } = await sql`
+                UPDATE deliveries 
+                SET status = 'completed', 
+                    completed_at = NOW(), 
+                    delivered_at = ${deliveredAt || 'NOW()'},
+                    notes = ${notes || null}
+                WHERE id = ${deliveryId}
+                RETURNING *;
+            `;
+            
+            if (!completedDelivery) {
+                return res.status(404).json({ error: 'Delivery not found.' });
+            }
+            
+            return res.status(200).json({ success: true, delivery: toCamelCase(completedDelivery) });
+        }
+        case 'deleteDelivery': {
+            const { deliveryId } = req.body;
+            if (!deliveryId) {
+                return res.status(400).json({ error: 'deliveryId is required.' });
+            }
+            const { rowCount } = await sql`DELETE FROM deliveries WHERE id = ${deliveryId}`;
+            
+            if (rowCount === 0) {
+                return res.status(404).json({ error: 'Delivery not found.' });
+            }
+            
+            return res.status(200).json({ success: true });
+        }
+        case 'updateDeliveryStatuses': {
+            // Update overdue deliveries
+            const { rows: overdueDeliveries } = await sql`
+                UPDATE deliveries 
+                SET status = 'overdue' 
+                WHERE status = 'pending' AND scheduled_date < CURRENT_DATE
+                RETURNING id;
+            `;
+            
+            return res.status(200).json({ 
+                success: true, 
+                updated: overdueDeliveries.length 
+            });
         }
         default:
             return res.status(400).json({ error: `Unknown action: ${action}` });
