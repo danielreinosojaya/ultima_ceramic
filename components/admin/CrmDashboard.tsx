@@ -5,6 +5,7 @@ import { CustomerList } from './CustomerList';
 import { CustomerDetailView } from './CustomerDetailView';
 import { UserGroupIcon } from '../icons/UserGroupIcon';
 import { OpenStudioView } from './OpenStudioView';
+import { DeliveryMetrics } from './DeliveryMetrics';
 
 interface NavigationState {
     tab: AdminTab;
@@ -108,6 +109,7 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({ navigateToEmail, bookings, 
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterByClassesRemaining, setFilterByClassesRemaining] = useState<FilterType>('all');
+    const [deliveryFilter, setDeliveryFilter] = useState<'all' | 'with-pending' | 'with-overdue' | 'with-completed' | 'none'>('all');
     const [activeTab, setActiveTab] = useState<'all' | 'openStudio'>('all');
     // FIX: Move these hooks to top level to avoid hook order errors
     const [studioFilter, setStudioFilter] = useState<'all' | 'active' | 'expiring' | 'unpaid'>('all');
@@ -116,8 +118,9 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({ navigateToEmail, bookings, 
     // CORRECCIÓN: El hook de efecto que causa el bucle infinito en CrmDashboard.tsx:162 se debe
     // a una actualización de estado sin dependencias adecuadas. La lógica de carga de datos
     // se ha movido a una función `useCallback` que se ejecutará solo cuando `bookings` cambie.
-    const loadCustomers = useCallback(() => {
-        setCustomers(dataService.getCustomers(bookings));
+    const loadCustomers = useCallback(async () => {
+        const customersWithDeliveries = await dataService.getCustomersWithDeliveries(bookings);
+        setCustomers(customersWithDeliveries);
         setLoading(false);
     }, [bookings]);
 
@@ -144,12 +147,13 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({ navigateToEmail, bookings, 
     // Se ha corregido la lógica para que solo se actualice si el cliente seleccionado es diferente.
     useEffect(() => {
       if (selectedCustomer) {
-        const updatedCustomer = dataService.getCustomers(bookings).find(c => c.email === selectedCustomer.email);
+        // Use the current customers state instead of fetching again
+        const updatedCustomer = customers.find(c => c.email === selectedCustomer.email);
         if (updatedCustomer && JSON.stringify(updatedCustomer) !== JSON.stringify(selectedCustomer)) {
             setSelectedCustomer(updatedCustomer);
         }
       }
-    }, [bookings, selectedCustomer]);
+    }, [bookings, selectedCustomer, customers]);
 
 
     const augmentedAndFilteredCustomers = useMemo((): AugmentedCustomer[] => {
@@ -170,6 +174,35 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({ navigateToEmail, bookings, 
                 return false;
             });
         }
+
+        // Apply delivery filter
+        if (deliveryFilter !== 'all') {
+            filtered = filtered.filter(c => {
+                const deliveries = c.deliveries || [];
+                const today = new Date();
+                
+                if (deliveryFilter === 'none') {
+                    return deliveries.length === 0;
+                }
+                
+                if (deliveryFilter === 'with-pending') {
+                    return deliveries.some(d => d.status === 'pending');
+                }
+                
+                if (deliveryFilter === 'with-overdue') {
+                    return deliveries.some(d => {
+                        const scheduledDate = new Date(d.scheduledDate);
+                        return d.status === 'pending' && scheduledDate < today;
+                    });
+                }
+                
+                if (deliveryFilter === 'with-completed') {
+                    return deliveries.some(d => d.status === 'completed');
+                }
+                
+                return true;
+            });
+        }
         
         if (searchTerm) {
             const lowercasedTerm = searchTerm.toLowerCase();
@@ -182,7 +215,7 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({ navigateToEmail, bookings, 
         }
 
         return filtered;
-    }, [customers, searchTerm, filterByClassesRemaining]);
+    }, [customers, searchTerm, filterByClassesRemaining, deliveryFilter]);
 
     const handleSelectCustomer = (customer: Customer) => {
         setSelectedCustomer(customer);
@@ -253,6 +286,7 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({ navigateToEmail, bookings, 
                 
                 {activeTab === 'all' && (
                     <div className="animate-fade-in">
+                        <DeliveryMetrics customers={customers} />
                         <div className="md:flex justify-between items-center mb-4 gap-4">
                             <input 
                                 type="text"
@@ -261,12 +295,47 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({ navigateToEmail, bookings, 
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="w-full max-w-sm px-4 py-2 border border-gray-300 rounded-lg focus:ring-brand-primary focus:border-brand-primary"
                             />
-                            <div className="bg-white p-2 rounded-lg border border-gray-200 flex items-center gap-2 flex-wrap mt-4 md:mt-0">
-                                <span className="text-sm font-bold text-brand-secondary mr-2">Filtrar:</span>
-                                <FilterButton filter="all">Todos</FilterButton>
-                                <FilterButton filter="2-left">2 clases restantes</FilterButton>
-                                <FilterButton filter="1-left">1 clase restante</FilterButton>
-                                <FilterButton filter="completed">Completados</FilterButton>
+                            <div className="flex flex-col gap-2 mt-4 md:mt-0">
+                                <div className="bg-white p-2 rounded-lg border border-gray-200 flex items-center gap-2 flex-wrap">
+                                    <span className="text-sm font-bold text-brand-secondary mr-2">Clases:</span>
+                                    <FilterButton filter="all">Todos</FilterButton>
+                                    <FilterButton filter="2-left">2 clases restantes</FilterButton>
+                                    <FilterButton filter="1-left">1 clase restante</FilterButton>
+                                    <FilterButton filter="completed">Completados</FilterButton>
+                                </div>
+                                <div className="bg-white p-2 rounded-lg border border-gray-200 flex items-center gap-2 flex-wrap">
+                                    <span className="text-sm font-bold text-brand-secondary mr-2">Entregas:</span>
+                                    <button
+                                        onClick={() => setDeliveryFilter('all')}
+                                        className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${deliveryFilter === 'all' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`}
+                                    >
+                                        Todos
+                                    </button>
+                                    <button
+                                        onClick={() => setDeliveryFilter('with-pending')}
+                                        className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${deliveryFilter === 'with-pending' ? 'bg-yellow-500 text-white' : 'bg-yellow-100 hover:bg-yellow-200 text-yellow-800'}`}
+                                    >
+                                        Con pendientes
+                                    </button>
+                                    <button
+                                        onClick={() => setDeliveryFilter('with-overdue')}
+                                        className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${deliveryFilter === 'with-overdue' ? 'bg-red-500 text-white' : 'bg-red-100 hover:bg-red-200 text-red-800'}`}
+                                    >
+                                        Con vencidas
+                                    </button>
+                                    <button
+                                        onClick={() => setDeliveryFilter('with-completed')}
+                                        className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${deliveryFilter === 'with-completed' ? 'bg-green-500 text-white' : 'bg-green-100 hover:bg-green-200 text-green-800'}`}
+                                    >
+                                        Con completadas
+                                    </button>
+                                    <button
+                                        onClick={() => setDeliveryFilter('none')}
+                                        className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${deliveryFilter === 'none' ? 'bg-gray-500 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-800'}`}
+                                    >
+                                        Sin entregas
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <CustomerList customers={augmentedAndFilteredCustomers} onSelectCustomer={handleSelectCustomer} />
