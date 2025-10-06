@@ -1,0 +1,3122 @@
+import React, { useState, useEffect } from 'react';import React, { useState, useEffect } from 'react';import React, { useState, useEffect } from 'react';import React, { useState, useEffect } from 'react';import React, { useState, useEffect } from 'react';
+
+import type { 
+
+    Booking,import type { 
+
+    InvoiceRequest,
+
+    ClassPackage,    Booking,import type { 
+
+    Delivery,
+
+    PaymentDetails    InvoiceRequest,
+
+} from '../../types';
+
+import { ActivePackagesDisplay } from './ActivePackagesDisplay';    ClassPackage,    Booking,import type { import type { 
+
+import { AcceptPaymentModal } from './AcceptPaymentModal';
+
+import { InvoiceReminderModal } from './InvoiceReminderModal';    Delivery,
+
+import { NewDeliveryModal } from './NewDeliveryModal';
+
+import { CustomerAttendanceHistory } from './CustomerAttendanceHistory';    PaymentDetails    InvoiceRequest,
+
+import { 
+
+    MapIcon,} from '../../types';
+
+    PhoneIcon,
+
+    CurrencyDollarIcon,import { ActivePackagesDisplay } from './ActivePackagesDisplay';    ClassPackage,    Booking,    Booking,
+
+    TrashIcon,
+
+    CalendarIconimport { AcceptPaymentModal } from './AcceptPaymentModal';
+
+} from '@heroicons/react/24/outline';
+
+import * as dataService from '../../services/dataService';import { InvoiceReminderModal } from './InvoiceReminderModal';    Delivery,
+
+
+
+interface UserInfo {import { NewDeliveryModal } from './NewDeliveryModal';
+
+    firstName: string;
+
+    lastName: string;import { CustomerAttendanceHistory } from './CustomerAttendanceHistory';    PaymentDetails    InvoiceRequest,    InvoiceRequest,
+
+    email: string;
+
+    phone: string;import { 
+
+    countryCode: string;
+
+    birthday: string | null;    MapIcon,} from '../../types';
+
+}
+
+    PhoneIcon,
+
+interface Props {
+
+    customer: {    CurrencyDollarIcon,import { ActivePackagesDisplay } from './ActivePackagesDisplay';    ClassPackage,    ClassPackage,
+
+        id: string;
+
+        name: string;    TrashIcon,
+
+        email: string;
+
+        phone?: string;    CalendarIconimport { AcceptPaymentModal } from './AcceptPaymentModal';
+
+        bookings: Booking[];
+
+        userInfo?: Partial<UserInfo>;} from '@heroicons/react/24/outline';
+
+        packages?: ClassPackage[];
+
+    } | null;import * as dataService from '../../services/dataService';import { InvoiceReminderModal } from './InvoiceReminderModal';    Delivery,    Delivery,
+
+    onBack: () => void;
+
+    onDataChange: () => void;
+
+    invoiceRequests: InvoiceRequest[];
+
+    setNavigateTo: (path: string) => void;interface UserInfo {import { NewDeliveryModal } from './NewDeliveryModal';
+
+}
+
+    firstName: string;
+
+interface ComponentState {
+
+    activeTab: string;    lastName: string;import { CustomerAttendanceHistory } from './CustomerAttendanceHistory';    PaymentDetails    PaymentDetails
+
+    bookingToPay: Booking | null;
+
+    bookingForReminder: Booking | null;    email: string;
+
+    isInvoiceReminderOpen: boolean;
+
+    currentPage: number;    phone: string;import { 
+
+    deliveriesPerPage: number;
+
+    deliveries: Delivery[];    countryCode: string;
+
+    searchTerm: string;
+
+    deliveryToDelete: Delivery | null;    birthday: string | null;    MapIcon,} from '../../types';} from '../../types';
+
+    isNewDeliveryModalOpen: boolean;
+
+    isViewingAttendance: boolean;}
+
+    editMode: boolean;
+
+    editInfo: UserInfo;    PhoneIcon,
+
+}
+
+interface Props {
+
+const formatDate = (dateInput: Date | string | undefined | null, options?: Intl.DateTimeFormatOptions): string => {
+
+    if (!dateInput) return 'N/A';    customer: {    CurrencyDollarIcon,import { ActivePackagesDisplay } from './ActivePackagesDisplay';import { ActivePackagesDisplay } from './ActivePackagesDisplay';
+
+    try {
+
+        return new Date(dateInput).toLocaleDateString(undefined, options);        id: string;
+
+    } catch {
+
+        return 'N/A';        name: string;    TrashIcon,
+
+    }
+
+};        email: string;
+
+
+
+const getInitialState = (customer: Props['customer']): ComponentState => {        phone?: string;    CalendarIconimport { AcceptPaymentModal } from './AcceptPaymentModal';import { AcceptPaymentModal } from './AcceptPaymentModal';
+
+    const safeCustomer = customer || { userInfo: {}, email: '', name: '', id: '', bookings: [] };
+
+    return {        bookings: Booking[];
+
+        activeTab: 'history',
+
+        bookingToPay: null,        userInfo?: Partial<UserInfo>;} from '@heroicons/react/24/outline';
+
+        bookingForReminder: null,
+
+        isInvoiceReminderOpen: false,        packages?: ClassPackage[];
+
+        currentPage: 1,
+
+        deliveriesPerPage: 5,    } | null;import * as dataService from '../../services/dataService';import { InvoiceReminderModal } from './InvoiceReminderModal';import { InvoiceReminderModal } from './InvoiceReminderModal';
+
+        deliveries: [],
+
+        searchTerm: '',    onBack: () => void;
+
+        deliveryToDelete: null,
+
+        isNewDeliveryModalOpen: false,    onDataChange: () => void;
+
+        isViewingAttendance: false,
+
+        editMode: false,    invoiceRequests: InvoiceRequest[];
+
+        editInfo: {
+
+            firstName: safeCustomer.userInfo?.firstName || '',    setNavigateTo: (path: string) => void;interface UserInfo {import { NewDeliveryModal } from './NewDeliveryModal';import { NewDeliveryModal } from './NewDeliveryModal';
+
+            lastName: safeCustomer.userInfo?.lastName || '',
+
+            email: safeCustomer.userInfo?.email || safeCustomer.email || '',}
+
+            phone: safeCustomer.userInfo?.phone || safeCustomer.phone || '',
+
+            countryCode: safeCustomer.userInfo?.countryCode || '',    firstName: string;
+
+            birthday: safeCustomer.userInfo?.birthday || null
+
+        }interface ComponentState {
+
+    };
+
+};    activeTab: string;    lastName: string;import { CustomerAttendanceHistory } from './CustomerAttendanceHistory';import { CustomerAttendanceHistory } from './CustomerAttendanceHistory';
+
+
+
+export const CustomerDetailView: React.FC<Props> = ({    bookingToPay: Booking | null;
+
+    customer,
+
+    onBack,    bookingForReminder: Booking | null;    email: string;
+
+    onDataChange,
+
+    invoiceRequests,    isInvoiceReminderOpen: boolean;
+
+    setNavigateTo
+
+}) => {    currentPage: number;    phone: string;import { import { 
+
+    const [state, setState] = useState<ComponentState>(() => getInitialState(customer));
+
+    deliveriesPerPage: number;
+
+    if (!customer) {
+
+        return (    deliveries: Delivery[];    countryCode: string;
+
+            <div className="flex items-center justify-center h-screen">
+
+                <div className="text-lg text-gray-600">Loading customer data...</div>    searchTerm: string;
+
+            </div>
+
+        );    deliveryToDelete: Delivery | null;    birthday: string | null;    MapIcon,    MapIcon,
+
+    }
+
+    isNewDeliveryModalOpen: boolean;
+
+    const handleTabChange = (tab: string) => {
+
+        setState(prev => ({ ...prev, activeTab: tab }));    isViewingAttendance: boolean;}
+
+    };
+
+    editMode: boolean;
+
+    const handlePaymentClick = (booking: Booking) => {
+
+        setState(prev => ({ ...prev, bookingToPay: booking }));    editInfo: UserInfo;    PhoneIcon,    PhoneIcon,
+
+    };
+
+}
+
+    const handlePaymentClose = () => {
+
+        setState(prev => ({ ...prev, bookingToPay: null }));interface Props {
+
+    };
+
+const formatDate = (dateInput: Date | string | undefined | null, options?: Intl.DateTimeFormatOptions): string => {
+
+    const handleReminderClick = (booking: Booking) => {
+
+        setState(prev => ({ ...prev, bookingForReminder: booking }));    if (!dateInput) return 'N/A';    customer: {    CurrencyDollarIcon,    CurrencyDollarIcon,
+
+    };
+
+    try {
+
+    const handleReminderClose = () => {
+
+        setState(prev => ({ ...prev, bookingForReminder: null }));        return new Date(dateInput).toLocaleDateString(undefined, options);        id: string;
+
+    };
+
+    } catch {
+
+    const handleCreateDelivery = async (deliveryData: Omit<Delivery, 'id' | 'createdAt'>) => {
+
+        if (!customer?.email) {        return 'N/A';        name: string;    TrashIcon,    TrashIcon,
+
+            console.error('Customer information is missing');
+
+            return;    }
+
+        }
+
+};        email: string;
+
+        try {
+
+            const newDelivery = await dataService.createDelivery({
+
+                ...deliveryData,
+
+                customerEmail: customer.userInfo?.email || customer.emailconst getInitialState = (customer: Props['customer']): ComponentState => {        phone?: string;    CalendarIcon    CalendarIcon
+
+            });
+
+                const safeCustomer = customer || { userInfo: {}, email: '', name: '', id: '', bookings: [] };
+
+            if (newDelivery) {
+
+                setState(prev => ({    return {        bookings: Booking[];
+
+                    ...prev,
+
+                    deliveries: [...(prev.deliveries || []), newDelivery],        activeTab: 'history',
+
+                    isNewDeliveryModalOpen: false
+
+                }));        bookingToPay: null,        userInfo?: Partial<UserInfo>;} from '@heroicons/react/24/outline';} from '@heroicons/react/24/outline';
+
+                onDataChange();
+
+            }        bookingForReminder: null,
+
+        } catch (error) {
+
+            console.error('Error creating delivery:', error);        isInvoiceReminderOpen: false,        packages?: ClassPackage[];
+
+        }
+
+    };        currentPage: 1,
+
+
+
+    const handleDeleteDelivery = async (deliveryId: string) => {        deliveriesPerPage: 5,    } | null;import * as dataService from '../../services/dataService';import * as dataService from '../../services/dataService';
+
+        try {
+
+            const result = await dataService.deleteDelivery(deliveryId);        deliveries: [],
+
+            if (result?.success) {
+
+                setState(prev => ({        searchTerm: '',    onBack: () => void;
+
+                    ...prev,
+
+                    deliveries: (prev.deliveries || []).filter(d => d?.id !== deliveryId),        deliveryToDelete: null,
+
+                    deliveryToDelete: null
+
+                }));        isNewDeliveryModalOpen: false,    onDataChange: () => void;
+
+                onDataChange();
+
+            }        isViewingAttendance: false,
+
+        } catch (error) {
+
+            console.error('Error deleting delivery:', error);        editMode: false,    invoiceRequests: InvoiceRequest[];
+
+        }
+
+    };        editInfo: {
+
+
+
+    const handleEditModeToggle = () => {            firstName: safeCustomer.userInfo?.firstName || '',    setNavigateTo: (path: string) => void;interface UserInfo {interface UserInfo {
+
+        setState(prev => ({ ...prev, editMode: !prev.editMode }));
+
+    };            lastName: safeCustomer.userInfo?.lastName || '',
+
+
+
+    const handleEditInfoChange = (field: keyof UserInfo, value: string) => {            email: safeCustomer.userInfo?.email || safeCustomer.email || '',}
+
+        setState(prev => ({
+
+            ...prev,            phone: safeCustomer.userInfo?.phone || safeCustomer.phone || '',
+
+            editInfo: {
+
+                ...prev.editInfo,            countryCode: safeCustomer.userInfo?.countryCode || '',    firstName: string;    firstName: string;
+
+                [field]: value
+
+            }            birthday: safeCustomer.userInfo?.birthday || null
+
+        }));
+
+    };        }interface ComponentState {
+
+
+
+    const handleSaveUserInfo = async () => {    };
+
+        if (!customer?.id) return;
+
+        try {};    activeTab: string;    lastName: string;    lastName: string;
+
+            await dataService.updateCustomerInfo(customer.id, state.editInfo);
+
+            setState(prev => ({ ...prev, editMode: false }));
+
+            onDataChange();
+
+        } catch (error) {export const CustomerDetailView: React.FC<Props> = ({    bookingToPay: Booking | null;
+
+            console.error('Error updating customer info:', error);
+
+        }    customer,
+
+    };
+
+    onBack,    bookingForReminder: Booking | null;    email: string;    email: string;
+
+    useEffect(() => {
+
+        if (!customer?.email) {    onDataChange,
+
+            setState(prev => ({ ...prev, deliveries: [] }));
+
+            return;    invoiceRequests,    isInvoiceReminderOpen: boolean;
+
+        }
+
+    setNavigateTo
+
+        const loadDeliveries = async () => {
+
+            try {}) => {    currentPage: number;    phone: string;    phone: string;
+
+                const deliveries = await dataService.getDeliveriesByCustomer(customer.email);
+
+                setState(prev => ({ ...prev, deliveries: deliveries || [] }));    const [state, setState] = useState<ComponentState>(() => getInitialState(customer));
+
+            } catch (error) {
+
+                console.error('Error loading deliveries:', error);    deliveriesPerPage: number;
+
+                setState(prev => ({ ...prev, deliveries: [] }));
+
+            }    if (!customer) {
+
+        };
+
+        return (    deliveries: Delivery[];    countryCode: string;    countryCode: string;
+
+        loadDeliveries();
+
+    }, [customer?.email]);            <div className="flex items-center justify-center h-screen">
+
+
+
+    const renderContent = () => {                <div className="text-lg text-gray-600">Loading customer data...</div>    searchTerm: string;
+
+        switch (state.activeTab) {
+
+            case 'history':            </div>
+
+                return (
+
+                    <div className="space-y-4">        );    deliveryToDelete: Delivery | null;    birthday: string | null;    birthday: string | null;
+
+                        <div className="flex justify-between items-center">
+
+                            <h3 className="text-lg font-medium">Booking History</h3>    }
+
+                            <button
+
+                                onClick={() => setState(prev => ({ ...prev, isViewingAttendance: !prev.isViewingAttendance }))}    isNewDeliveryModalOpen: boolean;
+
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+
+                            >    const handleTabChange = (tab: string) => {
+
+                                {state.isViewingAttendance ? 'View Bookings' : 'View Attendance'}
+
+                            </button>        setState(prev => ({ ...prev, activeTab: tab }));    isViewingAttendance: boolean;}}
+
+                        </div>
+
+                        {state.isViewingAttendance ? (    };
+
+                            <CustomerAttendanceHistory customerId={customer.id} />
+
+                        ) : (    editMode: boolean;
+
+                            <div className="bg-white shadow overflow-hidden sm:rounded-md">
+
+                                <ul className="divide-y divide-gray-200">    const handlePaymentClick = (booking: Booking) => {
+
+                                    {(customer.bookings || []).map((booking) => (
+
+                                        <li key={booking.id} className="px-4 py-4 sm:px-6">        setState(prev => ({ ...prev, bookingToPay: booking }));    editInfo: UserInfo;
+
+                                            <div className="flex items-center justify-between">
+
+                                                <div className="flex-1">    };
+
+                                                    <p className="text-sm font-medium text-gray-900">
+
+                                                        {booking.className || 'Class'}}
+
+                                                    </p>
+
+                                                    <p className="mt-2 flex items-center text-sm text-gray-500">    const handlePaymentClose = () => {
+
+                                                        <CalendarIcon className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" />
+
+                                                        {formatDate(booking.date)}        setState(prev => ({ ...prev, bookingToPay: null }));interface Props {interface Props {
+
+                                                    </p>
+
+                                                    <p className="mt-2 flex items-center text-sm text-gray-500">    };
+
+                                                        <CalendarIcon className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" />
+
+                                                        {booking.status}const formatDate = (dateInput: Date | string | undefined | null, options?: Intl.DateTimeFormatOptions): string => {
+
+                                                    </p>
+
+                                                </div>    const handleReminderClick = (booking: Booking) => {
+
+                                                <div className="ml-4 flex-shrink-0 space-x-2">
+
+                                                    {booking.status !== 'paid' && (        setState(prev => ({ ...prev, bookingForReminder: booking }));    if (!dateInput) return 'N/A';    customer: {    customer: {
+
+                                                        <>
+
+                                                            <button    };
+
+                                                                onClick={() => handlePaymentClick(booking)}
+
+                                                                className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"    try {
+
+                                                            >
+
+                                                                <CurrencyDollarIcon className="h-4 w-4 mr-1" />    const handleReminderClose = () => {
+
+                                                                Accept Payment
+
+                                                            </button>        setState(prev => ({ ...prev, bookingForReminder: null }));        return new Date(dateInput).toLocaleDateString(undefined, options);        id: string;        id: string;
+
+                                                            <button
+
+                                                                onClick={() => handleReminderClick(booking)}    };
+
+                                                                className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+
+                                                            >    } catch {
+
+                                                                Send Reminder
+
+                                                            </button>    const handleCreateDelivery = async (deliveryData: Omit<Delivery, 'id' | 'createdAt'>) => {
+
+                                                        </>
+
+                                                    )}        if (!customer?.email) {        return 'N/A';        name: string;        name: string;
+
+                                                </div>
+
+                                            </div>            console.error('Customer information is missing');
+
+                                        </li>
+
+                                    ))}            return;    }
+
+                                </ul>
+
+                            </div>        }
+
+                        )}
+
+                    </div>};        email: string;        email: string;
+
+                );
+
+            case 'deliveries':        try {
+
+                return (
+
+                    <div className="space-y-4">            const newDelivery = await dataService.createDelivery({
+
+                        <div className="flex justify-between items-center">
+
+                            <h3 className="text-lg font-medium">Deliveries</h3>                ...deliveryData,
+
+                            <button
+
+                                onClick={() => setState(prev => ({ ...prev, isNewDeliveryModalOpen: true }))}                customerEmail: customer.userInfo?.email || customer.emailconst getInitialState = (customer: Props['customer']): ComponentState => {        phone?: string;        phone?: string;
+
+                                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
+
+                            >            });
+
+                                New Delivery
+
+                            </button>                const safeCustomer = customer || { userInfo: {}, email: '', name: '', id: '', bookings: [] };
+
+                        </div>
+
+                        <div className="bg-white shadow overflow-hidden sm:rounded-md">            if (newDelivery) {
+
+                            <ul className="divide-y divide-gray-200">
+
+                                {state.deliveries.map((delivery) => (                setState(prev => ({    return {        bookings: Booking[];        bookings: Booking[];
+
+                                    <li key={delivery.id} className="px-4 py-4 sm:px-6">
+
+                                        <div className="flex items-center justify-between">                    ...prev,
+
+                                            <div className="flex-1">
+
+                                                <p className="text-sm font-medium text-gray-900">                    deliveries: [...(prev.deliveries || []), newDelivery],        activeTab: 'history',
+
+                                                    {delivery.productName}
+
+                                                </p>                    isNewDeliveryModalOpen: false
+
+                                                <p className="text-sm text-gray-500">
+
+                                                    Quantity: {delivery.quantity}                }));        bookingToPay: null,        userInfo?: Partial<UserInfo>;        userInfo?: Partial<UserInfo>;
+
+                                                </p>
+
+                                                <p className="text-sm text-gray-500">                onDataChange();
+
+                                                    Status: {delivery.status}
+
+                                                </p>            }        bookingForReminder: null,
+
+                                                <p className="text-sm text-gray-500">
+
+                                                    Date: {formatDate(delivery.createdAt)}        } catch (error) {
+
+                                                </p>
+
+                                            </div>            console.error('Error creating delivery:', error);        isInvoiceReminderOpen: false,        packages?: ClassPackage[];        packages?: ClassPackage[];
+
+                                            <div className="ml-4 flex-shrink-0">
+
+                                                <button        }
+
+                                                    onClick={() => setState(prev => ({ ...prev, deliveryToDelete: delivery }))}
+
+                                                    className="text-red-600 hover:text-red-900"    };        currentPage: 1,
+
+                                                >
+
+                                                    <TrashIcon className="h-5 w-5" />
+
+                                                </button>
+
+                                            </div>    const handleDeleteDelivery = async (deliveryId: string) => {        deliveriesPerPage: 5,    } | null;    } | null;
+
+                                        </div>
+
+                                    </li>        try {
+
+                                ))}
+
+                            </ul>            const result = await dataService.deleteDelivery(deliveryId);        deliveries: [],
+
+                        </div>
+
+                    </div>            if (result?.success) {
+
+                );
+
+            case 'packages':                setState(prev => ({        searchTerm: '',    onBack: () => void;    onBack: () => void;
+
+                return (
+
+                    <div className="space-y-4">                    ...prev,
+
+                        <h3 className="text-lg font-medium">Active Packages</h3>
+
+                        <ActivePackagesDisplay                     deliveries: (prev.deliveries || []).filter(d => d?.id !== deliveryId),        deliveryToDelete: null,
+
+                            customerId={customer.id}
+
+                            packages={customer.packages || []}                    deliveryToDelete: null
+
+                        />
+
+                    </div>                }));        isNewDeliveryModalOpen: false,    onDataChange: () => void;    onDataChange: () => void;
+
+                );
+
+            default:                onDataChange();
+
+                return null;
+
+        }            }        isViewingAttendance: false,
+
+    };
+
+        } catch (error) {
+
+    return (
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">            console.error('Error deleting delivery:', error);        editMode: false,    invoiceRequests: InvoiceRequest[];    invoiceRequests: InvoiceRequest[];
+
+            <div className="space-y-6">
+
+                <div className="bg-white shadow sm:rounded-lg">        }
+
+                    <div className="px-4 py-5 sm:p-6">
+
+                        <div className="flex justify-between items-start">    };        editInfo: {
+
+                            <div className="space-y-4">
+
+                                <h2 className="text-2xl font-bold">{customer.name}</h2>
+
+                                <div className="space-y-2">
+
+                                    <p className="flex items-center text-gray-600">    const handleEditModeToggle = () => {            firstName: safeCustomer.userInfo?.firstName || '',    setNavigateTo: (path: string) => void;    setNavigateTo: (path: string) => void;
+
+                                        <MapIcon className="h-5 w-5 mr-2" />
+
+                                        {customer.email}        setState(prev => ({ ...prev, editMode: !prev.editMode }));
+
+                                    </p>
+
+                                    {customer.phone && (    };            lastName: safeCustomer.userInfo?.lastName || '',
+
+                                        <p className="flex items-center text-gray-600">
+
+                                            <PhoneIcon className="h-5 w-5 mr-2" />
+
+                                            {customer.phone}
+
+                                        </p>    const handleEditInfoChange = (field: keyof UserInfo, value: string) => {            email: safeCustomer.userInfo?.email || safeCustomer.email || '',}}
+
+                                    )}
+
+                                </div>        setState(prev => ({
+
+                            </div>
+
+                            <button            ...prev,            phone: safeCustomer.userInfo?.phone || safeCustomer.phone || '',
+
+                                onClick={onBack}
+
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"            editInfo: {
+
+                            >
+
+                                Back                ...prev.editInfo,            countryCode: safeCustomer.userInfo?.countryCode || '',
+
+                            </button>
+
+                        </div>                [field]: value
+
+                    </div>
+
+                </div>            }            birthday: safeCustomer.userInfo?.birthday || null
+
+
+
+                <div className="border-b border-gray-200">        }));
+
+                    <nav className="-mb-px flex space-x-8">
+
+                        {['history', 'deliveries', 'packages'].map((tab) => (    };        }interface ComponentState {interface ComponentState {
+
+                            <button
+
+                                key={tab}
+
+                                onClick={() => handleTabChange(tab)}
+
+                                className={`    const handleSaveUserInfo = async () => {    };
+
+                                    whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
+
+                                    ${state.activeTab === tab        if (!customer?.id) return;
+
+                                        ? 'border-indigo-500 text-indigo-600'
+
+                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'        try {};    activeTab: string;    activeTab: string;
+
+                                    }
+
+                                `}            await dataService.updateCustomerInfo(customer.id, state.editInfo);
+
+                            >
+
+                                {tab.charAt(0).toUpperCase() + tab.slice(1)}            setState(prev => ({ ...prev, editMode: false }));
+
+                            </button>
+
+                        ))}            onDataChange();
+
+                    </nav>
+
+                </div>        } catch (error) {export const CustomerDetailView: React.FC<Props> = ({    bookingToPay: Booking | null;    bookingToPay: Booking | null;
+
+
+
+                {renderContent()}            console.error('Error updating customer info:', error);
+
+            </div>
+
+        }    customer,
+
+            {state.bookingToPay && (
+
+                <AcceptPaymentModal    };
+
+                    booking={state.bookingToPay}
+
+                    onClose={handlePaymentClose}    onBack,    bookingForReminder: Booking | null;
+
+                    onSuccess={() => {
+
+                        handlePaymentClose();    useEffect(() => {
+
+                        onDataChange();
+
+                    }}        if (!customer?.email) {    onDataChange,
+
+                />
+
+            )}            setState(prev => ({ ...prev, deliveries: [] }));
+
+
+
+            {state.bookingForReminder && (            return;    invoiceRequests,    isInvoiceReminderOpen: boolean;    bookingForReminder: Booking | null;    email: string;    email: string;
+
+                <InvoiceReminderModal
+
+                    booking={state.bookingForReminder}        }
+
+                    onClose={handleReminderClose}
+
+                    onSuccess={() => {    setNavigateTo
+
+                        handleReminderClose();
+
+                        onDataChange();        const loadDeliveries = async () => {
+
+                    }}
+
+                />            try {}) => {    currentPage: number;
+
+            )}
+
+                const deliveries = await dataService.getDeliveriesByCustomer(customer.email);
+
+            {state.isNewDeliveryModalOpen && (
+
+                <NewDeliveryModal                setState(prev => ({ ...prev, deliveries: deliveries || [] }));    const [state, setState] = useState<ComponentState>(() => getInitialState(customer));
+
+                    onClose={() => setState(prev => ({ ...prev, isNewDeliveryModalOpen: false }))}
+
+                    onCreate={handleCreateDelivery}            } catch (error) {
+
+                    customerId={customer.id}
+
+                />                console.error('Error loading deliveries:', error);    deliveriesPerPage: number;    isInvoiceReminderOpen: boolean;
+
+            )}
+
+                setState(prev => ({ ...prev, deliveries: [] }));
+
+            {state.deliveryToDelete && (
+
+                <div className="fixed z-10 inset-0 overflow-y-auto">            }    if (!customer) {
+
+                    <div className="flex items-center justify-center min-h-screen">
+
+                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75" />        };
+
+                        <div className="relative bg-white rounded-lg p-8 max-w-lg w-full">
+
+                            <h3 className="text-lg font-medium mb-4">Delete Delivery</h3>        return (    deliveries: Delivery[];
+
+                            <p className="text-gray-500 mb-4">
+
+                                Are you sure you want to delete this delivery? This action cannot be undone.        loadDeliveries();
+
+                            </p>
+
+                            <div className="flex justify-end space-x-2">    }, [customer?.email]);            <div className="flex items-center justify-center h-screen">
+
+                                <button
+
+                                    onClick={() => setState(prev => ({ ...prev, deliveryToDelete: null }))}
+
+                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+
+                                >    const renderContent = () => {                <div className="text-lg text-gray-600">Loading customer data...</div>    searchTerm: string;    currentPage: number;    phone: string;    phone: string;
+
+                                    Cancel
+
+                                </button>        switch (state.activeTab) {
+
+                                <button
+
+                                    onClick={() => state.deliveryToDelete && handleDeleteDelivery(state.deliveryToDelete.id)}            case 'history':            </div>
+
+                                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
+
+                                >                return (
+
+                                    Delete
+
+                                </button>                    <div className="space-y-4">        );    deliveryToDelete: Delivery | null;
+
+                            </div>
+
+                        </div>                        <div className="flex justify-between items-center">
+
+                    </div>
+
+                </div>                            <h3 className="text-lg font-medium">Booking History</h3>    }
+
+            )}
+
+        </div>                            <button
+
+    );
+
+};                                onClick={() => setState(prev => ({ ...prev, isViewingAttendance: !prev.isViewingAttendance }))}    isNewDeliveryModalOpen: boolean;    deliveriesPerPage: number;
+
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+
+                            >    const handleTabChange = (tab: string) => {
+
+                                {state.isViewingAttendance ? 'View Bookings' : 'View Attendance'}
+
+                            </button>        setState(prev => ({ ...prev, activeTab: tab }));    isViewingAttendance: boolean;
+
+                        </div>
+
+                        {state.isViewingAttendance ? (    };
+
+                            <CustomerAttendanceHistory customerId={customer.id} />
+
+                        ) : (    editMode: boolean;    deliveries: Delivery[];    countryCode: string;    countryCode: string;
+
+                            <div className="bg-white shadow overflow-hidden sm:rounded-md">
+
+                                <ul className="divide-y divide-gray-200">    const handlePaymentClick = (booking: Booking) => {
+
+                                    {(customer.bookings || []).map((booking) => (
+
+                                        <li key={booking.id} className="px-4 py-4 sm:px-6">        setState(prev => ({ ...prev, bookingToPay: booking }));    editInfo: UserInfo;
+
+                                            <div className="flex items-center justify-between">
+
+                                                <div className="flex-1">    };
+
+                                                    <p className="text-sm font-medium text-gray-900">
+
+                                                        {booking.className || 'Class'}}    searchTerm: string;
+
+                                                    </p>
+
+                                                    <p className="mt-2 flex items-center text-sm text-gray-500">    const handlePaymentClose = () => {
+
+                                                        <CalendarIcon className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" />
+
+                                                        {formatDate(booking.date)}        setState(prev => ({ ...prev, bookingToPay: null }));
+
+                                                    </p>
+
+                                                    <p className="mt-2 flex items-center text-sm text-gray-500">    };
+
+                                                        <CalendarIcon className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" />
+
+                                                        {booking.status}const formatDate = (dateInput: Date | string | undefined | null, options?: Intl.DateTimeFormatOptions): string => {    deliveryToDelete: Delivery | null;    birthday: string | null;    birthday: string | null;
+
+                                                    </p>
+
+                                                </div>    const handleReminderClick = (booking: Booking) => {
+
+                                                <div className="ml-4 flex-shrink-0 space-x-2">
+
+                                                    {booking.status !== 'paid' && (        setState(prev => ({ ...prev, bookingForReminder: booking }));    if (!dateInput) return 'N/A';
+
+                                                        <>
+
+                                                            <button    };
+
+                                                                onClick={() => handlePaymentClick(booking)}
+
+                                                                className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"    try {    isNewDeliveryModalOpen: boolean;
+
+                                                            >
+
+                                                                <CurrencyDollarIcon className="h-4 w-4 mr-1" />    const handleReminderClose = () => {
+
+                                                                Accept Payment
+
+                                                            </button>        setState(prev => ({ ...prev, bookingForReminder: null }));        return new Date(dateInput).toLocaleDateString(undefined, options);
+
+                                                            <button
+
+                                                                onClick={() => handleReminderClick(booking)}    };
+
+                                                                className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+
+                                                            >    } catch {    isViewingAttendance: boolean;}}
+
+                                                                Send Reminder
+
+                                                            </button>    const handleCreateDelivery = async (deliveryData: Omit<Delivery, 'id' | 'createdAt'>) => {
+
+                                                        </>
+
+                                                    )}        if (!customer?.email) {        return 'N/A';
+
+                                                </div>
+
+                                            </div>            console.error('Customer information is missing');
+
+                                        </li>
+
+                                    ))}            return;    }    editMode: boolean;
+
+                                </ul>
+
+                            </div>        }
+
+                        )}
+
+                    </div>};
+
+                );
+
+            case 'deliveries':        try {
+
+                return (
+
+                    <div className="space-y-4">            const newDelivery = await dataService.createDelivery({    editInfo: UserInfo;
+
+                        <div className="flex justify-between items-center">
+
+                            <h3 className="text-lg font-medium">Deliveries</h3>                ...deliveryData,
+
+                            <button
+
+                                onClick={() => setState(prev => ({ ...prev, isNewDeliveryModalOpen: true }))}                customerEmail: customer.userInfo?.email || customer.emailconst getInitialState = (customer: Props['customer']): ComponentState => {
+
+                                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
+
+                            >            });
+
+                                New Delivery
+
+                            </button>                const safeCustomer = customer || { userInfo: {}, email: '', name: '', id: '', bookings: [] };}
+
+                        </div>
+
+                        <div className="bg-white shadow overflow-hidden sm:rounded-md">            if (newDelivery) {
+
+                            <ul className="divide-y divide-gray-200">
+
+                                {state.deliveries.map((delivery) => (                setState(prev => ({    return {
+
+                                    <li key={delivery.id} className="px-4 py-4 sm:px-6">
+
+                                        <div className="flex items-center justify-between">                    ...prev,
+
+                                            <div className="flex-1">
+
+                                                <p className="text-sm font-medium text-gray-900">                    deliveries: [...(prev.deliveries || []), newDelivery],        activeTab: 'history',interface Props {interface Props {
+
+                                                    {delivery.productName}
+
+                                                </p>                    isNewDeliveryModalOpen: false
+
+                                                <p className="text-sm text-gray-500">
+
+                                                    Quantity: {delivery.quantity}                }));        bookingToPay: null,
+
+                                                </p>
+
+                                                <p className="text-sm text-gray-500">                onDataChange();
+
+                                                    Status: {delivery.status}
+
+                                                </p>            }        bookingForReminder: null,const formatDate = (dateInput: Date | string | undefined | null, options?: Intl.DateTimeFormatOptions): string => {
+
+                                                <p className="text-sm text-gray-500">
+
+                                                    Date: {formatDate(delivery.createdAt)}        } catch (error) {
+
+                                                </p>
+
+                                            </div>            console.error('Error creating delivery:', error);        isInvoiceReminderOpen: false,
+
+                                            <div className="ml-4 flex-shrink-0">
+
+                                                <button        }
+
+                                                    onClick={() => setState(prev => ({ ...prev, deliveryToDelete: delivery }))}
+
+                                                    className="text-red-600 hover:text-red-900"    };        currentPage: 1,    if (!dateInput) return 'N/A';    customer: {    customer: {
+
+                                                >
+
+                                                    <TrashIcon className="h-5 w-5" />
+
+                                                </button>
+
+                                            </div>    const handleDeleteDelivery = async (deliveryId: string) => {        deliveriesPerPage: 5,
+
+                                        </div>
+
+                                    </li>        try {
+
+                                ))}
+
+                            </ul>            const result = await dataService.deleteDelivery(deliveryId);        deliveries: [],    try {
+
+                        </div>
+
+                    </div>            if (result?.success) {
+
+                );
+
+            case 'packages':                setState(prev => ({        searchTerm: '',
+
+                return (
+
+                    <div className="space-y-4">                    ...prev,
+
+                        <h3 className="text-lg font-medium">Active Packages</h3>
+
+                        <ActivePackagesDisplay                     deliveries: (prev.deliveries || []).filter(d => d?.id !== deliveryId),        deliveryToDelete: null,        return new Date(dateInput).toLocaleDateString(undefined, options);        id: string;        id: string;
+
+                            customerId={customer.id}
+
+                            packages={customer.packages || []}                    deliveryToDelete: null
+
+                        />
+
+                    </div>                }));        isNewDeliveryModalOpen: false,
+
+                );
+
+            default:                onDataChange();
+
+                return null;
+
+        }            }        isViewingAttendance: false,    } catch {
+
+    };
+
+        } catch (error) {
+
+    return (
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">            console.error('Error deleting delivery:', error);        editMode: false,
+
+            <div className="space-y-6">
+
+                <div className="bg-white shadow sm:rounded-lg">        }
+
+                    <div className="px-4 py-5 sm:p-6">
+
+                        <div className="flex justify-between items-start">    };        editInfo: {        return 'N/A';        name: string;        name: string;
+
+                            <div className="space-y-4">
+
+                                <h2 className="text-2xl font-bold">{customer.name}</h2>
+
+                                <div className="space-y-2">
+
+                                    <p className="flex items-center text-gray-600">    const handleEditModeToggle = () => {            firstName: safeCustomer.userInfo?.firstName || '',
+
+                                        <MapIcon className="h-5 w-5 mr-2" />
+
+                                        {customer.email}        setState(prev => ({ ...prev, editMode: !prev.editMode }));
+
+                                    </p>
+
+                                    {customer.phone && (    };            lastName: safeCustomer.userInfo?.lastName || '',    }
+
+                                        <p className="flex items-center text-gray-600">
+
+                                            <PhoneIcon className="h-5 w-5 mr-2" />
+
+                                            {customer.phone}
+
+                                        </p>    const handleEditInfoChange = (field: keyof UserInfo, value: string) => {            email: safeCustomer.userInfo?.email || safeCustomer.email || '',
+
+                                    )}
+
+                                </div>        setState(prev => ({
+
+                            </div>
+
+                            <button            ...prev,            phone: safeCustomer.userInfo?.phone || safeCustomer.phone || '',};        email: string;        email: string;
+
+                                onClick={onBack}
+
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"            editInfo: {
+
+                            >
+
+                                Back                ...prev.editInfo,            countryCode: safeCustomer.userInfo?.countryCode || '',
+
+                            </button>
+
+                        </div>                [field]: value
+
+                    </div>
+
+                </div>            }            birthday: safeCustomer.userInfo?.birthday || null
+
+
+
+                <div className="border-b border-gray-200">        }));
+
+                    <nav className="-mb-px flex space-x-8">
+
+                        {['history', 'deliveries', 'packages'].map((tab) => (    };        }
+
+                            <button
+
+                                key={tab}
+
+                                onClick={() => handleTabChange(tab)}
+
+                                className={`    const handleSaveUserInfo = async () => {    };const getInitialState = (customer: Props['customer']): ComponentState => {        phone?: string;        phone?: string;
+
+                                    whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
+
+                                    ${state.activeTab === tab        if (!customer?.id) return;
+
+                                        ? 'border-indigo-500 text-indigo-600'
+
+                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'        try {};
+
+                                    }
+
+                                `}            await dataService.updateCustomerInfo(customer.id, state.editInfo);
+
+                            >
+
+                                {tab.charAt(0).toUpperCase() + tab.slice(1)}            setState(prev => ({ ...prev, editMode: false }));    const safeCustomer = customer || { userInfo: {}, email: '', name: '', id: '', bookings: [] };
+
+                            </button>
+
+                        ))}            onDataChange();
+
+                    </nav>
+
+                </div>        } catch (error) {export const CustomerDetailView: React.FC<Props> = ({
+
+
+
+                {renderContent()}            console.error('Error updating customer info:', error);
+
+            </div>
+
+        }    customer,    return {        bookings: Booking[];        bookings: Booking[];
+
+            {state.bookingToPay && (
+
+                <AcceptPaymentModal    };
+
+                    booking={state.bookingToPay}
+
+                    onClose={handlePaymentClose}    onBack,
+
+                    onSuccess={() => {
+
+                        handlePaymentClose();    useEffect(() => {
+
+                        onDataChange();
+
+                    }}        if (!customer?.email) {    onDataChange,        activeTab: 'history',
+
+                />
+
+            )}            setState(prev => ({ ...prev, deliveries: [] }));
+
+
+
+            {state.bookingForReminder && (            return;    invoiceRequests,
+
+                <InvoiceReminderModal
+
+                    booking={state.bookingForReminder}        }
+
+                    onClose={handleReminderClose}
+
+                    onSuccess={() => {    setNavigateTo        bookingToPay: null,        userInfo?: Partial<UserInfo>;        userInfo?: Partial<UserInfo>;
+
+                        handleReminderClose();
+
+                        onDataChange();        const loadDeliveries = async () => {
+
+                    }}
+
+                />            try {}) => {
+
+            )}
+
+                const deliveries = await dataService.getDeliveriesByCustomer(customer.email);
+
+            {state.isNewDeliveryModalOpen && (
+
+                <NewDeliveryModal                setState(prev => ({ ...prev, deliveries: deliveries || [] }));    const [state, setState] = useState<ComponentState>(() => getInitialState(customer));        bookingForReminder: null,
+
+                    onClose={() => setState(prev => ({ ...prev, isNewDeliveryModalOpen: false }))}
+
+                    onCreate={handleCreateDelivery}            } catch (error) {
+
+                    customerId={customer.id}
+
+                />                console.error('Error loading deliveries:', error);
+
+            )}
+
+                setState(prev => ({ ...prev, deliveries: [] }));
+
+            {state.deliveryToDelete && (
+
+                <div className="fixed z-10 inset-0 overflow-y-auto">            }    if (!customer) {        isInvoiceReminderOpen: false,        packages?: ClassPackage[];        packages?: ClassPackage[];
+
+                    <div className="flex items-center justify-center min-h-screen">
+
+                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75" />        };
+
+                        <div className="relative bg-white rounded-lg p-8 max-w-lg w-full">
+
+                            <h3 className="text-lg font-medium mb-4">Delete Delivery</h3>        return (
+
+                            <p className="text-gray-500 mb-4">
+
+                                Are you sure you want to delete this delivery? This action cannot be undone.        loadDeliveries();
+
+                            </p>
+
+                            <div className="flex justify-end space-x-2">    }, [customer?.email]);            <div className="flex items-center justify-center h-screen">        currentPage: 1,
+
+                                <button
+
+                                    onClick={() => setState(prev => ({ ...prev, deliveryToDelete: null }))}
+
+                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+
+                                >    const renderContent = () => {                <div className="text-lg text-gray-600">Loading customer data...</div>
+
+                                    Cancel
+
+                                </button>        switch (state.activeTab) {
+
+                                <button
+
+                                    onClick={() => state.deliveryToDelete && handleDeleteDelivery(state.deliveryToDelete.id)}            case 'history':            </div>        deliveriesPerPage: 5,    } | null | undefined;    };
+
+                                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
+
+                                >                return (
+
+                                    Delete
+
+                                </button>                    <div className="space-y-4">        );
+
+                            </div>
+
+                        </div>                        <div className="flex justify-between items-center">
+
+                    </div>
+
+                </div>                            <h3 className="text-lg font-medium">Booking History</h3>    }        deliveries: [],
+
+            )}
+
+        </div>                            <button
+
+    );
+
+};                                onClick={() => setState(prev => ({ ...prev, isViewingAttendance: !prev.isViewingAttendance }))}
+
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+
+                            >    const handleTabChange = (tab: string) => {        searchTerm: '',    onBack: () => void;    onBack: () => void;
+
+                                {state.isViewingAttendance ? 'View Bookings' : 'View Attendance'}
+
+                            </button>        setState(prev => ({ ...prev, activeTab: tab }));
+
+                        </div>
+
+                        {state.isViewingAttendance ? (    };        deliveryToDelete: null,
+
+                            <CustomerAttendanceHistory customerId={customer.id} />
+
+                        ) : (
+
+                            <div className="bg-white shadow overflow-hidden sm:rounded-md">
+
+                                <ul className="divide-y divide-gray-200">    const handlePaymentClick = (booking: Booking) => {        isNewDeliveryModalOpen: false,    onDataChange: () => void;    onDataChange: () => void;
+
+                                    {(customer.bookings || []).map((booking) => (
+
+                                        <li key={booking.id} className="px-4 py-4 sm:px-6">        setState(prev => ({ ...prev, bookingToPay: booking }));
+
+                                            <div className="flex items-center justify-between">
+
+                                                <div className="flex-1">    };        isViewingAttendance: false,
+
+                                                    <p className="text-sm font-medium text-gray-900">
+
+                                                        {booking.className || 'Class'}
+
+                                                    </p>
+
+                                                    <p className="mt-2 flex items-center text-sm text-gray-500">    const handlePaymentClose = () => {        editMode: false,    invoiceRequests: InvoiceRequest[];    invoiceRequests: InvoiceRequest[];
+
+                                                        <CalendarIcon className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" />
+
+                                                        {formatDate(booking.date)}        setState(prev => ({ ...prev, bookingToPay: null }));
+
+                                                    </p>
+
+                                                    <p className="mt-2 flex items-center text-sm text-gray-500">    };        editInfo: {
+
+                                                        <CalendarIcon className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" />
+
+                                                        {booking.status}
+
+                                                    </p>
+
+                                                </div>    const handleReminderClick = (booking: Booking) => {            firstName: safeCustomer.userInfo?.firstName || '',    setNavigateTo: (path: string) => void;    setNavigateTo: (path: string) => void;
+
+                                                <div className="ml-4 flex-shrink-0 space-x-2">
+
+                                                    {booking.status !== 'paid' && (        setState(prev => ({ ...prev, bookingForReminder: booking }));
+
+                                                        <>
+
+                                                            <button    };            lastName: safeCustomer.userInfo?.lastName || '',
+
+                                                                onClick={() => handlePaymentClick(booking)}
+
+                                                                className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+
+                                                            >
+
+                                                                <CurrencyDollarIcon className="h-4 w-4 mr-1" />    const handleReminderClose = () => {            email: safeCustomer.userInfo?.email || safeCustomer.email || '',}}
+
+                                                                Accept Payment
+
+                                                            </button>        setState(prev => ({ ...prev, bookingForReminder: null }));
+
+                                                            <button
+
+                                                                onClick={() => handleReminderClick(booking)}    };            phone: safeCustomer.userInfo?.phone || safeCustomer.phone || '',
+
+                                                                className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+
+                                                            >
+
+                                                                Send Reminder
+
+                                                            </button>    const handleCreateDelivery = async (deliveryData: Omit<Delivery, 'id' | 'createdAt'>) => {            countryCode: safeCustomer.userInfo?.countryCode || '',
+
+                                                        </>
+
+                                                    )}        if (!customer?.email) {
+
+                                                </div>
+
+                                            </div>            console.error('Customer information is missing');            birthday: safeCustomer.userInfo?.birthday || null
+
+                                        </li>
+
+                                    ))}            return;
+
+                                </ul>
+
+                            </div>        }        }interface ComponentState {interface ComponentState {
+
+                        )}
+
+                    </div>
+
+                );
+
+            case 'deliveries':        try {    };
+
+                return (
+
+                    <div className="space-y-4">            const newDelivery = await dataService.createDelivery({
+
+                        <div className="flex justify-between items-center">
+
+                            <h3 className="text-lg font-medium">Deliveries</h3>                ...deliveryData,};    activeTab: string;    activeTab: string;
+
+                            <button
+
+                                onClick={() => setState(prev => ({ ...prev, isNewDeliveryModalOpen: true }))}                customerEmail: customer.userInfo?.email || customer.email
+
+                                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
+
+                            >            });
+
+                                New Delivery
+
+                            </button>            
+
+                        </div>
+
+                        <div className="bg-white shadow overflow-hidden sm:rounded-md">            if (newDelivery) {export const CustomerDetailView: React.FC<Props> = ({    bookingToPay: Booking | null;    bookingToPay: Booking | null;
+
+                            <ul className="divide-y divide-gray-200">
+
+                                {state.deliveries.map((delivery) => (                setState(prev => ({
+
+                                    <li key={delivery.id} className="px-4 py-4 sm:px-6">
+
+                                        <div className="flex items-center justify-between">                    ...prev,    customer,
+
+                                            <div className="flex-1">
+
+                                                <p className="text-sm font-medium text-gray-900">                    deliveries: [...(prev.deliveries || []), newDelivery],
+
+                                                    {delivery.productName}
+
+                                                </p>                    isNewDeliveryModalOpen: false    onBack,    bookingForReminder: Booking | null;    bookingForReminder: Booking | null;
+
+                                                <p className="text-sm text-gray-500">
+
+                                                    Quantity: {delivery.quantity}                }));
+
+                                                </p>
+
+                                                <p className="text-sm text-gray-500">                onDataChange();    onDataChange,
+
+                                                    Status: {delivery.status}
+
+                                                </p>            }
+
+                                                <p className="text-sm text-gray-500">
+
+                                                    Date: {formatDate(delivery.createdAt)}        } catch (error) {    invoiceRequests,    isInvoiceReminderOpen: boolean;    isInvoiceReminderOpen: boolean;
+
+                                                </p>
+
+                                            </div>            console.error('Error creating delivery:', error);
+
+                                            <div className="ml-4 flex-shrink-0">
+
+                                                <button        }    setNavigateTo
+
+                                                    onClick={() => setState(prev => ({ ...prev, deliveryToDelete: delivery }))}
+
+                                                    className="text-red-600 hover:text-red-900"    };
+
+                                                >
+
+                                                    <TrashIcon className="h-5 w-5" />}) => {    currentPage: number;    currentPage: number;
+
+                                                </button>
+
+                                            </div>    const handleDeleteDelivery = async (deliveryId: string) => {
+
+                                        </div>
+
+                                    </li>        try {    const [state, setState] = useState<ComponentState>(() => getInitialState(customer));
+
+                                ))}
+
+                            </ul>            const result = await dataService.deleteDelivery(deliveryId);
+
+                        </div>
+
+                    </div>            if (result?.success) {    deliveriesPerPage: number;    deliveriesPerPage: number;
+
+                );
+
+            case 'packages':                setState(prev => ({
+
+                return (
+
+                    <div className="space-y-4">                    ...prev,    if (!customer) {
+
+                        <h3 className="text-lg font-medium">Active Packages</h3>
+
+                        <ActivePackagesDisplay                     deliveries: (prev.deliveries || []).filter(d => d?.id !== deliveryId),
+
+                            customerId={customer.id}
+
+                            packages={customer.packages || []}                    deliveryToDelete: null        return (    deliveries: Delivery[];    deliveries: Delivery[];
+
+                        />
+
+                    </div>                }));
+
+                );
+
+            default:                onDataChange();            <div className="flex items-center justify-center h-screen">
+
+                return null;
+
+        }            }
+
+    };
+
+        } catch (error) {                <div className="text-lg text-gray-600">Loading customer data...</div>    searchTerm: string;    searchTerm: string;
+
+    return (
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">            console.error('Error deleting delivery:', error);
+
+            <div className="space-y-6">
+
+                <div className="bg-white shadow sm:rounded-lg">        }            </div>
+
+                    <div className="px-4 py-5 sm:p-6">
+
+                        <div className="flex justify-between items-start">    };
+
+                            <div className="space-y-4">
+
+                                <h2 className="text-2xl font-bold">{customer.name}</h2>        );    deliveryToDelete: Delivery | null;    deliveryToDelete: Delivery | null;
+
+                                <div className="space-y-2">
+
+                                    <p className="flex items-center text-gray-600">    const handleEditModeToggle = () => {
+
+                                        <MapIcon className="h-5 w-5 mr-2" />
+
+                                        {customer.email}        setState(prev => ({ ...prev, editMode: !prev.editMode }));    }
+
+                                    </p>
+
+                                    {customer.phone && (    };
+
+                                        <p className="flex items-center text-gray-600">
+
+                                            <PhoneIcon className="h-5 w-5 mr-2" />    isNewDeliveryModalOpen: boolean;    isNewDeliveryModalOpen: boolean;
+
+                                            {customer.phone}
+
+                                        </p>    const handleEditInfoChange = (field: keyof UserInfo, value: string) => {
+
+                                    )}
+
+                                </div>        setState(prev => ({    const handleTabChange = (tab: string) => {
+
+                            </div>
+
+                            <button            ...prev,
+
+                                onClick={onBack}
+
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"            editInfo: {        setState(prev => ({ ...prev, activeTab: tab }));    isViewingAttendance: boolean;    isViewingAttendance: boolean;
+
+                            >
+
+                                Back                ...prev.editInfo,
+
+                            </button>
+
+                        </div>                [field]: value    };
+
+                    </div>
+
+                </div>            }
+
+
+
+                <div className="border-b border-gray-200">        }));    editMode: boolean;    editMode: boolean;
+
+                    <nav className="-mb-px flex space-x-8">
+
+                        {['history', 'deliveries', 'packages'].map((tab) => (    };
+
+                            <button
+
+                                key={tab}    const handlePaymentClick = (booking: Booking) => {
+
+                                onClick={() => handleTabChange(tab)}
+
+                                className={`    const handleSaveUserInfo = async () => {
+
+                                    whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
+
+                                    ${state.activeTab === tab        if (!customer?.id) return;        setState(prev => ({ ...prev, bookingToPay: booking }));    editInfo: UserInfo;    editInfo: UserInfo;
+
+                                        ? 'border-indigo-500 text-indigo-600'
+
+                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'        try {
+
+                                    }
+
+                                `}            await dataService.updateCustomerInfo(customer.id, state.editInfo);    };
+
+                            >
+
+                                {tab.charAt(0).toUpperCase() + tab.slice(1)}            setState(prev => ({ ...prev, editMode: false }));
+
+                            </button>
+
+                        ))}            onDataChange();}}
+
+                    </nav>
+
+                </div>        } catch (error) {
+
+
+
+                {renderContent()}            console.error('Error updating customer info:', error);    const handlePaymentClose = () => {
+
+            </div>
+
+        }
+
+            {state.bookingToPay && (
+
+                <AcceptPaymentModal    };        setState(prev => ({ ...prev, bookingToPay: null }));
+
+                    booking={state.bookingToPay}
+
+                    onClose={handlePaymentClose}
+
+                    onSuccess={() => {
+
+                        handlePaymentClose();    useEffect(() => {    };
+
+                        onDataChange();
+
+                    }}        if (!customer?.email) {
+
+                />
+
+            )}            setState(prev => ({ ...prev, deliveries: [] }));const formatDate = (dateInput: Date | string | undefined | null, options?: Intl.DateTimeFormatOptions): string => {const formatDate = (dateInput: Date | string | undefined | null, options?: Intl.DateTimeFormatOptions): string => {
+
+
+
+            {state.bookingForReminder && (            return;
+
+                <InvoiceReminderModal
+
+                    booking={state.bookingForReminder}        }    const handleReminderClick = (booking: Booking) => {
+
+                    onClose={handleReminderClose}
+
+                    onSuccess={() => {
+
+                        handleReminderClose();
+
+                        onDataChange();        const loadDeliveries = async () => {        setState(prev => ({ ...prev, bookingForReminder: booking }));    if (!dateInput) return 'N/A';    if (!dateInput) return 'N/A';
+
+                    }}
+
+                />            try {
+
+            )}
+
+                const deliveries = await dataService.getDeliveriesByCustomer(customer.email);    };
+
+            {state.isNewDeliveryModalOpen && (
+
+                <NewDeliveryModal                setState(prev => ({ ...prev, deliveries: deliveries || [] }));
+
+                    onClose={() => setState(prev => ({ ...prev, isNewDeliveryModalOpen: false }))}
+
+                    onCreate={handleCreateDelivery}            } catch (error) {    try {    return new Date(dateInput).toLocaleDateString(undefined, options);
+
+                    customerId={customer.id}
+
+                />                console.error('Error loading deliveries:', error);
+
+            )}
+
+                setState(prev => ({ ...prev, deliveries: [] }));    const handleReminderClose = () => {
+
+            {state.deliveryToDelete && (
+
+                <div className="fixed z-10 inset-0 overflow-y-auto">            }
+
+                    <div className="flex items-center justify-center min-h-screen">
+
+                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75" />        };        setState(prev => ({ ...prev, bookingForReminder: null }));        return new Date(dateInput).toLocaleDateString(undefined, options);};
+
+                        <div className="relative bg-white rounded-lg p-8 max-w-lg w-full">
+
+                            <h3 className="text-lg font-medium mb-4">Delete Delivery</h3>
+
+                            <p className="text-gray-500 mb-4">
+
+                                Are you sure you want to delete this delivery? This action cannot be undone.        loadDeliveries();    };
+
+                            </p>
+
+                            <div className="flex justify-end space-x-2">    }, [customer?.email]);
+
+                                <button
+
+                                    onClick={() => setState(prev => ({ ...prev, deliveryToDelete: null }))}    } catch {
+
+                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+
+                                >    const renderContent = () => {
+
+                                    Cancel
+
+                                </button>        switch (state.activeTab) {    const handleCreateDelivery = async (deliveryData: Omit<Delivery, 'id' | 'createdAt'>) => {
+
+                                <button
+
+                                    onClick={() => state.deliveryToDelete && handleDeleteDelivery(state.deliveryToDelete.id)}            case 'history':
+
+                                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
+
+                                >                return (        if (!customer?.email) {        return 'N/A';const getInitialState = (customer: Props['customer']): ComponentState => ({
+
+                                    Delete
+
+                                </button>                    <div className="space-y-4">
+
+                            </div>
+
+                        </div>                        <div className="flex justify-between items-center">            console.error('Customer information is missing');
+
+                    </div>
+
+                </div>                            <h3 className="text-lg font-medium">Booking History</h3>
+
+            )}
+
+        </div>                            <button            return;    }    activeTab: 'history',
+
+    );
+
+};                                onClick={() => setState(prev => ({ ...prev, isViewingAttendance: !prev.isViewingAttendance }))}
+
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"        }
+
+                            >
+
+                                {state.isViewingAttendance ? 'View Bookings' : 'View Attendance'}        try {};    bookingToPay: null,
+
+                            </button>
+
+                        </div>            const newDelivery = await dataService.createDelivery({
+
+                        {state.isViewingAttendance ? (
+
+                            <CustomerAttendanceHistory customerId={customer.id} />                ...deliveryData,    bookingForReminder: null,
+
+                        ) : (
+
+                            <div className="bg-white shadow overflow-hidden sm:rounded-md">                customerEmail: customer.userInfo?.email || customer.email
+
+                                <ul className="divide-y divide-gray-200">
+
+                                    {(customer.bookings || []).map((booking) => (            });const getInitialState = (customer: Props['customer']): ComponentState => {    isInvoiceReminderOpen: false,
+
+                                        <li key={booking.id} className="px-4 py-4 sm:px-6">
+
+                                            <div className="flex items-center justify-between">            
+
+                                                <div className="flex-1">
+
+                                                    <p className="text-sm font-medium text-gray-900">            if (newDelivery) {    const safeCustomer = customer || { userInfo: {} };    currentPage: 1,
+
+                                                        {booking.className || 'Class'}
+
+                                                    </p>                setState(prev => ({
+
+                                                    <p className="mt-2 flex items-center text-sm text-gray-500">
+
+                                                        <CalendarIcon className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" />                    ...prev,    return {    deliveriesPerPage: 5,
+
+                                                        {formatDate(booking.date)}
+
+                                                    </p>                    deliveries: [...(prev.deliveries || []), newDelivery],
+
+                                                    <p className="mt-2 flex items-center text-sm text-gray-500">
+
+                                                        <CalendarIcon className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" />                    isNewDeliveryModalOpen: false        activeTab: 'history',    deliveries: [],
+
+                                                        {booking.status}
+
+                                                    </p>                }));
+
+                                                </div>
+
+                                                <div className="ml-4 flex-shrink-0 space-x-2">                onDataChange();        bookingToPay: null,    searchTerm: '',
+
+                                                    {booking.status !== 'paid' && (
+
+                                                        <>            }
+
+                                                            <button
+
+                                                                onClick={() => handlePaymentClick(booking)}        } catch (error) {        bookingForReminder: null,    deliveryToDelete: null,
+
+                                                                className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+
+                                                            >            console.error('Error creating delivery:', error);
+
+                                                                <CurrencyDollarIcon className="h-4 w-4 mr-1" />
+
+                                                                Accept Payment        }        isInvoiceReminderOpen: false,    isNewDeliveryModalOpen: false,
+
+                                                            </button>
+
+                                                            <button    };
+
+                                                                onClick={() => handleReminderClick(booking)}
+
+                                                                className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"        currentPage: 1,    isViewingAttendance: false,
+
+                                                            >
+
+                                                                Send Reminder    const handleDeleteDelivery = async (deliveryId: string) => {
+
+                                                            </button>
+
+                                                        </>        try {        deliveriesPerPage: 5,    editMode: false,
+
+                                                    )}
+
+                                                </div>            const result = await dataService.deleteDelivery(deliveryId);
+
+                                            </div>
+
+                                        </li>            if (result?.success) {        deliveries: [],    editInfo: {
+
+                                    ))}
+
+                                </ul>                setState(prev => ({
+
+                            </div>
+
+                        )}                    ...prev,        searchTerm: '',        firstName: customer?.userInfo?.firstName || '',
+
+                    </div>
+
+                );                    deliveries: (prev.deliveries || []).filter(d => d?.id !== deliveryId),
+
+            case 'deliveries':
+
+                return (                    deliveryToDelete: null        deliveryToDelete: null,        lastName: customer?.userInfo?.lastName || '',
+
+                    <div className="space-y-4">
+
+                        <div className="flex justify-between items-center">                }));
+
+                            <h3 className="text-lg font-medium">Deliveries</h3>
+
+                            <button                onDataChange();        isNewDeliveryModalOpen: false,        email: customer?.userInfo?.email || '',
+
+                                onClick={() => setState(prev => ({ ...prev, isNewDeliveryModalOpen: true }))}
+
+                                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"            }
+
+                            >
+
+                                New Delivery        } catch (error) {        isViewingAttendance: false,        phone: customer?.userInfo?.phone || '',
+
+                            </button>
+
+                        </div>            console.error('Error deleting delivery:', error);
+
+                        <div className="bg-white shadow overflow-hidden sm:rounded-md">
+
+                            <ul className="divide-y divide-gray-200">        }        editMode: false,        countryCode: customer?.userInfo?.countryCode || '',
+
+                                {state.deliveries.map((delivery) => (
+
+                                    <li key={delivery.id} className="px-4 py-4 sm:px-6">    };
+
+                                        <div className="flex items-center justify-between">
+
+                                            <div className="flex-1">        editInfo: {        birthday: customer?.userInfo?.birthday || null
+
+                                                <p className="text-sm font-medium text-gray-900">
+
+                                                    {delivery.productName}    const handleEditModeToggle = () => {
+
+                                                </p>
+
+                                                <p className="text-sm text-gray-500">        setState(prev => ({ ...prev, editMode: !prev.editMode }));            firstName: safeCustomer.userInfo?.firstName || '',    }
+
+                                                    Quantity: {delivery.quantity}
+
+                                                </p>    };
+
+                                                <p className="text-sm text-gray-500">
+
+                                                    Status: {delivery.status}            lastName: safeCustomer.userInfo?.lastName || '',});
+
+                                                </p>
+
+                                                <p className="text-sm text-gray-500">    const handleEditInfoChange = (field: keyof UserInfo, value: string) => {
+
+                                                    Date: {formatDate(delivery.createdAt)}
+
+                                                </p>        setState(prev => ({            email: safeCustomer.userInfo?.email || safeCustomer.email || '',
+
+                                            </div>
+
+                                            <div className="ml-4 flex-shrink-0">            ...prev,
+
+                                                <button
+
+                                                    onClick={() => setState(prev => ({ ...prev, deliveryToDelete: delivery }))}            editInfo: {            phone: safeCustomer.userInfo?.phone || safeCustomer.phone || '',export const CustomerDetailView: React.FC<Props> = ({
+
+                                                    className="text-red-600 hover:text-red-900"
+
+                                                >                ...prev.editInfo,
+
+                                                    <TrashIcon className="h-5 w-5" />
+
+                                                </button>                [field]: value            countryCode: safeCustomer.userInfo?.countryCode || '',    customer,
+
+                                            </div>
+
+                                        </div>            }
+
+                                    </li>
+
+                                ))}        }));            birthday: safeCustomer.userInfo?.birthday || null    onBack,
+
+                            </ul>
+
+                        </div>    };
+
+                    </div>
+
+                );        }    onDataChange,
+
+            case 'packages':
+
+                return (    const handleSaveUserInfo = async () => {
+
+                    <div className="space-y-4">
+
+                        <h3 className="text-lg font-medium">Active Packages</h3>        if (!customer?.id) return;    };    invoiceRequests,
+
+                        <ActivePackagesDisplay 
+
+                            customerId={customer.id}        try {
+
+                            packages={customer.packages || []}
+
+                        />            await dataService.updateCustomerInfo(customer.id, state.editInfo);};    setNavigateTo
+
+                    </div>
+
+                );            setState(prev => ({ ...prev, editMode: false }));
+
+            default:
+
+                return null;            onDataChange();}) => {
+
+        }
+
+    };        } catch (error) {
+
+
+
+    return (            console.error('Error updating customer info:', error);export const CustomerDetailView: React.FC<Props> = ({    const [state, setState] = useState<ComponentState>(() => getInitialState(customer));
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+            <div className="space-y-6">        }
+
+                <div className="bg-white shadow sm:rounded-lg">
+
+                    <div className="px-4 py-5 sm:p-6">    };    customer,    const [isLoading, setIsLoading] = useState(false);
+
+                        <div className="flex justify-between items-start">
+
+                            <div className="space-y-4">
+
+                                <h2 className="text-2xl font-bold">{customer.name}</h2>
+
+                                <div className="space-y-2">    useEffect(() => {    onBack,    
+
+                                    <p className="flex items-center text-gray-600">
+
+                                        <MapIcon className="h-5 w-5 mr-2" />        if (!customer?.email) {
+
+                                        {customer.email}
+
+                                    </p>            setState(prev => ({ ...prev, deliveries: [] }));    onDataChange,    const handleTabChange = (tab: string) => {
+
+                                    {customer.phone && (
+
+                                        <p className="flex items-center text-gray-600">            return;
+
+                                            <PhoneIcon className="h-5 w-5 mr-2" />
+
+                                            {customer.phone}        }    invoiceRequests,        setState(prev => ({ ...prev, activeTab: tab }));
+
+                                        </p>
+
+                                    )}
+
+                                </div>
+
+                            </div>        const loadDeliveries = async () => {    setNavigateTo    };
+
+                            <button
+
+                                onClick={onBack}            try {
+
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+
+                            >                const deliveries = await dataService.getDeliveriesByCustomer(customer.email);}) => {
+
+                                Back
+
+                            </button>                setState(prev => ({ ...prev, deliveries: Array.isArray(deliveries) ? deliveries : [] }));
+
+                        </div>
+
+                    </div>            } catch (error) {    const [state, setState] = useState<ComponentState>(() => getInitialState(customer));    const handlePaymentClick = (booking: Booking) => {
+
+                </div>
+
+                console.error('Error loading deliveries:', error);
+
+                <div className="border-b border-gray-200">
+
+                    <nav className="-mb-px flex space-x-8">                setState(prev => ({ ...prev, deliveries: [] }));        setState(prev => ({ ...prev, bookingToPay: booking }));
+
+                        {['history', 'deliveries', 'packages'].map((tab) => (
+
+                            <button            }
+
+                                key={tab}
+
+                                onClick={() => handleTabChange(tab)}        };    // Early return if no customer    };
+
+                                className={`
+
+                                    whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
+
+                                    ${state.activeTab === tab
+
+                                        ? 'border-indigo-500 text-indigo-600'        loadDeliveries();    if (!customer) {
+
+                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+
+                                    }    }, [customer?.email]);
+
+                                `}
+
+                            >        return (    const handlePaymentClose = () => {
+
+                                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+
+                            </button>    const renderContent = () => {
+
+                        ))}
+
+                    </nav>        switch (state.activeTab) {            <div className="flex items-center justify-center h-screen">        setState(prev => ({ ...prev, bookingToPay: null }));
+
+                </div>
+
+            case 'history':
+
+                {renderContent()}
+
+            </div>                return (                <div className="text-lg text-gray-600">Loading customer data...</div>    };
+
+
+
+            {state.bookingToPay && (                    <div className="space-y-4">
+
+                <AcceptPaymentModal
+
+                    booking={state.bookingToPay}                        <div className="flex justify-between items-center">            </div>
+
+                    onClose={handlePaymentClose}
+
+                    onSuccess={() => {                            <h3 className="text-lg font-medium">Booking History</h3>
+
+                        handlePaymentClose();
+
+                        onDataChange();                            <button        );    const handleReminderClick = (booking: Booking) => {
+
+                    }}
+
+                />                                onClick={() => setState(prev => ({ ...prev, isViewingAttendance: !prev.isViewingAttendance }))}
+
+            )}
+
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"    }        setState(prev => ({ ...prev, bookingForReminder: booking }));
+
+            {state.bookingForReminder && (
+
+                <InvoiceReminderModal                            >
+
+                    booking={state.bookingForReminder}
+
+                    onClose={handleReminderClose}                                {state.isViewingAttendance ? 'View Bookings' : 'View Attendance'}    };
+
+                    onSuccess={() => {
+
+                        handleReminderClose();                            </button>
+
+                        onDataChange();
+
+                    }}                        </div>    const handleTabChange = (tab: string) => {
+
+                />
+
+            )}                        {state.isViewingAttendance ? (
+
+
+
+            {state.isNewDeliveryModalOpen && (                            <CustomerAttendanceHistory customerId={customer.id} />        setState(prev => ({ ...prev, activeTab: tab }));    const handleReminderClose = () => {
+
+                <NewDeliveryModal
+
+                    onClose={() => setState(prev => ({ ...prev, isNewDeliveryModalOpen: false }))}                        ) : (
+
+                    onCreate={handleCreateDelivery}
+
+                    customerId={customer.id}                            <div className="bg-white shadow overflow-hidden sm:rounded-md">    };        setState(prev => ({ ...prev, bookingForReminder: null }));
+
+                />
+
+            )}                                <ul className="divide-y divide-gray-200">
+
+
+
+            {state.deliveryToDelete && (                                    {Array.isArray(customer.bookings) && customer.bookings.map((booking) => {    };
+
+                <div className="fixed z-10 inset-0 overflow-y-auto">
+
+                    <div className="flex items-center justify-center min-h-screen">                                        if (!booking || !booking.id) return null;
+
+                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75" />
+
+                        <div className="relative bg-white rounded-lg p-8 max-w-lg w-full">                                        return (    const handlePaymentClick = (booking: Booking) => {
+
+                            <h3 className="text-lg font-medium mb-4">Delete Delivery</h3>
+
+                            <p className="text-gray-500 mb-4">                                            <li key={booking.id} className="px-4 py-4 sm:px-6">
+
+                                Are you sure you want to delete this delivery? This action cannot be undone.
+
+                            </p>                                                <div className="flex items-center justify-between">        setState(prev => ({ ...prev, bookingToPay: booking }));    const handleCreateDelivery = async (deliveryData: Omit<Delivery, 'id' | 'createdAt'>) => {
+
+                            <div className="flex justify-end space-x-2">
+
+                                <button                                                    <div className="flex-1">
+
+                                    onClick={() => setState(prev => ({ ...prev, deliveryToDelete: null }))}
+
+                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"                                                        <p className="text-sm font-medium text-indigo-600 truncate">    };        if (!customer || !customer.email) {
+
+                                >
+
+                                    Cancel                                                            {booking.type || 'Unknown'} - {formatDate(booking.date)}
+
+                                </button>
+
+                                <button                                                        </p>            console.error('Customer information is missing');
+
+                                    onClick={() => state.deliveryToDelete && handleDeleteDelivery(state.deliveryToDelete.id)}
+
+                                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"                                                        <p className="mt-2 flex items-center text-sm text-gray-500">
+
+                                >
+
+                                    Delete                                                            <CalendarIcon className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" />    const handlePaymentClose = () => {            return;
+
+                                </button>
+
+                            </div>                                                            {booking.status || 'Unknown'}
+
+                        </div>
+
+                    </div>                                                        </p>        setState(prev => ({ ...prev, bookingToPay: null }));        }
+
+                </div>
+
+            )}                                                    </div>
+
+        </div>
+
+    );                                                    <div className="ml-4 flex-shrink-0 space-x-2">    };        try {
+
+};
+                                                        {booking.status !== 'paid' && (
+
+                                                            <>            const newDelivery = await dataService.createDelivery({
+
+                                                                <button
+
+                                                                    onClick={() => handlePaymentClick(booking)}    const handleReminderClick = (booking: Booking) => {                ...deliveryData,
+
+                                                                    className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-indigo-600 hover:bg-indigo-700"
+
+                                                                >        setState(prev => ({ ...prev, bookingForReminder: booking }));                customerEmail: customer.userInfo?.email || customer.email
+
+                                                                    <CurrencyDollarIcon className="h-4 w-4 mr-1" />
+
+                                                                    Payment    };            });
+
+                                                                </button>
+
+                                                                <button            
+
+                                                                    onClick={() => handleReminderClick(booking)}
+
+                                                                    className="inline-flex items-center px-2.5 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50"    const handleReminderClose = () => {            if (newDelivery) {
+
+                                                                >
+
+                                                                    <MapIcon className="h-4 w-4 mr-1" />        setState(prev => ({ ...prev, bookingForReminder: null }));                setState(prev => ({
+
+                                                                    Reminder
+
+                                                                </button>    };                    ...prev,
+
+                                                            </>
+
+                                                        )}                    deliveries: [...prev.deliveries, newDelivery],
+
+                                                    </div>
+
+                                                </div>    const handleCreateDelivery = async (deliveryData: Omit<Delivery, 'id' | 'createdAt'>) => {                    isNewDeliveryModalOpen: false
+
+                                            </li>
+
+                                        );        if (!customer?.email) {                }));
+
+                                    })}
+
+                                </ul>            console.error('Customer information is missing');                onDataChange();
+
+                            </div>
+
+                        )}            return;            }
+
+                    </div>
+
+                );        }        } catch (error) {
+
+            case 'deliveries':
+
+                return (        try {            console.error('Error creating delivery:', error);
+
+                    <div className="space-y-4">
+
+                        <div className="flex justify-between items-center">            const newDelivery = await dataService.createDelivery({        }
+
+                            <h3 className="text-lg font-medium">Deliveries</h3>
+
+                            <button                ...deliveryData,    };
+
+                                onClick={() => setState(prev => ({ ...prev, isNewDeliveryModalOpen: true }))}
+
+                                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"                customerEmail: customer.userInfo?.email || customer.email
+
+                            >
+
+                                New Delivery            });    const handleDeleteDelivery = async (deliveryId: string) => {
+
+                            </button>
+
+                        </div>                    try {
+
+                        <div className="bg-white shadow overflow-hidden sm:rounded-md">
+
+                            <ul className="divide-y divide-gray-200">            if (newDelivery) {            const result = await dataService.deleteDelivery(deliveryId);
+
+                                {Array.isArray(state.deliveries) && state.deliveries.map((delivery) => {
+
+                                    if (!delivery || !delivery.id) return null;                setState(prev => ({            if (result.success) {
+
+                                    return (
+
+                                        <li key={delivery.id} className="px-4 py-4 sm:px-6">                    ...prev,                setState(prev => ({
+
+                                            <div className="flex items-center justify-between">
+
+                                                <div>                    deliveries: [...(prev.deliveries || []), newDelivery],                    ...prev,
+
+                                                    <p className="text-sm font-medium text-indigo-600">
+
+                                                        {delivery.type || 'Unknown'}                    isNewDeliveryModalOpen: false                    deliveries: prev.deliveries.filter(d => d.id !== deliveryId),
+
+                                                    </p>
+
+                                                    <p className="text-sm text-gray-500">                }));                    deliveryToDelete: null
+
+                                                        {formatDate(delivery.date)}
+
+                                                    </p>                onDataChange();                }));
+
+                                                </div>
+
+                                                <button            }                onDataChange();
+
+                                                    onClick={() => setState(prev => ({ ...prev, deliveryToDelete: delivery }))}
+
+                                                    className="inline-flex items-center p-1 border border-transparent rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-500"        } catch (error) {            }
+
+                                                >
+
+                                                    <TrashIcon className="h-5 w-5" />            console.error('Error creating delivery:', error);        } catch (error) {
+
+                                                </button>
+
+                                            </div>        }            console.error('Error deleting delivery:', error);
+
+                                        </li>
+
+                                    );    };        }
+
+                                })}
+
+                            </ul>    };
+
+                        </div>
+
+                    </div>    const handleDeleteDelivery = async (deliveryId: string) => {
+
+                );
+
+            case 'packages':        try {    const handleEditModeToggle = () => {
+
+                return (
+
+                    <div className="space-y-4">            const result = await dataService.deleteDelivery(deliveryId);        setState(prev => ({ ...prev, editMode: !prev.editMode }));
+
+                        <h3 className="text-lg font-medium">Active Packages</h3>
+
+                        <ActivePackagesDisplay             if (result?.success) {    };
+
+                            customerId={customer.id}
+
+                            packages={Array.isArray(customer.packages) ? customer.packages : []}                setState(prev => ({
+
+                        />
+
+                    </div>                    ...prev,    const handleEditInfoChange = (field: keyof UserInfo, value: string) => {
+
+                );
+
+            default:                    deliveries: (prev.deliveries || []).filter(d => d?.id !== deliveryId),        setState(prev => ({
+
+                return null;
+
+        }                    deliveryToDelete: null            ...prev,
+
+    };
+
+                }));            editInfo: {
+
+    return (
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">                onDataChange();                ...prev.editInfo,
+
+            <div className="space-y-6">
+
+                <div className="bg-white shadow sm:rounded-lg">            }                [field]: value
+
+                    <div className="px-4 py-5 sm:p-6">
+
+                        <div className="flex justify-between items-start">        } catch (error) {            }
+
+                            <div className="space-y-4">
+
+                                <h2 className="text-2xl font-bold">{customer.name || 'Unknown Customer'}</h2>            console.error('Error deleting delivery:', error);        }));
+
+                                <div className="space-y-2">
+
+                                    <p className="flex items-center text-gray-600">        }    };
+
+                                        <MapIcon className="h-5 w-5 mr-2" />
+
+                                        {customer.email || 'No email'}    };
+
+                                    </p>
+
+                                    {customer.phone && (    const handleSaveUserInfo = async () => {
+
+                                        <p className="flex items-center text-gray-600">
+
+                                            <PhoneIcon className="h-5 w-5 mr-2" />    const handleEditModeToggle = () => {        try {
+
+                                            {customer.phone}
+
+                                        </p>        setState(prev => ({ ...prev, editMode: !prev.editMode }));            await dataService.updateCustomerInfo(customer.id, state.editInfo);
+
+                                    )}
+
+                                </div>    };            setState(prev => ({ ...prev, editMode: false }));
+
+                            </div>
+
+                            <button            onDataChange();
+
+                                onClick={onBack}
+
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"    const handleEditInfoChange = (field: keyof UserInfo, value: string) => {        } catch (error) {
+
+                            >
+
+                                Back        setState(prev => ({            console.error('Error updating customer info:', error);
+
+                            </button>
+
+                        </div>            ...prev,        }
+
+                    </div>
+
+                </div>            editInfo: {    };
+
+
+
+                <div className="border-b border-gray-200">                ...prev.editInfo,
+
+                    <nav className="-mb-px flex space-x-8">
+
+                        {['history', 'deliveries', 'packages'].map((tab) => (                [field]: value    // Load deliveries on component mount and when customer changes
+
+                            <button
+
+                                key={tab}            }    useEffect(() => {
+
+                                onClick={() => handleTabChange(tab)}
+
+                                className={`        }));        if (!customer?.email) {
+
+                                    whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
+
+                                    ${state.activeTab === tab    };            setState(prev => ({ ...prev, deliveries: [] }));
+
+                                        ? 'border-indigo-500 text-indigo-600'
+
+                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'            return;
+
+                                    }
+
+                                `}    const handleSaveUserInfo = async () => {        }
+
+                            >
+
+                                {tab.charAt(0).toUpperCase() + tab.slice(1)}        if (!customer?.id) return;
+
+                            </button>
+
+                        ))}        try {        const loadDeliveries = async () => {
+
+                    </nav>
+
+                </div>            await dataService.updateCustomerInfo(customer.id, state.editInfo);            try {
+
+
+
+                {renderContent()}            setState(prev => ({ ...prev, editMode: false }));                const deliveries = await dataService.getDeliveriesByCustomer(customer.email);
+
+            </div>
+
+            onDataChange();                setState(prev => ({ ...prev, deliveries: deliveries || [] }));
+
+            {state.bookingToPay && (
+
+                <AcceptPaymentModal        } catch (error) {            } catch (error) {
+
+                    booking={state.bookingToPay}
+
+                    onClose={handlePaymentClose}            console.error('Error updating customer info:', error);                console.error('Error loading deliveries:', error);
+
+                    onSuccess={() => {
+
+                        handlePaymentClose();        }                setState(prev => ({ ...prev, deliveries: [] }));
+
+                        onDataChange();
+
+                    }}    };            }
+
+                />
+
+            )}        };
+
+            
+
+            {state.bookingForReminder && (    // Load deliveries on component mount and when customer changes
+
+                <InvoiceReminderModal
+
+                    booking={state.bookingForReminder}    useEffect(() => {        loadDeliveries();
+
+                    onClose={handleReminderClose}
+
+                    onSuccess={() => {        if (!customer?.email) {    }, [customer?.email]);
+
+                        handleReminderClose();
+
+                        onDataChange();            setState(prev => ({ ...prev, deliveries: [] }));
+
+                    }}
+
+                />            return;    if (!customer) {
+
+            )}
+
+        }        return <div className="flex items-center justify-center h-screen"><div className="text-lg">Loading...</div></div>;
+
+            {state.isNewDeliveryModalOpen && (
+
+                <NewDeliveryModal    }
+
+                    onClose={() => setState(prev => ({ ...prev, isNewDeliveryModalOpen: false }))}
+
+                    onCreate={handleCreateDelivery}        const loadDeliveries = async () => {
+
+                    customerId={customer.id}
+
+                />            try {    const renderContent = () => {
+
+            )}
+
+                const deliveries = await dataService.getDeliveriesByCustomer(customer.email);        switch (state.activeTab) {
+
+            {state.deliveryToDelete && (
+
+                <div className="fixed z-10 inset-0 overflow-y-auto">                setState(prev => ({ ...prev, deliveries: Array.isArray(deliveries) ? deliveries : [] }));            case 'history':
+
+                    <div className="flex items-center justify-center min-h-screen">
+
+                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75" />            } catch (error) {                return (
+
+                        <div className="relative bg-white rounded-lg p-8 max-w-lg w-full">
+
+                            <h3 className="text-lg font-medium mb-4">Delete Delivery</h3>                console.error('Error loading deliveries:', error);                    <div className="space-y-4">
+
+                            <p className="text-gray-500 mb-4">
+
+                                Are you sure you want to delete this delivery? This action cannot be undone.                setState(prev => ({ ...prev, deliveries: [] }));                        <div className="flex justify-between items-center">
+
+                            </p>
+
+                            <div className="flex justify-end space-x-4">            }                            <h3 className="text-lg font-medium">Booking History</h3>
+
+                                <button
+
+                                    onClick={() => setState(prev => ({ ...prev, deliveryToDelete: null }))}        };                            <button
+
+                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+
+                                >                                onClick={() => setState(prev => ({ ...prev, isViewingAttendance: !prev.isViewingAttendance }))}
+
+                                    Cancel
+
+                                </button>        loadDeliveries();                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+
+                                <button
+
+                                    onClick={() => state.deliveryToDelete && handleDeleteDelivery(state.deliveryToDelete.id)}    }, [customer?.email]);                            >
+
+                                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
+
+                                >                                {state.isViewingAttendance ? 'View Bookings' : 'View Attendance'}
+
+                                    Delete
+
+                                </button>    const renderContent = () => {                            </button>
+
+                            </div>
+
+                        </div>        switch (state.activeTab) {                        </div>
+
+                    </div>
+
+                </div>            case 'history':                        {state.isViewingAttendance ? (
+
+            )}
+
+        </div>                return (                            <CustomerAttendanceHistory customerId={customer.id} />
+
+    );
+
+};                    <div className="space-y-4">                        ) : (
+
+                        <div className="flex justify-between items-center">                            <div className="bg-white shadow overflow-hidden sm:rounded-md">
+
+                            <h3 className="text-lg font-medium">Booking History</h3>                                <ul className="divide-y divide-gray-200">
+
+                            <button                                    {(customer.bookings || []).map((booking) => (
+
+                                onClick={() => setState(prev => ({ ...prev, isViewingAttendance: !prev.isViewingAttendance }))}                                        <li key={booking.id} className="px-4 py-4 sm:px-6">
+
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"                                            <div className="flex items-center justify-between">
+
+                            >                                                <div className="flex-1">
+
+                                {state.isViewingAttendance ? 'View Bookings' : 'View Attendance'}                                                    <p className="text-sm font-medium text-indigo-600 truncate">
+
+                            </button>                                                        {booking.type} - {formatDate(booking.date)}
+
+                        </div>                                                    </p>
+
+                        {state.isViewingAttendance ? (                                                    <p className="mt-2 flex items-center text-sm text-gray-500">
+
+                            <CustomerAttendanceHistory customerId={customer.id} />                                                        <CalendarIcon className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" />
+
+                        ) : (                                                        {booking.status}
+
+                            <div className="bg-white shadow overflow-hidden sm:rounded-md">                                                    </p>
+
+                                <ul className="divide-y divide-gray-200">                                                </div>
+
+                                    {Array.isArray(customer.bookings) && customer.bookings.map((booking) => {                                                <div className="ml-4 flex-shrink-0 space-x-2">
+
+                                        if (!booking || !booking.id) return null;                                                    {booking.status !== 'paid' && (
+
+                                        return (                                                        <>
+
+                                            <li key={booking.id} className="px-4 py-4 sm:px-6">                                                            <button
+
+                                                <div className="flex items-center justify-between">                                                                onClick={() => handlePaymentClick(booking)}
+
+                                                    <div className="flex-1">                                                                className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-indigo-600 hover:bg-indigo-700"
+
+                                                        <p className="text-sm font-medium text-indigo-600 truncate">                                                            >
+
+                                                            {booking.type || 'Unknown'} - {formatDate(booking.date)}                                                                <CurrencyDollarIcon className="h-4 w-4 mr-1" />
+
+                                                        </p>                                                                Payment
+
+                                                        <p className="mt-2 flex items-center text-sm text-gray-500">                                                            </button>
+
+                                                            <CalendarIcon className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" />                                                            <button
+
+                                                            {booking.status || 'Unknown'}                                                                onClick={() => handleReminderClick(booking)}
+
+                                                        </p>                                                                className="inline-flex items-center px-2.5 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50"
+
+                                                    </div>                                                            >
+
+                                                    <div className="ml-4 flex-shrink-0 space-x-2">                                                                <MapIcon className="h-4 w-4 mr-1" />
+
+                                                        {booking.status !== 'paid' && (                                                                Reminder
+
+                                                            <>                                                            </button>
+
+                                                                <button                                                        </>
+
+                                                                    onClick={() => handlePaymentClick(booking)}                                                    )}
+
+                                                                    className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-indigo-600 hover:bg-indigo-700"                                                </div>
+
+                                                                >                                            </div>
+
+                                                                    <CurrencyDollarIcon className="h-4 w-4 mr-1" />                                        </li>
+
+                                                                    Payment                                    ))}
+
+                                                                </button>                                </ul>
+
+                                                                <button                            </div>
+
+                                                                    onClick={() => handleReminderClick(booking)}                        )}
+
+                                                                    className="inline-flex items-center px-2.5 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50"                    </div>
+
+                                                                >                );
+
+                                                                    <MapIcon className="h-4 w-4 mr-1" />            case 'deliveries':
+
+                                                                    Reminder                return (
+
+                                                                </button>                    <div className="space-y-4">
+
+                                                            </>                        <div className="flex justify-between items-center">
+
+                                                        )}                            <h3 className="text-lg font-medium">Deliveries</h3>
+
+                                                    </div>                            <button
+
+                                                </div>                                onClick={() => setState(prev => ({ ...prev, isNewDeliveryModalOpen: true }))}
+
+                                            </li>                                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
+
+                                        );                            >
+
+                                    })}                                New Delivery
+
+                                </ul>                            </button>
+
+                            </div>                        </div>
+
+                        )}                        <div className="bg-white shadow overflow-hidden sm:rounded-md">
+
+                    </div>                            <ul className="divide-y divide-gray-200">
+
+                );                                {state.deliveries.map((delivery) => (
+
+            case 'deliveries':                                    <li key={delivery.id} className="px-4 py-4 sm:px-6">
+
+                return (                                        <div className="flex items-center justify-between">
+
+                    <div className="space-y-4">                                            <div>
+
+                        <div className="flex justify-between items-center">                                                <p className="text-sm font-medium text-indigo-600">
+
+                            <h3 className="text-lg font-medium">Deliveries</h3>                                                    {delivery.type}
+
+                            <button                                                </p>
+
+                                onClick={() => setState(prev => ({ ...prev, isNewDeliveryModalOpen: true }))}                                                <p className="text-sm text-gray-500">
+
+                                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"                                                    {formatDate(delivery.date)}
+
+                            >                                                </p>
+
+                                New Delivery                                            </div>
+
+                            </button>                                            <button
+
+                        </div>                                                onClick={() => setState(prev => ({ ...prev, deliveryToDelete: delivery }))}
+
+                        <div className="bg-white shadow overflow-hidden sm:rounded-md">                                                className="inline-flex items-center p-1 border border-transparent rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-500"
+
+                            <ul className="divide-y divide-gray-200">                                            >
+
+                                {Array.isArray(state.deliveries) && state.deliveries.map((delivery) => {                                                <TrashIcon className="h-5 w-5" />
+
+                                    if (!delivery || !delivery.id) return null;                                            </button>
+
+                                    return (                                        </div>
+
+                                        <li key={delivery.id} className="px-4 py-4 sm:px-6">                                    </li>
+
+                                            <div className="flex items-center justify-between">                                ))}
+
+                                                <div>                            </ul>
+
+                                                    <p className="text-sm font-medium text-indigo-600">                        </div>
+
+                                                        {delivery.type || 'Unknown'}                    </div>
+
+                                                    </p>                );
+
+                                                    <p className="text-sm text-gray-500">            case 'packages':
+
+                                                        {formatDate(delivery.date)}                return (
+
+                                                    </p>                    <div className="space-y-4">
+
+                                                </div>                        <h3 className="text-lg font-medium">Active Packages</h3>
+
+                                                <button                        <ActivePackagesDisplay 
+
+                                                    onClick={() => setState(prev => ({ ...prev, deliveryToDelete: delivery }))}                            customerId={customer.id}
+
+                                                    className="inline-flex items-center p-1 border border-transparent rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-500"                            packages={customer.packages || []}
+
+                                                >                        />
+
+                                                    <TrashIcon className="h-5 w-5" />                    </div>
+
+                                                </button>                );
+
+                                            </div>            default:
+
+                                        </li>                return null;
+
+                                    );        }
+
+                                })}    };
+
+                            </ul>
+
+                        </div>    return (
+
+                    </div>        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+                );            <div className="space-y-6">
+
+            case 'packages':                {/* Customer Info Section */}
+
+                return (                <div className="bg-white shadow sm:rounded-lg">
+
+                    <div className="space-y-4">                    <div className="px-4 py-5 sm:p-6">
+
+                        <h3 className="text-lg font-medium">Active Packages</h3>                        <div className="flex justify-between items-start">
+
+                        <ActivePackagesDisplay                             {customer && (
+
+                            customerId={customer.id}                            <div className="space-y-4">
+
+                            packages={Array.isArray(customer.packages) ? customer.packages : []}                                <h2 className="text-2xl font-bold">{customer.name}</h2>
+
+                        />                                <div className="space-y-2">
+
+                    </div>                                    <p className="flex items-center text-gray-600">
+
+                );                                        <MapIcon className="h-5 w-5 mr-2" />
+
+            default:                                        {customer.email}
+
+                return null;                                    </p>
+
+        }                                    {customer.phone && (
+
+    };                                        <p className="flex items-center text-gray-600">
+
+                                            <PhoneIcon className="h-5 w-5 mr-2" />
+
+    return (                                            {customer.phone}
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">                                        </p>
+
+            <div className="space-y-6">                                    )}
+
+                {/* Customer Info Section */}                                </div>
+
+                <div className="bg-white shadow sm:rounded-lg">                            </div>
+
+                    <div className="px-4 py-5 sm:p-6">                            )}
+
+                        <div className="flex justify-between items-start">                            <button
+
+                            <div className="space-y-4">                                onClick={onBack}
+
+                                <h2 className="text-2xl font-bold">{customer.name || 'Unknown Customer'}</h2>                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+
+                                <div className="space-y-2">                            >
+
+                                    <p className="flex items-center text-gray-600">                                Back
+
+                                        <MapIcon className="h-5 w-5 mr-2" />                            </button>
+
+                                        {customer.email || 'No email'}                        </div>
+
+                                    </p>                    </div>
+
+                                    {customer.phone && (                </div>
+
+                                        <p className="flex items-center text-gray-600">
+
+                                            <PhoneIcon className="h-5 w-5 mr-2" />                {/* Tabs */}
+
+                                            {customer.phone}                <div className="border-b border-gray-200">
+
+                                        </p>                    <nav className="-mb-px flex space-x-8">
+
+                                    )}                        {['history', 'deliveries', 'packages'].map((tab) => (
+
+                                </div>                            <button
+
+                            </div>                                key={tab}
+
+                            <button                                onClick={() => handleTabChange(tab)}
+
+                                onClick={onBack}                                className={`
+
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"                                    whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
+
+                            >                                    ${state.activeTab === tab
+
+                                Back                                        ? 'border-indigo-500 text-indigo-600'
+
+                            </button>                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+
+                        </div>                                    }
+
+                    </div>                                `}
+
+                </div>                            >
+
+                                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+
+                {/* Tabs */}                            </button>
+
+                <div className="border-b border-gray-200">                        ))}
+
+                    <nav className="-mb-px flex space-x-8">                    </nav>
+
+                        {['history', 'deliveries', 'packages'].map((tab) => (                </div>
+
+                            <button
+
+                                key={tab}                {/* Content */}
+
+                                onClick={() => handleTabChange(tab)}                {renderContent()}
+
+                                className={`            </div>
+
+                                    whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
+
+                                    ${state.activeTab === tab            {/* Modals */}
+
+                                        ? 'border-indigo-500 text-indigo-600'            {state.bookingToPay && (
+
+                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'                <AcceptPaymentModal
+
+                                    }                    booking={state.bookingToPay}
+
+                                `}                    onClose={handlePaymentClose}
+
+                            >                    onSuccess={() => {
+
+                                {tab.charAt(0).toUpperCase() + tab.slice(1)}                        handlePaymentClose();
+
+                            </button>                        onDataChange();
+
+                        ))}                    }}
+
+                    </nav>                />
+
+                </div>            )}
+
+            
+
+                {/* Content */}            {state.bookingForReminder && (
+
+                {renderContent()}                <InvoiceReminderModal
+
+            </div>                    booking={state.bookingForReminder}
+
+                    onClose={handleReminderClose}
+
+            {/* Modals */}                    onSuccess={() => {
+
+            {state.bookingToPay && (                        handleReminderClose();
+
+                <AcceptPaymentModal                        onDataChange();
+
+                    booking={state.bookingToPay}                    }}
+
+                    onClose={handlePaymentClose}                />
+
+                    onSuccess={() => {            )}
+
+                        handlePaymentClose();
+
+                        onDataChange();            {state.isNewDeliveryModalOpen && (
+
+                    }}                <NewDeliveryModal
+
+                />                    onClose={() => setState(prev => ({ ...prev, isNewDeliveryModalOpen: false }))}
+
+            )}                    onCreate={handleCreateDelivery}
+
+                                customerId={customer.id}
+
+            {state.bookingForReminder && (                />
+
+                <InvoiceReminderModal            )}
+
+                    booking={state.bookingForReminder}
+
+                    onClose={handleReminderClose}            {state.deliveryToDelete && (
+
+                    onSuccess={() => {                <div className="fixed z-10 inset-0 overflow-y-auto">
+
+                        handleReminderClose();                    <div className="flex items-center justify-center min-h-screen">
+
+                        onDataChange();                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75" />
+
+                    }}                        <div className="relative bg-white rounded-lg p-8 max-w-lg w-full">
+
+                />                            <h3 className="text-lg font-medium mb-4">Delete Delivery</h3>
+
+            )}                            <p className="text-gray-500 mb-4">
+
+                                Are you sure you want to delete this delivery? This action cannot be undone.
+
+            {state.isNewDeliveryModalOpen && (                            </p>
+
+                <NewDeliveryModal                            <div className="flex justify-end space-x-4">
+
+                    onClose={() => setState(prev => ({ ...prev, isNewDeliveryModalOpen: false }))}                                <button
+
+                    onCreate={handleCreateDelivery}                                    onClick={() => setState(prev => ({ ...prev, deliveryToDelete: null }))}
+
+                    customerId={customer.id}                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+
+                />                                >
+
+            )}                                    Cancel
+
+                                </button>
+
+            {state.deliveryToDelete && (                                <button
+
+                <div className="fixed z-10 inset-0 overflow-y-auto">                                    onClick={() => handleDeleteDelivery(state.deliveryToDelete!.id)}
+
+                    <div className="flex items-center justify-center min-h-screen">                                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
+
+                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75" />                                >
+
+                        <div className="relative bg-white rounded-lg p-8 max-w-lg w-full">                                    Delete
+
+                            <h3 className="text-lg font-medium mb-4">Delete Delivery</h3>                                </button>
+
+                            <p className="text-gray-500 mb-4">                            </div>
+
+                                Are you sure you want to delete this delivery? This action cannot be undone.                        </div>
+
+                            </p>                    </div>
+
+                            <div className="flex justify-end space-x-4">                </div>
+
+                                <button            )}
+
+                                    onClick={() => setState(prev => ({ ...prev, deliveryToDelete: null }))}        </div>
+
+                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"    );
+
+                                >};
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => state.deliveryToDelete && handleDeleteDelivery(state.deliveryToDelete.id)}
+                                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
+                                >
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};

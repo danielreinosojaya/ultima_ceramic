@@ -23,7 +23,7 @@ function toCamelCase(obj: any): any {
     return obj;
 }
 import { sql } from '@vercel/postgres';
-import { seedDatabase, ensureTablesExist } from './db.js';
+import { seedDatabase, ensureTablesExist, createCustomer } from './db.js';
 import * as emailService from './emailService.js';
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import type {
@@ -258,6 +258,11 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     data = deliveries.map(toCamelCase);
                     break;
                 }
+                case 'standaloneCustomers': {
+                    const { rows: customers } = await sql`SELECT * FROM customers ORDER BY first_name ASC, last_name ASC`;
+                    data = customers.map(toCamelCase);
+                    break;
+                }
             default:
                 return res.status(400).json({ error: `Unknown action: ${action}` });
         }
@@ -319,44 +324,60 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
 
     const value = req.body;
     switch (key) {
-        case 'products':
-            await sql`BEGIN`;
-            await sql.query('DELETE FROM products');
-            for (const p of value) {
-                await sql.query(
-                    `INSERT INTO products (id, type, name, classes, price, description, image_url, details, is_active, scheduling_rules, overrides, min_participants, price_per_person)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-                    ON CONFLICT (id) DO UPDATE SET
-                        type = EXCLUDED.type,
-                        name = EXCLUDED.name,
-                        classes = EXCLUDED.classes,
-                        price = EXCLUDED.price,
-                        description = EXCLUDED.description,
-                        image_url = EXCLUDED.image_url,
-                        details = EXCLUDED.details,
-                        is_active = EXCLUDED.is_active,
-                        scheduling_rules = EXCLUDED.scheduling_rules,
-                        overrides = EXCLUDED.overrides,
-                        min_participants = EXCLUDED.min_participants,
-                        price_per_person = EXCLUDED.price_per_person;`,
-                    [
-                        p.id,
-                        p.type,
-                        p.name,
-                        p.classes || null,
-                        p.price || null,
-                        p.description || null,
-                        p.imageUrl || null,
-                        p.details ? JSON.stringify(p.details) : null,
-                        p.isActive,
-                        p.schedulingRules ? JSON.stringify(p.schedulingRules) : null,
-                        p.overrides ? JSON.stringify(p.overrides) : null,
-                        p.minParticipants || null,
-                        p.pricePerPerson || null
-                    ]
-                );
+            case 'customer': {
+                // Crear o actualizar cliente
+                try {
+                    const customer = await createCustomer(value);
+                    return res.status(200).json({ success: true, customer });
+                } catch (error) {
+                    const errorMsg = error instanceof Error ? error.message : String(error);
+                    return res.status(500).json({ success: false, error: errorMsg });
+                }
             }
-            await sql`COMMIT`;
+        case 'products':
+            try {
+                await sql`BEGIN`;
+                await sql.query('DELETE FROM products');
+                for (const p of value) {
+                    await sql.query(
+                        `INSERT INTO products (id, type, name, classes, price, description, image_url, details, is_active, scheduling_rules, overrides, min_participants, price_per_person)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                        ON CONFLICT (id) DO UPDATE SET
+                            type = EXCLUDED.type,
+                            name = EXCLUDED.name,
+                            classes = EXCLUDED.classes,
+                            price = EXCLUDED.price,
+                            description = EXCLUDED.description,
+                            image_url = EXCLUDED.image_url,
+                            details = EXCLUDED.details,
+                            is_active = EXCLUDED.is_active,
+                            scheduling_rules = EXCLUDED.scheduling_rules,
+                            overrides = EXCLUDED.overrides,
+                            min_participants = EXCLUDED.min_participants,
+                            price_per_person = EXCLUDED.price_per_person;`,
+                        [
+                            p.id,
+                            p.type,
+                            p.name,
+                            p.classes || null,
+                            p.price || null,
+                            p.description || null,
+                            p.imageUrl || null,
+                            p.details ? JSON.stringify(p.details) : null,
+                            p.isActive,
+                            p.schedulingRules ? JSON.stringify(p.schedulingRules) : null,
+                            p.overrides ? JSON.stringify(p.overrides) : null,
+                            p.minParticipants || null,
+                            p.pricePerPerson || null
+                        ]
+                    );
+                }
+                await sql`COMMIT`;
+            } catch (err) {
+                console.error('Error al guardar productos:', err, value);
+                await sql`ROLLBACK`;
+                return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+            }
             break;
         case 'instructors':
             await sql`BEGIN`;
@@ -374,6 +395,72 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
 async function handleAction(action: string, req: VercelRequest, res: VercelResponse) {
     let result: any = { success: true };
     switch (action) {
+        case 'syncProducts': {
+                // Sincroniza los productos de DEFAULT_PRODUCTS con la base de datos
+                try {
+                    // Import dinámico para evitar problemas de ESM/CJS
+                    const constantsModule = await import('../constants.js');
+                    const products = constantsModule.DEFAULT_PRODUCTS;
+                await sql`BEGIN`;
+                await sql.query('DELETE FROM products');
+                for (const p of products) {
+                    // Discriminación de tipos para evitar errores
+                    let classes = null, price = null, details = null, schedulingRules = null, overrides = null, minParticipants = null, pricePerPerson = null;
+                    if ('classes' in p) classes = p.classes;
+                    if ('price' in p) price = p.price;
+                    if ('details' in p) details = JSON.stringify(p.details);
+                    if ('schedulingRules' in p) schedulingRules = JSON.stringify((p as any).schedulingRules);
+                    if ('overrides' in p) overrides = JSON.stringify((p as any).overrides);
+                    if ('minParticipants' in p) minParticipants = (p as any).minParticipants;
+                    if ('pricePerPerson' in p) pricePerPerson = (p as any).pricePerPerson;
+                    await sql.query(
+                        `INSERT INTO products (id, type, name, classes, price, description, image_url, details, is_active, scheduling_rules, overrides, min_participants, price_per_person)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                        ON CONFLICT (id) DO UPDATE SET
+                            type = EXCLUDED.type,
+                            name = EXCLUDED.name,
+                            classes = EXCLUDED.classes,
+                            price = EXCLUDED.price,
+                            description = EXCLUDED.description,
+                            image_url = EXCLUDED.image_url,
+                            details = EXCLUDED.details,
+                            is_active = EXCLUDED.is_active,
+                            scheduling_rules = EXCLUDED.scheduling_rules,
+                            overrides = EXCLUDED.overrides,
+                            min_participants = EXCLUDED.min_participants,
+                            price_per_person = EXCLUDED.price_per_person;`,
+                        [
+                            p.id,
+                            p.type,
+                            p.name,
+                            classes,
+                            price,
+                            p.description || null,
+                            p.imageUrl || null,
+                            details,
+                            p.isActive,
+                            schedulingRules,
+                            overrides,
+                            minParticipants,
+                            pricePerPerson
+                        ]
+                    );
+                }
+                await sql`COMMIT`;
+                return res.status(200).json({ success: true });
+            } catch (error) {
+                await sql`ROLLBACK`;
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+        case 'deleteCustomer': {
+            const { email } = req.body;
+            if (!email) {
+                return res.status(400).json({ error: 'Email is required.' });
+            }
+            await sql`DELETE FROM customers WHERE email = ${email}`;
+            return res.status(200).json({ success: true });
+        }
         case 'updateBooking': {
             const { id, userInfo, price } = req.body;
             if (!id || !userInfo || typeof price === 'undefined') {
@@ -811,6 +898,21 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
 async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookingCode'> & { invoiceData?: Omit<InvoiceRequest, 'id' | 'bookingId' | 'status' | 'requestedAt' | 'processedAt'> }): Promise<AddBookingResult> {
     const { productId, slots, userInfo, productType, invoiceData, bookingDate, participants, clientNote } = body;
+
+        // Sincronizar cliente en tabla customers
+        try {
+            await createCustomer({
+                email: userInfo.email,
+                firstName: userInfo.firstName,
+                lastName: userInfo.lastName,
+                phone: userInfo.phone,
+                countryCode: userInfo.countryCode,
+                birthday: typeof userInfo.birthday === 'string' ? userInfo.birthday : undefined
+            });
+        } catch (error) {
+            // No romper el flujo si falla la creación del cliente
+            console.error('Error creando/actualizando cliente:', error);
+        }
     
     // Atomic deduplication: check for existing booking and slot, prevent race conditions
     if (productType === 'INTRODUCTORY_CLASS' || productType === 'CLASS_PACKAGE' || productType === 'SINGLE_CLASS' || productType === 'GROUP_CLASS') {

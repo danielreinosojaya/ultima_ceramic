@@ -198,18 +198,15 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
 
 
     const { pendingPackageBookings, pendingOpenStudioBookings } = useMemo(() => {
-        // Get all unpaid bookings, regardless of date range for pending payments
-        // The date filter should only apply to the summary view, not pending payments
-        
+        // Solo mostrar reservas impagas que tengan al menos un slot asignado
         const packages = allBookings.filter(b => {
-            // Include ALL unpaid bookings except Open Studio subscriptions
-            return !b.isPaid && b.productType !== 'OPEN_STUDIO_SUBSCRIPTION';
+            return !b.isPaid && b.productType !== 'OPEN_STUDIO_SUBSCRIPTION' && Array.isArray(b.slots) && b.slots.length > 0;
         }).sort((a,b) => (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0));
 
         const openStudio = allBookings.filter(b => {
-            return !b.isPaid && b.productType === 'OPEN_STUDIO_SUBSCRIPTION';
+            return !b.isPaid && b.productType === 'OPEN_STUDIO_SUBSCRIPTION' && Array.isArray(b.slots) && b.slots.length > 0;
         }).sort((a,b) => (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0));
-        
+
         return { pendingPackageBookings: packages, pendingOpenStudioBookings: openStudio };
     }, [allBookings]); // Remove date dependencies since pending payments should show all unpaid bookings
     

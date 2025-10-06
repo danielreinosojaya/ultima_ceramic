@@ -81,7 +81,7 @@ export interface SessionOverride {
 }
 
 export interface BaseProduct {
-    id: number;
+    id: string;
     type: ProductType;
     name: string;
     description: string;
@@ -181,7 +181,7 @@ export interface PaymentDetails {
 
 export interface Booking {
     id: string;
-    productId: number;
+    productId: string;
     productType: ProductType;
     product: Product;
     slots: TimeSlot[];

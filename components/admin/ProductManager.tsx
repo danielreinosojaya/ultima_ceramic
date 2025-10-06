@@ -11,6 +11,9 @@ import { CubeIcon } from '../icons/CubeIcon';
 import { ClassPackageModal } from './ClassPackageModal';
 import { IntroClassModal } from './IntroClassModal';
 import { OpenStudioModal } from './OpenStudioModal';
+import { SingleClassModal } from './SingleClassModal';
+type SingleClassFormData = { name: string; description: string; price: number; details: { duration: string } };
+  // ...existing code...
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 import { DuplicateIcon } from '../icons/DuplicateIcon';
 
@@ -20,7 +23,9 @@ interface ProductManagerProps {
 }
 
 export const ProductManager: React.FC<ProductManagerProps> = ({ products, onDataChange }) => {
-  // Monolingüe español, textos hardcodeados
+  const [isSingleClassModalOpen, setIsSingleClassModalOpen] = useState(false);
+  const [singleClassToEdit, setSingleClassToEdit] = useState<Product | null>(null);
+  // Monolingüe español, textos hardcodeados. No usar useLanguage ni contextos de idioma.
   
   const [isClassPackageModalOpen, setIsClassPackageModalOpen] = useState(false);
   const [classPackageToEdit, setClassPackageToEdit] = useState<ClassPackage | null>(null);
@@ -35,9 +40,9 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [productIdToUpdateImage, setProductIdToUpdateImage] = useState<number | null>(null);
+  const [productIdToUpdateImage, setProductIdToUpdateImage] = useState<string | null>(null);
 
-  const handleStatusToggle = async (id: number) => {
+  const handleStatusToggle = async (id: string) => {
     const currentProducts = await dataService.getProducts();
     const updatedProducts = currentProducts.map((p) =>
       p.id === id ? { ...p, isActive: !p.isActive } : p
@@ -56,6 +61,9 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
     } else if (product.type === 'OPEN_STUDIO_SUBSCRIPTION') {
       setOpenStudioToEdit(product);
       setIsOpenStudioModalOpen(true);
+    } else if (product.type === 'SINGLE_CLASS') {
+      setSingleClassToEdit(product);
+      setIsSingleClassModalOpen(true);
     }
   };
 
@@ -64,13 +72,13 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
     setIsDeleteModalOpen(true);
   };
   
-  const handleSaveClassPackage = async (pkgData: Omit<ClassPackage, 'id' | 'isActive' | 'type'>, id?: number) => {
+  const handleSaveClassPackage = async (pkgData: Omit<ClassPackage, 'id' | 'isActive' | 'type'>, id?: string) => {
     const currentProducts = await dataService.getProducts();
     let updatedProducts;
     if (id) {
       updatedProducts = currentProducts.map(p => (p.id === id && p.type === 'CLASS_PACKAGE' ? { ...p, ...pkgData } : p));
     } else {
-      const newProduct: Product = { ...pkgData, id: Date.now(), isActive: true, type: 'CLASS_PACKAGE' };
+      const newProduct: Product = { ...pkgData, id: `cp_${Date.now()}_${Math.random().toString(36).slice(2,8)}`, isActive: true, type: 'CLASS_PACKAGE' };
       updatedProducts = [...currentProducts, newProduct];
     }
     await dataService.updateProducts(updatedProducts);
@@ -78,29 +86,29 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
     setIsClassPackageModalOpen(false);
   };
 
-  const handleSaveIntroClass = async (classData: Omit<IntroductoryClass, 'id' | 'isActive' | 'type'>, id?: number) => {
-    const currentProducts = await dataService.getProducts();
-    let updatedProducts;
-    if (id) {
-        updatedProducts = currentProducts.map(p => (p.id === id && p.type === 'INTRODUCTORY_CLASS' ? { ...p, ...classData } : p));
-    } else {
-        const newProduct: Product = { ...classData, id: Date.now(), isActive: true, type: 'INTRODUCTORY_CLASS' };
-        updatedProducts = [...currentProducts, newProduct];
-    }
+  const handleSaveIntroClass = async (classData: Omit<IntroductoryClass, 'id' | 'isActive' | 'type'>, id?: string) => {
+  const currentProducts = await dataService.getProducts();
+  let updatedProducts;
+  if (id) {
+    updatedProducts = currentProducts.map(p => (p.id === id && p.type === 'INTRODUCTORY_CLASS' ? { ...p, ...classData } : p));
+  } else {
+    const newProduct: Product = { ...classData, id: `ic_${Date.now()}_${Math.random().toString(36).slice(2,8)}`, isActive: true, type: 'INTRODUCTORY_CLASS' };
+    updatedProducts = [...currentProducts, newProduct];
+  }
     await dataService.updateProducts(updatedProducts);
     onDataChange();
     setIsIntroClassModalOpen(false);
   };
   
-  const handleSaveOpenStudio = async (subData: Omit<OpenStudioSubscription, 'id' | 'isActive' | 'type'>, id?: number) => {
-    const currentProducts = await dataService.getProducts();
-    let updatedProducts;
-    if (id) {
-        updatedProducts = currentProducts.map(p => (p.id === id && p.type === 'OPEN_STUDIO_SUBSCRIPTION' ? { ...p, ...subData } : p));
-    } else {
-        const newProduct: Product = { ...subData, id: Date.now(), isActive: true, type: 'OPEN_STUDIO_SUBSCRIPTION' };
-        updatedProducts = [...currentProducts, newProduct];
-    }
+  const handleSaveOpenStudio = async (subData: Omit<OpenStudioSubscription, 'id' | 'isActive' | 'type'>, id?: string) => {
+  const currentProducts = await dataService.getProducts();
+  let updatedProducts;
+  if (id) {
+    updatedProducts = currentProducts.map(p => (p.id === id && p.type === 'OPEN_STUDIO_SUBSCRIPTION' ? { ...p, ...subData } : p));
+  } else {
+    const newProduct: Product = { ...subData, id: `os_${Date.now()}_${Math.random().toString(36).slice(2,8)}`, isActive: true, type: 'OPEN_STUDIO_SUBSCRIPTION' };
+    updatedProducts = [...currentProducts, newProduct];
+  }
     await dataService.updateProducts(updatedProducts);
     onDataChange();
     setIsOpenStudioModalOpen(false);
@@ -109,8 +117,8 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
   const handleDuplicateProduct = async (productToDuplicate: Product) => {
     const newProduct: Product = {
       ...productToDuplicate,
-      id: Date.now(),
-  name: `Copia de ${productToDuplicate.name}`,
+      id: `dup_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+      name: `Copia de ${productToDuplicate.name}`,
       isActive: false,
     };
 
@@ -130,7 +138,7 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
   };
   
   const handleTriggerImageUpload = (id: number) => {
-    setProductIdToUpdateImage(id);
+  setProductIdToUpdateImage(id);
     fileInputRef.current?.click();
   };
 
@@ -157,19 +165,79 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
   };
   
   const handleCreateNew = (type: Product['type']) => {
-    if (type === 'CLASS_PACKAGE') {
-        setClassPackageToEdit(null);
-        setIsClassPackageModalOpen(true);
-    } else if (type === 'INTRODUCTORY_CLASS') {
-        setIntroClassToEdit(null);
-        setIsIntroClassModalOpen(true);
-    } else if (type === 'OPEN_STUDIO_SUBSCRIPTION') {
-        setOpenStudioToEdit(null);
-        setIsOpenStudioModalOpen(true);
-    }
-  };
+  if (type === 'CLASS_PACKAGE') {
+    setClassPackageToEdit(null);
+    setIsClassPackageModalOpen(true);
+  } else if (type === 'INTRODUCTORY_CLASS') {
+    setIntroClassToEdit(null);
+    setIsIntroClassModalOpen(true);
+  } else if (type === 'OPEN_STUDIO_SUBSCRIPTION') {
+    setOpenStudioToEdit(null);
+    setIsOpenStudioModalOpen(true);
+  } else if (type === 'SINGLE_CLASS') {
+    setSingleClassToEdit(null);
+    setIsSingleClassModalOpen(true);
+  }
+};
 
-  return (
+type SingleClassFormData = { name: string; description: string; price: number; details: { duration: string } };
+const handleSaveSingleClass = async (classData: SingleClassFormData, id?: string) => {
+  try {
+    const currentProducts = await dataService.getProducts();
+    let updatedProducts;
+    if (id) {
+      updatedProducts = currentProducts.map(p => (
+        p.id === id && p.type === 'SINGLE_CLASS'
+          ? {
+              ...p,
+              name: classData.name,
+              description: classData.description,
+              price: Number(classData.price),
+              details: {
+                duration: classData.details.duration,
+                durationHours: 0,
+                activities: [],
+                generalRecommendations: '',
+                materials: '',
+                technique: 'potters_wheel'
+              },
+              classes: 1,
+              imageUrl: p.imageUrl || '',
+              isActive: typeof p.isActive === 'boolean' ? p.isActive : true
+            }
+          : p
+      ));
+    } else {
+      const newProduct: Product = {
+        id: `sc_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+        isActive: true,
+        type: 'SINGLE_CLASS',
+        name: classData.name,
+        description: classData.description,
+        price: Number(classData.price),
+        details: {
+          duration: classData.details.duration,
+          durationHours: 0,
+          activities: [],
+          generalRecommendations: '',
+          materials: '',
+          technique: 'potters_wheel'
+        },
+        classes: 1,
+        imageUrl: '',
+      };
+      updatedProducts = [...currentProducts, newProduct];
+    }
+    await dataService.updateProducts(updatedProducts);
+    onDataChange();
+  } catch (error) {
+    alert('Error al guardar la clase suelta. Intenta nuevamente.');
+  } finally {
+    setIsSingleClassModalOpen(false);
+  }
+};
+
+return (
     <div>
       <input type="file" ref={fileInputRef} onChange={handleFileSelected} accept="image/png, image/jpeg, image/webp" className="hidden"/>
       {isClassPackageModalOpen && (
@@ -194,6 +262,14 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
             onClose={() => setIsOpenStudioModalOpen(false)}
             onSave={handleSaveOpenStudio}
             subscriptionToEdit={openStudioToEdit}
+          />
+      )}
+      {isSingleClassModalOpen && (
+          <SingleClassModal
+            isOpen={isSingleClassModalOpen}
+            onClose={() => setIsSingleClassModalOpen(false)}
+            onSave={handleSaveSingleClass}
+            classToEdit={singleClassToEdit}
           />
       )}
       {isDeleteModalOpen && productToDelete && (
@@ -235,6 +311,12 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
                   className="block w-full text-left px-4 py-3 text-sm text-brand-text hover:bg-gray-100"
                 >
                   Suscripción Open Studio
+                </button>
+                <button 
+                  onClick={() => handleCreateNew('SINGLE_CLASS')} 
+                  className="block w-full text-left px-4 py-3 text-sm text-brand-text hover:bg-gray-100"
+                >
+                  Clase Suelta (Individual)
                 </button>
             </div>
         </div>

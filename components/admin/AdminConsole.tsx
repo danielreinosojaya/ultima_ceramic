@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-// ...existing code...
 import { Logo } from '../Logo';
 import { ProductManager } from './ProductManager';
 import { CalendarOverview } from './CalendarOverview';
