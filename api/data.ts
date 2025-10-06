@@ -22,6 +22,7 @@ function toCamelCase(obj: any): any {
     }
     return obj;
 }
+
 import { sql } from '@vercel/postgres';
 import { seedDatabase, ensureTablesExist, createCustomer } from './db.js';
 import * as emailService from './emailService.js';
@@ -170,11 +171,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).end();
     }
 
+    // Validate database connection early
+    if (!process.env.POSTGRES_URL) {
+        console.error('Database connection error: POSTGRES_URL environment variable is missing');
+        return res.status(500).json({ 
+            error: 'Database configuration error', 
+            details: 'POSTGRES_URL environment variable is required' 
+        });
+    }
+
+    // Test database connectivity with a simple query
+    try {
+        await sql`SELECT 1 as test`;
+    } catch (error) {
+        console.error('Database connectivity test failed:', error);
+        return res.status(500).json({ 
+            error: 'Database connection failed', 
+            details: error instanceof Error ? error.message : 'Database is unreachable' 
+        });
+    }
+
     // Ensure database tables exist (including the deliveries table)
     try {
         await ensureTablesExist();
     } catch (error) {
-        console.log('Table creation encountered an issue, but continuing...', error);
+        console.error('Database connection failed during table initialization:', error);
+        return res.status(500).json({ 
+            error: 'Database connection failed', 
+            details: error instanceof Error ? error.message : 'Unknown database error' 
+        });
     }
 
     try {
