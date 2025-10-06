@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { Booking, InvoiceRequest, ClassPackage, Delivery, PaymentDetails, Customer, AppData } from '../../types';
+import type { Booking, InvoiceRequest, ClassPackage, Delivery, PaymentDetails, Customer, AppData, Product } from '../../types';
 import { ActivePackagesDisplay } from './ActivePackagesDisplay';
 import { AcceptPaymentModal } from './AcceptPaymentModal';
 import { InvoiceReminderModal } from './InvoiceReminderModal';
@@ -104,6 +104,8 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
         };
 
     const [appData, setAppData] = useState<AppData | null>(null);
+    const [allProducts, setAllProducts] = useState<Product[]>([]);
+    const [allBookings, setAllBookings] = useState<Booking[]>([]);
     // Hooks para completar entrega (deben estar fuera de renderDeliveryTab)
     const [completeModal, setCompleteModal] = useState<{ open: boolean; deliveryId: string | null }>({ open: false, deliveryId: null });
     // Hooks para eliminar clase programada (deben estar fuera de renderScheduledClassesTab)
@@ -169,19 +171,23 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
         // Load basic app data if needed
         const loadAppData = async () => {
             try {
-                const [instructors, availability] = await Promise.all([
+                const [instructors, availability, products, bookings] = await Promise.all([
                     dataService.getInstructors(),
-                    dataService.getAvailability()
+                    dataService.getAvailability(),
+                    dataService.getProducts(),
+                    dataService.getBookings()
                 ]);
+                setAllProducts(products);
+                setAllBookings(bookings);
                 setAppData({ 
                     instructors, 
                     availability,
-                    products: [],
+                    products,
                     scheduleOverrides: {},
                     classCapacity: { potters_wheel: 4, molding: 6, introductory_class: 8 },
                     capacityMessages: { thresholds: [] },
                     announcements: [],
-                    bookings: [],
+                    bookings,
                     policies: '',
                     confirmationMessage: { title: '', message: '' },
                     footerInfo: { address: '', email: '', whatsapp: '', googleMapsLink: '', instagramHandle: '' },
@@ -341,8 +347,14 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                    {/* Modal de agendamiento flexible */}
                    {state.isSchedulingModalOpen && (
                        <ManualBookingModal
+                           isOpen={state.isSchedulingModalOpen}
                            onClose={() => setState(prev => ({ ...prev, isSchedulingModalOpen: false }))}
-                           onBookingAdded={onDataChange}
+                           onBookingAdded={() => {
+                               setState(prev => ({ ...prev, isSchedulingModalOpen: false }));
+                               onDataChange();
+                           }}
+                           existingBookings={allBookings}
+                           availableProducts={allProducts}
                            preselectedCustomer={customer}
                        />
                    )}

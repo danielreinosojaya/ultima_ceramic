@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback, useRef } from 'react';
 import type { Notification } from '../types';
 import * as dataService from '../services/dataService';
 
@@ -27,8 +27,20 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     const [unreadCount, setUnreadCount] = useState(0);
     const [activeToast, setActiveToast] = useState<Notification | null>(null);
     const [dataVersion, setDataVersion] = useState(0);
+    
+    // Throttling para forceRefresh
+    const lastRefreshTime = useRef<number>(0);
+    const REFRESH_THROTTLE = 2000; // 2 segundos
 
-    const forceRefresh = useCallback(() => setDataVersion(v => v + 1), []);
+    const forceRefresh = useCallback(() => {
+        const now = Date.now();
+        if (now - lastRefreshTime.current < REFRESH_THROTTLE) {
+            console.log('Refresh throttled, skipping...');
+            return;
+        }
+        lastRefreshTime.current = now;
+        setDataVersion(v => v + 1);
+    }, []);
 
     const loadNotifications = useCallback(async () => {
         const storedNotifications = await dataService.getNotifications();

@@ -39,31 +39,56 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [translations, setTranslations] = useState<Translations | null>(null);
 
   const fetchTranslations = useCallback(async () => {
+    // Verificar cache primero
+    const cached = localStorage.getItem('translations-cache');
+    const cacheTimestamp = localStorage.getItem('translations-cache-timestamp');
+    
+    if (cached && cacheTimestamp) {
+      const age = Date.now() - parseInt(cacheTimestamp);
+      // Usar cache por 24 horas
+      if (age < 24 * 60 * 60 * 1000) {
+        setTranslations(JSON.parse(cached));
+        return;
+      }
+    }
+
     try {
-      const [esDefaults, enDefaults, storedEs, storedEn] = await Promise.all([
+      // Solo cargar archivos locales inicialmente para arranque rápido
+      const [esDefaults, enDefaults] = await Promise.all([
         fetch('/locales/es.json').then(res => res.json()),
-        fetch('/locales/en.json').then(res => res.json()),
-        dataService.getUITexts('es'),
-        dataService.getUITexts('en')
+        fetch('/locales/en.json').then(res => res.json())
       ]);
       
-      setTranslations({ 
-          es: mergeTexts(esDefaults, storedEs),
-          en: mergeTexts(enDefaults, storedEn)
-      });
+      // Usar archivos locales inmediatamente
+      const initialTranslations = { es: esDefaults, en: enDefaults };
+      setTranslations(initialTranslations);
+      
+      // Cargar customizaciones de manera asíncrona en background
+      setTimeout(async () => {
+        try {
+          const [storedEs, storedEn] = await Promise.all([
+            dataService.getUITexts('es'),
+            dataService.getUITexts('en')
+          ]);
+          
+          const mergedTranslations = { 
+            es: mergeTexts(esDefaults, storedEs),
+            en: mergeTexts(enDefaults, storedEn)
+          };
+          
+          setTranslations(mergedTranslations);
+          // Guardar en cache
+          localStorage.setItem('translations-cache', JSON.stringify(mergedTranslations));
+          localStorage.setItem('translations-cache-timestamp', Date.now().toString());
+        } catch (error) {
+          console.warn('Failed to load custom translations, using defaults:', error);
+        }
+      }, 100);
 
     } catch (error) {
       console.error('Failed to load translation files:', error);
-      // Fallback to local files if API fails
-      try {
-        const [esDefaults, enDefaults] = await Promise.all([
-            fetch('/locales/es.json').then(res => res.json()),
-            fetch('/locales/en.json').then(res => res.json())
-        ]);
-        setTranslations({ es: esDefaults, en: enDefaults });
-      } catch (fallbackError) {
-        console.error('Failed to load fallback translation files:', fallbackError);
-      }
+      // Fallback básico
+      setTranslations({ es: {}, en: {} });
     }
   }, []);
 

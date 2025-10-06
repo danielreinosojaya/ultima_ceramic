@@ -227,6 +227,7 @@ export async function ensureTablesExist() {
         console.log('Checking essential columns...');
         await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS min_participants INT;`;
         await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS price_per_person NUMERIC(10, 2);`;
+        await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS sort_order INT DEFAULT 0;`;
         await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS participants INT DEFAULT 1;`;
         console.log("Essential columns ensured.");
     } catch (error) {

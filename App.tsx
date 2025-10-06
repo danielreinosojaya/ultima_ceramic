@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { Header } from './components/Header';
 import { WelcomeSelector } from './components/WelcomeSelector';
 import { TechniqueSelector } from './components/TechniqueSelector';
@@ -13,8 +13,10 @@ import { BookingTypeModal } from './components/BookingTypeModal';
 import { ClassInfoModal } from './components/ClassInfoModal';
 import { PrerequisiteModal } from './components/PrerequisiteModal';
 import { AnnouncementsBoard } from './components/AnnouncementsBoard';
-import { AdminConsole } from './components/admin/AdminConsole';
+// Lazy load AdminConsole to reduce initial bundle size
+const AdminConsole = lazy(() => import('./components/admin/AdminConsole').then(module => ({ default: module.AdminConsole })));
 import { NotificationProvider } from './context/NotificationContext';
+import { AdminDataProvider } from './context/AdminDataContext';
 import { ConfirmationPage } from './components/ConfirmationPage';
 
 import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession } from './types';
@@ -56,29 +58,32 @@ const App: React.FC = () => {
     useEffect(() => {
         const fetchAppData = async () => {
             try {
-                const [
-                    products, instructors, availability, scheduleOverrides, classCapacity,
-                    capacityMessages, announcements, policies, confirmationMessage, footerInfo, bankDetails,
-                    bookings // Added bookings to the list of fetched data
-                ] = await Promise.all([
+                // Load only essential data for initial render
+                console.log('Loading essential app data...');
+                const [products, announcements, policies, footerInfo] = await Promise.all([
                     dataService.getProducts(),
-                    dataService.getInstructors(),
-                    dataService.getAvailability(),
-                    dataService.getScheduleOverrides(),
-                    dataService.getClassCapacity(),
-                    dataService.getCapacityMessageSettings(),
                     dataService.getAnnouncements(),
                     dataService.getPolicies(),
-                    dataService.getConfirmationMessage(),
-                    dataService.getFooterInfo(),
-                    dataService.getBankDetails(),
-                    dataService.getBookings() // Added the dataService call to fetch bookings
+                    dataService.getFooterInfo()
                 ]);
 
                 setAppData({
-                    products, instructors, availability, scheduleOverrides, classCapacity,
-                    capacityMessages, announcements, bookings, policies, confirmationMessage, footerInfo, bankDetails
+                    products, 
+                    announcements, 
+                    policies, 
+                    footerInfo,
+                    // Initialize empty data structures for lazy loading
+                    instructors: [],
+                    availability: { Sunday: [], Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [] },
+                    scheduleOverrides: {},
+                    classCapacity: { potters_wheel: 0, molding: 0, introductory_class: 0 },
+                    capacityMessages: { thresholds: [] },
+                    bookings: [],
+                    confirmationMessage: '',
+                    bankDetails: []
                 });
+                
+                console.log('Essential app data loaded successfully');
             } catch (error) {
                 console.error("Failed to load initial app data:", error);
                 alert("Error cargando datos: " + (error?.message || error));
@@ -86,7 +91,9 @@ const App: React.FC = () => {
                 setLoading(false);
             }
         };
-        fetchAppData();
+        
+        // Use setTimeout to prevent blocking initial render
+        setTimeout(fetchAppData, 0);
     }, []);
 
     const handleWelcomeSelect = (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building') => {
@@ -194,6 +201,63 @@ const App: React.FC = () => {
         });
     };
     
+    // Función para cargar datos adicionales bajo demanda
+    const loadAdditionalData = useCallback(async (dataType: 'scheduling' | 'bookings' | 'admin', currentAppData: AppData) => {
+        if (!currentAppData) return;
+        
+        try {
+            let updates: Partial<AppData> = {};
+            
+            switch (dataType) {
+                case 'scheduling':
+                    if (currentAppData.instructors.length === 0) {
+                        const [instructors, availability, scheduleOverrides, classCapacity, capacityMessages] = await Promise.all([
+                            dataService.getInstructors(),
+                            dataService.getAvailability(),
+                            dataService.getScheduleOverrides(),
+                            dataService.getClassCapacity(),
+                            dataService.getCapacityMessageSettings()
+                        ]);
+                        updates = { instructors, availability, scheduleOverrides, classCapacity, capacityMessages };
+                    }
+                    break;
+                case 'bookings':
+                    if (currentAppData.bookings.length === 0) {
+                        const bookings = await dataService.getBookings();
+                        updates = { bookings };
+                    }
+                    break;
+                case 'admin':
+                    const [confirmationMessage, bankDetails] = await Promise.all([
+                        dataService.getConfirmationMessage(),
+                        dataService.getBankDetails()
+                    ]);
+                    updates = { confirmationMessage, bankDetails: bankDetails as any };
+                    break;
+            }
+            
+            if (Object.keys(updates).length > 0) {
+                setAppData(prev => prev ? { ...prev, ...updates } : null);
+            }
+        } catch (error) {
+            console.error(`Failed to load ${dataType} data:`, error);
+        }
+    }, []);
+
+    // Load scheduling data when needed for schedule view
+    useEffect(() => {
+        if (view === 'schedule' && appData && appData.instructors.length === 0) {
+            loadAdditionalData('scheduling', appData);
+        }
+    }, [view, appData, loadAdditionalData]);
+
+    // Load admin data when needed for confirmation view
+    useEffect(() => {
+        if (view === 'confirmation' && appData && !appData.confirmationMessage) {
+            loadAdditionalData('admin', appData);
+        }
+    }, [view, appData, loadAdditionalData]);
+    
     const resetFlow = () => {
         setView('welcome');
         setBookingDetails({ product: null, slots: [], userInfo: null });
@@ -217,7 +281,7 @@ const App: React.FC = () => {
                 return <TechniqueSelector onSelect={handleTechniqueSelect} onBack={() => setView('welcome')} />;
             case 'packages':
                 if (!technique) return <TechniqueSelector onSelect={handleTechniqueSelect} onBack={() => setView('welcome')} />;
-                return <PackageSelector onSelect={handlePackageSelect} technique={technique} />;
+                return <PackageSelector onSelect={handlePackageSelect} technique={technique} products={appData.products} />;
             case 'intro_classes':
                 return <IntroClassSelector onConfirm={handleIntroClassConfirm} appData={appData} onBack={() => setView('welcome')} />;
             case 'schedule':
@@ -275,7 +339,18 @@ const App: React.FC = () => {
         console.log("App - rendering AdminConsole");
         return (
             <NotificationProvider>
-                <AdminConsole />
+                <Suspense fallback={
+                    <div className="min-h-screen bg-brand-background flex items-center justify-center">
+                        <div className="text-center">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-primary mx-auto mb-4"></div>
+                            <p className="text-brand-secondary">Cargando panel de administración...</p>
+                        </div>
+                    </div>
+                }>
+                    <AdminDataProvider>
+                        <AdminConsole />
+                    </AdminDataProvider>
+                </Suspense>
             </NotificationProvider>
         );
     }

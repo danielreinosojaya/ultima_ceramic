@@ -1,15 +1,25 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import type { Product, UserInfo, Customer, TimeSlot } from '../../types';
+import type { Product, UserInfo, Customer, TimeSlot, Booking } from '../../types';
 import * as dataService from '../../services/dataService';
 import { COUNTRIES } from '@/constants';
 
 interface ManualBookingModalProps {
+  isOpen: boolean;
   onClose: () => void;
   onBookingAdded: () => void;
+  existingBookings: Booking[];
+  availableProducts: Product[];
   preselectedCustomer?: Customer;
 }
 
-export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose, onBookingAdded, preselectedCustomer }) => {
+export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  onBookingAdded,
+  existingBookings,
+  availableProducts,
+  preselectedCustomer
+}) => {
   const [productError, setProductError] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(preselectedCustomer || null);
@@ -34,18 +44,60 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
   });
 
   useEffect(() => {
-    dataService.getProducts().then((rawProducts) => {
-      // Mapear is_active a isActive si es necesario
-      const mapped = rawProducts.map(p => ({
-        ...p,
-        isActive: typeof p.isActive !== 'undefined' ? p.isActive : (typeof (p as any).is_active !== 'undefined' ? (p as any).is_active : false)
-      }));
-      setProducts(mapped);
-    });
-    dataService.getBookings().then(bookings => {
-      setAllCustomers(dataService.getCustomers(bookings));
-    });
-  }, []);
+    // Usar los productos pasados como props
+    setProducts(availableProducts);
+    
+    // Obtener customers correctamente usando la función async
+    const fetchCustomers = async () => {
+      const customers = await dataService.getCustomers();
+      setAllCustomers(customers);
+    };
+    fetchCustomers();
+  }, [availableProducts]);
+
+  // Efecto para manejar el cliente preseleccionado
+  useEffect(() => {
+    if (preselectedCustomer) {
+      setSelectedCustomer(preselectedCustomer);
+      setUserInfo({
+        firstName: preselectedCustomer.firstName,
+        lastName: preselectedCustomer.lastName,
+        email: preselectedCustomer.email,
+        phone: preselectedCustomer.phone,
+        countryCode: preselectedCustomer.countryCode || COUNTRIES[0].code,
+        birthday: preselectedCustomer.birthday || ''
+      });
+    }
+  }, [preselectedCustomer]);
+
+  // Resetear estado cuando se cierre el modal
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedCustomer(preselectedCustomer || null);
+      setSelectedProduct(null);
+      setPrice('');
+      setClientNote('');
+      setSelectedSlots([]);
+      setSelectedDate('');
+      setSelectedTime('');
+      setShowCalendar(false);
+      setShowTimePicker(false);
+      setProductError('');
+      setSearchTerm('');
+      if (preselectedCustomer) {
+        setUserInfo({
+          firstName: preselectedCustomer.firstName,
+          lastName: preselectedCustomer.lastName,
+          email: preselectedCustomer.email,
+          phone: preselectedCustomer.phone,
+          countryCode: preselectedCustomer.countryCode || COUNTRIES[0].code,
+          birthday: preselectedCustomer.birthday || ''
+        });
+      } else {
+        setUserInfo({ firstName: '', lastName: '', email: '', phone: '', countryCode: COUNTRIES[0].code, birthday: '' });
+      }
+    }
+  }, [isOpen, preselectedCustomer]);
 
   const filteredCustomers = useMemo(() => {
     if (!searchTerm) return [];
@@ -71,7 +123,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
     setProductError('');
     try {
       // Validación profesional
-      if (!selectedCustomer && !preselectedCustomer) throw new Error('Selecciona un cliente');
+      if (!selectedCustomer) throw new Error('Selecciona un cliente');
       if (!selectedProduct) {
         setProductError('Selecciona un producto antes de continuar.');
         setSubmitDisabled(false);
@@ -80,11 +132,23 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
       if (!selectedSlots.length) throw new Error('Agrega al menos un horario');
       // Construir datos de reserva
       const bookingData = {
-        customerEmail: (preselectedCustomer?.email || selectedCustomer?.email),
+        userInfo: selectedCustomer?.userInfo || {
+          firstName: selectedCustomer?.userInfo?.firstName || '',
+          lastName: selectedCustomer?.userInfo?.lastName || '',
+          email: selectedCustomer?.email || '',
+          phone: selectedCustomer?.userInfo?.phone || '',
+          countryCode: selectedCustomer?.userInfo?.countryCode || '',
+          birthday: selectedCustomer?.userInfo?.birthday || null
+        },
         productId: selectedProduct.id,
         price: Number(price) || selectedProduct.price,
         clientNote,
         slots: selectedSlots,
+        product: selectedProduct,
+        productType: selectedProduct.type,
+        bookingMode: 'flexible',
+        isPaid: false,
+        paymentDetails: []
       };
       // Llamar al servicio de agendamiento
       const result = await dataService.addBooking(bookingData);
@@ -108,7 +172,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <h2 className="text-2xl font-bold mb-4">Reserva manual</h2>
-        {!preselectedCustomer && (
+        {!selectedCustomer && (
           <div className="mb-4">
             <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Buscar cliente" className="w-full p-2 border rounded-lg" />
             {filteredCustomers.length > 0 && (
@@ -126,13 +190,13 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ onClose,
             )}
           </div>
         )}
-        {preselectedCustomer && (
-          <div className="mb-4 p-4 bg-blue-50 rounded-lg">
-            <h3 className="font-bold mb-2">Cliente Seleccionado</h3>
-            <p className="text-sm text-gray-700">
-              <strong>{preselectedCustomer.userInfo?.firstName} {preselectedCustomer.userInfo?.lastName}</strong><br />
-              {preselectedCustomer.email}
-            </p>
+        {selectedCustomer && (
+          <div className="mb-4 p-3 bg-gray-100 rounded-lg">
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Cliente Seleccionado:</h3>
+            <div className="text-sm text-gray-600">
+              <strong>{selectedCustomer.userInfo?.firstName} {selectedCustomer.userInfo?.lastName}</strong><br />
+              {selectedCustomer.email}
+            </div>
           </div>
         )}
         <div className="mb-4">

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Customer, Booking, ClassPackage, TimeSlot, InvoiceRequest, AdminTab, UserInfo } from '../../types';
 import * as dataService from '../../services/dataService';
+import { generateCustomersFromBookings } from '../../services/dataService';
 import { CustomerList } from './CustomerList';
 import CustomerDetailView from './CustomerDetailView';
 import { UserGroupIcon } from '../icons/UserGroupIcon';
@@ -17,6 +18,7 @@ interface NavigationState {
 interface CrmDashboardProps {
     navigateToEmail?: string;
     bookings: Booking[];
+    customers?: Customer[]; // Add customers prop for direct use
     invoiceRequests: InvoiceRequest[];
     onDataChange: () => void;
     onNavigationComplete: () => void;
@@ -226,7 +228,15 @@ const CustomerModal: React.FC<{
     );
 };
 
-const CrmDashboard: React.FC<CrmDashboardProps> = ({ navigateToEmail, bookings, invoiceRequests, onDataChange, onNavigationComplete, setNavigateTo }) => {
+const CrmDashboard: React.FC<CrmDashboardProps> = ({ 
+    navigateToEmail, 
+    bookings, 
+    customers: propCustomers, 
+    invoiceRequests, 
+    onDataChange, 
+    onNavigationComplete, 
+    setNavigateTo 
+}) => {
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
     const [loading, setLoading] = useState(true);
@@ -244,21 +254,37 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({ navigateToEmail, bookings, 
     // a una actualización de estado sin dependencias adecuadas. La lógica de carga de datos
     // se ha movido a una función `useCallback` que se ejecutará solo cuando `bookings` cambie.
     const loadCustomers = useCallback(async () => {
+        console.log('CrmDashboard: Loading customers...');
+        console.log('PropCustomers available:', propCustomers?.length || 0);
+        console.log('Bookings available:', bookings?.length || 0);
         
-        const customersWithDeliveries = await dataService.getCustomersWithDeliveries(bookings);
+        // Use propCustomers if available, otherwise generate from bookings
+        if (propCustomers && propCustomers.length > 0) {
+            console.log('CrmDashboard: Using propCustomers');
+            setCustomers(propCustomers);
+            setLoading(false);
+            return;
+        }
         
-        // Check specifically for Daniel Reinoso
-        const danielCustomer = customersWithDeliveries.find(c => 
-            (c.userInfo?.firstName?.toLowerCase() === 'daniel' && c.userInfo?.lastName?.toLowerCase() === 'reinoso') ||
-            c.email?.toLowerCase().includes('daniel') ||
-            c.email?.toLowerCase().includes('reinoso')
-        );
+        if (!bookings || bookings.length === 0) {
+            console.log('CrmDashboard: No bookings available, showing empty state');
+            setCustomers([]);
+            setLoading(false);
+            return;
+        }
         
-        setCustomers(customersWithDeliveries);
-        setLoading(false);
-    }, [bookings]);
-
-    // CORRECCIÓN: Llamamos a la función de carga de datos en un useEffect con la dependencia `loadCustomers`.
+        try {
+            console.log('CrmDashboard: Generating customers from bookings');
+            const customersFromBookings = generateCustomersFromBookings(bookings);
+            console.log('CrmDashboard: Generated customers:', customersFromBookings.length);
+            setCustomers(customersFromBookings);
+        } catch (error) {
+            console.error('CrmDashboard: Error loading customers:', error);
+            setCustomers([]);
+        } finally {
+            setLoading(false);
+        }
+    }, [bookings, propCustomers]);    // CORRECCIÓN: Llamamos a la función de carga de datos en un useEffect con la dependencia `loadCustomers`.
     // Esto asegura que la lógica se ejecuta solo cuando los datos de `bookings` cambian, evitando el bucle.
     useEffect(() => {
         loadCustomers();
@@ -408,7 +434,19 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({ navigateToEmail, bookings, 
     );
 
     if (loading) {
-        return <div>Loading customers...</div>
+        return <div className="flex items-center justify-center p-8">
+            <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary mx-auto mb-2"></div>
+                <p className="text-brand-secondary">Cargando clientes...</p>
+            </div>
+        </div>;
+    }
+
+    if (customers.length === 0) {
+        return <div className="text-center p-8">
+            <p className="text-brand-secondary mb-4">No hay clientes disponibles</p>
+            <p className="text-sm text-gray-500">Bookings recibidos: {bookings?.length || 0}</p>
+        </div>;
     }
 
     return (
