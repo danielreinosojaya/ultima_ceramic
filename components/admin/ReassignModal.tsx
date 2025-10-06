@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import type { Instructor } from '../../types';
 import * as dataService from '../../services/dataService';
-import { useLanguage } from '../../context/LanguageContext';
+// import { useLanguage } from '../../context/LanguageContext';
 
 interface ReassignModalProps {
   isOpen: boolean;
@@ -12,7 +12,7 @@ interface ReassignModalProps {
 }
 
 export const ReassignModal: React.FC<ReassignModalProps> = ({ isOpen, onClose, onConfirm, instructorToDelete }) => {
-  const { t } = useLanguage();
+  // const { t } = useLanguage();
   const [instructors, setInstructors] = useState<Instructor[]>([]);
   const [replacementId, setReplacementId] = useState<number | null>(null);
 
@@ -42,14 +42,14 @@ export const ReassignModal: React.FC<ReassignModalProps> = ({ isOpen, onClose, o
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
       <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md animate-fade-in-up" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-lg font-bold text-red-600 mb-2">{t('admin.reassignModal.title')}</h3>
-        <p className="text-brand-secondary mb-4">{t('admin.reassignModal.message', { name: instructorToDelete.name })}</p>
+        <h3 className="text-lg font-bold text-red-600 mb-2">Reasignar Instructor</h3>
+        <p className="text-brand-secondary mb-4">El instructor {instructorToDelete.name} tiene clases asignadas. Selecciona un instructor de reemplazo:</p>
 
         {instructors.length > 0 ? (
           <div className="space-y-4">
             <div>
               <label htmlFor="replacement-instructor" className="block text-sm font-bold text-brand-secondary mb-1">
-                {t('admin.reassignModal.reassignToLabel')}
+                Reasignar a:
               </label>
               <select
                 id="replacement-instructor"
@@ -67,14 +67,14 @@ export const ReassignModal: React.FC<ReassignModalProps> = ({ isOpen, onClose, o
                 onClick={onClose}
                 className="px-4 py-2 rounded-md text-sm font-semibold bg-gray-200 hover:bg-gray-300"
               >
-                {t('admin.productManager.cancelButton')}
+                Cancelar
               </button>
               <button
                 onClick={handleConfirm}
                 disabled={!replacementId}
                 className="px-4 py-2 rounded-md text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:bg-gray-400"
               >
-                {t('admin.reassignModal.confirmButton')}
+                Confirmar Reasignación
               </button>
             </div>
           </div>

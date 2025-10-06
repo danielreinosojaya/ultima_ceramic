@@ -1,3 +1,69 @@
+// Si el cliente no tiene reservas, agregarlo como standalone
+export const ensureStandaloneCustomer = async (customerData: {
+    email: string;
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    countryCode?: string;
+    birthday?: string;
+}): Promise<{ success: boolean; customer?: Customer; error?: string }> => {
+    // Verificar si el cliente ya existe en la base de datos
+    try {
+        const response = await fetch(`/api/data?action=standaloneCustomers`);
+        const customers = await response.json();
+        const exists = customers.some((c: any) => c.email?.toLowerCase() === customerData.email.toLowerCase());
+        if (exists) {
+            return { success: true, customer: customers.find((c: any) => c.email?.toLowerCase() === customerData.email.toLowerCase()) };
+        }
+        // Si no existe, crearlo
+        return await createOrUpdateCustomer(customerData);
+    } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+};
+// Obtener reservas por email de cliente
+export const getBookingsByCustomerEmail = async (email: string): Promise<Booking[]> => {
+    const response = await fetch(`/api/data?action=bookingsByCustomerEmail&email=${encodeURIComponent(email)}`);
+    if (!response.ok) throw new Error('Error fetching bookings for customer');
+    return response.json();
+};
+// Crear o actualizar cliente en la base de datos
+export const createOrUpdateCustomer = async (customerData: {
+    email: string;
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    countryCode?: string;
+    birthday?: string;
+}): Promise<{ success: boolean; customer?: Customer; error?: string }> => {
+    try {
+        const response = await fetch('/api/data?key=customer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(customerData),
+        });
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+};
+
+// Create a new customer
+export const createCustomer = async (customerData: {
+    email: string;
+    firstName: string;
+    lastName: string;
+    phone: string;
+    countryCode: string;
+    birthday?: string;
+}): Promise<Customer> => {
+    const result = await createOrUpdateCustomer(customerData);
+    if (!result.success || !result.customer) {
+        throw new Error(result.error || 'Error creating customer');
+    }
+    return result.customer;
+};
 // Edit payment details for a booking (amount, method, date)
 // import type { PaymentDetails } from '../types';
 
@@ -31,35 +97,174 @@ import { DAY_NAMES } from '../constants';
 
 // --- API Helpers ---
 
-const fetchData = async (url: string, options?: RequestInit) => {
-    try {
-        const response = await fetch(url, options);
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`HTTP error! status: ${response.status}`, errorText);
-            // Vercel might return HTML for 404, so we can't assume JSON
-            if (response.headers.get('content-type')?.includes('application/json')) {
-                const errorData = JSON.parse(errorText || '{}');
-                throw new Error(errorData.message || errorData.error || `HTTP error! status: ${response.status}`);
-            } else {
-                throw new Error(`${response.status} ${response.statusText}`);
+const fetchData = async (url: string, options?: RequestInit, retries: number = 3) => {
+    let lastError: Error;
+    
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            console.log(`Fetch attempt ${attempt}/${retries} for ${url}`);
+            
+            const response = await fetch(url, {
+                ...options,
+                // Timeout más largo para mejor compatibilidad
+                signal: AbortSignal.timeout(30000) // 30 segundos timeout
+            });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                // Vercel might return HTML for 404, so we can't assume JSON
+                if (response.headers.get('content-type')?.includes('application/json')) {
+                    const errorData = JSON.parse(errorText || '{}');
+                    throw new Error(errorData.message || errorData.error || `HTTP error! status: ${response.status}`);
+                } else {
+                    throw new Error(`${response.status} ${response.statusText}`);
+                }
+            }
+            
+            const text = await response.text();
+            // Handle cases where the response might be empty
+            return text ? JSON.parse(text) : null;
+            
+        } catch (error) {
+            lastError = error instanceof Error ? error : new Error(String(error));
+            console.warn(`Fetch attempt ${attempt} failed:`, lastError.message);
+            
+            // Si es timeout, intentar con timeout más largo en el último intento
+            if (attempt === retries && lastError.message.includes('timed out')) {
+                console.log('Final attempt with longer timeout...');
+                try {
+                    const response = await fetch(url, {
+                        ...options,
+                        signal: AbortSignal.timeout(60000) // 60 segundos para último intento
+                    });
+                    
+                    if (response.ok) {
+                        const text = await response.text();
+                        return text ? JSON.parse(text) : null;
+                    }
+                } catch (finalError) {
+                    console.error('Even extended timeout failed:', finalError);
+                }
+            }
+            
+            // Si no es el último intento, esperar antes de reintentar
+            if (attempt < retries) {
+                const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Exponential backoff, max 5s
+                console.log(`Retrying in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
             }
         }
-        const text = await response.text();
-        // Handle cases where the response might be empty
-        return text ? JSON.parse(text) : null;
-    } catch (error) {
-        console.error(`API call failed: ${url}`, error);
-        throw error;
+    }
+    
+    // Si todos los intentos fallaron, lanzar el último error
+    console.error(`All ${retries} fetch attempts failed for ${url}`);
+    throw lastError;
+};
+
+// Cache más agresivo para evitar requests innecesarias
+const cache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_DURATION = 30 * 60 * 1000; // 30 minutos para datos generales
+const CRITICAL_CACHE_DURATION = 60 * 60 * 1000; // 1 hora para datos críticos
+
+// Debounce para evitar requests duplicados
+const pendingRequests = new Map<string, Promise<any>>();
+
+const getCachedData = <T>(key: string): T | null => {
+    const cached = cache.get(key);
+    if (!cached) return null;
+    
+    const duration = ['products', 'instructors', 'policies'].includes(key) 
+        ? CRITICAL_CACHE_DURATION 
+        : CACHE_DURATION;
+    
+    const isExpired = Date.now() - cached.timestamp > duration;
+    if (isExpired) {
+        cache.delete(key);
+        return null;
+    }
+    return cached.data as T;
+};
+
+const setCachedData = <T>(key: string, data: T): void => {
+    cache.set(key, { data, timestamp: Date.now() });
+};
+
+const clearCache = (key?: string): void => {
+    if (key) {
+        cache.delete(key);
+        // También limpiar caches relacionados
+        if (key === 'products') {
+            cache.delete('packages');
+            cache.delete('classes');
+        }
+    } else {
+        cache.clear();
     }
 };
 
-
 const getData = async <T>(key: string): Promise<T> => {
-    return fetchData(`/api/data?key=${key}`);
+    // Intentar obtener de cache primero con prioridad alta
+    const cached = getCachedData<T>(key);
+    if (cached) {
+        console.log(`Cache hit for ${key}`);
+        return cached;
+    }
+    
+    // Verificar si ya hay un request pendiente para evitar duplicados
+    const requestKey = `get_${key}`;
+    if (pendingRequests.has(requestKey)) {
+        console.log(`Request already pending for ${key}, waiting...`);
+        return pendingRequests.get(requestKey) as Promise<T>;
+    }
+    
+    console.log(`Cache miss for ${key}, fetching from API`);
+    const requestPromise = fetchData(`/api/data?key=${key}`)
+        .then(data => {
+            setCachedData(key, data);
+            pendingRequests.delete(requestKey);
+            return data;
+        })
+        .catch(error => {
+            pendingRequests.delete(requestKey);
+            console.error(`Failed to fetch ${key}:`, error);
+            
+            // En caso de error, intentar devolver datos del cache aunque estén expirados
+            const expiredCache = cache.get(key);
+            if (expiredCache) {
+                console.warn(`Using expired cache for ${key} due to fetch error`);
+                return expiredCache.data as T;
+            }
+            
+            // Si no hay cache, devolver datos por defecto según el tipo
+            console.warn(`No cache available for ${key}, returning default data`);
+            return getDefaultData<T>(key);
+        });
+    
+    pendingRequests.set(requestKey, requestPromise);
+    return requestPromise;
+};
+
+const getDefaultData = <T>(key: string): T => {
+    const defaults: Record<string, any> = {
+        products: [],
+        bookings: [],
+        groupInquiries: [],
+        instructors: [],
+        availability: { Sunday: [], Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [] },
+        scheduleOverrides: {},
+        classCapacity: { potters_wheel: 0, molding: 0, introductory_class: 0 },
+        capacityMessages: { thresholds: [] },
+        announcements: [],
+        invoiceRequests: [],
+        notifications: []
+    };
+    
+    return defaults[key] || [] as T;
 };
 
 const setData = async <T>(key: string, data: T): Promise<{ success: boolean }> => {
+    // Limpiar cache cuando se actualizan datos
+    clearCache(key);
     return fetchData(`/api/data?key=${key}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -79,59 +284,166 @@ const postAction = async <T>(action: string, body: any): Promise<T> => {
 // This is the critical fix. The database sends numeric types as strings.
 // We must parse them into the correct types before they reach the application logic.
 
-const parseProduct = (p: any): Product => ({
-    ...p,
-    id: parseInt(p.id, 10),
-    classes: p.classes ? parseInt(p.classes, 10) : undefined,
-    price: p.price ? parseFloat(p.price) : undefined,
-    minParticipants: p.minParticipants ? parseInt(p.minParticipants, 10) : undefined,
-    pricePerPerson: p.pricePerPerson ? parseFloat(p.pricePerPerson) : undefined,
-    details: p.details ? {
-        ...p.details,
-        durationHours: p.details.durationHours ? parseFloat(p.details.durationHours) : undefined,
-        durationDays: p.details.durationDays ? parseInt(p.details.durationDays, 10) : undefined
-    } : undefined
-});
-
-const parseBooking = (b: any): Booking => {
-    const booking = {
-        ...b,
-        productId: parseInt(b.productId, 10),
-        price: b.price ? parseFloat(b.price) : 0, // Ensure price is a number, default to 0
-        createdAt: new Date(b.createdAt),
-        product: parseProduct(b.product)
-    };
+const parseProduct = (p: any): Product => {
+    // Validate that product data is not null/undefined
+    if (!p || typeof p !== 'object') {
+        console.warn('parseProduct: Invalid product data, creating minimal valid product:', p);
+        return {
+            id: '0',
+            type: 'SINGLE_CLASS',
+            name: 'Unknown Product',
+            description: 'Product data unavailable',
+            isActive: false,
+            classes: 1,
+            price: 0,
+            sortOrder: 0,
+            details: {
+                duration: '1 hour',
+                durationHours: 1,
+                activities: ['General pottery activity'],
+                generalRecommendations: 'Basic pottery class',
+                materials: 'Clay and tools provided',
+                technique: 'potters_wheel'
+            }
+        } as SingleClass;
+    }
     
-    // CORRECCIÓN: Asegurar que paymentDetails es un array de objetos
-    if (b.paymentDetails) {
+    try {
+        // Ensure all required fields exist with safe parsing
+        const safeProduct = {
+            ...p,
+            id: typeof p.id === 'string' ? p.id : String(p.id || 'unknown'),
+            price: typeof p.price === 'number' ? p.price : parseFloat(p.price || 0),
+            sortOrder: typeof p.sortOrder === 'number' ? p.sortOrder : parseInt(p.sortOrder || '0', 10),
+            isActive: typeof p.isActive === 'boolean' ? p.isActive : true,
+            name: p.name || 'Unknown Product',
+            description: p.description || 'No description available',
+            type: p.type || 'SINGLE_CLASS'
+        };
+        
+        // Ensure details exist for products that need them
+        if (['CLASS_PACKAGE', 'SINGLE_CLASS', 'INTRODUCTORY_CLASS'].includes(safeProduct.type)) {
+            if (!safeProduct.details) {
+                safeProduct.details = {
+                    duration: '1 hour',
+                    durationHours: 1,
+                    activities: ['Pottery activity'],
+                    generalRecommendations: 'Basic pottery class',
+                    materials: 'Clay and tools provided',
+                    technique: 'potters_wheel'
+                };
+            }
+        }
+        
+        return safeProduct;
+    } catch (error) {
+        console.error('parseProduct: Error parsing product, using fallback:', error, p);
+        return {
+            id: 'error',
+            type: 'SINGLE_CLASS',
+            name: 'Error Product',
+            description: 'Product parsing failed',
+            isActive: false,
+            classes: 1,
+            price: 0,
+            sortOrder: 0,
+            details: {
+                duration: '1 hour',
+                durationHours: 1,
+                activities: ['Error fallback'],
+                generalRecommendations: 'Error fallback',
+                materials: 'Error fallback',
+                technique: 'potters_wheel'
+            }
+        } as SingleClass;
+    }
+};
+
+const parseBooking = (b: any): Booking | null => {
+    try {
+        if (!b || typeof b !== 'object') {
+            return null;
+        }
+        
+        // Debug específico para Molina
+        let createdAt: Date;
         try {
-            const payments = typeof b.paymentDetails === 'string'
-                ? JSON.parse(b.paymentDetails)
-                : b.paymentDetails;
-            
-            if (Array.isArray(payments)) {
-                booking.paymentDetails = payments.map(p => {
-                    const receivedAt = new Date(p.receivedAt);
-                    // FIXED: Check if the date is valid before converting to ISO string
-                    const receivedAtIso = !isNaN(receivedAt.getTime()) ? receivedAt.toISOString() : p.receivedAt;
-                    return {
-                        ...p,
-                        amount: p.amount ? parseFloat(p.amount) : 0, // Ensure amount is a number, default to 0
-                        receivedAt: receivedAtIso
-                    };
-                });
-            } else {
+            createdAt = new Date(b.createdAt);
+            if (isNaN(createdAt.getTime())) {
+                createdAt = new Date();
+            }
+        } catch {
+            createdAt = new Date();
+        }
+        
+        let parsedProduct: Product;
+        try {
+            parsedProduct = parseProduct(b.product);
+        } catch (error) {
+            console.error('parseBooking: Failed to parse product, using fallback:', error);
+            parsedProduct = parseProduct(null);
+        }
+        
+        const booking = {
+            ...b,
+            id: b.id || 'unknown',
+            productId: typeof b.productId === 'string' ? b.productId : String(b.productId || ''),
+            price: typeof b.price === 'number' ? b.price : parseFloat(b.price || 0),
+            createdAt,
+            product: parsedProduct,
+            userInfo: b.userInfo || {
+                firstName: 'Unknown',
+                lastName: 'Customer',
+                email: 'unknown@email.com',
+                phone: '',
+                countryCode: '',
+                birthday: null
+            },
+            slots: Array.isArray(b.slots) ? b.slots : [],
+            isPaid: typeof b.isPaid === 'boolean' ? b.isPaid : false,
+            bookingCode: b.bookingCode || 'UNKNOWN',
+            bookingMode: b.bookingMode || 'flexible',
+            productType: b.productType || 'SINGLE_CLASS'
+        };
+        
+        if (b.paymentDetails) {
+            try {
+                const payments = typeof b.paymentDetails === 'string'
+                    ? JSON.parse(b.paymentDetails)
+                    : b.paymentDetails;
+                
+                if (Array.isArray(payments)) {
+                    booking.paymentDetails = payments.map(p => {
+                        let receivedAt: string;
+                        try {
+                            const receivedAtDate = new Date(p.receivedAt);
+                            receivedAt = !isNaN(receivedAtDate.getTime()) ? receivedAtDate.toISOString() : new Date().toISOString();
+                        } catch {
+                            receivedAt = new Date().toISOString();
+                        }
+                        
+                        return {
+                            amount: typeof p.amount === 'number' ? p.amount : parseFloat(p.amount || 0),
+                            method: p.method || 'Cash',
+                            receivedAt
+                        };
+                    });
+                } else {
+                    booking.paymentDetails = [];
+                }
+            } catch (e) {
+                console.warn('parseBooking: Error parsing paymentDetails for booking', b.id, e);
                 booking.paymentDetails = [];
             }
-        } catch (e) {
-            console.error('Error parsing paymentDetails:', e);
+        } else {
             booking.paymentDetails = [];
         }
-    } else {
-        booking.paymentDetails = [];
-    }
 
-    return booking;
+        return booking;
+    } catch (error) {
+        console.error('parseBooking: Critical error parsing booking:', error, b?.id);
+        return null;
+    }
 };
 
 const parseInstructor = (i: any): Instructor => ({
@@ -140,7 +452,7 @@ const parseInstructor = (i: any): Instructor => ({
 });
 
 const parseGroupInquiry = (i: any): GroupInquiry => {
-        console.log('Valor de tentativeDate en el frontend (desde la API):', i.tentativeDate, '| Tipo:', typeof i.tentativeDate);
+    // Eliminado debug
 
     // Definimos una variable para la fecha tentativa
     let tentativeDate: Date | undefined;
@@ -173,23 +485,114 @@ export const updateCustomerInfo = async (email: string, info: Partial<UserInfo>)
     return postAction('updateCustomerInfo', { email, info });
 };
 
-// Products
+// Products - simplificado pero con cache
 export const getProducts = async (): Promise<Product[]> => {
-    const rawProducts = await getData<any[]>('products');
-    return rawProducts.map(parseProduct);
+    try {
+        const rawProducts = await getData<any[]>('products');
+        if (!rawProducts || !Array.isArray(rawProducts)) {
+            console.warn('No products data received, returning empty array');
+            return [];
+        }
+        console.log('Raw products from API:', rawProducts.length);
+        const parsedProducts = rawProducts.map(parseProduct);
+        
+        // Asegurar que todos los productos tengan sortOrder válido
+        const productsWithOrder = parsedProducts.map((product, index) => ({
+            ...product,
+            sortOrder: product.sortOrder !== undefined && product.sortOrder !== null ? product.sortOrder : index
+        }));
+        
+        console.log('Parsed products:', productsWithOrder.length);
+        return productsWithOrder;
+    } catch (error) {
+        console.error('Failed to get products:', error);
+        return [];
+    }
 };
-export const updateProducts = (products: Product[]): Promise<{ success: boolean }> => setData('products', products);
+export const updateProducts = async (products: Product[]): Promise<{ success: boolean }> => {
+    // No limpiar cache agresivamente para evitar requests excesivas
+    const result = await setData('products', products);
+    // Solo limpiar cache después de una actualización exitosa
+    if (result.success) {
+        setTimeout(() => clearCache('products'), 1000);
+    }
+    return result;
+};
+
+// Save a single product (more efficient than updating all products)
+export const saveProduct = (product: Product): Promise<{ success: boolean }> => setData('products', product);
+
 export const addProduct = (productData: Omit<Product, 'id' | 'isActive'>): Promise<{ success: boolean }> => postAction('addProduct', productData);
-export const deleteProduct = (id: number): Promise<{ success: boolean }> => fetchData(`/api/data?action=deleteProduct&id=${id}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-});
+export const deleteProduct = async (id: string): Promise<{ success: boolean }> => {
+    // Limpiar cache antes de eliminar
+    clearCache('products');
+    return fetchData(`/api/data?key=product&id=${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+    });
+};
 
 
-// Bookings
+// Bookings - working version
+
+// Bookings - working version
+export const getCustomers = async (): Promise<Customer[]> => {
+    try {
+        console.log('getCustomers: Starting...');
+        const customers = await getData<Customer[]>('customers');
+        console.log('getCustomers: Received', customers?.length || 0, 'customers');
+        return customers || [];
+    } catch (error) {
+        console.error('getCustomers: Error:', error);
+        return [];
+    }
+};
+
 export const getBookings = async (): Promise<Booking[]> => {
-    const rawBookings = await fetchData('/api/data?action=bookings');
-    return rawBookings.map(parseBooking);
+    try {
+        console.log('getBookings: Starting...');
+        // Clear cache to force fresh data
+        clearCache('bookings');
+        const rawBookings = await getData<any[]>('bookings');
+        console.log('getBookings: Raw data received:', rawBookings?.length, 'items');
+        
+        if (!rawBookings || !Array.isArray(rawBookings)) {
+            console.warn('getBookings: No bookings data received, returning empty array');
+            return [];
+        }
+        
+        // Filter out null/undefined values before processing
+        const validBookings = rawBookings.filter(booking => {
+            if (!booking || typeof booking !== 'object') {
+                console.warn('getBookings: Filtering out invalid booking:', booking);
+                return false;
+            }
+            return true;
+        });
+        
+        console.log('getBookings: Processing', validBookings.length, 'valid bookings out of', rawBookings.length, 'total');
+        
+        // Parse bookings
+        const parsedBookings: Booking[] = [];
+        
+        validBookings.forEach((booking, index) => {
+            try {
+                const parsed = parseBooking(booking);
+                
+                if (parsed) {
+                    parsedBookings.push(parsed);
+                }
+            } catch (error) {
+                console.error(`getBookings: Error parsing booking ${index + 1}:`, error);
+            }
+        });
+        
+        console.log('getBookings: Final result - Successfully processed', parsedBookings.length, 'valid bookings');
+        return parsedBookings;
+    } catch (error) {
+        console.error('getBookings: Error:', error);
+        return [];
+    }
 };
 export const addBooking = async (bookingData: any): Promise<AddBookingResult> => {
     const result = await postAction<any>('addBooking', bookingData);
@@ -313,21 +716,51 @@ export const updateBankDetails = (details: BankDetails[]): Promise<{ success: bo
 
 // --- Client-side Calculations and Utilities ---
 
-export const getCustomers = (bookings: Booking[]): Customer[] => {
+// Función auxiliar para generar customers desde bookings (exportada para uso en componentes)
+export const generateCustomersFromBookings = (bookings: Booking[]): Customer[] => {
+    console.log('generateCustomersFromBookings: Starting with', bookings?.length || 0, 'bookings');
+    
+    if (!bookings || bookings.length === 0) {
+        console.log('generateCustomersFromBookings: No bookings provided, returning empty array');
+        return [];
+    }
+    
     const customerMap: Map<string, { userInfo: UserInfo; bookings: Booking[] }> = new Map();
     for (const booking of bookings) {
-        if (!booking.userInfo || !booking.userInfo.email) continue;
+        console.log('generateCustomersFromBookings: Processing booking', booking?.id, 'with userInfo:', !!booking?.userInfo);
+        
+        if (!booking.userInfo || !booking.userInfo.email) {
+            console.warn('generateCustomersFromBookings: Skipping booking without userInfo/email:', booking?.id);
+            continue;
+        }
+        
         const email = booking.userInfo.email.toLowerCase();
+    // Eliminado debug
+        
         if (!customerMap.has(email)) {
+            // Eliminado debug
             customerMap.set(email, { userInfo: booking.userInfo, bookings: [] });
         }
         customerMap.get(email)!.bookings.push(booking);
     }
+    
+    console.log('generateCustomersFromBookings: Created customerMap with', customerMap.size, 'unique customers');
+    
     const customers: Customer[] = Array.from(customerMap.values()).map(data => {
         const sortedBookings = data.bookings.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-        return {
-            email: data.userInfo.email,
-            userInfo: data.userInfo,
+        // Ensure userInfo has all required fields defined
+        const safeUserInfo: UserInfo = {
+            firstName: data.userInfo.firstName || '',
+            lastName: data.userInfo.lastName || '',
+            email: data.userInfo.email || '',
+            phone: data.userInfo.phone || '',
+            countryCode: data.userInfo.countryCode || '',
+            birthday: data.userInfo.birthday || null
+        };
+        
+        const customer = {
+            email: safeUserInfo.email,
+            userInfo: safeUserInfo,
             bookings: sortedBookings,
             totalBookings: data.bookings.length,
             // CORRECCIÓN: Sumar todos los montos de pago del historial en lugar de solo el precio de la reserva
@@ -337,28 +770,97 @@ export const getCustomers = (bookings: Booking[]): Customer[] => {
             }, 0),
             lastBookingDate: sortedBookings.length > 0 ? sortedBookings[0].createdAt : new Date(0),
         };
+        
+        console.log('generateCustomersFromBookings: Created customer:', customer.email, 'with', customer.totalBookings, 'bookings');
+        return customer;
     });
-    return customers.sort((a, b) => b.lastBookingDate.getTime() - a.lastBookingDate.getTime());
+    
+    const sortedCustomers = customers.sort((a, b) => b.lastBookingDate.getTime() - a.lastBookingDate.getTime());
+    console.log('generateCustomersFromBookings: Returning', sortedCustomers.length, 'sorted customers');
+    
+    return sortedCustomers;
+};
+
+// Get standalone customers from the customers table
+export const getStandaloneCustomers = async (): Promise<Customer[]> => {
+    try {
+        const rawCustomers = await fetchData('/api/data?action=standaloneCustomers');
+        if (!rawCustomers) return [];
+        
+        return rawCustomers.map((customerRow: any) => {
+            const safeUserInfo: UserInfo = {
+                firstName: customerRow.firstName || '',
+                lastName: customerRow.lastName || '', 
+                email: customerRow.email || '',
+                phone: customerRow.phone || '',
+                countryCode: customerRow.countryCode || '',
+                birthday: customerRow.birthday || null
+            };
+            
+            return {
+                email: customerRow.email,
+                userInfo: safeUserInfo,
+                bookings: [], // Standalone customers have no bookings
+                totalBookings: 0,
+                totalSpent: 0,
+                lastBookingDate: new Date(0),
+                deliveries: [] // Will be populated later
+            };
+        });
+    } catch (error) {
+    // Eliminado debug
+        return [];
+    }
 };
 
 export const getCustomersWithDeliveries = async (bookings: Booking[]): Promise<Customer[]> => {
+    // Eliminado debug
+    
     // Get customers from bookings first
-    const customers = getCustomers(bookings);
+            const customersFromBookings = generateCustomersFromBookings(bookings);
+    // Eliminado debug
+    
+    // Get standalone customers from the customers table
+    const standaloneCustomers = await getStandaloneCustomers();
+    // Eliminado debug
+    
+    // Merge customers, avoiding duplicates (booking-based customers take priority)
+    const customerEmailsFromBookings = new Set(customersFromBookings.map(c => c.email.toLowerCase()));
+    const uniqueStandaloneCustomers = standaloneCustomers.filter(c => 
+        !customerEmailsFromBookings.has(c.email.toLowerCase())
+    );
+    
+    const allCustomers = [...customersFromBookings, ...uniqueStandaloneCustomers];
+    // Eliminado debug
     
     // Get all deliveries
     const allDeliveries = await getDeliveries();
+    // Eliminado debug
     
     // Add deliveries to each customer
-    const customersWithDeliveries = customers.map(customer => {
+    const customersWithDeliveries = allCustomers.map(customer => {
         const customerDeliveries = allDeliveries.filter(d => 
             d.customerEmail.toLowerCase() === customer.email.toLowerCase()
         );
+        
+    // Eliminado debug
         
         return {
             ...customer,
             deliveries: customerDeliveries
         };
     });
+    
+    console.log('DEBUG getCustomersWithDeliveries - Final customers with deliveries:', customersWithDeliveries);
+    console.log('DEBUG getCustomersWithDeliveries - Final count:', customersWithDeliveries.length);
+    
+    // Check specifically for Daniel Reinoso
+    const danielCustomer = customersWithDeliveries.find(c => 
+        (c.userInfo?.firstName?.toLowerCase() === 'daniel' && c.userInfo?.lastName?.toLowerCase() === 'reinoso') ||
+        c.email?.toLowerCase().includes('daniel') ||
+        c.email?.toLowerCase().includes('reinoso')
+    );
+    console.log('DEBUG getCustomersWithDeliveries - Daniel Reinoso found:', danielCustomer);
     
     return customersWithDeliveries;
 };
@@ -542,6 +1044,10 @@ export const getFutureCapacityMetrics = async (days: number): Promise<{ totalCap
 };
 
 // --- Delivery System Functions ---
+// Eliminar cliente por email
+export const deleteCustomer = async (email: string): Promise<{ success: boolean }> => {
+    return postAction('deleteCustomer', { email });
+};
 
 const parseDelivery = (d: any): Delivery => {
     const parsedPhotos = d.photos ? (Array.isArray(d.photos) ? d.photos : JSON.parse(d.photos || '[]')) : [];
@@ -604,4 +1110,24 @@ export const deleteDelivery = async (deliveryId: string): Promise<{ success: boo
 
 export const updateDeliveryStatuses = async (): Promise<{ success: boolean; updated: number }> => {
     return postAction('updateDeliveryStatuses', {});
+};
+
+// Función para migrar productos existentes y asignar sort_order
+export const migrateSortOrderForProducts = async (): Promise<{ success: boolean }> => {
+    // Limpiar cache después de la migración
+    const result = await postAction<{ success: boolean }>('migrateSortOrderForProducts', {});
+    if (result.success) {
+        clearCache('products');
+    }
+    return result;
+};
+
+// Función para agregar la columna sort_order si no existe
+export const addSortOrderColumn = async (): Promise<{ success: boolean }> => {
+    // Limpiar cache después de agregar columna
+    const result = await postAction<{ success: boolean }>('addSortOrderColumn', {});
+    if (result.success) {
+        clearCache('products');
+    }
+    return result;
 };

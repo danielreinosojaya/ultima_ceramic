@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import type { UserInfo, TimeSlot, PaymentDetails, AttendanceStatus } from '../../types';
+import type { UserInfo, TimeSlot, PaymentDetails, AttendanceStatus, Product, Booking } from '../../types';
 import * as dataService from '../../services/dataService';
 import { UserIcon } from '../icons/UserIcon';
 import { MailIcon } from '../icons/MailIcon';
@@ -11,17 +11,26 @@ import { CalendarEditIcon } from '../icons/CalendarEditIcon';
 
 type AttendeeInfo = { userInfo: UserInfo; bookingId: string; isPaid: boolean; bookingCode?: string, paymentDetails?: PaymentDetails[] };
 
+interface Attendee {
+  id: string;
+  userInfo: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone?: string;
+  };
+  bookingId: string;
+}
+
 interface BookingDetailsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  attendees: Attendee[];
   date: string;
   time: string;
-  attendees: AttendeeInfo[];
-  instructorId: number;
-  onClose: () => void;
-  onRemoveAttendee: (bookingId: string) => void;
-  onAcceptPayment: (bookingId: string) => void;
-  onMarkAsUnpaid: (bookingId: string) => void;
-  onEditAttendee: (bookingId: string) => void;
-  onRescheduleAttendee: (bookingId: string, slot: TimeSlot, attendeeName: string) => void;
+  product: Product;
+  onBookingUpdate?: () => void;
+  allBookings: Booking[]; // Pass bookings as prop
 }
 
 const formatTimeForInput = (time12h: string): string => {
@@ -49,16 +58,20 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, 
   useEffect(() => {
     const fetchAllBookings = async () => {
       if (attendees.length === 0) return;
-      const allBookings = await dataService.getBookings();
+      // Use cached data from dataService instead of fresh fetch
+      const cachedBookings = await dataService.getBookings();
       // Map bookingId to booking object for fast lookup
       const map: Record<string, any> = {};
-      allBookings.forEach((b: any) => {
+      cachedBookings.forEach((b: any) => {
         map[b.id] = b;
       });
       setBookingsMap(map);
     };
-    fetchAllBookings();
-  }, [attendees]);
+    // Only fetch once when component mounts
+    if (Object.keys(bookingsMap).length === 0) {
+      fetchAllBookings();
+    }
+  }, [attendees.length]); // Only depend on length, not full attendees array
 
   // ...existing code...
 
@@ -70,11 +83,11 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, 
       const sessionDateTime = new Date(year, month - 1, day, hours, minutes);
       setIsPastClass(sessionDateTime < new Date());
 
-      const allBookings = await dataService.getBookings();
+      // Use bookingsMap instead of fetching again
       const initialAttendance: Record<string, AttendanceStatus> = {};
       let attendanceTaken = false;
       attendees.forEach(attendee => {
-          const booking = allBookings.find(b => b.id === attendee.bookingId);
+          const booking = bookingsMap[attendee.bookingId];
           const status = booking?.attendance?.[slotIdentifier];
           if (status) {
               initialAttendance[attendee.bookingId] = status;
@@ -86,8 +99,11 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, 
       setAttendanceData(initialAttendance);
       setIsAttendanceTaken(attendanceTaken);
     };
-    init();
-  }, [date, time, attendees, slotIdentifier]);
+    // Only run when we have bookingsMap data
+    if (Object.keys(bookingsMap).length > 0) {
+      init();
+    }
+  }, [date, time, attendees, slotIdentifier, bookingsMap]);
 
   const handleAttendanceChange = (bookingId: string, status: AttendanceStatus) => {
     setAttendanceData(prev => ({ ...prev, [bookingId]: status }));

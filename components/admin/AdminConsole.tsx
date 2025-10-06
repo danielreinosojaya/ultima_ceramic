@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
-// ...existing code...
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Logo } from '../Logo';
 import { ProductManager } from './ProductManager';
 import { CalendarOverview } from './CalendarOverview';
@@ -15,12 +14,13 @@ import { CalendarIcon } from '../icons/CalendarIcon';
 import { CubeIcon } from '../icons/CubeIcon';
 import { CogIcon } from '../icons/CogIcon';
 import { SettingsManager } from './SettingsManager';
-import type { AdminTab, Notification, Product, Booking, GroupInquiry, Instructor, ScheduleOverrides, DayKey, AvailableSlot, ClassCapacity, CapacityMessageSettings, Announcement, AppData, BankDetails, InvoiceRequest, NavigationState } from '../../types';
+import type { AdminTab, Notification, Product, Booking, Customer, GroupInquiry, Instructor, ScheduleOverrides, DayKey, AvailableSlot, ClassCapacity, CapacityMessageSettings, Announcement, AppData, BankDetails, InvoiceRequest, NavigationState } from '../../types';
 import { ScheduleSettingsManager } from './ScheduleSettingsManager';
 import { CalendarEditIcon } from '../icons/CalendarEditIcon';
 import { InquiryManager } from './InquiryManager';
 import { ChatBubbleLeftRightIcon } from '../icons/ChatBubbleLeftRightIcon';
 import * as dataService from '../../services/dataService';
+import { useAdminData } from '../../context/AdminDataContext';
 import { SyncButton } from './SyncButton';
 import { ClientNotificationLog } from './ClientNotificationLog';
 import { PaperAirplaneIcon } from '../icons/PaperAirplaneIcon';
@@ -32,6 +32,7 @@ import ErrorBoundary from './ErrorBoundary';
 interface AdminData {
   products: Product[];
   bookings: Booking[];
+  customers: Customer[];
   inquiries: GroupInquiry[];
   instructors: Instructor[];
   availability: Record<DayKey, AvailableSlot[]>;
@@ -43,19 +44,17 @@ interface AdminData {
 }
 
 const defaultAdminData: AdminData = {
-    products: [],
-    bookings: [],
-    inquiries: [],
-    instructors: [],
-    availability: {
-        Sunday: [], Monday: [], Tuesday: [], Wednesday: [],
-        Thursday: [], Friday: [], Saturday: []
-    },
-    scheduleOverrides: {},
-    classCapacity: { potters_wheel: 0, molding: 0, introductory_class: 0 },
-    capacityMessages: { thresholds: [] },
-    announcements: [],
-    invoiceRequests: []
+  products: [],
+  bookings: [],
+  customers: [],
+  inquiries: [],
+  instructors: [],
+  availability: {} as Record<DayKey, AvailableSlot[]>,
+  scheduleOverrides: {},
+  classCapacity: {} as ClassCapacity,
+  capacityMessages: {} as CapacityMessageSettings,
+  announcements: [],
+  invoiceRequests: []
 };
 
 
@@ -65,54 +64,27 @@ export const AdminConsole: React.FC = () => {
   const [calendarView, setCalendarView] = useState<'month' | 'week'>('month');
   const [weekStartDate, setWeekStartDate] = useState<Date | null>(null);
   const [navigateTo, setNavigateTo] = useState<NavigationState | null>(null);
-  const [isSyncing, setIsSyncing] = useState(true);
-  const [isLoading, setIsLoading] = useState(true);
-  const [adminData, setAdminData] = useState<AdminData | null>(null);
-
+  const [isSyncing, setIsSyncing] = useState(false);
   const { dataVersion, forceRefresh } = useNotifications();
+  const adminData = useAdminData();
   
   const handleNavigationComplete = useCallback(() => {
     setNavigateTo(null);
   }, []);
 
-  const fetchData = useCallback(async () => {
-      !isLoading && setIsSyncing(true);
-      try {
-          const [
-              products, bookings, inquiries, instructors, availability, 
-              scheduleOverrides, classCapacity, capacityMessages, announcements,
-              invoiceRequests
-          ] = await Promise.all([
-              dataService.getProducts(),
-              dataService.getBookings(),
-              dataService.getGroupInquiries(),
-              dataService.getInstructors(),
-              dataService.getAvailability(),
-              dataService.getScheduleOverrides(),
-              dataService.getClassCapacity(),
-              dataService.getCapacityMessageSettings(),
-              dataService.getAnnouncements(),
-              dataService.getInvoiceRequests(),
-          ]);
-          setAdminData({ 
-              products, bookings, inquiries, instructors, availability, 
-              scheduleOverrides, classCapacity, capacityMessages, announcements,
-              invoiceRequests
-          });
-      } catch (error) {
-          console.error("Failed to fetch admin data", error);
-          setAdminData(defaultAdminData);
-      } finally {
-          setIsLoading(false);
-          setIsSyncing(false);
-      }
-  }, [isLoading]);
-
-  useEffect(() => {
-    fetchData();
-  }, [dataVersion, fetchData]);
+  // Eliminar fetch local, los datos vienen del contexto
   
-  const handleSync = forceRefresh;
+  const handleSync = () => {
+    console.log('handleSync called, will increment dataVersion');
+    setIsSyncing(true);
+    forceRefresh();
+  };
+  // Set isSyncing to false when adminData finishes loading
+  useEffect(() => {
+    if (!adminData.loading) {
+      setIsSyncing(false);
+    }
+  }, [adminData.loading]);
 
   useEffect(() => {
   if (navigateTo) {
@@ -131,10 +103,12 @@ export const AdminConsole: React.FC = () => {
   const handleNotificationClick = async (notification: Notification) => {
     handleSync(); 
     if (notification.type === 'new_booking') {
-        const bookings = await dataService.getBookings();
-        const booking = bookings.find(b => b.id === notification.targetId);
-        if (booking) {
-            setNavigateTo({ tab: 'customers', targetId: booking.userInfo.email });
+        // Use cached bookings instead of fetching again
+        if (adminData?.bookings) {
+            const booking = adminData.bookings.find(b => b.id === notification.targetId);
+            if (booking) {
+                setNavigateTo({ tab: 'customers', targetId: booking.userInfo.email });
+            }
         }
     } else if (notification.type === 'new_inquiry') {
         setNavigateTo({ tab: 'inquiries', targetId: notification.targetId });
@@ -154,8 +128,8 @@ export const AdminConsole: React.FC = () => {
   };
 
   const renderContent = () => {
-    if (isLoading || !adminData) {
-  return <div>Cargando datos de administración...</div>;
+    if (adminData.loading) {
+      return <div>Cargando datos de administración...</div>;
     }
 
   // targetId para ScheduleManager si la navegación viene de 'schedule' o 'calendar'
@@ -213,7 +187,8 @@ export const AdminConsole: React.FC = () => {
                 />;
       case 'customers':
         return <CrmDashboard 
-                  bookings={adminData.bookings} 
+                  bookings={adminData.bookings}
+                  customers={adminData.customers}
                   navigateToEmail={targetId} 
                   onDataChange={handleSync} 
                   onNavigationComplete={handleNavigationComplete}

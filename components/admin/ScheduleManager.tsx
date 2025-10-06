@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import type { Instructor, Booking, IntroductoryClass, Product, EditableBooking, RescheduleSlotInfo, PaymentDetails, AppData, InvoiceRequest, AdminTab, Customer, ClassPackage, EnrichedAvailableSlot, SingleClass, GroupClass, DayKey, AvailableSlot, ClassCapacity, Technique } from '../../types';
 import * as dataService from '../../services/dataService';
-import { useLanguage } from '../../context/LanguageContext';
+// import { useLanguage } from '../../context/LanguageContext';
 import { DAY_NAMES, PALETTE_COLORS } from '../../constants.js';
 import { InstructorTag } from '../InstructorTag';
 import { BookingDetailsModal } from './BookingDetailsModal';
@@ -233,6 +233,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         }
 
         const { instructors, bookings, products, availability, scheduleOverrides, classCapacity } = appData;
+        
         const scheduleMap: ScheduleData = new Map();
         instructors.forEach(i => scheduleMap.set(i.id, { instructor: i, schedule: {} }));
 
@@ -241,15 +242,24 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         // Step 1: Populate slots from all bookings for the current week.
         for (const booking of bookings) {
             for (const slot of booking.slots) {
-                if (!slot.date || !slot.time || !slot.instructorId) continue;
+                if (!slot.date || !slot.time) {
+                    continue;
+                }
+
+                // Si no hay instructorId, usar un instructor por defecto o permitir el slot
+                const instructorId = slot.instructorId || 1; // Default instructor ID
 
                 const slotDate = new Date(slot.date + "T00:00:00");
-                if (isNaN(slotDate.getTime())) continue;
+                if (isNaN(slotDate.getTime())) {
+                    continue;
+                }
 
-                if (slotDate >= startOfWeek && slotDate <= new Date(startOfWeek.getTime() + 6 * 24 * 60 * 60 * 1000)) {
+                const inCurrentWeek = slotDate >= startOfWeek && slotDate <= new Date(startOfWeek.getTime() + 6 * 24 * 60 * 60 * 1000);
+
+                if (inCurrentWeek) {
                     const dateStr = slot.date;
                     const normalizedTime = normalizeTime(slot.time);
-                    const slotId = `${dateStr}-${normalizedTime}-${slot.instructorId}`;
+                    const slotId = `${dateStr}-${normalizedTime}-${instructorId}`;
                     
                     if (!allSlots.has(slotId)) {
                         let slotCapacity = 0;
@@ -283,10 +293,11 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                             product: booking.product,
                             bookings: [],
                             capacity: slotCapacity,
-                            instructorId: slot.instructorId,
+                            instructorId: instructorId,
                             isOverride: !!scheduleOverrides[dateStr],
                         });
                     }
+                    
                     allSlots.get(slotId)!.bookings.push(booking);
                 }
             }
@@ -345,7 +356,16 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         
         // Step 3: Populate the final schedule map from allSlots
         allSlots.forEach(slot => {
-            const instructorData = scheduleMap.get(slot.instructorId);
+            let instructorData = scheduleMap.get(slot.instructorId);
+            
+            // SOLUCIÓN DEFINITIVA: Si el instructor ID no existe, usar el primer instructor disponible
+            if (!instructorData && scheduleMap.size > 0) {
+                const firstInstructorId = Array.from(scheduleMap.keys())[0];
+                instructorData = scheduleMap.get(firstInstructorId);
+                // Actualizar el slot para usar el instructor válido
+                slot.instructorId = firstInstructorId;
+            }
+            
             if (instructorData) {
                  if (!instructorData.schedule[slot.date]) {
                     instructorData.schedule[slot.date] = [];
@@ -505,7 +525,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             return;
         }
         const lowercasedTerm = searchTerm.toLowerCase();
-        const customers = dataService.getCustomers(appData.bookings);
+        const customers = dataService.generateCustomersFromBookings(appData.bookings);
         
         const foundCustomer = customers.find(customer => {
             const userInfo = customer.userInfo;
@@ -546,16 +566,21 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         if (!showUnpaidOnly) {
             return scheduleData;
         }
+        
         const filtered: ScheduleData = new Map();
         for (const [instructorId, data] of scheduleData.entries()) {
             const newSchedule: Record<string, EnrichedSlot[]> = {};
             let instructorHasUnpaid = false;
             for (const [dateStr, slots] of Object.entries(data.schedule)) {
                 const slotsArr = Array.isArray(slots) ? slots : [];
-                const slotsWithUnpaid = slotsArr.map(slot => ({
-                    ...slot,
-                    bookings: slot.bookings.filter(b => !b.isPaid)
-                })).filter(slot => slot.bookings.length > 0);
+                const slotsWithUnpaid = slotsArr.map(slot => {
+                    const unpaidBookings = slot.bookings.filter(b => !b.isPaid);
+                    
+                    return {
+                        ...slot,
+                        bookings: unpaidBookings
+                    };
+                }).filter(slot => slot.bookings.length > 0);
 
                 if (slotsWithUnpaid.length > 0) {
                     newSchedule[dateStr] = slotsWithUnpaid;
@@ -734,7 +759,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                     return (
                                         <td key={dateStr} className={`px-2 py-2 align-top w-1/7 min-h-[100px] relative transition-colors ${isToday ? 'bg-brand-primary/5' : ''}`}>
                                             <div className="space-y-2">
-                                                {slots.map((slot) => {
+                                                {slots.map((slot, slotIndex) => {
                                                     const totalParticipants = calculateTotalParticipants(slot.bookings);
                                                     const unpaidBookingsCount = slot.bookings.filter(b => !b.isPaid).length;
                                                     const hasUnpaidBookings = unpaidBookingsCount > 0;
@@ -750,7 +775,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                                         ? 'bg-green-100'
                                                         : `bg-${colorMap[instructor.colorScheme]?.bg || colorMap[defaultColorName].bg}`;
                                                     const borderColor = isGroupClass ? 'border-blue-400' : `border-${colorMap[instructor.colorScheme]?.text || colorMap[defaultColorName].text}/50`;
-                                                    const slotKey = `${slot.date}-${normalizeTime(slot.time)}-${slot.instructorId}`;
+                                                    const slotKey = `${slot.date}-${normalizeTime(slot.time)}-${slot.instructorId}-${slotIndex}`;
                                                     return (
                                                         <button 
                                                             key={slotKey} 
@@ -827,7 +852,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                         <div key={instructor.id}>
                             <InstructorTag instructorId={instructor.id} instructors={appData.instructors} />
                             <div className="space-y-2 mt-2 border-l-2 pl-4 ml-3 border-gray-200">
-                                {slots.map((slot) => {
+                                {slots.map((slot, slotIndex) => {
                                     const totalParticipants = calculateTotalParticipants(slot.bookings);
                                     const unpaidBookingsCount = slot.bookings.filter(b => !b.isPaid).length;
                                     const hasUnpaidBookings = unpaidBookingsCount > 0;
@@ -836,7 +861,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                     const hasPaidBooking = slot.bookings.some(b => b.isPaid);
                                     const bgColor = isGroupClass ? 'bg-blue-100' : hasPaidBooking ? 'bg-green-50' : 'bg-white';
                                     const borderColor = isGroupClass ? 'border-blue-400' : 'border-gray-200';
-                                    const slotKey = `${slot.date}-${normalizeTime(slot.time)}-${slot.instructorId}`;
+                                    const slotKey = `${slot.date}-${normalizeTime(slot.time)}-${slot.instructorId}-${slotIndex}`;
                                     return (
                                         <button
                                             key={slotKey}

@@ -11,12 +11,12 @@ const BankAccountsManager: React.FC = () => {
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        async function fetchAccounts() {
+        const fetchAccounts = async () => {
             setLoading(true);
             const details = await dataService.getBankDetails();
             setAccounts(Array.isArray(details) ? details : [details]);
             setLoading(false);
-        }
+        };
         fetchAccounts();
     }, []);
 
@@ -459,12 +459,15 @@ const UITextEditor: React.FC = () => {
     useEffect(() => {
         const loadTexts = async () => {
             try {
-                const response = await fetch(`./locales/es-ES.json`);
-                const defaultTexts = await response.json();
+                // Evitar requests innecesarios a archivos de traducciones
+                // Solo usar datos del servidor para reducir network requests
                 const storedTexts = await dataService.getUITexts('es');
-                const mergedTexts = { ...defaultTexts, ...storedTexts };
-                setTexts(mergedTexts);
-            } catch (error) { console.error("Failed to load texts:", error); }
+                setTexts(storedTexts || {});
+                console.log('Loaded texts without extra file requests');
+            } catch (error) { 
+                console.error("Failed to load texts:", error);
+                setTexts({});
+            }
         };
         loadTexts();
     }, []);

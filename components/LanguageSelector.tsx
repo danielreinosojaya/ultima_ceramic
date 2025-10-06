@@ -1,13 +1,16 @@
 
 
 import React from 'react';
-import { useLanguage } from '../context/LanguageContext.js';
+// import { useLanguage } from '../context/LanguageContext.js';
 
-
-
+// Componente deshabilitado - la aplicación ahora es monolingüe en español
 export const LanguageSelector: React.FC = () => {
-  const { language, setLanguage } = useLanguage();
+  // const { language, setLanguage } = useLanguage();
 
+  // Retorna null para ocultar el selector de idioma ya que la app es monolingüe
+  return null;
+  
+  /*
   return (
     <div className="flex items-center p-1 bg-brand-background rounded-full border border-brand-border">
       <button 
@@ -26,4 +29,5 @@ export const LanguageSelector: React.FC = () => {
       </button>
     </div>
   );
+  */
 };

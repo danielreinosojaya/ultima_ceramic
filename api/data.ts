@@ -22,8 +22,9 @@ function toCamelCase(obj: any): any {
     }
     return obj;
 }
+
 import { sql } from '@vercel/postgres';
-import { seedDatabase, ensureTablesExist } from './db.js';
+import { seedDatabase, ensureTablesExist, createCustomer } from './db.js';
 import * as emailService from './emailService.js';
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import type {
@@ -37,7 +38,8 @@ import type {
     BankDetails,
     TimeSlot,
     Delivery,
-    DeliveryStatus
+    DeliveryStatus,
+    Customer
 } from '../types';
 
 // Función auxiliar para parsear fechas de forma segura
@@ -61,59 +63,154 @@ function safeParseDate(value: any): Date | null {
 
 const parseBookingFromDB = (dbRow: any): Booking => {
     if (!dbRow) return dbRow;
-    const camelCased = toCamelCase(dbRow);
-    // Incluir client_note y participants explícitamente
-    camelCased.clientNote = dbRow.client_note || null;
-    camelCased.participants = dbRow.participants !== undefined ? dbRow.participants : null;
     
-    if (camelCased.price && typeof camelCased.price === 'string') {
-        camelCased.price = parseFloat(camelCased.price);
-    }
-    if (camelCased.product && camelCased.product.price && typeof camelCased.product.price === 'string') {
-        camelCased.product.price = parseFloat(camelCased.product.price);
-    }
-    if (camelCased.product && camelCased.product.classes && typeof camelCased.product.classes === 'string') {
-        camelCased.product.classes = parseInt(camelCased.product.classes, 10);
-    }
-    if (camelCased.product && camelCased.product.minParticipants && typeof camelCased.product.minParticipants === 'string') {
-        camelCased.product.minParticipants = parseInt(camelCased.product.minParticipants, 10);
-    }
-    if (camelCased.product && camelCased.product.pricePerPerson && typeof camelCased.product.pricePerPerson === 'string') {
-        camelCased.product.pricePerPerson = parseFloat(camelCased.product.pricePerPerson);
-    }
+    try {
+        const camelCased = toCamelCase(dbRow);
+        
+        // Parse userInfo from JSON string
+        if (camelCased.userInfo && typeof camelCased.userInfo === 'string') {
+            try {
+                camelCased.userInfo = JSON.parse(camelCased.userInfo);
+            } catch (e) {
+                console.error('Error parsing userInfo JSON:', e);
+                camelCased.userInfo = null;
+            }
+        }
+        
+        // Parse product from JSON string
+            if (camelCased.product && typeof camelCased.product === 'string') {
+                try {
+                    camelCased.product = JSON.parse(camelCased.product);
+                } catch (e) {
+                    console.error('Error parsing product JSON:', e);
+                    // Asignar producto de fallback válido en vez de null
+                    camelCased.product = {
+                        id: '0',
+                        type: 'SINGLE_CLASS',
+                        name: 'Unknown Product',
+                        description: 'Product data unavailable',
+                        isActive: false,
+                        classes: 1,
+                        price: 0,
+                        sortOrder: 0,
+                        details: {
+                            duration: '1 hour',
+                            durationHours: 1,
+                            activities: ['General pottery activity'],
+                            generalRecommendations: 'Basic pottery class',
+                            materials: 'Clay and tools provided',
+                            technique: 'potters_wheel'
+                        }
+                    };
+                }
+            }
+        
+        // Parse slots from JSON string
+        if (camelCased.slots && typeof camelCased.slots === 'string') {
+            try {
+                camelCased.slots = JSON.parse(camelCased.slots);
+            } catch (e) {
+                console.error('Error parsing slots JSON:', e);
+                camelCased.slots = [];
+            }
+        }
+        
+        // Incluir client_note y participants explícitamente
+        camelCased.clientNote = dbRow.client_note || null;
+        camelCased.participants = dbRow.participants !== undefined ? dbRow.participants : null;
+        
+        if (camelCased.price && typeof camelCased.price === 'string') {
+            camelCased.price = parseFloat(camelCased.price);
+        }
+        if (camelCased.product && camelCased.product.price && typeof camelCased.product.price === 'string') {
+            camelCased.product.price = parseFloat(camelCased.product.price);
+        }
+        if (camelCased.product && camelCased.product.classes && typeof camelCased.product.classes === 'string') {
+            camelCased.product.classes = parseInt(camelCased.product.classes, 10);
+        }
+        if (camelCased.product && camelCased.product.minParticipants && typeof camelCased.product.minParticipants === 'string') {
+            camelCased.product.minParticipants = parseInt(camelCased.product.minParticipants, 10);
+        }
+        if (camelCased.product && camelCased.product.pricePerPerson && typeof camelCased.product.pricePerPerson === 'string') {
+            camelCased.product.pricePerPerson = parseFloat(camelCased.product.pricePerPerson);
+        }
 
-    camelCased.createdAt = safeParseDate(camelCased.createdAt);
-    camelCased.bookingDate = safeParseDate(camelCased.bookingDate)?.toISOString();
+        camelCased.createdAt = safeParseDate(camelCased.createdAt);
+        camelCased.bookingDate = safeParseDate(camelCased.bookingDate)?.toISOString();
 
-    if (camelCased.paymentDetails) {
-        try {
-            // Intenta analizar paymentDetails si es una cadena, si no, úsalo directamente
-            const payments = typeof camelCased.paymentDetails === 'string'
-                ? JSON.parse(camelCased.paymentDetails)
-                : camelCased.paymentDetails;
-            
-            if (Array.isArray(payments)) {
-                camelCased.paymentDetails = payments.map((p: any) => ({
-                    ...p,
-                    amount: typeof p.amount === 'string' ? parseFloat(p.amount) : p.amount,
-                    receivedAt: safeParseDate(p.receivedAt)?.toISOString() || p.receivedAt // Keep original if parsing fails
-                }));
-            } else {
+        if (camelCased.paymentDetails) {
+            try {
+                // Intenta analizar paymentDetails si es una cadena, si no, úsalo directamente
+                const payments = typeof camelCased.paymentDetails === 'string'
+                    ? JSON.parse(camelCased.paymentDetails)
+                    : camelCased.paymentDetails;
+                
+                if (Array.isArray(payments)) {
+                    camelCased.paymentDetails = payments.map((p: any) => ({
+                        ...p,
+                        amount: typeof p.amount === 'string' ? parseFloat(p.amount) : p.amount,
+                        receivedAt: safeParseDate(p.receivedAt)?.toISOString() || p.receivedAt // Keep original if parsing fails
+                    }));
+                } else {
+                    camelCased.paymentDetails = [];
+                }
+            } catch (e) {
+                console.error('Error parsing paymentDetails JSON:', e);
                 camelCased.paymentDetails = [];
             }
-        } catch (e) {
-            console.error('Error parsing paymentDetails JSON:', e);
+        } else {
             camelCased.paymentDetails = [];
         }
-    } else {
-        camelCased.paymentDetails = [];
+
+        const totalPaid = (camelCased.paymentDetails || []).reduce((sum: number, p: any) => sum + p.amount, 0);
+        camelCased.isPaid = totalPaid >= camelCased.price;
+
+        return camelCased as Booking;
+    } catch (error) {
+        console.error('Critical error in parseBookingFromDB:', error);
+        // Fallback Booking válido si ocurre un error crítico
+        return {
+            id: 'unknown',
+            productId: '',
+            price: 0,
+            createdAt: new Date(),
+            product: {
+                id: '0',
+                type: 'SINGLE_CLASS',
+                name: 'Unknown Product',
+                description: 'Product data unavailable',
+                isActive: false,
+                classes: 1,
+                price: 0,
+                sortOrder: 0,
+                details: {
+                    duration: '1 hour',
+                    durationHours: 1,
+                    activities: ['General pottery activity'],
+                    generalRecommendations: 'Basic pottery class',
+                    materials: 'Clay and tools provided',
+                    technique: 'potters_wheel'
+                }
+            },
+            userInfo: {
+                firstName: 'Unknown',
+                lastName: 'Customer',
+                email: 'unknown@email.com',
+                phone: '',
+                countryCode: '',
+                birthday: null
+            },
+            slots: [],
+            isPaid: false,
+            bookingCode: 'UNKNOWN',
+            bookingMode: 'flexible',
+            productType: 'SINGLE_CLASS',
+            paymentDetails: [],
+            clientNote: undefined,
+            participants: undefined,
+            bookingDate: new Date().toISOString()
+        };
     }
-
-    const totalPaid = (camelCased.paymentDetails || []).reduce((sum: number, p: any) => sum + p.amount, 0);
-    camelCased.isPaid = totalPaid >= camelCased.price;
-
-
-    return camelCased as Booking;
 }
 
 const parseNotificationFromDB = (dbRow: any): Notification => {
@@ -170,12 +267,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).end();
     }
 
-    // Ensure database tables exist (including the deliveries table)
-    try {
-        await ensureTablesExist();
-    } catch (error) {
-        console.log('Table creation encountered an issue, but continuing...', error);
+    // Validate database connection early - check multiple possible env var names
+    const dbUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL || process.env.POSTGRES_PRISMA_URL;
+    if (!dbUrl) {
+        console.error('Database connection error: No database URL found in environment variables');
+        console.error('Available env vars:', Object.keys(process.env).filter(key => key.includes('POSTGRES') || key.includes('DATABASE')));
+        return res.status(500).json({ 
+            error: 'Database configuration error', 
+            details: 'Database URL environment variable is required (POSTGRES_URL, DATABASE_URL, or POSTGRES_PRISMA_URL)' 
+        });
     }
+
+    console.log('Using database URL:', dbUrl.substring(0, 30) + '...');
+
+    // Test database connectivity with a simple query and timeout
+    try {
+        console.log('Testing database connectivity...');
+        const startTime = Date.now();
+        
+        // Create a promise that resolves with the SQL query
+        const queryPromise = sql`SELECT 1 as test`;
+        
+        // Create a timeout promise
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Database query timeout after 10 seconds')), 10000);
+        });
+        
+        // Race between the query and timeout
+        await Promise.race([queryPromise, timeoutPromise]);
+        
+        const endTime = Date.now();
+        console.log(`Database connectivity test passed in ${endTime - startTime}ms`);
+    } catch (error) {
+        console.error('Database connectivity test failed:', error);
+        return res.status(500).json({ 
+            error: 'Database connection failed', 
+            details: error instanceof Error ? error.message : 'Database is unreachable' 
+        });
+    }
+
+    // Skip table initialization for product operations to avoid timeouts
+    // Tables should already exist from previous deployments
+    console.log('Skipping table initialization for faster response');
 
     try {
         if (req.method === 'GET') {
@@ -248,14 +381,14 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     data = instructors.map(toCamelCase);
                     break;
                 }
-                case 'bookings': {
-                    const { rows: bookings } = await sql`SELECT * FROM bookings ORDER BY created_at DESC`;
-                    data = bookings.map(parseBookingFromDB);
-                    break;
-                }
                 case 'deliveries': {
                     const { rows: deliveries } = await sql`SELECT * FROM deliveries ORDER BY scheduled_date ASC, created_at DESC`;
                     data = deliveries.map(toCamelCase);
+                    break;
+                }
+                case 'standaloneCustomers': {
+                    const { rows: customers } = await sql`SELECT * FROM customers ORDER BY first_name ASC, last_name ASC`;
+                    data = customers.map(toCamelCase);
                     break;
                 }
             default:
@@ -274,31 +407,91 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
             `;
             data = clientNotifications.map(parseClientNotificationFromDB);
         } else {
-            const { rows: settings } = await sql`SELECT value FROM settings WHERE key = ${key}`;
-            if (settings.length > 0) {
-                data = settings[0].value;
+            // Special handling for products - fetch from products table
+            if (key === 'products') {
+                const { rows: products } = await sql`SELECT * FROM products ORDER BY sort_order ASC NULLS LAST, name ASC`;
+                console.log('GET products from DB:', products.length, 'SINGLE_CLASS:', products.filter(p => p.type === 'SINGLE_CLASS').length);
+                data = products.map(toCamelCase);
+            } else if (key === 'bookings') {
+                const { rows: bookings } = await sql`SELECT * FROM bookings ORDER BY created_at DESC`;
+                console.log(`API: Raw database query returned ${bookings.length} rows`);
+                
+                if (bookings.length === 0) {
+                    console.warn('API: No bookings found in database');
+                    data = [];
+                } else {
+                    // Parse bookings properly using parseBookingFromDB
+                    const processedBookings = bookings
+                        .map(parseBookingFromDB)
+                        .filter(Boolean);
+                    
+                    console.log(`API: Successfully processed ${processedBookings.length} bookings out of ${bookings.length} raw bookings`);
+                    data = processedBookings;
+                }
+            } else if (key === 'customers') {
+                // Get all unique customers from bookings
+                const { rows: bookings } = await sql`SELECT * FROM bookings ORDER BY created_at DESC`;
+                const validBookings = bookings.filter(booking => booking && typeof booking === 'object');
+                const parsedBookings = validBookings.map(parseBookingFromDB).filter(Boolean);
+                
+                const customerMap = new Map<string, Customer>();
+                
+                parsedBookings.forEach((booking: Booking) => {
+                    if (!booking || !booking.userInfo || !booking.userInfo.email) return;
+                    
+                    const email = booking.userInfo.email;
+                    const existing = customerMap.get(email);
+                    
+                    if (existing) {
+                        existing.bookings.push(booking);
+                        existing.totalBookings += 1;
+                        existing.totalSpent += booking.price || 0;
+                        const bookingDate = new Date(booking.createdAt);
+                        if (bookingDate > existing.lastBookingDate) {
+                            existing.lastBookingDate = bookingDate;
+                        }
+                    } else {
+                        customerMap.set(email, {
+                            email,
+                            userInfo: booking.userInfo,
+                            bookings: [booking],
+                            totalBookings: 1,
+                            totalSpent: booking.price || 0,
+                            lastBookingDate: new Date(booking.createdAt),
+                            deliveries: []
+                        });
+                    }
+                });
+                
+                data = Array.from(customerMap.values());
+                console.log(`Generated ${data.length} customers from ${parsedBookings.length} bookings`);
             } else {
-                // Si el key no existe, devuelve un valor por defecto según el tipo esperado
-                switch (key) {
-                    case 'bankDetails':
-                    case 'announcements':
-                    case 'capacityMessages':
-                        data = [];
-                        break;
-                    case 'availability':
-                    case 'scheduleOverrides':
-                    case 'classCapacity':
-                    case 'automationSettings':
-                    case 'footerInfo':
-                    case 'backgroundSettings':
-                        data = {};
-                        break;
-                    case 'policies':
-                    case 'confirmationMessage':
-                        data = '';
-                        break;
-                    default:
-                        data = null;
+                const { rows: settings } = await sql`SELECT value FROM settings WHERE key = ${key}`;
+                if (settings.length > 0) {
+                    data = settings[0].value;
+                } else {
+                    // Si el key no existe, devuelve un valor por defecto según el tipo esperado
+                    switch (key) {
+                        case 'bankDetails':
+                        case 'announcements':
+                        case 'capacityMessages':
+                            data = [];
+                            break;
+                        case 'availability':
+                        case 'scheduleOverrides':
+                        case 'classCapacity':
+                        case 'automationSettings':
+                        case 'footerInfo':
+                        case 'backgroundSettings':
+                            data = {};
+                            break;
+                        case 'policies':
+                        case 'confirmationMessage':
+                            data = '';
+                            break;
+                        default:
+                            data = null;
+                    }
                 }
             }
         }
@@ -319,44 +512,110 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
 
     const value = req.body;
     switch (key) {
-        case 'products':
-            await sql`BEGIN`;
-            await sql.query('DELETE FROM products');
-            for (const p of value) {
-                await sql.query(
-                    `INSERT INTO products (id, type, name, classes, price, description, image_url, details, is_active, scheduling_rules, overrides, min_participants, price_per_person)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-                    ON CONFLICT (id) DO UPDATE SET
-                        type = EXCLUDED.type,
-                        name = EXCLUDED.name,
-                        classes = EXCLUDED.classes,
-                        price = EXCLUDED.price,
-                        description = EXCLUDED.description,
-                        image_url = EXCLUDED.image_url,
-                        details = EXCLUDED.details,
-                        is_active = EXCLUDED.is_active,
-                        scheduling_rules = EXCLUDED.scheduling_rules,
-                        overrides = EXCLUDED.overrides,
-                        min_participants = EXCLUDED.min_participants,
-                        price_per_person = EXCLUDED.price_per_person;`,
-                    [
-                        p.id,
-                        p.type,
-                        p.name,
-                        p.classes || null,
-                        p.price || null,
-                        p.description || null,
-                        p.imageUrl || null,
-                        p.details ? JSON.stringify(p.details) : null,
-                        p.isActive,
-                        p.schedulingRules ? JSON.stringify(p.schedulingRules) : null,
-                        p.overrides ? JSON.stringify(p.overrides) : null,
-                        p.minParticipants || null,
-                        p.pricePerPerson || null
-                    ]
-                );
+            case 'customer': {
+                // Crear o actualizar cliente
+                try {
+                    const customer = await createCustomer(value);
+                    return res.status(200).json({ success: true, customer });
+                } catch (error) {
+                    const errorMsg = error instanceof Error ? error.message : String(error);
+                    return res.status(500).json({ success: false, error: errorMsg });
+                }
             }
-            await sql`COMMIT`;
+        case 'products':
+            try {
+                console.log('Processing products update:', value);
+                
+                // Si es un solo producto (desde modal), hacer upsert individual
+                if (!Array.isArray(value)) {
+                    const p = value;
+                    console.log('Single product upsert:', p.id);
+                    
+                    await sql.query(
+                        `INSERT INTO products (id, type, name, classes, price, description, image_url, details, is_active, scheduling_rules, overrides, min_participants, price_per_person, sort_order)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                        ON CONFLICT (id) DO UPDATE SET
+                            type = EXCLUDED.type,
+                            name = EXCLUDED.name,
+                            classes = EXCLUDED.classes,
+                            price = EXCLUDED.price,
+                            description = EXCLUDED.description,
+                            image_url = EXCLUDED.image_url,
+                            details = EXCLUDED.details,
+                            is_active = EXCLUDED.is_active,
+                            scheduling_rules = EXCLUDED.scheduling_rules,
+                            overrides = EXCLUDED.overrides,
+                            min_participants = EXCLUDED.min_participants,
+                            price_per_person = EXCLUDED.price_per_person,
+                            sort_order = EXCLUDED.sort_order;`,
+                        [
+                            p.id,
+                            p.type,
+                            p.name,
+                            p.classes || null,
+                            p.price || null,
+                            p.description || null,
+                            p.imageUrl || null,
+                            p.details ? JSON.stringify(p.details) : null,
+                            p.isActive,
+                            p.schedulingRules ? JSON.stringify(p.schedulingRules) : null,
+                            p.overrides ? JSON.stringify(p.overrides) : null,
+                            p.minParticipants || null,
+                            p.pricePerPerson || null,
+                            p.sortOrder || 0
+                        ]
+                    );
+                    console.log('Single product saved successfully');
+                    return res.status(200).json({ success: true });
+                }
+                
+                // Si es un array (actualización masiva), usar UPSERT en lugar de DELETE/INSERT
+                console.log('Bulk products update, count:', value.length);
+                await sql`BEGIN`;
+                
+                for (const p of value) {
+                    await sql.query(
+                        `INSERT INTO products (id, type, name, classes, price, description, image_url, details, is_active, scheduling_rules, overrides, min_participants, price_per_person, sort_order)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                        ON CONFLICT (id) DO UPDATE SET
+                            type = EXCLUDED.type,
+                            name = EXCLUDED.name,
+                            classes = EXCLUDED.classes,
+                            price = EXCLUDED.price,
+                            description = EXCLUDED.description,
+                            image_url = EXCLUDED.image_url,
+                            details = EXCLUDED.details,
+                            is_active = EXCLUDED.is_active,
+                            scheduling_rules = EXCLUDED.scheduling_rules,
+                            overrides = EXCLUDED.overrides,
+                            min_participants = EXCLUDED.min_participants,
+                            price_per_person = EXCLUDED.price_per_person,
+                            sort_order = EXCLUDED.sort_order`,
+                        [
+                            p.id,
+                            p.type,
+                            p.name,
+                            p.classes || null,
+                            p.price || null,
+                            p.description || null,
+                            p.imageUrl || null,
+                            p.details ? JSON.stringify(p.details) : null,
+                            p.isActive,
+                            p.schedulingRules ? JSON.stringify(p.schedulingRules) : null,
+                            p.overrides ? JSON.stringify(p.overrides) : null,
+                            p.minParticipants || null,
+                            p.pricePerPerson || null,
+                            p.sortOrder || 0
+                        ]
+                    );
+                }
+                await sql`COMMIT`;
+                console.log('Bulk products saved successfully');
+            } catch (err) {
+                console.error('Error al guardar productos:', err, value);
+                await sql`ROLLBACK`;
+                return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+            }
             break;
         case 'instructors':
             await sql`BEGIN`;
@@ -374,6 +633,72 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
 async function handleAction(action: string, req: VercelRequest, res: VercelResponse) {
     let result: any = { success: true };
     switch (action) {
+        case 'syncProducts': {
+                // Sincroniza los productos de DEFAULT_PRODUCTS con la base de datos
+                try {
+                    // Import dinámico para evitar problemas de ESM/CJS
+                    const constantsModule = await import('../constants.js');
+                    const products = constantsModule.DEFAULT_PRODUCTS;
+                await sql`BEGIN`;
+                await sql.query('DELETE FROM products');
+                for (const p of products) {
+                    // Discriminación de tipos para evitar errores
+                    let classes = null, price = null, details = null, schedulingRules = null, overrides = null, minParticipants = null, pricePerPerson = null;
+                    if ('classes' in p) classes = p.classes;
+                    if ('price' in p) price = p.price;
+                    if ('details' in p) details = JSON.stringify(p.details);
+                    if ('schedulingRules' in p) schedulingRules = JSON.stringify((p as any).schedulingRules);
+                    if ('overrides' in p) overrides = JSON.stringify((p as any).overrides);
+                    if ('minParticipants' in p) minParticipants = (p as any).minParticipants;
+                    if ('pricePerPerson' in p) pricePerPerson = (p as any).pricePerPerson;
+                    await sql.query(
+                        `INSERT INTO products (id, type, name, classes, price, description, image_url, details, is_active, scheduling_rules, overrides, min_participants, price_per_person)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                        ON CONFLICT (id) DO UPDATE SET
+                            type = EXCLUDED.type,
+                            name = EXCLUDED.name,
+                            classes = EXCLUDED.classes,
+                            price = EXCLUDED.price,
+                            description = EXCLUDED.description,
+                            image_url = EXCLUDED.image_url,
+                            details = EXCLUDED.details,
+                            is_active = EXCLUDED.is_active,
+                            scheduling_rules = EXCLUDED.scheduling_rules,
+                            overrides = EXCLUDED.overrides,
+                            min_participants = EXCLUDED.min_participants,
+                            price_per_person = EXCLUDED.price_per_person;`,
+                        [
+                            p.id,
+                            p.type,
+                            p.name,
+                            classes,
+                            price,
+                            p.description || null,
+                            p.imageUrl || null,
+                            details,
+                            p.isActive,
+                            schedulingRules,
+                            overrides,
+                            minParticipants,
+                            pricePerPerson
+                        ]
+                    );
+                }
+                await sql`COMMIT`;
+                return res.status(200).json({ success: true });
+            } catch (error) {
+                await sql`ROLLBACK`;
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+        case 'deleteCustomer': {
+            const { email } = req.body;
+            if (!email) {
+                return res.status(400).json({ error: 'Email is required.' });
+            }
+            await sql`DELETE FROM customers WHERE email = ${email}`;
+            return res.status(200).json({ success: true });
+        }
         case 'updateBooking': {
             const { id, userInfo, price } = req.body;
             if (!id || !userInfo || typeof price === 'undefined') {
@@ -801,6 +1126,79 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 updated: overdueDeliveries.length 
             });
         }
+        case 'migrateSortOrderForProducts': {
+            try {
+                // Primero intentar agregar la columna si no existe
+                try {
+                    await sql`ALTER TABLE products ADD COLUMN sort_order INT DEFAULT 0`;
+                    console.log('Columna sort_order agregada exitosamente');
+                } catch (error) {
+                    // Si la columna ya existe, continuamos
+                    console.log('Columna sort_order ya existe o error al agregarla:', error);
+                }
+                
+                // Obtener productos que necesitan sort_order
+                const { rows: products } = await sql`
+                    SELECT id FROM products 
+                    WHERE sort_order IS NULL OR sort_order = 0 
+                    ORDER BY name ASC
+                `;
+                
+                // Asignar valores uno por uno
+                for (let i = 0; i < products.length; i++) {
+                    await sql`
+                        UPDATE products 
+                        SET sort_order = ${i + 1}
+                        WHERE id = ${products[i].id}
+                    `;
+                }
+                
+                return res.status(200).json({ 
+                    success: true, 
+                    updated: products.length 
+                });
+            } catch (error) {
+                console.error('Error migrating sort_order:', error);
+                return res.status(500).json({ 
+                    success: false, 
+                    error: error instanceof Error ? error.message : String(error) 
+                });
+            }
+        }
+        case 'addSortOrderColumn': {
+            try {
+                // Agregar la columna sort_order si no existe
+                await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS sort_order INT DEFAULT 0`;
+                
+                // Obtener todos los productos ordenados por nombre
+                const { rows: products } = await sql`
+                    SELECT id FROM products 
+                    WHERE sort_order IS NULL OR sort_order = 0 
+                    ORDER BY name ASC
+                `;
+                
+                // Asignar valores de sort_order uno por uno
+                for (let i = 0; i < products.length; i++) {
+                    await sql`
+                        UPDATE products 
+                        SET sort_order = ${i + 1}
+                        WHERE id = ${products[i].id}
+                    `;
+                }
+                
+                return res.status(200).json({ 
+                    success: true, 
+                    message: 'Columna sort_order agregada y productos migrados',
+                    updated: products.length
+                });
+            } catch (error) {
+                console.error('Error adding sort_order column:', error);
+                return res.status(500).json({ 
+                    success: false, 
+                    error: error instanceof Error ? error.message : String(error) 
+                });
+            }
+        }
         default:
             return res.status(400).json({ error: `Unknown action: ${action}` });
     }
@@ -811,20 +1209,42 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
 async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookingCode'> & { invoiceData?: Omit<InvoiceRequest, 'id' | 'bookingId' | 'status' | 'requestedAt' | 'processedAt'> }): Promise<AddBookingResult> {
     const { productId, slots, userInfo, productType, invoiceData, bookingDate, participants, clientNote } = body;
+
+        // Sincronizar cliente en tabla customers
+        try {
+            await createCustomer({
+                email: userInfo.email,
+                firstName: userInfo.firstName,
+                lastName: userInfo.lastName,
+                phone: userInfo.phone,
+                countryCode: userInfo.countryCode,
+                birthday: typeof userInfo.birthday === 'string' ? userInfo.birthday : undefined
+            });
+        } catch (error) {
+            // No romper el flujo si falla la creación del cliente
+            console.error('Error creando/actualizando cliente:', error);
+        }
     
     // Atomic deduplication: check for existing booking and slot, prevent race conditions
     if (productType === 'INTRODUCTORY_CLASS' || productType === 'CLASS_PACKAGE' || productType === 'SINGLE_CLASS' || productType === 'GROUP_CLASS') {
-        // For each slot, check if a booking exists for this user and slot
         for (const newSlot of slots) {
-            const { rows: existingBookings } = await sql`
-                SELECT * FROM bookings 
-                WHERE user_info->>'email' = ${userInfo.email}
-                AND slots @> ${JSON.stringify([newSlot])}
+            // Buscar todas las reservas del usuario
+            const { rows: userBookings } = await sql`
+                SELECT * FROM bookings WHERE user_info->>'email' = ${userInfo.email}
             `;
-            if (existingBookings.length > 0) {
-                // Duplicate found, return existing booking
-                const parsedExisting = parseBookingFromDB(existingBookings[0]);
-                return { success: true, message: 'Booking already exists.', booking: parsedExisting };
+            for (const booking of userBookings) {
+                const bookingSlots = Array.isArray(booking.slots) ? booking.slots : [];
+                // Comparar cada slot existente por date, time, instructorId
+                const duplicateSlot = bookingSlots.find((s: any) =>
+                    s.date === newSlot.date &&
+                    s.time === newSlot.time &&
+                    s.instructorId === newSlot.instructorId
+                );
+                if (duplicateSlot) {
+                    // Si existe, retorna la reserva existente
+                    const parsedExisting = parseBookingFromDB(booking);
+                    return { success: true, message: 'Booking already exists.', booking: parsedExisting };
+                }
             }
         }
     }
@@ -929,6 +1349,9 @@ async function handleDelete(req: VercelRequest, res: VercelResponse) {
                 break;
             case 'instructor':
                 await sql`DELETE FROM instructors WHERE id = ${Array.isArray(id) ? id[0] : id}`;
+                break;
+            case 'product':
+                await sql`DELETE FROM products WHERE id = ${Array.isArray(id) ? id[0] : id}`;
                 break;
             default:
                 return res.status(400).json({ error: `Unknown key for deletion: ${key}` });

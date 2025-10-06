@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import type { IntroductoryClass, SessionOverride } from '../../types';
 import * as dataService from '../../services/dataService';
-import { useLanguage } from '../../context/LanguageContext';
 import { SessionEditorPanel } from './SessionEditorPanel';
 
 interface IntroClassCalendarProps {
@@ -17,7 +16,7 @@ const formatDateToYYYYMMDD = (d: Date): string => {
 };
 
 export const IntroClassCalendar: React.FC<IntroClassCalendarProps> = ({ product, onOverridesChange }) => {
-  const { t, language } = useLanguage();
+  // Monolingüe español, textos hardcodeados. No usar useLanguage ni contextos de idioma.
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [overrides, setOverrides] = useState<SessionOverride[]>(product.overrides || []);
@@ -37,9 +36,7 @@ export const IntroClassCalendar: React.FC<IntroClassCalendarProps> = ({ product,
   }, [currentDate.getFullYear(), currentDate.getMonth()]);
 
   const translatedDayNames = useMemo(() => 
-    [0, 1, 2, 3, 4, 5, 6].map(dayIndex => 
-      new Date(2024, 0, dayIndex + 7).toLocaleDateString(language, { weekday: 'short' })
-    ), [language]);
+    ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'], []);
     
   const handleOverrideSave = (dateStr: string, sessions: { time: string; instructorId: number; capacity: number }[] | null) => {
     const newOverrides = [...overrides.filter(ov => ov.date !== dateStr)];
@@ -54,13 +51,13 @@ export const IntroClassCalendar: React.FC<IntroClassCalendarProps> = ({ product,
 
   return (
     <div>
-        <h3 className="font-bold text-brand-accent mb-2">{t('admin.introClassModal.calendarTitle')}</h3>
-        <p className="text-sm text-brand-secondary mb-4">{t('admin.introClassModal.calendarSubtitle')}</p>
+  <h3 className="font-bold text-brand-accent mb-2">Calendario de clases</h3>
+  <p className="text-sm text-brand-secondary mb-4">Gestiona las fechas y sesiones de la clase introductoria.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
                 <div className="flex items-center justify-between mb-2">
                     <button type="button" onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-2 rounded-full hover:bg-brand-background disabled:opacity-50">&larr;</button>
-                    <h4 className="text-lg font-bold text-brand-text capitalize">{currentDate.toLocaleString(language, { month: 'long', year: 'numeric' })}</h4>
+                    <h4 className="text-lg font-bold text-brand-text capitalize">{currentDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' })}</h4>
                     <button type="button" onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-2 rounded-full hover:bg-brand-background">&rarr;</button>
                 </div>
                 <div className="grid grid-cols-7 gap-1 text-center text-xs text-brand-secondary mb-1">
