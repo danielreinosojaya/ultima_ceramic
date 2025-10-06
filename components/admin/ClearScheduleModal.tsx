@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import type { Booking } from '../../types';
-import { useLanguage } from '../../context/LanguageContext';
+// import { useLanguage } from '../../context/LanguageContext';
 import * as dataService from '../../services/dataService';
 
 interface ClearScheduleModalProps {

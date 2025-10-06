@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { BackgroundSettings, BackgroundImageSetting } from '../../types';
 import * as dataService from '../../services/dataService';
-import { useLanguage } from '../../context/LanguageContext';
+// import { useLanguage } from '../../context/LanguageContext';
 import { ImageIcon } from '../icons/ImageIcon';
 import { TrashIcon } from '../icons/TrashIcon';
 
@@ -85,7 +85,7 @@ const BackgroundControl: React.FC<{
 };
 
 export const BackgroundManager: React.FC = () => {
-    const { t } = useLanguage();
+    // const { t } = useLanguage();
     const [settings, setSettings] = useState<BackgroundSettings>({ topLeft: null, bottomRight: null });
     const [saved, setSaved] = useState(false);
 
