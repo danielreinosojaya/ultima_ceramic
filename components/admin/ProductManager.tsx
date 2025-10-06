@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { Product, ClassPackage, IntroductoryClass, OpenStudioSubscription } from '../../types';
+import type { Product, ClassPackage, IntroductoryClass, OpenStudioSubscription, SingleClass } from '../../types';
 import * as dataService from '../../services/dataService';
 // Eliminado useLanguage, la app ahora es monolingüe en español
 import { ToggleLeftIcon } from '../icons/ToggleLeftIcon';
@@ -11,8 +11,11 @@ import { CubeIcon } from '../icons/CubeIcon';
 import { ClassPackageModal } from './ClassPackageModal';
 import { IntroClassModal } from './IntroClassModal';
 import { OpenStudioModal } from './OpenStudioModal';
+import { SingleClassModal } from './SingleClassModal';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 import { DuplicateIcon } from '../icons/DuplicateIcon';
+import { ChevronUpIcon } from '../icons/ChevronUpIcon';
+import { ChevronDownIcon } from '../icons/ChevronDownIcon';
 
 interface ProductManagerProps {
   products: Product[];
@@ -20,7 +23,9 @@ interface ProductManagerProps {
 }
 
 export const ProductManager: React.FC<ProductManagerProps> = ({ products, onDataChange }) => {
-  // Monolingüe español, textos hardcodeados
+  const [isSingleClassModalOpen, setIsSingleClassModalOpen] = useState(false);
+  const [singleClassToEdit, setSingleClassToEdit] = useState<Product | null>(null);
+  // Monolingüe español, textos hardcodeados. No usar useLanguage ni contextos de idioma.
   
   const [isClassPackageModalOpen, setIsClassPackageModalOpen] = useState(false);
   const [classPackageToEdit, setClassPackageToEdit] = useState<ClassPackage | null>(null);
@@ -35,11 +40,11 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [productIdToUpdateImage, setProductIdToUpdateImage] = useState<number | null>(null);
+  const [productIdToUpdateImage, setProductIdToUpdateImage] = useState<string | null>(null);
 
-  const handleStatusToggle = async (id: number) => {
-    const currentProducts = await dataService.getProducts();
-    const updatedProducts = currentProducts.map((p) =>
+  const handleStatusToggle = async (id: string) => {
+    // Usar productos actuales en lugar de hacer nueva request
+    const updatedProducts = products.map((p) =>
       p.id === id ? { ...p, isActive: !p.isActive } : p
     );
     await dataService.updateProducts(updatedProducts);
@@ -56,6 +61,9 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
     } else if (product.type === 'OPEN_STUDIO_SUBSCRIPTION') {
       setOpenStudioToEdit(product);
       setIsOpenStudioModalOpen(true);
+    } else if (product.type === 'SINGLE_CLASS') {
+      setSingleClassToEdit(product);
+      setIsSingleClassModalOpen(true);
     }
   };
 
@@ -64,43 +72,43 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
     setIsDeleteModalOpen(true);
   };
   
-  const handleSaveClassPackage = async (pkgData: Omit<ClassPackage, 'id' | 'isActive' | 'type'>, id?: number) => {
-    const currentProducts = await dataService.getProducts();
+  const handleSaveClassPackage = async (pkgData: Omit<ClassPackage, 'id' | 'isActive' | 'type'>, id?: string) => {
+    // Usar productos actuales en lugar de hacer nueva request
     let updatedProducts;
     if (id) {
-      updatedProducts = currentProducts.map(p => (p.id === id && p.type === 'CLASS_PACKAGE' ? { ...p, ...pkgData } : p));
+      updatedProducts = products.map(p => (p.id === id && p.type === 'CLASS_PACKAGE' ? { ...p, ...pkgData } : p));
     } else {
-      const newProduct: Product = { ...pkgData, id: Date.now(), isActive: true, type: 'CLASS_PACKAGE' };
-      updatedProducts = [...currentProducts, newProduct];
+      const newProduct: Product = { ...pkgData, id: `cp_${Date.now()}_${Math.random().toString(36).slice(2,8)}`, isActive: true, type: 'CLASS_PACKAGE' };
+      updatedProducts = [...products, newProduct];
     }
     await dataService.updateProducts(updatedProducts);
     onDataChange();
     setIsClassPackageModalOpen(false);
   };
 
-  const handleSaveIntroClass = async (classData: Omit<IntroductoryClass, 'id' | 'isActive' | 'type'>, id?: number) => {
-    const currentProducts = await dataService.getProducts();
-    let updatedProducts;
-    if (id) {
-        updatedProducts = currentProducts.map(p => (p.id === id && p.type === 'INTRODUCTORY_CLASS' ? { ...p, ...classData } : p));
-    } else {
-        const newProduct: Product = { ...classData, id: Date.now(), isActive: true, type: 'INTRODUCTORY_CLASS' };
-        updatedProducts = [...currentProducts, newProduct];
-    }
+  const handleSaveIntroClass = async (classData: Omit<IntroductoryClass, 'id' | 'isActive' | 'type'>, id?: string) => {
+  // Usar productos actuales en lugar de hacer nueva request
+  let updatedProducts;
+  if (id) {
+    updatedProducts = products.map(p => (p.id === id && p.type === 'INTRODUCTORY_CLASS' ? { ...p, ...classData } : p));
+  } else {
+    const newProduct: Product = { ...classData, id: `ic_${Date.now()}_${Math.random().toString(36).slice(2,8)}`, isActive: true, type: 'INTRODUCTORY_CLASS' };
+    updatedProducts = [...products, newProduct];
+  }
     await dataService.updateProducts(updatedProducts);
     onDataChange();
     setIsIntroClassModalOpen(false);
   };
   
-  const handleSaveOpenStudio = async (subData: Omit<OpenStudioSubscription, 'id' | 'isActive' | 'type'>, id?: number) => {
-    const currentProducts = await dataService.getProducts();
-    let updatedProducts;
-    if (id) {
-        updatedProducts = currentProducts.map(p => (p.id === id && p.type === 'OPEN_STUDIO_SUBSCRIPTION' ? { ...p, ...subData } : p));
-    } else {
-        const newProduct: Product = { ...subData, id: Date.now(), isActive: true, type: 'OPEN_STUDIO_SUBSCRIPTION' };
-        updatedProducts = [...currentProducts, newProduct];
-    }
+  const handleSaveOpenStudio = async (subData: Omit<OpenStudioSubscription, 'id' | 'isActive' | 'type'>, id?: string) => {
+  // Usar productos actuales en lugar de hacer nueva request
+  let updatedProducts;
+  if (id) {
+    updatedProducts = products.map(p => (p.id === id && p.type === 'OPEN_STUDIO_SUBSCRIPTION' ? { ...p, ...subData } : p));
+  } else {
+    const newProduct: Product = { ...subData, id: `os_${Date.now()}_${Math.random().toString(36).slice(2,8)}`, isActive: true, type: 'OPEN_STUDIO_SUBSCRIPTION' };
+    updatedProducts = [...products, newProduct];
+  }
     await dataService.updateProducts(updatedProducts);
     onDataChange();
     setIsOpenStudioModalOpen(false);
@@ -109,13 +117,13 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
   const handleDuplicateProduct = async (productToDuplicate: Product) => {
     const newProduct: Product = {
       ...productToDuplicate,
-      id: Date.now(),
-  name: `Copia de ${productToDuplicate.name}`,
+      id: `dup_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+      name: `Copia de ${productToDuplicate.name}`,
       isActive: false,
     };
 
-    const currentProducts = await dataService.getProducts();
-    const updatedProducts = [...currentProducts, newProduct];
+    // Usar productos actuales en lugar de hacer nueva request
+    const updatedProducts = [...products, newProduct];
     await dataService.updateProducts(updatedProducts);
     onDataChange();
   };
@@ -128,9 +136,95 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
         setProductToDelete(null);
     }
   };
+
+  const [isMoving, setIsMoving] = useState(false);
+
+  const handleMoveUp = async (productId: string) => {
+    if (isMoving) return;
+
+    try {
+      setIsMoving(true);
+      console.log('Moving product up:', productId);
+      
+      // Trabajar directamente con los productos actuales
+      const sortedProducts = [...products].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+      const currentIndex = sortedProducts.findIndex(p => p.id === productId);
+      
+      if (currentIndex > 0) {
+        // Intercambiar productos
+        const newProducts = [...sortedProducts];
+        [newProducts[currentIndex], newProducts[currentIndex - 1]] = [newProducts[currentIndex - 1], newProducts[currentIndex]];
+        
+        // Asignar sortOrder limpio
+        const updatedProducts = newProducts.map((product, index) => ({
+          ...product,
+          sortOrder: index + 1
+        }));
+        
+        console.log('Updating products:', updatedProducts.map(p => `${p.name}: ${p.sortOrder}`));
+        
+        // Actualizar en base de datos y refrescar
+        await dataService.updateProducts(updatedProducts);
+        console.log('Database updated, refreshing...');
+        onDataChange();
+        
+        console.log('Move up completed successfully');
+      } else {
+        console.log('Cannot move up - already at top');
+      }
+    } catch (error) {
+      console.error('Error moving product up:', error);
+      alert('Error al mover el producto. Intenta nuevamente.');
+    } finally {
+      // Delay para evitar clicks rápidos
+      setTimeout(() => setIsMoving(false), 300);
+    }
+  };
+
+  const handleMoveDown = async (productId: string) => {
+    if (isMoving) return;
+
+    try {
+      setIsMoving(true);
+      console.log('Moving product down:', productId);
+      
+      // Trabajar directamente con los productos actuales
+      const sortedProducts = [...products].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+      const currentIndex = sortedProducts.findIndex(p => p.id === productId);
+      
+      if (currentIndex < sortedProducts.length - 1) {
+        // Intercambiar productos
+        const newProducts = [...sortedProducts];
+        [newProducts[currentIndex], newProducts[currentIndex + 1]] = [newProducts[currentIndex + 1], newProducts[currentIndex]];
+        
+        // Asignar sortOrder limpio
+        const updatedProducts = newProducts.map((product, index) => ({
+          ...product,
+          sortOrder: index + 1
+        }));
+        
+        console.log('Updating products:', updatedProducts.map(p => `${p.name}: ${p.sortOrder}`));
+        
+        // Actualizar en base de datos y refrescar
+        await dataService.updateProducts(updatedProducts);
+        console.log('Database updated, refreshing...');
+        onDataChange();
+        
+        console.log('Move down completed successfully');
+      } else {
+        console.log('Cannot move down - already at bottom');
+      }
+    } catch (error) {
+      console.error('Error moving product down:', error);
+      alert('Error al mover el producto. Intenta nuevamente.');
+    } finally {
+      // Delay para evitar clicks rápidos
+      setTimeout(() => setIsMoving(false), 300);
+    }
+  };
   
-  const handleTriggerImageUpload = (id: number) => {
-    setProductIdToUpdateImage(id);
+  const handleTriggerImageUpload = (id: string) => {
+  setProductIdToUpdateImage(id);
     fileInputRef.current?.click();
   };
 
@@ -144,8 +238,8 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
     const reader = new FileReader();
     reader.onloadend = async () => {
       const base64String = reader.result as string;
-      const currentProducts = await dataService.getProducts();
-      const updatedProducts = currentProducts.map(p =>
+      // Usar productos actuales en lugar de hacer nueva request
+      const updatedProducts = products.map(p =>
         p.id === productIdToUpdateImage ? { ...p, imageUrl: base64String } : p
       );
       await dataService.updateProducts(updatedProducts);
@@ -157,19 +251,84 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
   };
   
   const handleCreateNew = (type: Product['type']) => {
-    if (type === 'CLASS_PACKAGE') {
-        setClassPackageToEdit(null);
-        setIsClassPackageModalOpen(true);
-    } else if (type === 'INTRODUCTORY_CLASS') {
-        setIntroClassToEdit(null);
-        setIsIntroClassModalOpen(true);
-    } else if (type === 'OPEN_STUDIO_SUBSCRIPTION') {
-        setOpenStudioToEdit(null);
-        setIsOpenStudioModalOpen(true);
-    }
-  };
+  if (type === 'CLASS_PACKAGE') {
+    setClassPackageToEdit(null);
+    setIsClassPackageModalOpen(true);
+  } else if (type === 'INTRODUCTORY_CLASS') {
+    setIntroClassToEdit(null);
+    setIsIntroClassModalOpen(true);
+  } else if (type === 'OPEN_STUDIO_SUBSCRIPTION') {
+    setOpenStudioToEdit(null);
+    setIsOpenStudioModalOpen(true);
+  } else if (type === 'SINGLE_CLASS') {
+    setSingleClassToEdit(null);
+    setIsSingleClassModalOpen(true);
+  }
+};
 
-  return (
+type SingleClassFormData = { name: string; description: string; price: number; details: { duration: string } };
+const handleSaveSingleClass = async (classData: SingleClassFormData, id?: string) => {
+  try {
+    let productToSave: SingleClass;
+    
+    if (id) {
+      // Editing existing product - usar productos actuales
+      const existingProduct = products.find(p => p.id === id && p.type === 'SINGLE_CLASS') as SingleClass;
+      if (!existingProduct) {
+        throw new Error('Producto no encontrado');
+      }
+      productToSave = {
+        ...existingProduct,
+        name: classData.name,
+        description: classData.description,
+        price: Number(classData.price),
+        details: {
+          duration: classData.details.duration,
+          durationHours: 0,
+          activities: [],
+          generalRecommendations: '',
+          materials: '',
+          technique: 'potters_wheel'
+        },
+        classes: 1,
+        isActive: typeof existingProduct.isActive === 'boolean' ? existingProduct.isActive : true
+      };
+    } else {
+      // Creating new product
+      productToSave = {
+        id: `sc_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+        isActive: true,
+        type: 'SINGLE_CLASS',
+        name: classData.name,
+        description: classData.description,
+        price: Number(classData.price),
+        details: {
+          duration: classData.details.duration,
+          durationHours: 0,
+          activities: [],
+          generalRecommendations: '',
+          materials: '',
+          technique: 'potters_wheel'
+        },
+        classes: 1,
+        imageUrl: '',
+      };
+    }
+    
+    // Save only this product (much faster)
+    console.log('Saving product:', productToSave);
+    await dataService.saveProduct(productToSave);
+    console.log('Product saved, calling onDataChange');
+    onDataChange();
+    console.log('onDataChange called successfully');
+  } catch (error) {
+    alert('Error al guardar la clase suelta. Intenta nuevamente.');
+  } finally {
+    setIsSingleClassModalOpen(false);
+  }
+};
+
+return (
     <div>
       <input type="file" ref={fileInputRef} onChange={handleFileSelected} accept="image/png, image/jpeg, image/webp" className="hidden"/>
       {isClassPackageModalOpen && (
@@ -194,6 +353,14 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
             onClose={() => setIsOpenStudioModalOpen(false)}
             onSave={handleSaveOpenStudio}
             subscriptionToEdit={openStudioToEdit}
+          />
+      )}
+      {isSingleClassModalOpen && (
+          <SingleClassModal
+            isOpen={isSingleClassModalOpen}
+            onClose={() => setIsSingleClassModalOpen(false)}
+            onSave={handleSaveSingleClass}
+            classToEdit={singleClassToEdit}
           />
       )}
       {isDeleteModalOpen && productToDelete && (
@@ -236,6 +403,12 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
                 >
                   Suscripción Open Studio
                 </button>
+                <button 
+                  onClick={() => handleCreateNew('SINGLE_CLASS')} 
+                  className="block w-full text-left px-4 py-3 text-sm text-brand-text hover:bg-gray-100"
+                >
+                  Clase Suelta (Individual)
+                </button>
             </div>
         </div>
       </div>
@@ -253,7 +426,9 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {products.map((product) => (
+            {products
+              .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+              .map((product, index) => (
               <tr key={product.id}>
                 <td className="px-6 py-4 whitespace-nowrap">
                    <button onClick={() => handleTriggerImageUpload(product.id)} className="w-12 h-12 rounded-md overflow-hidden focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary group relative" title="Cambiar imagen">
@@ -266,7 +441,11 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
                   <div className="text-sm text-brand-secondary">{product.description}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-secondary">
-                    {product.type === 'CLASS_PACKAGE' ? 'Paquete de Clases' : product.type === 'INTRODUCTORY_CLASS' ? 'Clase Introductoria' : product.type === 'OPEN_STUDIO_SUBSCRIPTION' ? 'Suscripción Open Studio' : 'Otro'}
+                    {product.type === 'CLASS_PACKAGE' ? 'Paquete de Clases' : 
+                     product.type === 'INTRODUCTORY_CLASS' ? 'Clase Introductoria' : 
+                     product.type === 'OPEN_STUDIO_SUBSCRIPTION' ? 'Suscripción Open Studio' : 
+                     product.type === 'SINGLE_CLASS' ? 'Clase Suelta' :
+                     'Otro'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right font-semibold text-brand-text">
                   {'price' in product && product.price ? `$${product.price.toFixed(2)}` : 'N/A'}
@@ -283,6 +462,22 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex items-center space-x-2">
+                        <button 
+                          onClick={() => handleMoveUp(product.id)} 
+                          disabled={isMoving}
+                          className={`p-1 rounded-md hover:bg-gray-100 ${isMoving ? 'opacity-50 cursor-not-allowed' : 'text-brand-accent hover:text-brand-text'}`} 
+                          title="Subir"
+                        >
+                          <ChevronUpIcon className="w-5 h-5"/>
+                        </button>
+                        <button 
+                          onClick={() => handleMoveDown(product.id)} 
+                          disabled={isMoving}
+                          className={`p-1 rounded-md hover:bg-gray-100 ${isMoving ? 'opacity-50 cursor-not-allowed' : 'text-brand-accent hover:text-brand-text'}`} 
+                          title="Bajar"
+                        >
+                          <ChevronDownIcon className="w-5 h-5"/>
+                        </button>
                         <button onClick={() => handleOpenEditModal(product)} className="text-brand-accent hover:text-brand-text p-1 rounded-md hover:bg-gray-100" title="Editar"><EditIcon className="w-5 h-5"/></button>
                         <button onClick={() => handleDuplicateProduct(product)} className="text-brand-accent hover:text-brand-text p-1 rounded-md hover:bg-gray-100" title="Duplicar"><DuplicateIcon className="w-5 h-5"/></button>
                         <button onClick={() => handleOpenDeleteModal(product)} className="text-red-600 hover:text-red-900 p-1 rounded-md hover:bg-red-50" title="Eliminar"><TrashIcon className="w-5 h-5"/></button>

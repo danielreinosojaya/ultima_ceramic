@@ -25,13 +25,15 @@ export const RescheduleModal: React.FC<RescheduleModalProps> = ({ isOpen, onClos
     
     const [currentDate, setCurrentDate] = useState(new Date(slotInfo.slot.date + 'T00:00:00'));
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-    const [selectedTime, setSelectedTime] = useState<EnrichedAvailableSlot | null>(null);
+    const [selectedHour, setSelectedHour] = useState<string | null>(null);
+    const [selectedInstructor, setSelectedInstructor] = useState<string | null>(null);
     
     useEffect(() => {
         // Reset state when modal is reopened for a new slot
-        setCurrentDate(new Date(slotInfo.slot.date + 'T00:00:00'));
-        setSelectedDate(null);
-        setSelectedTime(null);
+    setCurrentDate(new Date(slotInfo.slot.date + 'T00:00:00'));
+    setSelectedDate(null);
+    setSelectedHour(null);
+    setSelectedInstructor(null);
     }, [slotInfo, isOpen]);
 
     const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
@@ -45,28 +47,26 @@ export const RescheduleModal: React.FC<RescheduleModalProps> = ({ isOpen, onClos
     }, [currentDate.getFullYear(), currentDate.getMonth()]);
 
     const handleDayClick = (day: number) => {
-        const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-        date.setHours(0, 0, 0, 0);
-        // FIX: Pass appData to getAvailableTimesForDate
-        if (date < today || dataService.getAvailableTimesForDate(date, appData).length === 0) return;
-        setSelectedDate(date);
-        setSelectedTime(null);
+    const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+    date.setHours(0, 0, 0, 0);
+    if (date < today) return;
+    setSelectedDate(date);
+    setSelectedHour(null);
+    setSelectedInstructor(null);
     };
 
     const handleSubmit = () => {
-        if (selectedDate && selectedTime) {
+        if (selectedDate && selectedHour && selectedInstructor) {
             onSave({
                 date: formatDateToYYYYMMDD(selectedDate),
-                time: selectedTime.time,
-                instructorId: selectedTime.instructorId,
+                time: selectedHour,
+                instructorId: selectedInstructor,
             });
         }
     };
     
     if (!isOpen) return null;
 
-    // FIX: Pass appData to getAvailableTimesForDate
-    const availableTimes = selectedDate ? dataService.getAvailableTimesForDate(selectedDate, appData) : [];
     const formattedCurrentSlotDate = new Date(slotInfo.slot.date + 'T00:00:00').toLocaleDateString(language, { weekday: 'long', month: 'long', day: 'numeric' });
     const translatedDayNames = useMemo(() => [0, 1, 2, 3, 4, 5, 6].map(dayIndex => new Date(2024, 0, dayIndex + 7).toLocaleDateString(language, { weekday: 'short' })), [language]);
 
@@ -96,50 +96,44 @@ export const RescheduleModal: React.FC<RescheduleModalProps> = ({ isOpen, onClos
                                 if (!day) return <div key={`blank-${index}`}></div>;
                                 const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day); date.setHours(0,0,0,0);
                                 const isPast = date < today;
-                                // FIX: Pass appData to getAvailableTimesForDate
-                                const isUnavailable = dataService.getAvailableTimesForDate(date, appData).length === 0;
                                 const dateStr = formatDateToYYYYMMDD(date);
                                 const dayIsSelected = selectedDate && formatDateToYYYYMMDD(selectedDate) === dateStr;
-                                const isDisabled = isPast || isUnavailable;
+                                const isDisabled = isPast;
 
                                 return <button key={day} onClick={() => handleDayClick(day)} disabled={isDisabled} className={`w-full aspect-square rounded-full text-sm font-semibold transition-all ${isDisabled ? 'text-gray-400 bg-gray-100 cursor-not-allowed' : 'hover:bg-brand-primary/20'} ${dayIsSelected ? 'bg-brand-primary text-white shadow-md ring-2 ring-brand-accent' : 'bg-white'}`}>{day}</button>
                             })}
                         </div>
                     </div>
-                    {/* Horarios */}
-                    <div className="bg-brand-background p-3 rounded-lg">
-                       {selectedDate ? (
-                         <>
-                            <h4 className="font-bold text-center mb-2">{selectedDate.toLocaleDateString(language, { weekday: 'long', month: 'long', day: 'numeric' })}</h4>
-                            <div className="flex flex-col gap-2 max-h-60 overflow-y-auto pr-2 -mr-2">
-                               {availableTimes.length > 0 ? availableTimes.map(slot => (
-                                   <button
-                                       key={slot.time}
-                                       onClick={() => setSelectedTime(slot)}
-                                       className={`w-full flex items-center justify-between p-2 rounded-lg text-md font-semibold transition-all ${selectedTime?.time === slot.time ? 'bg-brand-accent text-white' : 'bg-white hover:bg-brand-primary/20'}`}
-                                   >
-                                       <span className="font-semibold text-brand-text text-sm">{slot.time}</span>
-                                       <div className="flex items-center gap-2">
-                                            <InstructorTag instructorId={slot.instructorId} instructors={appData.instructors} />
-                                            <CapacityIndicator count={slot.paidBookingsCount} max={slot.maxCapacity} capacityMessages={appData.capacityMessages} />
-                                       </div>
-                                   </button>
-                               )) : <p className="text-center text-brand-secondary text-sm p-4">No hay clases disponibles.</p>}
-                           </div>
-                         </>
-                       ) : (
-                         <div className="flex items-center justify-center h-full">
-                            <p className="text-brand-secondary text-center">Selecciona un día para ver los horarios disponibles.</p>
-                         </div>
-                       )}
-                    </div>
+                                        {/* Horarios flexibles */}
+                                        <div className="bg-brand-background p-3 rounded-lg">
+                                             {selectedDate ? (
+                                                 <>
+                                                        <h4 className="font-bold text-center mb-2">{selectedDate.toLocaleDateString(language, { weekday: 'long', month: 'long', day: 'numeric' })}</h4>
+                                                        <div className="flex flex-col gap-2 max-h-60 overflow-y-auto pr-2 -mr-2">
+                                                                <label className="block text-sm font-bold mb-1 text-brand-text">Hora</label>
+                                                                <input type="time" className="w-full p-2 rounded-lg border" value={selectedHour || ''} onChange={e => setSelectedHour(e.target.value)} />
+                                                                <label className="block text-sm font-bold mt-3 mb-1 text-brand-text">Instructor</label>
+                                                                <select className="w-full p-2 rounded-lg border" value={selectedInstructor || ''} onChange={e => setSelectedInstructor(e.target.value)}>
+                                                                        <option value="">Selecciona instructor</option>
+                                                                        {appData.instructors.map(inst => (
+                                                                                <option key={inst.id} value={inst.id}>{inst.name}</option>
+                                                                        ))}
+                                                                </select>
+                                                        </div>
+                                                 </>
+                                             ) : (
+                                                 <div className="flex items-center justify-center h-full">
+                                                        <p className="text-brand-secondary text-center">Selecciona un día para elegir hora e instructor.</p>
+                                                 </div>
+                                             )}
+                                        </div>
                 </div>
 
                 <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-gray-200">
                     <button type="button" onClick={onClose} className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100">
                         Cancelar
                     </button>
-                    <button type="button" onClick={handleSubmit} disabled={!selectedDate || !selectedTime} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent disabled:bg-gray-400">
+                    <button type="button" onClick={handleSubmit} disabled={!selectedDate || !selectedHour || !selectedInstructor} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent disabled:bg-gray-400">
                         Guardar
                     </button>
                 </div>

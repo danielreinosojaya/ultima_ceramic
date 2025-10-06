@@ -81,12 +81,13 @@ export interface SessionOverride {
 }
 
 export interface BaseProduct {
-    id: number;
+    id: string;
     type: ProductType;
     name: string;
     description: string;
     imageUrl?: string;
     isActive: boolean;
+    sortOrder?: number;
 }
 
 export interface ClassPackage extends BaseProduct {
@@ -181,7 +182,7 @@ export interface PaymentDetails {
 
 export interface Booking {
     id: string;
-    productId: number;
+    productId: string;
     productType: ProductType;
     product: Product;
     slots: TimeSlot[];

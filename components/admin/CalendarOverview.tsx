@@ -21,6 +21,8 @@ interface CalendarOverviewProps {
 }
 
 export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect, bookings, onDataChange }) => {
+  console.log('CalendarOverview received bookings:', bookings?.length || 0);
+  
   // Monolingüe español, textos hardcodeados
   const language = 'es-ES';
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -29,19 +31,45 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
   const [isClearScheduleModalOpen, setIsClearScheduleModalOpen] = useState(false);
 
   const { bookingsByDate, unpaidDates } = useMemo(() => {
+    console.log('CalendarOverview processing bookings:', bookings?.length || 0);
+    if (!bookings || bookings.length === 0) {
+      console.log('No bookings to process');
+      return { bookingsByDate: {}, unpaidDates: new Set<string>() };
+    }
+    
     const acc: BookingsByDate = {};
     const unpaid = new Set<string>();
-    bookings.forEach(booking => {
+    
+    bookings.forEach((booking, index) => {
+      console.log(`Processing booking ${index}:`, {
+        id: booking.id,
+        isPaid: booking.isPaid,
+        slots: booking.slots?.length || 0,
+        userInfo: !!booking.userInfo
+      });
+      
       if (!booking.isPaid) {
-        booking.slots.forEach(slot => unpaid.add(slot.date));
+        booking.slots?.forEach(slot => unpaid.add(slot.date));
       }
-      booking.slots.forEach(slot => {
-        if (!booking.userInfo) return;
+      
+      booking.slots?.forEach(slot => {
+        if (!booking.userInfo) {
+          console.log('Booking missing userInfo:', booking.id);
+          return;
+        }
         if (!acc[slot.date]) acc[slot.date] = {};
         if (!acc[slot.date][slot.time]) acc[slot.date][slot.time] = { attendees: [], instructorId: slot.instructorId };
-        acc[slot.date][slot.time].attendees.push({ userInfo: booking.userInfo, bookingId: booking.id, isPaid: booking.isPaid, bookingCode: booking.bookingCode, paymentDetails: booking.paymentDetails });
+        acc[slot.date][slot.time].attendees.push({ 
+          userInfo: booking.userInfo, 
+          bookingId: booking.id, 
+          isPaid: booking.isPaid, 
+          bookingCode: booking.bookingCode, 
+          paymentDetails: booking.paymentDetails 
+        });
       });
     });
+    
+    console.log('Final bookingsByDate:', Object.keys(acc).length, 'dates with bookings');
     return { bookingsByDate: acc, unpaidDates: unpaid };
   }, [bookings]);
   

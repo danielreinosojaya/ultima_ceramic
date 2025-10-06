@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { Instructor } from '../../types';
-import { useLanguage } from '../../context/LanguageContext';
+// import { useLanguage } from '../../context/LanguageContext';
 import { PALETTE_COLORS } from '@/constants';
 import { CheckIcon } from '../icons/CheckIcon';
 
@@ -12,7 +12,7 @@ interface InstructorModalProps {
 }
 
 export const InstructorModal: React.FC<InstructorModalProps> = ({ isOpen, onClose, onSave, instructorToEdit }) => {
-  const { t } = useLanguage();
+  // const { t } = useLanguage();
   const [name, setName] = useState('');
   const [colorScheme, setColorScheme] = useState(PALETTE_COLORS[0].name);
   
@@ -44,23 +44,23 @@ export const InstructorModal: React.FC<InstructorModalProps> = ({ isOpen, onClos
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-2xl font-serif text-brand-accent mb-4 text-center">
-          {instructorToEdit ? t('admin.instructorModal.editTitle') : t('admin.instructorModal.createTitle')}
+          {instructorToEdit ? 'Editar Instructor' : 'Crear Instructor'}
         </h2>
         <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-                <label htmlFor="name" className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.instructorModal.nameLabel')}</label>
+                <label htmlFor="name" className="block text-sm font-bold text-brand-secondary mb-1">Nombre</label>
                 <input
                     id="name"
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder={t('admin.instructorModal.namePlaceholder')}
+                    placeholder="Nombre del instructor"
                     required
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary"
                 />
             </div>
             <div>
-                 <label className="block text-sm font-bold text-brand-secondary mb-2">{t('admin.instructorModal.colorLabel')}</label>
+                 <label className="block text-sm font-bold text-brand-secondary mb-2">Color del Instructor</label>
                  <div className="flex flex-wrap gap-3">
                     {PALETTE_COLORS.map(color => (
                         <button
@@ -77,10 +77,10 @@ export const InstructorModal: React.FC<InstructorModalProps> = ({ isOpen, onClos
 
             <div className="mt-8 flex justify-end gap-3 pt-4 border-t border-gray-200">
              <button type="button" onClick={onClose} className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100">
-                 {t('admin.productManager.cancelButton')}
+                 Cancelar
              </button>
              <button type="submit" className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent">
-                {t('admin.instructorModal.saveButton')}
+                Guardar
              </button>
           </div>
         </form>

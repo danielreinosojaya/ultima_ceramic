@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { Announcement } from '../../types';
 import * as dataService from '../../services/dataService';
-import { useLanguage } from '../../context/LanguageContext';
+// import { useLanguage } from '../../context/LanguageContext';
 import { PlusIcon } from '../icons/PlusIcon';
 import { EditIcon } from '../icons/EditIcon';
 import { TrashIcon } from '../icons/TrashIcon';
@@ -15,12 +15,12 @@ interface AnnouncementsManagerProps {
 }
 
 const TimeAgo: React.FC<{ isoDate: string }> = ({ isoDate }) => {
-    const { language } = useLanguage();
-    return new Date(isoDate).toLocaleDateString(language, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    // const { language } = useLanguage();
+    return new Date(isoDate).toLocaleDateString('es-ES', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
 export const AnnouncementsManager: React.FC<AnnouncementsManagerProps> = ({ announcements, onDataChange }) => {
-  const { t } = useLanguage();
+  // const { t } = useLanguage();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [announcementToEdit, setAnnouncementToEdit] = useState<Announcement | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -81,24 +81,24 @@ export const AnnouncementsManager: React.FC<AnnouncementsManagerProps> = ({ anno
             isOpen={isDeleteModalOpen}
             onClose={() => setIsDeleteModalOpen(false)}
             onConfirm={handleDeleteConfirm}
-            title={t('admin.announcementsManager.deleteConfirmTitle')}
-            message={t('admin.announcementsManager.deleteConfirmText')}
+            title="Eliminar Anuncio"
+            message="¿Estás seguro de que deseas eliminar este anuncio? Esta acción no se puede deshacer."
         />
       )}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h2 className="text-2xl font-serif text-brand-text mb-2 flex items-center gap-3">
             <MegaphoneIcon className="w-6 h-6 text-brand-accent" />
-            {t('admin.announcementsManager.title')}
+            Anuncios
           </h2>
-          <p className="text-brand-secondary">{t('admin.announcementsManager.subtitle')}</p>
+          <p className="text-brand-secondary">Gestiona los anuncios que aparecen en el tablero principal</p>
         </div>
         <button
           onClick={handleOpenCreateModal}
           className="flex items-center gap-2 bg-brand-primary text-white font-bold py-2 px-4 rounded-lg hover:bg-brand-accent transition-colors"
         >
           <PlusIcon className="w-5 h-5" />
-          {t('admin.announcementsManager.createButton')}
+          Crear Anuncio
         </button>
       </div>
 
@@ -109,24 +109,24 @@ export const AnnouncementsManager: React.FC<AnnouncementsManagerProps> = ({ anno
               <div>
                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
                     ${ann.urgency === 'urgent' ? 'bg-red-100 text-red-800' : ann.urgency === 'warning' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'}`}>
-                  {t(`admin.announcementModal.urgency${ann.urgency.charAt(0).toUpperCase() + ann.urgency.slice(1)}`)}
+                  {ann.urgency === 'urgent' ? 'Urgente' : ann.urgency === 'warning' ? 'Aviso' : 'Información'}
                 </span>
                 <h3 className="text-lg font-bold text-brand-text mt-2">{ann.title}</h3>
                 <p className="text-brand-secondary text-sm">{ann.content}</p>
                 <p className="text-xs text-gray-400 mt-2">Posted: <TimeAgo isoDate={ann.createdAt} /></p>
               </div>
               <div className="flex items-center space-x-2 flex-shrink-0 ml-4">
-                <button onClick={() => handleOpenEditModal(ann)} className="text-brand-accent hover:text-brand-text p-1 rounded-md hover:bg-gray-200" title={t('admin.packageManager.editButton')}>
+                <button onClick={() => handleOpenEditModal(ann)} className="text-brand-accent hover:text-brand-text p-1 rounded-md hover:bg-gray-200" title="Editar">
                   <EditIcon className="w-5 h-5" />
                 </button>
-                <button onClick={() => handleOpenDeleteModal(ann)} className="text-red-600 hover:text-red-900 p-1 rounded-md hover:bg-red-50" title={t('admin.packageManager.deleteButton')}>
+                <button onClick={() => handleOpenDeleteModal(ann)} className="text-red-600 hover:text-red-900 p-1 rounded-md hover:bg-red-50" title="Eliminar">
                   <TrashIcon className="w-5 h-5" />
                 </button>
               </div>
             </div>
           ))
         ) : (
-          <p className="text-center text-brand-secondary py-8">{t('admin.announcementsManager.noAnnouncements')}</p>
+          <p className="text-center text-brand-secondary py-8">No hay anuncios disponibles</p>
         )}
       </div>
     </div>
