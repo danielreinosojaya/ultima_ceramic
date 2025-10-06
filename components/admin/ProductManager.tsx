@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { Product, ClassPackage, IntroductoryClass, OpenStudioSubscription } from '../../types';
+import type { Product, ClassPackage, IntroductoryClass, OpenStudioSubscription, SingleClass } from '../../types';
 import * as dataService from '../../services/dataService';
 // Eliminado useLanguage, la app ahora es monolingüe en español
 import { ToggleLeftIcon } from '../icons/ToggleLeftIcon';
@@ -184,31 +184,33 @@ type SingleClassFormData = { name: string; description: string; price: number; d
 const handleSaveSingleClass = async (classData: SingleClassFormData, id?: string) => {
   try {
     const currentProducts = await dataService.getProducts();
-    let updatedProducts;
+    let productToSave: SingleClass;
+    
     if (id) {
-      updatedProducts = currentProducts.map(p => (
-        p.id === id && p.type === 'SINGLE_CLASS'
-          ? {
-              ...p,
-              name: classData.name,
-              description: classData.description,
-              price: Number(classData.price),
-              details: {
-                duration: classData.details.duration,
-                durationHours: 0,
-                activities: [],
-                generalRecommendations: '',
-                materials: '',
-                technique: 'potters_wheel'
-              },
-              classes: 1,
-              imageUrl: p.imageUrl || '',
-              isActive: typeof p.isActive === 'boolean' ? p.isActive : true
-            }
-          : p
-      ));
+      // Editing existing product
+      const existingProduct = currentProducts.find(p => p.id === id && p.type === 'SINGLE_CLASS') as SingleClass;
+      if (!existingProduct) {
+        throw new Error('Producto no encontrado');
+      }
+      productToSave = {
+        ...existingProduct,
+        name: classData.name,
+        description: classData.description,
+        price: Number(classData.price),
+        details: {
+          duration: classData.details.duration,
+          durationHours: 0,
+          activities: [],
+          generalRecommendations: '',
+          materials: '',
+          technique: 'potters_wheel'
+        },
+        classes: 1,
+        isActive: typeof existingProduct.isActive === 'boolean' ? existingProduct.isActive : true
+      };
     } else {
-      const newProduct: Product = {
+      // Creating new product
+      productToSave = {
         id: `sc_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
         isActive: true,
         type: 'SINGLE_CLASS',
@@ -226,9 +228,10 @@ const handleSaveSingleClass = async (classData: SingleClassFormData, id?: string
         classes: 1,
         imageUrl: '',
       };
-      updatedProducts = [...currentProducts, newProduct];
     }
-    await dataService.updateProducts(updatedProducts);
+    
+    // Save only this product (much faster)
+    await dataService.saveProduct(productToSave);
     onDataChange();
   } catch (error) {
     alert('Error al guardar la clase suelta. Intenta nuevamente.');
