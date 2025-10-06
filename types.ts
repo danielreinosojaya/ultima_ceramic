@@ -87,6 +87,7 @@ export interface BaseProduct {
     description: string;
     imageUrl?: string;
     isActive: boolean;
+    sortOrder?: number;
 }
 
 export interface ClassPackage extends BaseProduct {

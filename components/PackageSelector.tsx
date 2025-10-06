@@ -1,35 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import type { Product, OpenStudioSubscription } from '../types';
 // Traducción eliminada, usar texto en español directamente
-import * as dataService from '../services/dataService';
 import { KeyIcon } from './icons/KeyIcon';
 import { SparklesIcon } from './icons/SparklesIcon';
 
 interface PackageSelectorProps {
   onSelect: (pkg: Product) => void;
   technique: 'potters_wheel' | 'molding' | null;
+  products: Product[]; // Recibir productos como prop
 }
 
-export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, technique }) => {
+export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, technique, products }) => {
   // Traducción eliminada, usar texto en español directamente
   const [packages, setPackages] = useState<Product[]>([]);
 
   useEffect(() => {
-    const fetchPackages = async () => {
-      const allProducts = await dataService.getProducts();
-      const activePackages = allProducts.filter(p => 
+    if (technique && products.length > 0) {
+      const activePackages = products.filter(p => 
         p.isActive && (
             p.type === 'OPEN_STUDIO_SUBSCRIPTION' || 
             (p.type === 'CLASS_PACKAGE' && p.details.technique === technique)
         )
       );
       setPackages(activePackages);
-    };
-
-    if (technique) {
-        fetchPackages();
     }
-  }, [technique]);
+  }, [technique, products]);
 
   return (
     <div className="text-center p-6 bg-brand-surface rounded-xl shadow-subtle max-w-5xl mx-auto">
