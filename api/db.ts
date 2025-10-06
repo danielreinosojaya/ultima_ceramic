@@ -1,3 +1,10 @@
+import { sql } from '@vercel/postgres';
+
+// Validate database connection
+if (!process.env.POSTGRES_URL) {
+    throw new Error('POSTGRES_URL environment variable is required');
+}
+
 // Obtener reservas por email de cliente
 export async function getBookingsByCustomerEmail(email: string) {
     const { rows } = await sql`
@@ -5,7 +12,6 @@ export async function getBookingsByCustomerEmail(email: string) {
     `;
     return rows;
 }
-import { sql } from '@vercel/postgres';
 // Función para crear un cliente en la tabla customers
 export async function createCustomer({ email, firstName, lastName, phone, countryCode, birthday }: {
     email: string;
