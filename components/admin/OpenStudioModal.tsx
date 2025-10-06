@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { OpenStudioSubscription } from '../../types';
-import { useLanguage } from '../../context/LanguageContext';
+// Eliminado useLanguage, la app ahora es monolingüe en español
 import { CubeIcon } from '../icons/CubeIcon';
 
 interface OpenStudioModalProps {
@@ -33,7 +33,7 @@ const TextareaField: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement> 
 
 
 export const OpenStudioModal: React.FC<OpenStudioModalProps> = ({ isOpen, onClose, onSave, subscriptionToEdit }) => {
-  const { t } = useLanguage();
+  // Monolingüe español, textos hardcodeados. No usar useLanguage ni contextos de idioma.
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [formData, setFormData] = useState<Omit<OpenStudioSubscription, 'id' | 'isActive' | 'type'>>({
@@ -128,7 +128,7 @@ export const OpenStudioModal: React.FC<OpenStudioModalProps> = ({ isOpen, onClos
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-2xl font-serif text-brand-accent mb-4 text-center">
-          {subscriptionToEdit ? t('admin.openStudioModal.editTitle') : t('admin.openStudioModal.createTitle')}
+          {subscriptionToEdit ? 'Editar Estudio Abierto' : 'Crear Estudio Abierto'}
         </h2>
         <form onSubmit={handleSubmit}>
           <input
@@ -139,13 +139,13 @@ export const OpenStudioModal: React.FC<OpenStudioModalProps> = ({ isOpen, onClos
             className="hidden"
           />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <InputField label={t('admin.packageModal.nameLabel')} id="name" name="name" value={formData.name} onChange={handleChange} placeholder={t('admin.openStudioModal.namePlaceholder')} required />
-            <InputField label={t('admin.packageModal.priceLabel')} id="price" name="price" type="number" value={formData.price} onChange={handleChange} placeholder={t('admin.packageModal.pricePlaceholder')} required />
+            <InputField label="Nombre" id="name" name="name" value={formData.name} onChange={handleChange} placeholder="Nombre del estudio abierto" required />
+            <InputField label="Precio" id="price" name="price" type="number" value={formData.price} onChange={handleChange} placeholder="0.00" required />
             <div className="md:col-span-2">
-                <TextareaField label={t('admin.packageModal.descriptionLabel')} id="description" name="description" value={formData.description} onChange={handleChange} placeholder={t('admin.packageModal.descriptionPlaceholder')} />
+                <TextareaField label="Descripción" id="description" name="description" value={formData.description} onChange={handleChange} placeholder="Descripción del estudio abierto" />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.packageModal.imageLabel')}</label>
+              <label className="block text-sm font-bold text-brand-secondary mb-1">Imagen</label>
               <div className="mt-1 flex items-center gap-4 p-2 border-2 border-dashed border-gray-300 rounded-lg">
                 {formData.imageUrl ? (
                   <img src={formData.imageUrl} alt="Preview" className="w-24 h-24 object-cover rounded-md" />
@@ -159,24 +159,24 @@ export const OpenStudioModal: React.FC<OpenStudioModalProps> = ({ isOpen, onClos
                   onClick={() => fileInputRef.current?.click()}
                   className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-4 rounded-lg hover:bg-gray-100 transition-colors"
                 >
-                  {t('admin.packageModal.uploadImageButton')}
+                  Subir Imagen
                 </button>
               </div>
             </div>
 
-            <InputField label={t('admin.openStudioModal.durationLabel')} id="durationDays" name="durationDays" type="number" value={formData.details.durationDays} onChange={handleDetailChange} required />
-            <InputField label={t('admin.openStudioModal.timeLimitLabel')} id="timeLimit" name="timeLimit" value={formData.details.timeLimit} onChange={handleDetailChange} placeholder={t('admin.openStudioModal.timeLimitPlaceholder')} />
-            <InputField label={t('admin.openStudioModal.materialsLimitLabel')} id="materialsLimit" name="materialsLimit" value={formData.details.materialsLimit} onChange={handleDetailChange} placeholder={t('admin.openStudioModal.materialsLimitPlaceholder')} />
+            <InputField label="Duración (días)" id="durationDays" name="durationDays" type="number" value={formData.details.durationDays} onChange={handleDetailChange} required />
+            <InputField label="Límite de tiempo" id="timeLimit" name="timeLimit" value={formData.details.timeLimit} onChange={handleDetailChange} placeholder="Ej. 3 horas por sesión" />
+            <InputField label="Límite de materiales" id="materialsLimit" name="materialsLimit" value={formData.details.materialsLimit} onChange={handleDetailChange} placeholder="Ej. 2 kg de arcilla" />
             <div className="md:col-span-2">
-              <TextareaField label={t('admin.openStudioModal.howItWorksLabel')} id="howItWorks" name="howItWorks" value={formData.details.howItWorks.join('\n')} onChange={handleDetailChange} placeholder={t('admin.openStudioModal.howItWorksPlaceholder')} />
+              <TextareaField label="¿Cómo funciona?" id="howItWorks" name="howItWorks" value={formData.details.howItWorks.join('\n')} onChange={handleDetailChange} placeholder="Describe los pasos o reglas del estudio abierto" />
             </div>
           </div>
           <div className="mt-6 flex justify-end gap-3">
              <button type="button" onClick={onClose} className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100 transition-colors">
-                 {t('admin.productManager.cancelButton')}
+                 Cancelar
              </button>
              <button type="submit" className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent transition-colors">
-                {t('admin.packageModal.saveButton')}
+                Guardar
              </button>
           </div>
         </form>
