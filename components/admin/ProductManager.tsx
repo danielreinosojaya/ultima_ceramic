@@ -231,8 +231,11 @@ const handleSaveSingleClass = async (classData: SingleClassFormData, id?: string
     }
     
     // Save only this product (much faster)
+    console.log('Saving product:', productToSave);
     await dataService.saveProduct(productToSave);
+    console.log('Product saved, calling onDataChange');
     onDataChange();
+    console.log('onDataChange called successfully');
   } catch (error) {
     alert('Error al guardar la clase suelta. Intenta nuevamente.');
   } finally {
@@ -351,7 +354,11 @@ return (
                   <div className="text-sm text-brand-secondary">{product.description}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-secondary">
-                    {product.type === 'CLASS_PACKAGE' ? 'Paquete de Clases' : product.type === 'INTRODUCTORY_CLASS' ? 'Clase Introductoria' : product.type === 'OPEN_STUDIO_SUBSCRIPTION' ? 'Suscripción Open Studio' : 'Otro'}
+                    {product.type === 'CLASS_PACKAGE' ? 'Paquete de Clases' : 
+                     product.type === 'INTRODUCTORY_CLASS' ? 'Clase Introductoria' : 
+                     product.type === 'OPEN_STUDIO_SUBSCRIPTION' ? 'Suscripción Open Studio' : 
+                     product.type === 'SINGLE_CLASS' ? 'Clase Suelta' :
+                     'Otro'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right font-semibold text-brand-text">
                   {'price' in product && product.price ? `$${product.price.toFixed(2)}` : 'N/A'}
