@@ -242,7 +242,10 @@ export const updateCustomerInfo = async (email: string, info: Partial<UserInfo>)
 // Products
 export const getProducts = async (): Promise<Product[]> => {
     const rawProducts = await getData<any[]>('products');
-    return rawProducts.map(parseProduct);
+    console.log('Raw products from API:', rawProducts.length, rawProducts.filter(p => p.type === 'SINGLE_CLASS'));
+    const parsedProducts = rawProducts.map(parseProduct);
+    console.log('Parsed products:', parsedProducts.length, parsedProducts.filter(p => p.type === 'SINGLE_CLASS'));
+    return parsedProducts;
 };
 export const updateProducts = (products: Product[]): Promise<{ success: boolean }> => setData('products', products);
 

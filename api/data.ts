@@ -316,31 +316,38 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
             `;
             data = clientNotifications.map(parseClientNotificationFromDB);
         } else {
-            const { rows: settings } = await sql`SELECT value FROM settings WHERE key = ${key}`;
-            if (settings.length > 0) {
-                data = settings[0].value;
+            // Special handling for products - fetch from products table
+            if (key === 'products') {
+                const { rows: products } = await sql`SELECT * FROM products ORDER BY name`;
+                console.log('GET products from DB:', products.length, 'SINGLE_CLASS:', products.filter(p => p.type === 'SINGLE_CLASS').length);
+                data = products.map(toCamelCase);
             } else {
-                // Si el key no existe, devuelve un valor por defecto según el tipo esperado
-                switch (key) {
-                    case 'bankDetails':
-                    case 'announcements':
-                    case 'capacityMessages':
-                        data = [];
-                        break;
-                    case 'availability':
-                    case 'scheduleOverrides':
-                    case 'classCapacity':
-                    case 'automationSettings':
-                    case 'footerInfo':
-                    case 'backgroundSettings':
-                        data = {};
-                        break;
-                    case 'policies':
-                    case 'confirmationMessage':
-                        data = '';
-                        break;
-                    default:
-                        data = null;
+                const { rows: settings } = await sql`SELECT value FROM settings WHERE key = ${key}`;
+                if (settings.length > 0) {
+                    data = settings[0].value;
+                } else {
+                    // Si el key no existe, devuelve un valor por defecto según el tipo esperado
+                    switch (key) {
+                        case 'bankDetails':
+                        case 'announcements':
+                        case 'capacityMessages':
+                            data = [];
+                            break;
+                        case 'availability':
+                        case 'scheduleOverrides':
+                        case 'classCapacity':
+                        case 'automationSettings':
+                        case 'footerInfo':
+                        case 'backgroundSettings':
+                            data = {};
+                            break;
+                        case 'policies':
+                        case 'confirmationMessage':
+                            data = '';
+                            break;
+                        default:
+                            data = null;
+                    }
                 }
             }
         }
