@@ -210,29 +210,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
     }
 
-    // Ensure database tables exist (including the deliveries table) with timeout
-    try {
-        console.log('Starting table initialization...');
-        const tableInitPromise = ensureTablesExist();
-        const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Table initialization timeout after 30 seconds')), 30000);
-        });
-        
-        await Promise.race([tableInitPromise, timeoutPromise]);
-        console.log('Table initialization completed successfully');
-    } catch (error) {
-        console.error('Database table initialization failed:', error);
-        
-        // For timeout or critical errors, still try to continue but log the issue
-        if (error instanceof Error && error.message.includes('timeout')) {
-            console.log('Continuing despite table initialization timeout...');
-        } else {
-            return res.status(500).json({ 
-                error: 'Database initialization failed', 
-                details: error instanceof Error ? error.message : 'Unknown database error' 
-            });
-        }
-    }
+    // Skip table initialization for product operations to avoid timeouts
+    // Tables should already exist from previous deployments
+    console.log('Skipping table initialization for faster response');
 
     try {
         if (req.method === 'GET') {
@@ -393,9 +373,13 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
             }
         case 'products':
             try {
-                await sql`BEGIN`;
-                await sql.query('DELETE FROM products');
-                for (const p of value) {
+                console.log('Processing products update:', value);
+                
+                // Si es un solo producto (desde modal), hacer upsert individual
+                if (!Array.isArray(value)) {
+                    const p = value;
+                    console.log('Single product upsert:', p.id);
+                    
                     await sql.query(
                         `INSERT INTO products (id, type, name, classes, price, description, image_url, details, is_active, scheduling_rules, overrides, min_participants, price_per_person)
                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
@@ -428,8 +412,37 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
                             p.pricePerPerson || null
                         ]
                     );
+                    console.log('Single product saved successfully');
+                    return res.status(200).json({ success: true });
+                }
+                
+                // Si es un array (actualización masiva), usar transacción
+                console.log('Bulk products update, count:', value.length);
+                await sql`BEGIN`;
+                await sql.query('DELETE FROM products');
+                for (const p of value) {
+                    await sql.query(
+                        `INSERT INTO products (id, type, name, classes, price, description, image_url, details, is_active, scheduling_rules, overrides, min_participants, price_per_person)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+                        [
+                            p.id,
+                            p.type,
+                            p.name,
+                            p.classes || null,
+                            p.price || null,
+                            p.description || null,
+                            p.imageUrl || null,
+                            p.details ? JSON.stringify(p.details) : null,
+                            p.isActive,
+                            p.schedulingRules ? JSON.stringify(p.schedulingRules) : null,
+                            p.overrides ? JSON.stringify(p.overrides) : null,
+                            p.minParticipants || null,
+                            p.pricePerPerson || null
+                        ]
+                    );
                 }
                 await sql`COMMIT`;
+                console.log('Bulk products saved successfully');
             } catch (err) {
                 console.error('Error al guardar productos:', err, value);
                 await sql`ROLLBACK`;

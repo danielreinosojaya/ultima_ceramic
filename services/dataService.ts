@@ -245,6 +245,10 @@ export const getProducts = async (): Promise<Product[]> => {
     return rawProducts.map(parseProduct);
 };
 export const updateProducts = (products: Product[]): Promise<{ success: boolean }> => setData('products', products);
+
+// Save a single product (more efficient than updating all products)
+export const saveProduct = (product: Product): Promise<{ success: boolean }> => setData('products', product);
+
 export const addProduct = (productData: Omit<Product, 'id' | 'isActive'>): Promise<{ success: boolean }> => postAction('addProduct', productData);
 export const deleteProduct = (id: number): Promise<{ success: boolean }> => fetchData(`/api/data?action=deleteProduct&id=${id}`, {
     method: 'POST',
