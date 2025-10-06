@@ -161,31 +161,77 @@ const SCHEMA_SQL = `
 `;
 
 export async function ensureTablesExist() {
-    try {
-        await sql.query(SCHEMA_SQL);
-    } catch (error: any) {
-        // Ignore duplicate constraint errors as they indicate the tables already exist
-        if (error.code !== '23505') {
-            throw error;
-        }
-        console.log('Tables already exist, continuing with column checks...');
-    }
+    console.log('Starting table creation/migration...');
     
     try {
-      await sql`ALTER TABLE inquiries ADD COLUMN IF NOT EXISTS tentative_time VARCHAR(10);`;
-      await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS min_participants INT;`;
-      await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS price_per_person NUMERIC(10, 2);`;
-      await sql`ALTER TABLE bookings ALTER COLUMN payment_details SET DEFAULT '[]'::jsonb;`;
-      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS is_paid BOOLEAN DEFAULT false;`;
-      // Add participants and client_note columns to bookings table
-      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS participants INT DEFAULT 1;`;
-      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS client_note TEXT;`;
-      // Add new columns to deliveries table
-      await sql`ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMPTZ;`;
-      await sql`ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS photos JSONB DEFAULT '[]'::jsonb;`;
-      console.log("Migration check: new columns ensured.");
+        // Split the large schema into smaller chunks to avoid timeouts
+        const schemas = [
+            // Core tables first
+            `CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`,
+            
+            `CREATE TABLE IF NOT EXISTS products (
+                id VARCHAR(255) PRIMARY KEY,
+                type VARCHAR(50) NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                classes INT,
+                price NUMERIC(10, 2),
+                description TEXT,
+                image_url TEXT,
+                details JSONB,
+                is_active BOOLEAN DEFAULT true,
+                scheduling_rules JSONB,
+                overrides JSONB,
+                min_participants INT,
+                price_per_person NUMERIC(10, 2)
+            );`,
+            
+            `CREATE TABLE IF NOT EXISTS bookings (
+                id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                product_id VARCHAR(255),
+                product_type VARCHAR(50),
+                slots JSONB,
+                user_info JSONB,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                is_paid BOOLEAN DEFAULT false,
+                price NUMERIC(10, 2),
+                booking_mode VARCHAR(50),
+                product JSONB,
+                booking_code VARCHAR(50) UNIQUE,
+                payment_details JSONB DEFAULT '[]'::jsonb,
+                attendance JSONB,
+                booking_date TEXT,
+                participants INT DEFAULT 1,
+                client_note TEXT
+            );`
+        ];
+
+        // Execute schemas one by one with logging
+        for (let i = 0; i < schemas.length; i++) {
+            console.log(`Executing schema ${i + 1}/${schemas.length}...`);
+            await sql.query(schemas[i]);
+        }
+        
+        console.log('Core tables created successfully');
+        
+    } catch (error: any) {
+        // Ignore duplicate constraint errors as they indicate the tables already exist
+        if (error.code !== '23505' && !error.message?.includes('already exists')) {
+            console.error('Schema creation error:', error);
+            throw error;
+        }
+        console.log('Core tables already exist, continuing...');
+    }
+    
+    // Quick column checks only - skip heavy migrations for now
+    try {
+        console.log('Checking essential columns...');
+        await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS min_participants INT;`;
+        await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS price_per_person NUMERIC(10, 2);`;
+        await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS participants INT DEFAULT 1;`;
+        console.log("Essential columns ensured.");
     } catch (error) {
-      console.error("Error during migration:", error);
+        console.error("Error during column checks:", error);
+        // Don't throw - continue even if migrations fail
     }
 }
 

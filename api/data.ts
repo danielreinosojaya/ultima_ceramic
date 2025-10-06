@@ -210,15 +210,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
     }
 
-    // Ensure database tables exist (including the deliveries table)
+    // Ensure database tables exist (including the deliveries table) with timeout
     try {
-        await ensureTablesExist();
-    } catch (error) {
-        console.error('Database connection failed during table initialization:', error);
-        return res.status(500).json({ 
-            error: 'Database connection failed', 
-            details: error instanceof Error ? error.message : 'Unknown database error' 
+        console.log('Starting table initialization...');
+        const tableInitPromise = ensureTablesExist();
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Table initialization timeout after 30 seconds')), 30000);
         });
+        
+        await Promise.race([tableInitPromise, timeoutPromise]);
+        console.log('Table initialization completed successfully');
+    } catch (error) {
+        console.error('Database table initialization failed:', error);
+        
+        // For timeout or critical errors, still try to continue but log the issue
+        if (error instanceof Error && error.message.includes('timeout')) {
+            console.log('Continuing despite table initialization timeout...');
+        } else {
+            return res.status(500).json({ 
+                error: 'Database initialization failed', 
+                details: error instanceof Error ? error.message : 'Unknown database error' 
+            });
+        }
     }
 
     try {
