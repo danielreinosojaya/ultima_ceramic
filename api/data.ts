@@ -171,18 +171,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).end();
     }
 
-    // Validate database connection early
-    if (!process.env.POSTGRES_URL) {
-        console.error('Database connection error: POSTGRES_URL environment variable is missing');
+    // Validate database connection early - check multiple possible env var names
+    const dbUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL || process.env.POSTGRES_PRISMA_URL;
+    if (!dbUrl) {
+        console.error('Database connection error: No database URL found in environment variables');
+        console.error('Available env vars:', Object.keys(process.env).filter(key => key.includes('POSTGRES') || key.includes('DATABASE')));
         return res.status(500).json({ 
             error: 'Database configuration error', 
-            details: 'POSTGRES_URL environment variable is required' 
+            details: 'Database URL environment variable is required (POSTGRES_URL, DATABASE_URL, or POSTGRES_PRISMA_URL)' 
         });
     }
 
-    // Test database connectivity with a simple query
+    console.log('Using database URL:', dbUrl.substring(0, 30) + '...');
+
+    // Test database connectivity with a simple query and timeout
     try {
-        await sql`SELECT 1 as test`;
+        console.log('Testing database connectivity...');
+        const startTime = Date.now();
+        
+        // Create a promise that resolves with the SQL query
+        const queryPromise = sql`SELECT 1 as test`;
+        
+        // Create a timeout promise
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Database query timeout after 10 seconds')), 10000);
+        });
+        
+        // Race between the query and timeout
+        await Promise.race([queryPromise, timeoutPromise]);
+        
+        const endTime = Date.now();
+        console.log(`Database connectivity test passed in ${endTime - startTime}ms`);
     } catch (error) {
         console.error('Database connectivity test failed:', error);
         return res.status(500).json({ 

@@ -1,9 +1,14 @@
 import { sql } from '@vercel/postgres';
 
-// Validate database connection
-if (!process.env.POSTGRES_URL) {
-    throw new Error('POSTGRES_URL environment variable is required');
+// Validate database connection - try multiple possible environment variable names
+const dbUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL || process.env.POSTGRES_PRISMA_URL;
+if (!dbUrl) {
+    console.error('Database connection error: No database URL found in environment variables');
+    console.error('Checked: POSTGRES_URL, DATABASE_URL, POSTGRES_PRISMA_URL');
+    throw new Error('Database URL environment variable is required');
 }
+
+console.log('Database connection configured with URL:', dbUrl.substring(0, 20) + '...');
 
 // Obtener reservas por email de cliente
 export async function getBookingsByCustomerEmail(email: string) {
