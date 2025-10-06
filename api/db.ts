@@ -1,4 +1,33 @@
+// Obtener reservas por email de cliente
+export async function getBookingsByCustomerEmail(email: string) {
+    const { rows } = await sql`
+        SELECT * FROM bookings WHERE user_info->>'email' = ${email}
+    `;
+    return rows;
+}
 import { sql } from '@vercel/postgres';
+// Función para crear un cliente en la tabla customers
+export async function createCustomer({ email, firstName, lastName, phone, countryCode, birthday }: {
+    email: string;
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    countryCode?: string;
+    birthday?: string;
+}) {
+    const { rows } = await sql`
+        INSERT INTO customers (email, first_name, last_name, phone, country_code, birthday)
+        VALUES (${email}, ${firstName || null}, ${lastName || null}, ${phone || null}, ${countryCode || null}, ${birthday || null})
+        ON CONFLICT (email) DO UPDATE SET
+            first_name = EXCLUDED.first_name,
+            last_name = EXCLUDED.last_name,
+            phone = EXCLUDED.phone,
+            country_code = EXCLUDED.country_code,
+            birthday = EXCLUDED.birthday
+        RETURNING *;
+    `;
+    return rows[0];
+}
 import { 
     DEFAULT_PRODUCTS, DEFAULT_AVAILABLE_SLOTS_BY_DAY, DEFAULT_INSTRUCTORS, 
     DEFAULT_POLICIES_TEXT, DEFAULT_CONFIRMATION_MESSAGE, DEFAULT_CLASS_CAPACITY, 

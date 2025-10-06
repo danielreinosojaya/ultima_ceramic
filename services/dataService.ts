@@ -1,3 +1,69 @@
+// Si el cliente no tiene reservas, agregarlo como standalone
+export const ensureStandaloneCustomer = async (customerData: {
+    email: string;
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    countryCode?: string;
+    birthday?: string;
+}): Promise<{ success: boolean; customer?: Customer; error?: string }> => {
+    // Verificar si el cliente ya existe en la base de datos
+    try {
+        const response = await fetch(`/api/data?action=standaloneCustomers`);
+        const customers = await response.json();
+        const exists = customers.some((c: any) => c.email?.toLowerCase() === customerData.email.toLowerCase());
+        if (exists) {
+            return { success: true, customer: customers.find((c: any) => c.email?.toLowerCase() === customerData.email.toLowerCase()) };
+        }
+        // Si no existe, crearlo
+        return await createOrUpdateCustomer(customerData);
+    } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+};
+// Obtener reservas por email de cliente
+export const getBookingsByCustomerEmail = async (email: string): Promise<Booking[]> => {
+    const response = await fetch(`/api/data?action=bookingsByCustomerEmail&email=${encodeURIComponent(email)}`);
+    if (!response.ok) throw new Error('Error fetching bookings for customer');
+    return response.json();
+};
+// Crear o actualizar cliente en la base de datos
+export const createOrUpdateCustomer = async (customerData: {
+    email: string;
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    countryCode?: string;
+    birthday?: string;
+}): Promise<{ success: boolean; customer?: Customer; error?: string }> => {
+    try {
+        const response = await fetch('/api/data?key=customer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(customerData),
+        });
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+};
+
+// Create a new customer
+export const createCustomer = async (customerData: {
+    email: string;
+    firstName: string;
+    lastName: string;
+    phone: string;
+    countryCode: string;
+    birthday?: string;
+}): Promise<Customer> => {
+    const result = await createOrUpdateCustomer(customerData);
+    if (!result.success || !result.customer) {
+        throw new Error(result.error || 'Error creating customer');
+    }
+    return result.customer;
+};
 // Edit payment details for a booking (amount, method, date)
 // import type { PaymentDetails } from '../types';
 
@@ -36,7 +102,7 @@ const fetchData = async (url: string, options?: RequestInit) => {
         const response = await fetch(url, options);
         if (!response.ok) {
             const errorText = await response.text();
-            console.error(`HTTP error! status: ${response.status}`, errorText);
+            // Eliminado debug
             // Vercel might return HTML for 404, so we can't assume JSON
             if (response.headers.get('content-type')?.includes('application/json')) {
                 const errorData = JSON.parse(errorText || '{}');
@@ -49,7 +115,7 @@ const fetchData = async (url: string, options?: RequestInit) => {
         // Handle cases where the response might be empty
         return text ? JSON.parse(text) : null;
     } catch (error) {
-        console.error(`API call failed: ${url}`, error);
+    // Eliminado debug
         throw error;
     }
 };
@@ -81,7 +147,7 @@ const postAction = async <T>(action: string, body: any): Promise<T> => {
 
 const parseProduct = (p: any): Product => ({
     ...p,
-    id: parseInt(p.id, 10),
+    id: typeof p.id === 'string' ? p.id : String(p.id),
     classes: p.classes ? parseInt(p.classes, 10) : undefined,
     price: p.price ? parseFloat(p.price) : undefined,
     minParticipants: p.minParticipants ? parseInt(p.minParticipants, 10) : undefined,
@@ -96,7 +162,7 @@ const parseProduct = (p: any): Product => ({
 const parseBooking = (b: any): Booking => {
     const booking = {
         ...b,
-        productId: parseInt(b.productId, 10),
+        productId: typeof b.productId === 'string' ? b.productId : String(b.productId),
         price: b.price ? parseFloat(b.price) : 0, // Ensure price is a number, default to 0
         createdAt: new Date(b.createdAt),
         product: parseProduct(b.product)
@@ -124,7 +190,7 @@ const parseBooking = (b: any): Booking => {
                 booking.paymentDetails = [];
             }
         } catch (e) {
-            console.error('Error parsing paymentDetails:', e);
+            // Eliminado debug
             booking.paymentDetails = [];
         }
     } else {
@@ -140,7 +206,7 @@ const parseInstructor = (i: any): Instructor => ({
 });
 
 const parseGroupInquiry = (i: any): GroupInquiry => {
-        console.log('Valor de tentativeDate en el frontend (desde la API):', i.tentativeDate, '| Tipo:', typeof i.tentativeDate);
+    // Eliminado debug
 
     // Definimos una variable para la fecha tentativa
     let tentativeDate: Date | undefined;
@@ -314,20 +380,44 @@ export const updateBankDetails = (details: BankDetails[]): Promise<{ success: bo
 // --- Client-side Calculations and Utilities ---
 
 export const getCustomers = (bookings: Booking[]): Customer[] => {
+    // Eliminado debug
+    
     const customerMap: Map<string, { userInfo: UserInfo; bookings: Booking[] }> = new Map();
     for (const booking of bookings) {
-        if (!booking.userInfo || !booking.userInfo.email) continue;
+    // Eliminado debug
+        
+        if (!booking.userInfo || !booking.userInfo.email) {
+            // Eliminado debug
+            continue;
+        }
+        
         const email = booking.userInfo.email.toLowerCase();
+    // Eliminado debug
+        
         if (!customerMap.has(email)) {
+            // Eliminado debug
             customerMap.set(email, { userInfo: booking.userInfo, bookings: [] });
         }
         customerMap.get(email)!.bookings.push(booking);
     }
+    
+    // Eliminado debug
+    
     const customers: Customer[] = Array.from(customerMap.values()).map(data => {
         const sortedBookings = data.bookings.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-        return {
-            email: data.userInfo.email,
-            userInfo: data.userInfo,
+        // Ensure userInfo has all required fields defined
+        const safeUserInfo: UserInfo = {
+            firstName: data.userInfo.firstName || '',
+            lastName: data.userInfo.lastName || '',
+            email: data.userInfo.email || '',
+            phone: data.userInfo.phone || '',
+            countryCode: data.userInfo.countryCode || '',
+            birthday: data.userInfo.birthday || null
+        };
+        
+        const customer = {
+            email: safeUserInfo.email,
+            userInfo: safeUserInfo,
             bookings: sortedBookings,
             totalBookings: data.bookings.length,
             // CORRECCIÓN: Sumar todos los montos de pago del historial en lugar de solo el precio de la reserva
@@ -337,28 +427,97 @@ export const getCustomers = (bookings: Booking[]): Customer[] => {
             }, 0),
             lastBookingDate: sortedBookings.length > 0 ? sortedBookings[0].createdAt : new Date(0),
         };
+        
+    // Eliminado debug
+        return customer;
     });
-    return customers.sort((a, b) => b.lastBookingDate.getTime() - a.lastBookingDate.getTime());
+    
+    const sortedCustomers = customers.sort((a, b) => b.lastBookingDate.getTime() - a.lastBookingDate.getTime());
+    // Eliminado debug
+    
+    return sortedCustomers;
+};
+
+// Get standalone customers from the customers table
+export const getStandaloneCustomers = async (): Promise<Customer[]> => {
+    try {
+        const rawCustomers = await fetchData('/api/data?action=standaloneCustomers');
+        if (!rawCustomers) return [];
+        
+        return rawCustomers.map((customerRow: any) => {
+            const safeUserInfo: UserInfo = {
+                firstName: customerRow.firstName || '',
+                lastName: customerRow.lastName || '', 
+                email: customerRow.email || '',
+                phone: customerRow.phone || '',
+                countryCode: customerRow.countryCode || '',
+                birthday: customerRow.birthday || null
+            };
+            
+            return {
+                email: customerRow.email,
+                userInfo: safeUserInfo,
+                bookings: [], // Standalone customers have no bookings
+                totalBookings: 0,
+                totalSpent: 0,
+                lastBookingDate: new Date(0),
+                deliveries: [] // Will be populated later
+            };
+        });
+    } catch (error) {
+    // Eliminado debug
+        return [];
+    }
 };
 
 export const getCustomersWithDeliveries = async (bookings: Booking[]): Promise<Customer[]> => {
+    // Eliminado debug
+    
     // Get customers from bookings first
-    const customers = getCustomers(bookings);
+    const customersFromBookings = getCustomers(bookings);
+    // Eliminado debug
+    
+    // Get standalone customers from the customers table
+    const standaloneCustomers = await getStandaloneCustomers();
+    // Eliminado debug
+    
+    // Merge customers, avoiding duplicates (booking-based customers take priority)
+    const customerEmailsFromBookings = new Set(customersFromBookings.map(c => c.email.toLowerCase()));
+    const uniqueStandaloneCustomers = standaloneCustomers.filter(c => 
+        !customerEmailsFromBookings.has(c.email.toLowerCase())
+    );
+    
+    const allCustomers = [...customersFromBookings, ...uniqueStandaloneCustomers];
+    // Eliminado debug
     
     // Get all deliveries
     const allDeliveries = await getDeliveries();
+    // Eliminado debug
     
     // Add deliveries to each customer
-    const customersWithDeliveries = customers.map(customer => {
+    const customersWithDeliveries = allCustomers.map(customer => {
         const customerDeliveries = allDeliveries.filter(d => 
             d.customerEmail.toLowerCase() === customer.email.toLowerCase()
         );
+        
+    // Eliminado debug
         
         return {
             ...customer,
             deliveries: customerDeliveries
         };
     });
+    
+    console.log('DEBUG getCustomersWithDeliveries - Final customers with deliveries:', customersWithDeliveries);
+    console.log('DEBUG getCustomersWithDeliveries - Final count:', customersWithDeliveries.length);
+    
+    // Check specifically for Daniel Reinoso
+    const danielCustomer = customersWithDeliveries.find(c => 
+        (c.userInfo?.firstName?.toLowerCase() === 'daniel' && c.userInfo?.lastName?.toLowerCase() === 'reinoso') ||
+        c.email?.toLowerCase().includes('daniel') ||
+        c.email?.toLowerCase().includes('reinoso')
+    );
+    console.log('DEBUG getCustomersWithDeliveries - Daniel Reinoso found:', danielCustomer);
     
     return customersWithDeliveries;
 };
@@ -542,6 +701,10 @@ export const getFutureCapacityMetrics = async (days: number): Promise<{ totalCap
 };
 
 // --- Delivery System Functions ---
+// Eliminar cliente por email
+export const deleteCustomer = async (email: string): Promise<{ success: boolean }> => {
+    return postAction('deleteCustomer', { email });
+};
 
 const parseDelivery = (d: any): Delivery => {
     const parsedPhotos = d.photos ? (Array.isArray(d.photos) ? d.photos : JSON.parse(d.photos || '[]')) : [];

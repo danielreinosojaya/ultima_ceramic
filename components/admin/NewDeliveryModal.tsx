@@ -124,8 +124,7 @@ export const NewDeliveryModal: React.FC<NewDeliveryModalProps> = ({
                 className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md animate-fade-in-up" 
                 onClick={(e) => e.stopPropagation()}
             >
-                <h3 className="text-lg font-bold text-brand-text mb-4">Nueva Entrega</h3>
-                
+                <h3 className="text-lg font-bold text-brand-text mb-4">Nueva Recogida</h3>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
                         <label htmlFor="description" className="block text-sm font-semibold text-brand-text mb-1">
@@ -149,7 +148,7 @@ export const NewDeliveryModal: React.FC<NewDeliveryModalProps> = ({
 
                     <div>
                         <label htmlFor="scheduledDate" className="block text-sm font-semibold text-brand-text mb-1">
-                            Fecha de entrega *
+                            Fecha de recogida *
                         </label>
                         <input
                             id="scheduledDate"
@@ -175,7 +174,7 @@ export const NewDeliveryModal: React.FC<NewDeliveryModalProps> = ({
                             id="notes"
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
-                            placeholder="Información adicional sobre la entrega..."
+                            placeholder="Información adicional sobre la recogida..."
                             rows={3}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent resize-none"
                             disabled={isSubmitting}
@@ -240,7 +239,7 @@ export const NewDeliveryModal: React.FC<NewDeliveryModalProps> = ({
                             disabled={isSubmitting}
                             className="px-4 py-2 text-sm font-semibold text-white bg-brand-primary rounded-lg hover:bg-brand-secondary transition-colors disabled:opacity-50"
                         >
-                            {isSubmitting ? 'Guardando...' : 'Crear Entrega'}
+                            {isSubmitting ? 'Guardando...' : 'Crear Recogida'}
                         </button>
                     </div>
                 </form>

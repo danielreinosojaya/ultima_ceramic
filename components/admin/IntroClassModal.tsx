@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import type { IntroductoryClass, Instructor, SchedulingRule, SessionOverride, ClassCapacity } from '../../types';
-import { useLanguage } from '../../context/LanguageContext';
 import * as dataService from '../../services/dataService';
 import { CubeIcon } from '../icons/CubeIcon';
 import { TrashIcon } from '../icons/TrashIcon';
@@ -31,7 +30,7 @@ const TextareaField: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement> 
 );
 
 export const IntroClassModal: React.FC<IntroClassModalProps> = ({ isOpen, onClose, onSave, classToEdit }) => {
-  const { t, language } = useLanguage();
+  // Monolingüe español, textos hardcodeados. No usar useLanguage ni contextos de idioma.
   const fileInputRef = useRef<HTMLInputElement>(null);
   // FIX: Added 'technique' to the initial state to satisfy the IntroductoryClassDetails type.
   const [formData, setFormData] = useState<Omit<IntroductoryClass, 'id' | 'isActive' | 'type'>>({
@@ -161,7 +160,7 @@ export const IntroClassModal: React.FC<IntroClassModalProps> = ({ isOpen, onClos
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-2xl font-serif text-brand-accent mb-4 text-center">
-          {classToEdit ? t('admin.introClassModal.editTitle') : t('admin.introClassModal.createTitle')}
+          {classToEdit ? 'Editar clase introductoria' : 'Crear clase introductoria'}
         </h2>
         <form onSubmit={handleSubmit}>
            <input
@@ -172,14 +171,14 @@ export const IntroClassModal: React.FC<IntroClassModalProps> = ({ isOpen, onClos
             className="hidden"
           />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-            <InputField label={t('admin.packageModal.nameLabel')} id="name" name="name" value={formData.name} onChange={handleChange} required />
-            <InputField label={t('admin.packageModal.priceLabel')} id="price" name="price" type="number" value={formData.price} onChange={handleChange} required />
-            <div className="md:col-span-2">
-                <TextareaField label={t('admin.packageModal.descriptionLabel')} id="description" name="description" value={formData.description} onChange={handleChange} />
-            </div>
+      <InputField label="Nombre de la clase" id="name" name="name" value={formData.name} onChange={handleChange} required />
+      <InputField label="Precio" id="price" name="price" type="number" value={formData.price} onChange={handleChange} required />
+      <div className="md:col-span-2">
+        <TextareaField label="Descripción" id="description" name="description" value={formData.description} onChange={handleChange} />
+      </div>
 
             <div className="md:col-span-2">
-                <label className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.packageModal.imageLabel')}</label>
+                <label className="block text-sm font-bold text-brand-secondary mb-1">Imagen</label>
                 <div className="mt-1 flex items-center gap-4 p-2 border-2 border-dashed border-gray-300 rounded-lg">
                     {formData.imageUrl ? (
                     <img src={formData.imageUrl} alt="Preview" className="w-24 h-24 object-cover rounded-md" />
@@ -193,44 +192,44 @@ export const IntroClassModal: React.FC<IntroClassModalProps> = ({ isOpen, onClos
                     onClick={() => fileInputRef.current?.click()}
                     className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-4 rounded-lg hover:bg-gray-100"
                     >
-                    {t('admin.packageModal.uploadImageButton')}
+                    {'Subir imagen'}
                     </button>
                 </div>
             </div>
 
             <div className="md:col-span-2 border-t pt-4 mt-2">
-                <h3 className="font-bold text-brand-accent mb-2">{t('admin.packageModal.detailsSectionTitle')}</h3>
+                <h3 className="font-bold text-brand-accent mb-2">Detalles de la clase</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <InputField label={t('admin.packageModal.durationLabel')} name="duration" value={formData.details.duration} onChange={handleDetailChange} />
-                    <InputField label={t('admin.packageModal.durationHoursLabel')} name="durationHours" type="number" step="0.5" value={formData.details.durationHours} onChange={handleDetailChange} />
+                    <InputField label="Duración" name="duration" value={formData.details.duration} onChange={handleDetailChange} />
+                    <InputField label="Duración (horas)" name="durationHours" type="number" step="0.5" value={formData.details.durationHours} onChange={handleDetailChange} />
                     <div>
-                        <label htmlFor="technique" className="block text-sm font-bold text-brand-secondary mb-1">{t('admin.packageModal.techniqueLabel')}</label>
+                        <label htmlFor="technique" className="block text-sm font-bold text-brand-secondary mb-1">Técnica</label>
                         <select id="technique" name="technique" value={formData.details.technique} onChange={handleDetailChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
-                            <option value="potters_wheel">{t('techniques.pottersWheelTitle')}</option>
-                            <option value="molding">{t('techniques.moldingTitle')}</option>
+                            <option value="potters_wheel">Torno</option>
+                            <option value="molding">Moldeado</option>
                         </select>
                     </div>
                     <div className="md:col-span-2">
-                        <TextareaField label={t('admin.packageModal.activitiesLabel')} name="activities" value={formData.details.activities.join('\n')} onChange={handleDetailChange} />
+                        <TextareaField label="Actividades" name="activities" value={formData.details.activities.join('\n')} onChange={handleDetailChange} />
                     </div>
-                    <TextareaField label={t('admin.packageModal.generalRecommendationsLabel')} name="generalRecommendations" value={formData.details.generalRecommendations} onChange={handleDetailChange} />
-                    <TextareaField label={t('admin.packageModal.materialsLabel')} name="materials" value={formData.details.materials} onChange={handleDetailChange} />
+                    <TextareaField label="Recomendaciones generales" name="generalRecommendations" value={formData.details.generalRecommendations} onChange={handleDetailChange} />
+                    <TextareaField label="Materiales" name="materials" value={formData.details.materials} onChange={handleDetailChange} />
                 </div>
             </div>
 
              <div className="md:col-span-2 border-t pt-4 mt-2">
-                <h3 className="font-bold text-brand-accent mb-2">{t('admin.introClassModal.rulesTitle')}</h3>
-                <p className="text-sm text-brand-secondary mb-4">{t('admin.introClassModal.rulesSubtitle')}</p>
+                <h3 className="font-bold text-brand-accent mb-2">Reglas semanales</h3>
+                <p className="text-sm text-brand-secondary mb-4">Define los horarios y profesores para la clase introductoria.</p>
                 <div className="space-y-2 max-h-48 overflow-y-auto pr-2 bg-gray-50 p-2 rounded-lg">
                     {formData.schedulingRules.length > 0 ? formData.schedulingRules.map(rule => (
                         <div key={rule.id} className="flex items-center justify-between bg-white p-2 rounded-md text-sm border">
                             <div>
-                                <span className="font-semibold">{DAY_NAMES[rule.dayOfWeek]} at {new Date(`1970-01-01T${rule.time}`).toLocaleTimeString(language, { hour: 'numeric', minute: '2-digit' })}</span>
+                                <span className="font-semibold">{DAY_NAMES[rule.dayOfWeek]} a las {rule.time}</span>
                                 <span className="text-gray-600 ml-2">({instructors.find(i => i.id === rule.instructorId)?.name}, cap: {rule.capacity})</span>
                             </div>
                             <button type="button" onClick={() => handleRemoveRule(rule.id)} className="p-1 text-red-500 hover:text-red-700"><TrashIcon className="w-4 h-4" /></button>
                         </div>
-                    )) : <p className="text-xs text-center text-gray-500 py-2">No weekly rules defined.</p>}
+                    )) : <p className="text-xs text-center text-gray-500 py-2">No hay reglas semanales definidas.</p>}
                 </div>
                 <div className="flex items-center gap-2 mt-3 pt-3 border-t">
                     <select value={newRule.dayOfWeek} onChange={e => setNewRule({...newRule, dayOfWeek: Number(e.target.value)})} className="p-2 border rounded-md text-sm bg-white">
@@ -254,12 +253,12 @@ export const IntroClassModal: React.FC<IntroClassModalProps> = ({ isOpen, onClos
 
           </div>
           <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-gray-200">
-             <button type="button" onClick={onClose} className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100">
-                 {t('admin.productManager.cancelButton')}
-             </button>
-             <button type="submit" className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent">
-                {t('admin.packageModal.saveButton')}
-             </button>
+       <button type="button" onClick={onClose} className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100">
+         Cancelar
+       </button>
+       <button type="submit" className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent">
+        Guardar
+       </button>
           </div>
         </form>
       </div>

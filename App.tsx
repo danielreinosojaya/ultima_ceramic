@@ -81,6 +81,7 @@ const App: React.FC = () => {
                 });
             } catch (error) {
                 console.error("Failed to load initial app data:", error);
+                alert("Error cargando datos: " + (error?.message || error));
             } finally {
                 setLoading(false);
             }
@@ -202,9 +203,12 @@ const App: React.FC = () => {
     };
 
     const renderView = () => {
-        if (loading || !appData) {
-            return <div className="text-center p-10">Loading...</div>;
-        }
+        try {
+            if (loading || !appData) {
+                return <div className="text-center p-10">Loading...</div>;
+            }
+
+            console.log("App renderView - current view:", view, "appData available:", !!appData);
 
         switch (view) {
             case 'welcome':
@@ -261,9 +265,14 @@ const App: React.FC = () => {
             default:
                 return <WelcomeSelector onSelect={handleWelcomeSelect} />;
         }
+        } catch (error) {
+            console.error("Error in renderView:", error);
+            return <div className="text-center p-10 text-red-500">Error: {error?.message || 'Unknown error'}</div>;
+        }
     };
     
     if (isAdmin) {
+        console.log("App - rendering AdminConsole");
         return (
             <NotificationProvider>
                 <AdminConsole />
@@ -271,6 +280,7 @@ const App: React.FC = () => {
         );
     }
 
+    console.log("App - rendering main app, view:", view, "loading:", loading);
     return (
         <div className="bg-brand-background min-h-screen text-brand-text font-sans relative flex flex-col">
             <Header />

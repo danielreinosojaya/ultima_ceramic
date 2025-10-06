@@ -57,7 +57,7 @@ export const DAY_NAMES: DayKey[] = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 
 
 export const DEFAULT_PRODUCTS: Product[] = [
   {
-    id: 1,
+    id: "1",
     type: 'CLASS_PACKAGE',
     name: "Torno para Principiantes",
     classes: 4,
@@ -74,8 +74,44 @@ export const DEFAULT_PRODUCTS: Product[] = [
     },
     isActive: true
   },
-   {
-    id: 2,
+    {
+      id: "7",
+      type: 'SINGLE_CLASS',
+      name: "Clase Individual de Torno",
+      classes: 1,
+      price: 70,
+      description: "Clase personalizada de torno para todos los niveles. Ideal para quienes buscan atención individual y avanzar a su ritmo.",
+      imageUrl: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=1974&auto=format&fit=crop",
+      details: {
+        technique: 'potters_wheel',
+        duration: "2 horas",
+        durationHours: 2,
+        activities: ["Amasado y preparación de la arcilla", "Centrado en el torno", "Creación de piezas según el nivel del alumno"],
+        generalRecommendations: "Traer ropa cómoda y muchas ganas de aprender. Clase adaptada al nivel del participante.",
+        materials: "Incluye arcilla, herramientas y quema de una pieza."
+      },
+      isActive: true
+    },
+    {
+  id: "8",
+      type: 'SINGLE_CLASS',
+      name: "Clase Individual de Modelado",
+      classes: 1,
+      price: 65,
+      description: "Clase personalizada de modelado manual para explorar técnicas y creatividad en cerámica.",
+      imageUrl: "https://images.unsplash.com/photo-1519125323398-675f0ddb6308?q=80&w=1974&auto=format&fit=crop",
+      details: {
+        technique: 'molding',
+        duration: "2 horas",
+        durationHours: 2,
+        activities: ["Técnica del pellizco", "Churros", "Planchas", "Decoración personalizada"],
+        generalRecommendations: "No se requiere experiencia previa. Clase adaptada a los intereses del alumno.",
+        materials: "Incluye arcilla, herramientas y quema de una pieza."
+      },
+      isActive: true
+    },
+  {
+   id: "2",
     type: 'CLASS_PACKAGE',
     name: "Paquete de 4 Clases de Modelado",
     classes: 4,
@@ -93,7 +129,7 @@ export const DEFAULT_PRODUCTS: Product[] = [
     isActive: true
   },
   {
-    id: 3,
+    id: "3",
     type: 'OPEN_STUDIO_SUBSCRIPTION',
     name: "Acceso a Estudio Abierto",
     price: 150,
@@ -108,7 +144,7 @@ export const DEFAULT_PRODUCTS: Product[] = [
     isActive: true
   },
   {
-    id: 4,
+    id: "4",
     type: 'INTRODUCTORY_CLASS',
     name: "Clase Introductoria al Torno",
     price: 75,
@@ -129,8 +165,8 @@ export const DEFAULT_PRODUCTS: Product[] = [
     ],
     overrides: []
   },
-   {
-    id: 5,
+  {
+   id: "5",
     type: 'GROUP_EXPERIENCE',
     name: "Experiencia Grupal en Cerámica",
     description: "Celebra un cumpleaños, un evento de team building o simplemente una reunión creativa con amigos. Una experiencia privada y memorable.",
@@ -138,7 +174,7 @@ export const DEFAULT_PRODUCTS: Product[] = [
     isActive: true
   },
   {
-    id: 6,
+    id: "6",
     type: 'COUPLES_EXPERIENCE',
     name: "Experiencia en Pareja",
     description: "Una cita creativa y diferente. Moldeen una pieza juntos en el torno o creen piezas individuales, con la guía de un instructor.",

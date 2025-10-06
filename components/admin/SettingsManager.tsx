@@ -11,12 +11,12 @@ const BankAccountsManager: React.FC = () => {
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        async function fetchAccounts() {
+        const fetchAccounts = async () => {
             setLoading(true);
             const details = await dataService.getBankDetails();
             setAccounts(Array.isArray(details) ? details : [details]);
             setLoading(false);
-        }
+        };
         fetchAccounts();
     }, []);
 

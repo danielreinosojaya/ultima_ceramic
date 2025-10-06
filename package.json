@@ -9,7 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@vercel/node": "^3.2.29",
+    "@heroicons/react": "^2.2.0",
+    "@vercel/node": "^5.3.24",
     "@vercel/postgres": "^0.10.0",
     "chart.js": "^4.5.0",
     "date-fns": "^4.1.0",
