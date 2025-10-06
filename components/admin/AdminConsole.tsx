@@ -75,6 +75,7 @@ export const AdminConsole: React.FC = () => {
   }, []);
 
   const fetchData = useCallback(async () => {
+      console.log('fetchData called, dataVersion:', dataVersion);
       !isLoading && setIsSyncing(true);
       try {
           const [
@@ -93,6 +94,7 @@ export const AdminConsole: React.FC = () => {
               dataService.getAnnouncements(),
               dataService.getInvoiceRequests(),
           ]);
+          console.log('Products fetched:', products.length, 'SINGLE_CLASS products:', products.filter(p => p.type === 'SINGLE_CLASS'));
           setAdminData({ 
               products, bookings, inquiries, instructors, availability, 
               scheduleOverrides, classCapacity, capacityMessages, announcements,
@@ -111,7 +113,10 @@ export const AdminConsole: React.FC = () => {
     fetchData();
   }, [dataVersion, fetchData]);
   
-  const handleSync = forceRefresh;
+  const handleSync = () => {
+    console.log('handleSync called, will increment dataVersion');
+    forceRefresh();
+  };
 
   useEffect(() => {
   if (navigateTo) {
