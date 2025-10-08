@@ -13,6 +13,7 @@ interface PackageSelectorProps {
 export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, technique, products }) => {
   // Traducción eliminada, usar texto en español directamente
   const [packages, setPackages] = useState<Product[]>([]);
+  const [parejaCard, setParejaCard] = useState<Product | null>(null);
 
   useEffect(() => {
     if (technique && products.length > 0) {
@@ -22,7 +23,34 @@ export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, tech
             (p.type === 'CLASS_PACKAGE' && p.details.technique === technique)
         )
       );
-      setPackages(activePackages);
+      // Orden personalizado
+      const order = [
+        { type: 'CLASS_PACKAGE', price: 180 },
+        { type: 'CLASS_PACKAGE', price: 330 },
+        { type: 'CLASS_PACKAGE', price: 470 },
+        { type: 'OPEN_STUDIO_SUBSCRIPTION' }
+      ];
+      const pareja = activePackages.find(pkg => pkg.type === 'COUPLES_EXPERIENCE');
+      const ordered = [];
+      order.forEach(criteria => {
+        activePackages.forEach(pkg => {
+          if (
+            criteria.type === pkg.type &&
+            (criteria.price === undefined || pkg.price === criteria.price)
+          ) {
+            ordered.push(pkg);
+          }
+        });
+      });
+      // Agregar los que no están en el orden personalizado al final (excepto pareja)
+      activePackages.forEach(pkg => {
+        if (!ordered.includes(pkg) && pkg.type !== 'COUPLES_EXPERIENCE') {
+          ordered.push(pkg);
+        }
+      });
+      setPackages(ordered);
+      // Guardar pareja aparte para renderizarla al final
+      setParejaCard(pareja || null);
     }
   }, [technique, products]);
 
@@ -58,12 +86,10 @@ export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, tech
                     <KeyIcon className="w-8 h-8 text-brand-accent mb-4" />
                     <h3 className="text-4xl font-semibold text-brand-text mt-2">{openStudioPkg.name}</h3>
                     <p className="text-brand-secondary mt-4 max-w-xl mx-auto flex-grow">{openStudioPkg.description}</p>
-                    
                     <div className="my-8">
                         <p className="text-4xl font-bold text-brand-text">${openStudioPkg.price}</p>
                         <p className="text-base font-normal text-brand-secondary mt-1">por mes</p>
                     </div>
-                
                     <button className="bg-transparent border border-brand-accent text-brand-accent font-bold py-3 px-12 rounded-lg hover:bg-brand-accent hover:text-white transition-colors duration-300 w-full max-w-xs mx-auto">
                       Seleccionar membresía
                     </button>
@@ -97,11 +123,9 @@ export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, tech
                         <p className="text-4xl font-bold text-brand-text">${pkg.price}</p>
                         <p className="text-brand-secondary font-semibold text-sm">/ {pkg.classes} clases</p>
                    </div>
-                   
                   <div className="bg-brand-background/80 p-3 rounded-md text-center mb-4">
                         <p className="font-bold text-brand-text">${pricePerClass.toFixed(2)} <span className="font-normal text-brand-secondary">por clase</span></p>
                   </div>
-                                    
                   <p className="text-brand-secondary text-sm flex-grow min-h-[3.5rem]">{pkg.description}</p>
                   <button className="mt-6 bg-brand-primary text-white font-bold py-3 px-6 rounded-lg w-full hover:opacity-90 transition-opacity duration-300">
                     Seleccionar paquete
@@ -113,6 +137,36 @@ export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, tech
           return null;
         })}
       </div>
+      {/* Renderizar Clase Pareja al final */}
+      {parejaCard && (
+        <div className="mt-8">
+          <div className="bg-brand-surface rounded-xl overflow-hidden shadow-subtle hover:shadow-lifted transition-shadow duration-300 cursor-pointer flex flex-col transform hover:-translate-y-1 max-w-md mx-auto" onClick={() => onSelect(parejaCard)}>
+            <div className="aspect-[4/3] w-full bg-brand-background overflow-hidden group">
+              {parejaCard.imageUrl ? (
+                <img src={parejaCard.imageUrl} alt={parejaCard.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <span className="font-semibold text-brand-accent">CeramicAlma</span>
+                </div>
+              )}
+            </div>
+            <div className="p-6 flex-grow flex flex-col text-left">
+              <h3 className="text-2xl font-semibold text-brand-primary">{parejaCard.name}</h3>
+              <div className="flex items-baseline gap-2 my-4">
+                <p className="text-4xl font-bold text-brand-text">${parejaCard.price}</p>
+                <p className="text-brand-secondary font-semibold text-sm">/ {parejaCard.classes || 1} clases</p>
+              </div>
+              <div className="bg-brand-background/80 p-3 rounded-md text-center mb-4">
+                <p className="font-bold text-brand-text">${(parejaCard.price / (parejaCard.classes || 1)).toFixed(2)} <span className="font-normal text-brand-secondary">por clase</span></p>
+              </div>
+              <p className="text-brand-secondary text-sm flex-grow min-h-[3.5rem]">{parejaCard.description || 'No description available'}</p>
+              <button className="mt-6 bg-brand-primary text-white font-bold py-3 px-6 rounded-lg w-full hover:opacity-90 transition-opacity duration-300">
+                Seleccionar paquete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
