@@ -18,7 +18,10 @@ export const AcceptPaymentModal: React.FC<AcceptPaymentModalProps> = ({ isOpen, 
     const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Card' | 'Transfer'>('Cash');
     const [isProcessing, setIsProcessing] = useState(false);
 
+    if (!isOpen || !booking) return null;
+
     const handleAddPayment = async () => {
+        console.log('[UI] handleAddPayment - Disparando pago para bookingId:', booking.id);
         setIsProcessing(true);
         try {
             const paymentDetails: PaymentDetails = {
@@ -27,6 +30,9 @@ export const AcceptPaymentModal: React.FC<AcceptPaymentModalProps> = ({ isOpen, 
                 receivedAt: new Date().toISOString(),
             };
             await dataService.addPaymentToBooking(booking.id, paymentDetails);
+            if (dataService.invalidateBookingsCache) {
+                dataService.invalidateBookingsCache();
+            }
             onDataChange();
             onClose();
         } catch (error) {
@@ -36,8 +42,6 @@ export const AcceptPaymentModal: React.FC<AcceptPaymentModalProps> = ({ isOpen, 
             setIsProcessing(false);
         }
     };
-
-    if (!isOpen || !booking) return null;
 
     const getPaymentMethodIcon = (method: string) => {
         switch(method) {
@@ -105,10 +109,18 @@ export const AcceptPaymentModal: React.FC<AcceptPaymentModalProps> = ({ isOpen, 
                                 <button
                                     key={method}
                                     onClick={() => setPaymentMethod(method as any)}
-                                    className={`flex-1 p-3 rounded-lg border-2 flex flex-col items-center transition-colors ${paymentMethod === method ? 'border-brand-primary bg-brand-primary/10' : 'border-gray-200 hover:bg-gray-50'}`}
+                                    className={
+                                        `flex-1 p-3 rounded-lg border-2 flex flex-col items-center transition-colors ${
+                                            paymentMethod === method
+                                                ? 'border-brand-primary bg-brand-primary/10'
+                                                : 'border-gray-200 hover:bg-gray-50'
+                                        }`
+                                    }
                                 >
                                     {getPaymentMethodIcon(method)}
-                                    <span className="text-xs font-semibold mt-1">{method === 'Cash' ? 'Efectivo' : method === 'Card' ? 'Tarjeta' : 'Transferencia'}</span>
+                                    <span className="text-xs font-semibold mt-1">
+                                        {method === 'Cash' ? 'Efectivo' : (method === 'Card' ? 'Tarjeta' : 'Transferencia')}
+                                    </span>
                                 </button>
                             ))}
                         </div>
