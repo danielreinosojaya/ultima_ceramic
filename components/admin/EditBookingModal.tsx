@@ -11,10 +11,12 @@ interface EditBookingModalProps {
 export const EditBookingModal: React.FC<EditBookingModalProps> = ({ booking, onClose, onSave }) => {
     const [userInfo, setUserInfo] = useState<UserInfo>({ ...booking.userInfo! });
     const [price, setPrice] = useState<number | string>(booking.price);
+    const [participants, setParticipants] = useState<number | string>(booking.participants ?? 1);
     
     useEffect(() => {
         setUserInfo({ ...booking.userInfo! });
         setPrice(booking.price);
+        setParticipants(booking.participants ?? 1);
     }, [booking]);
 
     const handleUserInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -25,14 +27,16 @@ export const EditBookingModal: React.FC<EditBookingModalProps> = ({ booking, onC
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const finalPrice = typeof price === 'string' ? parseFloat(price) : price;
-        if (!userInfo.firstName || !userInfo.lastName || !userInfo.email || isNaN(finalPrice)) {
-            alert('Por favor, completa todos los campos requeridos y asegúrate de que el precio sea un número válido.');
+        const finalParticipants = typeof participants === 'string' ? parseInt(participants, 10) : participants;
+        if (!userInfo.firstName || !userInfo.lastName || !userInfo.email || isNaN(finalPrice) || isNaN(finalParticipants) || finalParticipants < 1) {
+            alert('Por favor, completa todos los campos requeridos y asegúrate de que el precio y participantes sean válidos.');
             return;
         }
 
         onSave({
             userInfo,
             price: finalPrice,
+            participants: finalParticipants,
         });
     };
 
@@ -49,6 +53,10 @@ export const EditBookingModal: React.FC<EditBookingModalProps> = ({ booking, onC
                              {COUNTRIES.map(c => <option key={c.name} value={c.code}>{c.flag} {c.code}</option>)}
                         </select>
                         <input type="tel" name="phone" value={userInfo.phone} onChange={handleUserInputChange} placeholder="Teléfono" className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+                    </div>
+                    <div>
+                        <label htmlFor="participants" className="block text-sm font-bold text-brand-secondary mb-1">Participantes</label>
+                        <input type="number" min={1} name="participants" value={participants} onChange={e => setParticipants(e.target.value)} placeholder="1" className="w-full px-3 py-2 border border-gray-300 rounded-lg" required />
                     </div>
                     <div>
                         <label htmlFor="price" className="block text-sm font-bold text-brand-secondary mb-1">Precio</label>

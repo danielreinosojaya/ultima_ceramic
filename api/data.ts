@@ -758,13 +758,13 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             return res.status(200).json({ success: true });
         }
         case 'updateBooking': {
-            const { id, userInfo, price } = req.body;
+            const { id, userInfo, price, participants } = req.body;
             if (!id || !userInfo || typeof price === 'undefined') {
                 return res.status(400).json({ error: 'id, userInfo, and price are required.' });
             }
             const { rows: [updatedBookingRow] } = await sql`
                 UPDATE bookings
-                SET user_info = ${JSON.stringify(userInfo)}, price = ${price}
+                SET user_info = ${JSON.stringify(userInfo)}, price = ${price}, participants = ${typeof participants !== 'undefined' ? participants : null}
                 WHERE id = ${id}
                 RETURNING *;
             `;
