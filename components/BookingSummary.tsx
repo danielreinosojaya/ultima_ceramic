@@ -8,6 +8,7 @@ import { UserIcon } from './icons/UserIcon.js';
 import { MailIcon } from './icons/MailIcon.js';
 import { PhoneIcon } from './icons/PhoneIcon.js';
 import { InfoCircleIcon } from './icons/InfoCircleIcon.js';
+import { formatPrice } from '../utils/formatters';
 
 interface BookingSummaryProps {
   bookingDetails: BookingDetails;
@@ -60,7 +61,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
           <h3 className="text-xl font-bold text-brand-text border-b border-brand-border pb-2 mb-4">Torno Alfarero</h3>
           <div className="flex justify-between items-center text-lg">
             <span className="text-brand-secondary">{slots.length} Clases</span>
-            <span className="font-bold text-brand-text">${product.price.toFixed(2)}</span>
+            <span className="font-bold text-brand-text">${formatPrice(product.price)}</span>
           </div>
       </div>
 

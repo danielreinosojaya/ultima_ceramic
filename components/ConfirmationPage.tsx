@@ -8,6 +8,7 @@ import { WhatsAppIcon } from './icons/WhatsAppIcon';
 import { DocumentDuplicateIcon } from './icons/DocumentDuplicateIcon';
 import { InfoCircleIcon } from './icons/InfoCircleIcon';
 import { generateBookingPDF } from '../services/pdfService';
+import { formatPrice } from '../utils/formatters';
 import { DownloadIcon } from './icons/DownloadIcon';
 import { SINGLE_CLASS_PRICE, VAT_RATE } from '../constants';
 
@@ -137,15 +138,15 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
             <div className="mt-8 bg-brand-background p-6 rounded-lg">
                 <div className="flex justify-between text-brand-secondary">
                     <span>Subtotal</span>
-                    <span>${subtotal.toFixed(2)}</span>
+                    <span>${formatPrice(subtotal)}</span>
                 </div>
                 <div className="flex justify-between text-brand-secondary">
                     <span>IVA (15%)</span>
-                    <span>${vat.toFixed(2)}</span>
+                    <span>${formatPrice(vat)}</span>
                 </div>
                 <div className="flex justify-between font-bold text-xl border-t-2 border-brand-border pt-2 mt-2">
                     <span className="text-brand-text">Total a Pagar</span>
-                    <span className="text-brand-text">${booking.price.toFixed(2)}</span>
+                    <span className="text-brand-text">${formatPrice(booking.price)}</span>
                 </div>
             </div>
 

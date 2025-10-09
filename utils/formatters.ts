@@ -20,6 +20,24 @@ export function formatCurrency(amount: number): string {
     return amount?.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' });
 }
 
+export function formatPrice(price: any): string {
+    // Safely parse and format price values
+    let numericPrice: number;
+    
+    if (typeof price === 'number') {
+        numericPrice = isNaN(price) ? 0 : price;
+    } else if (typeof price === 'string') {
+        numericPrice = parseFloat(price);
+        if (isNaN(numericPrice)) {
+            numericPrice = 0;
+        }
+    } else {
+        numericPrice = 0;
+    }
+    
+    return numericPrice.toFixed(2);
+}
+
 export function normalizeHour(time: string): string {
     // Normaliza hora tipo "9:00" a "09:00:00" y "14:30" a "14:30:00"
     if (!time) return '00:00:00';
