@@ -323,6 +323,10 @@ export interface UITexts {
     [key: string]: any;
 }
 
+export interface UILabels {
+    taxIdLabel: string; // "RUC", "Cédula", "Tax ID", etc.
+}
+
 export interface AutomationSettings {
     preBookingConfirmation: { enabled: boolean };
     paymentReceipt: { enabled: boolean };
@@ -353,6 +357,7 @@ export interface AppData {
   confirmationMessage: ConfirmationMessage;
   footerInfo: FooterInfo;
   bankDetails: BankDetails;
+  uiLabels?: UILabels;
 }
 
 // Admin & Notifications
