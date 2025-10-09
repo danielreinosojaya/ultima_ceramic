@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Test</title>
+</head>
+<body>
+    <h1>Testing UILabels API</h1>
+    <button onclick="testAPI()">Test API</button>
+    <div id="results"></div>
+    
+    <script>
+        async function testAPI() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<p>Testing...</p>';
+            
+            try {
+                console.log('Starting API test...');
+                
+                // Test GET
+                console.log('Testing GET...');
+                const getResponse = await fetch('/api/data?key=uiLabels');
+                console.log('GET Response status:', getResponse.status);
+                
+                if (!getResponse.ok) {
+                    throw new Error(`GET failed: ${getResponse.status} ${getResponse.statusText}`);
+                }
+                
+                const getData = await getResponse.json();
+                console.log('GET Success:', getData);
+                
+                // Test POST
+                console.log('Testing POST...');
+                const postResponse = await fetch('/api/data?key=uiLabels', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ taxIdLabel: 'Cédula de Prueba' })
+                });
+                console.log('POST Response status:', postResponse.status);
+                
+                if (!postResponse.ok) {
+                    throw new Error(`POST failed: ${postResponse.status} ${postResponse.statusText}`);
+                }
+                
+                const postData = await postResponse.json();
+                console.log('POST Success:', postData);
+                
+                resultsDiv.innerHTML = `
+                    <h3>✅ Tests Passed</h3>
+                    <p><strong>GET Result:</strong> ${JSON.stringify(getData)}</p>
+                    <p><strong>POST Result:</strong> ${JSON.stringify(postData)}</p>
+                `;
+                
+            } catch (error) {
+                console.error('API Test Failed:', error);
+                resultsDiv.innerHTML = `
+                    <h3>❌ Test Failed</h3>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

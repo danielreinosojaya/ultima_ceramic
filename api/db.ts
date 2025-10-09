@@ -8,7 +8,12 @@ if (!dbUrl) {
     throw new Error('Database URL environment variable is required');
 }
 
-console.log('Database connection configured with URL:', dbUrl.substring(0, 20) + '...');
+// Solo log una vez al inicializar el módulo
+let connectionLogged = false;
+if (!connectionLogged) {
+    console.log('Database connection configured');
+    connectionLogged = true;
+}
 
 // Obtener reservas por email de cliente
 export async function getBookingsByCustomerEmail(email: string) {

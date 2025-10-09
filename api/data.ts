@@ -543,6 +543,9 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         case 'backgroundSettings':
                             data = {};
                             break;
+                        case 'uiLabels':
+                            data = { taxIdLabel: 'RUC' };
+                            break;
                         case 'policies':
                         case 'confirmationMessage':
                             data = '';
@@ -569,7 +572,8 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
     }
 
     const value = req.body;
-    switch (key) {
+    try {
+        switch (key) {
             case 'customer': {
                 // Crear o actualizar cliente
                 try {
@@ -685,6 +689,12 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
             break;
         default:
             await sql.query('INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;', [key, JSON.stringify(value)]);
+            break;
+    }
+    return res.status(200).json({ success: true });
+    } catch (error) {
+        console.error('Error in handlePost:', error);
+        return res.status(500).json({ error: 'Internal server error' });
     }
 }
 
@@ -758,13 +768,13 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             return res.status(200).json({ success: true });
         }
         case 'updateBooking': {
-            const { id, userInfo, price } = req.body;
+            const { id, userInfo, price, participants } = req.body;
             if (!id || !userInfo || typeof price === 'undefined') {
                 return res.status(400).json({ error: 'id, userInfo, and price are required.' });
             }
             const { rows: [updatedBookingRow] } = await sql`
                 UPDATE bookings
-                SET user_info = ${JSON.stringify(userInfo)}, price = ${price}
+                SET user_info = ${JSON.stringify(userInfo)}, price = ${price}, participants = ${typeof participants !== 'undefined' ? participants : null}
                 WHERE id = ${id}
                 RETURNING *;
             `;

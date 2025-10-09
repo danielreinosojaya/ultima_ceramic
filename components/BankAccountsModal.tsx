@@ -1,6 +1,23 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { getUILabels } from '../services/dataService';
+import { UILabels } from '../types';
 
 export const BankAccountsModal = ({ open, onClose, accounts }) => {
+  const [uiLabels, setUiLabels] = useState<UILabels>({ taxIdLabel: 'RUC' });
+
+  useEffect(() => {
+    const fetchUILabels = async () => {
+      try {
+        const labels = await getUILabels();
+        setUiLabels(labels);
+      } catch (error) {
+        console.log('No se encontraron labels personalizados, usando defaults');
+        setUiLabels({ taxIdLabel: 'RUC' });
+      }
+    };
+    fetchUILabels();
+  }, []);
+
   if (!open) return null;
   return (
     <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 animate-fade-in">
@@ -27,7 +44,7 @@ export const BankAccountsModal = ({ open, onClose, accounts }) => {
                 <div><span className="font-semibold text-brand-secondary">Titular:</span> <span className="text-brand-text">{acc.accountHolder}</span></div>
                 <div><span className="font-semibold text-brand-secondary">Número:</span> <span className="text-brand-text">{acc.accountNumber}</span></div>
                 <div><span className="font-semibold text-brand-secondary">Tipo:</span> <span className="text-brand-text">{acc.accountType}</span></div>
-                <div><span className="font-semibold text-brand-secondary">RUC:</span> <span className="text-brand-text">{acc.taxId}</span></div>
+                <div><span className="font-semibold text-brand-secondary">{uiLabels.taxIdLabel}:</span> <span className="text-brand-text">{acc.taxId}</span></div>
               </div>
             </li>
           ))}
