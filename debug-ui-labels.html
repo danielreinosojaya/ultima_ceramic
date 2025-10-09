@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug UILabels</title>
+</head>
+<body>
+    <h1>Debug UILabels API</h1>
+    <div>
+        <h3>Test GET UILabels</h3>
+        <button onclick="testGet()">Test GET</button>
+        <pre id="getResult"></pre>
+    </div>
+    
+    <div>
+        <h3>Test POST UILabels</h3>
+        <input type="text" id="testValue" value="Cédula" placeholder="Nuevo valor">
+        <button onclick="testPost()">Test POST</button>
+        <pre id="postResult"></pre>
+    </div>
+
+    <script>
+        async function testGet() {
+            try {
+                const response = await fetch('/api/data?key=uiLabels');
+                const result = await response.json();
+                document.getElementById('getResult').textContent = JSON.stringify(result, null, 2);
+                console.log('GET result:', result);
+            } catch (error) {
+                document.getElementById('getResult').textContent = 'Error: ' + error.message;
+                console.error('GET error:', error);
+            }
+        }
+
+        async function testPost() {
+            try {
+                const value = document.getElementById('testValue').value;
+                const response = await fetch('/api/data?key=uiLabels', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ taxIdLabel: value })
+                });
+                const result = await response.json();
+                document.getElementById('postResult').textContent = JSON.stringify(result, null, 2);
+                console.log('POST result:', result);
+            } catch (error) {
+                document.getElementById('postResult').textContent = 'Error: ' + error.message;
+                console.error('POST error:', error);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -14,9 +14,10 @@ interface IntroClassSelectorProps {
   onConfirm: (product: Product, session: IntroClassSession) => void;
   appData: AppData;
   onBack: () => void;
+  onAppDataUpdate?: (updates: Partial<AppData>) => void;
 }
 
-export const IntroClassSelector: React.FC<IntroClassSelectorProps> = ({ onConfirm, appData, onBack }) => {
+export const IntroClassSelector: React.FC<IntroClassSelectorProps> = ({ onConfirm, appData, onBack, onAppDataUpdate }) => {
   // Traducción eliminada, usar texto en español directamente
   const [introClasses, setIntroClasses] = useState<IntroductoryClass[]>([]);
   
@@ -25,6 +26,21 @@ export const IntroClassSelector: React.FC<IntroClassSelectorProps> = ({ onConfir
         .filter(p => p.isActive && p.type === 'INTRODUCTORY_CLASS') as IntroductoryClass[];
     setIntroClasses(activeIntroClasses);
   }, [appData.products]);
+
+  // Force load bookings if not available
+  useEffect(() => {
+    const loadBookingsIfNeeded = async () => {
+      if (appData.bookings.length === 0 && onAppDataUpdate) {
+        try {
+          const bookings = await dataService.getBookings();
+          onAppDataUpdate({ bookings });
+        } catch (error) {
+          console.error('Failed to load bookings for intro class capacity calculation:', error);
+        }
+      }
+    };
+    loadBookingsIfNeeded();
+  }, [appData.bookings.length, onAppDataUpdate]);
 
 
   if (introClasses.length === 0) {

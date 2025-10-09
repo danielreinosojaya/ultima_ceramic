@@ -51,13 +51,6 @@ export default defineConfig({
     include: ['react', 'react-dom'],
     exclude: ['html2canvas'] // Exclude heavy libs from pre-bundling
   },
-  server: {
-    proxy: {
-      '/api': {
-        target: isDev ? 'http://localhost:3000' : 'https://ceramicalma-backend.vercel.app',
-        changeOrigin: true,
-        secure: false,
-      },
-    },
-  },
+  
+  // ✅ Sin proxy - Vercel Dev maneja todo
 });

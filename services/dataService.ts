@@ -91,7 +91,7 @@ import type {
     PaymentDetails, AttendanceStatus, ClientNotification, AutomationSettings, ClassPackage, 
     IntroductoryClass, OpenStudioSubscription, UserInfo, Customer, EnrichedIntroClassSession, 
     BackgroundSettings, AppData, BankDetails, InvoiceRequest, Technique, GroupClass, SingleClass,
-    Delivery, DeliveryStatus
+    Delivery, DeliveryStatus, UILabels
 } from '../types';
 import { DAY_NAMES } from '../constants';
 
@@ -102,7 +102,12 @@ const fetchData = async (url: string, options?: RequestInit, retries: number = 3
     
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
-            console.log(`Fetch attempt ${attempt}/${retries} for ${url}`);
+            // Solo log en primer intento o errores
+            if (attempt === 1) {
+                console.log(`Fetching ${url}`);
+            } else {
+                console.log(`Retry attempt ${attempt}/${retries} for ${url}`);
+            }
             
             const response = await fetch(url, {
                 ...options,
@@ -165,6 +170,7 @@ const fetchData = async (url: string, options?: RequestInit, retries: number = 3
 const cache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_DURATION = 30 * 60 * 1000; // 30 minutos para datos generales
 const CRITICAL_CACHE_DURATION = 60 * 60 * 1000; // 1 hora para datos críticos
+const BOOKINGS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutos para bookings (más dinámicos)
 
 // Debounce para evitar requests duplicados
 const pendingRequests = new Map<string, Promise<any>>();
@@ -175,6 +181,8 @@ const getCachedData = <T>(key: string): T | null => {
     
     const duration = ['products', 'instructors', 'policies'].includes(key) 
         ? CRITICAL_CACHE_DURATION 
+        : key === 'bookings' 
+        ? BOOKINGS_CACHE_DURATION
         : CACHE_DURATION;
     
     const isExpired = Date.now() - cached.timestamp > duration;
@@ -200,6 +208,11 @@ const clearCache = (key?: string): void => {
     } else {
         cache.clear();
     }
+};
+
+// Función específica para invalidar bookings cuando se modifiquen
+export const invalidateBookingsCache = (): void => {
+    clearCache('bookings');
 };
 
 const getData = async <T>(key: string): Promise<T> => {
@@ -256,7 +269,8 @@ const getDefaultData = <T>(key: string): T => {
         capacityMessages: { thresholds: [] },
         announcements: [],
         invoiceRequests: [],
-        notifications: []
+        notifications: [],
+        uiLabels: { taxIdLabel: 'RUC' }
     };
     
     return defaults[key] || [] as T;
@@ -283,6 +297,18 @@ const postAction = async <T>(action: string, body: any): Promise<T> => {
 // --- Data Parsing and Type Conversion Layer ---
 // This is the critical fix. The database sends numeric types as strings.
 // We must parse them into the correct types before they reach the application logic.
+
+// Helper function to safely parse price values
+const safeParsePrice = (value: any): number => {
+    if (typeof value === 'number') {
+        return isNaN(value) ? 0 : value;
+    }
+    if (typeof value === 'string') {
+        const parsed = parseFloat(value);
+        return isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+};
 
 const parseProduct = (p: any): Product => {
     // Validate that product data is not null/undefined
@@ -313,7 +339,7 @@ const parseProduct = (p: any): Product => {
         const safeProduct = {
             ...p,
             id: typeof p.id === 'string' ? p.id : String(p.id || 'unknown'),
-            price: typeof p.price === 'number' ? p.price : parseFloat(p.price || 0),
+            price: safeParsePrice(p.price),
             sortOrder: typeof p.sortOrder === 'number' ? p.sortOrder : parseInt(p.sortOrder || '0', 10),
             isActive: typeof p.isActive === 'boolean' ? p.isActive : true,
             name: p.name || 'Unknown Product',
@@ -388,7 +414,7 @@ const parseBooking = (b: any): Booking | null => {
             ...b,
             id: b.id || 'unknown',
             productId: typeof b.productId === 'string' ? b.productId : String(b.productId || ''),
-            price: typeof b.price === 'number' ? b.price : parseFloat(b.price || 0),
+            price: safeParsePrice(b.price),
             createdAt,
             product: parsedProduct,
             userInfo: b.userInfo || {
@@ -423,7 +449,7 @@ const parseBooking = (b: any): Booking | null => {
                         }
                         
                         return {
-                            amount: typeof p.amount === 'number' ? p.amount : parseFloat(p.amount || 0),
+                            amount: safeParsePrice(p.amount),
                             method: p.method || 'Cash',
                             receivedAt
                         };
@@ -548,11 +574,8 @@ export const getCustomers = async (): Promise<Customer[]> => {
 
 export const getBookings = async (): Promise<Booking[]> => {
     try {
-        console.log('getBookings: Starting...');
-        // Clear cache to force fresh data
-        clearCache('bookings');
+        // Usar cache normal sin forzar limpieza
         const rawBookings = await getData<any[]>('bookings');
-        console.log('getBookings: Raw data received:', rawBookings?.length, 'items');
         
         if (!rawBookings || !Array.isArray(rawBookings)) {
             console.warn('getBookings: No bookings data received, returning empty array');
@@ -562,13 +585,10 @@ export const getBookings = async (): Promise<Booking[]> => {
         // Filter out null/undefined values before processing
         const validBookings = rawBookings.filter(booking => {
             if (!booking || typeof booking !== 'object') {
-                console.warn('getBookings: Filtering out invalid booking:', booking);
                 return false;
             }
             return true;
         });
-        
-        console.log('getBookings: Processing', validBookings.length, 'valid bookings out of', rawBookings.length, 'total');
         
         // Parse bookings
         const parsedBookings: Booking[] = [];
@@ -585,7 +605,6 @@ export const getBookings = async (): Promise<Booking[]> => {
             }
         });
         
-        console.log('getBookings: Final result - Successfully processed', parsedBookings.length, 'valid bookings');
         return parsedBookings;
     } catch (error) {
         console.error('getBookings: Error:', error);
@@ -595,12 +614,26 @@ export const getBookings = async (): Promise<Booking[]> => {
 export const addBooking = async (bookingData: any): Promise<AddBookingResult> => {
     const result = await postAction<any>('addBooking', bookingData);
     if(result.success && result.booking) {
+        // Invalidar cache después de crear booking exitosamente
+        invalidateBookingsCache();
         return { ...result, booking: parseBooking(result.booking) };
     }
     return result;
 };
-export const updateBooking = (booking: Booking): Promise<{ success: boolean }> => postAction('updateBooking', booking);
-export const removeBookingSlot = (bookingId: string, slotToRemove: any): Promise<{ success: boolean }> => postAction('removeBookingSlot', { bookingId, slotToRemove });
+export const updateBooking = async (booking: Booking): Promise<{ success: boolean }> => {
+    const result = await postAction('updateBooking', booking);
+    if (result.success) {
+        invalidateBookingsCache();
+    }
+    return result;
+};
+export const removeBookingSlot = async (bookingId: string, slotToRemove: any): Promise<{ success: boolean }> => {
+    const result = await postAction<{ success: boolean }>('removeBookingSlot', { bookingId, slotToRemove });
+    if (result.success) {
+        invalidateBookingsCache();
+    }
+    return result;
+};
 export const addPaymentToBooking = async (bookingId: string, payment: PaymentDetails): Promise<{ success: boolean; booking?: Booking }> => {
     const result = await postAction<{ success: boolean; booking?: any }>('addPaymentToBooking', { bookingId, payment });
     if(result.success && result.booking) {
@@ -616,17 +649,36 @@ export const deletePaymentFromBooking = async (bookingId: string, paymentIndex: 
     return result;
 };
 export const markBookingAsPaid = (bookingId: string, details: Omit<PaymentDetails, 'receivedAt'>): Promise<{ success: boolean }> => postAction('markBookingAsPaid', { bookingId, details });
-export const markBookingAsUnpaid = (bookingId: string): Promise<{ success: boolean }> => postAction('markBookingAsUnpaid', { bookingId });
+export const markBookingAsUnpaid = async (bookingId: string): Promise<{ success: boolean }> => {
+    const result = await postAction<{ success: boolean }>('markBookingAsUnpaid', { bookingId });
+    if (result.success) {
+        invalidateBookingsCache();
+    }
+    return result;
+};
 export const rescheduleBookingSlot = async (bookingId: string, oldSlot: any, newSlot: any): Promise<AddBookingResult> => {
     const result = await postAction<any>('rescheduleBookingSlot', { bookingId, oldSlot, newSlot });
      if(result.success && result.booking) {
+        invalidateBookingsCache();
         return { ...result, booking: parseBooking(result.booking) };
     }
     return result;
 };
-export const deleteBookingsInDateRange = (startDate: Date, endDate: Date): Promise<{ success: boolean }> => postAction('deleteBookingsInDateRange', { startDate, endDate });
+export const deleteBookingsInDateRange = async (startDate: Date, endDate: Date): Promise<{ success: boolean }> => {
+    const result = await postAction<{ success: boolean }>('deleteBookingsInDateRange', { startDate, endDate });
+    if (result.success) {
+        invalidateBookingsCache();
+    }
+    return result;
+};
 export const updateAttendanceStatus = (bookingId: string, slot: any, status: AttendanceStatus): Promise<{ success: boolean }> => postAction('updateAttendanceStatus', { bookingId, slot, status });
-export const deleteBooking = (bookingId: string): Promise<{ success: boolean }> => postAction('deleteBooking', { bookingId });
+export const deleteBooking = async (bookingId: string): Promise<{ success: boolean }> => {
+    const result = await postAction<{ success: boolean }>('deleteBooking', { bookingId });
+    if (result.success) {
+        invalidateBookingsCache();
+    }
+    return result;
+};
 export const updatePaymentReceivedDate = (bookingId: string, newDate: string): Promise<{ success: boolean }> => {
     return postAction('updatePaymentReceivedDate', { bookingId, newDate });
 };
@@ -702,6 +754,8 @@ export const getUITexts = (lang: 'es' | 'en'): Promise<UITexts> => getData(`uiTe
 export const updateUITexts = (lang: 'es' | 'en', texts: UITexts): Promise<{ success: boolean }> => setData(`uiText_${lang}`, texts);
 export const getFooterInfo = (): Promise<FooterInfo> => getData('footerInfo');
 export const updateFooterInfo = (info: FooterInfo): Promise<{ success: boolean }> => setData('footerInfo', info);
+export const getUILabels = (): Promise<UILabels> => getData('uiLabels');
+export const updateUILabels = (labels: UILabels): Promise<{ success: boolean }> => setData('uiLabels', labels);
 export const getAutomationSettings = (): Promise<AutomationSettings> => getData('automationSettings');
 export const updateAutomationSettings = (settings: AutomationSettings): Promise<{ success: boolean }> => setData('automationSettings', settings);
 export const getClientNotifications = (): Promise<ClientNotification[]> => getData('clientNotifications');
@@ -710,6 +764,23 @@ export const triggerScheduledNotifications = (): Promise<{ success: boolean }> =
 export const getBackgroundSettings = (): Promise<BackgroundSettings> => getData('backgroundSettings');
 export const updateBackgroundSettings = (settings: BackgroundSettings): Promise<{ success: boolean }> => setData('backgroundSettings', settings);
 export const getBankDetails = (): Promise<BankDetails[]> => getData('bankDetails');
+
+// Función optimizada para cargar múltiples datos en batch
+export const getBatchedData = async (keys: string[]): Promise<Record<string, any>> => {
+    const promises = keys.map(key => getData(key).then(data => ({ [key]: data })));
+    const results = await Promise.all(promises);
+    return results.reduce((acc, result) => ({ ...acc, ...result }), {});
+};
+
+// Función específica para datos esenciales de la app
+export const getEssentialAppData = async () => {
+    return getBatchedData(['products', 'announcements', 'policies', 'footerInfo', 'uiLabels']);
+};
+
+// Función específica para datos de scheduling
+export const getSchedulingData = async () => {
+    return getBatchedData(['instructors', 'availability', 'scheduleOverrides', 'classCapacity', 'capacityMessages']);
+};
 export const updateBankDetails = (details: BankDetails[]): Promise<{ success: boolean }> => setData('bankDetails', details);
 
 // --- Client-side Calculations and Utilities ---
@@ -912,10 +983,29 @@ export const generateIntroClassSessions = (
             }));
         }
 
+        const normalizeTime = (time: string) => {
+            // Devuelve siempre en formato "HH:mm" 24h para comparación
+            if (!time) return '';
+            // Si ya está en formato "HH:mm", úsalo
+            if (/^\d{2}:\d{2}$/.test(time)) return time;
+            // Si está en formato "h:mm AM/PM", conviértelo
+            const d = new Date(`1970-01-01T${time}`);
+            if (!isNaN(d.getTime())) {
+                return d.toISOString().substr(11,5); // "HH:mm"
+            }
+            // Si no es parseable, devolver en minúsculas y sin espacios
+            return time.trim().toLowerCase();
+        };
+
         const enrichedSessions = todaysSessions.map(session => {
+            const sessionTimeNorm = normalizeTime(session.time);
             const bookingsForSession = (appData?.bookings || []).filter(b => 
                 b.productId === product.id &&
-                b.slots.some(s => s.date === session.date && s.time === session.time)
+                b.slots.some(s => 
+                    s.date === session.date &&
+                    normalizeTime(s.time) === sessionTimeNorm &&
+                    s.instructorId === session.instructorId
+                )
             );
             return {
                 ...session,
@@ -929,9 +1019,23 @@ export const generateIntroClassSessions = (
     return allSessions.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime() || a.time.localeCompare(b.time));
 };
 
-const getBookingsForSlot = (date: Date, time: string, appData: Pick<AppData, 'bookings'>): Booking[] => {
+const getBookingsForSlot = (date: Date, slot: AvailableSlot, appData: Pick<AppData, 'bookings'>): Booking[] => {
     const dateStr = formatDateToYYYYMMDD(date);
-    return appData.bookings.filter(b => b.slots.some(s => s.date === dateStr && s.time === time));
+    const normalizeTime = (t: string) => {
+        if (!t) return '';
+        if (/^\d{2}:\d{2}$/.test(t)) return t;
+        const d = new Date(`1970-01-01T${t}`);
+        if (!isNaN(d.getTime())) {
+            return d.toISOString().substr(11,5);
+        }
+        return t.trim().toLowerCase();
+    };
+    
+    return appData.bookings.filter(b => b.slots.some(s =>
+        s.date === dateStr &&
+        normalizeTime(s.time) === normalizeTime(slot.time) &&
+        s.instructorId === slot.instructorId
+    ));
 };
 
 export const getAvailableTimesForDate = (date: Date, appData: Pick<AppData, 'availability' | 'scheduleOverrides' | 'classCapacity' | 'bookings'>, technique?: Technique): EnrichedAvailableSlot[] => {
@@ -947,7 +1051,7 @@ export const getAvailableTimesForDate = (date: Date, appData: Pick<AppData, 'ava
     }
 
     return baseSlots.map(slot => {
-        const bookingsForSlot = getBookingsForSlot(date, slot.time, appData);
+        const bookingsForSlot = getBookingsForSlot(date, slot, appData);
         const maxCapacity = override?.capacity ?? (slot.technique === 'molding' ? appData.classCapacity.molding : appData.classCapacity.potters_wheel);
         return {
             ...slot,

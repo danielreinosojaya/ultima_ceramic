@@ -77,9 +77,86 @@ const BankAccountsManager: React.FC = () => {
         </div>
     );
 };
+
+const UILabelsManager: React.FC = () => {
+    const [labels, setLabels] = useState<UILabels>({ taxIdLabel: 'RUC' });
+    const [loading, setLoading] = useState(false);
+    const [saved, setSaved] = useState(false);
+
+    useEffect(() => {
+        const fetchLabels = async () => {
+            setLoading(true);
+            try {
+                const uiLabels = await dataService.getUILabels();
+                setLabels(uiLabels);
+            } catch (error) {
+                console.log('No se encontraron labels, usando defaults');
+                setLabels({ taxIdLabel: 'RUC' });
+            }
+            setLoading(false);
+        };
+        fetchLabels();
+    }, []);
+
+    const handleSave = async () => {
+        setLoading(true);
+        try {
+            console.log('Saving UILabels:', labels);
+            const result = await dataService.updateUILabels(labels);
+            console.log('Save result:', result);
+            setSaved(true);
+            setTimeout(() => setSaved(false), 3000);
+        } catch (error) {
+            console.error('Error saving UILabels:', error);
+        }
+        setLoading(false);
+    };
+
+    return (
+        <div className="bg-brand-background p-4 rounded-lg">
+            <h3 className="block text-sm font-bold text-brand-secondary mb-1">Etiquetas de Interfaz</h3>
+            <p className="text-xs text-brand-secondary mb-4">Personaliza los textos que se muestran en la interfaz de usuario.</p>
+            
+            <div className="space-y-4">
+                <div>
+                    <label htmlFor="taxIdLabel" className="block text-xs font-bold text-gray-500 mb-1">
+                        Etiqueta para Identificación Fiscal
+                    </label>
+                    <input
+                        id="taxIdLabel"
+                        type="text"
+                        value={labels.taxIdLabel}
+                        onChange={(e) => setLabels({ ...labels, taxIdLabel: e.target.value })}
+                        placeholder="Ej: RUC, Cédula, Tax ID"
+                        className="w-full p-2 border border-gray-300 rounded-lg"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                        Este texto aparecerá en las cuentas bancarias y formularios donde se muestre la identificación fiscal.
+                    </p>
+                </div>
+            </div>
+
+            <div className="flex items-center gap-4 mt-4">
+                <button
+                    onClick={handleSave}
+                    disabled={loading}
+                    className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent disabled:opacity-50"
+                >
+                    {loading ? 'Guardando...' : 'Guardar Cambios'}
+                </button>
+                {saved && (
+                    <span className="text-green-600 text-sm font-semibold">
+                        ✓ Cambios guardados
+                    </span>
+                )}
+            </div>
+        </div>
+    );
+};
+
 // ...existing code...
 import { CogIcon } from '../icons/CogIcon';
-import type { ConfirmationMessage, ClassCapacity, CapacityMessageSettings, CapacityThreshold, UITexts, FooterInfo, AutomationSettings, BankDetails } from '../../types';
+import type { ConfirmationMessage, ClassCapacity, CapacityMessageSettings, CapacityThreshold, UITexts, FooterInfo, AutomationSettings, BankDetails, UILabels } from '../../types';
 import { DocumentTextIcon } from '../icons/DocumentTextIcon';
 import { SparklesIcon } from '../icons/SparklesIcon';
 import { CurrencyDollarIcon } from '../icons/CurrencyDollarIcon';
@@ -629,6 +706,7 @@ export const SettingsManager: React.FC = () => {
                                 <div className="absolute top-0 left-0 h-full w-0.5 bg-brand-primary/20 rounded-full"></div>
                                 <div className="space-y-6">
                                     <BankAccountsManager />
+                                    <UILabelsManager />
                                     <PoliciesEditor />
                                     <ConfirmationEditor />
                                     <CapacityEditor />

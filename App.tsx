@@ -58,20 +58,15 @@ const App: React.FC = () => {
     useEffect(() => {
         const fetchAppData = async () => {
             try {
-                // Load only essential data for initial render
+                // Load only essential data for initial render usando batch optimizado
                 console.log('Loading essential app data...');
-                const [products, announcements, policies, footerInfo] = await Promise.all([
-                    dataService.getProducts(),
-                    dataService.getAnnouncements(),
-                    dataService.getPolicies(),
-                    dataService.getFooterInfo()
-                ]);
+                const essentialData = await dataService.getEssentialAppData();
 
                 setAppData({
-                    products, 
-                    announcements, 
-                    policies, 
-                    footerInfo,
+                    products: essentialData.products || [], 
+                    announcements: essentialData.announcements || [], 
+                    policies: essentialData.policies || '', 
+                    footerInfo: essentialData.footerInfo || {},
                     // Initialize empty data structures for lazy loading
                     instructors: [],
                     availability: { Sunday: [], Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [] },
@@ -211,14 +206,14 @@ const App: React.FC = () => {
             switch (dataType) {
                 case 'scheduling':
                     if (currentAppData.instructors.length === 0) {
-                        const [instructors, availability, scheduleOverrides, classCapacity, capacityMessages] = await Promise.all([
-                            dataService.getInstructors(),
-                            dataService.getAvailability(),
-                            dataService.getScheduleOverrides(),
-                            dataService.getClassCapacity(),
-                            dataService.getCapacityMessageSettings()
-                        ]);
-                        updates = { instructors, availability, scheduleOverrides, classCapacity, capacityMessages };
+                        const schedulingData = await dataService.getSchedulingData();
+                        updates = {
+                            instructors: schedulingData.instructors || [],
+                            availability: schedulingData.availability || { Sunday: [], Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [] },
+                            scheduleOverrides: schedulingData.scheduleOverrides || {},
+                            classCapacity: schedulingData.classCapacity || { potters_wheel: 0, molding: 0, introductory_class: 0 },
+                            capacityMessages: schedulingData.capacityMessages || { thresholds: [] }
+                        };
                     }
                     break;
                 case 'bookings':
@@ -248,6 +243,16 @@ const App: React.FC = () => {
     useEffect(() => {
         if (view === 'schedule' && appData && appData.instructors.length === 0) {
             loadAdditionalData('scheduling', appData);
+        }
+        if (view === 'schedule' && appData && appData.bookings.length === 0) {
+            loadAdditionalData('bookings', appData);
+        }
+    }, [view, appData, loadAdditionalData]);
+
+    // Load bookings data when needed for intro classes view
+    useEffect(() => {
+        if (view === 'intro_classes' && appData && appData.bookings.length === 0) {
+            loadAdditionalData('bookings', appData);
         }
     }, [view, appData, loadAdditionalData]);
 
@@ -283,7 +288,7 @@ const App: React.FC = () => {
                 if (!technique) return <TechniqueSelector onSelect={handleTechniqueSelect} onBack={() => setView('welcome')} />;
                 return <PackageSelector onSelect={handlePackageSelect} technique={technique} products={appData.products} />;
             case 'intro_classes':
-                return <IntroClassSelector onConfirm={handleIntroClassConfirm} appData={appData} onBack={() => setView('welcome')} />;
+                return <IntroClassSelector onConfirm={handleIntroClassConfirm} appData={appData} onBack={() => setView('welcome')} onAppDataUpdate={(updates) => setAppData(prev => prev ? { ...prev, ...updates } : null)} />;
             case 'schedule':
                 if (!bookingDetails.product || bookingDetails.product.type !== 'CLASS_PACKAGE' || !bookingMode) return <WelcomeSelector onSelect={handleWelcomeSelect} />;
                 return <ScheduleSelector 
@@ -293,6 +298,7 @@ const App: React.FC = () => {
                             onBack={() => setView('packages')}
                             bookingMode={bookingMode}
                             appData={appData}
+                            onAppDataUpdate={(updates) => setAppData(prev => prev ? { ...prev, ...updates } : null)}
                         />;
             case 'summary':
                 if (!bookingDetails.product) return <WelcomeSelector onSelect={handleWelcomeSelect} />;
