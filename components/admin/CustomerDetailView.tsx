@@ -346,7 +346,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                 {/* El modal se renderiza fuera de la función, en el componente principal */}
                    {/* Modal de agendamiento flexible */}
                    {state.isSchedulingModalOpen && (
-                       <ManualBookingModal
+                       <    ManualBookingModal
                            isOpen={state.isSchedulingModalOpen}
                            onClose={() => setState(prev => ({ ...prev, isSchedulingModalOpen: false }))}
                            onBookingAdded={() => {
