@@ -801,22 +801,24 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             if (!bookingRow) {
                 return res.status(404).json({ error: 'Booking not found.' });
             }
-            const currentPayments = (bookingRow.payment_details && Array.isArray(bookingRow.payment_details))
-                ? bookingRow.payment_details
-                : [];
-            const updatedPayments = [...currentPayments, payment];
-            const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
-            const isPaid = totalPaid >= bookingRow.price;
+                const currentPayments = (bookingRow.payment_details && Array.isArray(bookingRow.payment_details))
+                    ? bookingRow.payment_details
+                    : [];
+                console.log('[API] addPaymentToBooking - Antes de agregar:', { bookingId, currentPayments });
+                const updatedPayments = [...currentPayments, payment];
+                const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
+                const isPaid = totalPaid >= bookingRow.price;
 
-            const { rows: [updatedBookingRow] } = await sql`
-                UPDATE bookings
-                SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
-                WHERE id = ${bookingId}
-                RETURNING *;
-            `;
+                const { rows: [updatedBookingRow] } = await sql`
+                    UPDATE bookings
+                    SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
+                    WHERE id = ${bookingId}
+                    RETURNING *;
+                `;
+                console.log('[API] addPaymentToBooking - Después de agregar:', { bookingId, updatedPayments, totalPaid, isPaid });
 
-            const updatedBooking = parseBookingFromDB(updatedBookingRow);
-            result = { success: true, booking: updatedBooking };
+                const updatedBooking = parseBookingFromDB(updatedBookingRow);
+                result = { success: true, booking: updatedBooking };
 
             try {
                 await emailService.sendPaymentReceiptEmail(updatedBooking, payment);
