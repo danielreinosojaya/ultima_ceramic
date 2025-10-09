@@ -228,6 +228,27 @@ const CustomerModal: React.FC<{
     );
 };
 
+// FilterButton component for UX/UI consistency
+const FilterButton: React.FC<{
+    filter: FilterType;
+    active: boolean;
+    onClick: () => void;
+    children: React.ReactNode;
+}> = ({ filter, active, onClick, children }) => (
+    <button
+        type="button"
+        onClick={onClick}
+        className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${
+            active
+                ? 'bg-brand-primary text-white shadow'
+                : 'bg-brand-background hover:bg-brand-primary/20 text-brand-text'
+        }`}
+        aria-pressed={active}
+    >
+        {children}
+    </button>
+);
+
 const CrmDashboard: React.FC<CrmDashboardProps> = ({ 
     navigateToEmail, 
     bookings, 
@@ -258,7 +279,7 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
         console.log('PropCustomers available:', propCustomers?.length || 0);
         console.log('Bookings available:', bookings?.length || 0);
         
-        // Use propCustomers if available, otherwise generate from bookings
+        // Use propCustomers if available, otherwise combine standalone + booking customers
         if (propCustomers && propCustomers.length > 0) {
             console.log('CrmDashboard: Using propCustomers');
             setCustomers(propCustomers);
@@ -266,18 +287,38 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
             return;
         }
         
-        if (!bookings || bookings.length === 0) {
-            console.log('CrmDashboard: No bookings available, showing empty state');
-            setCustomers([]);
-            setLoading(false);
-            return;
-        }
-        
         try {
-            console.log('CrmDashboard: Generating customers from bookings');
-            const customersFromBookings = generateCustomersFromBookings(bookings);
-            console.log('CrmDashboard: Generated customers:', customersFromBookings.length);
-            setCustomers(customersFromBookings);
+            console.log('CrmDashboard: Loading standalone customers and merging with booking customers');
+            
+            // Get standalone customers from customers table
+            const standaloneCustomers = await dataService.getStandaloneCustomers();
+            console.log('CrmDashboard: Standalone customers loaded:', standaloneCustomers.length);
+            
+            // Get customers from bookings
+            const customersFromBookings = bookings && bookings.length > 0 
+                ? generateCustomersFromBookings(bookings) 
+                : [];
+            console.log('CrmDashboard: Customers from bookings:', customersFromBookings.length);
+            
+            // Merge customers: prioritize booking customers (they have more data), then add standalone without bookings
+            const customerMap = new Map<string, Customer>();
+            
+            // First add customers from bookings (they have complete booking data)
+            customersFromBookings.forEach(customer => {
+                customerMap.set(customer.email, customer);
+            });
+            
+            // Then add standalone customers that don't have bookings
+            standaloneCustomers.forEach(standaloneCustomer => {
+                if (!customerMap.has(standaloneCustomer.email)) {
+                    customerMap.set(standaloneCustomer.email, standaloneCustomer);
+                }
+            });
+            
+            const allCustomers = Array.from(customerMap.values());
+            console.log('CrmDashboard: Total combined customers:', allCustomers.length);
+            setCustomers(allCustomers);
+            
         } catch (error) {
             console.error('CrmDashboard: Error loading customers:', error);
             setCustomers([]);
@@ -410,243 +451,250 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
         try {
             // Create the new customer
             const newCustomer = await dataService.createCustomer(userInfo);
-            
-            // Update customer list
-            setCustomers(prev => [...prev, newCustomer]);
-            
-            // Close modal and select the new customer
+            console.log('Customer created successfully:', newCustomer);
+
+            // Force reload all customers regardless of propCustomers
+            setLoading(true);
+
+            try {
+                // Get standalone customers from customers table
+                const standaloneCustomers = await dataService.getStandaloneCustomers();
+                // Get customers from bookings
+                const customersFromBookings = bookings && bookings.length > 0
+                    ? generateCustomersFromBookings(bookings)
+                    : [];
+                // Merge customers: prioritize booking customers, then add standalone
+                const customerMap = new Map<string, Customer>();
+                customersFromBookings.forEach(customer => {
+                    customerMap.set(customer.email, customer);
+                });
+                standaloneCustomers.forEach(standaloneCustomer => {
+                    if (!customerMap.has(standaloneCustomer.email)) {
+                        customerMap.set(standaloneCustomer.email, standaloneCustomer);
+                    }
+                });
+                const allCustomers = Array.from(customerMap.values());
+                setCustomers(allCustomers);
+
+                // Select the newly created customer
+                const createdCustomer = allCustomers.find(c => c.email === newCustomer.email);
+                if (createdCustomer) {
+                    setSelectedCustomer(createdCustomer);
+                } else {
+                    setSelectedCustomer(newCustomer);
+                }
+            } catch (loadError) {
+                setCustomers(prev => {
+                    const filtered = prev.filter(c => c.email !== newCustomer.email);
+                    return [...filtered, newCustomer];
+                });
+                setSelectedCustomer(newCustomer);
+            } finally {
+                setLoading(false);
+            }
             setIsNewCustomerModalOpen(false);
-            setSelectedCustomer(newCustomer);
-            
-            onDataChange(); // Notify parent component of data change
         } catch (error) {
-            alert('Error al crear el cliente');
+            console.error('Error creating customer:', error);
+            setLoading(false);
+            setIsNewCustomerModalOpen(false);
         }
     };
-    
-    const FilterButton: React.FC<{ filter: FilterType; children: React.ReactNode; }> = ({ filter, children }) => (
-        <button
-            onClick={() => setFilterByClassesRemaining(filter)}
-            className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${filterByClassesRemaining === filter ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`}
-        >
-            {children}
-        </button>
-    );
 
-    if (loading) {
-        return <div className="flex items-center justify-center p-8">
-            <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary mx-auto mb-2"></div>
-                <p className="text-brand-secondary">Cargando clientes...</p>
-            </div>
-        </div>;
-    }
-
-    if (customers.length === 0) {
-        return <div className="text-center p-8">
-            <p className="text-brand-secondary mb-4">No hay clientes disponibles</p>
-            <p className="text-sm text-gray-500">Bookings recibidos: {bookings?.length || 0}</p>
-        </div>;
-    }
-
+    // MAIN RETURN STATEMENT ADDED HERE
     return (
-        <div>
-            <div className="flex justify-between items-center mb-6">
-                <div>
-                    <h2 className="text-2xl font-serif text-brand-text mb-2 flex items-center gap-3">
-                        <UserGroupIcon className="w-6 h-6 text-brand-accent" />
-                        CRM de clientes
-                    </h2>
-                    <p className="text-brand-secondary">Gestión y seguimiento de clientes, clases y paquetes.</p>
-                </div>
-                <button 
-                    onClick={() => setIsNewCustomerModalOpen(true)}
-                    className="px-4 py-2 bg-brand-primary text-white rounded-md flex items-center gap-2 hover:bg-brand-secondary transition-colors"
-                >
-                    <UserIcon className="w-5 h-5" />
-                    Agregar Cliente
-                </button>
-            </div>
-
-            {/* New Customer Modal */}
-            <CustomerModal 
+        <div className="crm-dashboard-container">
+            {/* Modal for adding new customer */}
+            <CustomerModal
                 isOpen={isNewCustomerModalOpen}
                 onClose={() => setIsNewCustomerModalOpen(false)}
                 onSave={handleCreateCustomer}
             />
-            
+
+            {/* Tabs navigation - restaurar iconos pequeños y alineados */}
+            <div className="flex gap-2 mb-6 items-center">
+                <button
+                    className={`flex items-center px-3 py-1.5 rounded-md font-semibold transition-colors text-base ${
+                        activeTab === 'all' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20 text-brand-text'
+                    }`}
+                    onClick={() => setActiveTab('all')}
+                >
+                    <UserGroupIcon className="w-5 h-5 mr-2 text-brand-secondary" />
+                    Clientes
+                </button>
+                <button
+                    className={`flex items-center px-3 py-1.5 rounded-md font-semibold transition-colors text-base ${
+                        activeTab === 'openStudio' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20 text-brand-text'
+                    }`}
+                    onClick={() => setActiveTab('openStudio')}
+                >
+                    <UserIcon className="w-5 h-5 mr-2 text-brand-secondary" />
+                    Open Studio
+                </button>
+                <button
+                    className="ml-auto flex items-center px-4 py-2 bg-brand-secondary text-white rounded-md font-semibold hover:bg-brand-primary transition-colors text-base"
+                    onClick={() => setIsNewCustomerModalOpen(true)}
+                >
+                    <UserIcon className="w-5 h-5 mr-2 text-white" />
+                    Agregar Cliente
+                </button>
+            </div>
+
+            {/* Main content */}
             {selectedCustomer ? (
-                <CustomerDetailView 
-                  customer={selectedCustomer} 
-                  onBack={handleBackToList} 
-                  onDataChange={onDataChange} 
-                  invoiceRequests={invoiceRequests}
-                  setNavigateTo={setNavigateTo}
+                <CustomerDetailView
+                    customer={selectedCustomer}
+                    onBack={handleBackToList}
+                    invoiceRequests={invoiceRequests}
+                    onDataChange={onDataChange}
+                    setNavigateTo={setNavigateTo}
                 />
             ) : (
-              <>
-                <div className="border-b border-gray-200 mb-4">
-                    <nav className="-mb-px flex space-x-6" aria-label="Tabs">
-                        <button
-                            onClick={() => setActiveTab('all')}
-                            className={`px-1 py-3 text-sm font-semibold border-b-2 ${activeTab === 'all' ? 'border-brand-primary text-brand-primary' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-                        >
-                            Todos los clientes
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('openStudio')}
-                            className={`px-1 py-3 text-sm font-semibold border-b-2 ${activeTab === 'openStudio' ? 'border-brand-primary text-brand-primary' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-                        >
-                            Suscripciones Open Studio
-                        </button>
-                    </nav>
-                </div>
-                
-                {activeTab === 'all' && (
-                    <div className="animate-fade-in">
-                        <DeliveryMetrics customers={customers} />
-                        <div className="md:flex justify-between items-center mb-4 gap-4">
-                            <input 
-                                type="text"
-                                placeholder="Buscar cliente por nombre, apellido, correo o código de reserva"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full max-w-sm px-4 py-2 border border-gray-300 rounded-lg focus:ring-brand-primary focus:border-brand-primary"
-                            />
-                            <div className="flex flex-col gap-2 mt-4 md:mt-0">
-                                <div className="bg-white p-2 rounded-lg border border-gray-200 flex items-center gap-2 flex-wrap">
-                                    <span className="text-sm font-bold text-brand-secondary mr-2">Clases:</span>
-                                    <FilterButton filter="all">Todos</FilterButton>
-                                    <FilterButton filter="2-left">2 clases restantes</FilterButton>
-                                    <FilterButton filter="1-left">1 clase restante</FilterButton>
-                                    <FilterButton filter="completed">Completados</FilterButton>
-                                </div>
-                                <div className="bg-white p-2 rounded-lg border border-gray-200 flex items-center gap-2 flex-wrap">
-                                    <span className="text-sm font-bold text-brand-secondary mr-2">Entregas:</span>
-                                    <button
-                                        onClick={() => setDeliveryFilter('all')}
-                                        className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${deliveryFilter === 'all' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`}
-                                    >
-                                        Todos
-                                    </button>
-                                    <button
-                                        onClick={() => setDeliveryFilter('with-pending')}
-                                        className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${deliveryFilter === 'with-pending' ? 'bg-yellow-500 text-white' : 'bg-yellow-100 hover:bg-yellow-200 text-yellow-800'}`}
-                                    >
-                                        Con pendientes
-                                    </button>
-                                    <button
-                                        onClick={() => setDeliveryFilter('with-overdue')}
-                                        className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${deliveryFilter === 'with-overdue' ? 'bg-red-500 text-white' : 'bg-red-100 hover:bg-red-200 text-red-800'}`}
-                                    >
-                                        Con vencidas
-                                    </button>
-                                    <button
-                                        onClick={() => setDeliveryFilter('with-completed')}
-                                        className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${deliveryFilter === 'with-completed' ? 'bg-green-500 text-white' : 'bg-green-100 hover:bg-green-200 text-green-800'}`}
-                                    >
-                                        Con completadas
-                                    </button>
-                                    <button
-                                        onClick={() => setDeliveryFilter('none')}
-                                        className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${deliveryFilter === 'none' ? 'bg-gray-500 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-800'}`}
-                                    >
-                                        Sin entregas
-                                    </button>
+                <>
+                    {activeTab === 'all' && (
+                        <div className="animate-fade-in">
+                            <DeliveryMetrics customers={customers} />
+                            <div className="md:flex justify-between items-center mb-4 gap-4">
+                                <input 
+                                    type="text"
+                                    placeholder="Buscar cliente por nombre, apellido, correo o código de reserva"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="w-full max-w-sm px-4 py-2 border border-gray-300 rounded-lg focus:ring-brand-primary focus:border-brand-primary"
+                                />
+                                <div className="flex flex-col gap-2 mt-4 md:mt-0">
+                                    <div className="bg-white p-2 rounded-lg border border-gray-200 flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-bold text-brand-secondary mr-2">Clases:</span>
+                                        <FilterButton filter="all" active={filterByClassesRemaining === 'all'} onClick={() => setFilterByClassesRemaining('all')}>Todos</FilterButton>
+                                        <FilterButton filter="2-left" active={filterByClassesRemaining === '2-left'} onClick={() => setFilterByClassesRemaining('2-left')}>2 clases restantes</FilterButton>
+                                        <FilterButton filter="1-left" active={filterByClassesRemaining === '1-left'} onClick={() => setFilterByClassesRemaining('1-left')}>1 clase restante</FilterButton>
+                                        <FilterButton filter="completed" active={filterByClassesRemaining === 'completed'} onClick={() => setFilterByClassesRemaining('completed')}>Completados</FilterButton>
+                                    </div>
+                                    <div className="bg-white p-2 rounded-lg border border-gray-200 flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-bold text-brand-secondary mr-2">Entregas:</span>
+                                        <button
+                                            onClick={() => setDeliveryFilter('all')}
+                                            className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${deliveryFilter === 'all' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`}
+                                        >
+                                            Todos
+                                        </button>
+                                        <button
+                                            onClick={() => setDeliveryFilter('with-pending')}
+                                            className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${deliveryFilter === 'with-pending' ? 'bg-yellow-500 text-white' : 'bg-yellow-100 hover:bg-yellow-200 text-yellow-800'}`}
+                                        >
+                                            Con pendientes
+                                        </button>
+                                        <button
+                                            onClick={() => setDeliveryFilter('with-overdue')}
+                                            className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${deliveryFilter === 'with-overdue' ? 'bg-red-500 text-white' : 'bg-red-100 hover:bg-red-200 text-red-800'}`}
+                                        >
+                                            Con vencidas
+                                        </button>
+                                        <button
+                                            onClick={() => setDeliveryFilter('with-completed')}
+                                            className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${deliveryFilter === 'with-completed' ? 'bg-green-500 text-white' : 'bg-green-100 hover:bg-green-200 text-green-800'}`}
+                                        >
+                                            Con completadas
+                                        </button>
+                                        <button
+                                            onClick={() => setDeliveryFilter('none')}
+                                            className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${deliveryFilter === 'none' ? 'bg-gray-500 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-800'}`}
+                                        >
+                                            Sin entregas
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
+                            <CustomerList customers={augmentedAndFilteredCustomers} onSelectCustomer={handleSelectCustomer} />
                         </div>
-                        <CustomerList customers={augmentedAndFilteredCustomers} onSelectCustomer={handleSelectCustomer} />
-                    </div>
-                )}
-                
-                {activeTab === 'openStudio' && (
-                    <div className="animate-fade-in">
-                        {/* --- Open Studio Summary & Controls --- */}
-                        {(() => {
-                            // Calculate summary metrics for open studio subscriptions
-                            const openStudioBookings = bookings.filter(b => b.productType === 'OPEN_STUDIO_SUBSCRIPTION');
-                            const now = new Date();
-                            const active = openStudioBookings.filter(b => {
-                                if (!b.paymentDetails?.receivedAt) return false;
-                                const start = new Date(b.paymentDetails.receivedAt);
-                                const duration = b.product.details.durationDays;
-                                const expiry = new Date(start);
-                                expiry.setDate(expiry.getDate() + duration);
-                                return now <= expiry;
-                            });
-                            const expiringSoon = active.filter(b => {
-                                const start = new Date(b.paymentDetails.receivedAt);
-                                const duration = b.product.details.durationDays;
-                                const expiry = new Date(start);
-                                expiry.setDate(expiry.getDate() + duration);
-                                const daysLeft = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                                return daysLeft <= 7 && daysLeft > 0;
-                            });
-                            const unpaid = openStudioBookings.filter(b => !b.isPaid);
-
-                            // --- Filtered and Sorted Bookings ---
-                            let filteredBookings = openStudioBookings;
-                            if (studioFilter === 'active') filteredBookings = active;
-                            if (studioFilter === 'expiring') filteredBookings = expiringSoon;
-                            if (studioFilter === 'unpaid') filteredBookings = unpaid;
-
-                            filteredBookings = [...filteredBookings];
-                            if (studioSort === 'expiry') {
-                                filteredBookings.sort((a, b) => {
-                                    const aStart = a.paymentDetails?.receivedAt ? new Date(a.paymentDetails.receivedAt) : new Date(0);
-                                    const aDuration = a.product.details.durationDays;
-                                    const aExpiry = new Date(aStart);
-                                    aExpiry.setDate(aExpiry.getDate() + aDuration);
-                                    const bStart = b.paymentDetails?.receivedAt ? new Date(b.paymentDetails.receivedAt) : new Date(0);
-                                    const bDuration = b.product.details.durationDays;
-                                    const bExpiry = new Date(bStart);
-                                    bExpiry.setDate(bExpiry.getDate() + bDuration);
-                                    return aExpiry.getTime() - bExpiry.getTime();
+                    )}
+                    
+                    {activeTab === 'openStudio' && (
+                        <div className="animate-fade-in">
+                            {/* --- Open Studio Summary & Controls --- */}
+                            {(() => {
+                                // Calculate summary metrics for open studio subscriptions
+                                const openStudioBookings = bookings.filter(b => b.productType === 'OPEN_STUDIO_SUBSCRIPTION');
+                                const now = new Date();
+                                const active = openStudioBookings.filter(b => {
+                                    if (!b.paymentDetails?.receivedAt) return false;
+                                    const start = new Date(b.paymentDetails.receivedAt);
+                                    const duration = b.product.details.durationDays;
+                                    const expiry = new Date(start);
+                                    expiry.setDate(expiry.getDate() + duration);
+                                    return now <= expiry;
                                 });
-                            } else if (studioSort === 'name') {
-                                filteredBookings.sort((a, b) => {
-                                    const aName = a.customer?.userInfo?.firstName || '';
-                                    const bName = b.customer?.userInfo?.firstName || '';
-                                    return aName.localeCompare(bName);
+                                const expiringSoon = active.filter(b => {
+                                    const start = new Date(b.paymentDetails.receivedAt);
+                                    const duration = b.product.details.durationDays;
+                                    const expiry = new Date(start);
+                                    expiry.setDate(expiry.getDate() + duration);
+                                    const daysLeft = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                                    return daysLeft <= 7 && daysLeft > 0;
                                 });
-                            }
+                                const unpaid = openStudioBookings.filter(b => !b.isPaid);
 
-                            // --- Controls UI ---
-                            return (
-                                <>
-                                    <div className="flex flex-wrap gap-4 mb-6">
-                                        <div className="bg-brand-background p-4 rounded-lg">
-                                            <div className="text-xs font-semibold text-brand-secondary">Suscripciones activas</div>
-                                            <div className="text-2xl font-bold text-brand-text">{active.length}</div>
+                                // --- Filtered and Sorted Bookings ---
+                                let filteredBookings = openStudioBookings;
+                                if (studioFilter === 'active') filteredBookings = active;
+                                if (studioFilter === 'expiring') filteredBookings = expiringSoon;
+                                if (studioFilter === 'unpaid') filteredBookings = unpaid;
+
+                                filteredBookings = [...filteredBookings];
+                                if (studioSort === 'expiry') {
+                                    filteredBookings.sort((a, b) => {
+                                        const aStart = a.paymentDetails?.receivedAt ? new Date(a.paymentDetails.receivedAt) : new Date(0);
+                                        const aDuration = a.product.details.durationDays;
+                                        const aExpiry = new Date(aStart);
+                                        aExpiry.setDate(aExpiry.getDate() + aDuration);
+                                        const bStart = b.paymentDetails?.receivedAt ? new Date(b.paymentDetails.receivedAt) : new Date(0);
+                                        const bDuration = b.product.details.durationDays;
+                                        const bExpiry = new Date(bStart);
+                                        bExpiry.setDate(bExpiry.getDate() + bDuration);
+                                        return aExpiry.getTime() - bExpiry.getTime();
+                                    });
+                                } else if (studioSort === 'name') {
+                                    filteredBookings.sort((a, b) => {
+                                        const aName = a.customer?.userInfo?.firstName || '';
+                                        const bName = b.customer?.userInfo?.firstName || '';
+                                        return aName.localeCompare(bName);
+                                    });
+                                }
+
+                                // --- Controls UI ---
+                                return (
+                                    <>
+                                        <div className="flex flex-wrap gap-4 mb-6">
+                                            <div className="bg-brand-background p-4 rounded-lg">
+                                                <div className="text-xs font-semibold text-brand-secondary">Suscripciones activas</div>
+                                                <div className="text-2xl font-bold text-brand-text">{active.length}</div>
+                                            </div>
+                                            <div className="bg-brand-background p-4 rounded-lg">
+                                                <div className="text-xs font-semibold text-brand-secondary">Por vencer (&le;7 días)</div>
+                                                <div className="text-2xl font-bold text-brand-text">{expiringSoon.length}</div>
+                                            </div>
+                                            <div className="bg-brand-background p-4 rounded-lg">
+                                                <div className="text-xs font-semibold text-brand-secondary">Pendientes de pago</div>
+                                                <div className="text-2xl font-bold text-brand-text">{unpaid.length}</div>
+                                            </div>
                                         </div>
-                                        <div className="bg-brand-background p-4 rounded-lg">
-                                            <div className="text-xs font-semibold text-brand-secondary">Por vencer (&le;7 días)</div>
-                                            <div className="text-2xl font-bold text-brand-text">{expiringSoon.length}</div>
+                                        <div className="flex gap-4 mb-4 flex-wrap items-center">
+                                            <span className="text-sm font-bold text-brand-secondary">Filtrar:</span>
+                                            <button className={`px-3 py-1.5 text-sm rounded-md ${studioFilter === 'all' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioFilter('all')}>Todos</button>
+                                            <button className={`px-3 py-1.5 text-sm rounded-md ${studioFilter === 'active' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioFilter('active')}>Activos</button>
+                                            <button className={`px-3 py-1.5 text-sm rounded-md ${studioFilter === 'expiring' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioFilter('expiring')}>Por vencer</button>
+                                            <button className={`px-3 py-1.5 text-sm rounded-md ${studioFilter === 'unpaid' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioFilter('unpaid')}>Pendientes de pago</button>
+                                            <span className="ml-6 text-sm font-bold text-brand-secondary">Ordenar por:</span>
+                                            <button className={`px-3 py-1.5 text-sm rounded-md ${studioSort === 'expiry' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioSort('expiry')}>Vencimiento</button>
+                                            <button className={`px-3 py-1.5 text-sm rounded-md ${studioSort === 'name' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioSort('name')}>Nombre</button>
                                         </div>
-                                        <div className="bg-brand-background p-4 rounded-lg">
-                                            <div className="text-xs font-semibold text-brand-secondary">Pendientes de pago</div>
-                                            <div className="text-2xl font-bold text-brand-text">{unpaid.length}</div>
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-4 mb-4 flex-wrap items-center">
-                                        <span className="text-sm font-bold text-brand-secondary">Filtrar:</span>
-                                        <button className={`px-3 py-1.5 text-sm rounded-md ${studioFilter === 'all' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioFilter('all')}>Todos</button>
-                                        <button className={`px-3 py-1.5 text-sm rounded-md ${studioFilter === 'active' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioFilter('active')}>Activos</button>
-                                        <button className={`px-3 py-1.5 text-sm rounded-md ${studioFilter === 'expiring' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioFilter('expiring')}>Por vencer</button>
-                                        <button className={`px-3 py-1.5 text-sm rounded-md ${studioFilter === 'unpaid' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioFilter('unpaid')}>Pendientes de pago</button>
-                                        <span className="ml-6 text-sm font-bold text-brand-secondary">Ordenar por:</span>
-                                        <button className={`px-3 py-1.5 text-sm rounded-md ${studioSort === 'expiry' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioSort('expiry')}>Vencimiento</button>
-                                        <button className={`px-3 py-1.5 text-sm rounded-md ${studioSort === 'name' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20'}`} onClick={() => setStudioSort('name')}>Nombre</button>
-                                    </div>
-                                    {/* --- Open Studio List --- */}
-                                    <OpenStudioView bookings={filteredBookings} onNavigateToCustomer={handleNavigateToCustomer} />
-                                </>
-                            );
-                        })()}
-                    </div>
-                )}
-              </>
+                                        {/* --- Open Studio List --- */}
+                                        <OpenStudioView bookings={filteredBookings} onNavigateToCustomer={handleNavigateToCustomer} />
+                                    </>
+                                );
+                            })()}
+                        </div>
+                    )}
+                </>
             )}
         </div>
     );

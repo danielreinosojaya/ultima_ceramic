@@ -31,7 +31,6 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
   const [selectedSlots, setSelectedSlots] = useState<TimeSlot[]>([]);
   const [submitDisabled, setSubmitDisabled] = useState(false);
   const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
-  const [participants, setParticipants] = useState<number>(1);
   // Calendar and time picker states
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<string>('');
@@ -43,38 +42,6 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
     const min = i % 2 === 0 ? '00' : '30';
     return `${hour.toString().padStart(2, '0')}:${min}`;
   });
-
-  // Función para obtener límites de participantes por tipo de producto
-  const getParticipantsRange = (product: Product | null) => {
-    if (!product) return { min: 1, max: 50 }; // Flexibilidad total por defecto
-    
-    switch(product.type) {
-      case 'GROUP_CLASS': 
-        return { 
-          min: (product as any).minParticipants || 1, 
-          max: 50 // Flexibilidad para grupos grandes
-        };
-      case 'SINGLE_CLASS':
-      case 'CLASS_PACKAGE':
-        return { min: 1, max: 30 }; // Máxima flexibilidad para el admin
-      case 'INTRODUCTORY_CLASS':
-        return { min: 1, max: 20 }; // Flexibilidad para grupos introductorios
-      default:
-        return { min: 1, max: 50 }; // Flexibilidad total por defecto
-    }
-  };
-
-  // Validación de participantes - más flexible para admin
-  const validateParticipants = (count: number, product: Product | null): boolean => {
-    // Siempre permitir al menos 1 participante
-    if (count < 1) return false;
-    
-    // Límite de seguridad muy alto para evitar errores de entrada
-    if (count > 100) return false;
-    
-    // Para el administrador, ser más flexible con los límites
-    return true;
-  };
 
   useEffect(() => {
     // Usar los productos pasados como props
@@ -118,7 +85,6 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
       setShowTimePicker(false);
       setProductError('');
       setSearchTerm('');
-      setParticipants(1);
       setAllCustomers(prev => {
         console.log('[ManualBookingModal] Reset allCustomers state:', prev);
         return Array.isArray(prev) ? prev : [];
@@ -137,14 +103,6 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
       }
     }
   }, [isOpen, preselectedCustomer]);
-
-  // Efecto para resetear participants cuando cambia el producto
-  useEffect(() => {
-    if (selectedProduct) {
-      const range = getParticipantsRange(selectedProduct);
-      setParticipants(range.min);
-    }
-  }, [selectedProduct]);
 
   const filteredCustomers = useMemo(() => {
     console.log('[ManualBookingModal] filteredCustomers useMemo - allCustomers:', allCustomers, 'searchTerm:', searchTerm);
@@ -179,9 +137,6 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
         return;
       }
       if (!selectedSlots.length) throw new Error('Agrega al menos un horario');
-      if (participants < 1 || participants > 100) {
-        throw new Error('Número de participantes debe estar entre 1 y 100');
-      }
       // Construir datos de reserva
       const bookingData = {
         userInfo: selectedCustomer?.userInfo || {
@@ -200,8 +155,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
         productType: selectedProduct.type,
         bookingMode: 'flexible',
         isPaid: false,
-        paymentDetails: [],
-        participants
+        paymentDetails: []
       };
       // Llamar al servicio de agendamiento
       const result = await dataService.addBooking(bookingData);
@@ -311,32 +265,10 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
           </div>
           {productError && <div className="text-red-500 text-sm mt-2">{productError}</div>}
         </div>
-        <div className="mb-4 grid grid-cols-3 gap-4">
+        <div className="mb-4 grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-bold mb-1">Precio</label>
             <input type="number" step="0.01" value={price} onChange={e => setPrice(e.target.value)} placeholder="0.00" className="w-full px-3 py-2 border rounded-lg" />
-          </div>
-          <div>
-            <label className="block text-sm font-bold mb-1">
-              Participantes
-              <span className="text-xs text-gray-500 ml-1">
-                (1-100 personas)
-              </span>
-            </label>
-            <input 
-              type="number" 
-              min={1}
-              max={100}
-              value={participants} 
-              onChange={e => {
-                const value = Math.max(1, parseInt(e.target.value) || 1);
-                // Permitir cualquier valor razonable para máxima flexibilidad
-                if (value >= 1 && value <= 100) {
-                  setParticipants(value);
-                }
-              }}
-              className={`w-full px-3 py-2 border rounded-lg ${participants < 1 || participants > 100 ? 'border-red-500' : ''}`}
-            />
           </div>
           <div>
             <label className="block text-sm font-bold mb-1">Nota</label>
