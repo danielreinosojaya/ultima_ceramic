@@ -100,9 +100,15 @@ const UILabelsManager: React.FC = () => {
 
     const handleSave = async () => {
         setLoading(true);
-        await dataService.updateUILabels(labels);
-        setSaved(true);
-        setTimeout(() => setSaved(false), 3000);
+        try {
+            console.log('Saving UILabels:', labels);
+            const result = await dataService.updateUILabels(labels);
+            console.log('Save result:', result);
+            setSaved(true);
+            setTimeout(() => setSaved(false), 3000);
+        } catch (error) {
+            console.error('Error saving UILabels:', error);
+        }
         setLoading(false);
     };
 
