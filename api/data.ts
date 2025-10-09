@@ -391,6 +391,64 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     data = customers.map(toCamelCase);
                     break;
                 }
+                case 'getStandaloneCustomers': {
+                    // Get all customers from customers table (standalone customers without necessarily having bookings)
+                    const { rows: standaloneCustomers } = await sql`SELECT * FROM customers ORDER BY first_name ASC, last_name ASC`;
+                    
+                    // Convert to Customer format
+                    const formattedCustomers = standaloneCustomers.map(customer => ({
+                        email: customer.email,
+                        userInfo: {
+                            firstName: customer.first_name || '',
+                            lastName: customer.last_name || '',
+                            email: customer.email,
+                            phone: customer.phone || '',
+                            countryCode: customer.country_code || '',
+                            birthday: customer.birthday || null
+                        },
+                        bookings: [], // Start with empty bookings, will be populated if needed
+                        totalBookings: 0,
+                        totalSpent: 0,
+                        lastBookingDate: new Date(0) // Default old date
+                    }));
+                    
+                    data = formattedCustomers;
+                    break;
+                }
+                case 'getCustomers': {
+                    // Get all unique customers from bookings
+                    const { rows: bookings } = await sql`SELECT * FROM bookings ORDER BY created_at DESC`;
+                    const validBookings = bookings.filter(booking => booking && typeof booking === 'object');
+                    const parsedBookings = validBookings.map(parseBookingFromDB).filter(Boolean);
+                    const customerMap = new Map<string, Customer>();
+                    parsedBookings.forEach((booking: Booking) => {
+                        if (!booking || !booking.userInfo || !booking.userInfo.email) return;
+                        const email = booking.userInfo.email;
+                        const existing = customerMap.get(email);
+                        if (existing) {
+                            existing.bookings.push(booking);
+                            existing.totalBookings += 1;
+                            existing.totalSpent += booking.price || 0;
+                            const bookingDate = new Date(booking.createdAt);
+                            if (bookingDate > existing.lastBookingDate) {
+                                existing.lastBookingDate = bookingDate;
+                            }
+                        } else {
+                            customerMap.set(email, {
+                                email,
+                                userInfo: booking.userInfo,
+                                bookings: [booking],
+                                totalBookings: 1,
+                                totalSpent: booking.price || 0,
+                                lastBookingDate: new Date(booking.createdAt),
+                                deliveries: []
+                            });
+                        }
+                    });
+                    data = Array.from(customerMap.values());
+                    console.log(`[API] Generated ${data.length} customers from ${parsedBookings.length} bookings`);
+                    break;
+                }
             default:
                 return res.status(400).json({ error: `Unknown action: ${action}` });
         }

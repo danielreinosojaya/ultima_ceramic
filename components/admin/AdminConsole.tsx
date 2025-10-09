@@ -75,8 +75,11 @@ export const AdminConsole: React.FC = () => {
   // Eliminar fetch local, los datos vienen del contexto
   
   const handleSync = () => {
-    console.log('handleSync called, will increment dataVersion');
+    console.log('handleSync called, will increment dataVersion and refresh admin data');
     setIsSyncing(true);
+    if (adminData.refresh) {
+      adminData.refresh();
+    }
     forceRefresh();
   };
   // Set isSyncing to false when adminData finishes loading
@@ -155,7 +158,7 @@ export const AdminConsole: React.FC = () => {
         return <ProductManager products={adminData.products} onDataChange={handleSync} />;
       case 'calendar':
         if (calendarView === 'month') {
-          return <CalendarOverview bookings={adminData.bookings} onDateSelect={handleDateSelect} onDataChange={handleSync} />;
+          return <CalendarOverview bookings={adminData.bookings} onDateSelect={handleDateSelect} onDataChange={handleSync} products={adminData.products} />;
         } else {
           return (
             <ErrorBoundary fallback={<p className="text-center text-red-500 font-bold p-8">Hubo un error al cargar el calendario. Por favor, intenta de nuevo.</p>}>

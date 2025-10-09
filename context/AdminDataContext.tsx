@@ -69,7 +69,9 @@ export const AdminDataProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   useEffect(() => { fetchAll(); }, [version]);
 
-  const refresh = () => setVersion(v => v + 1);
+  const refresh = () => {
+    setVersion(v => v + 1);
+  };
 
   return (
     <AdminDataContext.Provider value={{ ...data, loading, refresh }}>

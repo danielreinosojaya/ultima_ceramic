@@ -537,15 +537,13 @@ export const deleteProduct = async (id: string): Promise<{ success: boolean }> =
 
 // Bookings - working version
 export const getCustomers = async (): Promise<Customer[]> => {
-    try {
-        console.log('getCustomers: Starting...');
-        const customers = await getData<Customer[]>('customers');
-        console.log('getCustomers: Received', customers?.length || 0, 'customers');
-        return customers || [];
-    } catch (error) {
-        console.error('getCustomers: Error:', error);
-        return [];
-    }
+  try {
+    const response = await fetch('/api/data?action=getCustomers');
+    const customers = await response.json();
+    return Array.isArray(customers) ? customers : [];
+  } catch {
+    return [];
+  }
 };
 
 export const getBookings = async (): Promise<Booking[]> => {
