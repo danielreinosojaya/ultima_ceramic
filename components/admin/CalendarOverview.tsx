@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import type { Booking, TimeSlot, UserInfo, EditableBooking, RescheduleSlotInfo, PaymentDetails } from '../../types';
+import type { Booking, TimeSlot, UserInfo, EditableBooking, RescheduleSlotInfo, PaymentDetails, Product } from '../../types';
 import * as dataService from '../../services/dataService';
 // Eliminado useLanguage, la app ahora es monolingüe en español
 import { ManualBookingModal } from './ManualBookingModal';
@@ -18,9 +18,10 @@ interface CalendarOverviewProps {
   onDateSelect: (date: Date) => void;
   bookings: Booking[];
   onDataChange: () => void;
+  products: Product[];
 }
 
-export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect, bookings, onDataChange }) => {
+export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect, bookings, onDataChange, products }) => {
   console.log('CalendarOverview received bookings:', bookings?.length || 0);
   
   // Monolingüe español, textos hardcodeados
@@ -103,8 +104,11 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
     <div>
       {isManualBookingModalOpen && (
         <ManualBookingModal
+          isOpen={isManualBookingModalOpen}
           onClose={() => setIsManualBookingModalOpen(false)}
           onBookingAdded={handleManualBookingAdded}
+          existingBookings={bookings}
+          availableProducts={products}
         />
       )}
       {isReportModalOpen && (
