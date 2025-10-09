@@ -6,6 +6,7 @@ import { InvoiceReminderModal } from './InvoiceReminderModal';
 import { NewDeliveryModal } from './NewDeliveryModal';
 import { ManualBookingModal } from './ManualBookingModal';
 import { RescheduleModal } from './RescheduleModal';
+import { useAdminData } from '../../context/AdminDataContext';
 import { 
     MapIcon, 
     PhoneIcon, 
@@ -28,6 +29,9 @@ import * as dataService from '../../services/dataService';
 import { formatDate, formatCurrency, normalizeHour } from '../../utils/formatters';
 
 function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, setNavigateTo }) {
+    // Usar AdminDataContext para datos compartidos
+    const adminData = useAdminData();
+    
     // Si el cliente no existe, intentar rescatarlo como standalone (solo una vez)
     const [rescueStatus, setRescueStatus] = useState<'idle'|'pending'|'success'|'error'>('idle');
     const [rescuedCustomer, setRescuedCustomer] = useState<Customer|null>(null);
@@ -104,8 +108,9 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
         };
 
     const [appData, setAppData] = useState<AppData | null>(null);
-    const [allProducts, setAllProducts] = useState<Product[]>([]);
-    const [allBookings, setAllBookings] = useState<Booking[]>([]);
+    // Usar datos del AdminDataContext en lugar de cargar localmente
+    const allProducts = adminData.products;
+    const allBookings = adminData.bookings;
     // Hooks para completar entrega (deben estar fuera de renderDeliveryTab)
     const [completeModal, setCompleteModal] = useState<{ open: boolean; deliveryId: string | null }>({ open: false, deliveryId: null });
     // Hooks para eliminar clase programada (deben estar fuera de renderScheduledClassesTab)
@@ -168,37 +173,25 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
     };
 
     useEffect(() => {
-        // Load basic app data if needed
-        const loadAppData = async () => {
-            try {
-                const [instructors, availability, products, bookings] = await Promise.all([
-                    dataService.getInstructors(),
-                    dataService.getAvailability(),
-                    dataService.getProducts(),
-                    dataService.getBookings()
-                ]);
-                setAllProducts(products);
-                setAllBookings(bookings);
-                setAppData({ 
-                    instructors, 
-                    availability,
-                    products,
-                    scheduleOverrides: {},
-                    classCapacity: { potters_wheel: 4, molding: 6, introductory_class: 8 },
-                    capacityMessages: { thresholds: [] },
-                    announcements: [],
-                    bookings,
-                    policies: '',
-                    confirmationMessage: { title: '', message: '' },
-                    footerInfo: { address: '', email: '', whatsapp: '', googleMapsLink: '', instagramHandle: '' },
-                    bankDetails: { bankName: '', accountHolder: '', accountNumber: '', accountType: '', taxId: '' }
-                });
-            } catch (error) {
-                console.error('Error loading app data:', error);
-            }
-        };
-        loadAppData();
-    }, []);
+        // Los datos ahora vienen del AdminDataContext, solo necesitamos configurar appData una vez
+        // cuando tenemos los datos básicos disponibles
+        if (!appData && adminData.instructors.length > 0 && adminData.products.length > 0) {
+            setAppData({ 
+                instructors: adminData.instructors, 
+                availability: adminData.availability,
+                products: adminData.products,
+                scheduleOverrides: adminData.scheduleOverrides || {},
+                classCapacity: adminData.classCapacity || { potters_wheel: 4, molding: 6, introductory_class: 8 },
+                capacityMessages: adminData.capacityMessages || { thresholds: [] },
+                announcements: adminData.announcements || [],
+                bookings: adminData.bookings,
+                policies: '',
+                confirmationMessage: { title: '', message: '' },
+                footerInfo: { address: '', email: '', whatsapp: '', googleMapsLink: '', instagramHandle: '' },
+                bankDetails: { bankName: '', accountHolder: '', accountNumber: '', accountType: '', taxId: '' }
+            });
+        }
+    }, [adminData.instructors.length, adminData.products.length, appData]); // Solo depende de que los datos estén disponibles
 
     // Clases pasadas = slots anteriores
     const renderPastClassesTab = () => {

@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BankAccountsModal } from './BankAccountsModal';
+import { getUILabels } from '../services/dataService';
+import { UILabels } from '../types';
 
 const bankAccounts = [
   {
@@ -21,6 +23,20 @@ const bankAccounts = [
 
 export const PaymentInfo = () => {
   const [modalOpen, setModalOpen] = useState(false);
+  const [uiLabels, setUiLabels] = useState<UILabels>({ taxIdLabel: 'RUC' });
+
+  useEffect(() => {
+    const fetchUILabels = async () => {
+      try {
+        const labels = await getUILabels();
+        setUiLabels(labels);
+      } catch (error) {
+        console.log('No se encontraron labels personalizados, usando defaults');
+        setUiLabels({ taxIdLabel: 'RUC' });
+      }
+    };
+    fetchUILabels();
+  }, []);
 
   return (
     <div className="bg-white rounded-xl shadow-lg p-6 mt-8 animate-fade-in">
@@ -39,7 +55,7 @@ export const PaymentInfo = () => {
         <div className="flex justify-between"><span className="text-brand-secondary">Titular de la Cuenta:</span><span className="font-semibold text-brand-text">{bankAccounts[0].accountHolder}</span></div>
         <div className="flex justify-between"><span className="text-brand-secondary">Número de Cuenta:</span><span className="font-semibold text-brand-text">{bankAccounts[0].accountNumber}</span></div>
         <div className="flex justify-between"><span className="text-brand-secondary">Tipo de Cuenta:</span><span className="font-semibold text-brand-text">{bankAccounts[0].accountType}</span></div>
-        <div className="flex justify-between"><span className="text-brand-secondary">Ruc:</span><span className="font-semibold text-brand-text">{bankAccounts[0].taxId}</span></div>
+        <div className="flex justify-between"><span className="text-brand-secondary">{uiLabels.taxIdLabel}:</span><span className="font-semibold text-brand-text">{bankAccounts[0].taxId}</span></div>
       </div>
       <p className="text-center text-sm text-brand-secondary mt-4 italic">Por favor, realiza la transferencia y envíanos el comprobante por WhatsApp, incluyendo tu código de reserva (C-ALMA-6JIN31H6), para activar tu cupo.</p>
       <BankAccountsModal open={modalOpen} onClose={() => setModalOpen(false)} accounts={bankAccounts} />

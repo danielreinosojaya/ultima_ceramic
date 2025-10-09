@@ -541,6 +541,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         case 'automationSettings':
                         case 'footerInfo':
                         case 'backgroundSettings':
+                        case 'uiLabels':
                             data = {};
                             break;
                         case 'policies':

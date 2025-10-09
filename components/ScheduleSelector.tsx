@@ -3,6 +3,7 @@ import type { ClassPackage, TimeSlot, EnrichedAvailableSlot, BookingMode, AppDat
 import * as dataService from '../services/dataService.js';
 // Eliminado useLanguage, la app ahora es monolingüe en español
 import { BookingSidebar } from './BookingSidebar.js';
+import ScheduleDetailPanel from './ScheduleDetailPanel';
 import { CapacityIndicator } from './CapacityIndicator.js';
 import { InstructorTag } from './InstructorTag.js';
 import { DAY_NAMES } from '../constants.js';
@@ -29,15 +30,31 @@ interface ScheduleSelectorProps {
   onBack: () => void;
   bookingMode: BookingMode;
   appData: AppData;
+  onAppDataUpdate?: (updates: Partial<AppData>) => void;
 }
 
-export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfirm, initialSlots, onBack, bookingMode, appData }) => {
+export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfirm, initialSlots, onBack, bookingMode, appData, onAppDataUpdate }) => {
   // Eliminado useLanguage, la app ahora es monolingüe en español
   const language = 'es-ES';
   // Inicializar sin slots seleccionados por defecto
   const [selectedSlots, setSelectedSlots] = useState<TimeSlot[]>([]);
   // Inicializar la vista en la semana del día actual
   const [currentDate, setCurrentDate] = useState(getWeekStartDate(new Date()));
+
+  // Force load bookings if not available
+  useEffect(() => {
+    const loadBookingsIfNeeded = async () => {
+      if (appData.bookings.length === 0 && onAppDataUpdate) {
+        try {
+          const bookings = await dataService.getBookings();
+          onAppDataUpdate({ bookings });
+        } catch (error) {
+          console.error('Failed to load bookings for capacity calculation:', error);
+        }
+      }
+    };
+    loadBookingsIfNeeded();
+  }, [appData.bookings.length, onAppDataUpdate]);
 
   // Refs for mobile day carousel
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -156,8 +173,8 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
     <button onClick={onBack} className="text-brand-secondary hover:text-brand-text mb-4 transition-colors font-semibold">
       &larr; Atrás
     </button>
-        <div className="flex flex-col lg:flex-row gap-8">
-            <div className="lg:w-2/3">
+    <div className="flex flex-col lg:flex-row gap-8">
+      <div className="lg:w-2/3">
                 <p className="text-brand-secondary mb-2">
                   {bookingMode === 'monthly' ? 'Selecciona el horario para tus clases mensuales' : 'Selecciona el horario para tus clases'} <span className="font-bold text-brand-text">{pkg.name}</span>.
                 </p>
@@ -217,7 +234,7 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                                     >
                                       <span className="font-semibold text-sm text-brand-text">{slot.time}</span>
                                       <InstructorTag instructorId={slot.instructorId} instructors={appData.instructors} />
-                                      <CapacityIndicator count={slot.totalBookingsCount} max={slot.maxCapacity} capacityMessages={appData.capacityMessages} />
+                                      <CapacityIndicator count={slot.paidBookingsCount} max={slot.maxCapacity} capacityMessages={appData.capacityMessages} />
                                       {isFull && <div className="absolute top-1 right-1 text-[8px] font-bold bg-red-500 text-white px-1 rounded-sm">LLENO</div>}
                                     </button>
                                   )
@@ -304,7 +321,7 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                               <span className="font-semibold text-md text-brand-text">{slot.time}</span>
                               <InstructorTag instructorId={slot.instructorId} instructors={appData.instructors} />
                             </div>
-                            <CapacityIndicator count={slot.totalBookingsCount} max={slot.maxCapacity} capacityMessages={appData.capacityMessages} />
+                            <CapacityIndicator count={slot.paidBookingsCount} max={slot.maxCapacity} capacityMessages={appData.capacityMessages} />
                             {isFull && <div className="absolute top-1 right-1 text-[8px] font-bold bg-red-500 text-white px-1 rounded-sm">LLENO</div>}
                           </button>
                         )
@@ -313,14 +330,22 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                   </div>
                 </div>
             </div>
-            <div className="lg:w-1/3">
-        <BookingSidebar 
-          product={pkg} 
-          selectedSlots={selectedSlots}
-          onRemoveSlot={(slotToRemove) => setSelectedSlots(prev => prev.filter(s => s.date !== slotToRemove.date || s.time !== slotToRemove.time))}
-          onConfirm={() => onConfirm(selectedSlots)}
-          bookingMode={bookingMode}
-        />
+            <div className="lg:w-1/3 flex flex-col gap-4">
+              {/* Panel de detalle del slot seleccionado */}
+              <ScheduleDetailPanel slot={(() => {
+                if (selectedSlots.length === 0) return null;
+                // Tomar el primer slot seleccionado (o el último, según preferencia UX)
+                const slotSel = selectedSlots[selectedSlots.length - 1];
+                const slotsForDay = scheduleData[slotSel.date] || [];
+                return slotsForDay.find(s => s.time === slotSel.time && s.instructorId === slotSel.instructorId) || null;
+              })()} />
+              <BookingSidebar 
+                product={pkg} 
+                selectedSlots={selectedSlots}
+                onRemoveSlot={(slotToRemove) => setSelectedSlots(prev => prev.filter(s => s.date !== slotToRemove.date || s.time !== slotToRemove.time))}
+                onConfirm={() => onConfirm(selectedSlots)}
+                bookingMode={bookingMode}
+              />
             </div>
         </div>
       </div>
