@@ -541,8 +541,10 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         case 'automationSettings':
                         case 'footerInfo':
                         case 'backgroundSettings':
-                        case 'uiLabels':
                             data = {};
+                            break;
+                        case 'uiLabels':
+                            data = { taxIdLabel: 'RUC' };
                             break;
                         case 'policies':
                         case 'confirmationMessage':
