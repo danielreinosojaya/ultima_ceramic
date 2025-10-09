@@ -298,6 +298,18 @@ const postAction = async <T>(action: string, body: any): Promise<T> => {
 // This is the critical fix. The database sends numeric types as strings.
 // We must parse them into the correct types before they reach the application logic.
 
+// Helper function to safely parse price values
+const safeParsePrice = (value: any): number => {
+    if (typeof value === 'number') {
+        return isNaN(value) ? 0 : value;
+    }
+    if (typeof value === 'string') {
+        const parsed = parseFloat(value);
+        return isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+};
+
 const parseProduct = (p: any): Product => {
     // Validate that product data is not null/undefined
     if (!p || typeof p !== 'object') {
@@ -327,7 +339,7 @@ const parseProduct = (p: any): Product => {
         const safeProduct = {
             ...p,
             id: typeof p.id === 'string' ? p.id : String(p.id || 'unknown'),
-            price: typeof p.price === 'number' ? p.price : parseFloat(p.price || 0),
+            price: safeParsePrice(p.price),
             sortOrder: typeof p.sortOrder === 'number' ? p.sortOrder : parseInt(p.sortOrder || '0', 10),
             isActive: typeof p.isActive === 'boolean' ? p.isActive : true,
             name: p.name || 'Unknown Product',
@@ -402,7 +414,7 @@ const parseBooking = (b: any): Booking | null => {
             ...b,
             id: b.id || 'unknown',
             productId: typeof b.productId === 'string' ? b.productId : String(b.productId || ''),
-            price: typeof b.price === 'number' ? b.price : parseFloat(b.price || 0),
+            price: safeParsePrice(b.price),
             createdAt,
             product: parsedProduct,
             userInfo: b.userInfo || {
@@ -437,7 +449,7 @@ const parseBooking = (b: any): Booking | null => {
                         }
                         
                         return {
-                            amount: typeof p.amount === 'number' ? p.amount : parseFloat(p.amount || 0),
+                            amount: safeParsePrice(p.amount),
                             method: p.method || 'Cash',
                             receivedAt
                         };
