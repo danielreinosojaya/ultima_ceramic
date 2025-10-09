@@ -371,13 +371,14 @@ export const generateScheduleReportPDF = (
                       translations.package,
                       translations.paymentStatus
                   ]],
-                  body: attendees.map(b => [
-  '', // Empty first column for grouping
-  `${b.userInfo.firstName} ${b.userInfo.lastName}`,
-  `${b.userInfo.email}\n${b.userInfo.countryCode} ${b.userInfo.phone}`,
-  b.product?.name || 'N/A',
-  b.isPaid ? translations.paid : translations.unpaid
-]),
+                                    body: attendees.map(b => [
+                                            '', // Empty first column for grouping
+                                            `${b.userInfo.firstName} ${b.userInfo.lastName}`,
+                                            typeof b.participants === 'number' ? b.participants : 1,
+                                            `${b.userInfo.email}\n${b.userInfo.countryCode} ${b.userInfo.phone}`,
+                                            b.product?.name || 'N/A',
+                                            b.isPaid ? translations.paid : translations.unpaid
+                                    ]),
                   theme: 'grid',
                   headStyles: {
                       fillColor: '#C8A18F',
