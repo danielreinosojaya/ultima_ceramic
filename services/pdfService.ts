@@ -343,7 +343,7 @@ export const generateScheduleReportPDF = (
     currentY += 4;
     doc.text(`${translations.generatedOn}: ${new Date().toLocaleString(language)}`, pageWidth / 2, currentY, { align: 'center' });
     currentY += 10;
-    
+
     // --- CREATE TABLES FOR EACH DAY ---
     if (sortedDates.length === 0) {
       doc.text("No classes scheduled for this period.", pageWidth / 2, currentY + 20, { align: 'center' });
@@ -366,17 +366,19 @@ export const generateScheduleReportPDF = (
                   head: [[
                       `${translations.time}: ${time}`,
                       translations.attendee,
+                      'Asistentes',
                       translations.contact,
                       translations.package,
                       translations.paymentStatus
                   ]],
-                  body: attendees.map(b => [
-                      '', // Empty first column for grouping
-                      `${b.userInfo.firstName} ${b.userInfo.lastName}`,
-                      `${b.userInfo.email}\n${b.userInfo.countryCode} ${b.userInfo.phone}`,
-                      b.product?.name || 'N/A',
-                      b.isPaid ? translations.paid : translations.unpaid
-                  ]),
+                                    body: attendees.map(b => [
+                                            '', // Empty first column for grouping
+                                            `${b.userInfo.firstName} ${b.userInfo.lastName}`,
+                                            typeof b.participants === 'number' ? b.participants : 1,
+                                            `${b.userInfo.email}\n${b.userInfo.countryCode} ${b.userInfo.phone}`,
+                                            b.product?.name || 'N/A',
+                                            b.isPaid ? translations.paid : translations.unpaid
+                                    ]),
                   theme: 'grid',
                   headStyles: {
                       fillColor: '#C8A18F',
@@ -386,8 +388,9 @@ export const generateScheduleReportPDF = (
                   },
                   columnStyles: {
                       0: { halign: 'center', cellWidth: 20 },
-                      3: { cellWidth: 40 },
-                      4: { halign: 'center' }
+                      2: { halign: 'center', cellWidth: 20 },
+                      4: { cellWidth: 40 },
+                      5: { halign: 'center' }
                   },
                   styles: {
                       font: 'helvetica',
