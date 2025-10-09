@@ -30,6 +30,9 @@ export const AcceptPaymentModal: React.FC<AcceptPaymentModalProps> = ({ isOpen, 
                 receivedAt: new Date().toISOString(),
             };
             await dataService.addPaymentToBooking(booking.id, paymentDetails);
+            if (dataService.invalidateBookingsCache) {
+                dataService.invalidateBookingsCache();
+            }
             onDataChange();
             onClose();
         } catch (error) {
