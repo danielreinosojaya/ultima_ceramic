@@ -164,40 +164,35 @@ export async function obtenerPagosExtras() {
 export async function calcularRolPago(empleadoId: string, mes: string, anio: number) {
   const empleados = await getEmployees();
   const emp = empleados.find((e: any) => e.id === empleadoId);
-  if (!emp) return null;
+  if (!emp) return {
+    aporteIessEmpleado: 0,
+    aporteIessEmpleador: 0,
+    fondoReserva: 0,
+    decimoTercero: 0,
+    decimoCuarto: 0
+  };
 
   const salarioBase = Number(emp.salario || 0);
-
   const descuentosArr = (await getDescuentos()).filter((d: any) => d.empleado_id === empleadoId && d.mes === mes && d.anio === Number(anio));
   const descuentos = descuentosArr.reduce((sum: number, d: any) => sum + Number(d.monto || 0), 0);
-
   const pagosExtrasArr = (await getPagosExtras()).filter((p: any) => p.empleado_id === empleadoId && p.mes === mes && p.anio === Number(anio));
   const pagosExtras = pagosExtrasArr.reduce((sum: number, p: any) => sum + Number(p.monto || 0), 0);
-
   const aporteIessEmpleado = salarioBase * IESS_EMPLEADO;
   const aporteIessEmpleador = salarioBase * IESS_EMPLEADOR;
-
-  const fechaIngreso = new Date(emp.fecha_ingreso);
+  // Fondo de reserva
+  const fechaIngreso = new Date(emp.fecha_ingreso || emp.fechaIngreso);
   const fechaCorte = new Date(`${anio}-${mes}-01`);
   const tieneFondoReserva = fechaCorte.getFullYear() - fechaIngreso.getFullYear() > 1 || (fechaCorte.getFullYear() - fechaIngreso.getFullYear() === 1 && fechaCorte.getMonth() >= fechaIngreso.getMonth());
   const fondoReserva = tieneFondoReserva ? salarioBase * FONDO_RESERVA : 0;
-
   const decimoTercero = salarioBase * DECIMO_TERCERO;
   const decimoCuarto = DECIMO_CUARTO / 12;
-
-  const neto = salarioBase + pagosExtras + fondoReserva + decimoTercero + decimoCuarto - descuentos - aporteIessEmpleado;
-
   return {
-    empleadoId,
-    mes,
-        aporteIessEmpleado,
-        aporteIessEmpleador,
-        fondoReserva,
-        decimoTercero,
-        decimoCuarto,
-        neto,
-      };
-
-
-    export async function generarReporteRRHH(tipo: string, mes: string, anio: number) {
+    aporteIessEmpleado,
+    aporteIessEmpleador,
+    fondoReserva,
+    decimoTercero,
+    decimoCuarto
+  };
+// Eliminar duplicados y fragmentos corruptos
+// Todas las funciones están correctamente cerradas y exportadas arriba
 

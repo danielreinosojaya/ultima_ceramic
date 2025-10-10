@@ -269,15 +269,21 @@ export async function createEmployee({ nombre, cedula, cargo, fechaIngreso, esta
             console.error('[createEmployee] Formato de fecha inválido:', fechaIngreso);
             throw new Error('Formato de fechaIngreso inválido, debe ser YYYY-MM-DD');
         }
-        const { rows } = await sql`
-            INSERT INTO employees (nombre, cedula, cargo, fecha_ingreso, estado, salario)
-            VALUES (${nombre}, ${cedula}, ${cargo}, ${fechaIngreso}, ${estado}, ${salario})
-            RETURNING *;
-        `;
-        console.log('[createEmployee] Empleado creado:', rows[0]);
-        return rows[0];
+        const fechaSQL = fechaIngreso || null;
+        try {
+            const { rows } = await sql`
+                INSERT INTO employees (nombre, cedula, cargo, fecha_ingreso, estado, salario)
+                VALUES (${nombre}, ${cedula}, ${cargo}, ${fechaSQL}, ${estado}, ${salario})
+                RETURNING *;
+            `;
+            console.log('[createEmployee] Empleado creado:', rows[0]);
+            return rows[0];
+        } catch (sqlError) {
+            console.error('[createEmployee] SQL Error:', sqlError);
+            throw sqlError;
+        }
     } catch (error) {
-        console.error('[createEmployee] Error:', error);
+        console.error('[createEmployee] Error general:', error);
         throw error;
     }
 }
