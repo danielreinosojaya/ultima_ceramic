@@ -290,7 +290,11 @@ export async function createEmployee({ nombre, cedula, cargo, fechaIngreso, esta
 
 export async function getEmployees() {
     const { rows } = await sql`SELECT * FROM employees ORDER BY nombre ASC;`;
-    return rows;
+    // Convertir salario a número en todos los empleados
+    return rows.map(e => ({
+        ...e,
+        salario: e.salario !== null ? Number(e.salario) : 0
+    }));
 }
 
 export async function updateEmployee({ id, nombre, cedula, cargo, fechaIngreso, estado, salario }: {
