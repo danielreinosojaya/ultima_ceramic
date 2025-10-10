@@ -18,7 +18,8 @@ import {
   registrarHorasTrabajo,
   obtenerHorasTrabajadas,
   calcularRolPago,
-  generarReporteRRHH
+  generarReporteRRHH,
+  deleteEmployee
 } from './rrhhService';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -28,7 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { id } = query;
     if (!id) return res.status(400).json({ error: 'Falta el id de empleado' });
     try {
-      await require('./rrhhService').deleteEmployee(String(id));
+      await deleteEmployee(String(id));
       return res.status(200).json({ success: true });
     } catch (error) {
       console.error('Error al borrar empleado:', error);

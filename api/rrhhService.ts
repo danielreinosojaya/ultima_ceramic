@@ -1,3 +1,4 @@
+// ...existing code...
 // Entradas/Salidas
 export async function registrarEntradaSalida(codigo: string, tipo: 'entrada' | 'salida') {
   return await createLogRRHH({ codigo, tipo });
@@ -87,7 +88,7 @@ export async function generarReporteRRHH(tipo: string, mes: string, anio: number
 }
 
 import {
-  createEmployee, getEmployees, updateEmployee, deleteEmployee,
+  createEmployee, getEmployees, updateEmployee,
   createVacacion, getVacaciones,
   createDescuento, getDescuentos,
   createPagoExtra, getPagosExtras,
@@ -96,6 +97,7 @@ import {
   createHorasTrabajadas, getHorasTrabajadas,
   createLogRRHH, getLogsRRHH
 } from './db';
+export { deleteEmployee } from './db';
 
 // Normativa ecuatoriana
 const IESS_EMPLEADO = 0.0945;
