@@ -23,6 +23,18 @@ import {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { method, query, body } = req;
+  // Borrado de empleado
+  if (method === 'DELETE' && query.action === 'empleado') {
+    const { id } = query;
+    if (!id) return res.status(400).json({ error: 'Falta el id de empleado' });
+    try {
+      await require('./rrhhService').deleteEmployee(String(id));
+      return res.status(200).json({ success: true });
+    } catch (error) {
+      console.error('Error al borrar empleado:', error);
+      return res.status(500).json({ error: (error instanceof Error ? error.message : 'Error interno al borrar empleado'), details: error });
+    }
+  }
 
   if (method === 'POST' && query.action === 'registro') {
     const { codigo, tipo } = body;

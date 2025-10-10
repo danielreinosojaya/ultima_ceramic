@@ -180,7 +180,7 @@ export async function calcularRolPago(empleadoId: string, mes: string, anio: num
   const aporteIessEmpleado = salarioBase * IESS_EMPLEADO;
   const aporteIessEmpleador = salarioBase * IESS_EMPLEADOR;
   // Fondo de reserva
-  const fechaIngreso = new Date(emp.fecha_ingreso || emp.fechaIngreso);
+  const fechaIngreso = new Date(emp.fechaIngreso);
   const fechaCorte = new Date(`${anio}-${mes}-01`);
   const tieneFondoReserva = fechaCorte.getFullYear() - fechaIngreso.getFullYear() > 1 || (fechaCorte.getFullYear() - fechaIngreso.getFullYear() === 1 && fechaCorte.getMonth() >= fechaIngreso.getMonth());
   const fondoReserva = tieneFondoReserva ? salarioBase * FONDO_RESERVA : 0;
