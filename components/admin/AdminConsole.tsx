@@ -14,6 +14,7 @@ import { CalendarIcon } from '../icons/CalendarIcon';
 import { CubeIcon } from '../icons/CubeIcon';
 import { CogIcon } from '../icons/CogIcon';
 import { SettingsManager } from './SettingsManager';
+import RRHHDashboard from '../rrhh/RRHHDashboard';
 import type { AdminTab, Notification, Product, Booking, Customer, GroupInquiry, Instructor, ScheduleOverrides, DayKey, AvailableSlot, ClassCapacity, CapacityMessageSettings, Announcement, AppData, BankDetails, InvoiceRequest, NavigationState } from '../../types';
 import { ScheduleSettingsManager } from './ScheduleSettingsManager';
 import { CalendarEditIcon } from '../icons/CalendarEditIcon';
@@ -173,6 +174,8 @@ export const AdminConsole: React.FC = () => {
             </ErrorBoundary>
           );
         }
+      case 'rrhh':
+        return <RRHHDashboard />;
       case 'schedule-settings':
         return <ScheduleSettingsManager 
             availability={adminData.availability}
@@ -251,6 +254,7 @@ export const AdminConsole: React.FC = () => {
             <div className="flex items-center space-x-2 flex-wrap gap-2">
               <TabButton tab="products" icon={<CubeIcon className="w-4 h-4" />}>Productos</TabButton>
               <TabButton tab="calendar" icon={<CalendarIcon className="w-4 h-4" />}>Calendario</TabButton>
+              <TabButton tab="rrhh" icon={<UserGroupIcon className="w-4 h-4 text-blue-600" />}>RRHH</TabButton>
               <TabButton tab="schedule-settings" icon={<CalendarEditIcon className="w-4 h-4" />}>Configuración de Horarios</TabButton>
               <TabButton tab="inquiries" icon={<ChatBubbleLeftRightIcon className="w-4 h-4" />}>Consultas</TabButton>
               <TabButton tab="communications" icon={<PaperAirplaneIcon className="w-4 h-4" />}>Comunicaciones</TabButton>

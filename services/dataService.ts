@@ -539,10 +539,11 @@ export const updateProducts = async (products: Product[]): Promise<{ success: bo
     // No limpiar cache agresivamente para evitar requests excesivas
     const result = await setData('products', products);
     // Solo limpiar cache después de una actualización exitosa
-    if (result.success) {
+    if (result && result.success) {
         setTimeout(() => clearCache('products'), 1000);
+        return { success: true };
     }
-    return result;
+    return { success: false };
 };
 
 // Save a single product (more efficient than updating all products)
@@ -781,7 +782,13 @@ export const getEssentialAppData = async () => {
 export const getSchedulingData = async () => {
     return getBatchedData(['instructors', 'availability', 'scheduleOverrides', 'classCapacity', 'capacityMessages']);
 };
-export const updateBankDetails = (details: BankDetails[]): Promise<{ success: boolean }> => setData('bankDetails', details);
+export const updateBankDetails = async (details: BankDetails[]): Promise<{ success: boolean }> => {
+    const result: { success: boolean } = await setData('bankDetails', details);
+    if (result.success) {
+        clearCache('bankDetails');
+    }
+    return result;
+};
 
 // --- Client-side Calculations and Utilities ---
 
