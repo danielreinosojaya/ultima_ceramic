@@ -193,6 +193,7 @@ export async function calcularRolPago(empleadoId: string, mes: string, anio: num
     decimoTercero,
     decimoCuarto
   };
+}
 // Eliminar duplicados y fragmentos corruptos
 // Todas las funciones están correctamente cerradas y exportadas arriba
 
