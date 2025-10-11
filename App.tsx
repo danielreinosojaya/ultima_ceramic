@@ -1,3 +1,4 @@
+import { GiftcardPersonalization } from './components/giftcard/GiftcardPersonalization';
 import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { Header } from './components/Header';
 import { WelcomeSelector } from './components/WelcomeSelector';
@@ -25,11 +26,26 @@ import { InstagramIcon } from './components/icons/InstagramIcon';
 import { WhatsAppIcon } from './components/icons/WhatsAppIcon';
 import { MailIcon } from './components/icons/MailIcon';
 import { LocationPinIcon } from './components/icons/LocationPinIcon';
+import { LandingGiftcard } from './components/giftcard/LandingGiftcard';
+import { GiftcardRedemption } from './components/giftcard/GiftcardRedemption';
+import { GiftcardAmountSelector } from './components/giftcard/GiftcardAmountSelector';
+import { GiftcardInviteModal } from './components/giftcard/GiftcardInviteModal';
+import { GiftcardBanner } from './components/giftcard/GiftcardBanner';
+import { GiftcardDeliveryOptions } from './components/giftcard/GiftcardDeliveryOptions';
+import { GiftcardPayment } from './components/giftcard/GiftcardPayment';
+import { GiftcardConfirmation } from './components/giftcard/GiftcardConfirmation';
+import { GiftcardManualPaymentInstructions } from './components/giftcard/GiftcardManualPaymentInstructions';
+import { GiftcardPendingReview } from './components/giftcard/GiftcardPendingReview';
 
 const App: React.FC = () => {
+    const [giftcardPaid, setGiftcardPaid] = useState(false);
+    const [giftcardPersonalization, setGiftcardPersonalization] = useState<any>(null);
+    const [giftcardAmount, setGiftcardAmount] = useState<number | null>(null);
+    const [selectedDelivery, setSelectedDelivery] = useState<string | null>(null);
+    const [showGiftcardBanner, setShowGiftcardBanner] = useState(true);
     // Traducciones eliminadas, usar texto en español directamente
     const [isAdmin, setIsAdmin] = useState(false);
-    const [view, setView] = useState<AppView>('welcome');
+    const [view, setView] = useState<AppView | 'giftcard_landing'>('welcome');
     const [bookingDetails, setBookingDetails] = useState<BookingDetails>({ product: null, slots: [], userInfo: null });
     const [confirmedBooking, setConfirmedBooking] = useState<Booking | null>(null);
     const [technique, setTechnique] = useState<Technique | null>(null);
@@ -280,8 +296,63 @@ const App: React.FC = () => {
             console.log("App renderView - current view:", view, "appData available:", !!appData);
 
         switch (view) {
+            case 'giftcard_landing':
+                return <LandingGiftcard onStart={() => setView('giftcard_amount')} onRedeem={() => setView('giftcard_redemption')} />;
+            case 'giftcard_redemption':
+                return <GiftcardRedemption code="" onRedeem={code => alert(`Redimir: ${code}`)} onBack={() => setView('giftcard_landing')} />;
+            case 'giftcard_amount':
+                return <GiftcardAmountSelector onSelect={amount => { setGiftcardAmount(amount); setView('giftcard_personalization'); }} />;
+            case 'giftcard_personalization':
+                return giftcardAmount !== null ? (
+                    <GiftcardPersonalization
+                        amount={giftcardAmount}
+                        onPersonalize={data => { setGiftcardPersonalization(data); setView('giftcard_delivery'); }}
+                    />
+                ) : null;
+            case 'giftcard_delivery':
+                return (
+                    <GiftcardDeliveryOptions
+                        onSelect={(option, data) => { setSelectedDelivery({ type: option, data }); setView('giftcard_payment'); }}
+                        onBack={() => setView('giftcard_personalization')}
+                    />
+                );
+            case 'giftcard_payment':
+                return (
+                    <GiftcardPayment
+                        amount={giftcardAmount || 0}
+                        deliveryMethod={selectedDelivery || ''}
+                        personalization={giftcardPersonalization}
+                        onPay={() => setView('giftcard_manual_payment')}
+                        onBack={() => setView('giftcard_delivery')}
+                    />
+                );
+            case 'giftcard_manual_payment':
+                return (
+                    <GiftcardManualPaymentInstructions
+                        amount={giftcardAmount || 0}
+                        deliveryMethod={selectedDelivery || ''}
+                        personalization={giftcardPersonalization}
+                        onFinish={() => setView('giftcard_pending_review')}
+                    />
+                );
+            case 'giftcard_pending_review':
+                return (
+                    <GiftcardPendingReview
+                        onFinish={() => { setGiftcardPaid(false); setView('welcome'); }}
+                    />
+                );
+            case 'giftcard_confirmation':
+                return (
+                    <GiftcardConfirmation
+                        amount={giftcardAmount || 0}
+                        deliveryMethod={selectedDelivery || ''}
+                        personalization={giftcardPersonalization}
+                        onFinish={() => { setView('welcome'); setGiftcardPaid(false); }}
+                        onBack={() => setView('giftcard_payment')}
+                    />
+                );
             case 'welcome':
-                return <WelcomeSelector onSelect={handleWelcomeSelect} />;
+                return <WelcomeSelector onSelect={handleWelcomeSelect} onRedeemGiftcard={() => setView('giftcard_redemption')} />;
             case 'techniques':
                 return <TechniqueSelector onSelect={handleTechniqueSelect} onBack={() => setView('welcome')} />;
             case 'packages':
@@ -364,7 +435,21 @@ const App: React.FC = () => {
     console.log("App - rendering main app, view:", view, "loading:", loading);
     return (
         <div className="bg-brand-background min-h-screen text-brand-text font-sans relative flex flex-col">
+            <GiftcardBanner
+                open={showGiftcardBanner}
+                onClose={() => setShowGiftcardBanner(false)}
+                onCTA={() => { setShowGiftcardBanner(false); setView('giftcard_landing'); }}
+            />
             <Header />
+            <div className="absolute top-4 right-4 z-50">
+                <button
+                    className="border border-brand-primary bg-white/80 text-brand-primary font-semibold py-1.5 px-4 rounded-full shadow-sm hover:bg-brand-primary/10 transition-colors text-base"
+                    style={{letterSpacing: '0.03em'}} 
+                    onClick={() => setView('giftcard_landing')}
+                >
+                    <span className="inline-block align-middle">Giftcard</span>
+                </button>
+            </div>
             <main className="container mx-auto px-4 py-8 flex-grow">
                 {appData && <AnnouncementsBoard announcements={appData.announcements} />}
                 <div className="mt-8">
