@@ -14,6 +14,7 @@ interface AdminData {
   capacityMessages: CapacityMessageSettings;
   announcements: Announcement[];
   invoiceRequests: InvoiceRequest[];
+  giftcardRequests: import('../services/dataService').GiftcardRequest[];
   loading: boolean; // ✅ Cambiar a boolean para compatibilidad
   loadingState: {
     critical: boolean;
@@ -43,6 +44,7 @@ const initialState = {
   capacityMessages: {},
   announcements: [],
   invoiceRequests: [],
+  giftcardRequests: [],
   loadingState: {
     critical: false,
     extended: false,
@@ -64,11 +66,17 @@ type AdminAction =
   | { type: 'SET_EXTENDED_DATA'; data: Partial<AdminState> }
   | { type: 'SET_INDIVIDUAL_DATA'; dataType: string; data: any }
   | { type: 'SET_ERROR'; error: string | null }
-  | { type: 'UPDATE_TIMESTAMP'; dataType: 'critical' | 'extended' };
+  | { type: 'UPDATE_TIMESTAMP'; dataType: 'critical' | 'extended' }
+  | { type: 'SET_GIFTCARD_REQUESTS'; requests: import('../services/dataService').GiftcardRequest[] };
 
 // Reducer
 function adminReducer(state: AdminState, action: AdminAction): AdminState {
   switch (action.type) {
+    case 'SET_GIFTCARD_REQUESTS':
+      return {
+        ...state,
+        giftcardRequests: action.requests,
+      };
     case 'SET_LOADING':
       if (action.dataType === 'critical' || action.dataType === 'extended') {
         return {
@@ -167,8 +175,8 @@ export const AdminDataProvider: React.FC<{ children: ReactNode }> = ({ children 
         dataService.getCustomers().catch(() => []),
         dataService.getGroupInquiries().catch(() => []),
         dataService.getAnnouncements().catch(() => []),
+        dataService.getGiftcardRequests().catch(() => []),
       ]);
-      
       dispatch({
         type: 'SET_CRITICAL_DATA',
         data: {
@@ -177,6 +185,10 @@ export const AdminDataProvider: React.FC<{ children: ReactNode }> = ({ children 
           inquiries: results[2].status === 'fulfilled' ? results[2].value : [],
           announcements: results[3].status === 'fulfilled' ? results[3].value : [],
         }
+      });
+      dispatch({
+        type: 'SET_GIFTCARD_REQUESTS',
+        requests: results[4].status === 'fulfilled' ? results[4].value : [],
       });
     } catch (error) {
       console.error('Error loading critical admin data:', error);
@@ -285,11 +297,11 @@ export const AdminDataProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, []); // Sin dependencias - solo se ejecuta al montar
 
   const adminData: AdminData = {
-    ...state,
-    loading: state.loadingState.critical || state.loadingState.extended, // ✅ Boolean para compatibilidad
-    refresh,
-    refreshCritical,
-    refreshExtended,
+  ...state,
+  loading: state.loadingState.critical || state.loadingState.extended, // ✅ Boolean para compatibilidad
+  refresh,
+  refreshCritical,
+  refreshExtended,
   };
 
   return (

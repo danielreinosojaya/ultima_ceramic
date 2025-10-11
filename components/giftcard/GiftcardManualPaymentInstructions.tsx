@@ -1,6 +1,7 @@
 import React from 'react';
+import * as dataService from '../../services/dataService';
 
-export const GiftcardManualPaymentInstructions: React.FC<{ onFinish: () => void; amount: number; personalization: any; deliveryMethod: { type: string; data?: any } }> = ({ onFinish, amount, personalization, deliveryMethod }) => {
+export const GiftcardManualPaymentInstructions: React.FC<{ onFinish: () => void; amount: number; personalization: any; deliveryMethod: { type: string; data?: any }; buyerEmail: string }> = ({ onFinish, amount, personalization, deliveryMethod, buyerEmail }) => {
   // Generar código único (ejemplo: GIF-XXXXXX)
   const [copied, setCopied] = React.useState(false);
   const code = React.useMemo(() => {
@@ -89,7 +90,18 @@ export const GiftcardManualPaymentInstructions: React.FC<{ onFinish: () => void;
       <div className="w-full px-8 pb-8">
         <button
           className="w-full py-3 rounded-full bg-brand-primary text-white font-bold text-lg shadow-md hover:scale-[1.03] hover:bg-brand-primary/90 transition-all duration-150"
-          onClick={onFinish}
+          onClick={async () => {
+            await dataService.addGiftcardRequest({
+              buyerName: personalization?.sender || '',
+              buyerEmail: buyerEmail,
+              recipientName: personalization?.recipient || '',
+              recipientEmail: deliveryMethod?.type === 'email' || deliveryMethod?.type === 'schedule' ? deliveryMethod?.data?.email || '' : '',
+              recipientWhatsapp: deliveryMethod?.type === 'whatsapp' ? deliveryMethod?.data?.whatsapp || '' : '',
+              amount,
+              code,
+            });
+            onFinish();
+          }}
         >
           Finalizar
         </button>

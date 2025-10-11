@@ -15,11 +15,14 @@ import { CubeIcon } from '../icons/CubeIcon';
 import { CogIcon } from '../icons/CogIcon';
 import { SettingsManager } from './SettingsManager';
 import type { AdminTab, Notification, Product, Booking, Customer, GroupInquiry, Instructor, ScheduleOverrides, DayKey, AvailableSlot, ClassCapacity, CapacityMessageSettings, Announcement, AppData, BankDetails, InvoiceRequest, NavigationState } from '../../types';
+
+type ExtendedAdminTab = AdminTab | 'giftcards';
 import { ScheduleSettingsManager } from './ScheduleSettingsManager';
 import { CalendarEditIcon } from '../icons/CalendarEditIcon';
 import { InquiryManager } from './InquiryManager';
 import { ChatBubbleLeftRightIcon } from '../icons/ChatBubbleLeftRightIcon';
 import * as dataService from '../../services/dataService';
+import GiftcardsManager from './GiftcardsManager';
 import { useAdminData } from '../../context/AdminDataContext';
 import { SyncButton } from './SyncButton';
 import { ClientNotificationLog } from './ClientNotificationLog';
@@ -60,7 +63,7 @@ const defaultAdminData: AdminData = {
 
 export const AdminConsole: React.FC = () => {
   // Traducción eliminada, usar texto en español directamente
-  const [activeTab, setActiveTab] = useState<AdminTab>('calendar');
+  const [activeTab, setActiveTab] = useState<ExtendedAdminTab>('calendar');
   const [calendarView, setCalendarView] = useState<'month' | 'week'>('month');
   const [weekStartDate, setWeekStartDate] = useState<Date | null>(null);
   const [navigateTo, setNavigateTo] = useState<NavigationState | null>(null);
@@ -154,6 +157,8 @@ export const AdminConsole: React.FC = () => {
     };
 
     switch (activeTab) {
+      case 'giftcards':
+        return <GiftcardsManager />;
       case 'products':
         return <ProductManager products={adminData.products} onDataChange={handleSync} />;
       case 'calendar':
@@ -211,7 +216,7 @@ export const AdminConsole: React.FC = () => {
     }
   };
 
-  const TabButton: React.FC<{ tab: AdminTab; children: React.ReactNode; icon: React.ReactNode }> = ({ tab, children, icon }) => (
+  const TabButton: React.FC<{ tab: ExtendedAdminTab; children: React.ReactNode; icon: React.ReactNode }> = ({ tab, children, icon }) => (
     <button
       onClick={() => {
         if (tab === 'calendar') setCalendarView('month');
@@ -257,6 +262,7 @@ export const AdminConsole: React.FC = () => {
               <TabButton tab="financials" icon={<ChartBarIcon className="w-4 h-4" />}>Finanzas</TabButton>
               <TabButton tab="customers" icon={<UserGroupIcon className="w-4 h-4" />}>Clientes</TabButton>
               <TabButton tab="invoicing" icon={<DocumentTextIcon className="w-4 h-4" />}>Facturación</TabButton>
+              <TabButton tab="giftcards" icon={<svg className="w-4 h-4" viewBox="0 0 24 24" fill="none"><rect x="3" y="7" width="18" height="10" rx="2" stroke="#A89C94" strokeWidth="2" fill="#F5F3EA"/><path d="M3 7l9 7 9-7" stroke="#A89C94" strokeWidth="2" fill="none"/></svg>}>Giftcards</TabButton>
               <TabButton tab="settings" icon={<CogIcon className="w-4 h-4" />}>Ajustes</TabButton>
             </div>
           </div>

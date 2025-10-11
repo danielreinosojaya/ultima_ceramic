@@ -334,6 +334,44 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
     const action = req.query.action as string | undefined;
     if (action) {
         switch (action) {
+            case 'listGiftcardRequests': {
+                // Devuelve todas las solicitudes de giftcard
+                try {
+                    await sql`
+                        CREATE TABLE IF NOT EXISTS giftcard_requests (
+                            id SERIAL PRIMARY KEY,
+                            buyer_name VARCHAR(100) NOT NULL,
+                            buyer_email VARCHAR(100) NOT NULL,
+                            recipient_name VARCHAR(100) NOT NULL,
+                            recipient_email VARCHAR(100),
+                            recipient_whatsapp VARCHAR(30),
+                            amount NUMERIC NOT NULL,
+                            code VARCHAR(32) NOT NULL,
+                            status VARCHAR(20) DEFAULT 'pending',
+                            created_at TIMESTAMP DEFAULT NOW()
+                        )
+                    `;
+                    const { rows } = await sql`SELECT * FROM giftcard_requests ORDER BY created_at DESC`;
+                    // Formatear a camelCase y parsear tipos
+                    const formatted = rows.map(row => ({
+                        id: String(row.id),
+                        buyerName: row.buyer_name,
+                        buyerEmail: row.buyer_email,
+                        recipientName: row.recipient_name,
+                        recipientEmail: row.recipient_email || '',
+                        recipientWhatsapp: row.recipient_whatsapp || '',
+                        amount: typeof row.amount === 'number' ? row.amount : parseFloat(row.amount),
+                        code: row.code,
+                        status: row.status,
+                        createdAt: row.created_at ? new Date(row.created_at).toISOString() : ''
+                    }));
+                    data = formatted;
+                } catch (error) {
+                    console.error('Error al listar giftcards:', error);
+                    data = [];
+                }
+                break;
+            }
             case 'inquiries': {
                 const { rows: inquiries } = await sql`
                     SELECT
@@ -701,6 +739,78 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
 async function handleAction(action: string, req: VercelRequest, res: VercelResponse) {
     let result: any = { success: true };
     switch (action) {
+        case 'addGiftcardRequest': {
+            // Inserta una nueva solicitud de giftcard en la base de datos
+            const body = req.body;
+            if (!body || !body.buyerName || !body.buyerEmail || !body.recipientName || !body.amount || !body.code) {
+                return res.status(400).json({ success: false, error: 'Datos incompletos para registrar giftcard.' });
+            }
+            try {
+                // Crear tabla si no existe
+                await sql`
+                    CREATE TABLE IF NOT EXISTS giftcard_requests (
+                        id SERIAL PRIMARY KEY,
+                        buyer_name VARCHAR(100) NOT NULL,
+                        buyer_email VARCHAR(100) NOT NULL,
+                        recipient_name VARCHAR(100) NOT NULL,
+                        recipient_email VARCHAR(100),
+                        recipient_whatsapp VARCHAR(30),
+                        amount NUMERIC NOT NULL,
+                        code VARCHAR(32) NOT NULL,
+                        status VARCHAR(20) DEFAULT 'pending',
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                `;
+                const { rows } = await sql`
+                    INSERT INTO giftcard_requests (
+                        buyer_name, buyer_email, recipient_name, recipient_email, recipient_whatsapp, amount, code, status
+                    ) VALUES (
+                        ${body.buyerName}, ${body.buyerEmail}, ${body.recipientName}, ${body.recipientEmail || null}, ${body.recipientWhatsapp || null}, ${body.amount}, ${body.code}, 'pending'
+                    ) RETURNING id, created_at;
+                `;
+                return res.status(200).json({ success: true, id: rows[0].id, createdAt: rows[0].created_at });
+            } catch (error) {
+                console.error('Error al registrar giftcard:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+        case 'listGiftcardRequests': {
+            // Devuelve todas las solicitudes de giftcard
+            try {
+                await sql`
+                    CREATE TABLE IF NOT EXISTS giftcard_requests (
+                        id SERIAL PRIMARY KEY,
+                        buyer_name VARCHAR(100) NOT NULL,
+                        buyer_email VARCHAR(100) NOT NULL,
+                        recipient_name VARCHAR(100) NOT NULL,
+                        recipient_email VARCHAR(100),
+                        recipient_whatsapp VARCHAR(30),
+                        amount NUMERIC NOT NULL,
+                        code VARCHAR(32) NOT NULL,
+                        status VARCHAR(20) DEFAULT 'pending',
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                `;
+                const { rows } = await sql`SELECT * FROM giftcard_requests ORDER BY created_at DESC`;
+                // Formatear a camelCase y parsear tipos
+                const formatted = rows.map(row => ({
+                    id: String(row.id),
+                    buyerName: row.buyer_name,
+                    buyerEmail: row.buyer_email,
+                    recipientName: row.recipient_name,
+                    recipientEmail: row.recipient_email || '',
+                    recipientWhatsapp: row.recipient_whatsapp || '',
+                    amount: typeof row.amount === 'number' ? row.amount : parseFloat(row.amount),
+                    code: row.code,
+                    status: row.status,
+                    createdAt: row.created_at ? new Date(row.created_at).toISOString() : ''
+                }));
+                return res.status(200).json(formatted);
+            } catch (error) {
+                console.error('Error al listar giftcards:', error);
+                return res.status(500).json([]);
+            }
+        }
         case 'syncProducts': {
                 // Sincroniza los productos de DEFAULT_PRODUCTS con la base de datos
                 try {
