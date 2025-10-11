@@ -701,45 +701,6 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
 async function handleAction(action: string, req: VercelRequest, res: VercelResponse) {
     let result: any = { success: true };
     switch (action) {
-        case 'redeemGiftcard': {
-            // Endpoint para redimir giftcard
-            const { code } = req.body;
-            if (!code || typeof code !== 'string') {
-                return res.status(400).json({ success: false, error: 'Código de giftcard requerido.' });
-            }
-            // Buscar la giftcard por código
-            const { rows: [giftcard] } = await sql`SELECT * FROM giftcards WHERE code = ${code}`;
-            if (!giftcard) {
-                return res.status(404).json({ success: false, error: 'Código inválido o no encontrado.' });
-            }
-            // Validar estado y expiración
-            if (giftcard.status !== 'active') {
-                return res.status(400).json({ success: false, error: 'Giftcard no está activa.' });
-            }
-            if (giftcard.expires_at && new Date(giftcard.expires_at) < new Date()) {
-                return res.status(400).json({ success: false, error: 'Giftcard expirada.' });
-            }
-            if (giftcard.balance <= 0) {
-                return res.status(400).json({ success: false, error: 'Giftcard sin saldo.' });
-            }
-            // Opcional: registrar redención en el historial
-            const redeemedHistory = Array.isArray(giftcard.redeemed_history) ? giftcard.redeemed_history : [];
-            redeemedHistory.push({
-                redeemed_at: new Date().toISOString(),
-                redeemed_by: req.body.redeemed_by || null
-            });
-            await sql`
-                UPDATE giftcards SET redeemed_history = ${JSON.stringify(redeemedHistory)}, status = 'redeemed', balance = 0 WHERE code = ${code}
-            `;
-            return res.status(200).json({
-                success: true,
-                message: 'Giftcard redimida exitosamente.',
-                value: giftcard.value,
-                balance: 0,
-                recipient_info: giftcard.recipient_info,
-                buyer_info: giftcard.buyer_info
-            });
-        }
         case 'syncProducts': {
                 // Sincroniza los productos de DEFAULT_PRODUCTS con la base de datos
                 try {
@@ -840,24 +801,22 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             if (!bookingRow) {
                 return res.status(404).json({ error: 'Booking not found.' });
             }
-                const currentPayments = (bookingRow.payment_details && Array.isArray(bookingRow.payment_details))
-                    ? bookingRow.payment_details
-                    : [];
-                console.log('[API] addPaymentToBooking - Antes de agregar:', { bookingId, currentPayments });
-                const updatedPayments = [...currentPayments, payment];
-                const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
-                const isPaid = totalPaid >= bookingRow.price;
+            const currentPayments = (bookingRow.payment_details && Array.isArray(bookingRow.payment_details))
+                ? bookingRow.payment_details
+                : [];
+            const updatedPayments = [...currentPayments, payment];
+            const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
+            const isPaid = totalPaid >= bookingRow.price;
 
-                const { rows: [updatedBookingRow] } = await sql`
-                    UPDATE bookings
-                    SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
-                    WHERE id = ${bookingId}
-                    RETURNING *;
-                `;
-                console.log('[API] addPaymentToBooking - Después de agregar:', { bookingId, updatedPayments, totalPaid, isPaid });
+            const { rows: [updatedBookingRow] } = await sql`
+                UPDATE bookings
+                SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
+                WHERE id = ${bookingId}
+                RETURNING *;
+            `;
 
-                const updatedBooking = parseBookingFromDB(updatedBookingRow);
-                result = { success: true, booking: updatedBooking };
+            const updatedBooking = parseBookingFromDB(updatedBookingRow);
+            result = { success: true, booking: updatedBooking };
 
             try {
                 await emailService.sendPaymentReceiptEmail(updatedBooking, payment);

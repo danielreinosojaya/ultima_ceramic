@@ -27,7 +27,6 @@ import { WhatsAppIcon } from './components/icons/WhatsAppIcon';
 import { MailIcon } from './components/icons/MailIcon';
 import { LocationPinIcon } from './components/icons/LocationPinIcon';
 import { LandingGiftcard } from './components/giftcard/LandingGiftcard';
-import { GiftcardRedemption } from './components/giftcard/GiftcardRedemption';
 import { GiftcardAmountSelector } from './components/giftcard/GiftcardAmountSelector';
 import { GiftcardInviteModal } from './components/giftcard/GiftcardInviteModal';
 import { GiftcardBanner } from './components/giftcard/GiftcardBanner';
@@ -297,9 +296,7 @@ const App: React.FC = () => {
 
         switch (view) {
             case 'giftcard_landing':
-                return <LandingGiftcard onStart={() => setView('giftcard_amount')} onRedeem={() => setView('giftcard_redemption')} />;
-            case 'giftcard_redemption':
-                return <GiftcardRedemption code="" onRedeem={code => alert(`Redimir: ${code}`)} onBack={() => setView('giftcard_landing')} />;
+                return <LandingGiftcard onStart={() => setView('giftcard_amount')} />;
             case 'giftcard_amount':
                 return <GiftcardAmountSelector onSelect={amount => { setGiftcardAmount(amount); setView('giftcard_personalization'); }} />;
             case 'giftcard_personalization':
@@ -352,7 +349,7 @@ const App: React.FC = () => {
                     />
                 );
             case 'welcome':
-                return <WelcomeSelector onSelect={handleWelcomeSelect} onRedeemGiftcard={() => setView('giftcard_redemption')} />;
+                return <WelcomeSelector onSelect={handleWelcomeSelect} />;
             case 'techniques':
                 return <TechniqueSelector onSelect={handleTechniqueSelect} onBack={() => setView('welcome')} />;
             case 'packages':
