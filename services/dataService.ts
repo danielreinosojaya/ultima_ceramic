@@ -1,3 +1,53 @@
+export const addGiftcardRequest = async (request: Omit<GiftcardRequest, 'id' | 'status' | 'createdAt'>): Promise<{ success: boolean; id?: string; error?: string }> => {
+    try {
+        const response = await fetch('/api/data?action=addGiftcardRequest', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(request),
+        });
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+};
+// Giftcard Requests
+export type GiftcardRequest = {
+    id: string;
+    buyerName: string;
+    buyerEmail: string;
+    recipientName: string;
+    recipientEmail?: string;
+    recipientWhatsapp?: string;
+    amount: number;
+    code: string;
+    status: 'pending' | 'approved' | 'rejected' | 'delivered';
+    createdAt: string;
+};
+
+export const getGiftcardRequests = async (): Promise<GiftcardRequest[]> => {
+    try {
+        const response = await fetch('/api/data?action=listGiftcardRequests');
+        if (!response.ok) throw new Error('Error fetching giftcard requests');
+        const data = await response.json();
+        if (!Array.isArray(data)) return [];
+        return data.map((req: any) => ({
+            id: req.id || '',
+            buyerName: req.buyerName || '',
+            buyerEmail: req.buyerEmail || '',
+            recipientName: req.recipientName || '',
+            recipientEmail: req.recipientEmail || '',
+            recipientWhatsapp: req.recipientWhatsapp || '',
+            amount: typeof req.amount === 'number' ? req.amount : parseFloat(req.amount || '0'),
+            code: req.code || '',
+            status: req.status || 'pending',
+            createdAt: req.createdAt || ''
+        }));
+    } catch (error) {
+        console.error('getGiftcardRequests error:', error);
+        return [];
+    }
+};
 // Si el cliente no tiene reservas, agregarlo como standalone
 export const ensureStandaloneCustomer = async (customerData: {
     email: string;

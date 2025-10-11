@@ -1,12 +1,19 @@
-import React from 'react';
+import React, { useState } from 'react';
 // ...existing code...
 export const GiftcardPayment: React.FC<{
   amount: number;
   deliveryMethod: { type: string; data?: any };
   personalization: any;
-  onPay: () => void;
+  onPay: (buyerEmail: string) => void;
   onBack?: () => void;
 }> = ({ amount, deliveryMethod, personalization, onPay, onBack }) => {
+  // Email del comprador
+  const [buyerEmail, setBuyerEmail] = useState('');
+  const [emailTouched, setEmailTouched] = useState(false);
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const isEmailValid = emailRegex.test(buyerEmail);
+  const showEmailError = emailTouched && !isEmailValid;
+
   // Iconos para método de entrega
   const deliveryIcons: Record<string, React.ReactElement> = {
     email: (
@@ -53,6 +60,24 @@ export const GiftcardPayment: React.FC<{
             )}
           </span>
         </div>
+        <div className="mb-4">
+          <label className="block text-brand-secondary mb-2 text-sm font-semibold" htmlFor="buyerEmail">Correo electrónico del comprador <span className="text-red-500">*</span></label>
+          <input
+            id="buyerEmail"
+            type="email"
+            className={`w-full px-4 py-2 rounded-lg border text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-brand-primary border-brand-border ${showEmailError ? 'border-red-500 ring-red-200' : ''}`}
+            placeholder="tucorreo@ejemplo.com"
+            value={buyerEmail}
+            onChange={e => setBuyerEmail(e.target.value)}
+            onBlur={() => setEmailTouched(true)}
+            required
+            autoComplete="email"
+          />
+          {showEmailError && (
+            <span className="text-red-500 text-xs mt-1 block">Ingresa un correo válido para recibir la confirmación y el código de la giftcard.</span>
+          )}
+          <span className="text-brand-secondary text-xs mt-1 block">Recibirás la confirmación y el código de la giftcard en este correo.</span>
+        </div>
         <hr className="my-4 border-brand-border" />
         <div className="bg-brand-background rounded-xl p-4 flex flex-col gap-2">
           <span className="text-brand-secondary text-base">Para: <span className="font-bold text-brand-primary">{personalization?.recipient}</span></span>
@@ -61,8 +86,9 @@ export const GiftcardPayment: React.FC<{
         </div>
       </div>
       <button
-        className="w-full py-4 rounded-full bg-gradient-to-r from-brand-primary to-brand-secondary text-white font-display font-bold text-xl shadow-lg hover:scale-105 hover:from-brand-secondary hover:to-brand-primary transition-all duration-200"
-        onClick={onPay}
+        className="w-full py-4 rounded-full bg-gradient-to-r from-brand-primary to-brand-secondary text-white font-display font-bold text-xl shadow-lg hover:scale-105 hover:from-brand-secondary hover:to-brand-primary transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+        onClick={() => { setEmailTouched(true); if (isEmailValid) onPay(buyerEmail); }}
+        disabled={!isEmailValid}
       >
         Pagar y enviar giftcard
       </button>

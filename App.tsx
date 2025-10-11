@@ -41,6 +41,7 @@ const App: React.FC = () => {
     const [giftcardPersonalization, setGiftcardPersonalization] = useState<any>(null);
     const [giftcardAmount, setGiftcardAmount] = useState<number | null>(null);
     const [selectedDelivery, setSelectedDelivery] = useState<string | null>(null);
+    const [giftcardBuyerEmail, setGiftcardBuyerEmail] = useState<string>('');
     const [showGiftcardBanner, setShowGiftcardBanner] = useState(true);
     // Traducciones eliminadas, usar texto en español directamente
     const [isAdmin, setIsAdmin] = useState(false);
@@ -319,7 +320,7 @@ const App: React.FC = () => {
                         amount={giftcardAmount || 0}
                         deliveryMethod={selectedDelivery || ''}
                         personalization={giftcardPersonalization}
-                        onPay={() => setView('giftcard_manual_payment')}
+                        onPay={(buyerEmail) => { setGiftcardBuyerEmail(buyerEmail); setView('giftcard_manual_payment'); }}
                         onBack={() => setView('giftcard_delivery')}
                     />
                 );
@@ -329,6 +330,7 @@ const App: React.FC = () => {
                         amount={giftcardAmount || 0}
                         deliveryMethod={selectedDelivery || ''}
                         personalization={giftcardPersonalization}
+                        buyerEmail={giftcardBuyerEmail}
                         onFinish={() => setView('giftcard_pending_review')}
                     />
                 );
