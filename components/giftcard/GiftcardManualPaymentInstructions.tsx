@@ -74,7 +74,7 @@ export const GiftcardManualPaymentInstructions: React.FC<{ onFinish: () => void;
         </div>
         <span className="text-brand-primary font-semibold text-center">1. Realiza la transferencia por el monto indicado a cualquiera de las cuentas.</span>
         <span className="text-brand-primary font-semibold text-center">
-          2. Envía el comprobante por WhatsApp junto con {deliveryMethod?.type === 'schedule' ? 'el correo del destinatario y ' : ''}{destinatarioLabel && `${destinatarioLabel.toLowerCase()}: ${destinatarioValue}, `}el código de pago.
+          2. Envía el comprobante por WhatsApp junto con {deliveryMethod?.type === 'schedule' ? 'el correo electrónico del destinatario y ' : ''}{destinatarioLabel && `${destinatarioLabel.toLowerCase()}: ${destinatarioValue}, `}el código de pago.
         </span>
         <span className="text-brand-secondary text-sm text-center">Recibirás un correo de confirmación cuando tu pago sea procesado por nuestro equipo.</span>
         <a
