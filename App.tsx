@@ -18,6 +18,7 @@ const AdminConsole = lazy(() => import('./components/admin/AdminConsole').then(m
 import { NotificationProvider } from './context/NotificationContext';
 import { AdminDataProvider } from './context/AdminDataContext';
 import { ConfirmationPage } from './components/ConfirmationPage';
+import { OpenStudioModal } from './components/admin/OpenStudioModal';
 
 import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession } from './types';
 import * as dataService from './services/dataService';
@@ -27,12 +28,25 @@ import { MailIcon } from './components/icons/MailIcon';
 import { LocationPinIcon } from './components/icons/LocationPinIcon';
 
 const App: React.FC = () => {
+    // Modal informativo de Open Studio usando ClassInfoModal
+    const handleOpenStudioInfoModalClose = () => {
+        setIsOpenStudioModalOpen(false);
+        setTechnique(null);
+    };
+    const handleOpenStudioInfoModalConfirm = () => {
+        setIsOpenStudioModalOpen(false);
+        setTechnique('open_studio');
+        setBookingDetails(prev => ({ ...prev, product: openStudioProduct }));
+        setIsUserInfoModalOpen(true);
+    };
+    const [isOpenStudioModalOpen, setIsOpenStudioModalOpen] = useState(false);
+    const [openStudioProduct, setOpenStudioProduct] = useState<Product | null>(null);
     // Traducciones eliminadas, usar texto en español directamente
     const [isAdmin, setIsAdmin] = useState(false);
     const [view, setView] = useState<AppView>('welcome');
     const [bookingDetails, setBookingDetails] = useState<BookingDetails>({ product: null, slots: [], userInfo: null });
     const [confirmedBooking, setConfirmedBooking] = useState<Booking | null>(null);
-    const [technique, setTechnique] = useState<Technique | null>(null);
+    const [technique, setTechnique] = useState<Technique | 'open_studio' | null>(null);
     const [bookingMode, setBookingMode] = useState<BookingMode | null>(null);
 
     const [isUserInfoModalOpen, setIsUserInfoModalOpen] = useState(false);
@@ -74,8 +88,8 @@ const App: React.FC = () => {
                     classCapacity: { potters_wheel: 0, molding: 0, introductory_class: 0 },
                     capacityMessages: { thresholds: [] },
                     bookings: [],
-                    confirmationMessage: '',
-                    bankDetails: []
+                    confirmationMessage: { title: '', message: '' },
+                    bankDetails: { bankName: '', accountHolder: '', accountNumber: '', accountType: '', taxId: '', details: '' },
                 });
                 
                 console.log('Essential app data loaded successfully');
@@ -110,9 +124,15 @@ const App: React.FC = () => {
         setView('techniques');
     };
 
-    const handleTechniqueSelect = (selectedTechnique: Technique) => {
-        setTechnique(selectedTechnique);
-        setView('packages');
+    const handleTechniqueSelect = (selectedTechnique: Technique | 'open_studio') => {
+        if (selectedTechnique === 'open_studio') {
+            const product = appData?.products.find(p => p.type === 'OPEN_STUDIO_SUBSCRIPTION') || null;
+            setOpenStudioProduct(product);
+            setIsOpenStudioModalOpen(true);
+        } else {
+            setTechnique(selectedTechnique);
+            setView('packages');
+        }
     };
 
     const handleBookingTypeSelect = (mode: BookingMode) => {
@@ -283,10 +303,22 @@ const App: React.FC = () => {
             case 'welcome':
                 return <WelcomeSelector onSelect={handleWelcomeSelect} />;
             case 'techniques':
-                return <TechniqueSelector onSelect={handleTechniqueSelect} onBack={() => setView('welcome')} />;
+                return <TechniqueSelector onSelect={handleTechniqueSelect} onBack={() => setView('welcome')} products={appData.products} />;
             case 'packages':
-                if (!technique) return <TechniqueSelector onSelect={handleTechniqueSelect} onBack={() => setView('welcome')} />;
+                if (!technique) return <TechniqueSelector onSelect={handleTechniqueSelect} onBack={() => setView('welcome')} products={appData.products} />;
+                // Si la técnica es open_studio, nunca mostrar PackageSelector
+                if (technique === 'open_studio') return null;
                 return <PackageSelector onSelect={handlePackageSelect} technique={technique} products={appData.products} />;
+    // Renderizar el modal informativo de Open Studio
+    const handleOpenStudioModalClose = () => {
+        setIsOpenStudioModalOpen(false);
+        setTechnique(null);
+    };
+    const handleOpenStudioModalContinue = () => {
+        setIsOpenStudioModalOpen(false);
+        setTechnique('open_studio');
+        setView('packages');
+    };
             case 'intro_classes':
                 return <IntroClassSelector onConfirm={handleIntroClassConfirm} appData={appData} onBack={() => setView('welcome')} onAppDataUpdate={(updates) => setAppData(prev => prev ? { ...prev, ...updates } : null)} />;
             case 'schedule':
@@ -319,7 +351,7 @@ const App: React.FC = () => {
                 if (!confirmedBooking) return <WelcomeSelector onSelect={handleWelcomeSelect} />;
                 return <ConfirmationPage 
                             booking={confirmedBooking} 
-                            bankDetails={appData.bankDetails}
+                            bankDetails={[appData.bankDetails]}
                             footerInfo={appData.footerInfo}
                             policies={appData.policies}
                             onFinish={resetFlow} 
@@ -369,6 +401,13 @@ const App: React.FC = () => {
                 {appData && <AnnouncementsBoard announcements={appData.announcements} />}
                 <div className="mt-8">
                     {renderView()}
+                    {isOpenStudioModalOpen && openStudioProduct && (
+                        <ClassInfoModal
+                            product={openStudioProduct}
+                            onClose={handleOpenStudioInfoModalClose}
+                            onConfirm={handleOpenStudioInfoModalConfirm}
+                        />
+                    )}
                 </div>
             </main>
             {appData?.footerInfo && (
