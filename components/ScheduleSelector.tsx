@@ -152,9 +152,16 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
   const todayIndex = useMemo(() => weekDates.findIndex(d => formatDateToYYYYMMDD(d) === todayStr), [weekDates, todayStr]);
   const [selectedDayIndex, setSelectedDayIndex] = useState(todayIndex !== -1 ? todayIndex : 0);
 
+  // Solo actualizar el índice si no hay selección previa (primer render o cambio de semana sin selección manual)
   useEffect(() => {
-    const newTodayIndex = weekDates.findIndex(d => formatDateToYYYYMMDD(d) === todayStr);
-    setSelectedDayIndex(newTodayIndex !== -1 ? newTodayIndex : 0);
+    setSelectedDayIndex(prevIndex => {
+      // Si el usuario ya seleccionó un día, no sobrescribir
+      if (prevIndex !== undefined && prevIndex !== null && prevIndex >= 0 && prevIndex < weekDates.length) {
+        return prevIndex;
+      }
+      const newTodayIndex = weekDates.findIndex(d => formatDateToYYYYMMDD(d) === todayStr);
+      return newTodayIndex !== -1 ? newTodayIndex : 0;
+    });
   }, [weekDates, todayStr]);
 
   // Effect to scroll the selected day into view on mobile
