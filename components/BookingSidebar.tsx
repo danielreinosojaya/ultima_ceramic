@@ -71,7 +71,11 @@ export const BookingSidebar: React.FC<BookingSidebarProps> = ({ product, selecte
                 </div>
                 <div className="flex justify-between font-bold text-lg text-brand-text pt-1 mt-1">
                     <span>Total a pagar</span>
-                    <span>${product.price.toFixed(2)}</span>
+                    <span>
+                      {typeof product.price === 'number' && !isNaN(product.price)
+                        ? `$${product.price.toFixed(2)}`
+                        : (() => { console.error('BookingSidebar: product.price inválido', product); return '---'; })()}
+                    </span>
                 </div>
             </div>
         </div>
