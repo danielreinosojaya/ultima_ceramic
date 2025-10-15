@@ -70,6 +70,18 @@ export const ClassInfoModal: React.FC<ClassInfoModalProps> = ({ product, onConfi
                 </p>
               </div>
           </div>
+          {/* Botón WhatsApp solo para Open Studio */}
+          <div className="mt-8 flex justify-end">
+            <a
+              href="https://wa.me/593985813327?text=Hola%2C%20quiero%20más%20información%20sobre%20Open%20Studio"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 bg-green-500 text-white font-bold py-2 px-6 rounded-lg hover:bg-green-600 transition-colors duration-300"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" className="w-5 h-5"><path d="M12 2C6.477 2 2 6.477 2 12c0 1.85.504 3.63 1.46 5.19L2 22l4.93-1.43A9.953 9.953 0 0 0 12 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18c-1.64 0-3.22-.5-4.57-1.44l-.33-.22-2.93.85.84-2.86-.22-.34A7.963 7.963 0 0 1 4 12c0-4.411 3.589-8 8-8s8 3.589 8 8-3.589 8-8 8zm4.13-5.47c-.22-.11-1.3-.64-1.5-.71-.2-.07-.35-.11-.5.11-.15.22-.57.71-.7.86-.13.15-.26.16-.48.05-.22-.11-.93-.34-1.77-1.07-.66-.59-1.1-1.31-1.23-1.53-.13-.22-.01-.34.1-.45.1-.1.22-.26.33-.39.11-.13.15-.22.22-.37.07-.15.04-.28-.02-.39-.07-.11-.5-1.21-.68-1.66-.18-.44-.36-.38-.5-.39-.13-.01-.28-.01-.43-.01-.15 0-.39.06-.6.28-.21.22-.8.78-.8 1.9s.82 2.21.93 2.37c.11.15 1.62 2.47 3.93 3.36.55.19.98.3 1.31.38.55.14 1.05.12 1.45.07.44-.07 1.3-.53 1.48-1.04.18-.51.18-.95.13-1.04-.05-.09-.2-.14-.42-.25z"/></svg>
+              Quiero más información
+            </a>
+          </div>
         </>
       )
     }
