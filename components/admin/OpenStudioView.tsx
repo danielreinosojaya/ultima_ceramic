@@ -106,15 +106,21 @@ export const OpenStudioView: React.FC<OpenStudioViewProps> = ({ bookings, onNavi
             let startDate: Date | null = null;
             let expiryDate: Date | null = null;
 
-            if (booking.isPaid && booking.paymentDetails?.receivedAt) {
-                startDate = new Date(booking.paymentDetails.receivedAt);
+            // Si hay algún pago registrado, usar ese para determinar el estado
+            let receivedAt: string | undefined;
+            if (Array.isArray(booking.paymentDetails) && booking.paymentDetails.length > 0) {
+                receivedAt = booking.paymentDetails[0].receivedAt;
+            } else if (booking.paymentDetails && typeof booking.paymentDetails === 'object' && 'receivedAt' in booking.paymentDetails) {
+                receivedAt = (booking.paymentDetails as any).receivedAt;
+            }
+            if (receivedAt) {
+                startDate = new Date(receivedAt);
                 if (!isNaN(startDate.getTime())) {
                     expiryDate = new Date(startDate);
                     expiryDate.setDate(expiryDate.getDate() + booking.product.details.durationDays);
                     status = now < expiryDate ? 'Active' : 'Expired';
                 } else {
-                    // Handle case where receivedAt might be invalid
-                    startDate = null; 
+                    startDate = null;
                 }
             }
 
