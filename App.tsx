@@ -105,7 +105,7 @@ const App: React.FC = () => {
         setTimeout(fetchAppData, 0);
     }, []);
 
-    const handleWelcomeSelect = (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building') => {
+    const handleWelcomeSelect = (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio') => {
         if (userType === 'new') {
             setView('intro_classes');
         } else if (userType === 'returning') {
@@ -116,6 +116,10 @@ const App: React.FC = () => {
             setView('couples_experience');
         } else if (userType === 'team_building') {
             setView('team_building');
+        } else if (userType === 'open_studio') {
+            const product = appData?.products.find(p => p.type === 'OPEN_STUDIO_SUBSCRIPTION') || null;
+            setOpenStudioProduct(product);
+            setIsOpenStudioModalOpen(true);
         }
     };
     
