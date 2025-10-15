@@ -25,28 +25,22 @@ export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, tech
           p.details.technique === technique
         );
       }
-      // Orden personalizado solo para paquetes de clase
-      const order = [
-        { type: 'CLASS_PACKAGE', price: 180 },
-        { type: 'CLASS_PACKAGE', price: 330 },
-        { type: 'CLASS_PACKAGE', price: 470 }
-      ];
+      // Orden robusto por precio normalizado
+      const orderPrices = [180, 330, 470];
       const pareja = activePackages.find(pkg => pkg.type === 'COUPLES_EXPERIENCE');
       const ordered: Product[] = [];
-      order.forEach(criteria => {
-        activePackages.forEach(pkg => {
-          if (
-            criteria.type === pkg.type &&
-            pkg.type === 'CLASS_PACKAGE' &&
-            ('price' in pkg ? (criteria.price === undefined || pkg.price === criteria.price) : true)
-          ) {
-            ordered.push(pkg);
-          }
-        });
+      orderPrices.forEach(price => {
+        const found = activePackages.find(pkg =>
+          pkg.type === 'CLASS_PACKAGE' &&
+          Number(parseFloat(pkg.price as any).toFixed(0)) === price
+        );
+        if (found && !ordered.some(o => o.id === found.id)) {
+          ordered.push(found);
+        }
       });
       // Agregar los que no están en el orden personalizado al final (excepto pareja)
       activePackages.forEach(pkg => {
-        if (!ordered.includes(pkg) && pkg.type !== 'COUPLES_EXPERIENCE') {
+        if (!ordered.some(o => o.id === pkg.id) && pkg.type !== 'COUPLES_EXPERIENCE') {
           ordered.push(pkg);
         }
       });
