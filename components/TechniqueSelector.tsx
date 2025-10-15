@@ -4,6 +4,18 @@ import type { Technique, Product } from '../types';
 import { KeyIcon } from './icons/KeyIcon';
 import { DEFAULT_PRODUCTS } from '../constants';
 
+// Normalizador de price para productos recibidos por props
+const normalizeProductsPrice = (products: Product[]): Product[] =>
+  products.map(p => {
+    if ('price' in p) {
+      return {
+        ...p,
+        price: typeof (p as any).price === 'number' ? (p as any).price : parseFloat((p as any).price) || 0
+      };
+    }
+    return p;
+  });
+
 
 interface TechniqueSelectorProps {
   onSelect: (technique: Technique | 'open_studio') => void;
@@ -25,7 +37,10 @@ const TechniqueCard: React.FC<{ title: string; subtitle: string; buttonText: str
 );
 
 
+
 export const TechniqueSelector: React.FC<TechniqueSelectorProps> = ({ onSelect, onBack, products }) => {
+  // Normalizar precios antes de cualquier uso
+  const normalizedProducts = normalizeProductsPrice(products);
   // No mostrar Open Studio en TechniqueSelector
 
   return (
