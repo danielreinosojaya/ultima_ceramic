@@ -26,8 +26,7 @@ const TechniqueCard: React.FC<{ title: string; subtitle: string; buttonText: str
 
 
 export const TechniqueSelector: React.FC<TechniqueSelectorProps> = ({ onSelect, onBack, products }) => {
-  // Obtener el producto Open Studio desde los productos recibidos por props
-  const openStudioProduct = [...products, ...DEFAULT_PRODUCTS].find((p: Product) => p.type === 'OPEN_STUDIO_SUBSCRIPTION');
+  // No mostrar Open Studio en TechniqueSelector
 
   return (
     <div className="text-center p-6 bg-transparent animate-fade-in-up max-w-5xl mx-auto">
@@ -50,35 +49,7 @@ export const TechniqueSelector: React.FC<TechniqueSelectorProps> = ({ onSelect, 
             onClick={() => onSelect('molding')}
         />
       </div>
-      {/* Separador visual y copy explicativo para membresía */}
-      <div className="my-10 flex flex-col items-center">
-        <div className="w-full flex items-center justify-center mb-4">
-          <hr className="flex-grow border-t border-brand-border mx-4" />
-          <span className="text-brand-accent font-serif text-lg px-2">¿Buscas acceso libre?</span>
-          <hr className="flex-grow border-t border-brand-border mx-4" />
-        </div>
-        <div className="mb-6 text-brand-secondary text-base font-medium">Elige nuestra membresía Open Studio y accede al taller sin límites.</div>
-        {openStudioProduct && (
-          <div
-            className="mx-auto md:w-3/4 lg:w-2/3 bg-rigid-texture border border-brand-border rounded-xl shadow-subtle hover:shadow-lifted transition-all duration-300 cursor-pointer transform hover:-translate-y-1 flex flex-col items-center text-center"
-            onClick={() => onSelect('open_studio')}
-          >
-            <div className="p-12 flex flex-col items-center text-center h-full">
-                <p className="text-brand-accent uppercase tracking-widest text-xs font-semibold mb-6">Membresía</p>
-                <KeyIcon className="w-8 h-8 text-brand-accent mb-4" />
-                <h3 className="text-4xl font-semibold text-brand-text mt-2">{openStudioProduct.name}</h3>
-                <p className="text-brand-secondary mt-4 max-w-xl mx-auto flex-grow">{openStudioProduct.description}</p>
-                <div className="my-8">
-                    <p className="text-4xl font-bold text-brand-text">${openStudioProduct.price}</p>
-                    <p className="text-base font-normal text-brand-secondary mt-1">por mes</p>
-                </div>
-                <button className="bg-transparent border border-brand-accent text-brand-accent font-bold py-3 px-12 rounded-lg hover:bg-brand-accent hover:text-white transition-colors duration-300 w-full max-w-xs mx-auto">
-                  Seleccionar membresía
-                </button>
-            </div>
-          </div>
-        )}
-      </div>
+      {/* Separador visual y copy explicativo para membresía ELIMINADO: Open Studio solo en Welcome Page */}
     </div>
   );
 };

@@ -20,7 +20,9 @@ export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, tech
       let activePackages: Product[] = [];
       if (technique === 'potters_wheel' || technique === 'molding') {
         activePackages = products.filter(p =>
-          p.isActive && p.type === 'CLASS_PACKAGE' && p.details.technique === technique
+          p.isActive &&
+          p.type === 'CLASS_PACKAGE' &&
+          p.details.technique === technique
         );
       }
       // Orden personalizado solo para paquetes de clase

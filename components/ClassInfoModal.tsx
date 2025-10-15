@@ -36,6 +36,12 @@ export const ClassInfoModal: React.FC<ClassInfoModalProps> = ({ product, onConfi
       // wording exacto de la imagen
       return (
         <>
+          <div className="mb-6">
+            <h3 className="text-xl font-bold text-brand-text mb-2">¿Qué es Open Studio?</h3>
+            <p className="text-brand-secondary text-lg">
+              Ven a nuestro Open Studio de cerámica y trabaja en tus proyectos a tu propio ritmo. Este es un espacio colaborativo donde puedes usar nuestros tornos, herramientas y hornos. Ideal para quienes ya tienen experiencia y buscan un lugar para crear libremente.
+            </p>
+          </div>
           <InfoDetail icon={<ClockIcon className="w-6 h-6" />} label="Duración">
             <p>30 días de acceso</p>
           </InfoDetail>
