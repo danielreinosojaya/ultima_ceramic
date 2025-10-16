@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
+import type { BankDetails } from './types';
 import { Header } from './components/Header';
 import { WelcomeSelector } from './components/WelcomeSelector';
 import { TechniqueSelector } from './components/TechniqueSelector';
@@ -89,7 +90,7 @@ const App: React.FC = () => {
                     capacityMessages: { thresholds: [] },
                     bookings: [],
                     confirmationMessage: { title: '', message: '' },
-                    bankDetails: { bankName: '', accountHolder: '', accountNumber: '', accountType: '', taxId: '', details: '' },
+                    bankDetails: [] as BankDetails[],
                 });
                 
                 console.log('Essential app data loaded successfully');
@@ -251,12 +252,19 @@ const App: React.FC = () => {
                         dataService.getConfirmationMessage(),
                         dataService.getBankDetails()
                     ]);
-                    updates = { confirmationMessage, bankDetails: bankDetails as any };
+                    console.log('App.tsx: bankDetails recibidos del backend:', bankDetails);
+                    updates = { confirmationMessage, bankDetails: Array.isArray(bankDetails) ? bankDetails : bankDetails ? [bankDetails] : [] };
                     break;
             }
             
             if (Object.keys(updates).length > 0) {
-                setAppData(prev => prev ? { ...prev, ...updates } : null);
+                setAppData(prev => {
+                    const newData = prev ? { ...prev, ...updates } : null;
+                    if (newData && Array.isArray(newData.bankDetails)) {
+                        console.log('App.tsx: bankDetails en appData tras update:', newData.bankDetails);
+                    }
+                    return newData;
+                });
             }
         } catch (error) {
             console.error(`Failed to load ${dataType} data:`, error);
@@ -281,8 +289,17 @@ const App: React.FC = () => {
     }, [view, appData, loadAdditionalData]);
 
     // Load admin data when needed for confirmation view
+    // Carga bankDetails y confirmationMessage al entrar a la vista de confirmación si faltan
     useEffect(() => {
-        if (view === 'confirmation' && appData && !appData.confirmationMessage) {
+        if (
+            view === 'confirmation' &&
+            appData &&
+            (
+                !appData.confirmationMessage?.message ||
+                !Array.isArray(appData.bankDetails) ||
+                appData.bankDetails.length === 0
+            )
+        ) {
             loadAdditionalData('admin', appData);
         }
     }, [view, appData, loadAdditionalData]);
@@ -355,7 +372,7 @@ const App: React.FC = () => {
                 if (!confirmedBooking) return <WelcomeSelector onSelect={handleWelcomeSelect} />;
                 return <ConfirmationPage 
                             booking={confirmedBooking} 
-                            bankDetails={[appData.bankDetails]}
+                            bankDetails={Array.isArray(appData.bankDetails) ? appData.bankDetails : appData.bankDetails ? [appData.bankDetails] : []}
                             footerInfo={appData.footerInfo}
                             policies={appData.policies}
                             onFinish={resetFlow} 

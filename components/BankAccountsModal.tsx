@@ -3,6 +3,8 @@ import { getUILabels } from '../services/dataService';
 import { UILabels } from '../types';
 
 export const BankAccountsModal = ({ open, onClose, accounts }) => {
+  // Debug: log para validar datos recibidos
+  console.log('BankAccountsModal accounts:', accounts);
   const [uiLabels, setUiLabels] = useState<UILabels>({ taxIdLabel: 'RUC' });
 
   useEffect(() => {
