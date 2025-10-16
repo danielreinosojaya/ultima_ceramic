@@ -356,7 +356,7 @@ export interface AppData {
   policies: string;
   confirmationMessage: ConfirmationMessage;
   footerInfo: FooterInfo;
-  bankDetails: BankDetails;
+    bankDetails: BankDetails[];
   uiLabels?: UILabels;
 }
 
