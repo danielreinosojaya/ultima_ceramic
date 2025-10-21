@@ -380,6 +380,15 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                 data = invoiceRequests.map(parseInvoiceRequestFromDB);
                 break;
             }
+            case 'bookingOverrides': {
+                const bookingId = req.query.bookingId as string | undefined;
+                if (!bookingId) return res.status(400).json({ error: 'bookingId is required' });
+                const { rows: overrides } = await sql`
+                    SELECT * FROM booking_overrides WHERE booking_id = ${bookingId} ORDER BY created_at DESC
+                `;
+                data = overrides.map(toCamelCase);
+                break;
+            }
                 case 'instructors': {
                     const { rows: instructors } = await sql`SELECT * FROM instructors ORDER BY name ASC`;
                     data = instructors.map(toCamelCase);
@@ -807,6 +816,32 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 await sql.query('UPDATE bookings SET user_info = $1 WHERE id = $2', [JSON.stringify(updatedInfo), booking.id]);
             }
             return res.status(200).json({ success: true });
+        }
+        case 'authorizeBookingOverride': {
+            const { bookingId, overriddenBy, reason, metadata } = req.body || {};
+            if (!bookingId || !overriddenBy || !reason) {
+                return res.status(400).json({ success: false, error: 'bookingId, overriddenBy and reason are required.' });
+            }
+            try {
+                await sql`BEGIN`;
+                const { rows: [overrideRow] } = await sql`
+                    INSERT INTO booking_overrides (booking_id, overridden_by, reason, metadata)
+                    VALUES (${bookingId}, ${overriddenBy}, ${reason}, ${metadata ? JSON.stringify(metadata) : '{}'})
+                    RETURNING *;
+                `;
+
+                const { rows: [updatedBooking] } = await sql`
+                    UPDATE bookings SET accepted_no_refund = true WHERE id = ${bookingId} RETURNING *;
+                `;
+
+                await sql`COMMIT`;
+
+                return res.status(200).json({ success: true, override: toCamelCase(overrideRow), booking: parseBookingFromDB(updatedBooking) });
+            } catch (err: any) {
+                await sql`ROLLBACK`;
+                console.error('Error in authorizeBookingOverride:', err);
+                return res.status(500).json({ success: false, error: err?.message || String(err) });
+            }
         }
         // Only one switch block should exist here. All cases including updateCustomerInfo are already present above.
         case 'addPaymentToBooking': {

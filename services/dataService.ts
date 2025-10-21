@@ -286,7 +286,7 @@ const setData = async <T>(key: string, data: T): Promise<{ success: boolean }> =
     });
 };
 
-const postAction = async <T>(action: string, body: any): Promise<T> => {
+const postAction = async <T = any>(action: string, body: any): Promise<T> => {
     return fetchData(`/api/data?action=${action}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -618,6 +618,12 @@ export const getBookings = async (): Promise<Booking[]> => {
         return [];
     }
 };
+export const getBookingOverrides = async (bookingId: string): Promise<any[]> => {
+    if (!bookingId) return [];
+    const res = await fetch(`/api/data?action=bookingOverrides&bookingId=${encodeURIComponent(bookingId)}`);
+    if (!res.ok) throw new Error('Error fetching booking overrides');
+    return res.json();
+};
 export const addBooking = async (bookingData: any): Promise<AddBookingResult> => {
     const result = await postAction<any>('addBooking', bookingData);
     if(result.success && result.booking) {
@@ -685,6 +691,14 @@ export const deleteBooking = async (bookingId: string): Promise<{ success: boole
         invalidateBookingsCache();
     }
     return result;
+};
+// Authorize an override for a booking (admin action)
+export const authorizeBookingOverride = async (bookingId: string, overriddenBy: string, reason: string, metadata?: any): Promise<{ success: boolean; override?: any }> => {
+    const result: any = await postAction('authorizeBookingOverride', { bookingId, overriddenBy, reason, metadata });
+    if (result && result.success) {
+        invalidateBookingsCache();
+    }
+    return result as { success: boolean; override?: any };
 };
 export const updatePaymentReceivedDate = (bookingId: string, newDate: string): Promise<{ success: boolean }> => {
     return postAction('updatePaymentReceivedDate', { bookingId, newDate });

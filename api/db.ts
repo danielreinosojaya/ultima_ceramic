@@ -140,6 +140,15 @@ const SCHEMA_SQL = `
         booking_code VARCHAR(50),
         scheduled_at TIMESTAMPTZ
     );
+
+    CREATE TABLE IF NOT EXISTS booking_overrides (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        booking_id UUID NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+        overridden_by TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        metadata JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+    );
     
     CREATE TABLE IF NOT EXISTS invoice_requests (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

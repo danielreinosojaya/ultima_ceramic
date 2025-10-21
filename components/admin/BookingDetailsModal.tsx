@@ -8,19 +8,9 @@ import { TrashIcon } from '../icons/TrashIcon';
 import { EditIcon } from '../icons/EditIcon';
 import { CurrencyDollarIcon } from '../icons/CurrencyDollarIcon';
 import { CalendarEditIcon } from '../icons/CalendarEditIcon';
+import { AuthorizeOverrideModal } from './AuthorizeOverrideModal';
 
-type AttendeeInfo = { userInfo: UserInfo; bookingId: string; isPaid: boolean; bookingCode?: string, paymentDetails?: PaymentDetails[] };
-
-interface Attendee {
-  id: string;
-  userInfo: {
-    firstName: string;
-    lastName: string;
-    email: string;
-    phone?: string;
-  };
-  bookingId: string;
-}
+type Attendee = { userInfo: UserInfo; bookingId: string; isPaid: boolean; bookingCode?: string; paymentDetails?: PaymentDetails[] };
 
 interface BookingDetailsModalProps {
   isOpen: boolean;
@@ -30,7 +20,14 @@ interface BookingDetailsModalProps {
   time: string;
   product: Product;
   onBookingUpdate?: () => void;
-  allBookings: Booking[]; // Pass bookings as prop
+  allBookings?: Booking[]; // Pass bookings as prop (optional)
+  // Callbacks used in this component
+  onRemoveAttendee?: (bookingId: string) => void;
+  onAcceptPayment?: (bookingId: string) => void;
+  onMarkAsUnpaid?: (bookingId: string) => void;
+  onEditAttendee?: (bookingId: string) => void;
+  onRescheduleAttendee?: (bookingId: string, oldSlot: any, label?: string) => void;
+  instructorId?: string | number;
 }
 
 const formatTimeForInput = (time12h: string): string => {
@@ -40,11 +37,16 @@ const formatTimeForInput = (time12h: string): string => {
 
 export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, time, attendees, instructorId, onClose, onRemoveAttendee, onAcceptPayment, onMarkAsUnpaid, onEditAttendee, onRescheduleAttendee }) => {
   // Fallbacks para evitar errores si no se pasan como función
+  const safeOnRemoveAttendee = typeof onRemoveAttendee === 'function' ? onRemoveAttendee : () => {};
+  const safeOnAcceptPayment = typeof onAcceptPayment === 'function' ? onAcceptPayment : () => {};
+  const safeOnMarkAsUnpaid = typeof onMarkAsUnpaid === 'function' ? onMarkAsUnpaid : () => {};
   const safeOnEditAttendee = typeof onEditAttendee === 'function' ? onEditAttendee : () => {};
   const safeOnRescheduleAttendee = typeof onRescheduleAttendee === 'function' ? onRescheduleAttendee : () => {};
   const [attendanceData, setAttendanceData] = useState<Record<string, AttendanceStatus>>({});
   const [isPastClass, setIsPastClass] = useState(false);
   const [isAttendanceTaken, setIsAttendanceTaken] = useState(false);
+  const [overrideModalOpen, setOverrideModalOpen] = useState(false);
+  const [overrideBookingId, setOverrideBookingId] = useState<string | null>(null);
 
   const slotIdentifier = useMemo(() => `${date}_${time}`, [date, time]);
   // Fecha en formato español
@@ -54,6 +56,7 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, 
 
   // Find the booking object for the first attendee (all attendees share the same booking)
   const [bookingsMap, setBookingsMap] = useState<Record<string, any>>({});
+  const [overridesMap, setOverridesMap] = useState<Record<string, any[]>>({});
 
   useEffect(() => {
     const fetchAllBookings = async () => {
@@ -66,6 +69,15 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, 
         map[b.id] = b;
       });
       setBookingsMap(map);
+      // Preload overrides for each booking
+      for (const a of attendees) {
+        try {
+          const ovs = await dataService.getBookingOverrides(a.bookingId);
+          setOverridesMap(prev => ({ ...prev, [a.bookingId]: ovs }));
+        } catch (e) {
+          // ignore
+        }
+      }
     };
     // Only fetch once when component mounts
     if (Object.keys(bookingsMap).length === 0) {
@@ -121,11 +133,12 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, 
   const handleRemoveClick = (bookingId: string, userName: string) => {
     const confirmationMessage = `¿Seguro que quieres eliminar la reserva de ${userName}?`;
     if (window.confirm(confirmationMessage)) {
-      onRemoveAttendee(bookingId);
+      safeOnRemoveAttendee(bookingId);
     }
   };
   
   return (
+    <>
     <div
       className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in"
       onClick={onClose}
@@ -143,6 +156,7 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, 
         const attendeeBooking = bookingsMap[attendee.bookingId];
         const participantCount = attendeeBooking?.participants || 1;
         const manualNote = attendeeBooking?.clientNote || attendeeBooking?.manualNote || attendeeBooking?.note || attendeeBooking?.message || attendeeBooking?.comments || null;
+  const bookingOverrides = overridesMap[attendee.bookingId] || [];
 
         return (
           <li key={attendee.bookingId} className="bg-brand-background p-3 rounded-lg">
@@ -174,6 +188,20 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, 
                   <span className="font-bold">Nota: </span>{manualNote}
                   </div>
                 )}
+                {bookingOverrides.length > 0 && (
+                  <div className="mt-2 p-2 bg-gray-50 border rounded text-xs">
+                    <div className="font-bold text-sm mb-1">Excepciones registradas</div>
+                    <ul className="space-y-1">
+                      {bookingOverrides.map((o: any) => (
+                        <li key={o.id} className="text-xs text-gray-700">
+                          <div className="font-semibold">{o.overriddenBy}</div>
+                          <div className="text-gray-600">{new Date(o.createdAt).toLocaleString()}</div>
+                          <div className="mt-1">{o.reason}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <div className={`mt-2 text-xs font-bold px-2 py-0.5 rounded-full inline-block ${attendee.isPaid ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}> 
                   {attendee.isPaid ? 'Pagado' : 'Pendiente de pago'}
                 </div>
@@ -190,15 +218,18 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, 
                 <button onClick={() => safeOnRescheduleAttendee(attendee.bookingId, { date, time, instructorId }, `${attendee.userInfo.firstName} ${attendee.userInfo.lastName}`)} title="Reagendar asistente" className="text-brand-secondary hover:text-brand-accent p-2 rounded-full hover:bg-gray-200 transition-colors">
                 <CalendarEditIcon className="w-5 h-5" />
                 </button>
+                <button onClick={() => { setOverrideBookingId(attendee.bookingId); setOverrideModalOpen(true); }} title="Autorizar excepción" className="text-yellow-600 hover:text-yellow-800 p-2 rounded-full hover:bg-yellow-100 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.957a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.37 2.448a1 1 0 00-.364 1.118l1.287 3.957c.3.921-.755 1.688-1.54 1.118l-3.37-2.448a1 1 0 00-1.175 0l-3.37 2.448c-.785.57-1.84-.197-1.54-1.118l1.287-3.957a1 1 0 00-.364-1.118L2.063 9.384c-.783-.57-.38-1.81.588-1.81h4.162a1 1 0 00.95-.69L9.049 2.927z"/></svg>
+                </button>
                 <button onClick={() => handleRemoveClick(attendee.bookingId, `${attendee.userInfo.firstName} ${attendee.userInfo.lastName}`)} title="Eliminar asistente" className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-100 transition-colors">
                   <TrashIcon className="w-5 h-5" />
                 </button>
                 {attendee.isPaid ? (
-                  <button onClick={() => onMarkAsUnpaid(attendee.bookingId)} title="Marcar como no pagado" className="p-2 rounded-full text-brand-success hover:bg-green-100 transition-colors">
+                  <button onClick={() => safeOnMarkAsUnpaid(attendee.bookingId)} title="Marcar como no pagado" className="p-2 rounded-full text-brand-success hover:bg-green-100 transition-colors">
                     <CurrencyDollarIcon className="w-5 h-5"/>
                   </button>
                 ) : (
-                  <button onClick={() => onAcceptPayment(attendee.bookingId)} title="Aceptar pago" className="p-2 rounded-full text-gray-400 hover:text-brand-success hover:bg-green-100 transition-colors">
+                  <button onClick={() => safeOnAcceptPayment(attendee.bookingId)} title="Aceptar pago" className="p-2 rounded-full text-gray-400 hover:text-brand-success hover:bg-green-100 transition-colors">
                     <CurrencyDollarIcon className="w-5 h-5"/>
                   </button>
                 )}
@@ -253,5 +284,17 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, 
         </div>
       </div>
     </div>
+    {overrideModalOpen && overrideBookingId && (
+      <AuthorizeOverrideModal
+        isOpen={overrideModalOpen}
+        onClose={() => setOverrideModalOpen(false)}
+        bookingId={overrideBookingId}
+        onSaved={() => {
+          // Refresh bookings map by clearing and re-fetching
+          setBookingsMap({});
+        }}
+      />
+    )}
+    </>
   );
 };
