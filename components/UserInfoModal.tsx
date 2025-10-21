@@ -15,9 +15,10 @@ interface InvoiceData {
     email: string;
 }
 interface UserInfoModalProps {
-  onClose: () => void;
-  onSubmit: (data: { userInfo: UserInfo, needsInvoice: boolean, invoiceData?: InvoiceData }) => void;
-  onShowPolicies: () => void;
+    onClose: () => void;
+    onSubmit: (data: { userInfo: UserInfo, needsInvoice: boolean, invoiceData?: InvoiceData, acceptedNoRefund?: boolean }) => void;
+    onShowPolicies: () => void;
+    requiresImmediateAcceptance?: boolean;
 }
 
 const InputField: React.FC<{
@@ -59,7 +60,7 @@ const InputField: React.FC<{
     </div>
 );
 
-export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit, onShowPolicies }) => {
+export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit, onShowPolicies, requiresImmediateAcceptance }) => {
     // Eliminado useLanguage, la app ahora es monolingüe en español
     // User info state
     const [firstName, setFirstName] = useState('');
@@ -79,6 +80,7 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [isPhoneFocused, setIsPhoneFocused] = useState(false);
     const [acceptedPolicies, setAcceptedPolicies] = useState(false);
+    const [acceptedNoRefund, setAcceptedNoRefund] = useState(false);
     const [submitDisabled, setSubmitDisabled] = useState(false);
     
     const validatePhone = (phoneNum: string): string | null => {
@@ -126,6 +128,7 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
         if (invoiceData.email && !/\S+@\S+\.\S+/.test(invoiceData.email)) newErrors.invoiceEmail = 'El correo electrónico no es válido.';
 
         if (!acceptedPolicies) newErrors.acceptedPolicies = 'Debes aceptar las políticas.';
+    if (requiresImmediateAcceptance && !acceptedNoRefund) newErrors.acceptedNoRefund = 'Debes aceptar la política de no reembolsos/reagendamientos.';
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
@@ -135,20 +138,21 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
         e.preventDefault();
             if (submitDisabled) return;
             if (validate()) {
-            setSubmitDisabled(true);
-            onSubmit({
-                userInfo: { 
-                    firstName, 
-                    lastName, 
-                    email, 
-                    phone, 
-                    countryCode: country.code,
-                    birthday: optOutBirthday ? null : birthday
-                },
-                needsInvoice: true,
-                invoiceData: { ...invoiceData, email: invoiceData.email || email }
-            });
-        }
+                setSubmitDisabled(true);
+                onSubmit({
+                    userInfo: { 
+                        firstName, 
+                        lastName, 
+                        email, 
+                        phone, 
+                        countryCode: country.code,
+                        birthday: optOutBirthday ? null : birthday
+                    },
+                    needsInvoice: true,
+                    invoiceData: { ...invoiceData, email: invoiceData.email || email },
+                    acceptedNoRefund: requiresImmediateAcceptance ? acceptedNoRefund : undefined
+                } as any);
+            }
     };
 
     const handleInvoiceDataChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -261,6 +265,21 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                         </div>
                         {errors.acceptedPolicies && <p className="text-red-600 text-xs mt-1 ml-1">{errors.acceptedPolicies}</p>}
                     </div>
+
+                    {/** Checkbox requerido para reservas <48h */}
+                    {/** The prop requiresImmediateAcceptance will be undefined unless App passes it; guard accordingly */}
+                    {requiresImmediateAcceptance && (
+                        <div className="mt-4 p-3 border-l-4 border-rose-400 bg-rose-50 rounded">
+                            <label className="flex items-start gap-3">
+                                <input id="accept-no-refund" type="checkbox" checked={acceptedNoRefund} onChange={(e) => setAcceptedNoRefund(e.target.checked)} className="h-4 w-4 text-brand-primary border-brand-border rounded focus:ring-brand-primary mt-1" />
+                                <div className="text-sm text-brand-secondary">
+                                    <div className="font-semibold text-brand-text">He leído y acepto que para clases que empiezan en menos de 48 horas no existen reembolsos ni reagendamientos.</div>
+                                    <div className="text-xs mt-1">Si reservas ahora, no podrás solicitar reembolso ni reagendar esta clase.</div>
+                                </div>
+                            </label>
+                            {!acceptedNoRefund && <p className="text-red-600 text-xs mt-2">Debes aceptar esta condición para continuar con la reserva.</p>}
+                        </div>
+                    )}
                     <div className="mt-6 flex justify-end">
                         <button type="submit"
                                 disabled={isSaveDisabled}

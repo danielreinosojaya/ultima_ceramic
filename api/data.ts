@@ -24,6 +24,7 @@ function toCamelCase(obj: any): any {
 }
 
 import { sql } from '@vercel/postgres';
+import { slotToDate as utilSlotToDate, slotsRequireNoRefund } from '../utils/bookingPolicy.js';
 import { seedDatabase, ensureTablesExist, createCustomer } from './db.js';
 import * as emailService from './emailService.js';
 import { VercelRequest, VercelResponse } from '@vercel/node';
@@ -161,6 +162,9 @@ const parseBookingFromDB = (dbRow: any): Booking => {
         } else {
             camelCased.paymentDetails = [];
         }
+
+        // Map accepted_no_refund flag from DB to camelCase
+        camelCased.acceptedNoRefund = dbRow.accepted_no_refund === true;
 
         const totalPaid = (camelCased.paymentDetails || []).reduce((sum: number, p: any) => sum + p.amount, 0);
         camelCased.isPaid = totalPaid >= camelCased.price;
@@ -915,6 +919,35 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             const { bookingId: rescheduleId, oldSlot, newSlot } = rescheduleBody;
             const { rows: [bookingToReschedule] } = await sql`SELECT slots FROM bookings WHERE id = ${rescheduleId}`;
             if (bookingToReschedule) {
+                // Fetch full booking to check accepted_no_refund
+                const { rows: [fullBookingRow] } = await sql`SELECT * FROM bookings WHERE id = ${rescheduleId}`;
+                const parsed = parseBookingFromDB(fullBookingRow);
+
+                // Helper to compute Date from slot (assume time is in HH:mm or parsable by Date)
+                const slotToDate = (s: any) => {
+                    try {
+                        // Normalize time to HH:mm if possible
+                        const dateStr = `${s.date}T${(s.time.length === 5 && s.time[2] === ':') ? s.time : s.time}`;
+                        const dt = new Date(dateStr);
+                        if (isNaN(dt.getTime())) {
+                            // Try with 1970 time parse fallback
+                            return new Date(`${s.date}T00:00:00`);
+                        }
+                        return dt;
+                    } catch {
+                        return new Date(`${s.date}T00:00:00`);
+                    }
+                };
+
+                const newSlotDate = slotToDate(newSlot);
+                const now = new Date();
+                const diffMs = newSlotDate.getTime() - now.getTime();
+                const hoursDiff = diffMs / (1000 * 60 * 60);
+
+                if (hoursDiff < 48 && !parsed?.acceptedNoRefund) {
+                    return res.status(400).json({ error: 'reschedule_requires_no_refund_acceptance', message: 'El reagendamiento solicitado cae dentro de las 48 horas y requiere aceptación de la política de no reembolsos/reagendamientos.' });
+                }
+
                 const otherSlots = bookingToReschedule.slots.filter((s: any) => s.date !== oldSlot.date || s.time !== oldSlot.time);
                 const updatedSlots = [...otherSlots, newSlot];
                 await sql`UPDATE bookings SET slots = ${JSON.stringify(updatedSlots)} WHERE id = ${rescheduleId}`;
@@ -1287,7 +1320,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 }
 
 
-async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookingCode'> & { invoiceData?: Omit<InvoiceRequest, 'id' | 'bookingId' | 'status' | 'requestedAt' | 'processedAt'> }): Promise<AddBookingResult> {
+export async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookingCode'> & { invoiceData?: Omit<InvoiceRequest, 'id' | 'bookingId' | 'status' | 'requestedAt' | 'processedAt'> }): Promise<AddBookingResult> {
     const { productId, slots, userInfo, productType, invoiceData, bookingDate, participants, clientNote } = body;
 
         // Sincronizar cliente en tabla customers
@@ -1334,9 +1367,16 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
     bookingCode: generateBookingCode(),
     createdAt: new Date(),
     };
+    // Validate 48-hour rule: if any selected slot starts within 48 hours, require acceptedNoRefund === true
+    // Use shared util to determine if slots require no-refund acceptance
+    const requiresAcceptance = slotsRequireNoRefund(Array.isArray(slots) ? slots : [], 48);
+
+    if (requiresAcceptance && !body.acceptedNoRefund) {
+        return { success: false, message: 'La(s) clase(s) seleccionada(s) inicia(n) en menos de 48 horas. Debes aceptar la política de no reembolsos ni reagendamientos.' };
+    }
 
     const { rows: [insertedRow] } = await sql`
-        INSERT INTO bookings (product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_code, booking_date, participants, client_note)
+        INSERT INTO bookings (product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_code, booking_date, participants, client_note, accepted_no_refund)
         VALUES (
             ${newBooking.productId},
             ${newBooking.productType},
@@ -1350,7 +1390,8 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
             ${newBooking.bookingCode},
             ${bookingDate},
             ${participants || 1},
-            ${clientNote || null}
+            ${clientNote || null},
+            ${body.acceptedNoRefund === true}
         )
         RETURNING *;
     `;

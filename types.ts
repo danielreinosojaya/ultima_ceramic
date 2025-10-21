@@ -192,6 +192,8 @@ export interface Booking {
     price: number;
     bookingCode: string;
     bookingMode: BookingMode;
+    // Si la reserva fue aceptada con la condición de "sin reembolsos ni reagendamientos" (para reservas <48h)
+    acceptedNoRefund?: boolean;
     // FIX: Change to an array of payments
     paymentDetails?: PaymentDetails[];
     attendance?: Record<string, AttendanceStatus>; // key is `${date}_${time}`

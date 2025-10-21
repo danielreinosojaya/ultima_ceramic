@@ -23,6 +23,7 @@ import { OpenStudioModal } from './components/admin/OpenStudioModal';
 
 import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession } from './types';
 import * as dataService from './services/dataService';
+import { slotsRequireNoRefund } from './utils/bookingPolicy';
 import { InstagramIcon } from './components/icons/InstagramIcon';
 import { WhatsAppIcon } from './components/icons/WhatsAppIcon';
 import { MailIcon } from './components/icons/MailIcon';
@@ -186,6 +187,9 @@ const App: React.FC = () => {
     const handleUserInfoSubmit = (data: { userInfo: UserInfo, needsInvoice: boolean, invoiceData?: any }) => {
         setBookingDetails(currentDetails => {
             const finalDetails = { ...currentDetails, userInfo: data.userInfo };
+            // Determine if selected slots require acceptance of no-refund policy
+            const requiresImmediateAcceptance = slotsRequireNoRefund(finalDetails.slots || [], 48);
+
             const bookingData = {
                 product: finalDetails.product!,
                 productId: finalDetails.product!.id,
@@ -196,7 +200,8 @@ const App: React.FC = () => {
                 price: 'price' in finalDetails.product! ? finalDetails.product.price : 0,
                 bookingMode: bookingMode || 'flexible',
                 bookingDate: new Date().toISOString(),
-                invoiceData: data.needsInvoice ? data.invoiceData : undefined
+                invoiceData: data.needsInvoice ? data.invoiceData : undefined,
+                acceptedNoRefund: requiresImmediateAcceptance ? !!(data as any).acceptedNoRefund : false
             };
 
             const submit = async () => {
@@ -415,6 +420,7 @@ const App: React.FC = () => {
     }
 
     console.log("App - rendering main app, view:", view, "loading:", loading);
+    const requiresImmediateAcceptance = slotsRequireNoRefund(bookingDetails.slots || [], 48);
     return (
         <div className="bg-brand-background min-h-screen text-brand-text font-sans relative flex flex-col">
             <Header />
@@ -463,6 +469,7 @@ const App: React.FC = () => {
                     onClose={() => setIsUserInfoModalOpen(false)}
                     onSubmit={handleUserInfoSubmit}
                     onShowPolicies={() => setIsPolicyModalOpen(true)}
+                    requiresImmediateAcceptance={requiresImmediateAcceptance}
                 />
             )}
             {isPolicyModalOpen && appData && (

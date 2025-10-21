@@ -7,6 +7,7 @@ import ScheduleDetailPanel from './ScheduleDetailPanel';
 import { CapacityIndicator } from './CapacityIndicator.js';
 import { InstructorTag } from './InstructorTag.js';
 import { DAY_NAMES } from '../constants.js';
+import { slotsRequireNoRefund } from '../utils/bookingPolicy.js';
 
 const formatDateToYYYYMMDD = (d: Date): string => d.toISOString().split('T')[0];
 
@@ -100,6 +101,8 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
 
       return { weekDates: dates, scheduleData: data };
   }, [currentDate, appData, pkg.details.technique]);
+
+  const selectedRequiresImmediateAcceptance = slotsRequireNoRefund(selectedSlots || [], 48);
   
   const handleSlotSelect = (date: Date, slot: EnrichedAvailableSlot) => {
     const dateStr = formatDateToYYYYMMDD(date);
@@ -197,6 +200,11 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                     </div>
                     <button onClick={handleNextWeek} className="p-2 rounded-full hover:bg-gray-100">&gt;</button>
                 </div>
+        {selectedRequiresImmediateAcceptance && (
+          <div className="mb-4 p-3 rounded border-l-4 border-rose-400 bg-rose-50 text-rose-800 text-sm">
+            Atención: alguna de las clases seleccionadas inicia en menos de 48 horas. Te pediremos aceptar la política de no reembolsos en el siguiente paso.
+          </div>
+        )}
                 
                 {/* --- DESKTOP VIEW --- */}
                 <div className="hidden lg:block">

@@ -3,9 +3,14 @@ import { sql } from '@vercel/postgres';
 // Validate database connection - try multiple possible environment variable names
 const dbUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL || process.env.POSTGRES_PRISMA_URL;
 if (!dbUrl) {
-    console.error('Database connection error: No database URL found in environment variables');
-    console.error('Checked: POSTGRES_URL, DATABASE_URL, POSTGRES_PRISMA_URL');
-    throw new Error('Database URL environment variable is required');
+    // During tests we might not have a real database. Allow running tests by skipping the hard throw.
+    if (process.env.NODE_ENV === 'test' || process.env.POSTGRES_URL?.includes('localhost') || process.env.POSTGRES_URL?.includes('fake')) {
+        console.warn('Database URL not found, skipping strict DB initialization in test environment.');
+    } else {
+        console.error('Database connection error: No database URL found in environment variables');
+        console.error('Checked: POSTGRES_URL, DATABASE_URL, POSTGRES_PRISMA_URL');
+        throw new Error('Database URL environment variable is required');
+    }
 }
 
 // Solo log una vez al inicializar el módulo
@@ -81,6 +86,7 @@ const SCHEMA_SQL = `
         booking_mode VARCHAR(50),
         product JSONB,
         booking_code VARCHAR(50) UNIQUE,
+        accepted_no_refund BOOLEAN DEFAULT FALSE,
         payment_details JSONB DEFAULT '[]'::jsonb,
         attendance JSONB,
         booking_date TEXT
@@ -233,7 +239,8 @@ export async function ensureTablesExist() {
         await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS min_participants INT;`;
         await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS price_per_person NUMERIC(10, 2);`;
         await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS sort_order INT DEFAULT 0;`;
-        await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS participants INT DEFAULT 1;`;
+    await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS participants INT DEFAULT 1;`;
+    await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS accepted_no_refund BOOLEAN DEFAULT FALSE;`;
         console.log("Essential columns ensured.");
     } catch (error) {
         console.error("Error during column checks:", error);

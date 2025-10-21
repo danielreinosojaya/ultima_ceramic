@@ -4,6 +4,7 @@ import type { ClassPackage, TimeSlot, Product, BookingMode } from '../types';
 import { CalendarIcon } from './icons/CalendarIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { SINGLE_CLASS_PRICE, VAT_RATE } from '../constants';
+import { slotsRequireNoRefund } from '../utils/bookingPolicy';
 
 interface BookingSidebarProps {
   product: Product;
@@ -29,6 +30,7 @@ export const BookingSidebar: React.FC<BookingSidebarProps> = ({ product, selecte
 
   // Type cast seguro
   const pkg = safeProduct as ClassPackage;
+  const requiresImmediateAcceptance = slotsRequireNoRefund(selectedSlots || [], 48);
   const classesRemaining = pkg.classes - selectedSlots.length;
   const originalPrice = pkg.classes * SINGLE_CLASS_PRICE;
   const discount = originalPrice - pkg.price;
@@ -47,6 +49,11 @@ export const BookingSidebar: React.FC<BookingSidebarProps> = ({ product, selecte
 
   return (
     <div className="bg-brand-background p-6 rounded-lg sticky top-24 h-fit">
+    {requiresImmediateAcceptance && (
+        <div className="mb-4 p-3 rounded border-l-4 border-rose-400 bg-rose-50 text-rose-800">
+            Atención: alguna de las clases seleccionadas inicia en menos de 48 horas. Si reservas ahora, no habrá reembolsos ni reagendamientos.
+        </div>
+    )}
   <h3 className="text-xl font-serif text-brand-text mb-1">Resumen de compra</h3>
       <div className="border-t border-brand-border pt-4">
         <div className="space-y-3 mb-4 text-sm">
