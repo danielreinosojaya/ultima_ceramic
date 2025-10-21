@@ -571,13 +571,20 @@ export const getProducts = async (): Promise<Product[]> => {
         }
         console.log('Raw products from API:', rawProducts.length);
         const parsedProducts = rawProducts.map(parseProduct);
-        
-        // Asegurar que todos los productos tengan sortOrder válido
-        const productsWithOrder = parsedProducts.map((product, index) => ({
-            ...product,
-            sortOrder: product.sortOrder !== undefined && product.sortOrder !== null ? product.sortOrder : index
-        }));
-        
+
+        // Refuerzo: normalizar price en todos los productos
+        const productsWithOrder = parsedProducts.map((product, index) => {
+            let normalized = { ...product };
+            if ('price' in normalized) {
+                normalized.price = typeof (normalized as any).price === 'number' ? (normalized as any).price : parseFloat((normalized as any).price) || 0;
+            }
+            if ('pricePerPerson' in normalized) {
+                normalized.pricePerPerson = typeof (normalized as any).pricePerPerson === 'number' ? (normalized as any).pricePerPerson : parseFloat((normalized as any).pricePerPerson) || 0;
+            }
+            normalized.sortOrder = normalized.sortOrder !== undefined && normalized.sortOrder !== null ? normalized.sortOrder : index;
+            return normalized;
+        });
+
         console.log('Parsed products:', productsWithOrder.length);
         return productsWithOrder;
     } catch (error) {
