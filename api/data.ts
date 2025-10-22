@@ -975,8 +975,65 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         code = generateCode();
                     }
                 }
+                // If insert failed after retries, try a minimal fallback insert once more
+                if (!issuedGiftcard) {
+                    try {
+                        // Try a minimal insert that sets available numeric fields to avoid NOT NULL violations
+                        if (hasInitial && hasValue && hasBalance) {
+                            const { rows: [giftcardRow] } = await sql`
+                                INSERT INTO giftcards (id, code, initial_value, value, balance, giftcard_request_id, expires_at, metadata)
+                                VALUES (nextval('giftcards_id_seq'), ${code}, ${updated.amount}, ${updated.amount}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser, fallback: true })}::jsonb)
+                                RETURNING *;
+                            `;
+                            issuedGiftcard = giftcardRow;
+                        } else if (hasInitial && hasBalance) {
+                            const { rows: [giftcardRow] } = await sql`
+                                INSERT INTO giftcards (id, code, initial_value, balance, giftcard_request_id, expires_at, metadata)
+                                VALUES (nextval('giftcards_id_seq'), ${code}, ${updated.amount}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser, fallback: true })}::jsonb)
+                                RETURNING *;
+                            `;
+                            issuedGiftcard = giftcardRow;
+                        } else if (hasValue && hasBalance) {
+                            const { rows: [giftcardRow] } = await sql`
+                                INSERT INTO giftcards (id, code, value, balance, giftcard_request_id, expires_at, metadata)
+                                VALUES (nextval('giftcards_id_seq'), ${code}, ${updated.amount}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser, fallback: true })}::jsonb)
+                                RETURNING *;
+                            `;
+                            issuedGiftcard = giftcardRow;
+                        } else if (hasInitial) {
+                            const { rows: [giftcardRow] } = await sql`
+                                INSERT INTO giftcards (id, code, initial_value, giftcard_request_id, expires_at, metadata)
+                                VALUES (nextval('giftcards_id_seq'), ${code}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser, fallback: true })}::jsonb)
+                                RETURNING *;
+                            `;
+                            issuedGiftcard = giftcardRow;
+                        } else if (hasValue) {
+                            const { rows: [giftcardRow] } = await sql`
+                                INSERT INTO giftcards (id, code, value, giftcard_request_id, expires_at, metadata)
+                                VALUES (nextval('giftcards_id_seq'), ${code}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser, fallback: true })}::jsonb)
+                                RETURNING *;
+                            `;
+                            issuedGiftcard = giftcardRow;
+                        } else {
+                            const { rows: [giftcardRow] } = await sql`
+                                INSERT INTO giftcards (id, code, giftcard_request_id, expires_at, metadata)
+                                VALUES (nextval('giftcards_id_seq'), ${code}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser, fallback: true, amount: updated.amount })}::jsonb)
+                                RETURNING *;
+                            `;
+                            issuedGiftcard = giftcardRow;
+                        }
+                    } catch (fallbackErr) {
+                        const fallbackMsg = (fallbackErr && (fallbackErr as any).message) ? (fallbackErr as any).message : String(fallbackErr);
+                        console.warn('Fallback giftcard insert also failed:', fallbackMsg);
+                    }
+                }
 
-                    if (issuedGiftcard) {
+                // Regardless of whether we created a DB giftcard, if not created we will still attempt to send emails using the generated code
+                if (!issuedGiftcard) {
+                    console.warn('Proceeding without persisted giftcard record; will send best-effort emails to buyer/recipient with code:', code);
+                }
+
+                if (issuedGiftcard) {
                     // Generate QR and PDF and upload to S3 (best-effort)
                     const baseUrl = process.env.APP_BASE_URL || (req.headers.host ? `https://${req.headers.host}` : '');
                     const redeemUrl = baseUrl ? `${baseUrl}/giftcard/redeem?code=${encodeURIComponent(code)}` : `code:${code}`;
