@@ -1,5 +1,7 @@
 export async function generateQrPngBuffer(text: string, size = 300): Promise<Buffer> {
     // Dynamic import to avoid top-level type resolution issues in environments without types
+    // Type definitions for 'qrcode' may be missing in some environments; ignore at compile-time
+    // @ts-ignore
     const QRCodeModule: any = await import('qrcode').then(m => m.default || m);
     const options = {
         type: 'png',

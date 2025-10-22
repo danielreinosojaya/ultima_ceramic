@@ -8,6 +8,8 @@ export async function generateVoucherPdfBuffer(data: {
     note?: string;
     qrPngBuffer?: Buffer;
 }) {
+    // Type definitions for 'pdfkit' may be missing in some environments; ignore at compile-time
+    // @ts-ignore
     const PDFDocumentModule: any = await import('pdfkit').then(m => m.default || m);
     const doc = new PDFDocumentModule({ size: 'A4', margin: 50 });
     const passthrough = new stream.PassThrough();

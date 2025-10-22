@@ -839,19 +839,27 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     return `GC-${part}`;
                 };
 
-                // Ensure giftcards table exists
-                await sql`
-                    CREATE TABLE IF NOT EXISTS giftcards (
+                // Ensure giftcards table exists and has required columns (safe, idempotent)
+                try {
+                    await sql`CREATE TABLE IF NOT EXISTS giftcards (
                         id SERIAL PRIMARY KEY,
                         code VARCHAR(32) NOT NULL UNIQUE,
-                        initial_value NUMERIC NOT NULL,
-                        balance NUMERIC NOT NULL,
-                        giftcard_request_id INTEGER REFERENCES giftcard_requests(id) ON DELETE SET NULL,
-                        created_at TIMESTAMP DEFAULT NOW(),
-                        expires_at TIMESTAMP,
-                        metadata JSONB
-                    )
-                `;
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )`;
+                } catch (e) {
+                    console.warn('Could not create giftcards table (it may already exist):', e);
+                }
+
+                // Add missing columns if they don't exist to avoid "column does not exist" errors
+                try {
+                    await sql`ALTER TABLE giftcards ADD COLUMN IF NOT EXISTS initial_value NUMERIC`;
+                    await sql`ALTER TABLE giftcards ADD COLUMN IF NOT EXISTS balance NUMERIC`;
+                    await sql`ALTER TABLE giftcards ADD COLUMN IF NOT EXISTS giftcard_request_id INTEGER`;
+                    await sql`ALTER TABLE giftcards ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP`;
+                    await sql`ALTER TABLE giftcards ADD COLUMN IF NOT EXISTS metadata JSONB`;
+                } catch (e) {
+                    console.warn('Error ensuring giftcards columns exist:', e);
+                }
 
                 // Load helpers dynamically to avoid load errors in tests when env not configured
                 let s3Module: any = null;
