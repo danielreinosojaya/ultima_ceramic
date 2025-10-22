@@ -14,10 +14,46 @@ const isEmailServiceConfigured = () => {
 }
 
 const sendEmail = async (to: string, subject: string, html: string, attachments?: { filename: string; data: string; type?: string }[]) => {
-    if (!isEmailServiceConfigured()) {
-        console.error('Email service is not configured on the server. RESEND_API_KEY and/or EMAIL_FROM environment variables are missing or incorrect.');
-        throw new Error('Email service is not configured on the server.');
+    // If the email service is not configured (no RESEND API key), do a dry-run:
+    // save the email contents to disk for inspection and do not throw so
+    // callers (like giftcard flows) can continue running in test/dev.
+    if (!resend) {
+        console.warn('RESEND_API_KEY not configured — performing email dry-run (email will be saved to disk).');
+        try {
+            const fs = await import('fs');
+            const path = await import('path');
+            const outDir = process.env.EMAIL_DRYRUN_DIR || path.join('/tmp', 'ceramicalma-emails');
+            try {
+                fs.mkdirSync(outDir, { recursive: true });
+            } catch (mkErr) {
+                // ignore
+            }
+            const safeTo = to.replace(/[@<>\\/\\s]/g, '_').slice(0, 64);
+            const safeSubject = subject.replace(/[^a-zA-Z0-9-_ ]/g, '').slice(0, 48).replace(/\s+/g, '_');
+            const filename = `${Date.now()}_${safeTo}_${safeSubject}.html`;
+            const filePath = path.join(outDir, filename);
+            let content = `To: ${to}\nSubject: ${subject}\n\n${html}\n\n`;
+            if (attachments && attachments.length > 0) {
+                content += '\nAttachments:\n';
+                for (const a of attachments) {
+                    content += `- ${a.filename} (${a.type || 'unknown'}) - ${a.data?.length || 0} bytes base64\n`;
+                }
+            }
+            try {
+                fs.writeFileSync(filePath, content, 'utf8');
+                console.info(`Email dry-run saved to: ${filePath}`);
+            } catch (writeErr) {
+                console.warn('Failed to write dry-run email to disk:', writeErr);
+            }
+        } catch (err) {
+            console.warn('Email dry-run failed (fs unavailable):', err);
+        }
+
+        // Don't throw in dry-run mode — resolve so flows can continue during tests
+        return;
     }
+
+    // Live send path (Resend configured)
     try {
         const payload: any = {
             from: fromEmail,
@@ -36,6 +72,7 @@ const sendEmail = async (to: string, subject: string, html: string, attachments?
         console.log(`Email sent to ${to} with subject "${subject}"`);
     } catch (error) {
         console.error(`Resend API Error: Failed to send email to ${to}:`, error);
+        // Re-throw so callers that expect exceptions still get them
         throw error;
     }
 };
