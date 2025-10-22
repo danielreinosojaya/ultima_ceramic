@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import type { GiftcardRequest } from '../../services/dataService';
 import * as dataService from '../../services/dataService';
 import { useAdminData } from '../../context/AdminDataContext';
@@ -6,6 +6,9 @@ import { useAdminData } from '../../context/AdminDataContext';
 const GiftcardsManager: React.FC = () => {
   const adminData = useAdminData();
   const [selected, setSelected] = React.useState<GiftcardRequest | null>(null);
+  const [isProcessing, setIsProcessing] = React.useState(false);
+  const [noteText, setNoteText] = React.useState('');
+  const [proofPreview, setProofPreview] = React.useState<string | null>(null);
   return (
     <div className="w-full flex flex-col items-center gap-6">
       <h2 className="text-2xl font-bold text-brand-primary mb-4">Gestión de Giftcards</h2>
@@ -65,6 +68,157 @@ const GiftcardsManager: React.FC = () => {
               <div><span className="font-semibold">Código:</span> <span className="font-mono">{selected.code}</span></div>
               <div><span className="font-semibold">Estado:</span> <span className={`px-2 py-1 rounded-full text-xs font-semibold ${selected.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : selected.status === 'approved' ? 'bg-green-100 text-green-700' : selected.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{selected.status}</span></div>
               <div><span className="font-semibold">Fecha:</span> {new Date(selected.createdAt).toLocaleString()}</div>
+            </div>
+            <div className="mt-4">
+              <label className="block text-sm font-semibold text-brand-secondary mb-2">Nota administrativa (opcional)</label>
+              <textarea
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                className="w-full p-2 border rounded-md text-sm"
+                rows={2}
+                placeholder="Añadir nota visible en el historial"
+                disabled={isProcessing}
+              />
+            </div>
+            <div className="mt-3">
+              <label className="block text-sm font-semibold text-brand-secondary mb-1">Adjuntar comprobante</label>
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  // Simple client-side preview as data URL
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    setProofPreview(typeof reader.result === 'string' ? reader.result : null);
+                  };
+                  reader.readAsDataURL(f);
+                }}
+                disabled={isProcessing}
+              />
+              {proofPreview && (
+                <div className="mt-2">
+                  <div className="text-xs text-brand-secondary mb-1">Preview:</div>
+                  <img src={proofPreview} alt="proof" className="w-40 h-auto rounded-md border" />
+                </div>
+              )}
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                className="px-3 py-2 rounded-lg bg-gray-200 text-sm text-gray-700 hover:bg-gray-300"
+                onClick={() => setSelected(null)}
+                disabled={isProcessing}
+              >Cerrar</button>
+              <button
+                className="px-3 py-2 rounded-lg bg-red-600 text-sm text-white hover:bg-red-700"
+                onClick={async () => {
+                  if (!selected) return;
+                  const confirmReject = window.confirm('¿Confirma que desea rechazar esta solicitud de giftcard?');
+                  if (!confirmReject) return;
+                  const adminUser = window.prompt('Ingrese su nombre de usuario administrativo para auditar esta acción:', 'admin') || 'admin';
+                  setIsProcessing(true);
+                  try {
+                    const res = await dataService.rejectGiftcardRequest(selected.id, adminUser, noteText || undefined);
+                    if (res && res.success) {
+                      adminData.refreshCritical();
+                      setSelected(null);
+                    } else {
+                      alert('No se pudo rechazar la solicitud: ' + (res?.error || 'error desconocido'));
+                    }
+                  } catch (err) {
+                    console.error(err);
+                    alert('Error rechazando la solicitud');
+                  } finally {
+                    setIsProcessing(false);
+                  }
+                }}
+                disabled={isProcessing}
+              >Rechazar</button>
+              <button
+                className="px-3 py-2 rounded-lg bg-red-800 text-sm text-white hover:bg-red-900"
+                onClick={async () => {
+                  if (!selected) return;
+                  const confirmDelete = window.confirm('¿Confirma que desea eliminar (marcar como borrada) esta solicitud? Esta acción es reversible solo desde la base de datos.');
+                  if (!confirmDelete) return;
+                  const adminUser = window.prompt('Ingrese su nombre de usuario administrativo para auditar esta acción:', 'admin') || 'admin';
+                  setIsProcessing(true);
+                  try {
+                    const res = await dataService.deleteGiftcardRequest(selected.id, adminUser, noteText || undefined);
+                    if (res && res.success) {
+                      adminData.refreshCritical();
+                      setSelected(null);
+                    } else {
+                      alert('No se pudo eliminar la solicitud: ' + (res?.error || 'error desconocido'));
+                    }
+                  } catch (err) {
+                    console.error(err);
+                    alert('Error eliminando la solicitud');
+                  } finally {
+                    setIsProcessing(false);
+                  }
+                }}
+                disabled={isProcessing}
+              >Eliminar</button>
+              <button
+                className="px-3 py-2 rounded-lg border-2 border-red-700 text-sm text-red-700 hover:bg-red-50"
+                onClick={async () => {
+                  if (!selected) return;
+                  const confirmHard = window.prompt('TYPE DELETE to permanently delete this request. This will remove data permanently.');
+                  if (confirmHard !== 'DELETE') return;
+                  const adminUser = window.prompt('Ingrese su nombre de usuario administrativo para auditar esta acción:', 'admin') || 'admin';
+                  setIsProcessing(true);
+                  try {
+                    const res = await dataService.hardDeleteGiftcardRequest(selected.id, adminUser, noteText || undefined);
+                    if (res && res.success) {
+                      adminData.refreshCritical();
+                      setSelected(null);
+                    } else {
+                      alert('No se pudo eliminar permanentemente la solicitud: ' + (res?.error || 'error desconocido'));
+                    }
+                  } catch (err) {
+                    console.error(err);
+                    alert('Error en la eliminación permanente');
+                  } finally {
+                    setIsProcessing(false);
+                  }
+                }}
+                disabled={isProcessing}
+              >Eliminar permanentemente</button>
+              <button
+                className="px-3 py-2 rounded-lg bg-green-600 text-sm text-white hover:bg-green-700"
+                onClick={async () => {
+                  if (!selected) return;
+                  const adminUser = window.prompt('Ingrese su nombre de usuario administrativo para auditar esta acción:', 'admin') || 'admin';
+                  setIsProcessing(true);
+                  try {
+                    // If proofPreview exists, attach it first
+                    if (proofPreview) {
+                      const attachRes = await dataService.attachGiftcardProof(selected.id, proofPreview, adminUser, noteText || undefined);
+                      if (!attachRes || !attachRes.success) {
+                        alert('No se pudo adjuntar el comprobante: ' + (attachRes?.error || 'error desconocido'));
+                        setIsProcessing(false);
+                        return;
+                      }
+                    }
+                    const res = await dataService.approveGiftcardRequest(selected.id, adminUser, noteText || undefined);
+                    if (res && res.success) {
+                      adminData.refreshCritical();
+                      setSelected(null);
+                      setNoteText('');
+                      setProofPreview(null);
+                    } else {
+                      alert('No se pudo aprobar la solicitud: ' + (res?.error || 'error desconocido'));
+                    }
+                  } catch (err) {
+                    console.error(err);
+                    alert('Error aprobando la solicitud');
+                  } finally {
+                    setIsProcessing(false);
+                  }
+                }}
+                disabled={isProcessing}
+              >Aprobar</button>
             </div>
           </div>
         </div>

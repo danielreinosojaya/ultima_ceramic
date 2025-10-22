@@ -791,7 +791,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         created_at TIMESTAMP DEFAULT NOW()
                     )
                 `;
-                const { rows } = await sql`SELECT * FROM giftcard_requests ORDER BY created_at DESC`;
+                const { rows } = await sql`SELECT * FROM giftcard_requests WHERE COALESCE(status, '') <> 'deleted' ORDER BY created_at DESC`;
                 // Formatear a camelCase y parsear tipos
                 const formatted = rows.map(row => ({
                     id: String(row.id),
@@ -809,6 +809,308 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             } catch (error) {
                 console.error('Error al listar giftcards:', error);
                 return res.status(500).json([]);
+            }
+        }
+            break;
+        case 'approveGiftcardRequest': {
+            // Admin action: mark request as approved and insert audit event
+            const body = req.body || {};
+            const id = body.id;
+            const adminUser = req.headers['x-admin-user'] || body.adminUser || null;
+            if (!id || !adminUser) return res.status(400).json({ success: false, error: 'id and adminUser are required.' });
+            try {
+                await sql`BEGIN`;
+
+                // Mark request as approved and add basic metadata
+                const { rows: [updated] } = await sql`
+                    UPDATE giftcard_requests SET status = 'approved', approved_by = ${String(adminUser)}, approved_at = NOW(), metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ approvedBy: adminUser })}::jsonb WHERE id = ${id} RETURNING *;
+                `;
+
+                // Insert approval event
+                await sql`
+                    INSERT INTO giftcard_events (giftcard_request_id, event_type, admin_user, note, metadata)
+                    VALUES (${id}, 'approved', ${String(adminUser)}, ${body.note || null}, ${body.metadata ? JSON.stringify(body.metadata) : null});
+                `;
+
+                // Issue giftcard assets (code, QR, PDF) and persist giftcard record
+                // Generate unique code: GC- + 6 base36 chars (uppercase)
+                const generateCode = () => {
+                    const part = Math.random().toString(36).slice(2, 8).toUpperCase();
+                    return `GC-${part}`;
+                };
+
+                // Ensure giftcards table exists
+                await sql`
+                    CREATE TABLE IF NOT EXISTS giftcards (
+                        id SERIAL PRIMARY KEY,
+                        code VARCHAR(32) NOT NULL UNIQUE,
+                        initial_value NUMERIC NOT NULL,
+                        balance NUMERIC NOT NULL,
+                        giftcard_request_id INTEGER REFERENCES giftcard_requests(id) ON DELETE SET NULL,
+                        created_at TIMESTAMP DEFAULT NOW(),
+                        expires_at TIMESTAMP,
+                        metadata JSONB
+                    )
+                `;
+
+                // Load helpers dynamically to avoid load errors in tests when env not configured
+                let s3Module: any = null;
+                let qrModule: any = null;
+                let pdfModule: any = null;
+                try {
+                    s3Module = await import('./s3.js');
+                } catch (e) {
+                    // ignore
+                }
+                try {
+                    qrModule = await import('./qr.js');
+                } catch (e) {}
+                try {
+                    pdfModule = await import('./pdf.js');
+                } catch (e) {}
+
+                // Generate code and attempt to insert (retry if collision)
+                let code = generateCode();
+                let issuedGiftcard: any = null;
+                for (let attempt = 0; attempt < 4; attempt++) {
+                    try {
+                        const expiresInterval = '3 months';
+                        const { rows: [giftcardRow] } = await sql`
+                            INSERT INTO giftcards (code, initial_value, balance, giftcard_request_id, expires_at, metadata)
+                            VALUES (${code}, ${updated.amount}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser })}::jsonb)
+                            RETURNING *;
+                        `;
+                        issuedGiftcard = giftcardRow;
+                        break;
+                    } catch (err: any) {
+                        // If unique constraint violated, generate a new code and retry
+                        console.warn('Giftcard code insert failed, retrying with new code:', err && err.message ? err.message : String(err));
+                        code = generateCode();
+                    }
+                }
+
+                    if (issuedGiftcard) {
+                    // Generate QR and PDF and upload to S3 (best-effort)
+                    const baseUrl = process.env.APP_BASE_URL || (req.headers.host ? `https://${req.headers.host}` : '');
+                    const redeemUrl = baseUrl ? `${baseUrl}/giftcard/redeem?code=${encodeURIComponent(code)}` : `code:${code}`;
+
+                    let qrS3Url: string | null = null;
+                    let pdfS3Url: string | null = null;
+                    let localPdfBuffer: Buffer | undefined;
+                    try {
+                        let qrBuffer: Buffer | undefined;
+                        if (qrModule && qrModule.generateQrPngBuffer) {
+                            qrBuffer = await qrModule.generateQrPngBuffer(redeemUrl, 400);
+                        }
+
+                        localPdfBuffer = undefined;
+                        // Use localPdfBuffer for the generated PDF
+                        if (pdfModule && pdfModule.generateVoucherPdfBuffer) {
+                            localPdfBuffer = await pdfModule.generateVoucherPdfBuffer({
+                                buyerName: updated.buyer_name || updated.buyerName,
+                                recipientName: updated.recipient_name || updated.recipientName,
+                                amount: Number(updated.amount),
+                                code,
+                                note: body.note || '' ,
+                                qrPngBuffer: qrBuffer
+                            });
+                        }
+
+                        if (s3Module && s3Module.uploadBufferToS3) {
+                            if (qrBuffer) {
+                                const qrKey = s3Module.generateS3Key('giftcards', `qr-${code}.png`);
+                                const maybe = await s3Module.uploadBufferToS3(qrKey, qrBuffer, 'image/png');
+                                qrS3Url = maybe;
+                            }
+                            if (localPdfBuffer) {
+                                const pdfKey = s3Module.generateS3Key('giftcards', `voucher-${code}.pdf`);
+                                const maybePdf = await s3Module.uploadBufferToS3(pdfKey, localPdfBuffer, 'application/pdf');
+                                pdfS3Url = maybePdf;
+                            }
+                        }
+                    } catch (assetErr) {
+                        console.warn('Failed generating/uploading giftcard assets:', assetErr);
+                    }
+
+                    // Persist URLs into giftcard metadata and request metadata
+                    const metaPatch: any = {};
+                    if (qrS3Url) metaPatch.qrUrl = qrS3Url;
+                        if (pdfS3Url) metaPatch.voucherUrl = pdfS3Url;
+                    metaPatch.issuedCode = code;
+                    metaPatch.issuedGiftcardId = issuedGiftcard.id;
+
+                    await sql`
+                        UPDATE giftcard_requests SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(metaPatch)}::jsonb WHERE id = ${id}
+                    `;
+                    await sql`
+                        UPDATE giftcards SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(metaPatch)}::jsonb WHERE id = ${issuedGiftcard.id}
+                    `;
+                    // Send emails: buyer receipt (attach PDF) and optionally recipient email
+                    try {
+                        const emailServiceModule = await import('./emailService.js');
+                        let pdfBase64: string | undefined;
+                        let downloadLink: string | undefined;
+                        if (pdfS3Url) {
+                            // If uploaded to S3, create a presigned GET URL for download
+                            try {
+                                const s3m = await import('./s3.js');
+                                const key = pdfS3Url.replace(`s3://${s3m.defaultBucket || ''}/`, '');
+                                const maybe = await s3m.generatePresignedGetUrl(key, 60 * 60 * 24 * 7); // 7 days
+                                if (maybe) downloadLink = maybe;
+                            } catch (err) {
+                                console.warn('Failed to generate presigned URL for pdf:', err);
+                            }
+                        } else if (typeof localPdfBuffer !== 'undefined' && localPdfBuffer) {
+                            pdfBase64 = localPdfBuffer.toString('base64');
+                        }
+
+                        // If no pdfBase64 and downloadLink is undefined but pdfS3Url exists as s3://, include the raw s3 path as backup
+                        if (!downloadLink && pdfS3Url) downloadLink = pdfS3Url;
+
+                        const buyerEmail = updated.buyer_email || updated.buyerEmail;
+                        if (buyerEmail) {
+                            await emailServiceModule.sendGiftcardPaymentConfirmedEmail(buyerEmail, { buyerName: updated.buyer_name || updated.buyerName, amount: Number(updated.amount), code }, pdfBase64, downloadLink);
+                        }
+                        const recipientEmail = updated.recipient_email || updated.recipientEmail;
+                        if (recipientEmail) {
+                            // Send recipient email with PDF attached or download link
+                            await emailServiceModule.sendGiftcardRecipientEmail(recipientEmail, { recipientName: updated.recipient_name || updated.recipientName, amount: Number(updated.amount), code, message: body.recipientMessage || null }, pdfBase64, downloadLink);
+                        }
+                    } catch (emailErr) {
+                        console.warn('Failed to send giftcard emails:', emailErr);
+                    }
+                }
+
+                await sql`COMMIT`;
+                const responsePayload: any = { success: true, request: toCamelCase(updated) };
+                if (issuedGiftcard) responsePayload.giftcard = toCamelCase(issuedGiftcard);
+                return res.status(200).json(responsePayload);
+            } catch (error) {
+                await sql`ROLLBACK`;
+                console.error('approveGiftcardRequest error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+
+        case 'rejectGiftcardRequest': {
+            const body = req.body || {};
+            const id = body.id;
+            const adminUser = req.headers['x-admin-user'] || body.adminUser || null;
+            if (!id || !adminUser) return res.status(400).json({ success: false, error: 'id and adminUser are required.' });
+            try {
+                await sql`BEGIN`;
+                const { rows: [updated] } = await sql`
+                    UPDATE giftcard_requests SET status = 'rejected', rejected_by = ${String(adminUser)}, rejected_at = NOW(), metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ rejectedBy: adminUser })}::jsonb WHERE id = ${id} RETURNING *;
+                `;
+                await sql`
+                    INSERT INTO giftcard_events (giftcard_request_id, event_type, admin_user, note, metadata)
+                    VALUES (${id}, 'rejected', ${String(adminUser)}, ${body.note || null}, ${body.metadata ? JSON.stringify(body.metadata) : null});
+                `;
+                await sql`COMMIT`;
+                return res.status(200).json({ success: true, request: toCamelCase(updated) });
+            } catch (error) {
+                await sql`ROLLBACK`;
+                console.error('rejectGiftcardRequest error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+        
+        case 'deleteGiftcardRequest': {
+            const body = req.body || {};
+            const id = body.id;
+            const adminUser = req.headers['x-admin-user'] || body.adminUser || null;
+            if (!id || !adminUser) return res.status(400).json({ success: false, error: 'id and adminUser are required.' });
+            try {
+                await sql`BEGIN`;
+                const { rows: [updated] } = await sql`
+                    UPDATE giftcard_requests SET status = 'deleted', deleted_by = ${String(adminUser)}, deleted_at = NOW(), metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ deletedBy: adminUser })}::jsonb WHERE id = ${id} RETURNING *;
+                `;
+                await sql`
+                    INSERT INTO giftcard_events (giftcard_request_id, event_type, admin_user, note, metadata)
+                    VALUES (${id}, 'deleted', ${String(adminUser)}, ${body.note || null}, ${body.metadata ? JSON.stringify(body.metadata) : null});
+                `;
+                await sql`COMMIT`;
+                return res.status(200).json({ success: true, request: toCamelCase(updated) });
+            } catch (error) {
+                await sql`ROLLBACK`;
+                console.error('deleteGiftcardRequest error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+
+        case 'hardDeleteGiftcardRequest': {
+            const body = req.body || {};
+            const id = body.id;
+            const adminUser = req.headers['x-admin-user'] || body.adminUser || null;
+            if (!id || !adminUser) return res.status(400).json({ success: false, error: 'id and adminUser are required.' });
+            try {
+                await sql`BEGIN`;
+                // Insert event recording the impending hard delete
+                await sql`
+                    INSERT INTO giftcard_events (giftcard_request_id, event_type, admin_user, note, metadata)
+                    VALUES (${id}, 'hard_deleted', ${String(adminUser)}, ${body.note || null}, ${body.metadata ? JSON.stringify(body.metadata) : null});
+                `;
+                // Perform delete
+                await sql`DELETE FROM giftcard_requests WHERE id = ${id}`;
+                await sql`COMMIT`;
+                return res.status(200).json({ success: true, deletedId: id });
+            } catch (error) {
+                await sql`ROLLBACK`;
+                console.error('hardDeleteGiftcardRequest error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+        case 'sendTestEmail': {
+            // Lightweight test email sender to validate RESEND_API_KEY and EMAIL_FROM at runtime
+            const body = req.body || {};
+            const to = body.to;
+            const type = body.type || 'test';
+            if (!to || typeof to !== 'string') return res.status(400).json({ success: false, error: 'to email is required' });
+            try {
+                const emailModule = await import('./emailService.js');
+                const code = body.code || 'TEST-CODE';
+                const amount = typeof body.amount === 'number' ? body.amount : (body.amount ? Number(body.amount) : 0);
+                const buyerName = body.name || 'Cliente de Prueba';
+                let pdfBase64: string | undefined = undefined;
+                let downloadLink: string | undefined = undefined;
+                if (body.pdfBase64) pdfBase64 = body.pdfBase64;
+                if (body.downloadLink) downloadLink = body.downloadLink;
+
+                // Use the same giftcard email logic depending on 'type'
+                if (type === 'recipient') {
+                    await emailModule.sendGiftcardRecipientEmail(to, { recipientName: buyerName, amount, code, message: body.message || '' }, pdfBase64, downloadLink);
+                } else {
+                    await emailModule.sendGiftcardPaymentConfirmedEmail(to, { buyerName, amount, code }, pdfBase64, downloadLink);
+                }
+
+                return res.status(200).json({ success: true, sentTo: to });
+            } catch (err) {
+                console.error('sendTestEmail failed:', err);
+                return res.status(500).json({ success: false, error: err instanceof Error ? err.message : String(err) });
+            }
+        }
+        case 'attachGiftcardProof': {
+            // Attach proof URL to giftcard request and insert event
+            const body = req.body || {};
+            const id = body.id;
+            const proofUrl = body.proofUrl;
+            const adminUser = req.headers['x-admin-user'] || body.adminUser || null;
+            if (!id || !proofUrl || !adminUser) return res.status(400).json({ success: false, error: 'id, proofUrl and adminUser are required.' });
+            try {
+                await sql`BEGIN`;
+                const { rows: [updated] } = await sql`
+                    UPDATE giftcard_requests SET payment_proof_url = ${proofUrl}, metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ proofUrl })}::jsonb WHERE id = ${id} RETURNING *;
+                `;
+                await sql`
+                    INSERT INTO giftcard_events (giftcard_request_id, event_type, admin_user, note, metadata)
+                    VALUES (${id}, 'attached_proof', ${String(adminUser)}, ${body.note || null}, ${body.metadata ? JSON.stringify(body.metadata) : null});
+                `;
+                await sql`COMMIT`;
+                return res.status(200).json({ success: true, request: toCamelCase(updated) });
+            } catch (error) {
+                await sql`ROLLBACK`;
+                console.error('attachGiftcardProof error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
             }
         }
         case 'syncProducts': {

@@ -5,6 +5,9 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "esnext",
     "skipLibCheck": true,
+    "esModuleInterop": true,
+  "allowSyntheticDefaultImports": true,
+    "typeRoots": ["./types", "./src/types", "./node_modules/@types"],
   "moduleResolution": "node",
     "isolatedModules": true,
     "noEmit": true,
@@ -16,7 +19,8 @@
   },
   "include": [
     "./**/*.ts",
-    "./**/*.tsx"
+    "./**/*.tsx",
+    "./**/*.d.ts"
   ],
   "exclude": ["node_modules"]
 }
