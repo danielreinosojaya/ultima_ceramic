@@ -44,7 +44,7 @@ const sendWithRetry = async (payload: any, maxAttempts = 3) => {
     throw lastErr;
 };
 
-const sendEmail = async (to: string, subject: string, html: string, attachments?: { filename: string; data: string; type?: string }[]) => {
+const sendEmail = async (to: string, subject: string, html: string, attachments?: { filename: string; data: string; type?: string }[]): Promise<{ sent: boolean; dryRunPath?: string } | void> => {
     const cfg = isEmailServiceConfigured();
     // Dry-run when not configured
     if (!cfg.configured) {
@@ -66,8 +66,8 @@ const sendEmail = async (to: string, subject: string, html: string, attachments?
                 }
             }
             try { fs.writeFileSync(filePath, content, 'utf8'); console.info(`Email dry-run saved to: ${filePath}`); } catch (writeErr) { console.warn('Failed to write dry-run email to disk:', writeErr); }
-        } catch (err) { console.warn('Email dry-run failed (fs unavailable):', err); }
-        return;
+            return { sent: false, dryRunPath: filePath };
+        } catch (err) { console.warn('Email dry-run failed (fs unavailable):', err); return { sent: false }; }
     }
 
     // Live-send
@@ -84,9 +84,9 @@ const sendEmail = async (to: string, subject: string, html: string, attachments?
     try {
         await sendWithRetry(payload, 3);
         console.log(`Email sent to ${to} with subject "${subject}"`);
+        return { sent: true };
     } catch (error) {
         console.error(`Resend API Error: Failed to send email to ${to} after retries:`, error);
-        // Bubble up so callers can handle (some flows catch and continue)
         throw error;
     }
 };
