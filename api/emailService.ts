@@ -3,31 +3,57 @@ import { toZonedTime, format } from 'date-fns-tz';
 import type { Booking, BankDetails, TimeSlot, PaymentDetails } from '../types.js';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-const fromEmail = process.env.EMAIL_FROM || 'no-reply@ceramicalma.com';
+const fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_FROM_ADDRESS || 'no-reply@ceramicalma.com';
 
-const isEmailServiceConfigured = () => {
-    if (!resend || !fromEmail) {
-        console.warn('Email service is not configured. Please set RESEND_API_KEY and EMAIL_FROM environment variables.');
-        return false;
+export const isEmailServiceConfigured = (): { configured: boolean; reason?: string } => {
+    if (!resend) return { configured: false, reason: 'Missing RESEND_API_KEY' };
+    if (!fromEmail) return { configured: false, reason: 'Missing EMAIL_FROM' };
+    return { configured: true };
+};
+
+const normalizeAttachments = (attachments?: { filename: string; data: string; type?: string }[]) => {
+    if (!attachments || attachments.length === 0) return undefined;
+    return attachments.map(a => {
+        // If data already looks like base64, keep it; else try to coerce
+        let data = a.data || '';
+        // If data contains whitespace/newlines it's probably base64; otherwise leave as-is
+        if (typeof data !== 'string') data = String(data);
+        // Trim data for safety
+        data = data.trim();
+        return { name: a.filename, filename: a.filename, type: a.type || 'application/octet-stream', data };
+    });
+};
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const sendWithRetry = async (payload: any, maxAttempts = 3) => {
+    let attempt = 0;
+    let lastErr: any = null;
+    while (attempt < maxAttempts) {
+        attempt++;
+        try {
+            await resend!.emails.send(payload);
+            return;
+        } catch (err) {
+            lastErr = err;
+            const backoff = Math.min(500 * Math.pow(2, attempt - 1), 5000);
+            console.warn(`Resend send attempt ${attempt} failed. Retrying in ${backoff}ms...`, err && (err as any).message ? (err as any).message : err);
+            await sleep(backoff);
+        }
     }
-    return true;
-}
+    throw lastErr;
+};
 
 const sendEmail = async (to: string, subject: string, html: string, attachments?: { filename: string; data: string; type?: string }[]) => {
-    // If the email service is not configured (no RESEND API key), do a dry-run:
-    // save the email contents to disk for inspection and do not throw so
-    // callers (like giftcard flows) can continue running in test/dev.
-    if (!resend) {
-        console.warn('RESEND_API_KEY not configured — performing email dry-run (email will be saved to disk).');
+    const cfg = isEmailServiceConfigured();
+    // Dry-run when not configured
+    if (!cfg.configured) {
+        console.warn(`Email service not configured (${cfg.reason}). Performing dry-run and saving email to disk.`);
         try {
             const fs = await import('fs');
             const path = await import('path');
             const outDir = process.env.EMAIL_DRYRUN_DIR || path.join('/tmp', 'ceramicalma-emails');
-            try {
-                fs.mkdirSync(outDir, { recursive: true });
-            } catch (mkErr) {
-                // ignore
-            }
+            try { fs.mkdirSync(outDir, { recursive: true }); } catch {}
             const safeTo = to.replace(/[@<>\\/\\s]/g, '_').slice(0, 64);
             const safeSubject = subject.replace(/[^a-zA-Z0-9-_ ]/g, '').slice(0, 48).replace(/\s+/g, '_');
             const filename = `${Date.now()}_${safeTo}_${safeSubject}.html`;
@@ -39,40 +65,28 @@ const sendEmail = async (to: string, subject: string, html: string, attachments?
                     content += `- ${a.filename} (${a.type || 'unknown'}) - ${a.data?.length || 0} bytes base64\n`;
                 }
             }
-            try {
-                fs.writeFileSync(filePath, content, 'utf8');
-                console.info(`Email dry-run saved to: ${filePath}`);
-            } catch (writeErr) {
-                console.warn('Failed to write dry-run email to disk:', writeErr);
-            }
-        } catch (err) {
-            console.warn('Email dry-run failed (fs unavailable):', err);
-        }
-
-        // Don't throw in dry-run mode — resolve so flows can continue during tests
+            try { fs.writeFileSync(filePath, content, 'utf8'); console.info(`Email dry-run saved to: ${filePath}`); } catch (writeErr) { console.warn('Failed to write dry-run email to disk:', writeErr); }
+        } catch (err) { console.warn('Email dry-run failed (fs unavailable):', err); }
         return;
     }
 
-    // Live send path (Resend configured)
+    // Live-send
+    const payload: any = {
+        from: fromEmail,
+        to,
+        subject,
+        html
+    };
+
+    const normalized = normalizeAttachments(attachments);
+    if (normalized) payload.attachments = normalized;
+
     try {
-        const payload: any = {
-            from: fromEmail,
-            to,
-            subject,
-            html,
-        };
-        if (attachments && attachments.length > 0) {
-            payload.attachments = attachments.map(a => ({
-                filename: a.filename,
-                type: a.type,
-                data: a.data
-            }));
-        }
-        await resend!.emails.send(payload);
+        await sendWithRetry(payload, 3);
         console.log(`Email sent to ${to} with subject "${subject}"`);
     } catch (error) {
-        console.error(`Resend API Error: Failed to send email to ${to}:`, error);
-        // Re-throw so callers that expect exceptions still get them
+        console.error(`Resend API Error: Failed to send email to ${to} after retries:`, error);
+        // Bubble up so callers can handle (some flows catch and continue)
         throw error;
     }
 };
