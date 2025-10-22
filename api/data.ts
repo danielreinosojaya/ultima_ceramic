@@ -857,15 +857,26 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     await sql`ALTER TABLE giftcards ADD COLUMN IF NOT EXISTS giftcard_request_id INTEGER`;
                     await sql`ALTER TABLE giftcards ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP`;
                     await sql`ALTER TABLE giftcards ADD COLUMN IF NOT EXISTS metadata JSONB`;
-                    // Ensure id column has a sequence/default so INSERTs that omit id will get one
+                    await sql`ALTER TABLE giftcards ADD COLUMN IF NOT EXISTS value NUMERIC`;
+                    // Ensure id column has a sequence/default only if id is integer-type
                     try {
-                        await sql`CREATE SEQUENCE IF NOT EXISTS giftcards_id_seq`;
-                        await sql`ALTER TABLE giftcards ALTER COLUMN id SET DEFAULT nextval('giftcards_id_seq')`;
-                        await sql`ALTER SEQUENCE giftcards_id_seq OWNED BY giftcards.id`;
-                        const { rows: [r] } = await sql`SELECT COALESCE(MAX(id), 0) as max_id FROM giftcards`;
-                        const next = (r && r.max_id ? Number(r.max_id) + 1 : 1);
-                        // set sequence current value to max(id) so nextval returns a safe next id
-                        await sql`SELECT setval('giftcards_id_seq', ${next}, false)`;
+                        const { rows: [colInfo] } = await sql`
+                            SELECT udt_name FROM information_schema.columns
+                            WHERE table_name = 'giftcards' AND column_name = 'id'
+                        `;
+                        const idType = colInfo ? colInfo.udt_name : null;
+                        if (idType === 'int4' || idType === 'int8' || idType === 'int2') {
+                            await sql`CREATE SEQUENCE IF NOT EXISTS giftcards_id_seq`;
+                            await sql`ALTER TABLE giftcards ALTER COLUMN id SET DEFAULT nextval('giftcards_id_seq')`;
+                            await sql`ALTER SEQUENCE giftcards_id_seq OWNED BY giftcards.id`;
+                            // Safely compute max id as bigint
+                            const { rows: [r] } = await sql`SELECT MAX(id) as max_id FROM giftcards`;
+                            const maxId = r && r.max_id ? Number(r.max_id) : 0;
+                            const next = maxId + 1;
+                            await sql`SELECT setval('giftcards_id_seq', ${next}, false)`;
+                        } else {
+                            console.warn('Skipping giftcards id sequence setup: id column is not integer type:', idType);
+                        }
                     } catch (seqErr) {
                         console.warn('Failed to ensure giftcards id sequence/default:', seqErr);
                     }
@@ -889,18 +900,74 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     pdfModule = await import('./pdf.js');
                 } catch (e) {}
 
+                // Determine which amount/balance columns exist
+                let amountColumn = 'initial_value';
+                let hasInitial = false;
+                let hasValue = false;
+                let hasBalance = false;
+                try {
+                    const { rows: colCheck } = await sql`SELECT column_name FROM information_schema.columns WHERE table_name='giftcards' AND column_name IN ('initial_value','value','balance')`;
+                    const cols = (colCheck || []).map((r: any) => r.column_name);
+                    hasInitial = cols.includes('initial_value');
+                    hasValue = cols.includes('value');
+                    hasBalance = cols.includes('balance');
+                    if (hasInitial) amountColumn = 'initial_value';
+                    else if (hasValue) amountColumn = 'value';
+                } catch (colErr) {
+                    console.warn('Could not determine giftcards amount/balance columns, defaulting to initial_value', colErr);
+                }
+
                 // Generate code and attempt to insert (retry if collision)
                 let code = generateCode();
                 let issuedGiftcard: any = null;
                 for (let attempt = 0; attempt < 4; attempt++) {
                     try {
                         const expiresInterval = '3 months';
-                        const { rows: [giftcardRow] } = await sql`
-                            INSERT INTO giftcards (id, code, initial_value, balance, giftcard_request_id, expires_at, metadata)
-                            VALUES (nextval('giftcards_id_seq'), ${code}, ${updated.amount}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser })}::jsonb)
-                            RETURNING *;
-                        `;
-                        issuedGiftcard = giftcardRow;
+                        // Insert setting all present numeric columns to provided amount to avoid NOT NULL violations
+                        if (hasInitial && hasValue && hasBalance) {
+                            const { rows: [giftcardRow] } = await sql`
+                                INSERT INTO giftcards (id, code, initial_value, value, balance, giftcard_request_id, expires_at, metadata)
+                                VALUES (nextval('giftcards_id_seq'), ${code}, ${updated.amount}, ${updated.amount}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser })}::jsonb)
+                                RETURNING *;
+                            `;
+                            issuedGiftcard = giftcardRow;
+                        } else if (hasInitial && hasBalance) {
+                            const { rows: [giftcardRow] } = await sql`
+                                INSERT INTO giftcards (id, code, initial_value, balance, giftcard_request_id, expires_at, metadata)
+                                VALUES (nextval('giftcards_id_seq'), ${code}, ${updated.amount}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser })}::jsonb)
+                                RETURNING *;
+                            `;
+                            issuedGiftcard = giftcardRow;
+                        } else if (hasValue && hasBalance) {
+                            const { rows: [giftcardRow] } = await sql`
+                                INSERT INTO giftcards (id, code, value, balance, giftcard_request_id, expires_at, metadata)
+                                VALUES (nextval('giftcards_id_seq'), ${code}, ${updated.amount}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser })}::jsonb)
+                                RETURNING *;
+                            `;
+                            issuedGiftcard = giftcardRow;
+                        } else if (hasInitial) {
+                            const { rows: [giftcardRow] } = await sql`
+                                INSERT INTO giftcards (id, code, initial_value, giftcard_request_id, expires_at, metadata)
+                                VALUES (nextval('giftcards_id_seq'), ${code}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser })}::jsonb)
+                                RETURNING *;
+                            `;
+                            issuedGiftcard = giftcardRow;
+                        } else if (hasValue) {
+                            const { rows: [giftcardRow] } = await sql`
+                                INSERT INTO giftcards (id, code, value, giftcard_request_id, expires_at, metadata)
+                                VALUES (nextval('giftcards_id_seq'), ${code}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser })}::jsonb)
+                                RETURNING *;
+                            `;
+                            issuedGiftcard = giftcardRow;
+                        } else {
+                            // Fallback: insert minimal row, set metadata with amount
+                            const { rows: [giftcardRow] } = await sql`
+                                INSERT INTO giftcards (id, code, giftcard_request_id, expires_at, metadata)
+                                VALUES (nextval('giftcards_id_seq'), ${code}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser, amount: updated.amount })}::jsonb)
+                                RETURNING *;
+                            `;
+                            issuedGiftcard = giftcardRow;
+                        }
                         break;
                     } catch (err: any) {
                         // If unique constraint violated, generate a new code and retry
