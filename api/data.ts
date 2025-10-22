@@ -857,6 +857,18 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     await sql`ALTER TABLE giftcards ADD COLUMN IF NOT EXISTS giftcard_request_id INTEGER`;
                     await sql`ALTER TABLE giftcards ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP`;
                     await sql`ALTER TABLE giftcards ADD COLUMN IF NOT EXISTS metadata JSONB`;
+                    // Ensure id column has a sequence/default so INSERTs that omit id will get one
+                    try {
+                        await sql`CREATE SEQUENCE IF NOT EXISTS giftcards_id_seq`;
+                        await sql`ALTER TABLE giftcards ALTER COLUMN id SET DEFAULT nextval('giftcards_id_seq')`;
+                        await sql`ALTER SEQUENCE giftcards_id_seq OWNED BY giftcards.id`;
+                        const { rows: [r] } = await sql`SELECT COALESCE(MAX(id), 0) as max_id FROM giftcards`;
+                        const next = (r && r.max_id ? Number(r.max_id) + 1 : 1);
+                        // set sequence current value to max(id) so nextval returns a safe next id
+                        await sql`SELECT setval('giftcards_id_seq', ${next}, false)`;
+                    } catch (seqErr) {
+                        console.warn('Failed to ensure giftcards id sequence/default:', seqErr);
+                    }
                 } catch (e) {
                     console.warn('Error ensuring giftcards columns exist:', e);
                 }
@@ -884,8 +896,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     try {
                         const expiresInterval = '3 months';
                         const { rows: [giftcardRow] } = await sql`
-                            INSERT INTO giftcards (code, initial_value, balance, giftcard_request_id, expires_at, metadata)
-                            VALUES (${code}, ${updated.amount}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser })}::jsonb)
+                            INSERT INTO giftcards (id, code, initial_value, balance, giftcard_request_id, expires_at, metadata)
+                            VALUES (nextval('giftcards_id_seq'), ${code}, ${updated.amount}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser })}::jsonb)
                             RETURNING *;
                         `;
                         issuedGiftcard = giftcardRow;
