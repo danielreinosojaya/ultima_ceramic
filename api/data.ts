@@ -1033,96 +1033,125 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     console.warn('Proceeding without persisted giftcard record; will send best-effort emails to buyer/recipient with code:', code);
                 }
 
-                if (issuedGiftcard) {
-                    // Generate QR and PDF and upload to S3 (best-effort)
-                    const baseUrl = process.env.APP_BASE_URL || (req.headers.host ? `https://${req.headers.host}` : '');
-                    const redeemUrl = baseUrl ? `${baseUrl}/giftcard/redeem?code=${encodeURIComponent(code)}` : `code:${code}`;
+                // Generate QR and PDF and upload to S3 (best-effort) — try even if issuedGiftcard is missing
+                const baseUrl = process.env.APP_BASE_URL || (req.headers.host ? `https://${req.headers.host}` : '');
+                const redeemUrl = baseUrl ? `${baseUrl}/giftcard/redeem?code=${encodeURIComponent(code)}` : `code:${code}`;
 
-                    let qrS3Url: string | null = null;
-                    let pdfS3Url: string | null = null;
-                    let localPdfBuffer: Buffer | undefined;
-                    try {
-                        let qrBuffer: Buffer | undefined;
-                        if (qrModule && qrModule.generateQrPngBuffer) {
-                            qrBuffer = await qrModule.generateQrPngBuffer(redeemUrl, 400);
-                        }
-
-                        localPdfBuffer = undefined;
-                        // Use localPdfBuffer for the generated PDF
-                        if (pdfModule && pdfModule.generateVoucherPdfBuffer) {
-                            localPdfBuffer = await pdfModule.generateVoucherPdfBuffer({
-                                buyerName: updated.buyer_name || updated.buyerName,
-                                recipientName: updated.recipient_name || updated.recipientName,
-                                amount: Number(updated.amount),
-                                code,
-                                note: body.note || '' ,
-                                qrPngBuffer: qrBuffer
-                            });
-                        }
-
-                        if (s3Module && s3Module.uploadBufferToS3) {
-                            if (qrBuffer) {
-                                const qrKey = s3Module.generateS3Key('giftcards', `qr-${code}.png`);
-                                const maybe = await s3Module.uploadBufferToS3(qrKey, qrBuffer, 'image/png');
-                                qrS3Url = maybe;
-                            }
-                            if (localPdfBuffer) {
-                                const pdfKey = s3Module.generateS3Key('giftcards', `voucher-${code}.pdf`);
-                                const maybePdf = await s3Module.uploadBufferToS3(pdfKey, localPdfBuffer, 'application/pdf');
-                                pdfS3Url = maybePdf;
-                            }
-                        }
-                    } catch (assetErr) {
-                        console.warn('Failed generating/uploading giftcard assets:', assetErr);
+                let qrS3Url: string | null = null;
+                let pdfS3Url: string | null = null;
+                let localPdfBuffer: Buffer | undefined;
+                try {
+                    let qrBuffer: Buffer | undefined;
+                    if (qrModule && qrModule.generateQrPngBuffer) {
+                        qrBuffer = await qrModule.generateQrPngBuffer(redeemUrl, 400);
                     }
 
-                    // Persist URLs into giftcard metadata and request metadata
-                    const metaPatch: any = {};
-                    if (qrS3Url) metaPatch.qrUrl = qrS3Url;
-                        if (pdfS3Url) metaPatch.voucherUrl = pdfS3Url;
-                    metaPatch.issuedCode = code;
-                    metaPatch.issuedGiftcardId = issuedGiftcard.id;
-
-                    await sql`
-                        UPDATE giftcard_requests SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(metaPatch)}::jsonb WHERE id = ${id}
-                    `;
-                    await sql`
-                        UPDATE giftcards SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(metaPatch)}::jsonb WHERE id = ${issuedGiftcard.id}
-                    `;
-                    // Send emails: buyer receipt (attach PDF) and optionally recipient email
-                    try {
-                        const emailServiceModule = await import('./emailService.js');
-                        let pdfBase64: string | undefined;
-                        let downloadLink: string | undefined;
-                        if (pdfS3Url) {
-                            // If uploaded to S3, create a presigned GET URL for download
-                            try {
-                                const s3m = await import('./s3.js');
-                                const key = pdfS3Url.replace(`s3://${s3m.defaultBucket || ''}/`, '');
-                                const maybe = await s3m.generatePresignedGetUrl(key, 60 * 60 * 24 * 7); // 7 days
-                                if (maybe) downloadLink = maybe;
-                            } catch (err) {
-                                console.warn('Failed to generate presigned URL for pdf:', err);
-                            }
-                        } else if (typeof localPdfBuffer !== 'undefined' && localPdfBuffer) {
-                            pdfBase64 = localPdfBuffer.toString('base64');
-                        }
-
-                        // If no pdfBase64 and downloadLink is undefined but pdfS3Url exists as s3://, include the raw s3 path as backup
-                        if (!downloadLink && pdfS3Url) downloadLink = pdfS3Url;
-
-                        const buyerEmail = updated.buyer_email || updated.buyerEmail;
-                        if (buyerEmail) {
-                            await emailServiceModule.sendGiftcardPaymentConfirmedEmail(buyerEmail, { buyerName: updated.buyer_name || updated.buyerName, amount: Number(updated.amount), code }, pdfBase64, downloadLink);
-                        }
-                        const recipientEmail = updated.recipient_email || updated.recipientEmail;
-                        if (recipientEmail) {
-                            // Send recipient email with PDF attached or download link
-                            await emailServiceModule.sendGiftcardRecipientEmail(recipientEmail, { recipientName: updated.recipient_name || updated.recipientName, amount: Number(updated.amount), code, message: body.recipientMessage || null }, pdfBase64, downloadLink);
-                        }
-                    } catch (emailErr) {
-                        console.warn('Failed to send giftcard emails:', emailErr);
+                    // Use localPdfBuffer for the generated PDF
+                    if (pdfModule && pdfModule.generateVoucherPdfBuffer) {
+                        localPdfBuffer = await pdfModule.generateVoucherPdfBuffer({
+                            buyerName: updated.buyer_name || updated.buyerName,
+                            recipientName: updated.recipient_name || updated.recipientName,
+                            amount: Number(updated.amount),
+                            code,
+                            note: body.note || '' ,
+                            qrPngBuffer: qrBuffer
+                        });
                     }
+
+                    if (s3Module && s3Module.uploadBufferToS3) {
+                        if (qrBuffer) {
+                            const qrKey = s3Module.generateS3Key('giftcards', `qr-${code}.png`);
+                            const maybe = await s3Module.uploadBufferToS3(qrKey, qrBuffer, 'image/png');
+                            qrS3Url = maybe;
+                        }
+                        if (localPdfBuffer) {
+                            const pdfKey = s3Module.generateS3Key('giftcards', `voucher-${code}.pdf`);
+                            const maybePdf = await s3Module.uploadBufferToS3(pdfKey, localPdfBuffer, 'application/pdf');
+                            pdfS3Url = maybePdf;
+                        }
+                    }
+                } catch (assetErr) {
+                    console.warn('Failed generating/uploading giftcard assets:', assetErr);
+                }
+
+                // Prepare metaPatch for DB (include asset URLs if we have them and issued code)
+                const metaPatch: any = { issuedCode: code };
+                if (issuedGiftcard) metaPatch.issuedGiftcardId = issuedGiftcard.id;
+                if (qrS3Url) metaPatch.qrUrl = qrS3Url;
+                if (pdfS3Url) metaPatch.voucherUrl = pdfS3Url;
+
+                // Persist asset metadata if giftcard row exists
+                try {
+                    if (issuedGiftcard) {
+                        await sql`
+                            UPDATE giftcard_requests SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(metaPatch)}::jsonb WHERE id = ${id}
+                        `;
+                        await sql`
+                            UPDATE giftcards SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(metaPatch)}::jsonb WHERE id = ${issuedGiftcard.id}
+                        `;
+                    } else {
+                        // Update request metadata with issuedCode even if giftcard record missing
+                        await sql`
+                            UPDATE giftcard_requests SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(metaPatch)}::jsonb WHERE id = ${id}
+                        `;
+                    }
+                } catch (persistErr) {
+                    console.warn('Failed to persist giftcard metadata:', persistErr);
+                }
+
+                // Send emails: buyer receipt (attach PDF) and optionally recipient email — always attempt
+                let buyerEmailResult: any = null;
+                let recipientEmailResult: any = null;
+                try {
+                    const emailServiceModule = await import('./emailService.js');
+                    let pdfBase64: string | undefined;
+                    let downloadLink: string | undefined;
+                    if (pdfS3Url) {
+                        // If uploaded to S3, create a presigned GET URL for download
+                        try {
+                            const s3m = await import('./s3.js');
+                            const key = pdfS3Url.replace(`s3://${s3m.defaultBucket || ''}/`, '');
+                            const maybe = await s3m.generatePresignedGetUrl(key, 60 * 60 * 24 * 7); // 7 days
+                            if (maybe) downloadLink = maybe;
+                        } catch (err) {
+                            console.warn('Failed to generate presigned URL for pdf:', err);
+                        }
+                    } else if (typeof localPdfBuffer !== 'undefined' && localPdfBuffer) {
+                        pdfBase64 = localPdfBuffer.toString('base64');
+                    }
+
+                    if (!downloadLink && pdfS3Url) downloadLink = pdfS3Url;
+
+                    const buyerEmail = updated.buyer_email || updated.buyerEmail;
+                    if (buyerEmail) {
+                        try {
+                            buyerEmailResult = await emailServiceModule.sendGiftcardPaymentConfirmedEmail(buyerEmail, { buyerName: updated.buyer_name || updated.buyerName, amount: Number(updated.amount), code }, pdfBase64, downloadLink);
+                        } catch (e) {
+                            console.warn('Buyer email send failed:', e);
+                            buyerEmailResult = { sent: false, error: e instanceof Error ? e.message : String(e) };
+                        }
+                    }
+                    const recipientEmail = updated.recipient_email || updated.recipientEmail;
+                    if (recipientEmail) {
+                        try {
+                            recipientEmailResult = await emailServiceModule.sendGiftcardRecipientEmail(recipientEmail, { recipientName: updated.recipient_name || updated.recipientName, amount: Number(updated.amount), code, message: body.recipientMessage || null }, pdfBase64, downloadLink);
+                        } catch (e) {
+                            console.warn('Recipient email send failed:', e);
+                            recipientEmailResult = { sent: false, error: e instanceof Error ? e.message : String(e) };
+                        }
+                    }
+
+                    // Persist email result metadata to request
+                    try {
+                        const emailMeta = { buyer: buyerEmailResult, recipient: recipientEmailResult };
+                        await sql`
+                            UPDATE giftcard_requests SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ emailDelivery: emailMeta })}::jsonb WHERE id = ${id}
+                        `;
+                    } catch (metaErr) {
+                        console.warn('Failed to persist email delivery metadata:', metaErr);
+                    }
+                } catch (emailErr) {
+                    console.warn('Failed to send giftcard emails:', emailErr);
                 }
 
                 await sql`COMMIT`;
