@@ -6,7 +6,7 @@ export const slotToDate = (s: any): Date => {
         let iso: string;
         if (hhmm) {
             // Ensure two-digit hour
-            const parts = time.split(':').map(p => p.padStart(2, '0'));
+            const parts = time.split(':').map((p: string) => p.padStart(2, '0'));
             iso = `${s.date}T${parts[0]}:${parts[1]}:00`;
         } else if (time) {
             iso = `${s.date}T${time}`;
