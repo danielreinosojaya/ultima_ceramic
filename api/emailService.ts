@@ -3,32 +3,40 @@ import { toZonedTime, format } from 'date-fns-tz';
 import type { Booking, BankDetails, TimeSlot, PaymentDetails } from '../types.js';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-const fromEmail = process.env.EMAIL_FROM;
+const fromEmail = process.env.EMAIL_FROM || 'no-reply@ceramicalma.com';
 
 const isEmailServiceConfigured = () => {
     if (!resend || !fromEmail) {
-        console.warn("Email service is not configured. Please set RESEND_API_KEY and EMAIL_FROM environment variables.");
+        console.warn('Email service is not configured. Please set RESEND_API_KEY and EMAIL_FROM environment variables.');
         return false;
     }
     return true;
 }
 
-const sendEmail = async (to: string, subject: string, html: string) => {
+const sendEmail = async (to: string, subject: string, html: string, attachments?: { filename: string; data: string; type?: string }[]) => {
     if (!isEmailServiceConfigured()) {
-        console.error("Email service is not configured on the server. RESEND_API_KEY and/or EMAIL_FROM environment variables are missing or incorrect.");
-        throw new Error("Email service is not configured on the server.");
+        console.error('Email service is not configured on the server. RESEND_API_KEY and/or EMAIL_FROM environment variables are missing or incorrect.');
+        throw new Error('Email service is not configured on the server.');
     }
     try {
-        await resend!.emails.send({
-            from: fromEmail!,
+        const payload: any = {
+            from: fromEmail,
             to,
             subject,
             html,
-        });
+        };
+        if (attachments && attachments.length > 0) {
+            payload.attachments = attachments.map(a => ({
+                filename: a.filename,
+                type: a.type,
+                data: a.data
+            }));
+        }
+        await resend!.emails.send(payload);
         console.log(`Email sent to ${to} with subject "${subject}"`);
     } catch (error) {
         console.error(`Resend API Error: Failed to send email to ${to}:`, error);
-        throw error; // Re-throw the error to let the caller know something went wrong
+        throw error;
     }
 };
 
@@ -130,3 +138,37 @@ export const sendClassReminderEmail = async (booking: Booking, slot: TimeSlot) =
     `;
     await sendEmail(userInfo.email, subject, html);
 };
+
+// --- Giftcard emails ---
+export const sendGiftcardRequestReceivedEmail = async (buyerEmail: string, payload: { buyerName: string; amount: number; code: string }) => {
+    const subject = `Solicitud recibida — Tu Giftcard (${payload.code})`;
+    const html = `<p>Hola ${payload.buyerName},</p>
+    <p>Hemos recibido tu solicitud de giftcard por S/ ${Number(payload.amount).toFixed(2)}. Te avisaremos cuando confirmes el pago.</p>
+    <p>Código provisional: <strong>${payload.code}</strong></p>
+    <p>Gracias por elegirnos.</p>`;
+    return sendEmail(buyerEmail, subject, html);
+}
+
+export const sendGiftcardPaymentConfirmedEmail = async (buyerEmail: string, payload: { buyerName: string; amount: number; code: string }, pdfBase64?: string, downloadLink?: string) => {
+    const subject = `Pago confirmado — Recibo Giftcard (${payload.code})`;
+    const downloadHtml = downloadLink ? `<p>Descarga tu comprobante: <a href="${downloadLink}">Descargar PDF</a></p>` : '';
+    const html = `<p>Hola ${payload.buyerName},</p>
+    <p>Hemos confirmado el pago de tu giftcard por S/ ${Number(payload.amount).toFixed(2)}.</p>
+    ${downloadHtml}
+    <p>Adjuntamos el comprobante en PDF cuando está disponible.</p>`;
+    const attachments = pdfBase64 ? [{ filename: `giftcard-${payload.code}.pdf`, data: pdfBase64, type: 'application/pdf' }] : undefined;
+    return sendEmail(buyerEmail, subject, html, attachments as any);
+}
+
+export const sendGiftcardRecipientEmail = async (recipientEmail: string, payload: { recipientName: string; amount: number; code: string; message?: string }, pdfBase64?: string, downloadLink?: string) => {
+    const subject = `Has recibido una Giftcard — Código ${payload.code}`;
+    const downloadHtml = downloadLink ? `<p>También puedes descargar el voucher aquí: <a href="${downloadLink}">Descargar PDF</a></p>` : '';
+    const html = `<p>Hola ${payload.recipientName},</p>
+    <p>Has recibido una giftcard por S/ ${Number(payload.amount).toFixed(2)}.</p>
+    <p>Código: <strong>${payload.code}</strong></p>
+    ${payload.message ? `<p>Mensaje: ${payload.message}</p>` : ''}
+    ${downloadHtml}
+    <p>Presenta este código o el PDF adjunto al momento de canjear.</p>`;
+    const attachments = pdfBase64 ? [{ filename: `giftcard-${payload.code}.pdf`, data: pdfBase64, type: 'application/pdf' }] : undefined;
+    return sendEmail(recipientEmail, subject, html, attachments as any);
+}
