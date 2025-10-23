@@ -99,6 +99,7 @@ export const GiftcardManualPaymentInstructions: React.FC<{ onFinish: () => void;
               recipientWhatsapp: deliveryMethod?.type === 'whatsapp' ? deliveryMethod?.data?.whatsapp || '' : '',
               amount,
               code,
+              message: personalization?.message || ''
             });
             onFinish();
           }}

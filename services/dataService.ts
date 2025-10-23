@@ -21,6 +21,7 @@ export type GiftcardRequest = {
     recipientWhatsapp?: string;
     amount: number;
     code: string;
+    message?: string;
     status: 'pending' | 'approved' | 'rejected' | 'delivered' | 'deleted';
     createdAt: string;
 };

@@ -15,7 +15,7 @@ import { ClassInfoModal } from './components/ClassInfoModal';
 import { PrerequisiteModal } from './components/PrerequisiteModal';
 import { AnnouncementsBoard } from './components/AnnouncementsBoard';
 // Lazy load AdminConsole to reduce initial bundle size
-const AdminConsole = lazy(() => import('./components/admin/AdminConsole').then(module => ({ default: module.AdminConsole })));
+const AdminConsole = lazy(() => import('./components/admin/AdminConsole.js').then(module => ({ default: module.AdminConsole })));
 import { NotificationProvider } from './context/NotificationContext';
 import { AdminDataProvider } from './context/AdminDataContext';
 import { ConfirmationPage } from './components/ConfirmationPage';

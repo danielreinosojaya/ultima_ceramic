@@ -746,7 +746,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 return res.status(400).json({ success: false, error: 'Datos incompletos para registrar giftcard.' });
             }
             try {
-                // Crear tabla si no existe
+                // Crear tabla si no existe y agregar columna buyer_message si falta
                 await sql`
                     CREATE TABLE IF NOT EXISTS giftcard_requests (
                         id SERIAL PRIMARY KEY,
@@ -758,14 +758,19 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         amount NUMERIC NOT NULL,
                         code VARCHAR(32) NOT NULL,
                         status VARCHAR(20) DEFAULT 'pending',
-                        created_at TIMESTAMP DEFAULT NOW()
+                        created_at TIMESTAMP DEFAULT NOW(),
+                        buyer_message TEXT
                     )
                 `;
+                // Asegura la columna buyer_message si la tabla ya existía
+                try {
+                    await sql`ALTER TABLE giftcard_requests ADD COLUMN IF NOT EXISTS buyer_message TEXT`;
+                } catch (e) {}
                 const { rows } = await sql`
                     INSERT INTO giftcard_requests (
-                        buyer_name, buyer_email, recipient_name, recipient_email, recipient_whatsapp, amount, code, status
+                        buyer_name, buyer_email, recipient_name, recipient_email, recipient_whatsapp, amount, code, status, buyer_message
                     ) VALUES (
-                        ${body.buyerName}, ${body.buyerEmail}, ${body.recipientName}, ${body.recipientEmail || null}, ${body.recipientWhatsapp || null}, ${body.amount}, ${body.code}, 'pending'
+                        ${body.buyerName}, ${body.buyerEmail}, ${body.recipientName}, ${body.recipientEmail || null}, ${body.recipientWhatsapp || null}, ${body.amount}, ${body.code}, 'pending', ${body.message || null}
                     ) RETURNING id, created_at;
                 `;
                 return res.status(200).json({ success: true, id: rows[0].id, createdAt: rows[0].created_at });
@@ -1099,6 +1104,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     console.warn('Failed to persist giftcard metadata:', persistErr);
                 }
 
+
                 // Send emails: buyer receipt (attach PDF) and optionally recipient email — always attempt
                 let buyerEmailResult: any = null;
                 let recipientEmailResult: any = null;
@@ -1123,9 +1129,11 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     if (!downloadLink && pdfS3Url) downloadLink = pdfS3Url;
 
                     const buyerEmail = updated.buyer_email || updated.buyerEmail;
+                    const buyerName = updated.buyer_name || updated.buyerName;
+                    const buyerMessage = updated.buyer_message || null;
                     if (buyerEmail) {
                         try {
-                            buyerEmailResult = await emailServiceModule.sendGiftcardPaymentConfirmedEmail(buyerEmail, { buyerName: updated.buyer_name || updated.buyerName, amount: Number(updated.amount), code }, pdfBase64, downloadLink);
+                            buyerEmailResult = await emailServiceModule.sendGiftcardPaymentConfirmedEmail(buyerEmail, { buyerName, amount: Number(updated.amount), code }, pdfBase64, downloadLink);
                         } catch (e) {
                             console.warn('Buyer email send failed:', e);
                             buyerEmailResult = { sent: false, error: e instanceof Error ? e.message : String(e) };
@@ -1134,7 +1142,18 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     const recipientEmail = updated.recipient_email || updated.recipientEmail;
                     if (recipientEmail) {
                         try {
-                            recipientEmailResult = await emailServiceModule.sendGiftcardRecipientEmail(recipientEmail, { recipientName: updated.recipient_name || updated.recipientName, amount: Number(updated.amount), code, message: body.recipientMessage || null }, pdfBase64, downloadLink);
+                            recipientEmailResult = await emailServiceModule.sendGiftcardRecipientEmail(
+                                recipientEmail,
+                                {
+                                    recipientName: updated.recipient_name || updated.recipientName,
+                                    amount: Number(updated.amount),
+                                    code,
+                                    message: buyerMessage,
+                                    buyerName
+                                },
+                                pdfBase64,
+                                downloadLink
+                            );
                         } catch (e) {
                             console.warn('Recipient email send failed:', e);
                             recipientEmailResult = { sent: false, error: e instanceof Error ? e.message : String(e) };
