@@ -81,13 +81,22 @@ const sendEmail = async (to: string, subject: string, html: string, attachments?
         html
     };
 
-    const normalized = normalizeAttachments(attachments);
-    if (normalized) payload.attachments = normalized;
-
     try {
-    const providerResponse = await sendWithRetry(payload, 3);
-    console.log(`Email sent to ${to} with subject "${subject}"`, providerResponse && (providerResponse as any).id ? `providerId=${(providerResponse as any).id}` : '');
-    return { sent: true, providerResponse };
+    // Log a concise payload summary for debugging (avoid dumping full binary attachments)
+    const normalized = normalizeAttachments(attachments);
+        const attachmentSummary = normalized ? normalized.map(a => ({ filename: a.filename, type: a.type, size: a.content ? a.content.length : 0 })) : [];
+        console.info('[emailService] Sending email payload summary:', {
+            to,
+            subject,
+            htmlSnippet: typeof html === 'string' ? html.slice(0, 400).replace(/\n/g, ' ') : '',
+            attachments: attachmentSummary
+        });
+
+        if (normalized) payload.attachments = normalized;
+
+        const providerResponse = await sendWithRetry(payload, 3);
+        console.log(`Email sent to ${to} with subject "${subject}"`, providerResponse && (providerResponse as any).id ? `providerId=${(providerResponse as any).id}` : '');
+        return { sent: true, providerResponse };
     } catch (error) {
         console.error(`Resend API Error: Failed to send email to ${to} after retries:`, error);
         // Return a failure object rather than throwing so callers can persist failure metadata
@@ -206,24 +215,84 @@ export const sendGiftcardRequestReceivedEmail = async (buyerEmail: string, paylo
 
 export const sendGiftcardPaymentConfirmedEmail = async (buyerEmail: string, payload: { buyerName: string; amount: number; code: string }, pdfBase64?: string, downloadLink?: string) => {
     const subject = `Pago confirmado — Recibo Giftcard (${payload.code})`;
-    const downloadHtml = downloadLink ? `<p>Descarga tu comprobante: <a href="${downloadLink}">Descargar PDF</a></p>` : '';
-    const html = `<p>Hola ${payload.buyerName},</p>
-    <p>Hemos confirmado el pago de tu giftcard por S/ ${Number(payload.amount).toFixed(2)}.</p>
-    ${downloadHtml}
-    <p>Adjuntamos el comprobante en PDF cuando está disponible.</p>`;
-    const attachments = pdfBase64 ? [{ filename: `giftcard-${payload.code}.pdf`, data: pdfBase64, type: 'application/pdf' }] : undefined;
-    return sendEmail(buyerEmail, subject, html, attachments as any);
+    // render HTML usando plantilla si queremos body más bonito
+        try {
+                const { generateGiftcardPdf } = await import('./pdfPuppeteer');
+                let attachments = undefined;
+                if (!pdfBase64) {
+                        const buf = await generateGiftcardPdf({ code: payload.code, amount: payload.amount, recipientName: payload.buyerName, buyerName: payload.buyerName, message: '' });
+                        pdfBase64 = (buf as Buffer).toString('base64');
+                }
+                if (pdfBase64) attachments = [{ filename: `giftcard-${payload.code}.pdf`, data: pdfBase64, type: 'application/pdf' }];
+
+                // Email-friendly inline HTML (keep styles inline to avoid stripping by some providers/clients)
+                const downloadHtml = downloadLink ? `<p style="margin:10px 0;"><a href="${downloadLink}" style="color:#1d4ed8; text-decoration:none;">Descargar comprobante PDF</a></p>` : '';
+                const html = `
+                        <div style="font-family: Arial, Helvetica, sans-serif; color:#333;">
+                            <h2 style="margin-bottom:6px;">Hola ${payload.buyerName},</h2>
+                            <p style="margin-top:0;">Hemos confirmado tu pago por la giftcard.</p>
+                            <div style="background:#f9fafb; border:1px solid #e5e7eb; padding:12px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <p style="margin:0; font-size:14px; color:#6b7280;">Código</p>
+                                    <p style="margin:4px 0; font-weight:700; color:#D95F43; font-size:18px;">${payload.code}</p>
+                                    <p style="margin:0; font-size:14px;">Monto: <strong>S/ ${Number(payload.amount).toFixed(2)}</strong></p>
+                                </div>
+                                <div style="text-align:right; font-size:12px; color:#6b7280;">CeramicAlma</div>
+                            </div>
+                            ${downloadHtml}
+                            <p style="margin-top:12px;">Adjuntamos el comprobante en PDF. Presenta el código o el PDF al momento de canjear.</p>
+                            <p style="margin-top:12px;">Saludos,<br/>El equipo de CeramicAlma</p>
+                        </div>
+                `;
+                return sendEmail(buyerEmail, subject, html, attachments as any);
+        } catch (e) {
+        // fallback simple body
+        const downloadHtml = downloadLink ? `<p>Descarga tu comprobante: <a href="${downloadLink}">Descargar PDF</a></p>` : '';
+        const html = `<p>Hola ${payload.buyerName},</p>
+        <p>Hemos confirmado el pago de tu giftcard por S/ ${Number(payload.amount).toFixed(2)}.</p>
+        ${downloadHtml}
+        <p>Adjuntamos el comprobante en PDF cuando está disponible.</p>`;
+        const attachments = pdfBase64 ? [{ filename: `giftcard-${payload.code}.pdf`, data: pdfBase64, type: 'application/pdf' }] : undefined;
+        return sendEmail(buyerEmail, subject, html, attachments as any);
+    }
 }
 
 export const sendGiftcardRecipientEmail = async (recipientEmail: string, payload: { recipientName: string; amount: number; code: string; message?: string }, pdfBase64?: string, downloadLink?: string) => {
     const subject = `Has recibido una Giftcard — Código ${payload.code}`;
-    const downloadHtml = downloadLink ? `<p>También puedes descargar el voucher aquí: <a href="${downloadLink}">Descargar PDF</a></p>` : '';
-    const html = `<p>Hola ${payload.recipientName},</p>
-    <p>Has recibido una giftcard por S/ ${Number(payload.amount).toFixed(2)}.</p>
-    <p>Código: <strong>${payload.code}</strong></p>
-    ${payload.message ? `<p>Mensaje: ${payload.message}</p>` : ''}
-    ${downloadHtml}
-    <p>Presenta este código o el PDF adjunto al momento de canjear.</p>`;
-    const attachments = pdfBase64 ? [{ filename: `giftcard-${payload.code}.pdf`, data: pdfBase64, type: 'application/pdf' }] : undefined;
-    return sendEmail(recipientEmail, subject, html, attachments as any);
+    try {
+        const { generateGiftcardPdf } = await import('./pdfPuppeteer');
+        let attachments = undefined;
+        if (!pdfBase64) {
+            const buf = await generateGiftcardPdf({ code: payload.code, amount: payload.amount, recipientName: payload.recipientName, buyerName: payload.recipientName, message: payload.message });
+            pdfBase64 = (buf as Buffer).toString('base64');
+        }
+        if (pdfBase64) attachments = [{ filename: `giftcard-${payload.code}.pdf`, data: pdfBase64, type: 'application/pdf' }];
+
+        const downloadHtml = downloadLink ? `<p style="margin:10px 0;"><a href="${downloadLink}" style="color:#1d4ed8; text-decoration:none;">Descargar voucher PDF</a></p>` : '';
+        const html = `
+            <div style="font-family: Arial, Helvetica, sans-serif; color:#333;">
+              <h2 style="margin-bottom:6px;">Hola ${payload.recipientName},</h2>
+              <p style="margin-top:0;">Has recibido una giftcard por <strong>S/ ${Number(payload.amount).toFixed(2)}</strong>.</p>
+              <div style="background:#fff7ed; border:1px solid #fee2b3; padding:12px; border-radius:8px;">
+                <p style="margin:0; font-size:14px; color:#6b7280;">Código</p>
+                <p style="margin:4px 0; font-weight:700; color:#D95F43; font-size:18px;">${payload.code}</p>
+              </div>
+              ${payload.message ? `<p style="margin-top:10px;">Mensaje: ${payload.message}</p>` : ''}
+              ${downloadHtml}
+              <p style="margin-top:12px;">Adjuntamos el voucher en PDF. Presenta el PDF o el código al momento de canjear.</p>
+              <p style="margin-top:12px;">Saludos,<br/>El equipo de CeramicAlma</p>
+            </div>
+        `;
+        return sendEmail(recipientEmail, subject, html, attachments as any);
+    } catch (e) {
+        const downloadHtml = downloadLink ? `<p>También puedes descargar el voucher aquí: <a href="${downloadLink}">Descargar PDF</a></p>` : '';
+        const html = `<p>Hola ${payload.recipientName},</p>
+        <p>Has recibido una giftcard por S/ ${Number(payload.amount).toFixed(2)}.</p>
+        <p>Código: <strong>${payload.code}</strong></p>
+        ${payload.message ? `<p>Mensaje: ${payload.message}</p>` : ''}
+        ${downloadHtml}
+        <p>Presenta este código o el PDF adjunto al momento de canjear.</p>`;
+        const attachments = pdfBase64 ? [{ filename: `giftcard-${payload.code}.pdf`, data: pdfBase64, type: 'application/pdf' }] : undefined;
+        return sendEmail(recipientEmail, subject, html, attachments as any);
+    }
 }
