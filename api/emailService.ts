@@ -15,12 +15,13 @@ const normalizeAttachments = (attachments?: { filename: string; data: string; ty
     if (!attachments || attachments.length === 0) return undefined;
     return attachments.map(a => {
         // If data already looks like base64, keep it; else try to coerce
-        let data = a.data || '';
-        // If data contains whitespace/newlines it's probably base64; otherwise leave as-is
-        if (typeof data !== 'string') data = String(data);
-        // Trim data for safety
-        data = data.trim();
-        return { name: a.filename, filename: a.filename, type: a.type || 'application/octet-stream', data };
+        let raw = a.data || '';
+        if (typeof raw !== 'string') raw = String(raw);
+        raw = raw.trim();
+        // If data is a data URL like "data:application/pdf;base64,AAA...", strip the prefix
+        const dataUrlMatch = raw.match(/^data:.*;base64,(.*)$/i);
+        const content = dataUrlMatch ? dataUrlMatch[1] : raw;
+        return { filename: a.filename, type: a.type || 'application/octet-stream', content };
     });
 };
 
@@ -32,8 +33,8 @@ const sendWithRetry = async (payload: any, maxAttempts = 3) => {
     while (attempt < maxAttempts) {
         attempt++;
         try {
-            await resend!.emails.send(payload);
-            return;
+            const result = await resend!.emails.send(payload);
+            return result;
         } catch (err) {
             lastErr = err;
             const backoff = Math.min(500 * Math.pow(2, attempt - 1), 5000);
@@ -44,7 +45,9 @@ const sendWithRetry = async (payload: any, maxAttempts = 3) => {
     throw lastErr;
 };
 
-const sendEmail = async (to: string, subject: string, html: string, attachments?: { filename: string; data: string; type?: string }[]): Promise<{ sent: boolean; dryRunPath?: string } | void> => {
+type SendEmailResult = { sent: true; providerResponse?: any } | { sent: false; error?: string; dryRunPath?: string };
+
+const sendEmail = async (to: string, subject: string, html: string, attachments?: { filename: string; data: string; type?: string }[]): Promise<SendEmailResult | void> => {
     const cfg = isEmailServiceConfigured();
     // Dry-run when not configured
     if (!cfg.configured) {
@@ -82,12 +85,13 @@ const sendEmail = async (to: string, subject: string, html: string, attachments?
     if (normalized) payload.attachments = normalized;
 
     try {
-        await sendWithRetry(payload, 3);
-        console.log(`Email sent to ${to} with subject "${subject}"`);
-        return { sent: true };
+    const providerResponse = await sendWithRetry(payload, 3);
+    console.log(`Email sent to ${to} with subject "${subject}"`, providerResponse && (providerResponse as any).id ? `providerId=${(providerResponse as any).id}` : '');
+    return { sent: true, providerResponse };
     } catch (error) {
         console.error(`Resend API Error: Failed to send email to ${to} after retries:`, error);
-        throw error;
+        // Return a failure object rather than throwing so callers can persist failure metadata
+        return { sent: false, error: error instanceof Error ? error.message : String(error) };
     }
 };
 
