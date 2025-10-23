@@ -69,6 +69,43 @@ const GiftcardsManager: React.FC = () => {
               <div><span className="font-semibold">Estado:</span> <span className={`px-2 py-1 rounded-full text-xs font-semibold ${selected.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : selected.status === 'approved' ? 'bg-green-100 text-green-700' : selected.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{selected.status}</span></div>
               <div><span className="font-semibold">Fecha:</span> {new Date(selected.createdAt).toLocaleString()}</div>
             </div>
+            {/* Metadata: email delivery and voucher URL for auditability */}
+            {selected.metadata && (
+              <div className="mt-4 p-3 bg-gray-50 rounded-md border">
+                <div className="text-sm font-semibold text-brand-secondary mb-2">Información de entrega</div>
+                <div className="text-sm text-brand-secondary">
+                  <div>
+                    <span className="font-semibold">Buyer email:</span>{' '}
+                    {selected.metadata.emailDelivery?.buyer ? (
+                      selected.metadata.emailDelivery.buyer.sent ? (
+                        <span className="text-green-700">Enviado</span>
+                      ) : (
+                        <span className="text-red-700">No enviado</span>
+                      )
+                    ) : (
+                      <span className="text-gray-500">-</span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="font-semibold">Recipient email:</span>{' '}
+                    {selected.metadata.emailDelivery?.recipient ? (
+                      selected.metadata.emailDelivery.recipient.sent ? (
+                        <span className="text-green-700">Enviado</span>
+                      ) : (
+                        <span className="text-red-700">No enviado</span>
+                      )
+                    ) : (
+                      <span className="text-gray-500">-</span>
+                    )}
+                  </div>
+                  {selected.metadata.voucherUrl && (
+                    <div className="mt-2">
+                      <a href={selected.metadata.voucherUrl} target="_blank" rel="noreferrer" className="text-sm text-brand-primary underline">Abrir voucher / comprobante</a>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             <div className="mt-4">
               <label className="block text-sm font-semibold text-brand-secondary mb-2">Nota administrativa (opcional)</label>
               <textarea
