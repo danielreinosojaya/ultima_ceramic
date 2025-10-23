@@ -1,8 +1,15 @@
 import fs from 'fs';
 import path from 'path';
-import nunjucks from 'nunjucks';
-
-nunjucks.configure(path.join(process.cwd(), 'templates'));
+let _nunjucks: any = null;
+async function getNunjucks() {
+  if (_nunjucks) return _nunjucks;
+  // dynamic import so TypeScript won't require types at compile time
+  // @ts-ignore - third-party lib may not have types in this repo
+  const mod: any = await import('nunjucks');
+  _nunjucks = mod.default || mod;
+  _nunjucks.configure(path.join(process.cwd(), 'templates'));
+  return _nunjucks;
+}
 
 export async function renderReceiptHtml(data: any) {
   const logoPath = path.join(process.cwd(), 'public', 'logo.png');
@@ -15,6 +22,7 @@ export async function renderReceiptHtml(data: any) {
   } catch (e) {
     // ignore
   }
+  const nunjucks = await getNunjucks();
   const html = nunjucks.render('receipt.html', {
     title: `Recibo ${data.booking?.bookingCode || ''}`,
     logoDataUrl,
@@ -32,10 +40,15 @@ export async function generatePdfFromHtml(html: string) {
   const puppeteer = await import('puppeteer').catch(() => null);
   if (!puppeteer) throw new Error('puppeteer not installed. Run: npm i -D puppeteer');
   const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-  try {
+    try {
     const page = await browser.newPage();
+    // Set a wide viewport and a higher deviceScaleFactor to better match desktop rendering and improve PDF raster quality
+    await page.setViewport({ width: 1400, height: 1000, deviceScaleFactor: 1.5 });
+    // Use screen media to apply the same CSS used for screen rendering
+    try { await page.emulateMediaType('screen'); } catch (e) {}
     await page.setContent(html, { waitUntil: 'networkidle0' });
-    const buffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '20mm', bottom: '20mm', left: '20mm', right: '20mm' } });
+    // Use preferCSSPageSize so @page rules in the template control sizing and avoid page breaks
+    const buffer = await page.pdf({ printBackground: true, preferCSSPageSize: true });
     return buffer;
   } finally {
     await browser.close();
@@ -48,23 +61,27 @@ export async function generateReceiptPdf(data: any) {
 }
 
 export async function renderGiftcardHtml(data: any) {
-  const fs = await import('fs');
-  const path = await import('path');
   const logoPath = path.join(process.cwd(), 'public', 'logo.png');
   let qrDataUrl = '';
-  if (data.qrData) {
-    // assume data.qrData is dataURL
-    qrDataUrl = data.qrData;
-  }
-  const nunj = await import('nunjucks');
-  nunj.configure(path.join(process.cwd(), 'templates'));
-  return nunj.render('giftcard.html', {
+  if (data.qrData) qrDataUrl = data.qrData;
+  // embed logo if available
+  let logoDataUrl = '';
+  try {
+    if (fs.existsSync(logoPath)) {
+      const b = fs.readFileSync(logoPath);
+      logoDataUrl = `data:image/png;base64,${b.toString('base64')}`;
+    }
+  } catch (e) {}
+
+  const nunjucks = await getNunjucks();
+  return nunjucks.render('giftcard.html', {
     code: data.code,
     amount: Number(data.amount).toFixed(2),
     recipientName: data.recipientName,
     buyerName: data.buyerName,
     message: data.message,
-    qrDataUrl
+    qrDataUrl,
+    logoDataUrl
   });
 }
 
