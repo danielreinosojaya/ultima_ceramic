@@ -1,0 +1,2 @@
+// Variante 1 para mensaje de agradecimiento en email de solicitud de giftcard
+// "Gracias, [NOMBRE]. Hemos recibido tu solicitud de giftcard y nos alegra ayudarte a dar un regalo diferente."
