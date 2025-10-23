@@ -221,33 +221,134 @@ export const sendClassReminderEmail = async (booking: Booking, slot: TimeSlot) =
 };
 
 // --- Giftcard emails ---
-export const sendGiftcardRequestReceivedEmail = async (buyerEmail: string, payload: { buyerName: string; amount: number; code: string }) => {
+export const sendGiftcardRequestReceivedEmail = async (
+    buyerEmail: string,
+    payload: {
+        buyerName: string;
+        amount: number;
+        code: string;
+        recipientName?: string;
+        message?: string;
+    }
+) => {
     const subject = `Solicitud recibida — Tu Giftcard (${payload.code})`;
-    const html = `<p>Hola ${payload.buyerName},</p>
-    <p>Hemos recibido tu solicitud de giftcard por S/ ${Number(payload.amount).toFixed(2)}. Te avisaremos cuando confirmes el pago.</p>
-    <p>Código provisional: <strong>${payload.code}</strong></p>
-    <p>Gracias por elegirnos.</p>`;
+        const html = `
+            <div style="font-family: Arial, Helvetica, sans-serif; color:#222; max-width:600px; margin:0 auto; background:#fff; border-radius:16px; box-shadow:0 2px 12px #0001; padding:32px 24px 28px 24px;">
+                <h2 style="color:#D95F43; font-size:1.7rem; margin-bottom:0.5rem; text-align:center; font-weight:800; letter-spacing:0.01em;">¡Solicitud recibida!</h2>
+                <p style="font-size:1.1rem; color:#444; text-align:center; margin-bottom:1.2rem;">Gracias, ${payload.buyerName}. Tu solicitud de giftcard fue recibida. ¡Nos encanta ayudarte a sorprender a alguien especial!</p>
+                <div style="background:#f9fafb; border:1px solid #e5e7eb; padding:16px 18px; border-radius:10px; margin-bottom:18px;">
+                    <div style="font-size:16px; color:#555; margin-bottom:8px;">Para: <strong>${payload.recipientName || '—'}</strong></div>
+                    <div style="font-size:16px; color:#555; margin-bottom:8px;">Monto: <strong>USD ${Number(payload.amount).toFixed(2)}</strong></div>
+                    <div style="font-size:16px; color:#555; margin-bottom:8px;">Código provisional: <span style="font-weight:700; color:#D95F43; font-size:18px; letter-spacing:2px;">${payload.code}</span></div>
+                </div>
+                ${payload.message ? `
+                    <div style="margin-bottom:18px; background:#fff7ed; border-left:6px solid #D95F43; border-radius:8px; padding:14px 18px; font-size:16px; color:#222; box-shadow:0 2px 8px #0001;">
+                        <div style="font-weight:600; color:#D95F43; margin-bottom:4px;">Mensaje para el destinatario:</div>
+                        <div style="font-style:italic;">${payload.message}</div>
+                    </div>
+                ` : ''}
+                <div style="margin-bottom:18px;">
+                    <h3 style="font-size:17px; color:#222; margin-bottom:8px;">Datos para transferencia bancaria</h3>
+                    <table style="width:100%; font-size:15px; color:#333; border-collapse:collapse; background:#f9f9f9; border-radius:12px;">
+                        <thead>
+                            <tr style="background:#eaeaea;">
+                                <th style="padding:10px; text-align:left; font-size:16px; color:#7c868e;">Banco</th>
+                                <th style="padding:10px; text-align:left;">Titular</th>
+                                <th style="padding:10px; text-align:left;">Número</th>
+                                <th style="padding:10px; text-align:left;">Tipo</th>
+                                <th style="padding:10px; text-align:left;">Cédula</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="padding:8px; font-weight:bold; color:#7c868e;">Banco Pichincha</td>
+                                <td style="padding:8px;">Carolina Massuh Morán</td>
+                                <td style="padding:8px;">2100334248</td>
+                                <td style="padding:8px;">Cuenta Corriente</td>
+                                <td style="padding:8px;">0921343935</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div style="margin-top: 10px; font-style: italic; color:#555;"><strong>Importante:</strong> Usa el código de giftcard <strong>${payload.code}</strong> como referencia en la transferencia.</div>
+                </div>
+                <div style="margin-bottom:18px; font-size:15px; color:#444;">
+                    <strong>¿Cómo continuar?</strong>
+                    <ol style="padding-left:18px; color:#444; font-size:15px;">
+                        <li>Realiza el pago por el monto indicado a la cuenta bancaria mostrada arriba.</li>
+                        <li>Envía el comprobante únicamente por WhatsApp.</li>
+                        <li>Te avisaremos cuando tu giftcard esté lista y enviada al destinatario.</li>
+                    </ol>
+                </div>
+                <div style="margin-bottom:18px; font-size:15px; color:#444;">
+                    <strong>¿Dudas o necesitas ayuda?</strong> <br>
+                    WhatsApp: <a href="https://wa.me/593985813327" style="color:#1d4ed8; text-decoration:none;">+593 985813327</a>
+                </div>
+                <div style="margin-top:24px; font-size:13px; color:#888; text-align:center;">
+                    <em>Giftcard válida para clases, talleres y productos en CeramicAlma. No acumulable con otras promociones. Consulta condiciones en nuestra web.</em>
+                </div>
+                <div style="margin-top:32px; text-align:center; font-size:15px; color:#555;">
+                    <strong>El equipo de CeramicAlma</strong>
+                </div>
+            </div>
+        `;
     return sendEmail(buyerEmail, subject, html);
 }
 
-export const sendGiftcardPaymentConfirmedEmail = async (buyerEmail: string, payload: { buyerName: string; amount: number; code: string }, _pdfBase64?: string, downloadLink?: string) => {
-    const subject = `Pago confirmado — Recibo Giftcard (${payload.code})`;
+export const sendGiftcardPaymentConfirmedEmail = async (
+    buyerEmail: string,
+    payload: {
+        buyerName: string;
+        amount: number;
+        code: string;
+        recipientName?: string;
+        recipientEmail?: string;
+        message?: string;
+    },
+    _pdfBase64?: string,
+    downloadLink?: string
+) => {
+    const subject = `¡Tu pago fue recibido! La giftcard ya fue enviada 🎁`;
     const downloadHtml = downloadLink ? `<p style="margin:10px 0;"><a href="${downloadLink}" style="color:#1d4ed8; text-decoration:none;">Descargar comprobante PDF</a></p>` : '';
     const html = `
-        <div style="font-family: Arial, Helvetica, sans-serif; color:#333;">
-            <h2 style="margin-bottom:6px;">Hola ${payload.buyerName},</h2>
-            <p style="margin-top:0;">Hemos confirmado tu pago por la giftcard.</p>
-            <div style="background:#f9fafb; border:1px solid #e5e7eb; padding:12px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <p style="margin:0; font-size:14px; color:#6b7280;">Código</p>
-                    <p style="margin:4px 0; font-weight:700; color:#D95F43; font-size:18px;">${payload.code}</p>
-                    <p style="margin:0; font-size:14px;">Monto: <strong>S/ ${Number(payload.amount).toFixed(2)}</strong></p>
+        <div style="font-family: Arial, Helvetica, sans-serif; color:#222; max-width:600px; margin:0 auto; background:#fff; border-radius:16px; box-shadow:0 2px 12px #0001; padding:36px 28px 32px 28px;">
+            <h1 style="color:#D95F43; font-size:2.1rem; margin-bottom:0.5rem; text-align:center; font-weight:800; letter-spacing:0.01em;">¡Gracias por tu regalo!</h1>
+            <p style="font-size:1.15rem; color:#444; text-align:center; margin-bottom:1.2rem;">Tu pago fue confirmado y la giftcard ya fue enviada al destinatario.</p>
+            <div style="background:#f9fafb; border:1px solid #e5e7eb; padding:18px 20px; border-radius:10px; margin-bottom:18px;">
+                <div style="font-size:16px; color:#555; margin-bottom:8px;">Para: <strong>${payload.recipientName || '—'}</strong></div>
+                <div style="font-size:16px; color:#555; margin-bottom:8px;">Email/WhatsApp: <strong>${payload.recipientEmail || '—'}</strong></div>
+                <div style="font-size:16px; color:#555; margin-bottom:8px;">Código: <span style="font-weight:700; color:#D95F43; font-size:20px; letter-spacing:2px;">${payload.code}</span></div>
+                <div style="font-size:16px; color:#555; margin-bottom:8px;">Monto: <strong>USD ${Number(payload.amount).toFixed(2)}</strong></div>
+                <div style="font-size:15px; color:#666; margin-bottom:8px;">Validez: <strong>3 meses desde la fecha de emisión</strong></div>
+            </div>
+            ${payload.message ? `
+                <div style="margin-bottom:24px; background:#fff7ed; border-left:6px solid #D95F43; border-radius:8px; padding:18px 24px; font-size:17px; color:#222; box-shadow:0 2px 8px #0001; display:flex; align-items:flex-start; gap:12px;">
+                    <span style="font-size:28px; color:#D95F43; font-family:serif; line-height:1;">“</span>
+                    <div>
+                        <div style="font-weight:600; color:#D95F43; margin-bottom:4px;">Mensaje que enviaste al destinatario:</div>
+                        <div style="font-style:italic;">${payload.message}</div>
+                    </div>
                 </div>
-                <div style="text-align:right; font-size:12px; color:#6b7280;">CeramicAlma</div>
+            ` : ''}
+            <div style="margin-bottom:18px;">
+                <h3 style="font-size:18px; color:#222; margin-bottom:8px;">¿Qué sucede ahora?</h3>
+                <ol style="padding-left:18px; color:#444; font-size:15px;">
+                    <li>El destinatario ya recibió su giftcard por email o WhatsApp.</li>
+                    <li>Le hemos explicado cómo redimirla y los pasos a seguir.</li>
+                    <li>Si no la encuentra, puedes reenviarle este código o contactarnos para ayuda.</li>
+                </ol>
+            </div>
+            <div style="margin-bottom:18px; font-size:15px; color:#444;">
+                <strong>¿Dudas o necesitas ayuda?</strong> <br>
+                WhatsApp: <a href="https://wa.me/593985813327" style="color:#1d4ed8; text-decoration:none;">+593 985813327</a>
+                <br><span style="font-size:13px; color:#888;">El comprobante de pago se recibe únicamente por WhatsApp.</span>
             </div>
             ${downloadHtml}
-            <p style="margin-top:12px;">Presenta el código al momento de canjear.</p>
-            <p style="margin-top:12px;">Saludos,<br/>El equipo de CeramicAlma</p>
+            <div style="margin-top:24px; font-size:13px; color:#888; text-align:center;">
+                <em>Giftcard válida para clases, talleres y productos en CeramicAlma. No acumulable con otras promociones. Consulta condiciones en nuestra web.</em>
+            </div>
+            <div style="margin-top:32px; text-align:center; font-size:15px; color:#555;">
+                <strong>El equipo de CeramicAlma</strong>
+            </div>
         </div>
     `;
     return sendEmail(buyerEmail, subject, html);
@@ -283,7 +384,7 @@ export const sendGiftcardRecipientEmail = async (
                         <h3 style="font-size:18px; color:#222; margin-bottom:8px;">¿Cómo redimir tu Giftcard?</h3>
                         <ol style="padding-left:18px; color:#444; font-size:15px;">
                             <li>Guarda este correo y tu código de giftcard.</li>
-                            <li>Contáctanos por WhatsApp o teléfono para reservar tu clase o producto.</li>
+                            <li>Contáctanos solo por WhatsApp para reservar tu clase o producto.</li>
                             <li>Presenta el código al momento de canjear en CeramicAlma.</li>
                         </ol>
                     </div>
@@ -295,6 +396,7 @@ export const sendGiftcardRecipientEmail = async (
                         <em>Giftcard válida para clases, talleres y productos en CeramicAlma. No acumulable con otras promociones. Consulta condiciones en nuestra web.</em>
                     </div>
                     <div style="margin-top:32px; text-align:center; font-size:15px; color:#555;">
+                        <a href="https://www.ceramicalma.com" style="color:#D95F43; font-weight:600; text-decoration:none;">Reserva tu próxima experiencia en www.ceramicalma.com</a><br/>
                         <strong>El equipo de CeramicAlma</strong>
                     </div>
                 </div>

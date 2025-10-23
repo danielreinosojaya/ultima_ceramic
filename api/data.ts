@@ -773,6 +773,22 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         ${body.buyerName}, ${body.buyerEmail}, ${body.recipientName}, ${body.recipientEmail || null}, ${body.recipientWhatsapp || null}, ${body.amount}, ${body.code}, 'pending', ${body.message || null}
                     ) RETURNING id, created_at;
                 `;
+                // Enviar email de confirmación de recepción de solicitud
+                try {
+                    const emailServiceModule = await import('./emailService.js');
+                    await emailServiceModule.sendGiftcardRequestReceivedEmail(
+                        body.buyerEmail,
+                        {
+                            buyerName: body.buyerName,
+                            amount: body.amount,
+                            code: body.code,
+                            recipientName: body.recipientName,
+                            message: body.message || ''
+                        }
+                    );
+                } catch (err) {
+                    console.warn('No se pudo enviar el email de confirmación de solicitud de giftcard:', err);
+                }
                 return res.status(200).json({ success: true, id: rows[0].id, createdAt: rows[0].created_at });
             } catch (error) {
                 console.error('Error al registrar giftcard:', error);
@@ -1133,7 +1149,19 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     const buyerMessage = updated.buyer_message || null;
                     if (buyerEmail) {
                         try {
-                            buyerEmailResult = await emailServiceModule.sendGiftcardPaymentConfirmedEmail(buyerEmail, { buyerName, amount: Number(updated.amount), code }, pdfBase64, downloadLink);
+                            buyerEmailResult = await emailServiceModule.sendGiftcardPaymentConfirmedEmail(
+                                buyerEmail,
+                                {
+                                    buyerName,
+                                    amount: Number(updated.amount),
+                                    code,
+                                    recipientName: updated.recipient_name || updated.recipientName,
+                                    recipientEmail: updated.recipient_email || updated.recipientEmail,
+                                    message: buyerMessage
+                                },
+                                pdfBase64,
+                                downloadLink
+                            );
                         } catch (e) {
                             console.warn('Buyer email send failed:', e);
                             buyerEmailResult = { sent: false, error: e instanceof Error ? e.message : String(e) };
