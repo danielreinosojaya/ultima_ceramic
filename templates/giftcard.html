@@ -5,37 +5,53 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Giftcard {{code}}</title>
   <style>
-    body { font-family: 'Inter', Arial, sans-serif; color:#333; margin: 40px; }
-    .card { border: 2px dashed #e2e8f0; padding: 24px; border-radius: 8px; max-width: 720px; margin: 0 auto; }
-    h1 { text-align:center; font-size:22px; margin-bottom:12px; }
-    .meta { display:flex; justify-content:space-between; margin-top:18px; }
+    @page { size: A4; margin: 20mm; }
+    body { font-family: Arial, Helvetica, sans-serif; color:#111; margin: 0; }
+    .container { width: 100%; padding: 60px 80px; box-sizing: border-box; }
+    .card { max-width: 720px; margin: 0 auto; }
+    h1 { text-align:center; font-size:34px; margin-bottom:36px; font-weight:400; }
+    .meta { display:flex; justify-content:flex-start; gap:40px; align-items:flex-start; margin-top:8px; }
     .left { flex:1; }
-    .right { flex:0 0 140px; text-align:right; }
-    .code { color:#D95F43; font-weight:700; font-size:20px; }
-    .note { margin-top:18px; color:#555; font-size:13px; }
-    footer { margin-top:22px; font-size:12px; color:#777; }
+    .code { color:#111; font-weight:700; font-size:18px; }
+    .label { display:block; font-size:16px; color:#111; margin-bottom:6px; }
+    .value { font-size:16px; font-weight:600; margin-bottom:6px; }
+    footer { margin-top:40px; font-size:12px; color:#666; text-align:left; }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>Giftcard / Vale de Regalo</h1>
-    <div class="meta">
-      <div class="left">
-        <p><strong>Código:</strong> <span class="code">{{ code }}</span></p>
-        <p><strong>Monto:</strong> S/ {{ amount }}</p>
-        <p><strong>Para:</strong> {{ recipientName }}</p>
-        <p><strong>De:</strong> {{ buyerName }}</p>
-      </div>
-      <div class="right">
-        {% if qrDataUrl %}
-        <img src="{{ qrDataUrl }}" alt="QR" style="width:120px;" />
+  <div class="container">
+    <div class="card" role="main" aria-labelledby="title">
+      <h1 id="title">Giftcard / Vale de Regalo</h1>
+      <div style="text-align:center; margin-top:12px; margin-bottom:28px;">
+        {% if logoDataUrl %}
+          <img src="{{ logoDataUrl }}" alt="CeramicAlma" style="height:48px; display:block; margin:0 auto 8px;" />
         {% endif %}
       </div>
+      <div class="meta" style="justify-content:center;">
+        <div class="left" style="max-width:520px; text-align:center;">
+          <span class="label">Código</span>
+          <div class="value code" style="font-size:64px; letter-spacing:2px; margin:8px 0;">{{ code }}</div>
+          <span class="label">Monto</span>
+          <div class="value" style="font-size:36px; margin:8px 0;">S/ {{ amount }}</div>
+          <div style="display:flex; justify-content:space-between; gap:20px; margin-top:18px;">
+            <div style="flex:1; text-align:left;">
+              <div class="label">Para</div>
+              <div class="value" style="font-size:20px;">{{ recipientName }}</div>
+            </div>
+            <div style="flex:1; text-align:right;">
+              <div class="label">De</div>
+              <div class="value" style="font-size:20px;">{{ buyerName }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {% if message %}
+        <div class="note" style="margin-top:22px; text-align:center;"><strong>Mensaje:</strong> {{ message }}</div>
+      {% endif %}
+
+      <footer style="margin-top:40px; text-align:center; font-size:12px; color:#666;">Presenta este código o el PDF adjunto al momento de canjear.<br/>CeramicAlma</footer>
     </div>
-    {% if message %}
-    <div class="note"><strong>Mensaje:</strong> {{ message }}</div>
-    {% endif %}
-    <footer>Presenta este código o el PDF adjunto al momento de canjear.<br/>CeramicAlma</footer>
   </div>
 </body>
 </html>

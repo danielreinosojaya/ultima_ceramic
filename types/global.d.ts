@@ -40,6 +40,7 @@ declare module 'qrcode';
 declare module 'pdfkit';
 declare module '@aws-sdk/client-s3';
 declare module '@aws-sdk/s3-request-presigner';
+declare module 'nunjucks';
 
 declare module '*.png';
 declare module '*.jpg';

@@ -13,6 +13,7 @@ export const isEmailServiceConfigured = (): { configured: boolean; reason?: stri
 
 const normalizeAttachments = (attachments?: { filename: string; data: string; type?: string }[]) => {
     if (!attachments || attachments.length === 0) return undefined;
+    // Resend expects attachments as { filename, type, data } where `data` is base64 string
     return attachments.map(a => {
         // If data already looks like base64, keep it; else try to coerce
         let raw = a.data || '';
@@ -20,8 +21,8 @@ const normalizeAttachments = (attachments?: { filename: string; data: string; ty
         raw = raw.trim();
         // If data is a data URL like "data:application/pdf;base64,AAA...", strip the prefix
         const dataUrlMatch = raw.match(/^data:.*;base64,(.*)$/i);
-        const content = dataUrlMatch ? dataUrlMatch[1] : raw;
-        return { filename: a.filename, type: a.type || 'application/octet-stream', content };
+        const base64 = dataUrlMatch ? dataUrlMatch[1] : raw;
+        return { filename: a.filename, type: a.type || 'application/octet-stream', data: base64 };
     });
 };
 
@@ -46,6 +47,14 @@ const sendWithRetry = async (payload: any, maxAttempts = 3) => {
 };
 
 type SendEmailResult = { sent: true; providerResponse?: any } | { sent: false; error?: string; dryRunPath?: string };
+
+const wrapHtmlEmail = (maybeHtml: string) => {
+    if (!maybeHtml || typeof maybeHtml !== 'string') return '';
+    // If it already looks like a full document, return as-is
+    if (/\s*<!doctype html>|<html[\s>]/i.test(maybeHtml)) return maybeHtml;
+    // Minimal safe HTML wrapper (inline-friendly)
+    return `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Email</title><style>body{font-family: Arial, Helvetica, sans-serif; color:#333; margin:0; padding:12px;} a{color:#1d4ed8;}</style></head><body>${maybeHtml}</body></html>`;
+};
 
 const sendEmail = async (to: string, subject: string, html: string, attachments?: { filename: string; data: string; type?: string }[]): Promise<SendEmailResult | void> => {
     const cfg = isEmailServiceConfigured();
@@ -74,21 +83,28 @@ const sendEmail = async (to: string, subject: string, html: string, attachments?
     }
 
     // Live-send
+    // Wrap HTML into a minimal full document so providers/clients don't interpret it as plain text or strip <head>
+    const wrappedHtml = wrapHtmlEmail(html);
+    // Generate a conservative plain-text fallback from the wrapped HTML
+    const textFallback = typeof wrappedHtml === 'string' ? wrappedHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : undefined;
     const payload: any = {
         from: fromEmail,
         to,
         subject,
-        html
+        html: wrappedHtml,
+        ...(textFallback ? { text: textFallback.slice(0, 10000) } : {})
     };
 
     try {
-    // Log a concise payload summary for debugging (avoid dumping full binary attachments)
-    const normalized = normalizeAttachments(attachments);
-        const attachmentSummary = normalized ? normalized.map(a => ({ filename: a.filename, type: a.type, size: a.content ? a.content.length : 0 })) : [];
+        // Log a concise payload summary for debugging (avoid dumping full binary attachments)
+        const normalized = normalizeAttachments(attachments);
+        const attachmentSummary = normalized ? normalized.map(a => ({ filename: a.filename, type: a.type, size: (a as any).data ? (a as any).data.length : 0 })) : [];
         console.info('[emailService] Sending email payload summary:', {
             to,
             subject,
-            htmlSnippet: typeof html === 'string' ? html.slice(0, 400).replace(/\n/g, ' ') : '',
+            hasHtml: !!payload.html,
+            htmlSnippet: typeof payload.html === 'string' ? payload.html.slice(0, 400).replace(/\n/g, ' ') : '',
+            textLength: payload.text ? payload.text.length : 0,
             attachments: attachmentSummary
         });
 
@@ -217,13 +233,17 @@ export const sendGiftcardPaymentConfirmedEmail = async (buyerEmail: string, payl
     const subject = `Pago confirmado — Recibo Giftcard (${payload.code})`;
     // render HTML usando plantilla si queremos body más bonito
         try {
-                const { generateGiftcardPdf } = await import('./pdfPuppeteer');
-                let attachments = undefined;
-                if (!pdfBase64) {
-                        const buf = await generateGiftcardPdf({ code: payload.code, amount: payload.amount, recipientName: payload.buyerName, buyerName: payload.buyerName, message: '' });
-                        pdfBase64 = (buf as Buffer).toString('base64');
-                }
-                if (pdfBase64) attachments = [{ filename: `giftcard-${payload.code}.pdf`, data: pdfBase64, type: 'application/pdf' }];
+        // Prefer Puppeteer-generated PDF to ensure visual fidelity
+        let attachments = undefined;
+        try {
+            const { generateGiftcardPdf } = await import('./pdfPuppeteer');
+            const buf = await generateGiftcardPdf({ code: payload.code, amount: payload.amount, recipientName: payload.buyerName, buyerName: payload.buyerName, message: '' });
+            pdfBase64 = (buf as Buffer).toString('base64');
+            console.info('[emailService] Using puppeteer-generated giftcard PDF for', payload.code);
+        } catch (genErr: any) {
+            console.warn('[emailService] Puppeteer PDF generation failed, falling back to provided pdfBase64 if any:', genErr?.message || genErr);
+        }
+        if (pdfBase64) attachments = [{ filename: `giftcard-${payload.code}.pdf`, data: pdfBase64, type: 'application/pdf' }];
 
                 // Email-friendly inline HTML (keep styles inline to avoid stripping by some providers/clients)
                 const downloadHtml = downloadLink ? `<p style="margin:10px 0;"><a href="${downloadLink}" style="color:#1d4ed8; text-decoration:none;">Descargar comprobante PDF</a></p>` : '';
@@ -260,11 +280,15 @@ export const sendGiftcardPaymentConfirmedEmail = async (buyerEmail: string, payl
 export const sendGiftcardRecipientEmail = async (recipientEmail: string, payload: { recipientName: string; amount: number; code: string; message?: string }, pdfBase64?: string, downloadLink?: string) => {
     const subject = `Has recibido una Giftcard — Código ${payload.code}`;
     try {
-        const { generateGiftcardPdf } = await import('./pdfPuppeteer');
+        // Prefer Puppeteer-generated PDF for consistent layout
         let attachments = undefined;
-        if (!pdfBase64) {
+        try {
+            const { generateGiftcardPdf } = await import('./pdfPuppeteer');
             const buf = await generateGiftcardPdf({ code: payload.code, amount: payload.amount, recipientName: payload.recipientName, buyerName: payload.recipientName, message: payload.message });
             pdfBase64 = (buf as Buffer).toString('base64');
+            console.info('[emailService] Using puppeteer-generated giftcard PDF for', payload.code);
+        } catch (genErr: any) {
+            console.warn('[emailService] Puppeteer PDF generation failed, falling back to provided pdfBase64 if any:', genErr?.message || genErr);
         }
         if (pdfBase64) attachments = [{ filename: `giftcard-${payload.code}.pdf`, data: pdfBase64, type: 'application/pdf' }];
 
