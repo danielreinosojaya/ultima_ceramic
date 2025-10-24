@@ -44,8 +44,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Check requests
-    const { rows: reqRows } = await sql`SELECT * FROM giftcard_requests WHERE code = ${codeStr} LIMIT 1`;
+    // Check requests. Try by request.code first, then by metadata.issuedCode (covers approved requests
+    // where the issued code was stored in metadata but the giftcard row may not exist yet).
+    let reqRows = (await sql`SELECT * FROM giftcard_requests WHERE code = ${codeStr} LIMIT 1`).rows;
+    if ((!reqRows || reqRows.length === 0)) {
+      // Try to find by metadata JSON 'issuedCode' (if metadata is jsonb)
+      try {
+        reqRows = (await sql`SELECT * FROM giftcard_requests WHERE (metadata->>'issuedCode') = ${codeStr} LIMIT 1`).rows;
+      } catch (e) {
+        // metadata might be a plain text column; fall back to string match
+        try {
+          reqRows = (await sql`SELECT * FROM giftcard_requests WHERE metadata::text LIKE ${'%' + codeStr + '%'} LIMIT 1`).rows;
+        } catch (inner) {
+          // ignore and continue
+          reqRows = [];
+        }
+      }
+    }
     if (reqRows && reqRows.length > 0) {
       const r = reqRows[0];
       const reqCamel = toCamelCase(r);

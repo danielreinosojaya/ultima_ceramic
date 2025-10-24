@@ -825,8 +825,23 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     });
                 }
 
-                // If no issued giftcard, check if there's a request (pending/approved/rejected)
-                const { rows: reqRows } = await sql`SELECT * FROM giftcard_requests WHERE code = ${code} LIMIT 1`;
+                // If no issued giftcard, check if there's a request (pending/approved/rejected).
+                // Try to find by request.code first, then by metadata->>'issuedCode' so that
+                // looking up an issued code still returns the original request even if the
+                // giftcard row wasn't successfully created.
+                let reqRows = (await sql`SELECT * FROM giftcard_requests WHERE code = ${code} LIMIT 1`).rows;
+                if ((!reqRows || reqRows.length === 0)) {
+                    try {
+                        reqRows = (await sql`SELECT * FROM giftcard_requests WHERE (metadata->>'issuedCode') = ${code} LIMIT 1`).rows;
+                    } catch (e) {
+                        // If metadata is stored as text, fall back to text search (best-effort)
+                        try {
+                            reqRows = (await sql`SELECT * FROM giftcard_requests WHERE metadata::text LIKE ${'%' + code + '%'} LIMIT 1`).rows;
+                        } catch (inner) {
+                            reqRows = [];
+                        }
+                    }
+                }
                 if (reqRows && reqRows.length > 0) {
                     const r = reqRows[0];
                     // If the request exists, return helpful info for the UI.
