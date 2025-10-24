@@ -25,6 +25,7 @@ const GiftcardsManager: React.FC = () => {
               <th className="px-4 py-2 text-left text-brand-secondary">Destinatario</th>
               <th className="px-4 py-2 text-left text-brand-secondary">Monto</th>
               <th className="px-4 py-2 text-left text-brand-secondary">Código</th>
+              <th className="px-4 py-2 text-left text-brand-secondary">Código emitido</th>
               <th className="px-4 py-2 text-left text-brand-secondary">Estado</th>
               <th className="px-4 py-2 text-left text-brand-secondary">Fecha</th>
               <th className="px-4 py-2 text-left text-brand-secondary"></th>
@@ -37,6 +38,7 @@ const GiftcardsManager: React.FC = () => {
                 <td className="px-4 py-2">{req.recipientName} <br /><span className="text-xs text-brand-secondary">{req.recipientEmail || req.recipientWhatsapp}</span></td>
                 <td className="px-4 py-2 font-bold text-brand-primary">${req.amount}</td>
                 <td className="px-4 py-2 font-mono text-xs">{req.code}</td>
+                <td className="px-4 py-2 font-mono text-xs">{(req as any).metadata?.issuedCode || (req as any).metadata?.issued_code || '-'}</td>
                 <td className="px-4 py-2">
                   <span className={`px-2 py-1 rounded-full text-xs font-semibold ${req.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : req.status === 'approved' ? 'bg-green-100 text-green-700' : req.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{req.status}</span>
                 </td>
@@ -66,6 +68,20 @@ const GiftcardsManager: React.FC = () => {
               <div><span className="font-semibold">Destinatario:</span> {selected.recipientName} ({selected.recipientEmail || selected.recipientWhatsapp})</div>
               <div><span className="font-semibold">Monto:</span> <span className="font-bold text-brand-primary">${selected.amount}</span></div>
               <div><span className="font-semibold">Código:</span> <span className="font-mono">{selected.code}</span></div>
+              <div className="flex items-center gap-3">
+                <div><span className="font-semibold">Código emitido:</span> <span className="font-mono">{(selected as any).metadata?.issuedCode || (selected as any).metadata?.issued_code || '-'}</span></div>
+                {((selected as any).metadata?.issuedCode || (selected as any).metadata?.issued_code) && (
+                  <button
+                    className="px-2 py-1 text-xs bg-brand-primary text-white rounded-md"
+                    onClick={() => {
+                      const code = (selected as any).metadata?.issuedCode || (selected as any).metadata?.issued_code;
+                      if (!code) return;
+                      navigator.clipboard?.writeText(code);
+                      alert('Código emitido copiado al portapapeles: ' + code);
+                    }}
+                  >Copiar</button>
+                )}
+              </div>
               <div><span className="font-semibold">Estado:</span> <span className={`px-2 py-1 rounded-full text-xs font-semibold ${selected.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : selected.status === 'approved' ? 'bg-green-100 text-green-700' : selected.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{selected.status}</span></div>
               <div><span className="font-semibold">Fecha:</span> {new Date(selected.createdAt).toLocaleString()}</div>
             </div>
