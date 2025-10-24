@@ -363,7 +363,9 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         amount: typeof row.amount === 'number' ? row.amount : parseFloat(row.amount),
                         code: row.code,
                         status: row.status,
-                        createdAt: row.created_at ? new Date(row.created_at).toISOString() : ''
+                        createdAt: row.created_at ? new Date(row.created_at).toISOString() : '',
+                        // Include metadata so admin UI can surface issued codes, voucher URLs, etc.
+                        metadata: row.metadata || null
                     }));
                     data = formatted;
                 } catch (error) {
@@ -795,6 +797,148 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
             }
         }
+
+        case 'validateGiftcard': {
+            // Validate a giftcard code and return balance, expiry and status.
+            const body = req.body || {};
+            const code = (body.code || req.query.code || '').toString();
+            if (!code) return res.status(400).json({ success: false, error: 'code is required' });
+
+            try {
+                // Try to find an issued giftcard first
+                const { rows: giftcardRows } = await sql`SELECT * FROM giftcards WHERE code = ${code} LIMIT 1`;
+                if (giftcardRows && giftcardRows.length > 0) {
+                    const g = giftcardRows[0];
+                    const balance = (typeof g.balance === 'number') ? g.balance : (g.balance ? parseFloat(g.balance) : 0);
+                    const initialValue = (typeof g.initial_value === 'number') ? g.initial_value : (g.initial_value ? parseFloat(g.initial_value) : null);
+                    const expiresAt = g.expires_at ? new Date(g.expires_at).toISOString() : null;
+                    const isExpired = expiresAt ? (new Date() > new Date(expiresAt)) : false;
+                    return res.status(200).json({
+                        valid: !isExpired,
+                        code: g.code,
+                        giftcardId: g.id,
+                        balance: Number(balance),
+                        initialValue: initialValue !== null ? Number(initialValue) : null,
+                        expiresAt,
+                        status: isExpired ? 'expired' : 'active',
+                        metadata: g.metadata || {}
+                    });
+                }
+
+                // If no issued giftcard, check if there's a request (pending/approved/rejected)
+                const { rows: reqRows } = await sql`SELECT * FROM giftcard_requests WHERE code = ${code} LIMIT 1`;
+                if (reqRows && reqRows.length > 0) {
+                    const r = reqRows[0];
+                    // If the request exists, return helpful info for the UI.
+                    // If the request was already approved and an issuedCode exists in metadata,
+                    // try to resolve it to an issued giftcard and return that as valid if present.
+                    const reqCamel = toCamelCase(r);
+                    const status = (r.status || '').toString();
+                    let issuedCode: string | null = null;
+                    try {
+                        if (r.metadata && typeof r.metadata === 'object' && r.metadata.issuedCode) {
+                            issuedCode = String(r.metadata.issuedCode);
+                        } else if (r.metadata && typeof r.metadata === 'string') {
+                            // in case metadata is stored as stringified JSON
+                            try { const parsed = JSON.parse(r.metadata); if (parsed && parsed.issuedCode) issuedCode = String(parsed.issuedCode); } catch(e){}
+                        }
+                    } catch (e) { issuedCode = null; }
+
+                    if (status === 'approved' && issuedCode) {
+                        // check if a giftcard with issuedCode exists
+                        try {
+                            const { rows: issuedRows } = await sql`SELECT * FROM giftcards WHERE code = ${issuedCode} LIMIT 1`;
+                            if (issuedRows && issuedRows.length > 0) {
+                                const g = issuedRows[0];
+                                const balance = (typeof g.balance === 'number') ? g.balance : (g.balance ? parseFloat(g.balance) : 0);
+                                const initialValue = (typeof g.initial_value === 'number') ? g.initial_value : (g.initial_value ? parseFloat(g.initial_value) : null);
+                                const expiresAt = g.expires_at ? new Date(g.expires_at).toISOString() : null;
+                                const isExpired = expiresAt ? (new Date() > new Date(expiresAt)) : false;
+                                return res.status(200).json({
+                                    valid: !isExpired,
+                                    code: g.code,
+                                    giftcardId: g.id,
+                                    balance: Number(balance),
+                                    initialValue: initialValue !== null ? Number(initialValue) : null,
+                                    expiresAt,
+                                    status: isExpired ? 'expired' : 'active',
+                                    metadata: g.metadata || {},
+                                    request: reqCamel
+                                });
+                            }
+                        } catch (e) {
+                            console.warn('Error resolving issuedCode for approved request:', e);
+                        }
+                        // If we fallthrough, we'll still inform UI the request is approved and include issuedCode
+                        return res.status(200).json({ valid: false, reason: 'approved_request_has_issued_code', issuedCode, request: reqCamel });
+                    }
+
+                    // generic case: return request info and its status so UI can show a tailored message
+                    return res.status(200).json({ valid: false, reason: 'request_found', request: reqCamel });
+                }
+
+                return res.status(404).json({ valid: false, reason: 'not_found' });
+            } catch (err) {
+                console.error('validateGiftcard error:', err);
+                return res.status(500).json({ success: false, error: err instanceof Error ? err.message : String(err) });
+            }
+        }
+        
+        case 'createGiftcardHold': {
+            // Create a temporary hold on a giftcard balance to avoid double-spend.
+            // Body params: code (giftcard code) OR giftcardId, amount (numeric), bookingTempRef (string), ttlMinutes (optional)
+            const body = req.body || {};
+            const amount = body.amount !== undefined ? Number(body.amount) : null;
+            const ttlMinutes = Number(body.ttlMinutes || 15);
+            const bookingTempRef = body.bookingTempRef || body.booking_temp_ref || null;
+            const code = body.code || null;
+            const giftcardId = body.giftcardId || body.giftcard_id || null;
+
+            if (!amount || amount <= 0) return res.status(400).json({ success: false, error: 'amount is required and must be > 0' });
+            if (!code && !giftcardId) return res.status(400).json({ success: false, error: 'code or giftcardId is required' });
+
+            try {
+                // Find giftcard by code or id
+                let giftcardRow: any = null;
+                if (code) {
+                    const { rows: gRows } = await sql`SELECT * FROM giftcards WHERE code = ${code} LIMIT 1`;
+                    giftcardRow = gRows && gRows.length > 0 ? gRows[0] : null;
+                } else {
+                    const { rows: gRows } = await sql`SELECT * FROM giftcards WHERE id = ${giftcardId} LIMIT 1`;
+                    giftcardRow = gRows && gRows.length > 0 ? gRows[0] : null;
+                }
+
+                if (!giftcardRow) return res.status(404).json({ success: false, error: 'giftcard_not_found' });
+
+                const gid = String(giftcardRow.id);
+                const balance = (typeof giftcardRow.balance === 'number') ? Number(giftcardRow.balance) : (giftcardRow.balance ? Number(giftcardRow.balance) : 0);
+
+                // Sum active holds for this giftcard
+                const { rows: [holdSumRow] } = await sql`
+                    SELECT COALESCE(SUM(amount), 0) AS total_holds
+                    FROM giftcard_holds
+                    WHERE giftcard_id = ${gid} AND expires_at > NOW()
+                `;
+                const totalHolds = holdSumRow ? Number(holdSumRow.total_holds) : 0;
+                const available = Number(balance) - Number(totalHolds);
+
+                if (available < Number(amount)) {
+                    return res.status(400).json({ success: false, error: 'insufficient_funds', available, balance });
+                }
+
+                // Insert hold with TTL
+                const { rows: [inserted] } = await sql`
+                    INSERT INTO giftcard_holds (id, giftcard_id, amount, booking_temp_ref, expires_at)
+                    VALUES (uuid_generate_v4(), ${gid}, ${amount}, ${bookingTempRef}, NOW() + (${ttlMinutes} * INTERVAL '1 minute'))
+                    RETURNING *
+                `;
+
+                return res.status(200).json({ success: true, hold: toCamelCase(inserted), available: Number(available) - Number(amount), balance });
+            } catch (err) {
+                console.error('createGiftcardHold error:', err);
+                return res.status(500).json({ success: false, error: err instanceof Error ? err.message : String(err) });
+            }
+        }
         case 'listGiftcardRequests': {
             // Devuelve todas las solicitudes de giftcard
             try {
@@ -823,8 +967,10 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     recipientWhatsapp: row.recipient_whatsapp || '',
                     amount: typeof row.amount === 'number' ? row.amount : parseFloat(row.amount),
                     code: row.code,
-                    status: row.status,
-                    createdAt: row.created_at ? new Date(row.created_at).toISOString() : ''
+                        status: row.status,
+                        createdAt: row.created_at ? new Date(row.created_at).toISOString() : '',
+                        // Include metadata so admin UI can surface issued codes, voucher URLs, etc.
+                        metadata: row.metadata || null
                 }));
                 return res.status(200).json(formatted);
             } catch (error) {
@@ -1954,26 +2100,134 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
     bookingCode: generateBookingCode(),
     createdAt: new Date(),
     };
+    // If the client provided a holdId, confirm and consume the hold atomically with the booking creation
+    const holdId = (body as any).holdId || (body as any).hold_id || null;
 
-    const { rows: [insertedRow] } = await sql`
-        INSERT INTO bookings (product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_code, booking_date, participants, client_note)
-        VALUES (
-            ${newBooking.productId},
-            ${newBooking.productType},
-            ${JSON.stringify(newBooking.slots)},
-            ${JSON.stringify(newBooking.userInfo)},
-            ${new Date().toISOString()},
-            ${newBooking.isPaid},
-            ${newBooking.price},
-            ${newBooking.bookingMode},
-            ${JSON.stringify(newBooking.product)},
-            ${newBooking.bookingCode},
-            ${bookingDate},
-            ${participants || 1},
-            ${clientNote || null}
-        )
-        RETURNING *;
-    `;
+    let insertedRow: any;
+
+    if (holdId) {
+        try {
+            await sql`BEGIN`;
+
+            // Lock the hold row
+            const { rows: [holdRow] } = await sql`SELECT * FROM giftcard_holds WHERE id = ${holdId} FOR UPDATE`;
+            if (!holdRow) {
+                await sql`ROLLBACK`;
+                return { success: false, message: 'hold_not_found' };
+            }
+
+            // Check expiration
+            if (holdRow.expires_at && new Date(holdRow.expires_at) <= new Date()) {
+                await sql`ROLLBACK`;
+                return { success: false, message: 'hold_expired' };
+            }
+
+            const gid = String(holdRow.giftcard_id);
+
+            // Lock the giftcard row to avoid races
+            const { rows: [giftcardRow] } = await sql`SELECT * FROM giftcards WHERE id = ${gid} FOR UPDATE`;
+            if (!giftcardRow) {
+                await sql`ROLLBACK`;
+                return { success: false, message: 'giftcard_not_found' };
+            }
+
+            const currentBalance = (typeof giftcardRow.balance === 'number') ? Number(giftcardRow.balance) : (giftcardRow.balance ? Number(giftcardRow.balance) : 0);
+            const holdAmount = Number(holdRow.amount);
+
+            if (currentBalance < holdAmount) {
+                await sql`ROLLBACK`;
+                return { success: false, message: 'insufficient_balance' };
+            }
+
+            // Deduct balance and append to redeemed_history if column exists
+            const redeemedEntry = JSON.stringify({ amount: holdAmount, redeemedAt: new Date().toISOString(), holdId, bookingTempRef: holdRow.booking_temp_ref || null });
+            try {
+                await sql`
+                    UPDATE giftcards
+                    SET balance = ${currentBalance - holdAmount}, redeemed_history = COALESCE(redeemed_history, '[]'::jsonb) || ${redeemedEntry}::jsonb
+                    WHERE id = ${gid}
+                `;
+            } catch (e) {
+                // If the update fails for any reason, rollback
+                console.error('Failed updating giftcard balance:', e);
+                await sql`ROLLBACK`;
+                return { success: false, message: 'failed_update_giftcard' };
+            }
+
+            // Remove the hold (consumed)
+            await sql`DELETE FROM giftcard_holds WHERE id = ${holdId}`;
+
+            // Insert booking inside the same transaction
+            const { rows: [created] } = await sql`
+                INSERT INTO bookings (product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_code, booking_date, participants, client_note)
+                VALUES (
+                    ${newBooking.productId},
+                    ${newBooking.productType},
+                    ${JSON.stringify(newBooking.slots)},
+                    ${JSON.stringify(newBooking.userInfo)},
+                    ${new Date().toISOString()},
+                    ${newBooking.isPaid},
+                    ${newBooking.price},
+                    ${newBooking.bookingMode},
+                    ${JSON.stringify(newBooking.product)},
+                    ${newBooking.bookingCode},
+                    ${bookingDate},
+                    ${participants || 1},
+                    ${clientNote || null}
+                )
+                RETURNING *;
+            `;
+
+            insertedRow = created;
+
+            // Optionally create invoice request here as before
+            if (invoiceData) {
+                const { rows: [invoiceRequestRow] } = await sql`
+                    INSERT INTO invoice_requests (booking_id, status, company_name, tax_id, address, email)
+                    VALUES (${created.id}, 'Pending', ${invoiceData.companyName}, ${invoiceData.taxId}, ${invoiceData.address}, ${invoiceData.email})
+                    RETURNING id;
+                `;
+                await sql`
+                    INSERT INTO notifications (type, target_id, user_name, summary)
+                    VALUES ('new_invoice_request', ${invoiceRequestRow.id}, ${`${userInfo.firstName} ${userInfo.lastName}`}, ${created.booking_code});
+                `;
+            }
+
+            // Notification insertion as before
+            await sql`
+                INSERT INTO notifications (type, target_id, user_name, summary)
+                VALUES ('new_booking', ${created.id}, ${`${userInfo.firstName} ${created.user_info ? JSON.parse(created.user_info).lastName : ''}`}, ${newBooking.product.name});
+            `;
+
+            await sql`COMMIT`;
+        } catch (err) {
+            try { await sql`ROLLBACK`; } catch(e){}
+            console.error('Error in booking+hold transaction:', err);
+            return { success: false, message: err instanceof Error ? err.message : String(err) };
+        }
+    } else {
+        // No hold provided: insert booking normally
+        const { rows: [created] } = await sql`
+            INSERT INTO bookings (product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_code, booking_date, participants, client_note)
+            VALUES (
+                ${newBooking.productId},
+                ${newBooking.productType},
+                ${JSON.stringify(newBooking.slots)},
+                ${JSON.stringify(newBooking.userInfo)},
+                ${new Date().toISOString()},
+                ${newBooking.isPaid},
+                ${newBooking.price},
+                ${newBooking.bookingMode},
+                ${JSON.stringify(newBooking.product)},
+                ${newBooking.bookingCode},
+                ${bookingDate},
+                ${participants || 1},
+                ${clientNote || null}
+            )
+            RETURNING *;
+        `;
+        insertedRow = created;
+    }
     
     const fullyParsedBooking = parseBookingFromDB(insertedRow);
 

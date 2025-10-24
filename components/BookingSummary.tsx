@@ -15,6 +15,7 @@ interface BookingSummaryProps {
   onProceedToConfirmation: () => void;
   onBack: () => void;
   appData: AppData;
+  onUseGiftcard?: (holdInfo: { holdId: string; expiresAt?: string; amount: number }) => void;
 }
 
 export const BookingSummary: React.FC<BookingSummaryProps> = ({
@@ -22,6 +23,7 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   onProceedToConfirmation,
   onBack,
   appData,
+  onUseGiftcard
 }) => {
   // Eliminado useLanguage, la app ahora es monolingüe en español
   const language = 'es-ES';
@@ -97,6 +99,8 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
       )}
 
       <div className="mt-8 flex flex-col items-center gap-4 justify-center">
+        {/* Giftcard redeem UI */}
+        <GiftcardRedeemSection product={product} onUseGiftcard={onUseGiftcard} />
         <button
           onClick={onProceedToConfirmation}
           className="w-full md:w-auto bg-brand-primary text-white font-bold py-3 px-8 rounded-lg hover:opacity-90 transition-opacity duration-300"
@@ -104,6 +108,138 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
           Continuar a Confirmación
         </button>
       </div>
+    </div>
+  );
+};
+
+// Small internal component to redeem a giftcard and create a hold
+const GiftcardRedeemSection: React.FC<{ product: Product; onUseGiftcard?: (holdInfo: { holdId: string; expiresAt?: string; amount: number }) => void }> = ({ product, onUseGiftcard }) => {
+  const [code, setCode] = React.useState('');
+  const [checking, setChecking] = React.useState(false);
+  const [giftcardInfo, setGiftcardInfo] = React.useState<any>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [creatingHold, setCreatingHold] = React.useState(false);
+
+  const handleValidate = async () => {
+    setChecking(true);
+    setError(null);
+    try {
+      // Dynamically import dataService to avoid circular imports in some build setups
+      const ds = await import('../services/dataService');
+      const res = await ds.validateGiftcard(code.trim());
+      if (res && (res.valid === true || res.valid === false)) {
+        setGiftcardInfo(res);
+      } else if (res && res.reason === 'request_found') {
+        setGiftcardInfo(res);
+      } else {
+        setError('Giftcard no encontrada');
+        setGiftcardInfo(null);
+      }
+    } catch (e: any) {
+      setError(e?.message || String(e));
+      setGiftcardInfo(null);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const handleUse = async () => {
+    if (!giftcardInfo) return;
+    setCreatingHold(true);
+    setError(null);
+    try {
+      const ds = await import('../services/dataService');
+      const amount = Math.min(Number(product.price || 0), Number(giftcardInfo.balance || 0));
+      const payload: any = { amount, ttlMinutes: 15 };
+      if (giftcardInfo.giftcardId) payload.giftcardId = giftcardInfo.giftcardId;
+      else payload.code = giftcardInfo.code || code.trim();
+
+      const res = await ds.createGiftcardHold(payload);
+      if (res && res.success && res.hold) {
+        onUseGiftcard && onUseGiftcard({ holdId: res.hold.id, expiresAt: res.hold.expires_at, amount: Number(res.hold.amount) });
+      } else {
+        setError(res?.error || 'No se pudo crear el hold');
+      }
+    } catch (e: any) {
+      setError(e?.message || String(e));
+    } finally {
+      setCreatingHold(false);
+    }
+  };
+
+  // Create a hold using an issuedCode returned inside a request response
+  const handleUseIssuedCode = async (issuedCode: string) => {
+    if (!issuedCode) return;
+    setCreatingHold(true);
+    setError(null);
+    try {
+      const ds = await import('../services/dataService');
+      const amount = Math.min(Number(product.price || 0), Number(giftcardInfo?.balance || 0) || Number(product.price || 0));
+      const payload: any = { amount, ttlMinutes: 15, code: issuedCode };
+      const res = await ds.createGiftcardHold(payload);
+      if (res && res.success && res.hold) {
+        onUseGiftcard && onUseGiftcard({ holdId: res.hold.id, expiresAt: res.hold.expires_at, amount: Number(res.hold.amount) });
+      } else {
+        setError(res?.error || 'No se pudo crear el hold con el código emitido');
+      }
+    } catch (e: any) {
+      setError(e?.message || String(e));
+    } finally {
+      setCreatingHold(false);
+    }
+  };
+
+  return (
+    <div className="w-full max-w-xl bg-white/60 border border-dashed border-brand-border p-4 rounded-lg mb-4">
+      <h4 className="font-semibold mb-2">Pagar con Giftcard</h4>
+      <div className="flex gap-2 items-center">
+        <input type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="Ingresa código de giftcard" className="flex-grow px-3 py-2 border rounded" />
+        <button onClick={handleValidate} disabled={!code || checking} className="bg-brand-primary text-white px-4 py-2 rounded">{checking ? 'Verificando…' : 'Validar'}</button>
+      </div>
+      {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
+      {giftcardInfo && (
+        <div className="mt-3 text-sm text-brand-secondary">
+          {giftcardInfo.valid ? (
+            <>
+              <div>Saldo disponible: <span className="font-bold text-brand-text">${giftcardInfo.balance}</span></div>
+              <div>Válida hasta: <span className="font-medium">{giftcardInfo.expiresAt || '—'}</span></div>
+              <div className="mt-2">
+                <button onClick={handleUse} disabled={creatingHold || Number(giftcardInfo.balance) <= 0} className="bg-green-600 text-white px-3 py-2 rounded">Usar giftcard</button>
+              </div>
+            </>
+          ) : (
+            <div>
+              {/* Friendly handling for request cases */}
+              {giftcardInfo.reason === 'approved_request_has_issued_code' ? (
+                <div>
+                  <div className="mb-2">Tu solicitud fue aprobada. Código emitido: <span className="font-mono font-semibold">{giftcardInfo.issuedCode}</span></div>
+                  <div className="flex gap-2">
+                    <button onClick={() => { setCode(giftcardInfo.issuedCode); handleUseIssuedCode(giftcardInfo.issuedCode); }} disabled={creatingHold} className="bg-green-600 text-white px-3 py-2 rounded">Usar código emitido</button>
+                    <button onClick={() => { navigator.clipboard?.writeText(giftcardInfo.issuedCode); alert('Código copiado'); }} className="px-3 py-2 border rounded">Copiar</button>
+                  </div>
+                </div>
+              ) : giftcardInfo.reason === 'request_found' && giftcardInfo.request ? (
+                <div>
+                  <div className="mb-1">Se encontró una solicitud con estado: <strong>{giftcardInfo.request.status}</strong></div>
+                  {giftcardInfo.request.metadata && (giftcardInfo.request.metadata.issuedCode || giftcardInfo.request.metadata.issued_code) ? (
+                    <div className="mt-2">
+                      <div className="mb-1">Código emitido en la solicitud: <span className="font-mono">{giftcardInfo.request.metadata.issuedCode || giftcardInfo.request.metadata.issued_code}</span></div>
+                      <div className="flex gap-2">
+                        <button onClick={() => { const issued = giftcardInfo.request.metadata.issuedCode || giftcardInfo.request.metadata.issued_code; setCode(issued); handleUseIssuedCode(issued); }} disabled={creatingHold} className="bg-green-600 text-white px-3 py-2 rounded">Usar código emitido</button>
+                        <button onClick={() => { const issued = giftcardInfo.request.metadata.issuedCode || giftcardInfo.request.metadata.issued_code; navigator.clipboard?.writeText(issued); alert('Código copiado'); }} className="px-3 py-2 border rounded">Copiar</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>Estado de la solicitud: <strong>{giftcardInfo.request.status}</strong></div>
+                  )}
+                </div>
+              ) : (
+                <div>Giftcard no válida: {giftcardInfo.reason || '—'}</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

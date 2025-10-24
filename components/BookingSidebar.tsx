@@ -22,13 +22,18 @@ export const BookingSidebar: React.FC<BookingSidebarProps> = ({ product, selecte
   }
   
   const classesRemaining = product.classes - selectedSlots.length;
-  
+
+  // Ensure price is a number (defensive against server returning strings or other shapes)
+  const rawPrice = (product as any).price;
+  const priceNumber = Number(rawPrice);
+  const price = Number.isFinite(priceNumber) ? priceNumber : 0;
+
   const originalPrice = product.classes * SINGLE_CLASS_PRICE;
-  const discount = originalPrice - product.price;
+  const discount = originalPrice - price;
 
   // Calculate Subtotal and VAT from the final price
-  const subtotal = product.price / (1 + VAT_RATE);
-  const vat = product.price - subtotal;
+  const subtotal = price / (1 + VAT_RATE);
+  const vat = price - subtotal;
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -71,7 +76,7 @@ export const BookingSidebar: React.FC<BookingSidebarProps> = ({ product, selecte
                 </div>
                 <div className="flex justify-between font-bold text-lg text-brand-text pt-1 mt-1">
                     <span>Total a pagar</span>
-                    <span>${product.price.toFixed(2)}</span>
+                    <span>${price.toFixed(2)}</span>
                 </div>
             </div>
         </div>

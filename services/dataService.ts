@@ -42,7 +42,9 @@ export const getGiftcardRequests = async (): Promise<GiftcardRequest[]> => {
             amount: typeof req.amount === 'number' ? req.amount : parseFloat(req.amount || '0'),
             code: req.code || '',
             status: req.status || 'pending',
-            createdAt: req.createdAt || ''
+            createdAt: req.createdAt || '',
+            // Preserve metadata from the server so admin UI can display issuedCode, voucherUrl, etc.
+            metadata: req.metadata || null
         }));
     } catch (error) {
         console.error('getGiftcardRequests error:', error);
@@ -770,6 +772,25 @@ export const addBooking = async (bookingData: any): Promise<AddBookingResult> =>
         return { ...result, booking: parseBooking(result.booking) };
     }
     return result;
+};
+
+// Giftcard client helpers
+export const validateGiftcard = async (code: string): Promise<any> => {
+    try {
+        const res = await postAction('validateGiftcard', { code });
+        return res;
+    } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+};
+
+export const createGiftcardHold = async (payload: { code?: string; giftcardId?: string; amount: number; bookingTempRef?: string; ttlMinutes?: number }): Promise<any> => {
+    try {
+        const res = await postAction('createGiftcardHold', payload);
+        return res;
+    } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
 };
 export const updateBooking = async (booking: Booking): Promise<{ success: boolean }> => {
     const result = await postAction('updateBooking', booking);
