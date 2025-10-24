@@ -783,15 +783,32 @@ export const validateGiftcard = async (code: string): Promise<any> => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ code })
         });
-        if (response.ok) return await response.json();
-        // If POST fails with 404 or other, try GET fallback to the same endpoint
+        // If we get any JSON response from the dedicated endpoint, return it (even on 4xx/5xx)
+        try {
+            const body = await response.json().catch(() => null);
+            if (body) return body;
+        } catch (e) {}
+        // If POST didn't return JSON or body, try GET fallback to the same endpoint
         if (response.status === 404 || response.status === 405) {
             const resp = await fetch(`/api/giftcards/validate?code=${encodeURIComponent(code)}`, { method: 'GET' });
-            if (resp.ok) return await resp.json();
+            try {
+                const body = await resp.json().catch(() => null);
+                if (body) return body;
+            } catch (e) {}
         }
-        // Last resort: try legacy action router GET
-        const legacy = await fetch(`/api/data?action=validateGiftcard&code=${encodeURIComponent(code)}`);
-        if (legacy.ok) return await legacy.json();
+        // Last resort: try legacy action router via POST (legacy router expects actions via POST)
+        try {
+            const legacyPost = await fetch(`/api/data?action=validateGiftcard`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code })
+            });
+            // Return any JSON payload from legacy route even if status is 4xx/5xx
+            const legacyBody = await legacyPost.json().catch(() => null);
+            if (legacyBody) return legacyBody;
+        } catch (legacyErr) {
+            console.warn('Legacy POST fallback failed for validateGiftcard:', legacyErr);
+        }
         return { success: false, error: `validateGiftcard failed (${response.status})` };
     } catch (err) {
         return { success: false, error: err instanceof Error ? err.message : String(err) };
@@ -805,7 +822,24 @@ export const createGiftcardHold = async (payload: { code?: string; giftcardId?: 
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-        if (response.ok) return await response.json();
+        // If we received JSON from dedicated endpoint return it even if status is 4xx
+        try {
+            const body = await response.json().catch(() => null);
+            if (body) return body;
+        } catch (e) {}
+
+        // Fallback: use legacy action router which supports POST actions
+        try {
+            const legacy = await fetch(`/api/data?action=createGiftcardHold`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const legacyBody = await legacy.json().catch(() => null);
+            if (legacyBody) return legacyBody;
+        } catch (legacyErr) {
+            console.warn('Legacy POST fallback failed for createGiftcardHold:', legacyErr);
+        }
         return { success: false, error: `createGiftcardHold failed (${response.status})` };
     } catch (err) {
         return { success: false, error: err instanceof Error ? err.message : String(err) };
