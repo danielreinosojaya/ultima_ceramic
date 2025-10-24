@@ -780,7 +780,16 @@ export const validateGiftcard = async (code: string): Promise<any> => {
         const res = await postAction('validateGiftcard', { code });
         return res;
     } catch (err) {
-        return { success: false, error: err instanceof Error ? err.message : String(err) };
+        // Fallback: some deployments may not accept POST to /api/data (404). Try GET fallback.
+        try {
+            const url = `/api/data?action=validateGiftcard&code=${encodeURIComponent(code)}`;
+            const resp = await fetch(url, { method: 'GET' });
+            if (!resp.ok) throw new Error(`GET fallback failed: ${resp.status}`);
+            const data = await resp.json();
+            return data;
+        } catch (e) {
+            return { success: false, error: err instanceof Error ? err.message : String(err) };
+        }
     }
 };
 
