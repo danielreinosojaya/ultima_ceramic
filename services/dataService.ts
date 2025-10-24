@@ -777,26 +777,36 @@ export const addBooking = async (bookingData: any): Promise<AddBookingResult> =>
 // Giftcard client helpers
 export const validateGiftcard = async (code: string): Promise<any> => {
     try {
-        const res = await postAction('validateGiftcard', { code });
-        return res;
-    } catch (err) {
-        // Fallback: some deployments may not accept POST to /api/data (404). Try GET fallback.
-        try {
-            const url = `/api/data?action=validateGiftcard&code=${encodeURIComponent(code)}`;
-            const resp = await fetch(url, { method: 'GET' });
-            if (!resp.ok) throw new Error(`GET fallback failed: ${resp.status}`);
-            const data = await resp.json();
-            return data;
-        } catch (e) {
-            return { success: false, error: err instanceof Error ? err.message : String(err) };
+        // Prefer dedicated endpoint (more reliable routing)
+        const response = await fetch('/api/giftcards/validate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code })
+        });
+        if (response.ok) return await response.json();
+        // If POST fails with 404 or other, try GET fallback to the same endpoint
+        if (response.status === 404 || response.status === 405) {
+            const resp = await fetch(`/api/giftcards/validate?code=${encodeURIComponent(code)}`, { method: 'GET' });
+            if (resp.ok) return await resp.json();
         }
+        // Last resort: try legacy action router GET
+        const legacy = await fetch(`/api/data?action=validateGiftcard&code=${encodeURIComponent(code)}`);
+        if (legacy.ok) return await legacy.json();
+        return { success: false, error: `validateGiftcard failed (${response.status})` };
+    } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
 };
 
 export const createGiftcardHold = async (payload: { code?: string; giftcardId?: string; amount: number; bookingTempRef?: string; ttlMinutes?: number }): Promise<any> => {
     try {
-        const res = await postAction('createGiftcardHold', payload);
-        return res;
+        const response = await fetch('/api/giftcards/create-hold', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (response.ok) return await response.json();
+        return { success: false, error: `createGiftcardHold failed (${response.status})` };
     } catch (err) {
         return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
