@@ -46,16 +46,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const gid = String(giftcardRow.id);
     const balance = (typeof giftcardRow.balance === 'number') ? Number(giftcardRow.balance) : (giftcardRow.balance ? Number(giftcardRow.balance) : 0);
 
-    const { rows: [holdSumRow] } = await sql`
-      SELECT COALESCE(SUM(amount), 0) AS total_holds
-      FROM giftcard_holds
-      WHERE giftcard_id = ${gid} AND expires_at > NOW()
-    `;
-    const totalHolds = holdSumRow ? Number(holdSumRow.total_holds) : 0;
-    const available = Number(balance) - Number(totalHolds);
-
-    if (available < Number(amount)) {
-      return res.status(400).json({ success: false, error: 'insufficient_funds', available, balance });
+    // Eliminar bloqueo por holds: permitir uso inmediato del balance
+    if (Number(balance) < Number(amount)) {
+      return res.status(400).json({ success: false, error: 'insufficient_funds', available: balance, balance });
     }
 
     const { rows: [inserted] } = await sql`
@@ -64,7 +57,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       RETURNING *
     `;
 
-    return res.status(200).json({ success: true, hold: toCamelCase(inserted), available: Number(available) - Number(amount), balance });
+    return res.status(200).json({ success: true, hold: toCamelCase(inserted), available: Number(balance) - Number(amount), balance });
   } catch (err) {
     console.error('giftcards/create-hold error:', err);
     return res.status(500).json({ success: false, error: err instanceof Error ? err.message : String(err) });

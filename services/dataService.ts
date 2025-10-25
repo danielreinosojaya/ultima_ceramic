@@ -777,6 +777,7 @@ export const addBooking = async (bookingData: any): Promise<AddBookingResult> =>
 // Giftcard client helpers
 export const validateGiftcard = async (code: string): Promise<any> => {
     try {
+        console.debug('[dataService.validateGiftcard] requesting validation for code:', code);
         // Prefer dedicated endpoint (more reliable routing)
         const response = await fetch('/api/giftcards/validate', {
             method: 'POST',
@@ -805,12 +806,15 @@ export const validateGiftcard = async (code: string): Promise<any> => {
             });
             // Return any JSON payload from legacy route even if status is 4xx/5xx
             const legacyBody = await legacyPost.json().catch(() => null);
+            console.debug('[dataService.validateGiftcard] legacyPost response body:', legacyBody);
             if (legacyBody) return legacyBody;
         } catch (legacyErr) {
             console.warn('Legacy POST fallback failed for validateGiftcard:', legacyErr);
         }
+        console.debug('[dataService.validateGiftcard] all fallbacks failed for code:', code, 'response status:', response.status);
         return { success: false, error: `validateGiftcard failed (${response.status})` };
     } catch (err) {
+        console.error('[dataService.validateGiftcard] unexpected error for code:', code, err);
         return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
 };
@@ -842,6 +846,70 @@ export const createGiftcardHold = async (payload: { code?: string; giftcardId?: 
         }
         return { success: false, error: `createGiftcardHold failed (${response.status})` };
     } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+};
+export const releaseGiftcardHold = async (payload: { holdId: string }): Promise<any> => {
+    try {
+        const response = await fetch('/api/giftcards/release-hold', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        try {
+            const body = await response.json().catch(() => null);
+            if (body) return body;
+        } catch (e) {}
+
+        // Fallback to legacy router if needed
+        try {
+            const legacy = await fetch(`/api/data?action=releaseGiftcardHold`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const legacyBody = await legacy.json().catch(() => null);
+            if (legacyBody) return legacyBody;
+        } catch (legacyErr) {
+            console.warn('Legacy POST fallback failed for releaseGiftcardHold:', legacyErr);
+        }
+
+        return { success: false, error: `releaseGiftcardHold failed (${response.status})` };
+    } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+};
+
+// Admin: get all issued giftcards (for admin console)
+export const getGiftcards = async (): Promise<any[]> => {
+    try {
+        console.debug('[dataService.getGiftcards] fetching listGiftcards from /api/data');
+        const response = await fetch('/api/data?action=listGiftcards');
+        if (!response.ok) throw new Error('Error fetching giftcards');
+        const data = await response.json();
+        console.debug('[dataService.getGiftcards] raw response length:', Array.isArray(data) ? data.length : 'non-array');
+        if (!Array.isArray(data)) return [];
+        return data.map((g: any) => ({
+            id: String(g.id),
+            code: g.code,
+            balance: typeof g.balance === 'number' ? g.balance : (g.balance ? parseFloat(g.balance) : 0),
+            initialValue: typeof g.initialValue === 'number' ? g.initialValue : (g.initial_value ? parseFloat(g.initial_value) : (g.initialValue ? parseFloat(g.initialValue) : null)),
+            expiresAt: g.expiresAt || g.expires_at || null,
+            metadata: g.metadata || g.meta || null,
+            giftcardRequestId: g.giftcardRequestId || g.giftcard_request_id || null,
+        }));
+    } catch (err) {
+        console.error('[dataService.getGiftcards] error fetching giftcards:', err);
+        return [];
+    }
+};
+// Admin: repair missing giftcards generated from approved requests
+export const repairMissingGiftcards = async (options: { dryRun?: boolean; limit?: number } = {}): Promise<any> => {
+    try {
+        const res = await postAction('repairMissingGiftcards', { dryRun: !!options.dryRun, limit: options.limit || 200 });
+        return res;
+    } catch (err) {
+        console.error('[dataService.repairMissingGiftcards] error:', err);
         return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
 };

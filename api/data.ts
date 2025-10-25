@@ -374,6 +374,39 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                 }
                 break;
             }
+            case 'listGiftcards': {
+                // Devuelve todas las giftcards emitidas (para el panel admin)
+                try {
+                    console.debug('[API] listGiftcards called - fetching issued giftcards');
+                    await sql`CREATE TABLE IF NOT EXISTS giftcards (
+                        id SERIAL PRIMARY KEY,
+                        code VARCHAR(32) NOT NULL UNIQUE,
+                        initial_value NUMERIC,
+                        balance NUMERIC,
+                        giftcard_request_id INTEGER,
+                        expires_at TIMESTAMP,
+                        metadata JSONB,
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )`;
+                    const { rows } = await sql`SELECT * FROM giftcards ORDER BY created_at DESC`;
+                    const formattedG = rows.map(r => ({
+                        id: String(r.id),
+                        code: r.code,
+                        initialValue: typeof r.initial_value === 'number' ? r.initial_value : (r.initial_value ? parseFloat(r.initial_value) : null),
+                        balance: typeof r.balance === 'number' ? r.balance : (r.balance ? parseFloat(r.balance) : 0),
+                        giftcardRequestId: r.giftcard_request_id || null,
+                        expiresAt: r.expires_at ? new Date(r.expires_at).toISOString() : null,
+                        metadata: r.metadata || null,
+                        createdAt: r.created_at ? new Date(r.created_at).toISOString() : null
+                    }));
+                    console.debug('[API] listGiftcards fetched rows:', rows.length);
+                    data = formattedG;
+                } catch (err) {
+                    console.error('Error listing giftcards:', err);
+                    data = [];
+                }
+                break;
+            }
             case 'inquiries': {
                 const { rows: inquiries } = await sql`
                     SELECT
@@ -802,6 +835,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             // Validate a giftcard code and return balance, expiry and status.
             const body = req.body || {};
             const code = (body.code || req.query.code || '').toString();
+            console.debug('[API] validateGiftcard called with code:', code);
             if (!code) return res.status(400).json({ success: false, error: 'code is required' });
 
             try {
@@ -1210,6 +1244,46 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     }
                 }
 
+
+                // FINAL SAFETY CHECK: if issuedGiftcard is still missing, attempt one last simple insert
+                if (!issuedGiftcard) {
+                    try {
+                        console.error('[API][approveGiftcardRequest] issuedGiftcard missing after retries, attempting final insert for code', code);
+                        // Minimal safe insert: try to set numeric columns only if they exist
+                        if (hasInitial && hasBalance) {
+                            const { rows: [finalRow] } = await sql`
+                                INSERT INTO giftcards (code, initial_value, balance, giftcard_request_id, expires_at, metadata)
+                                VALUES (${code}, ${updated.amount}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser, repaired_at: new Date().toISOString(), repaired_by: 'approveGiftcardRequest-final-insert' })}::jsonb)
+                                RETURNING *;
+                            `;
+                            issuedGiftcard = finalRow;
+                        } else if (hasInitial) {
+                            const { rows: [finalRow] } = await sql`
+                                INSERT INTO giftcards (code, initial_value, giftcard_request_id, expires_at, metadata)
+                                VALUES (${code}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser, repaired_at: new Date().toISOString(), repaired_by: 'approveGiftcardRequest-final-insert' })}::jsonb)
+                                RETURNING *;
+                            `;
+                            issuedGiftcard = finalRow;
+                        } else if (hasValue && hasBalance) {
+                            const { rows: [finalRow] } = await sql`
+                                INSERT INTO giftcards (code, value, balance, giftcard_request_id, expires_at, metadata)
+                                VALUES (${code}, ${updated.amount}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser, repaired_at: new Date().toISOString(), repaired_by: 'approveGiftcardRequest-final-insert' })}::jsonb)
+                                RETURNING *;
+                            `;
+                            issuedGiftcard = finalRow;
+                        } else {
+                            const { rows: [finalRow] } = await sql`
+                                INSERT INTO giftcards (code, giftcard_request_id, expires_at, metadata)
+                                VALUES (${code}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser, repaired_at: new Date().toISOString(), repaired_by: 'approveGiftcardRequest-final-insert', amount: updated.amount })}::jsonb)
+                                RETURNING *;
+                            `;
+                            issuedGiftcard = finalRow;
+                        }
+                        console.debug('[API][approveGiftcardRequest] final insert succeeded for code', code, 'row:', issuedGiftcard && issuedGiftcard.id);
+                    } catch (finalErr) {
+                        console.error('[API][approveGiftcardRequest] final fallback insert failed for code', code, finalErr);
+                    }
+                }
                 // Regardless of whether we created a DB giftcard, if not created we will still attempt to send emails using the generated code
                 if (!issuedGiftcard) {
                     console.warn('Proceeding without persisted giftcard record; will send best-effort emails to buyer/recipient with code:', code);
@@ -1492,6 +1566,113 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 await sql`ROLLBACK`;
                 console.error('attachGiftcardProof error:', error);
                 return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+        case 'repairMissingGiftcards': {
+            // Scan approved giftcard_requests with metadata.issuedCode but no giftcards row, and insert missing giftcards.
+            const body = req.body || {};
+            const dryRun = !!body.dryRun;
+            const limit = body.limit ? Number(body.limit) : 200;
+            try {
+                console.debug('[API] repairMissingGiftcards called, dryRun=', dryRun, 'limit=', limit);
+
+                // Find approved requests with issuedCode
+                const { rows: reqRows } = await sql`
+                    SELECT id, amount, metadata
+                    FROM giftcard_requests
+                    WHERE status = 'approved' AND (metadata->>'issuedCode') IS NOT NULL
+                    ORDER BY created_at DESC
+                `;
+
+                const candidates: Array<{ id: any; issuedCode: string; amount: number | null; metadata: any }> = [];
+                for (const r of reqRows) {
+                    if (!r) continue;
+                    let issuedCode: string | null = null;
+                    try {
+                        if (r.metadata && typeof r.metadata === 'object' && r.metadata.issuedCode) issuedCode = String(r.metadata.issuedCode);
+                        else if (r.metadata && typeof r.metadata === 'string') {
+                            try { const parsed = JSON.parse(r.metadata); if (parsed && parsed.issuedCode) issuedCode = String(parsed.issuedCode); } catch(e) {}
+                        }
+                    } catch (e) { issuedCode = null; }
+                    if (!issuedCode) continue;
+
+                    const { rows: giftRows } = await sql`SELECT id FROM giftcards WHERE code = ${issuedCode} LIMIT 1`;
+                    if (!giftRows || giftRows.length === 0) {
+                        let amountVal: number | null = null;
+                        if (typeof r.amount === 'number') amountVal = r.amount;
+                        else if (r.amount) amountVal = Number(r.amount);
+                        else if (r.metadata && r.metadata.amount) amountVal = Number(r.metadata.amount);
+                        candidates.push({ id: r.id, issuedCode, amount: amountVal, metadata: r.metadata });
+                    }
+                    if (candidates.length >= limit) break;
+                }
+
+                console.debug('[API] repairMissingGiftcards candidates found:', candidates.length);
+
+                // Determine which numeric columns exist in giftcards
+                const { rows: colCheck } = await sql`SELECT column_name FROM information_schema.columns WHERE table_name='giftcards' AND column_name IN ('initial_value','value','balance')`;
+                const cols = (colCheck || []).map((c: any) => c.column_name);
+                const hasInitial = cols.includes('initial_value');
+                const hasValue = cols.includes('value');
+                const hasBalance = cols.includes('balance');
+
+                const repaired: any[] = [];
+                const failed: any[] = [];
+
+                for (const c of candidates) {
+                    try {
+                        if (dryRun) {
+                            repaired.push({ id: c.id, code: c.issuedCode, wouldInsert: true });
+                            continue;
+                        }
+
+                        // Attempt insertion with the safest set of columns available
+                        let inserted: any = null;
+                        if (hasInitial && hasBalance) {
+                            const { rows: [r] } = await sql`
+                                INSERT INTO giftcards (code, initial_value, balance, giftcard_request_id, expires_at, metadata)
+                                VALUES (${c.issuedCode}, ${c.amount || 0}, ${c.amount || 0}, ${c.id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ repairedBy: 'repairMissingGiftcards', repairedAt: new Date().toISOString() })}::jsonb)
+                                RETURNING *;
+                            `;
+                            inserted = r;
+                        } else if (hasInitial) {
+                            const { rows: [r] } = await sql`
+                                INSERT INTO giftcards (code, initial_value, giftcard_request_id, expires_at, metadata)
+                                VALUES (${c.issuedCode}, ${c.amount || 0}, ${c.id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ repairedBy: 'repairMissingGiftcards', repairedAt: new Date().toISOString() })}::jsonb)
+                                RETURNING *;
+                            `;
+                            inserted = r;
+                        } else if (hasValue && hasBalance) {
+                            const { rows: [r] } = await sql`
+                                INSERT INTO giftcards (code, value, balance, giftcard_request_id, expires_at, metadata)
+                                VALUES (${c.issuedCode}, ${c.amount || 0}, ${c.amount || 0}, ${c.id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ repairedBy: 'repairMissingGiftcards', repairedAt: new Date().toISOString() })}::jsonb)
+                                RETURNING *;
+                            `;
+                            inserted = r;
+                        } else {
+                            const { rows: [r] } = await sql`
+                                INSERT INTO giftcards (code, giftcard_request_id, expires_at, metadata)
+                                VALUES (${c.issuedCode}, ${c.id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ repairedBy: 'repairMissingGiftcards', repairedAt: new Date().toISOString(), amount: c.amount })}::jsonb)
+                                RETURNING *;
+                            `;
+                            inserted = r;
+                        }
+
+                        if (inserted) {
+                            repaired.push({ id: c.id, code: c.issuedCode, giftcardId: inserted.id });
+                        } else {
+                            failed.push({ id: c.id, code: c.issuedCode, error: 'insert returned no row' });
+                        }
+                    } catch (err) {
+                        console.error('[API][repairMissingGiftcards] failed inserting for', c.issuedCode, err);
+                        failed.push({ id: c.id, code: c.issuedCode, error: err instanceof Error ? err.message : String(err) });
+                    }
+                }
+
+                return res.status(200).json({ success: true, dryRun, candidates: candidates.length, repaired, failed });
+            } catch (err) {
+                console.error('[API][repairMissingGiftcards] error:', err);
+                return res.status(500).json({ success: false, error: err instanceof Error ? err.message : String(err) });
             }
         }
         case 'syncProducts': {
@@ -2221,27 +2402,110 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
             return { success: false, message: err instanceof Error ? err.message : String(err) };
         }
     } else {
-        // No hold provided: insert booking normally
-        const { rows: [created] } = await sql`
-            INSERT INTO bookings (product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_code, booking_date, participants, client_note)
-            VALUES (
-                ${newBooking.productId},
-                ${newBooking.productType},
-                ${JSON.stringify(newBooking.slots)},
-                ${JSON.stringify(newBooking.userInfo)},
-                ${new Date().toISOString()},
-                ${newBooking.isPaid},
-                ${newBooking.price},
-                ${newBooking.bookingMode},
-                ${JSON.stringify(newBooking.product)},
-                ${newBooking.bookingCode},
-                ${bookingDate},
-                ${participants || 1},
-                ${clientNote || null}
-            )
-            RETURNING *;
-        `;
-        insertedRow = created;
+        // Support immediate giftcard consumption (no hold) when client sends giftcard info
+        const giftcardCode = (body as any).giftcardCode || (body as any).giftcard_code || (body as any).code || null;
+        const giftcardId = (body as any).giftcardId || (body as any).giftcard_id || null;
+        const giftcardAmount = typeof (body as any).giftcardAmount !== 'undefined' ? Number((body as any).giftcardAmount) : (typeof (body as any).giftcard_amount !== 'undefined' ? Number((body as any).giftcard_amount) : null);
+
+        if ((giftcardCode || giftcardId) && giftcardAmount && giftcardAmount > 0) {
+            // Attempt to consume the giftcard atomically and create booking with paymentDetails
+            try {
+                await sql`BEGIN`;
+
+                // Lock giftcard row (by id or code)
+                let giftcardRow: any = null;
+                if (giftcardId) {
+                    const { rows: [g] } = await sql`SELECT * FROM giftcards WHERE id = ${String(giftcardId)} FOR UPDATE`;
+                    giftcardRow = g;
+                } else {
+                    const { rows: [g] } = await sql`SELECT * FROM giftcards WHERE code = ${giftcardCode} FOR UPDATE`;
+                    giftcardRow = g;
+                }
+
+                if (!giftcardRow) {
+                    await sql`ROLLBACK`;
+                    return { success: false, message: 'giftcard_not_found' } as AddBookingResult;
+                }
+
+                const currentBalance = (typeof giftcardRow.balance === 'number') ? Number(giftcardRow.balance) : (giftcardRow.balance ? Number(giftcardRow.balance) : 0);
+                if (currentBalance < giftcardAmount) {
+                    await sql`ROLLBACK`;
+                    return { success: false, message: 'insufficient_balance' } as AddBookingResult;
+                }
+
+                // Deduct balance and append to redeemed_history if column exists
+                const redeemedEntry = JSON.stringify({ amount: giftcardAmount, redeemedAt: new Date().toISOString(), giftcardId: giftcardRow.id || null });
+                try {
+                    await sql`
+                        UPDATE giftcards
+                        SET balance = ${currentBalance - giftcardAmount}, redeemed_history = COALESCE(redeemed_history, '[]'::jsonb) || ${redeemedEntry}::jsonb
+                        WHERE id = ${String(giftcardRow.id)}
+                    `;
+                } catch (e) {
+                    await sql`ROLLBACK`;
+                    return { success: false, message: 'failed_update_giftcard' } as AddBookingResult;
+                }
+
+                // Create booking and include paymentDetails entry for giftcard
+                const paymentDetails = JSON.stringify([{ amount: giftcardAmount, method: 'Giftcard', receivedAt: new Date().toISOString(), metadata: { giftcardId: giftcardRow.id || null, code: giftcardRow.code || giftcardCode } }]);
+
+                // If giftcard covers total price, mark as paid
+                const isPaidFinal = giftcardAmount >= Number(newBooking.price || 0);
+
+                const { rows: [created] } = await sql`
+                    INSERT INTO bookings (product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_code, booking_date, participants, client_note, payment_details, giftcard_redeemed_amount, giftcard_id)
+                    VALUES (
+                        ${newBooking.productId},
+                        ${newBooking.productType},
+                        ${JSON.stringify(newBooking.slots)},
+                        ${JSON.stringify(newBooking.userInfo)},
+                        ${new Date().toISOString()},
+                        ${isPaidFinal},
+                        ${newBooking.price},
+                        ${newBooking.bookingMode},
+                        ${JSON.stringify(newBooking.product)},
+                        ${newBooking.bookingCode},
+                        ${bookingDate},
+                        ${participants || 1},
+                        ${clientNote || null},
+                        ${paymentDetails},
+                        ${giftcardAmount},
+                        ${String(giftcardRow.id)}
+                    )
+                    RETURNING *;
+                `;
+
+                insertedRow = created;
+
+                await sql`COMMIT`;
+            } catch (err) {
+                try { await sql`ROLLBACK`; } catch(e){}
+                console.error('Error creating booking with immediate giftcard consume:', err);
+                return { success: false, message: err instanceof Error ? err.message : String(err) } as AddBookingResult;
+            }
+        } else {
+            // No giftcard consumption requested: insert booking normally
+            const { rows: [created] } = await sql`
+                INSERT INTO bookings (product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_code, booking_date, participants, client_note)
+                VALUES (
+                    ${newBooking.productId},
+                    ${newBooking.productType},
+                    ${JSON.stringify(newBooking.slots)},
+                    ${JSON.stringify(newBooking.userInfo)},
+                    ${new Date().toISOString()},
+                    ${newBooking.isPaid},
+                    ${newBooking.price},
+                    ${newBooking.bookingMode},
+                    ${JSON.stringify(newBooking.product)},
+                    ${newBooking.bookingCode},
+                    ${bookingDate},
+                    ${participants || 1},
+                    ${clientNote || null}
+                )
+                RETURNING *;
+            `;
+            insertedRow = created;
+        }
     }
     
     const fullyParsedBooking = parseBookingFromDB(insertedRow);

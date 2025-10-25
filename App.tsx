@@ -48,7 +48,7 @@ const App: React.FC = () => {
     const [view, setView] = useState<AppView | 'giftcard_landing'>('welcome');
     const [bookingDetails, setBookingDetails] = useState<BookingDetails>({ product: null, slots: [], userInfo: null });
     const [confirmedBooking, setConfirmedBooking] = useState<Booking | null>(null);
-    const [activeGiftcardHold, setActiveGiftcardHold] = useState<{ holdId: string; expiresAt?: string; amount: number } | null>(null);
+    const [activeGiftcardHold, setActiveGiftcardHold] = useState<{ holdId?: string; expiresAt?: string; amount?: number; giftcardId?: string; code?: string } | null>(null);
     const [technique, setTechnique] = useState<Technique | null>(null);
     const [bookingMode, setBookingMode] = useState<BookingMode | null>(null);
 
@@ -193,9 +193,20 @@ const App: React.FC = () => {
 
             const submit = async () => {
                 try {
-                    // Attach holdId if user created a giftcard hold
-                    if (activeGiftcardHold && activeGiftcardHold.holdId) {
-                        (bookingData as any).holdId = activeGiftcardHold.holdId;
+                    // Attach giftcard info if the user applied a giftcard (supports holdId or immediate consume)
+                    if (activeGiftcardHold) {
+                        if (activeGiftcardHold.holdId) {
+                            (bookingData as any).holdId = activeGiftcardHold.holdId;
+                        }
+                        if (activeGiftcardHold.giftcardId) {
+                            (bookingData as any).giftcardId = activeGiftcardHold.giftcardId;
+                        }
+                        if (activeGiftcardHold.code) {
+                            (bookingData as any).giftcardCode = activeGiftcardHold.code;
+                        }
+                        if (typeof activeGiftcardHold.amount === 'number') {
+                            (bookingData as any).giftcardAmount = activeGiftcardHold.amount;
+                        }
                     }
 
                     const result = await dataService.addBooking(bookingData);
@@ -391,6 +402,7 @@ const App: React.FC = () => {
                             onBack={handleBackFromSummary} 
                             appData={appData} 
                             onUseGiftcard={(holdInfo) => setActiveGiftcardHold(holdInfo)}
+                            activeGiftcardHold={activeGiftcardHold}
                         />;
             case 'confirmation':
                 if (!confirmedBooking) return <WelcomeSelector onSelect={handleWelcomeSelect} />;
@@ -399,7 +411,8 @@ const App: React.FC = () => {
                             bankDetails={appData.bankDetails}
                             footerInfo={appData.footerInfo}
                             policies={appData.policies}
-                            onFinish={resetFlow} 
+                            onFinish={resetFlow}
+                            appliedGiftcardHold={activeGiftcardHold}
                         />;
             case 'group_experience':
             case 'couples_experience':

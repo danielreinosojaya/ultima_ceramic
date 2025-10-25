@@ -21,6 +21,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const code = (req.method === 'GET' ? req.query.code : req.body && req.body.code) || '';
   const codeStr = String(code || '').trim();
+  console.debug('[API:/giftcards/validate] called with code:', codeStr, 'method:', req.method);
   if (!codeStr) return res.status(400).json({ success: false, error: 'code is required' });
 
   try {
@@ -28,6 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { rows: giftcardRows } = await sql`SELECT * FROM giftcards WHERE code = ${codeStr} LIMIT 1`;
     if (giftcardRows && giftcardRows.length > 0) {
       const g = giftcardRows[0];
+      console.debug('[API:/giftcards/validate] found issued giftcard row id=', g.id, 'balance=', g.balance);
       const balance = (typeof g.balance === 'number') ? g.balance : (g.balance ? parseFloat(g.balance) : 0);
       const initialValue = (typeof g.initial_value === 'number') ? g.initial_value : (g.initial_value ? parseFloat(g.initial_value) : null);
       const expiresAt = g.expires_at ? new Date(g.expires_at).toISOString() : null;
@@ -63,6 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (reqRows && reqRows.length > 0) {
       const r = reqRows[0];
+      console.debug('[API:/giftcards/validate] found giftcard_request row id=', r.id, 'status=', r.status);
       const reqCamel = toCamelCase(r);
       const status = (r.status || '').toString();
       let issuedCode: string | null = null;

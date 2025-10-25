@@ -15,6 +15,7 @@ interface AdminData {
   announcements: Announcement[];
   invoiceRequests: InvoiceRequest[];
   giftcardRequests: import('../services/dataService').GiftcardRequest[];
+  giftcards: any[];
   loading: boolean; // ✅ Cambiar a boolean para compatibilidad
   loadingState: {
     critical: boolean;
@@ -45,6 +46,7 @@ const initialState = {
   announcements: [],
   invoiceRequests: [],
   giftcardRequests: [],
+  giftcards: [],
   loadingState: {
     critical: false,
     extended: false,
@@ -190,6 +192,7 @@ export const AdminDataProvider: React.FC<{ children: ReactNode }> = ({ children 
         type: 'SET_GIFTCARD_REQUESTS',
         requests: results[4].status === 'fulfilled' ? results[4].value : [],
       });
+      console.debug('[AdminDataContext] Loaded critical data: booking count', results[0].status === 'fulfilled' ? (results[0].value || []).length : 0, 'giftcardRequests:', results[4].status === 'fulfilled' ? (results[4].value || []).length : 0);
     } catch (error) {
       console.error('Error loading critical admin data:', error);
       // En lugar de mostrar error, cargar datos vacíos para que funcione
@@ -223,6 +226,7 @@ export const AdminDataProvider: React.FC<{ children: ReactNode }> = ({ children 
         dataService.getClassCapacity().catch(() => ({})),
         dataService.getCapacityMessageSettings().catch(() => ({})),
         dataService.getInvoiceRequests().catch(() => []),
+        dataService.getGiftcards().catch(() => []),
       ]);
 
       dispatch({
@@ -235,8 +239,10 @@ export const AdminDataProvider: React.FC<{ children: ReactNode }> = ({ children 
           classCapacity: results[4].status === 'fulfilled' ? results[4].value : {},
           capacityMessages: results[5].status === 'fulfilled' ? results[5].value : {},
           invoiceRequests: results[6].status === 'fulfilled' ? results[6].value : [],
+          giftcards: results[7].status === 'fulfilled' ? results[7].value : [],
         }
       });
+      console.debug('[AdminDataContext] Loaded extended data: giftcards count', results[7].status === 'fulfilled' ? (results[7].value || []).length : 0);
     } catch (error) {
       console.error('Error loading extended admin data:', error);
       // Fallback con datos vacíos
