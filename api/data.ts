@@ -350,9 +350,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 }
 
 async function handleGet(req: VercelRequest, res: VercelResponse) {
-    const { key } = req.query;
+    const { key, action } = req.query;
+
+    if (action === 'ping') {
+        const info = {
+            ok: true,
+            method: req.method,
+            query: req.query || null,
+            bodyPresent: !!req.body,
+            body: typeof req.body === 'object' ? req.body : String(req.body || null),
+            ts: new Date().toISOString()
+        };
+        console.log('[ping] received', info.method, info.query);
+        return res.status(200).json(info);
+    }
+
     let data;
-    const action = req.query.action as string | undefined;
     if (action) {
         switch (action) {
             case 'listGiftcardRequests': {
@@ -1958,7 +1971,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         case 'addGroupInquiry':
             const addInquiryBody = req.body;
             const newInquiry = { ...addInquiryBody, status: 'New', createdAt: new Date().toISOString() };
-            const { rows: [insertedInquiry] } = await sql`INSERT INTO inquiries (name, email, phone, country_code, participants, tentative_date, tentative_time, event_type, message, status, created_at, inquiry_type)
+            const { rows: [insertedInquiry] = [{}] } = await sql`INSERT INTO inquiries (name, email, phone, country_code, participants, tentative_date, tentative_time, event_type, message, status, created_at, inquiry_type)
             VALUES (${newInquiry.name}, ${newInquiry.email}, ${newInquiry.phone}, ${newInquiry.countryCode}, ${newInquiry.participants}, ${newInquiry.tentativeDate || null}, ${newInquiry.tentativeTime || null}, ${newInquiry.eventType}, ${newInquiry.message}, ${newInquiry.status}, ${newInquiry.createdAt}, ${newInquiry.inquiryType})
             RETURNING *;`;
             await sql`INSERT INTO notifications (type, target_id, user_name, summary) VALUES ('new_inquiry', ${insertedInquiry.id}, ${insertedInquiry.name}, ${insertedInquiry.inquiry_type});`;
