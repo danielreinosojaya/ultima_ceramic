@@ -6,7 +6,7 @@ interface EditPaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   payment: PaymentDetails;
-  paymentIndex: number;
+  paymentIndex: number;  // Mantener para retrocompatibilidad, pero preferir paymentId
   bookingId: string;
   onSave: (updated: Partial<PaymentDetails>) => void;
 }
@@ -36,9 +36,48 @@ export const EditPaymentModal: React.FC<EditPaymentModalProps> = ({ isOpen, onCl
   };
 
   const handleConfirmDelete = async () => {
-    await import('../../services/dataService').then(ds => ds.deletePaymentFromBooking(bookingId, paymentIndex, cancelReason));
-    setShowConfirm(false);
-    onClose();
+    try {
+      const dataService = await import('../../services/dataService');
+      
+      // Prefer paymentId if available, fallback to index-based approach
+      if (payment.id) {
+        console.log('[EditPaymentModal] Deleting payment by ID:', payment.id);
+        await dataService.deletePaymentFromBooking(bookingId, payment.id, cancelReason);
+      } else {
+        console.warn('[EditPaymentModal] Payment has no ID, falling back to index-based deletion');
+        // Refetch booking to get fresh payment array and correct index
+        const freshBookings = await dataService.getBookings();
+        const freshBooking = freshBookings.find((b: any) => b.id === bookingId);
+        
+        if (!freshBooking || !freshBooking.paymentDetails) {
+          console.error('[EditPaymentModal] Could not find booking or payment details');
+          alert('Error: No se pudo encontrar la reserva o los pagos actualizados.');
+          return;
+        }
+
+        // Find the real index by matching payment properties
+        const realIndex = freshBooking.paymentDetails.findIndex((p: any) => 
+          p.amount === payment.amount && 
+          p.method === payment.method && 
+          p.receivedAt === payment.receivedAt
+        );
+
+        if (realIndex === -1) {
+          console.error('[EditPaymentModal] Could not find matching payment in fresh data');
+          alert('Error: No se pudo encontrar el pago en los datos actualizados. Puede que ya haya sido eliminado.');
+          return;
+        }
+
+        console.log('[EditPaymentModal] Deleting payment with realIndex:', realIndex, 'from', freshBooking.paymentDetails.length, 'payments');
+        await dataService.deletePaymentFromBooking(bookingId, realIndex, cancelReason);
+      }
+      
+      setShowConfirm(false);
+      onClose();
+    } catch (error) {
+      console.error('[EditPaymentModal] Error deleting payment:', error);
+      alert(`Error al eliminar el pago: ${error instanceof Error ? error.message : String(error)}`);
+    }
   };
 
   if (!isOpen) return null;

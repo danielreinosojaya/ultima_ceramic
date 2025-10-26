@@ -3,16 +3,24 @@ import { sql } from '@vercel/postgres';
 // Validate database connection - try multiple possible environment variable names
 const dbUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL || process.env.POSTGRES_PRISMA_URL;
 if (!dbUrl) {
-    console.error('Database connection error: No database URL found in environment variables');
-    console.error('Checked: POSTGRES_URL, DATABASE_URL, POSTGRES_PRISMA_URL');
-    throw new Error('Database URL environment variable is required');
+    console.warn('⚠️  WARNING: No database URL found in environment variables');
+    console.warn('⚠️  Checked: POSTGRES_URL, DATABASE_URL, POSTGRES_PRISMA_URL');
+    console.warn('⚠️  Database operations will fail until environment is configured');
+    // DO NOT throw here - allow module to load, functions will fail gracefully with proper error responses
+} else {
+    console.log('✅ Database connection configured');
 }
 
-// Solo log una vez al inicializar el módulo
-let connectionLogged = false;
-if (!connectionLogged) {
-    console.log('Database connection configured');
-    connectionLogged = true;
+// Helper to check if DB is configured
+export function isDatabaseConfigured(): boolean {
+    return !!dbUrl;
+}
+
+// Helper to throw descriptive error when DB is not configured
+export function requireDatabase(): void {
+    if (!dbUrl) {
+        throw new Error('Database not configured. Please set POSTGRES_URL, DATABASE_URL, or POSTGRES_PRISMA_URL environment variable.');
+    }
 }
 
 // Obtener reservas por email de cliente
@@ -207,6 +215,18 @@ export async function ensureTablesExist() {
                 booking_date TEXT,
                 participants INT DEFAULT 1,
                 client_note TEXT
+            );`,
+            
+            `CREATE TABLE IF NOT EXISTS giftcard_audit (
+                id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                giftcard_id VARCHAR(255) NOT NULL,
+                booking_id UUID,
+                action VARCHAR(50) NOT NULL, -- use, error, revert
+                amount NUMERIC(10,2),
+                status VARCHAR(20) NOT NULL, -- success, failed, reverted
+                error TEXT,
+                timestamp TIMESTAMPTZ DEFAULT NOW(),
+                metadata JSONB
             );`
         ];
 

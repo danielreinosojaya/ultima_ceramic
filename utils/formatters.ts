@@ -44,3 +44,21 @@ export function normalizeHour(time: string): string {
     const [h, m] = time.split(':');
     return `${h.padStart(2, '0')}:${(m || '00').padStart(2, '0')}:00`;
 }
+
+/**
+ * Generate a unique payment ID (UUID v4 simplified)
+ * Format: 8-4-4-4-12 hexadecimal characters
+ */
+export function generatePaymentId(): string {
+    // Simple UUID v4 generator (client-side compatible)
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+    }
+    
+    // Fallback for environments without crypto.randomUUID
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}

@@ -175,9 +175,13 @@ export interface EnrichedIntroClassSession {
 export type AttendanceStatus = 'attended' | 'no-show';
 
 export interface PaymentDetails {
+    id?: string;  // UUID único para identificar el pago (opcional para retrocompatibilidad)
     amount: number;
-    method: 'Cash' | 'Card' | 'Transfer';
+    method: 'Cash' | 'Card' | 'Transfer' | 'Giftcard' | 'Manual';
     receivedAt: string; // ISO date string
+    giftcardAmount?: number;  // Monto pagado con giftcard (puede ser parcial)
+    giftcardId?: string;      // ID de la giftcard usada
+    metadata?: Record<string, any>;  // Datos adicionales (código, etc.)
 }
 
 export interface Booking {
@@ -192,12 +196,19 @@ export interface Booking {
     price: number;
     bookingCode: string;
     bookingMode: BookingMode;
-    // FIX: Change to an array of payments
     paymentDetails?: PaymentDetails[];
     attendance?: Record<string, AttendanceStatus>; // key is `${date}_${time}`
     bookingDate: string;
     participants?: number;
     clientNote?: string;
+    giftcardApplied?: boolean;
+    giftcardRedeemedAmount?: number;
+    giftcardId?: string;
+    pendingBalance?: number;
+
+    // Propiedades derivadas
+    date?: string; // Derivada de bookingDate
+    time?: string; // Derivada de slots
 }
 
 export interface BookingDetails {

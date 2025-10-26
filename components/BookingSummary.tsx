@@ -32,6 +32,29 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   const language = 'es-ES';
   const { product, slots, userInfo } = bookingDetails;
   
+    // --- INTEGRACIÓN GIFT CARD ---
+    const renderGiftcardBadge = (hold: any) => {
+      if (hold && (hold.amount || hold.giftcardId)) {
+        return (
+          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-indigo-50 text-indigo-700 ml-2">
+            Giftcard: ${hold.amount}
+            {hold.giftcardId ? ` · ID:${hold.giftcardId}` : ''}
+          </span>
+        );
+      }
+      return null;
+    };
+    // Modal de auditoría de giftcard
+    const [showGiftcardAudit, setShowGiftcardAudit] = React.useState(false);
+    const handleOpenAudit = () => setShowGiftcardAudit(true);
+    const handleCloseAudit = () => setShowGiftcardAudit(false);
+    // Simulación de datos de auditoría (reemplazar por fetch real si aplica)
+    const giftcardAuditData = activeGiftcardHold ? [{
+      fecha: '2024-06-01',
+      accion: 'Reserva creada',
+      monto: activeGiftcardHold.amount,
+      id: activeGiftcardHold.giftcardId || activeGiftcardHold.code
+    }] : [];
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     const adjustedDate = new Date(date.valueOf() + date.getTimezoneOffset() * 60 * 1000);
@@ -104,6 +127,47 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
       <div className="mt-8 flex flex-col items-center gap-4 justify-center">
         {/* Giftcard redeem UI */}
         <GiftcardRedeemSection product={product} onUseGiftcard={onUseGiftcard} activeGiftcardHold={activeGiftcardHold} />
+          {/* Visualización robusta de giftcard */}
+          {activeGiftcardHold && renderGiftcardBadge(activeGiftcardHold)}
+        {activeGiftcardHold && (
+          <button onClick={handleOpenAudit} className="inline-flex items-center gap-2 px-3 py-1 text-xs font-semibold rounded bg-indigo-100 hover:bg-indigo-200 text-indigo-700 ml-2 shadow transition" title="Ver auditoría de giftcard">
+            Auditoría Giftcard
+          </button>
+        )}
+        {/* Modal auditoría giftcard */}
+        {showGiftcardAudit && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-fade-in">
+            <div className="bg-white rounded-xl shadow-lg p-8 max-w-lg w-full relative">
+              <button onClick={handleCloseAudit} className="absolute top-4 right-4 text-gray-500 hover:text-brand-primary text-xl">×</button>
+              <h3 className="text-2xl font-bold mb-4 text-brand-text">Auditoría de Giftcard</h3>
+              {giftcardAuditData.length > 0 ? (
+                <table className="w-full text-sm mb-4">
+                  <thead>
+                    <tr>
+                      <th className="text-left py-2 px-2">Fecha</th>
+                      <th className="text-left py-2 px-2">Acción</th>
+                      <th className="text-left py-2 px-2">Monto</th>
+                      <th className="text-left py-2 px-2">ID</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {giftcardAuditData.map((row, idx) => (
+                      <tr key={idx} className="border-b">
+                        <td className="py-2 px-2">{row.fecha}</td>
+                        <td className="py-2 px-2">{row.accion}</td>
+                        <td className="py-2 px-2">${row.monto}</td>
+                        <td className="py-2 px-2">{row.id}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="text-brand-secondary">No hay movimientos registrados.</div>
+              )}
+              <button onClick={handleCloseAudit} className="mt-4 px-4 py-2 bg-brand-primary text-white rounded hover:bg-brand-secondary">Cerrar</button>
+            </div>
+          </div>
+        )}
         {activeGiftcardHold && (Number(activeGiftcardHold.amount || 0) >= Number(product.price || 0)) ? (
           <div className="w-full md:w-auto flex flex-col items-center gap-3">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-full font-bold">

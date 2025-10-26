@@ -145,6 +145,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
     const [productTypeFilter, setProductTypeFilter] = useState<string>('all');
     const [paymentMethodFilter, setPaymentMethodFilter] = useState<string>('all');
     const [bookingStatusFilter, setBookingStatusFilter] = useState<string>('all');
+    const [giftcardFilter, setGiftcardFilter] = useState<string>('all');
 
     // State for Pending Tab
     const [pendingPeriod, setPendingPeriod] = useState<FilterPeriod>('month');
@@ -170,15 +171,40 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
     // CORRECCIÓN: Filtrar las reservas por la fecha del pago, no la fecha de la reserva.
     const summaryBookings = useMemo(() => {
         const { startDate, endDate } = getDatesForPeriod(summaryPeriod, summaryCustomRange);
-        let filtered = allBookings.filter(b => {
-            if (!b.isPaid || !b.paymentDetails) return false;
-            // Verificar si alguno de los pagos se recibió en el rango de fechas
-            return b.paymentDetails.some(p => {
-                const receivedAt = new Date(p.receivedAt!);
-                if (isNaN(receivedAt.getTime())) return false;
-                return receivedAt >= startDate && receivedAt <= endDate;
-            });
+        
+        console.log('[FinancialDashboard] Summary filter - Date range:', { 
+            startDate: startDate.toISOString(), 
+            endDate: endDate.toISOString(),
+            period: summaryPeriod 
         });
+        
+        let filtered = allBookings.filter(b => {
+            if (!b.isPaid || !b.paymentDetails) {
+                console.log('[FinancialDashboard] Filtering out booking (not paid or no paymentDetails):', b.bookingCode, { isPaid: b.isPaid, hasPaymentDetails: !!b.paymentDetails });
+                return false;
+            }
+            // Verificar si alguno de los pagos se recibió en el rango de fechas
+            const hasPaymentInRange = b.paymentDetails.some(p => {
+                const receivedAt = new Date(p.receivedAt!);
+                if (isNaN(receivedAt.getTime())) {
+                    console.log('[FinancialDashboard] Invalid receivedAt date:', p.receivedAt);
+                    return false;
+                }
+                const inRange = receivedAt >= startDate && receivedAt <= endDate;
+                console.log('[FinancialDashboard] Checking payment:', { 
+                    bookingCode: b.bookingCode, 
+                    receivedAt: receivedAt.toISOString(), 
+                    inRange,
+                    method: p.method,
+                    giftcardAmount: p.giftcardAmount 
+                });
+                return inRange;
+            });
+            return hasPaymentInRange;
+        });
+        
+        console.log('[FinancialDashboard] Filtered bookings before advanced filters:', filtered.length);
+        
         // Advanced filters
         if (productTypeFilter !== 'all') {
             filtered = filtered.filter(b => b.product?.type === productTypeFilter);
@@ -193,8 +219,13 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                 return true;
             });
         }
+        if (giftcardFilter !== 'all') {
+            filtered = filtered.filter(b => b.paymentDetails?.some(p => (giftcardFilter === 'giftcard' ? (p.giftcardAmount || p.giftcard) : !(p.giftcardAmount || p.giftcard))));
+        }
+        
+        console.log('[FinancialDashboard] Final filtered bookings:', filtered.length);
         return filtered;
-    }, [summaryPeriod, summaryCustomRange, allBookings, productTypeFilter, paymentMethodFilter, bookingStatusFilter]);
+    }, [summaryPeriod, summaryCustomRange, allBookings, productTypeFilter, paymentMethodFilter, bookingStatusFilter, giftcardFilter]);
 
 
     const { pendingPackageBookings, pendingOpenStudioBookings } = useMemo(() => {
@@ -514,7 +545,9 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                 bookingId={paymentToEdit.bookingId}
                                 onClose={() => setPaymentToEdit(null)}
                                 onSave={async (updated) => {
-                                    await dataService.updatePaymentDetails(paymentToEdit.bookingId, paymentToEdit.index, updated);
+                                    // Prefer paymentId if available, fallback to index
+                                    const identifier = paymentToEdit.payment.id || paymentToEdit.index;
+                                    await dataService.updatePaymentDetails(paymentToEdit.bookingId, identifier, updated);
                                     setPaymentToEdit(null);
                                     onDataChange();
                                 }}
@@ -564,6 +597,11 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                             <option value="paid">Pagado</option>
                             <option value="pending">Pendiente</option>
                         </select>
+                        <select value={giftcardFilter} onChange={e => setGiftcardFilter(e.target.value)} className="text-sm p-1 border rounded-md" title="Filtrar por pagos con giftcard">
+                            <option value="all">Todos</option>
+                            <option value="giftcard">Solo giftcard</option>
+                            <option value="no-giftcard">Sin giftcard</option>
+                        </select>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                          <div title={'Valor total de vida del cliente'}>
@@ -594,7 +632,14 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{formatDate(p.receivedAt, {})}</td>
                                                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{b.userInfo?.firstName} {b.userInfo?.lastName}</td>
                                                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{b.product?.name || 'N/A'}</td>
-                                                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-semibold">${(p.amount || 0).toFixed(2)}</td>
+                                                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-semibold">${(p.amount || 0).toFixed(2)}
+                                                                                {(p.giftcardAmount || p.giftcard) && (
+                                                                                    <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-indigo-50 text-indigo-700 ml-2">
+                                                                                        Giftcard: ${((p.giftcardAmount || p.giftcard?.amount || 0)).toFixed(2)}
+                                                                                        {p.giftcardId ? ` · ID:${p.giftcardId}` : ''}
+                                                                                    </span>
+                                                                                )}
+                                                                            </td>
                                                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right">
                                                                                 <button className="bg-brand-primary text-white px-2 py-1 rounded text-xs" onClick={() => setPaymentToEdit({ payment: p, bookingId: b.id, index: idx })}>Editar pago</button>
                                                                             </td>
@@ -660,6 +705,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                         <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">Cliente</th>
                                         <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">Producto</th>
                                         <th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">Monto</th>
+                                        <th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">Saldo pendiente</th>
                                         <th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">Acciones</th>
                                     </tr>
                                 </thead>
@@ -673,7 +719,14 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                                 <div className="text-xs text-brand-secondary">{b.userInfo?.email}</div>
                                             </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text" role="cell">{b.product?.name || 'N/A'}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-semibold" role="cell">${(b.price || 0).toFixed(2)}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-semibold" role="cell">${(b.price || 0).toFixed(2)}
+                                                {b.giftcardApplied && (
+                                                    <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-indigo-50 text-indigo-700 ml-2">
+                                                        Giftcard: ${(b.giftcardRedeemedAmount || 0).toFixed(2)}
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-semibold" role="cell">${(b.pendingBalance || 0).toFixed(2)}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-right" role="cell">
                                                 <div className="flex items-center justify-end gap-2">
                                                     <button

@@ -209,13 +209,19 @@ export const createCustomer = async (customerData: {
 // Edit payment details for a booking (amount, method, date)
 // import type { PaymentDetails } from '../types';
 
+// Update payment by ID (new way) or by index (legacy fallback)
 export const updatePaymentDetails = async (
     bookingId: string,
-    paymentIndex: number,
+    paymentIdOrIndex: string | number,
     updatedDetails: Partial<PaymentDetails>
 ): Promise<{ success: boolean }> => {
-    return postAction('updatePaymentDetails', { bookingId, paymentIndex, updatedDetails });
+    const params = typeof paymentIdOrIndex === 'string'
+        ? { bookingId, paymentId: paymentIdOrIndex, updatedDetails }
+        : { bookingId, paymentIndex: paymentIdOrIndex, updatedDetails };
+    
+    return postAction('updatePaymentDetails', params);
 };
+
 // Bulk actions for FinancialDashboard
 export const acceptPaymentForBooking = async (bookingId: string): Promise<{ success: boolean }> => {
     // Placeholder: Integrate with backend/payment API as needed
@@ -440,9 +446,33 @@ const setData = async <T>(key: string, data: T): Promise<{ success: boolean }> =
 };
 
 const postAction = async (action: string, body: any): Promise<any> => {
+    // Determine admin user for automatic header propagation when available.
+    // Priority: explicit body.adminUser > payment.metadata.adminName > localStorage.adminUser > window.__ADMIN_USER__
+    let adminUserHeader: string | null = null;
+    try {
+        if (body && typeof body === 'object') {
+            if (body.adminUser) adminUserHeader = String(body.adminUser);
+            else if (body.payment && body.payment.metadata && (body.payment.metadata.adminName || body.payment.metadata.adminUser)) {
+                adminUserHeader = String(body.payment.metadata.adminName || body.payment.metadata.adminUser);
+            }
+        }
+        if (!adminUserHeader && typeof window !== 'undefined') {
+            // localStorage may contain admin user if the app sets it during admin login
+            const ls = window.localStorage.getItem('adminUser');
+            if (ls) adminUserHeader = ls;
+            // global override (rare) -- small safety check
+            if (!adminUserHeader && (window as any).__ADMIN_USER__) adminUserHeader = String((window as any).__ADMIN_USER__);
+        }
+    } catch (e) {
+        // ignore any issues reading window/localStorage in non-browser contexts
+    }
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (adminUserHeader) headers['x-admin-user'] = adminUserHeader;
+
     return fetchData(`/api/data?action=${action}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(body),
     });
 };
@@ -774,6 +804,18 @@ export const addBooking = async (bookingData: any): Promise<AddBookingResult> =>
     return result;
 };
 
+// Obtener un booking por su ID
+export const getBookingById = async (bookingId: string): Promise<Booking> => {
+    try {
+        const response = await fetch(`/api/data?action=getBookingById&bookingId=${encodeURIComponent(bookingId)}`);
+        if (!response.ok) throw new Error('Error fetching booking by ID');
+        return response.json();
+    } catch (error) {
+        console.error('getBookingById error:', error);
+        throw error;
+    }
+};
+
 // Giftcard client helpers
 export const validateGiftcard = async (code: string): Promise<any> => {
     try {
@@ -934,13 +976,24 @@ export const addPaymentToBooking = async (bookingId: string, payment: PaymentDet
     }
     return result;
 };
-export const deletePaymentFromBooking = async (bookingId: string, paymentIndex: number, cancelReason?: string): Promise<{ success: boolean; booking?: Booking }> => {
-    const result = await postAction('deletePaymentFromBooking', { bookingId, paymentIndex, cancelReason });
+
+// Delete payment by ID (new way) or by index (legacy fallback)
+export const deletePaymentFromBooking = async (
+    bookingId: string, 
+    paymentIdOrIndex: string | number, 
+    cancelReason?: string
+): Promise<{ success: boolean; booking?: Booking }> => {
+    const params = typeof paymentIdOrIndex === 'string'
+        ? { bookingId, paymentId: paymentIdOrIndex, cancelReason }
+        : { bookingId, paymentIndex: paymentIdOrIndex, cancelReason };
+    
+    const result = await postAction('deletePaymentFromBooking', params);
     if(result.success && result.booking) {
         return { ...result, booking: parseBooking(result.booking) };
     }
     return result;
 };
+
 export const markBookingAsPaid = (bookingId: string, details: Omit<PaymentDetails, 'receivedAt'>): Promise<{ success: boolean }> => postAction('markBookingAsPaid', { bookingId, details });
 export const markBookingAsUnpaid = async (bookingId: string): Promise<{ success: boolean }> => {
     const result = await postAction('markBookingAsUnpaid', { bookingId });
@@ -1250,66 +1303,45 @@ export const generateIntroClassSessions = (
         const dateStr = formatDateToYYYYMMDD(date);
         const dayOfWeek = date.getDay();
 
-        let todaysSessions: Omit<EnrichedIntroClassSession, 'paidBookingsCount' | 'totalBookingsCount'>[] = [];
-        const override = overridesByDate[dateStr];
+        const rulesForDay = (product.schedulingRules || []).filter((rule) => rule.dayOfWeek === dayOfWeek);
+        let todaysSessions = rulesForDay.map((rule) => ({
+            id: `${dateStr}-${rule.time.replace(':', '')}-${rule.instructorId}`,
+            date: dateStr,
+            time: rule.time,
+            instructorId: rule.instructorId,
+            capacity: rule.capacity || 0,
+            paidBookingsCount: 0,
+            totalBookingsCount: 0,
+            isOverride: false,
+        }));
 
-        if (override !== undefined) { 
-            if (override !== null) { 
-                todaysSessions = override.map(s => ({
+        const override = overridesByDate[dateStr];
+        if (override !== undefined) {
+            if (override !== null) {
+                todaysSessions = override.map((s) => ({
                     id: `${dateStr}-${s.time.replace(':', '')}-${s.instructorId}`,
                     date: dateStr,
-                    time: new Date(`1970-01-01T${s.time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+                    time: s.time,
                     instructorId: s.instructorId,
                     capacity: s.capacity,
-                    isOverride: true
+                    paidBookingsCount: 0,
+                    totalBookingsCount: 0,
+                    isOverride: true,
                 }));
+            } else {
+                todaysSessions = [];
             }
-        } else { 
-            const rulesForDay = (product.schedulingRules || []).filter(rule => rule.dayOfWeek === dayOfWeek);
-            todaysSessions = rulesForDay.map(rule => ({
-                id: `${dateStr}-${rule.time.replace(':', '')}-${rule.instructorId}`,
-                date: dateStr,
-                time: new Date(`1970-01-01T${rule.time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
-                instructorId: rule.instructorId,
-                capacity: rule.capacity,
-                isOverride: false
-            }));
         }
 
-        const normalizeTime = (time: string) => {
-            // Devuelve siempre en formato "HH:mm" 24h para comparación
-            if (!time) return '';
-            // Si ya está en formato "HH:mm", úsalo
-            if (/^\d{2}:\d{2}$/.test(time)) return time;
-            // Si está en formato "h:mm AM/PM", conviértelo
-            const d = new Date(`1970-01-01T${time}`);
-            if (!isNaN(d.getTime())) {
-                return d.toISOString().substr(11,5); // "HH:mm"
+        todaysSessions.forEach((session) => {
+            const isFull = appData.bookings.some((b) => b.date === session.date && b.time === session.time);
+            if (includeFull || !isFull) {
+                allSessions.push(session);
             }
-            // Si no es parseable, devolver en minúsculas y sin espacios
-            return time.trim().toLowerCase();
-        };
-
-        const enrichedSessions = todaysSessions.map(session => {
-            const sessionTimeNorm = normalizeTime(session.time);
-            const bookingsForSession = (appData?.bookings || []).filter(b => 
-                b.productId === product.id &&
-                b.slots.some(s => 
-                    s.date === session.date &&
-                    normalizeTime(s.time) === sessionTimeNorm &&
-                    s.instructorId === session.instructorId
-                )
-            );
-            return {
-                ...session,
-                paidBookingsCount: bookingsForSession.filter(b => b.isPaid).length,
-                totalBookingsCount: bookingsForSession.length,
-            };
         });
-        
-        allSessions.push(...(includeFull ? enrichedSessions : enrichedSessions.filter(s => s.paidBookingsCount < s.capacity)));
     }
-    return allSessions.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime() || a.time.localeCompare(b.time));
+
+    return allSessions;
 };
 
 const getBookingsForSlot = (date: Date, slot: AvailableSlot, appData: Pick<AppData, 'bookings'>): Booking[] => {

@@ -29,6 +29,8 @@ import * as dataService from '../../services/dataService';
 import { formatDate, formatCurrency, normalizeHour } from '../../utils/formatters';
 
 function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, setNavigateTo }) {
+    // Modal de auditoría de giftcard
+    const [giftcardAuditModal, setGiftcardAuditModal] = useState<{ open: boolean, giftcardId: string|null }>({ open: false, giftcardId: null });
     // Usar AdminDataContext para datos compartidos
     const adminData = useAdminData();
     
@@ -359,6 +361,13 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
     const renderPaymentsTab = () => {
         const payments = customer.bookings
             .flatMap(booking => (booking.paymentDetails || []).map((payment, idx) => ({ payment, booking, idx })));
+            // LOG VISUALIZACIÓN GIFT CARD
+            console.log('CustomerDetailView - Render payments tab - payments:', payments);
+            payments.forEach(({ payment, booking, idx }) => {
+                if (payment.giftcardAmount || payment.giftcard?.amount) {
+                    console.log(`Giftcard detectada en pago idx=${idx}, bookingId=${booking.id}, amount=${payment.giftcardAmount || payment.giftcard?.amount}, giftcardId=${payment.giftcardId}`);
+                }
+            });
         return (
             <div className="space-y-6">
                 <h3 className="text-lg font-medium flex items-center gap-2">
@@ -377,6 +386,13 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                     <span className="inline-flex items-center px-2 py-1 text-sm font-semibold rounded bg-green-50 text-green-700 ml-2">
                                         ${formatCurrency(payment.amount).replace('€', '')}
                                     </span>
+                                    {/* Badge para indicar uso de giftcard (parcial o total) */}
+                                    {(payment.giftcardAmount || payment.giftcard?.amount) && (
+                                        <span className="inline-flex items-center px-2 py-1 text-sm font-semibold rounded bg-indigo-50 text-indigo-700 ml-2">
+                                            Giftcard: ${formatCurrency(payment.giftcardAmount || payment.giftcard?.amount || 0).replace('€', '')}
+                                            {payment.giftcardId ? ` · ID:${payment.giftcardId}` : ''}
+                                        </span>
+                                    )}
                                 </p>
                                 <p className="text-sm text-brand-secondary mb-1 flex items-center gap-2">
                                     <ClockIcon className="h-4 w-4 text-gray-400" />
@@ -388,6 +404,15 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                     <TagIcon className="h-4 w-4 text-gray-400" />
                                     <span className="font-mono">Código: {booking.bookingCode}</span>
                                 </p>
+                                {/* Acción administrativa rápida: ver logs de giftcard (placeholder) */}
+                                {(payment.giftcardAmount || payment.giftcard) && (
+                                    <div className="mt-2">
+                                        <button
+                                            onClick={() => setGiftcardAuditModal({ open: true, giftcardId: payment.giftcardId || (payment.giftcard?.id ?? null) })}
+                                            className="inline-flex items-center gap-2 px-3 py-1 text-xs font-semibold rounded bg-gray-100 hover:bg-gray-200 text-gray-700"
+                                        >Ver auditoría de giftcard</button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )) : (
@@ -397,6 +422,18 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                         </div>
                     )}
                 </div>
+                {/* Modal de auditoría de giftcard */}
+                {giftcardAuditModal.open && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+                        <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md relative animate-fade-in">
+                            <button className="absolute top-2 right-2 text-gray-500 hover:text-gray-700" onClick={() => setGiftcardAuditModal({ open: false, giftcardId: null })} aria-label="Cerrar">&times;</button>
+                            <h3 className="text-lg font-bold mb-4 text-indigo-700">Auditoría de Giftcard</h3>
+                            <p className="mb-2 text-sm text-brand-secondary">Giftcard ID: <span className="font-mono font-bold">{giftcardAuditModal.giftcardId}</span></p>
+                            {/* Aquí se puede integrar la consulta de logs/auditoría real desde backend */}
+                            <div className="bg-gray-50 p-3 rounded text-xs text-gray-700">(Próximamente: historial de uso, saldos y logs de auditoría)</div>
+                        </div>
+                    </div>
+                )}
             </div>
         );
     };
@@ -730,6 +767,10 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
             default: return null;
         }
     };
+
+    // --- EDICIÓN MANUAL DE PRUEBA (NO BORRAR) ---
+    // Este comentario confirma que la edición manual se aplicó correctamente.
+    // Fecha (ISO): 2025-10-25
 
     const handleDeleteDelivery = async (deliveryId: string) => {
         // Aquí va la lógica de eliminación de delivery
