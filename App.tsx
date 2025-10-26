@@ -64,7 +64,6 @@ const App: React.FC = () => {
     const [bookingDetails, setBookingDetails] = useState<BookingDetails>({ product: null, slots: [], userInfo: null });
     const [confirmedBooking, setConfirmedBooking] = useState<Booking | null>(null);
     const [activeGiftcardHold, setActiveGiftcardHold] = useState<{ holdId?: string; expiresAt?: string; amount?: number; giftcardId?: string; code?: string } | null>(null);
-    const [technique, setTechnique] = useState<Technique | null>(null);
     const [technique, setTechnique] = useState<Technique | 'open_studio' | null>(null);
     const [bookingMode, setBookingMode] = useState<BookingMode | null>(null);
     const [bookingInProgress, setBookingInProgress] = useState(false); // Prevent double submit
