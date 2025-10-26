@@ -633,7 +633,17 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
             } else {
                 const { rows: settings } = await sql`SELECT value FROM settings WHERE key = ${key}`;
                 if (settings.length > 0) {
-                    data = settings[0].value;
+                    // Si es bankDetails y el valor es string, parsear JSON
+                    if (key === 'bankDetails' && typeof settings[0].value === 'string') {
+                        try {
+                            data = JSON.parse(settings[0].value);
+                        } catch (e) {
+                            console.error('Error parsing bankDetails JSON:', e);
+                            data = [];
+                        }
+                    } else {
+                        data = settings[0].value;
+                    }
                 } else {
                     // Si el key no existe, devuelve un valor por defecto según el tipo esperado
                     switch (key) {

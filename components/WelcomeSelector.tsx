@@ -2,7 +2,7 @@ import React from 'react';
 // ...existing code...
 
 interface WelcomeSelectorProps {
-  onSelect: (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building') => void;
+  onSelect: (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio') => void;
 }
 
 const ChoiceCard: React.FC<{
@@ -49,21 +49,27 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
 
   return (
     <div className="text-center p-6 bg-transparent animate-fade-in-up max-w-4xl mx-auto">
-  <h2 className="text-3xl font-serif font-bold text-brand-text mb-2">Bienvenido a Ceramicalma</h2>
-  <p className="text-brand-secondary mb-10">¿Es tu primera vez con nosotros?</p>
-      <div className="grid md:grid-cols-2 gap-8">
-    <ChoiceCard
-      title="Soy Nuevo Aquí"
-      subtitle="Comienza tu aventura con nuestra Clase Introductoria, diseñada para principiantes absolutos."
-      buttonText="¡Quiero Empezar!"
-      onClick={() => onSelect('new')}
-    />
-    <ChoiceCard
-      title="Ya Soy Alumno"
-      subtitle="Continúa tu práctica seleccionando uno de nuestros paquetes de clases continuas."
-      buttonText="Ver Paquetes"
-      onClick={() => onSelect('returning')}
-    />
+      <h2 className="text-3xl font-serif font-bold text-brand-text mb-2">Bienvenido a Ceramicalma</h2>
+      <p className="text-brand-secondary mb-10">¿Es tu primera vez con nosotros?</p>
+      <div className="grid md:grid-cols-3 gap-8">
+        <ChoiceCard
+          title="Soy Nuevo Aquí"
+          subtitle="Comienza tu aventura con nuestra Clase Introductoria, diseñada para principiantes absolutos."
+          buttonText="¡Quiero Empezar!"
+          onClick={() => onSelect('new')}
+        />
+        <ChoiceCard
+          title="Ya Soy Alumno"
+          subtitle="Continúa tu práctica seleccionando uno de nuestros paquetes de clases continuas."
+          buttonText="Ver Paquetes"
+          onClick={() => onSelect('returning')}
+        />
+        <ChoiceCard
+          title="Open Studio"
+          subtitle="Elige nuestra membresía Open Studio y accede al taller sin límites."
+          buttonText="Ir a Open Studio"
+          onClick={() => onSelect('open_studio')}
+        />
       </div>
       <div className="mt-8 space-y-8">
         <ExperienceCard 

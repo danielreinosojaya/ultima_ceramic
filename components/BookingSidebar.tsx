@@ -17,7 +17,13 @@ export const BookingSidebar: React.FC<BookingSidebarProps> = ({ product, selecte
   // Eliminado useLanguage, la app ahora es monolingüe en español
   const language = 'es-ES';
 
-  if (product.type !== 'CLASS_PACKAGE') {
+  // Validación defensiva: normalizar price
+  let safeProduct = { ...product };
+  if ('price' in safeProduct) {
+    safeProduct.price = typeof (safeProduct as any).price === 'number' ? (safeProduct as any).price : parseFloat((safeProduct as any).price) || 0;
+  }
+
+  if (safeProduct.type !== 'CLASS_PACKAGE') {
     return null; // This sidebar is only for class packages
   }
   
@@ -35,6 +41,14 @@ export const BookingSidebar: React.FC<BookingSidebarProps> = ({ product, selecte
   const subtotal = price / (1 + VAT_RATE);
   const vat = price - subtotal;
 
+  // Type cast seguro
+  const pkg = safeProduct as ClassPackage;
+  const classesRemaining = pkg.classes - selectedSlots.length;
+  const originalPrice = pkg.classes * SINGLE_CLASS_PRICE;
+  const discount = originalPrice - pkg.price;
+  const subtotal = pkg.price / (1 + VAT_RATE);
+  const vat = pkg.price - subtotal;
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     const adjustedDate = new Date(date.valueOf() + date.getTimezoneOffset() * 60 * 1000);
@@ -50,12 +64,12 @@ export const BookingSidebar: React.FC<BookingSidebarProps> = ({ product, selecte
   <h3 className="text-xl font-serif text-brand-text mb-1">Resumen de compra</h3>
       <div className="border-t border-brand-border pt-4">
         <div className="space-y-3 mb-4 text-sm">
-            <h4 className="font-bold text-brand-text text-base">{product.name}</h4>
+            <h4 className="font-bold text-brand-text text-base">{pkg.name}</h4>
             
             {/* Savings Breakdown */}
             <div className="space-y-1">
                 <div className="flex justify-between">
-                    <span className="text-brand-secondary">Precio original ({product.classes} x ${SINGLE_CLASS_PRICE})</span>
+                    <span className="text-brand-secondary">Precio original ({pkg.classes} x ${SINGLE_CLASS_PRICE})</span>
                     <span className="text-brand-secondary line-through">${originalPrice.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
@@ -77,6 +91,11 @@ export const BookingSidebar: React.FC<BookingSidebarProps> = ({ product, selecte
                 <div className="flex justify-between font-bold text-lg text-brand-text pt-1 mt-1">
                     <span>Total a pagar</span>
                     <span>${price.toFixed(2)}</span>
+                    <span>
+                      {typeof pkg.price === 'number' && !isNaN(pkg.price)
+                        ? `$${pkg.price.toFixed(2)}`
+                        : (() => { console.error('BookingSidebar: pkg.price inválido', pkg); return '---'; })()}
+                    </span>
                 </div>
             </div>
         </div>
@@ -111,7 +130,7 @@ export const BookingSidebar: React.FC<BookingSidebarProps> = ({ product, selecte
           disabled={classesRemaining > 0}
           className="mt-6 w-full bg-brand-primary text-white font-bold py-3 px-6 rounded-lg disabled:bg-stone-400 disabled:cursor-not-allowed hover:bg-brand-text transition-colors duration-300"
         >
-          {`Confirmar (${selectedSlots.length}/${product.classes})`}
+          {`Confirmar (${selectedSlots.length}/${pkg.classes})`}
         </button>
       </div>
     </div>
