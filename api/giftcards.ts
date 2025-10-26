@@ -96,6 +96,82 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await sql`COMMIT`;
         return res.status(200).json({ success: true });
       }
+      case 'cleanup-expired': {
+        const secret = process.env.CLEANUP_SECRET || null;
+        if (secret) {
+          const got = (req.headers['x-cleanup-secret'] as string) || null;
+          if (!got || got !== secret) return res.status(403).json({ success: false, error: 'forbidden' });
+        }
+
+        const body = req.body || {};
+        const limit = body.limit ? Number(body.limit) : null;
+
+        try {
+          await sql`BEGIN`;
+          let deletedRes: any;
+          if (limit && Number.isInteger(limit) && limit > 0) {
+            const { rows } = await sql`
+              WITH to_delete AS (
+                SELECT id FROM giftcard_holds WHERE expires_at <= NOW() ORDER BY expires_at ASC LIMIT ${limit}
+              )
+              DELETE FROM giftcard_holds WHERE id IN (SELECT id FROM to_delete) RETURNING *
+            `;
+            deletedRes = rows;
+          } else {
+            const { rows } = await sql`DELETE FROM giftcard_holds WHERE expires_at <= NOW() RETURNING *`;
+            deletedRes = rows;
+          }
+
+          for (const d of deletedRes) {
+            try {
+              await sql`
+                INSERT INTO giftcard_audit (giftcard_id, action, status, error, amount, metadata)
+                VALUES (${String(d.giftcard_id)}, 'expire', 'reverted', NULL, ${d.amount}, ${JSON.stringify({ holdId: d.id, reason: 'expired' })}::jsonb)
+              `;
+            } catch (auditErr) {
+              console.warn('Failed to insert giftcard_audit for expired hold', d.id, auditErr);
+            }
+          }
+
+          await sql`COMMIT`;
+          return res.status(200).json({ success: true, deleted: deletedRes.length, holds: toCamelCase(deletedRes) });
+        } catch (err) {
+          try { await sql`ROLLBACK`; } catch (_) {}
+          console.error('giftcards/cleanup-expired error:', err);
+          return res.status(500).json({ success: false, error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+      case 'validate': {
+        const code = (req.method === 'GET' ? req.query.code : req.body && req.body.code) || '';
+        const codeStr = String(code || '').trim();
+        if (!codeStr) return res.status(400).json({ success: false, error: 'code is required' });
+
+        try {
+          const { rows: giftcardRows } = await sql`SELECT * FROM giftcards WHERE code = ${codeStr} LIMIT 1`;
+          if (giftcardRows && giftcardRows.length > 0) {
+            const g = giftcardRows[0];
+            const balance = (typeof g.balance === 'number') ? g.balance : (g.balance ? parseFloat(g.balance) : 0);
+            const initialValue = (typeof g.initial_value === 'number') ? g.initial_value : (g.initial_value ? parseFloat(g.initial_value) : null);
+            const expiresAt = g.expires_at ? new Date(g.expires_at).toISOString() : null;
+            const isExpired = expiresAt ? (new Date() > new Date(expiresAt)) : false;
+            return res.status(200).json({
+              valid: !isExpired,
+              code: g.code,
+              giftcardId: g.id,
+              balance: Number(balance),
+              initialValue: initialValue !== null ? Number(initialValue) : null,
+              expiresAt,
+              status: isExpired ? 'expired' : 'active',
+              metadata: g.metadata || {}
+            });
+          }
+
+          return res.status(404).json({ valid: false, reason: 'not_found' });
+        } catch (err) {
+          console.error('giftcards/validate error:', err);
+          return res.status(500).json({ success: false, error: err instanceof Error ? err.message : String(err) });
+        }
+      }
       default:
         return res.status(400).json({ success: false, error: 'Unknown action' });
     }
