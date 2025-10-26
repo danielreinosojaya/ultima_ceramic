@@ -51,6 +51,7 @@ const App: React.FC = () => {
     const [activeGiftcardHold, setActiveGiftcardHold] = useState<{ holdId?: string; expiresAt?: string; amount?: number; giftcardId?: string; code?: string } | null>(null);
     const [technique, setTechnique] = useState<Technique | null>(null);
     const [bookingMode, setBookingMode] = useState<BookingMode | null>(null);
+    const [bookingInProgress, setBookingInProgress] = useState(false); // Prevent double submit
 
     const [isUserInfoModalOpen, setIsUserInfoModalOpen] = useState(false);
     const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
@@ -79,11 +80,20 @@ const App: React.FC = () => {
                 console.log('Loading essential app data...');
                 const essentialData = await dataService.getEssentialAppData();
 
+                // Provide safe defaults so the UI doesn't crash when the API is unavailable
+                const safeFooter = {
+                    whatsapp: (essentialData.footerInfo && essentialData.footerInfo.whatsapp) || '',
+                    email: (essentialData.footerInfo && essentialData.footerInfo.email) || '',
+                    instagramHandle: (essentialData.footerInfo && essentialData.footerInfo.instagramHandle) || '',
+                    address: (essentialData.footerInfo && essentialData.footerInfo.address) || '',
+                    googleMapsLink: (essentialData.footerInfo && essentialData.footerInfo.googleMapsLink) || '#',
+                };
+
                 setAppData({
                     products: essentialData.products || [], 
                     announcements: essentialData.announcements || [], 
                     policies: essentialData.policies || '', 
-                    footerInfo: essentialData.footerInfo || {},
+                    footerInfo: safeFooter,
                     // Initialize empty data structures for lazy loading
                     instructors: [],
                     availability: { Sunday: [], Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [] },
@@ -175,58 +185,68 @@ const App: React.FC = () => {
         setIsUserInfoModalOpen(true);
     };
 
-    const handleUserInfoSubmit = (data: { userInfo: UserInfo, needsInvoice: boolean, invoiceData?: any }) => {
-        setBookingDetails(currentDetails => {
-            const finalDetails = { ...currentDetails, userInfo: data.userInfo };
-            const bookingData = {
-                product: finalDetails.product!,
-                productId: finalDetails.product!.id,
-                productType: finalDetails.product!.type,
-                slots: finalDetails.slots,
-                userInfo: data.userInfo,
-                isPaid: false,
-                price: 'price' in finalDetails.product! ? finalDetails.product.price : 0,
-                bookingMode: bookingMode || 'flexible',
-                bookingDate: new Date().toISOString(),
-                invoiceData: data.needsInvoice ? data.invoiceData : undefined
-            };
+    const handleUserInfoSubmit = async (data: { userInfo: UserInfo, needsInvoice: boolean, invoiceData?: any }) => {
+        // Prevent double submission
+        if (bookingInProgress) {
+            console.warn('[App] Booking already in progress, ignoring duplicate submit');
+            return;
+        }
 
-            const submit = async () => {
-                try {
-                    // Attach giftcard info if the user applied a giftcard (supports holdId or immediate consume)
-                    if (activeGiftcardHold) {
-                        if (activeGiftcardHold.holdId) {
-                            (bookingData as any).holdId = activeGiftcardHold.holdId;
-                        }
-                        if (activeGiftcardHold.giftcardId) {
-                            (bookingData as any).giftcardId = activeGiftcardHold.giftcardId;
-                        }
-                        if (activeGiftcardHold.code) {
-                            (bookingData as any).giftcardCode = activeGiftcardHold.code;
-                        }
-                        if (typeof activeGiftcardHold.amount === 'number') {
-                            (bookingData as any).giftcardAmount = activeGiftcardHold.amount;
-                        }
-                    }
+        setBookingInProgress(true);
+        console.log('[App] Starting booking submission...');
 
-                    const result = await dataService.addBooking(bookingData);
-                    if (result.success && result.booking) {
-                        setConfirmedBooking(result.booking);
-                        setIsUserInfoModalOpen(false);
-                        setView('confirmation');
-                    } else {
-                        // NOTE: Using alert() is not recommended in immersive. Please use a custom modal instead.
-                        alert(`Error: ${result.message}`);
-                    }
-                } catch (error) {
-                    console.error("Failed to add booking", error);
-                    // NOTE: Using alert() is not recommended in immersive. Please use a custom modal instead.
-                    alert("An error occurred while creating your booking.");
+        const finalDetails = { ...bookingDetails, userInfo: data.userInfo };
+        const bookingData = {
+            product: finalDetails.product!,
+            productId: finalDetails.product!.id,
+            productType: finalDetails.product!.type,
+            slots: finalDetails.slots,
+            userInfo: data.userInfo,
+            isPaid: false,
+            price: 'price' in finalDetails.product! ? finalDetails.product.price : 0,
+            bookingMode: bookingMode || 'flexible',
+            bookingDate: new Date().toISOString(),
+            invoiceData: data.needsInvoice ? data.invoiceData : undefined
+        };
+
+        try {
+            // Attach giftcard info if the user applied a giftcard (supports holdId or immediate consume)
+            if (activeGiftcardHold) {
+                if (activeGiftcardHold.holdId) {
+                    (bookingData as any).holdId = activeGiftcardHold.holdId;
                 }
-            };
-            submit();
-            return finalDetails;
-        });
+                if (activeGiftcardHold.giftcardId) {
+                    (bookingData as any).giftcardId = activeGiftcardHold.giftcardId;
+                }
+                if (activeGiftcardHold.code) {
+                    (bookingData as any).giftcardCode = activeGiftcardHold.code;
+                }
+                if (typeof activeGiftcardHold.amount === 'number') {
+                    (bookingData as any).giftcardAmount = activeGiftcardHold.amount;
+                }
+            }
+
+            const result = await dataService.addBooking(bookingData);
+            if (result.success && result.booking) {
+                console.log('[App] Booking created successfully:', result.booking.bookingCode);
+                setBookingDetails(finalDetails);
+                setConfirmedBooking(result.booking);
+                setIsUserInfoModalOpen(false);
+                setView('confirmation');
+                // Reset flag after successful navigation
+                setTimeout(() => setBookingInProgress(false), 1000);
+            } else {
+                console.error('[App] Booking failed:', result.message);
+                setBookingInProgress(false);
+                // NOTE: Using alert() is not recommended in immersive. Please use a custom modal instead.
+                alert(`Error: ${result.message}`);
+            }
+        } catch (error) {
+            console.error("[App] Failed to add booking", error);
+            setBookingInProgress(false);
+            // NOTE: Using alert() is not recommended in immersive. Please use a custom modal instead.
+            alert("An error occurred while creating your booking.");
+        }
     };
     
     // Función para cargar datos adicionales bajo demanda
@@ -481,17 +501,17 @@ const App: React.FC = () => {
                         <div className="flex items-center gap-3">
                             <LocationPinIcon className="w-5 h-5 flex-shrink-0" />
                             <a href={appData.footerInfo.googleMapsLink || '#'} target="_blank" rel="noopener noreferrer" className="hover:text-brand-primary transition-colors">
-                                {appData.footerInfo.address}
+                                {appData.footerInfo.address || 'Dirección no disponible'}
                             </a>
                         </div>
                         <div className="flex items-center justify-center gap-6 mt-2">
-                            <a href={`https://wa.me/${appData.footerInfo.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp" className="hover:text-brand-primary transition-colors">
+                            <a href={`https://wa.me/${(appData.footerInfo.whatsapp || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp" className="hover:text-brand-primary transition-colors">
                                 <WhatsAppIcon className="w-6 h-6" />
                             </a>
-                            <a href={`mailto:${appData.footerInfo.email}`} aria-label="Correo" className="hover:text-brand-primary transition-colors">
+                            <a href={`mailto:${appData.footerInfo.email || ''}`} aria-label="Correo" className="hover:text-brand-primary transition-colors">
                                 <MailIcon className="w-6 h-6" />
                             </a>
-                            <a href={`https://instagram.com/${appData.footerInfo.instagramHandle}`} target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="hover:text-brand-primary transition-colors">
+                            <a href={`https://instagram.com/${(appData.footerInfo.instagramHandle || '').replace(/^@/, '')}`} target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="hover:text-brand-primary transition-colors">
                                 <InstagramIcon className="w-6 h-6" />
                             </a>
                         </div>

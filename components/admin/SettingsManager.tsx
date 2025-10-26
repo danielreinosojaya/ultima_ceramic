@@ -240,34 +240,34 @@ const CommunicationAutomationManager: React.FC = () => {
             <div className="space-y-4">
                 <div className="flex items-center justify-between">
                     <span className="font-semibold text-sm">Confirmación de pre-reserva</span>
-                    <button onClick={() => handleToggle('preBookingConfirmation')} className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${settings.preBookingConfirmation.enabled ? 'bg-brand-success' : 'bg-gray-300'}`}>
-                        <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${settings.preBookingConfirmation.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                    <button onClick={() => handleToggle('preBookingConfirmation')} className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${settings?.preBookingConfirmation?.enabled ? 'bg-brand-success' : 'bg-gray-300'}`}>
+                        <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${settings?.preBookingConfirmation?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
                     </button>
                 </div>
                  <div className="flex items-center justify-between">
                     <span className="font-semibold text-sm">Recibo de pago</span>
-                    <button onClick={() => handleToggle('paymentReceipt')} className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${settings.paymentReceipt.enabled ? 'bg-brand-success' : 'bg-gray-300'}`}>
-                        <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${settings.paymentReceipt.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                    <button onClick={() => handleToggle('paymentReceipt')} className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${settings?.paymentReceipt?.enabled ? 'bg-brand-success' : 'bg-gray-300'}`}>
+                        <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${settings?.paymentReceipt?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
                     </button>
                 </div>
                  <div>
                     <div className="flex items-center justify-between">
                         <span className="font-semibold text-sm">Recordatorio de clase</span>
-                        <button onClick={() => handleToggle('classReminder')} className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${settings.classReminder.enabled ? 'bg-brand-success' : 'bg-gray-300'}`}>
-                            <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${settings.classReminder.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                        <button onClick={() => handleToggle('classReminder')} className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${settings?.classReminder?.enabled ? 'bg-brand-success' : 'bg-gray-300'}`}>
+                            <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${settings?.classReminder?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
                         </button>
                     </div>
-                    {settings.classReminder.enabled && (
+                    {settings?.classReminder?.enabled && (
                         <div className="flex items-center gap-2 mt-2 pl-4 animate-fade-in-fast">
                             <span className="text-sm">Enviar recordatorio</span>
                             <input
                                 type="number"
-                                value={settings.classReminder.value}
+                                value={settings?.classReminder?.value || 1}
                                 onChange={e => handleReminderChange('value', parseInt(e.target.value) || 1)}
                                 className="w-16 p-1 border rounded-md text-sm"
                             />
                             <select
-                                value={settings.classReminder.unit}
+                                value={settings?.classReminder?.unit || 'hours'}
                                 onChange={e => handleReminderChange('unit', e.target.value)}
                                 className="p-1 border rounded-md text-sm bg-white"
                             >

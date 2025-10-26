@@ -164,7 +164,9 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
             <p>Saludos,<br/>El equipo de CeramicAlma</p>
         </div>
     `;
-    await sendEmail(userInfo.email, subject, html);
+    const result = await sendEmail(userInfo.email, subject, html);
+    console.info('[emailService] Pre-booking confirmation email result for', userInfo.email, bookingCode, result && (result as any).dryRunPath ? { dryRunPath: (result as any).dryRunPath } : (result && (result as any).providerResponse ? { providerId: (result as any).providerResponse?.id } : result));
+    return result;
 };
 
 
@@ -172,6 +174,7 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
 export const sendPaymentReceiptEmail = async (booking: Booking, payment: PaymentDetails) => {
     const { userInfo, bookingCode, product } = booking;
     const subject = `¡Confirmación de Pago para tu reserva en CeramicAlma! (Código: ${bookingCode})`;
+
     // Usar zona horaria de Ecuador
     const timeZone = 'America/Guayaquil';
     let fechaPago;
@@ -182,6 +185,13 @@ export const sendPaymentReceiptEmail = async (booking: Booking, payment: Payment
         const zonedDate = toZonedTime(new Date(), timeZone);
         fechaPago = format(zonedDate, 'd/M/yyyy', { timeZone });
     }
+
+    // Determinar si se aplicó una giftcard y calcular el saldo restante
+    const giftcardInfo = payment.giftcardAmount
+        ? `<p><strong>Monto aplicado con Giftcard:</strong> $${payment.giftcardAmount.toFixed(2)}</p>
+           <p><strong>Saldo restante:</strong> $${(payment.amount - payment.giftcardAmount).toFixed(2)}</p>`
+        : '';
+
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333;">
             <h2>¡Hola, ${userInfo.firstName}!</h2>
@@ -191,6 +201,7 @@ export const sendPaymentReceiptEmail = async (booking: Booking, payment: Payment
                 <h3 style="color: #D95F43;">Detalles del Pago</h3>
                 <p><strong>Código de Reserva:</strong> ${bookingCode}</p>
                 <p><strong>Monto Pagado:</strong> $${payment.amount.toFixed(2)}</p>
+                ${giftcardInfo}
                 <p><strong>Método:</strong> ${payment.method}</p>
                 <p><strong>Fecha de Pago:</strong> ${fechaPago}</p>
             </div>

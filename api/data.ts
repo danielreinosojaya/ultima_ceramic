@@ -27,6 +27,7 @@ import { sql } from '@vercel/postgres';
 import { seedDatabase, ensureTablesExist, createCustomer } from './db.js';
 import * as emailService from './emailService.js';
 import { VercelRequest, VercelResponse } from '@vercel/node';
+import { generatePaymentId } from '../utils/formatters.js';
 import type {
     Booking,
     ClientNotification,
@@ -164,6 +165,26 @@ const parseBookingFromDB = (dbRow: any): Booking => {
 
         const totalPaid = (camelCased.paymentDetails || []).reduce((sum: number, p: any) => sum + p.amount, 0);
         camelCased.isPaid = totalPaid >= camelCased.price;
+
+        // Calculate giftcard-specific fields
+        const giftcardPayments = (camelCased.paymentDetails || []).filter((p: any) => p.method === 'Giftcard');
+        camelCased.giftcardApplied = giftcardPayments.length > 0;
+        camelCased.giftcardRedeemedAmount = giftcardPayments.reduce((sum: number, p: any) => sum + (p.giftcardAmount || p.amount || 0), 0);
+        camelCased.giftcardId = giftcardPayments.length > 0 ? (giftcardPayments[0].giftcardId || null) : null;
+        camelCased.pendingBalance = Math.max(0, camelCased.price - totalPaid);
+
+        // Debug log for giftcard bookings
+        if (giftcardPayments.length > 0) {
+            console.log('[parseBookingFromDB] Giftcard booking parsed:', {
+                bookingCode: camelCased.bookingCode,
+                isPaid: camelCased.isPaid,
+                price: camelCased.price,
+                totalPaid,
+                giftcardRedeemedAmount: camelCased.giftcardRedeemedAmount,
+                giftcardId: camelCased.giftcardId,
+                paymentDetailsCount: camelCased.paymentDetails?.length || 0
+            });
+        }
 
         return camelCased as Booking;
     } catch (error) {
@@ -943,26 +964,38 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             const code = body.code || null;
             const giftcardId = body.giftcardId || body.giftcard_id || null;
 
+            console.log('[createGiftcardHold] Request:', { code, giftcardId, amount: body.amount, amountParsed: amount });
+
             if (!amount || amount <= 0) return res.status(400).json({ success: false, error: 'amount is required and must be > 0' });
             if (!code && !giftcardId) return res.status(400).json({ success: false, error: 'code or giftcardId is required' });
 
             try {
-                // Find giftcard by code or id
+                // Use a transaction + row-level lock to avoid race conditions where
+                // two concurrent requests read the same balance and both create holds
+                // that together exceed the available amount.
+                await sql`BEGIN`;
+
+                // Find giftcard by code or id and lock the row
                 let giftcardRow: any = null;
                 if (code) {
-                    const { rows: gRows } = await sql`SELECT * FROM giftcards WHERE code = ${code} LIMIT 1`;
+                    const { rows: gRows } = await sql`SELECT * FROM giftcards WHERE code = ${code} LIMIT 1 FOR UPDATE`;
                     giftcardRow = gRows && gRows.length > 0 ? gRows[0] : null;
                 } else {
-                    const { rows: gRows } = await sql`SELECT * FROM giftcards WHERE id = ${giftcardId} LIMIT 1`;
+                    const { rows: gRows } = await sql`SELECT * FROM giftcards WHERE id = ${giftcardId} LIMIT 1 FOR UPDATE`;
                     giftcardRow = gRows && gRows.length > 0 ? gRows[0] : null;
                 }
 
-                if (!giftcardRow) return res.status(404).json({ success: false, error: 'giftcard_not_found' });
+                if (!giftcardRow) {
+                    await sql`ROLLBACK`;
+                    return res.status(404).json({ success: false, error: 'giftcard_not_found' });
+                }
 
                 const gid = String(giftcardRow.id);
                 const balance = (typeof giftcardRow.balance === 'number') ? Number(giftcardRow.balance) : (giftcardRow.balance ? Number(giftcardRow.balance) : 0);
 
-                // Sum active holds for this giftcard
+                console.log('[createGiftcardHold] Giftcard (locked):', { id: gid, balance, balanceType: typeof giftcardRow.balance });
+
+                // Sum active holds for this giftcard (inside the same transaction)
                 const { rows: [holdSumRow] } = await sql`
                     SELECT COALESCE(SUM(amount), 0) AS total_holds
                     FROM giftcard_holds
@@ -971,7 +1004,11 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 const totalHolds = holdSumRow ? Number(holdSumRow.total_holds) : 0;
                 const available = Number(balance) - Number(totalHolds);
 
+                console.log('[createGiftcardHold] Calculation (transactional):', { balance, totalHolds, available, requestedAmount: amount, sufficient: available >= amount });
+
                 if (available < Number(amount)) {
+                    console.log('[createGiftcardHold] INSUFFICIENT FUNDS:', { available, balance, requested: amount });
+                    await sql`ROLLBACK`;
                     return res.status(400).json({ success: false, error: 'insufficient_funds', available, balance });
                 }
 
@@ -982,8 +1019,22 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     RETURNING *
                 `;
 
+                // Best-effort audit insert (don't fail the whole operation if audit not available)
+                try {
+                    await sql`
+                        INSERT INTO giftcard_audit (id, giftcard_id, event_type, amount, booking_temp_ref, metadata, created_at)
+                        VALUES (uuid_generate_v4(), ${gid}, 'hold_created', ${amount}, ${bookingTempRef}, ${JSON.stringify({ source: 'createGiftcardHold' })}::jsonb, NOW())
+                    `;
+                } catch (auditErr) {
+                    console.warn('[createGiftcardHold] audit insert failed (continuing):', auditErr);
+                }
+
+                await sql`COMMIT`;
+
+                console.log('[createGiftcardHold] Hold created:', inserted.id);
                 return res.status(200).json({ success: true, hold: toCamelCase(inserted), available: Number(available) - Number(amount), balance });
             } catch (err) {
+                try { await sql`ROLLBACK`; } catch (rbErr) { console.warn('rollback failed after createGiftcardHold error', rbErr); }
                 console.error('createGiftcardHold error:', err);
                 return res.status(500).json({ success: false, error: err instanceof Error ? err.message : String(err) });
             }
@@ -1116,74 +1167,43 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     pdfModule = await import('./pdf.js');
                 } catch (e) {}
 
-                // Determine which amount/balance columns exist
-                let amountColumn = 'initial_value';
-                let hasInitial = false;
-                let hasValue = false;
-                let hasBalance = false;
-                try {
-                    const { rows: colCheck } = await sql`SELECT column_name FROM information_schema.columns WHERE table_name='giftcards' AND column_name IN ('initial_value','value','balance')`;
-                    const cols = (colCheck || []).map((r: any) => r.column_name);
-                    hasInitial = cols.includes('initial_value');
-                    hasValue = cols.includes('value');
-                    hasBalance = cols.includes('balance');
-                    if (hasInitial) amountColumn = 'initial_value';
-                    else if (hasValue) amountColumn = 'value';
-                } catch (colErr) {
-                    console.warn('Could not determine giftcards amount/balance columns, defaulting to initial_value', colErr);
-                }
+                // Prepare buyer and recipient info for NOT NULL constraints
+                const buyerInfo = JSON.stringify({
+                    name: updated.buyer_name || updated.buyerName || '',
+                    email: updated.buyer_email || updated.buyerEmail || ''
+                });
+                const recipientInfo = JSON.stringify({
+                    name: updated.recipient_name || updated.recipientName || '',
+                    email: updated.recipient_email || updated.recipientEmail || ''
+                });
 
                 // Generate code and attempt to insert (retry if collision)
                 let code = generateCode();
                 let issuedGiftcard: any = null;
                 for (let attempt = 0; attempt < 4; attempt++) {
                     try {
-                        const expiresInterval = '3 months';
-                        // Insert setting all present numeric columns to provided amount to avoid NOT NULL violations
-                        if (hasInitial && hasValue && hasBalance) {
-                            const { rows: [giftcardRow] } = await sql`
-                                INSERT INTO giftcards (id, code, initial_value, value, balance, giftcard_request_id, expires_at, metadata)
-                                VALUES (nextval('giftcards_id_seq'), ${code}, ${updated.amount}, ${updated.amount}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser })}::jsonb)
-                                RETURNING *;
-                            `;
-                            issuedGiftcard = giftcardRow;
-                        } else if (hasInitial && hasBalance) {
-                            const { rows: [giftcardRow] } = await sql`
-                                INSERT INTO giftcards (id, code, initial_value, balance, giftcard_request_id, expires_at, metadata)
-                                VALUES (nextval('giftcards_id_seq'), ${code}, ${updated.amount}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser })}::jsonb)
-                                RETURNING *;
-                            `;
-                            issuedGiftcard = giftcardRow;
-                        } else if (hasValue && hasBalance) {
-                            const { rows: [giftcardRow] } = await sql`
-                                INSERT INTO giftcards (id, code, value, balance, giftcard_request_id, expires_at, metadata)
-                                VALUES (nextval('giftcards_id_seq'), ${code}, ${updated.amount}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser })}::jsonb)
-                                RETURNING *;
-                            `;
-                            issuedGiftcard = giftcardRow;
-                        } else if (hasInitial) {
-                            const { rows: [giftcardRow] } = await sql`
-                                INSERT INTO giftcards (id, code, initial_value, giftcard_request_id, expires_at, metadata)
-                                VALUES (nextval('giftcards_id_seq'), ${code}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser })}::jsonb)
-                                RETURNING *;
-                            `;
-                            issuedGiftcard = giftcardRow;
-                        } else if (hasValue) {
-                            const { rows: [giftcardRow] } = await sql`
-                                INSERT INTO giftcards (id, code, value, giftcard_request_id, expires_at, metadata)
-                                VALUES (nextval('giftcards_id_seq'), ${code}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser })}::jsonb)
-                                RETURNING *;
-                            `;
-                            issuedGiftcard = giftcardRow;
-                        } else {
-                            // Fallback: insert minimal row, set metadata with amount
-                            const { rows: [giftcardRow] } = await sql`
-                                INSERT INTO giftcards (id, code, giftcard_request_id, expires_at, metadata)
-                                VALUES (nextval('giftcards_id_seq'), ${code}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser, amount: updated.amount })}::jsonb)
-                                RETURNING *;
-                            `;
-                            issuedGiftcard = giftcardRow;
-                        }
+                        // Single unified INSERT with ALL required fields for production DB
+                        const { rows: [giftcardRow] } = await sql`
+                            INSERT INTO giftcards (
+                                code, value, balance, initial_value, status,
+                                giftcard_request_id, expires_at, metadata,
+                                buyer_info, recipient_info
+                            )
+                            VALUES (
+                                ${code}, 
+                                ${updated.amount}, 
+                                ${updated.amount}, 
+                                ${updated.amount},
+                                'active',
+                                ${id}, 
+                                NOW() + INTERVAL '3 months', 
+                                ${JSON.stringify({ issuedBy: adminUser })}::jsonb,
+                                ${buyerInfo}::jsonb,
+                                ${recipientInfo}::jsonb
+                            )
+                            RETURNING *;
+                        `;
+                        issuedGiftcard = giftcardRow;
                         break;
                     } catch (err: any) {
                         // If unique constraint violated, generate a new code and retry
@@ -1191,99 +1211,12 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         code = generateCode();
                     }
                 }
-                // If insert failed after retries, try a minimal fallback insert once more
+
+                // If insert still failed, log warning but proceed with email delivery
                 if (!issuedGiftcard) {
-                    try {
-                        // Try a minimal insert that sets available numeric fields to avoid NOT NULL violations
-                        if (hasInitial && hasValue && hasBalance) {
-                            const { rows: [giftcardRow] } = await sql`
-                                INSERT INTO giftcards (id, code, initial_value, value, balance, giftcard_request_id, expires_at, metadata)
-                                VALUES (nextval('giftcards_id_seq'), ${code}, ${updated.amount}, ${updated.amount}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser, fallback: true })}::jsonb)
-                                RETURNING *;
-                            `;
-                            issuedGiftcard = giftcardRow;
-                        } else if (hasInitial && hasBalance) {
-                            const { rows: [giftcardRow] } = await sql`
-                                INSERT INTO giftcards (id, code, initial_value, balance, giftcard_request_id, expires_at, metadata)
-                                VALUES (nextval('giftcards_id_seq'), ${code}, ${updated.amount}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser, fallback: true })}::jsonb)
-                                RETURNING *;
-                            `;
-                            issuedGiftcard = giftcardRow;
-                        } else if (hasValue && hasBalance) {
-                            const { rows: [giftcardRow] } = await sql`
-                                INSERT INTO giftcards (id, code, value, balance, giftcard_request_id, expires_at, metadata)
-                                VALUES (nextval('giftcards_id_seq'), ${code}, ${updated.amount}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser, fallback: true })}::jsonb)
-                                RETURNING *;
-                            `;
-                            issuedGiftcard = giftcardRow;
-                        } else if (hasInitial) {
-                            const { rows: [giftcardRow] } = await sql`
-                                INSERT INTO giftcards (id, code, initial_value, giftcard_request_id, expires_at, metadata)
-                                VALUES (nextval('giftcards_id_seq'), ${code}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser, fallback: true })}::jsonb)
-                                RETURNING *;
-                            `;
-                            issuedGiftcard = giftcardRow;
-                        } else if (hasValue) {
-                            const { rows: [giftcardRow] } = await sql`
-                                INSERT INTO giftcards (id, code, value, giftcard_request_id, expires_at, metadata)
-                                VALUES (nextval('giftcards_id_seq'), ${code}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser, fallback: true })}::jsonb)
-                                RETURNING *;
-                            `;
-                            issuedGiftcard = giftcardRow;
-                        } else {
-                            const { rows: [giftcardRow] } = await sql`
-                                INSERT INTO giftcards (id, code, giftcard_request_id, expires_at, metadata)
-                                VALUES (nextval('giftcards_id_seq'), ${code}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser, fallback: true, amount: updated.amount })}::jsonb)
-                                RETURNING *;
-                            `;
-                            issuedGiftcard = giftcardRow;
-                        }
-                    } catch (fallbackErr) {
-                        const fallbackMsg = (fallbackErr && (fallbackErr as any).message) ? (fallbackErr as any).message : String(fallbackErr);
-                        console.warn('Fallback giftcard insert also failed:', fallbackMsg);
-                    }
+                    console.warn('[API][approveGiftcardRequest] Failed to persist giftcard after all retries for code:', code);
                 }
 
-
-                // FINAL SAFETY CHECK: if issuedGiftcard is still missing, attempt one last simple insert
-                if (!issuedGiftcard) {
-                    try {
-                        console.error('[API][approveGiftcardRequest] issuedGiftcard missing after retries, attempting final insert for code', code);
-                        // Minimal safe insert: try to set numeric columns only if they exist
-                        if (hasInitial && hasBalance) {
-                            const { rows: [finalRow] } = await sql`
-                                INSERT INTO giftcards (code, initial_value, balance, giftcard_request_id, expires_at, metadata)
-                                VALUES (${code}, ${updated.amount}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser, repaired_at: new Date().toISOString(), repaired_by: 'approveGiftcardRequest-final-insert' })}::jsonb)
-                                RETURNING *;
-                            `;
-                            issuedGiftcard = finalRow;
-                        } else if (hasInitial) {
-                            const { rows: [finalRow] } = await sql`
-                                INSERT INTO giftcards (code, initial_value, giftcard_request_id, expires_at, metadata)
-                                VALUES (${code}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser, repaired_at: new Date().toISOString(), repaired_by: 'approveGiftcardRequest-final-insert' })}::jsonb)
-                                RETURNING *;
-                            `;
-                            issuedGiftcard = finalRow;
-                        } else if (hasValue && hasBalance) {
-                            const { rows: [finalRow] } = await sql`
-                                INSERT INTO giftcards (code, value, balance, giftcard_request_id, expires_at, metadata)
-                                VALUES (${code}, ${updated.amount}, ${updated.amount}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser, repaired_at: new Date().toISOString(), repaired_by: 'approveGiftcardRequest-final-insert' })}::jsonb)
-                                RETURNING *;
-                            `;
-                            issuedGiftcard = finalRow;
-                        } else {
-                            const { rows: [finalRow] } = await sql`
-                                INSERT INTO giftcards (code, giftcard_request_id, expires_at, metadata)
-                                VALUES (${code}, ${id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ issuedBy: adminUser, repaired_at: new Date().toISOString(), repaired_by: 'approveGiftcardRequest-final-insert', amount: updated.amount })}::jsonb)
-                                RETURNING *;
-                            `;
-                            issuedGiftcard = finalRow;
-                        }
-                        console.debug('[API][approveGiftcardRequest] final insert succeeded for code', code, 'row:', issuedGiftcard && issuedGiftcard.id);
-                    } catch (finalErr) {
-                        console.error('[API][approveGiftcardRequest] final fallback insert failed for code', code, finalErr);
-                    }
-                }
                 // Regardless of whether we created a DB giftcard, if not created we will still attempt to send emails using the generated code
                 if (!issuedGiftcard) {
                     console.warn('Proceeding without persisted giftcard record; will send best-effort emails to buyer/recipient with code:', code);
@@ -1778,7 +1711,14 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             const currentPayments = (bookingRow.payment_details && Array.isArray(bookingRow.payment_details))
                 ? bookingRow.payment_details
                 : [];
-            const updatedPayments = [...currentPayments, payment];
+            
+            // Generate unique ID for the new payment if not present
+            const paymentWithId = {
+                ...payment,
+                id: payment.id || generatePaymentId()
+            };
+            
+            const updatedPayments = [...currentPayments, paymentWithId];
             const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
             const isPaid = totalPaid >= bookingRow.price;
 
@@ -1793,7 +1733,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             result = { success: true, booking: updatedBooking };
 
             try {
-                await emailService.sendPaymentReceiptEmail(updatedBooking, payment);
+                await emailService.sendPaymentReceiptEmail(updatedBooking, paymentWithId);
             } catch (emailError) {
                 console.warn(`Payment receipt email for booking ${updatedBooking.bookingCode} failed to send:`, emailError);
             }
@@ -1801,7 +1741,19 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         }
 
         case 'deletePaymentFromBooking': {
-            const { bookingId, paymentIndex, cancelReason } = req.body;
+            const { bookingId, paymentId, paymentIndex, cancelReason } = req.body;
+            
+            console.log('[API][deletePaymentFromBooking] Request:', { bookingId, paymentId, paymentIndex, cancelReason });
+            
+            if (!bookingId) {
+                return res.status(400).json({ error: 'bookingId is required' });
+            }
+            
+            // Support both paymentId (new way) and paymentIndex (legacy fallback)
+            if (!paymentId && (typeof paymentIndex !== 'number' || paymentIndex < 0)) {
+                return res.status(400).json({ error: 'Either paymentId or valid paymentIndex (>= 0) is required' });
+            }
+            
             const { rows: [bookingRow] } = await sql`SELECT payment_details, price FROM bookings WHERE id = ${bookingId}`;
 
             if (!bookingRow) {
@@ -1812,31 +1764,71 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 ? bookingRow.payment_details
                 : [];
 
-            if (paymentIndex >= 0 && paymentIndex < currentPayments.length) {
-                const deletedPayment = currentPayments[paymentIndex];
-                const updatedPayments = currentPayments.filter((_: any, i: number) => i !== paymentIndex);
-                const totalPaid = updatedPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
-                const isPaid = totalPaid >= bookingRow.price;
-                const { rows: [updatedBookingRow] } = await sql`
-                    UPDATE bookings
-                    SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
-                    WHERE id = ${bookingId}
-                    RETURNING *;
-                `;
-                const updatedBooking = parseBookingFromDB(updatedBookingRow);
-                result = { success: true, booking: updatedBooking };
-                // Audit log: guardar cancelación en notifications
-                await sql`
-                    INSERT INTO notifications (type, target_id, user_name, summary)
-                    VALUES ('payment_deleted', ${bookingId}, ${deletedPayment.method || 'N/A'}, ${cancelReason || 'Deleted by admin'});
-                `;
+            console.log('[API][deletePaymentFromBooking] Current payments:', currentPayments.length);
+
+            let deletedPayment: any = null;
+            let updatedPayments: any[] = [];
+
+            if (paymentId) {
+                // New way: Find and remove by ID
+                const paymentIndex = currentPayments.findIndex((p: any) => p.id === paymentId);
+                
+                if (paymentIndex === -1) {
+                    console.error('[API][deletePaymentFromBooking] Payment not found with ID:', paymentId);
+                    return res.status(404).json({ error: `Payment not found with ID: ${paymentId}` });
+                }
+                
+                deletedPayment = currentPayments[paymentIndex];
+                updatedPayments = currentPayments.filter((p: any) => p.id !== paymentId);
+                console.log('[API][deletePaymentFromBooking] Deleted payment by ID:', paymentId, 'at index:', paymentIndex);
             } else {
-                return res.status(400).json({ error: 'Invalid payment index.' });
+                // Legacy way: Use index (for backward compatibility)
+                if (paymentIndex >= 0 && paymentIndex < currentPayments.length) {
+                    deletedPayment = currentPayments[paymentIndex];
+                    updatedPayments = currentPayments.filter((_: any, i: number) => i !== paymentIndex);
+                    console.log('[API][deletePaymentFromBooking] Deleted payment by index:', paymentIndex);
+                } else {
+                    console.error('[API][deletePaymentFromBooking] Invalid index:', paymentIndex, 'for array length:', currentPayments.length);
+                    return res.status(400).json({ error: `Invalid payment index. Request index: ${paymentIndex}, Available payments: ${currentPayments.length}` });
+                }
             }
+
+            const totalPaid = updatedPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
+            const isPaid = totalPaid >= bookingRow.price;
+            
+            const { rows: [updatedBookingRow] } = await sql`
+                UPDATE bookings
+                SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
+                WHERE id = ${bookingId}
+                RETURNING *;
+            `;
+            
+            const updatedBooking = parseBookingFromDB(updatedBookingRow);
+            result = { success: true, booking: updatedBooking };
+            
+            // Audit log: guardar cancelación en notifications
+            await sql`
+                INSERT INTO notifications (type, target_id, user_name, summary)
+                VALUES ('payment_deleted', ${bookingId}, ${deletedPayment.method || 'N/A'}, ${cancelReason || 'Deleted by admin'});
+            `;
+            
+            console.log('[API][deletePaymentFromBooking] Success: Deleted payment');
             break;
         }
         case 'updatePaymentDetails': {
-            const { bookingId, paymentIndex, updatedDetails } = req.body;
+            const { bookingId, paymentId, paymentIndex, updatedDetails } = req.body;
+            
+            console.log('[API][updatePaymentDetails] Request:', { bookingId, paymentId, paymentIndex, updatedDetails });
+            
+            if (!bookingId) {
+                return res.status(400).json({ error: 'bookingId is required' });
+            }
+            
+            // Support both paymentId (new way) and paymentIndex (legacy fallback)
+            if (!paymentId && (typeof paymentIndex !== 'number' || paymentIndex < 0)) {
+                return res.status(400).json({ error: 'Either paymentId or valid paymentIndex (>= 0) is required' });
+            }
+            
             const { rows: [bookingRow] } = await sql`SELECT payment_details, price FROM bookings WHERE id = ${bookingId}`;
 
             if (!bookingRow) {
@@ -1847,25 +1839,49 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 ? bookingRow.payment_details
                 : [];
 
-            if (paymentIndex >= 0 && paymentIndex < currentPayments.length) {
-                // Actualiza solo los campos enviados en updatedDetails
-                const updatedPayments = currentPayments.map((p: any, i: number) =>
-                    i === paymentIndex ? { ...p, ...updatedDetails } : p
-                );
-                const totalPaid = updatedPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
-                const isPaid = totalPaid >= bookingRow.price;
+            console.log('[API][updatePaymentDetails] Current payments:', currentPayments.length);
 
-                const { rows: [updatedBookingRow] } = await sql`
-                    UPDATE bookings
-                    SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
-                    WHERE id = ${bookingId}
-                    RETURNING *;
-                `;
-                const updatedBooking = parseBookingFromDB(updatedBookingRow);
-                result = { success: true, booking: updatedBooking };
+            let updatedPayments: any[] = [];
+
+            if (paymentId) {
+                // New way: Find and update by ID
+                const targetIndex = currentPayments.findIndex((p: any) => p.id === paymentId);
+                
+                if (targetIndex === -1) {
+                    console.error('[API][updatePaymentDetails] Payment not found with ID:', paymentId);
+                    return res.status(404).json({ error: `Payment not found with ID: ${paymentId}` });
+                }
+                
+                updatedPayments = currentPayments.map((p: any) =>
+                    p.id === paymentId ? { ...p, ...updatedDetails } : p
+                );
+                console.log('[API][updatePaymentDetails] Updated payment by ID:', paymentId);
             } else {
-                return res.status(400).json({ error: 'Invalid payment index.' });
+                // Legacy way: Use index (for backward compatibility)
+                if (paymentIndex >= 0 && paymentIndex < currentPayments.length) {
+                    updatedPayments = currentPayments.map((p: any, i: number) =>
+                        i === paymentIndex ? { ...p, ...updatedDetails } : p
+                    );
+                    console.log('[API][updatePaymentDetails] Updated payment by index:', paymentIndex);
+                } else {
+                    console.error('[API][updatePaymentDetails] Invalid index:', paymentIndex, 'for array length:', currentPayments.length);
+                    return res.status(400).json({ error: `Invalid payment index. Request index: ${paymentIndex}, Available payments: ${currentPayments.length}` });
+                }
             }
+
+            const totalPaid = updatedPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
+            const isPaid = totalPaid >= bookingRow.price;
+
+            const { rows: [updatedBookingRow] } = await sql`
+                UPDATE bookings
+                SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
+                WHERE id = ${bookingId}
+                RETURNING *;
+            `;
+            const updatedBooking = parseBookingFromDB(updatedBookingRow);
+            result = { success: true, booking: updatedBooking };
+            
+            console.log('[API][updatePaymentDetails] Success');
             break;
         }
         case 'markBookingAsUnpaid':
@@ -2252,6 +2268,16 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookingCode'> & { invoiceData?: Omit<InvoiceRequest, 'id' | 'bookingId' | 'status' | 'requestedAt' | 'processedAt'> }): Promise<AddBookingResult> {
     const { productId, slots, userInfo, productType, invoiceData, bookingDate, participants, clientNote } = body;
 
+    // IDEMPOTENCY: Check if bookingCode already exists (prevent duplicate submissions)
+    const bookingCodeCheck = (body as any).bookingCode;
+    if (bookingCodeCheck) {
+        const { rows: existingByCode } = await sql`SELECT * FROM bookings WHERE booking_code = ${bookingCodeCheck}`;
+        if (existingByCode.length > 0) {
+            console.log('[IDEMPOTENCY] Booking already exists with code:', bookingCodeCheck);
+            return { success: true, message: 'Booking already exists (idempotent).', booking: parseBookingFromDB(existingByCode[0]) };
+        }
+    }
+
         // Sincronizar cliente en tabla customers
         try {
             await createCustomer({
@@ -2353,28 +2379,54 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
             // Remove the hold (consumed)
             await sql`DELETE FROM giftcard_holds WHERE id = ${holdId}`;
 
-            // Insert booking inside the same transaction
+            // Create paymentDetails entry for giftcard
+            const paymentDetails = JSON.stringify([{ 
+                amount: holdAmount, 
+                method: 'Giftcard', 
+                receivedAt: new Date().toISOString(), 
+                giftcardAmount: holdAmount,
+                giftcardId: String(giftcardRow.id),
+                metadata: { giftcardId: giftcardRow.id, code: giftcardRow.code } 
+            }]);
+
+            // If giftcard covers total price, mark as paid
+            const isPaidFinal = holdAmount >= Number(newBooking.price || 0);
+
+            // Insert booking inside the same transaction with payment details
             const { rows: [created] } = await sql`
-                INSERT INTO bookings (product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_code, booking_date, participants, client_note)
+                INSERT INTO bookings (product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_code, booking_date, participants, client_note, payment_details, giftcard_redeemed_amount, giftcard_id)
                 VALUES (
                     ${newBooking.productId},
                     ${newBooking.productType},
                     ${JSON.stringify(newBooking.slots)},
                     ${JSON.stringify(newBooking.userInfo)},
                     ${new Date().toISOString()},
-                    ${newBooking.isPaid},
+                    ${isPaidFinal},
                     ${newBooking.price},
                     ${newBooking.bookingMode},
                     ${JSON.stringify(newBooking.product)},
                     ${newBooking.bookingCode},
                     ${bookingDate},
                     ${participants || 1},
-                    ${clientNote || null}
+                    ${clientNote || null},
+                    ${paymentDetails},
+                    ${holdAmount},
+                    ${String(giftcardRow.id)}
                 )
                 RETURNING *;
             `;
 
             insertedRow = created;
+
+            console.log('[GIFTCARD BOOKING] Booking created with hold:', {
+                bookingId: created.id,
+                bookingCode: created.booking_code,
+                email: created.user_info?.email || 'N/A',
+                isPaid: isPaidFinal,
+                paymentDetails: paymentDetails,
+                giftcardAmount: holdAmount,
+                giftcardId: String(giftcardRow.id)
+            });
 
             // Optionally create invoice request here as before
             if (invoiceData) {
@@ -2392,12 +2444,23 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
             // Notification insertion as before
             await sql`
                 INSERT INTO notifications (type, target_id, user_name, summary)
-                VALUES ('new_booking', ${created.id}, ${`${userInfo.firstName} ${created.user_info ? JSON.parse(created.user_info).lastName : ''}`}, ${newBooking.product.name});
+                VALUES ('new_booking', ${created.id}, ${`${userInfo.firstName} ${userInfo.lastName}`}, ${newBooking.product.name});
             `;
 
             await sql`COMMIT`;
         } catch (err) {
             try { await sql`ROLLBACK`; } catch(e){}
+            
+            // CRITICAL: Clean up orphaned hold if one was created
+            if (holdId) {
+                try {
+                    await sql`DELETE FROM giftcard_holds WHERE id = ${holdId}`;
+                    console.log('[HOLD CLEANUP] Deleted orphaned hold:', holdId);
+                } catch (cleanupErr) {
+                    console.error('[HOLD CLEANUP] Failed to delete hold:', holdId, cleanupErr);
+                }
+            }
+            
             console.error('Error in booking+hold transaction:', err);
             return { success: false, message: err instanceof Error ? err.message : String(err) };
         }
@@ -2447,7 +2510,14 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
                 }
 
                 // Create booking and include paymentDetails entry for giftcard
-                const paymentDetails = JSON.stringify([{ amount: giftcardAmount, method: 'Giftcard', receivedAt: new Date().toISOString(), metadata: { giftcardId: giftcardRow.id || null, code: giftcardRow.code || giftcardCode } }]);
+                const paymentDetails = JSON.stringify([{ 
+                    amount: giftcardAmount, 
+                    method: 'Giftcard', 
+                    receivedAt: new Date().toISOString(), 
+                    giftcardAmount: giftcardAmount,
+                    giftcardId: String(giftcardRow.id || null),
+                    metadata: { giftcardId: giftcardRow.id || null, code: giftcardRow.code || giftcardCode } 
+                }]);
 
                 // If giftcard covers total price, mark as paid
                 const isPaidFinal = giftcardAmount >= Number(newBooking.price || 0);
@@ -2480,6 +2550,9 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
                 await sql`COMMIT`;
             } catch (err) {
                 try { await sql`ROLLBACK`; } catch(e){}
+                
+                // CRITICAL: Clean up orphaned hold if giftcard was validated but booking failed
+                // (In immediate consume flow, no hold is created, but keeping this for consistency)
                 console.error('Error creating booking with immediate giftcard consume:', err);
                 return { success: false, message: err instanceof Error ? err.message : String(err) } as AddBookingResult;
             }
@@ -2528,12 +2601,18 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
     `;
     
     try {
+        console.log(`[EMAIL DEBUG] Fetching automation settings for booking ${fullyParsedBooking.bookingCode}`);
         const { rows: settingsRows } = await sql`SELECT key, value FROM settings WHERE key = 'automationSettings' OR key = 'bankDetails'`;
         const automationSettings = settingsRows.find(r => r.key === 'automationSettings')?.value as AutomationSettings;
     const bankDetails = settingsRows.find(r => r.key === 'bankDetails')?.value as BankDetails[];
 
+        console.log(`[EMAIL DEBUG] automationSettings.preBookingConfirmation.enabled:`, automationSettings?.preBookingConfirmation?.enabled);
+        console.log(`[EMAIL DEBUG] bankDetails exists:`, !!bankDetails && bankDetails.length > 0);
+
         if (automationSettings?.preBookingConfirmation?.enabled && bankDetails && bankDetails.length > 0 && bankDetails[0].accountNumber) {
+            console.log(`[EMAIL DEBUG] Sending pre-booking confirmation email to ${fullyParsedBooking.userInfo.email} for booking ${fullyParsedBooking.bookingCode}`);
             await emailService.sendPreBookingConfirmationEmail(fullyParsedBooking, bankDetails[0]);
+            console.log(`[EMAIL DEBUG] Email sent successfully!`);
             await sql`
                 INSERT INTO client_notifications (created_at, client_name, client_email, type, channel, status, booking_code)
                 VALUES (
@@ -2544,12 +2623,26 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
                     ${fullyParsedBooking.bookingCode}
                 );
             `;
+            console.log(`[EMAIL DEBUG] client_notifications record inserted`);
         } else if (automationSettings?.preBookingConfirmation?.enabled) {
-            console.log(`Skipping pre-booking confirmation email for ${fullyParsedBooking.bookingCode}: Bank details are not configured.`);
+            console.log(`[EMAIL DEBUG] Skipping pre-booking confirmation email for ${fullyParsedBooking.bookingCode}: Bank details are not configured.`);
+        } else {
+            console.log(`[EMAIL DEBUG] Skipping pre-booking confirmation email for ${fullyParsedBooking.bookingCode}: Feature is disabled.`);
         }
     } catch(emailError) {
-        console.warn(`Booking ${fullyParsedBooking.bookingCode} created, but confirmation email failed to send:`, emailError);
+        console.error(`[EMAIL DEBUG] ERROR: Booking ${fullyParsedBooking.bookingCode} created, but confirmation email failed to send:`, emailError);
     }
+
+    console.log('[BOOKING SUCCESS] Returning booking:', {
+        id: fullyParsedBooking.id,
+        bookingCode: fullyParsedBooking.bookingCode,
+        email: fullyParsedBooking.userInfo?.email,
+        isPaid: fullyParsedBooking.isPaid,
+        price: fullyParsedBooking.price,
+        giftcardApplied: fullyParsedBooking.giftcardApplied,
+        giftcardRedeemedAmount: fullyParsedBooking.giftcardRedeemedAmount,
+        paymentDetailsCount: fullyParsedBooking.paymentDetails?.length || 0
+    });
 
     return { success: true, message: 'Booking added.', booking: fullyParsedBooking };
 }
