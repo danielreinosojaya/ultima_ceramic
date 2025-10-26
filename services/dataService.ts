@@ -257,7 +257,7 @@ import { DAY_NAMES } from '../constants';
 // --- API Helpers ---
 
 const fetchData = async (url: string, options?: RequestInit, retries: number = 3) => {
-    let lastError: Error;
+    let lastError: Error | null = null; // Inicialización de la variable
     
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
@@ -321,8 +321,12 @@ const fetchData = async (url: string, options?: RequestInit, retries: number = 3
     }
     
     // Si todos los intentos fallaron, lanzar el último error
-    console.error(`All ${retries} fetch attempts failed for ${url}`);
-    throw lastError;
+    if (lastError) {
+        console.error(`All ${retries} fetch attempts failed for ${url}`);
+        throw lastError;
+    } else {
+        throw new Error('Unknown error occurred during fetch attempts.');
+    }
 };
 
 // Cache más agresivo para evitar requests innecesarias
