@@ -229,13 +229,14 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
 
 
     const { pendingPackageBookings, pendingOpenStudioBookings } = useMemo(() => {
-        // Solo mostrar reservas impagas que tengan al menos un slot asignado
+        // Solo mostrar reservas impagas que tengan al menos un slot asignado para paquetes/clases
         const packages = allBookings.filter(b => {
             return !b.isPaid && b.productType !== 'OPEN_STUDIO_SUBSCRIPTION' && Array.isArray(b.slots) && b.slots.length > 0;
         }).sort((a,b) => (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0));
 
+        // Mostrar todas las reservas impagas de Open Studio, sin filtrar por slots
         const openStudio = allBookings.filter(b => {
-            return !b.isPaid && b.productType === 'OPEN_STUDIO_SUBSCRIPTION' && Array.isArray(b.slots) && b.slots.length > 0;
+            return !b.isPaid && b.productType === 'OPEN_STUDIO_SUBSCRIPTION';
         }).sort((a,b) => (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0));
 
         return { pendingPackageBookings: packages, pendingOpenStudioBookings: openStudio };

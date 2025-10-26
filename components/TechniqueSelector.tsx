@@ -1,10 +1,26 @@
 import React from 'react';
 // Traducción eliminada, usar texto en español directamente
-import type { Technique } from '../types';
+import type { Technique, Product } from '../types';
+import { KeyIcon } from './icons/KeyIcon';
+import { DEFAULT_PRODUCTS } from '../constants';
+
+// Normalizador de price para productos recibidos por props
+const normalizeProductsPrice = (products: Product[]): Product[] =>
+  products.map(p => {
+    if ('price' in p) {
+      return {
+        ...p,
+        price: typeof (p as any).price === 'number' ? (p as any).price : parseFloat((p as any).price) || 0
+      };
+    }
+    return p;
+  });
+
 
 interface TechniqueSelectorProps {
-  onSelect: (technique: Technique) => void;
+  onSelect: (technique: Technique | 'open_studio') => void;
   onBack: () => void;
+  products: Product[];
 }
 
 const TechniqueCard: React.FC<{ title: string; subtitle: string; buttonText: string; onClick: () => void; }> = ({ title, subtitle, buttonText, onClick }) => (
@@ -21,15 +37,20 @@ const TechniqueCard: React.FC<{ title: string; subtitle: string; buttonText: str
 );
 
 
-export const TechniqueSelector: React.FC<TechniqueSelectorProps> = ({ onSelect, onBack }) => {
+
+export const TechniqueSelector: React.FC<TechniqueSelectorProps> = ({ onSelect, onBack, products }) => {
+  // Normalizar precios antes de cualquier uso
+  const normalizedProducts = normalizeProductsPrice(products);
+  // No mostrar Open Studio en TechniqueSelector
+
   return (
-    <div className="text-center p-6 bg-transparent animate-fade-in-up max-w-4xl mx-auto">
+    <div className="text-center p-6 bg-transparent animate-fade-in-up max-w-5xl mx-auto">
       <button onClick={onBack} className="text-brand-secondary hover:text-brand-text mb-4 transition-colors font-semibold text-lg" style={{ background: 'none', border: 'none' }}>
         &larr; Editar Selección
       </button>
-      <h2 className="text-4xl font-bold text-brand-text mb-2">Elige una Técnica</h2>
+      <h2 className="text-4xl font-bold text-brand-text mb-2">Elige una opción</h2>
       <p className="text-brand-secondary mb-10 text-xl">¿En qué te gustaría enfocarte hoy?</p>
-      <div className="grid md:grid-cols-2 gap-8">
+      <div className="grid md:grid-cols-2 gap-8 mb-12">
         <TechniqueCard
             title="Torno Alfarero"
             subtitle="Aprende a levantar piezas en el torno, creando tazas, cuencos y jarrones."
@@ -40,9 +61,10 @@ export const TechniqueSelector: React.FC<TechniqueSelectorProps> = ({ onSelect, 
             title="Modelado a Mano"
             subtitle="Explora técnicas escultóricas como el pellizco, los churros y las planchas."
             buttonText="Seleccionar"
-              onClick={() => onSelect('molding')}
+            onClick={() => onSelect('molding')}
         />
       </div>
+      {/* Separador visual y copy explicativo para membresía ELIMINADO: Open Studio solo en Welcome Page */}
     </div>
   );
 };
