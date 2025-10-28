@@ -1179,17 +1179,20 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 }
 
                 // Load helpers dynamically to avoid load errors in tests when env not configured
+                // S3 and QR modules removed to reduce serverless function count
                 let s3Module: any = null;
                 let qrModule: any = null;
                 let pdfModule: any = null;
-                try {
-                    s3Module = await import('./s3.js');
-                } catch (e) {
-                    // ignore
-                }
-                try {
-                    qrModule = await import('./qr.js');
-                } catch (e) {}
+                // S3 module no longer available
+                // try {
+                //     s3Module = await import('./s3.js');
+                // } catch (e) {
+                //     // ignore
+                // }
+                // QR module no longer available
+                // try {
+                //     qrModule = await import('./qr.js');
+                // } catch (e) {}
                 try {
                     pdfModule = await import('./pdf.js');
                 } catch (e) {}
@@ -1325,11 +1328,14 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     let downloadLink: string | undefined;
                     if (pdfS3Url) {
                         // If uploaded to S3, create a presigned GET URL for download
+                        // S3 module removed - using S3 URL directly as download link
                         try {
-                            const s3m = await import('./s3.js');
-                            const key = pdfS3Url.replace(`s3://${s3m.defaultBucket || ''}/`, '');
-                            const maybe = await s3m.generatePresignedGetUrl(key, 60 * 60 * 24 * 7); // 7 days
-                            if (maybe) downloadLink = maybe;
+                            // S3 module no longer available
+                            // const s3m = await import('./s3.js');
+                            // const key = pdfS3Url.replace(`s3://${s3m.defaultBucket || ''}/`, '');
+                            // const maybe = await s3m.generatePresignedGetUrl(key, 60 * 60 * 24 * 7); // 7 days
+                            // if (maybe) downloadLink = maybe;
+                            downloadLink = pdfS3Url; // Use S3 URL directly
                         } catch (err) {
                             console.warn('Failed to generate presigned URL for pdf:', err);
                         }
@@ -2335,6 +2341,34 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
       bookingMode: created[0].booking_mode,
       bookingDate: created[0].booking_date,
     };
+
+    // Create invoice request if invoiceData is provided
+    if (body.invoiceData) {
+      try {
+        console.log('[ADD BOOKING] Creating invoice request for booking:', booking.bookingCode);
+        const invoiceData = body.invoiceData;
+        
+        await sql`
+          INSERT INTO invoice_requests (
+            booking_id, company_name, tax_id, address, email, status, requested_at
+          ) VALUES (
+            ${booking.id}, 
+            ${invoiceData.companyName || ''}, 
+            ${invoiceData.taxId || ''}, 
+            ${invoiceData.address || ''}, 
+            ${invoiceData.email || booking.userInfo.email}, 
+            'Pending', 
+            NOW()
+          )
+        `;
+        
+        console.log('[ADD BOOKING] Invoice request created successfully');
+      } catch (invoiceError) {
+        console.error('[ADD BOOKING] Error creating invoice request:', invoiceError);
+        // Don't fail the booking creation if invoice request fails
+        // The booking is already created, just log the error
+      }
+    }
 
     // Send pre-booking confirmation email
     try {

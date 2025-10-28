@@ -58,7 +58,9 @@ export const ClientNotificationLog: React.FC = () => {
     const filteredNotifications = useMemo(() => {
         return notifications.filter(n => {
             const searchTermLower = searchTerm.toLowerCase();
-            const matchesSearch = n.clientName.toLowerCase().includes(searchTermLower) || n.clientEmail.toLowerCase().includes(searchTermLower);
+            const clientNameLower = (n.clientName || '').toLowerCase();
+            const clientEmailLower = (n.clientEmail || '').toLowerCase();
+            const matchesSearch = clientNameLower.includes(searchTermLower) || clientEmailLower.includes(searchTermLower);
             const matchesType = filterType === 'all' || n.type === filterType;
             return matchesSearch && matchesType;
         });
@@ -138,8 +140,8 @@ export const ClientNotificationLog: React.FC = () => {
                                     {formatDate(n.createdAt)}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="font-bold text-brand-text">{n.clientName}</div>
-                                    <div className="text-sm text-brand-secondary">{n.clientEmail}</div>
+                                    <div className="font-bold text-brand-text">{n.clientName || 'Sin nombre'}</div>
+                                    <div className="text-sm text-brand-secondary">{n.clientEmail || 'Sin email'}</div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-text">
                                     {n.type === 'PRE_BOOKING_CONFIRMATION' ? 'Reserva' : n.type === 'PAYMENT_RECEIPT' ? 'Recibo' : n.type === 'CLASS_REMINDER' ? 'Recordatorio' : 'Otro'}
