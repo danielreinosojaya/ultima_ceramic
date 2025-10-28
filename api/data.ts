@@ -1022,6 +1022,18 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
                 console.log('[createGiftcardHold] Giftcard (locked):', { id: gid, balance, balanceType: typeof giftcardRow.balance });
 
+                // LIMPIEZA: Eliminar holds expirados Y holds previos de esta misma sesión (booking_temp_ref)
+                // Esto permite al usuario reintentar aplicar la giftcard sin acumular holds fantasma
+                const { rowCount: deletedHolds } = await sql`
+                    DELETE FROM giftcard_holds
+                    WHERE giftcard_id = ${gid}
+                    AND (
+                        expires_at <= NOW()
+                        ${bookingTempRef ? sql`OR booking_temp_ref = ${bookingTempRef}` : sql``}
+                    )
+                `;
+                console.log('[createGiftcardHold] Cleaned holds:', { deletedHolds, bookingTempRef });
+
                 // Sum active holds for this giftcard (inside the same transaction)
                 const { rows: [holdSumRow] } = await sql`
                     SELECT COALESCE(SUM(amount), 0) AS total_holds
