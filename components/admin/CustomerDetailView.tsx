@@ -108,12 +108,12 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                 console.log('[DELETE CUSTOMER] Attempting to delete customer with email:', customer.email);
                 console.log('[DELETE CUSTOMER] Customer object:', customer);
                 
-                const response = await fetch('/api/deleteCustomer', {
-                    method: 'DELETE',
+                const response = await fetch('/api/data?action=deleteCustomer', {
+                    method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ customerEmail: customer.email }),
+                    body: JSON.stringify({ email: customer.email }),
                 });
 
                 console.log('[DELETE CUSTOMER] Response status:', response.status);
@@ -124,12 +124,13 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                     throw new Error(deleteResult.error || 'Failed to delete customer');
                 }
 
-                if (deleteResult.message) {
+                if (deleteResult.success) {
                     setFeedbackMsg('Cliente eliminado exitosamente');
                     setFeedbackType('success');
+                    onDataChange(); // Refresh data
                     onBack(); // Redirigir a la lista de clientes
                 } else {
-                    throw new Error('Cliente no encontrado');
+                    throw new Error(deleteResult.error || 'Cliente no encontrado');
                 }
             } catch (error) {
                 console.error('Error eliminando cliente:', error);
