@@ -1693,8 +1693,22 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             if (!email) {
                 return res.status(400).json({ error: 'Email is required.' });
             }
-            await sql`DELETE FROM customers WHERE email = ${email}`;
-            return res.status(200).json({ success: true });
+            
+            // Use the complete deletion function from lib/database
+            const { deleteCustomerByEmail } = await import('../lib/database.js');
+            const result = await deleteCustomerByEmail(email);
+            
+            if (result) {
+                return res.status(200).json({ 
+                    success: true, 
+                    message: 'Customer and related data deleted successfully' 
+                });
+            } else {
+                return res.status(404).json({ 
+                    success: false, 
+                    error: 'Customer not found or no data to delete' 
+                });
+            }
         }
         case 'updateBooking': {
             const { id, userInfo, price, participants } = req.body;
