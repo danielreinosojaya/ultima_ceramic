@@ -36,6 +36,16 @@ export const ClassInfoModal: React.FC<ClassInfoModalProps> = ({ product, onConfi
       // wording exacto de la imagen
       return (
         <>
+          {/* Badge de precio prominente */}
+          <div className="mb-6 bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-brand-primary/30 rounded-xl p-5 text-center shadow-sm">
+            <p className="text-sm font-semibold text-brand-secondary uppercase tracking-wide mb-1">Inversión Mensual</p>
+            <div className="flex items-center justify-center gap-2">
+              <span className="text-5xl font-bold text-brand-primary">${product.price}</span>
+              <span className="text-xl text-brand-secondary font-medium">USD</span>
+            </div>
+            <p className="text-sm text-brand-secondary mt-2">Acceso completo por 30 días</p>
+          </div>
+
           <div className="mb-6">
             <h3 className="text-xl font-bold text-brand-text mb-2">¿Qué es Open Studio?</h3>
             <p className="text-brand-secondary text-lg">

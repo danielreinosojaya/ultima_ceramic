@@ -257,6 +257,12 @@ const App: React.FC = () => {
                 console.log('[App] Booking created successfully:', result.booking.bookingCode);
                 setBookingDetails(finalDetails);
                 setConfirmedBooking(result.booking);
+                
+                // CRITICAL: Preserve giftcard hold info for ConfirmationPage display
+                if (activeGiftcardHold && activeGiftcardHold.amount > 0) {
+                    setAppliedGiftcardHold(activeGiftcardHold);
+                }
+                
                 setIsUserInfoModalOpen(false);
                 setView('confirmation');
                 // Reset flag after successful navigation
@@ -498,11 +504,11 @@ const App: React.FC = () => {
                     footerInfo={appData.footerInfo}
                     policies={appData.policies}
                     onFinish={resetFlow}
-                    appliedGiftcardHold={appliedGiftcardHold ? {
+                    appliedGiftcardHold={appliedGiftcardHold && appliedGiftcardHold.amount > 0 ? {
                         holdId: appliedGiftcardHold.holdId || '',
                         expiresAt: appliedGiftcardHold.expiresAt,
-                        amount: appliedGiftcardHold.amount || 0
-                    } : { holdId: '', expiresAt: '', amount: 0 }} // Ajuste aquí
+                        amount: appliedGiftcardHold.amount
+                    } : null}
                 />;
             case 'group_experience':
             case 'couples_experience':
