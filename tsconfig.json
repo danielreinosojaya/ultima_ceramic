@@ -6,13 +6,12 @@
     "module": "esnext",
     "skipLibCheck": true,
     "esModuleInterop": true,
-  "allowSyntheticDefaultImports": true,
+    "allowSyntheticDefaultImports": true,
     "typeRoots": ["./types", "./src/types", "./node_modules/@types"],
-  "moduleResolution": "node",
+    "moduleResolution": "node",
     "isolatedModules": true,
     "noEmit": true,
-  "jsx": "react-jsx",
-  "allowSyntheticDefaultImports": true,
+    "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
       "@/*": ["./*"]

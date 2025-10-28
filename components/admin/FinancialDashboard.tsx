@@ -220,7 +220,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
             });
         }
         if (giftcardFilter !== 'all') {
-            filtered = filtered.filter(b => b.paymentDetails?.some(p => (giftcardFilter === 'giftcard' ? (p.giftcardAmount || p.giftcard) : !(p.giftcardAmount || p.giftcard))));
+            filtered = filtered.filter(b => b.paymentDetails?.some(p => (giftcardFilter === 'giftcard' ? (p.giftcardAmount || p.giftcardId) : !(p.giftcardAmount || p.giftcardId))));
         }
         
         console.log('[FinancialDashboard] Final filtered bookings:', filtered.length);
@@ -634,9 +634,9 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{b.userInfo?.firstName} {b.userInfo?.lastName}</td>
                                                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{b.product?.name || 'N/A'}</td>
                                                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-semibold">${(p.amount || 0).toFixed(2)}
-                                                                                {(p.giftcardAmount || p.giftcard) && (
+                                                                                {(p.giftcardAmount || p.giftcardId) && (
                                                                                     <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-indigo-50 text-indigo-700 ml-2">
-                                                                                        Giftcard: ${((p.giftcardAmount || p.giftcard?.amount || 0)).toFixed(2)}
+                                                                                        Giftcard: ${((p.giftcardAmount || 0)).toFixed(2)}
                                                                                         {p.giftcardId ? ` · ID:${p.giftcardId}` : ''}
                                                                                     </span>
                                                                                 )}

@@ -18,8 +18,12 @@ interface Attendee {
     lastName: string;
     email: string;
     phone?: string;
+    countryCode?: string; // Agregar countryCode como opcional
   };
   bookingId: string;
+  bookingCode?: string; // Agregar bookingCode como opcional
+  paymentDetails?: PaymentDetails[]; // Agregar paymentDetails como opcional
+  isPaid?: boolean; // Agregar isPaid como opcional
 }
 
 interface BookingDetailsModalProps {
@@ -31,6 +35,12 @@ interface BookingDetailsModalProps {
   product: Product;
   onBookingUpdate?: () => void;
   allBookings: Booking[]; // Pass bookings as prop
+  instructorId?: number; // Hacer opcional
+  onRemoveAttendee?: (bookingId: string) => void; // Hacer opcional
+  onAcceptPayment?: (bookingId: string) => void; // Hacer opcional
+  onMarkAsUnpaid?: (bookingId: string) => void; // Hacer opcional
+  onEditAttendee?: (bookingId: string) => void; // Hacer opcional
+  onRescheduleAttendee?: (bookingId: string, slot: TimeSlot, attendeeName: string) => void; // Hacer opcional
 }
 
 const formatTimeForInput = (time12h: string): string => {

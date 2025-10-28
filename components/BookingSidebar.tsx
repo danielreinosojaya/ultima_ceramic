@@ -77,12 +77,7 @@ return (
                 </div>
                 <div className="flex justify-between font-bold text-lg text-brand-text pt-1 mt-1">
                     <span>Total a pagar</span>
-                    <span>${price.toFixed(2)}</span>
-                    <span>
-                      {typeof pkg.price === 'number' && !isNaN(pkg.price)
-                        ? `$${pkg.price.toFixed(2)}`
-                        : (() => { console.error('BookingSidebar: pkg.price inválido', pkg); return '---'; })()}
-                    </span>
+                    <span>${pkg.price.toFixed(2)}</span>
                 </div>
             </div>
         </div>

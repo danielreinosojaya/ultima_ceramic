@@ -86,7 +86,7 @@ export const CustomerList: React.FC<CustomerListProps> = ({ customers, onSelectC
         // --- INTEGRACIÓN GIFT CARD ---
         const renderGiftcardBadge = (customer: any) => {
             if (customer && customer.bookings) {
-                const hasGiftcard = customer.bookings.some(b => b.paymentDetails?.some(p => p.giftcardAmount || p.giftcard));
+                const hasGiftcard = customer.bookings.some(b => b.paymentDetails?.some(p => p.giftcardAmount || p.giftcardId));
                 if (hasGiftcard) {
                     return (
                         <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-indigo-50 text-indigo-700 ml-2" title="Cliente ha pagado con giftcard">
@@ -105,14 +105,14 @@ export const CustomerList: React.FC<CustomerListProps> = ({ customers, onSelectC
         const getGiftcardAuditData = (customer: any) => {
           if (!customer) return [];
           // Simulación: solo muestra el primer pago giftcard
-          const booking = customer.bookings?.find(b => b.paymentDetails?.some(p => p.giftcardAmount || p.giftcard));
+          const booking = customer.bookings?.find(b => b.paymentDetails?.some(p => p.giftcardAmount || p.giftcardId));
           if (!booking) return [];
-          const payment = booking.paymentDetails?.find(p => p.giftcardAmount || p.giftcard);
+          const payment = booking.paymentDetails?.find(p => p.giftcardAmount || p.giftcardId);
           return payment ? [{
             fecha: booking.date || '—',
             accion: 'Reserva creada',
-            monto: payment.giftcardAmount || payment.giftcard,
-            id: payment.giftcard || '—'
+            monto: payment.giftcardAmount || 0,
+            id: payment.giftcardId || '—'
           }] : [];
         };
     
@@ -143,7 +143,7 @@ export const CustomerList: React.FC<CustomerListProps> = ({ customers, onSelectC
                                             </span>
                                             {renderGiftcardBadge(customer)}
                                             {/* Botón auditoría giftcard si tiene pago giftcard */}
-                                            {customer.bookings?.some(b => b.paymentDetails?.some(p => p.giftcardAmount || p.giftcard)) && (
+                                            {customer.bookings?.some(b => b.paymentDetails?.some(p => p.giftcardAmount || p.giftcardId)) && (
                                               <button onClick={e => { e.stopPropagation(); handleOpenAudit(customer); }} className="inline-flex items-center gap-2 px-2 py-1 text-xs font-semibold rounded bg-indigo-100 hover:bg-indigo-200 text-indigo-700 ml-1 shadow transition" title="Ver auditoría de giftcard">
                                                 Auditoría Giftcard
                                               </button>

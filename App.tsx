@@ -22,7 +22,7 @@ import { AdminDataProvider } from './context/AdminDataContext';
 import { ConfirmationPage } from './components/ConfirmationPage';
 import { OpenStudioModal } from './components/admin/OpenStudioModal';
 
-import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession } from './types';
+import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession, DeliveryMethod, GiftcardHold } from './types';
 import * as dataService from './services/dataService';
 import { InstagramIcon } from './components/icons/InstagramIcon';
 import { WhatsAppIcon } from './components/icons/WhatsAppIcon';
@@ -42,7 +42,7 @@ const App: React.FC = () => {
     const [giftcardPaid, setGiftcardPaid] = useState(false);
     const [giftcardPersonalization, setGiftcardPersonalization] = useState<any>(null);
     const [giftcardAmount, setGiftcardAmount] = useState<number | null>(null);
-    const [selectedDelivery, setSelectedDelivery] = useState<string | null>(null);
+    const [selectedDelivery, setSelectedDelivery] = useState<DeliveryMethod | null>(null);
     const [giftcardBuyerEmail, setGiftcardBuyerEmail] = useState<string>('');
     const [showGiftcardBanner, setShowGiftcardBanner] = useState(true);
     // Modal informativo de Open Studio usando ClassInfoModal
@@ -60,10 +60,11 @@ const App: React.FC = () => {
     const [openStudioProduct, setOpenStudioProduct] = useState<Product | null>(null);
     // Traducciones eliminadas, usar texto en español directamente
     const [isAdmin, setIsAdmin] = useState(false);
-    const [view, setView] = useState<AppView | 'giftcard_landing'>('welcome');
+    const [view, setView] = useState<AppView>('welcome');
     const [bookingDetails, setBookingDetails] = useState<BookingDetails>({ product: null, slots: [], userInfo: null });
     const [confirmedBooking, setConfirmedBooking] = useState<Booking | null>(null);
-    const [activeGiftcardHold, setActiveGiftcardHold] = useState<{ holdId?: string; expiresAt?: string; amount?: number; giftcardId?: string; code?: string } | null>(null);
+    const [activeGiftcardHold, setActiveGiftcardHold] = useState<GiftcardHold | null>(null);
+    const [appliedGiftcardHold, setAppliedGiftcardHold] = useState<GiftcardHold | null>(null);
     const [technique, setTechnique] = useState<Technique | 'open_studio' | null>(null);
     const [bookingMode, setBookingMode] = useState<BookingMode | null>(null);
     const [bookingInProgress, setBookingInProgress] = useState(false); // Prevent double submit
@@ -388,7 +389,10 @@ const App: React.FC = () => {
             case 'giftcard_delivery':
                 return (
                     <GiftcardDeliveryOptions
-                        onSelect={(option, data) => { setSelectedDelivery({ type: option, data }); setView('giftcard_payment'); }}
+                        onSelect={(option: 'email' | 'physical', data) => {
+  setSelectedDelivery({ type: option, data });
+  setView('giftcard_payment');
+}}
                         onBack={() => setView('giftcard_personalization')}
                     />
                 );
@@ -396,9 +400,12 @@ const App: React.FC = () => {
                 return (
                     <GiftcardPayment
                         amount={giftcardAmount || 0}
-                        deliveryMethod={selectedDelivery || ''}
+                        deliveryMethod={selectedDelivery || { type: 'email', data: {} }}
                         personalization={giftcardPersonalization}
-                        onPay={(buyerEmail) => { setGiftcardBuyerEmail(buyerEmail); setView('giftcard_manual_payment'); }}
+                        onPay={(buyerEmail) => {
+                            setGiftcardBuyerEmail(buyerEmail);
+                            setView('giftcard_manual_payment');
+                        }}
                         onBack={() => setView('giftcard_delivery')}
                     />
                 );
@@ -406,7 +413,7 @@ const App: React.FC = () => {
                 return (
                     <GiftcardManualPaymentInstructions
                         amount={giftcardAmount || 0}
-                        deliveryMethod={selectedDelivery || ''}
+                        deliveryMethod={selectedDelivery || { type: 'email', data: {} }} // Ajuste aquí
                         personalization={giftcardPersonalization}
                         buyerEmail={giftcardBuyerEmail}
                         onFinish={() => setView('giftcard_pending_review')}
@@ -422,7 +429,7 @@ const App: React.FC = () => {
                 return (
                     <GiftcardConfirmation
                         amount={giftcardAmount || 0}
-                        deliveryMethod={selectedDelivery || ''}
+                        deliveryMethod={selectedDelivery || { type: 'email', data: {} }}
                         personalization={giftcardPersonalization}
                         onFinish={() => { setView('welcome'); setGiftcardPaid(false); }}
                         onBack={() => setView('giftcard_payment')}
@@ -470,23 +477,33 @@ const App: React.FC = () => {
                     }
                 };
                 return <BookingSummary 
-                            bookingDetails={bookingDetails} 
-                            onProceedToConfirmation={handleSummaryConfirm} 
-                            onBack={handleBackFromSummary} 
-                            appData={appData} 
-                            onUseGiftcard={(holdInfo) => setActiveGiftcardHold(holdInfo)}
-                            activeGiftcardHold={activeGiftcardHold}
-                        />;
+                    bookingDetails={bookingDetails} 
+                    onProceedToConfirmation={handleSummaryConfirm} 
+                    onBack={handleBackFromSummary} 
+                    appData={appData} 
+                    onUseGiftcard={(holdInfo) => setActiveGiftcardHold(holdInfo)}
+                    activeGiftcardHold={activeGiftcardHold ? {
+                        holdId: activeGiftcardHold.holdId,
+                        expiresAt: activeGiftcardHold.expiresAt,
+                        amount: activeGiftcardHold.amount || 0, // Asegurar que amount sea un número
+                        giftcardId: activeGiftcardHold.giftcardId,
+                        code: activeGiftcardHold.code
+                    } : null} // Ajuste aquí
+                />;
             case 'confirmation':
                 if (!confirmedBooking) return <WelcomeSelector onSelect={handleWelcomeSelect} />;
                 return <ConfirmationPage 
-                            booking={confirmedBooking} 
-                            bankDetails={Array.isArray(appData.bankDetails) ? appData.bankDetails : appData.bankDetails ? [appData.bankDetails] : []}
-                            footerInfo={appData.footerInfo}
-                            policies={appData.policies}
-                            onFinish={resetFlow}
-                            appliedGiftcardHold={activeGiftcardHold}
-                        />;
+                    booking={confirmedBooking} 
+                    bankDetails={Array.isArray(appData.bankDetails) ? appData.bankDetails : appData.bankDetails ? [appData.bankDetails] : []}
+                    footerInfo={appData.footerInfo}
+                    policies={appData.policies}
+                    onFinish={resetFlow}
+                    appliedGiftcardHold={appliedGiftcardHold ? {
+                        holdId: appliedGiftcardHold.holdId || '',
+                        expiresAt: appliedGiftcardHold.expiresAt,
+                        amount: appliedGiftcardHold.amount || 0
+                    } : { holdId: '', expiresAt: '', amount: 0 }} // Ajuste aquí
+                />;
             case 'group_experience':
             case 'couples_experience':
             case 'team_building':

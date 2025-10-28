@@ -28,7 +28,7 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
     const [modalOpen, setModalOpen] = useState(false);
 
     const isPackage = booking.product.type === 'CLASS_PACKAGE';
-    const originalPrice = isPackage ? (booking.product as ClassPackage).classes * SINGLE_CLASS_PRICE : booking.price;
+    const originalPrice = isPackage ? booking.product.price : booking.price;
     const subtotal = booking.price / (1 + VAT_RATE);
     const vat = booking.price - subtotal;
     const discount = originalPrice - subtotal;
