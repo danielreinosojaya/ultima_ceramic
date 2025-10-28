@@ -206,6 +206,9 @@ const GiftcardRedeemSection: React.FC<{ product: Product; onUseGiftcard?: (holdI
   // Feedback visual inmediato tras aplicar saldo parcial
   const [justApplied, setJustApplied] = React.useState(false);
 
+  // Generar un bookingTempRef único por sesión de usuario para evitar holds duplicados
+  const bookingTempRef = React.useRef<string>(`booking_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+
   const handleValidate = async () => {
     setChecking(true);
     setError(null);
@@ -262,7 +265,7 @@ const GiftcardRedeemSection: React.FC<{ product: Product; onUseGiftcard?: (holdI
         return;
       }
 
-      const payloadBase: any = { ttlMinutes: 15 };
+      const payloadBase: any = { ttlMinutes: 15, bookingTempRef: bookingTempRef.current };
       if (giftcardInfo.giftcardId) payloadBase.giftcardId = giftcardInfo.giftcardId;
       else payloadBase.code = latestInfo.code || code.trim();
 
@@ -320,7 +323,7 @@ const GiftcardRedeemSection: React.FC<{ product: Product; onUseGiftcard?: (holdI
     setError(null);
     try {
       const ds = await import('../services/dataService');
-      const payload: any = { ttlMinutes: 15, amount };
+      const payload: any = { ttlMinutes: 15, amount, bookingTempRef: bookingTempRef.current };
       if (giftcardInfo.giftcardId) payload.giftcardId = giftcardInfo.giftcardId;
       else payload.code = giftcardInfo.code || code.trim();
 
@@ -366,7 +369,7 @@ const GiftcardRedeemSection: React.FC<{ product: Product; onUseGiftcard?: (holdI
         return;
       }
 
-      const payload: any = { ttlMinutes: 15, code: issuedCode, amount: amountToTry };
+      const payload: any = { ttlMinutes: 15, code: issuedCode, amount: amountToTry, bookingTempRef: bookingTempRef.current };
       const res = await ds.createGiftcardHold(payload);
       if (res && res.success && res.hold) {
         const holdInfo: any = { holdId: res.hold.id, expiresAt: res.hold.expires_at, amount: Number(res.hold.amount) };

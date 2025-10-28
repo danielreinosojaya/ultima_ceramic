@@ -1022,17 +1022,26 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
                 console.log('[createGiftcardHold] Giftcard (locked):', { id: gid, balance, balanceType: typeof giftcardRow.balance });
 
-                // LIMPIEZA: Eliminar holds expirados Y holds previos de esta misma sesión (booking_temp_ref)
-                // Esto permite al usuario reintentar aplicar la giftcard sin acumular holds fantasma
-                const { rowCount: deletedHolds } = await sql`
-                    DELETE FROM giftcard_holds
-                    WHERE giftcard_id = ${gid}
-                    AND (
-                        expires_at <= NOW()
-                        ${bookingTempRef ? sql`OR booking_temp_ref = ${bookingTempRef}` : sql``}
-                    )
-                `;
-                console.log('[createGiftcardHold] Cleaned holds:', { deletedHolds, bookingTempRef });
+                // LIMPIEZA: Eliminar holds expirados SIEMPRE
+                // Si hay bookingTempRef, también eliminar holds previos de esta misma sesión
+                let deletedHolds = 0;
+                if (bookingTempRef) {
+                    // Con booking_temp_ref: limpiar expirados Y previos de esta sesión
+                    const { rowCount } = await sql`
+                        DELETE FROM giftcard_holds
+                        WHERE giftcard_id = ${gid}
+                        AND (expires_at <= NOW() OR booking_temp_ref = ${bookingTempRef})
+                    `;
+                    deletedHolds = rowCount || 0;
+                } else {
+                    // Sin booking_temp_ref: solo limpiar expirados
+                    const { rowCount } = await sql`
+                        DELETE FROM giftcard_holds
+                        WHERE giftcard_id = ${gid} AND expires_at <= NOW()
+                    `;
+                    deletedHolds = rowCount || 0;
+                }
+                console.log('[createGiftcardHold] Cleaned holds:', { deletedHolds, hadBookingRef: !!bookingTempRef });
 
                 // Sum active holds for this giftcard (inside the same transaction)
                 const { rows: [holdSumRow] } = await sql`
