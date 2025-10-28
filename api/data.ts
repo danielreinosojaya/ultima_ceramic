@@ -2342,6 +2342,77 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
       bookingDate: created[0].booking_date,
     };
 
+    // Process giftcard hold if provided
+    const giftcardHoldId = (body as any).holdId;
+    const giftcardAmount = typeof (body as any).giftcardAmount === 'number' ? (body as any).giftcardAmount : 0;
+
+    if (giftcardHoldId && giftcardAmount > 0) {
+      try {
+        console.log('[ADD BOOKING] Processing giftcard hold:', { holdId: giftcardHoldId, amount: giftcardAmount });
+        
+        // Begin transaction for giftcard consumption
+        await sql`BEGIN`;
+        
+        // Lock and fetch the hold
+        const { rows: [holdRow] } = await sql`SELECT * FROM giftcard_holds WHERE id = ${giftcardHoldId} FOR UPDATE`;
+        if (!holdRow) {
+          await sql`ROLLBACK`;
+          console.error('[ADD BOOKING] Giftcard hold not found:', giftcardHoldId);
+          throw new Error('Giftcard hold not found');
+        }
+
+        // Lock and fetch the giftcard
+        const giftcardId = holdRow.giftcard_id;
+        const { rows: [giftcardRow] } = await sql`SELECT * FROM giftcards WHERE id = ${giftcardId} FOR UPDATE`;
+        if (!giftcardRow) {
+          await sql`ROLLBACK`;
+          console.error('[ADD BOOKING] Giftcard not found:', giftcardId);
+          throw new Error('Giftcard not found');
+        }
+
+        const currentBalance = Number(giftcardRow.balance || 0);
+        const holdAmount = Number(holdRow.amount || 0);
+
+        if (currentBalance < holdAmount) {
+          await sql`ROLLBACK`;
+          console.error('[ADD BOOKING] Insufficient giftcard balance:', { current: currentBalance, required: holdAmount });
+          throw new Error('Insufficient giftcard balance');
+        }
+
+        // Update giftcard balance
+        await sql`UPDATE giftcards SET balance = ${currentBalance - holdAmount} WHERE id = ${giftcardId}`;
+        
+        // Delete the hold
+        await sql`DELETE FROM giftcard_holds WHERE id = ${giftcardHoldId}`;
+
+        // Insert audit log
+        try {
+          await sql`
+            INSERT INTO giftcard_audit (
+              id, giftcard_id, event_type, amount, metadata, created_at
+            ) VALUES (
+              uuid_generate_v4(),
+              ${String(giftcardId)},
+              'hold_consumed',
+              ${holdAmount},
+              ${JSON.stringify({ holdId: giftcardHoldId, bookingCode: booking.bookingCode })}::jsonb,
+              NOW()
+            )
+          `;
+        } catch (auditErr) {
+          console.warn('[ADD BOOKING] Failed to insert giftcard audit:', auditErr);
+          // Don't fail the transaction if audit fails
+        }
+
+        await sql`COMMIT`;
+        console.log('[ADD BOOKING] Giftcard consumed successfully:', { giftcardId, newBalance: currentBalance - holdAmount });
+      } catch (giftcardError) {
+        try { await sql`ROLLBACK`; } catch (_) {}
+        console.error('[ADD BOOKING] Error processing giftcard:', giftcardError);
+        // Don't fail the booking creation, but log the error
+      }
+    }
+
     // Create invoice request if invoiceData is provided
     if (body.invoiceData) {
       try {
