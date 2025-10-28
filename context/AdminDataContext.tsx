@@ -41,8 +41,8 @@ const initialState = {
   instructors: [],
   availability: {},
   scheduleOverrides: {},
-  classCapacity: {},
-  capacityMessages: {},
+  classCapacity: { potters_wheel: 0, molding: 0, introductory_class: 0 },
+  capacityMessages: { thresholds: [] },
   announcements: [],
   invoiceRequests: [],
   giftcardRequests: [],
@@ -223,8 +223,8 @@ export const AdminDataProvider: React.FC<{ children: ReactNode }> = ({ children 
         dataService.getInstructors().catch(() => []),
         dataService.getAvailability().catch(() => ({})),
         dataService.getScheduleOverrides().catch(() => ({})),
-        dataService.getClassCapacity().catch(() => ({})),
-        dataService.getCapacityMessageSettings().catch(() => ({})),
+        dataService.getClassCapacity().catch(() => ({ potters_wheel: 0, molding: 0, introductory_class: 0 })),
+        dataService.getCapacityMessageSettings().catch(() => ({ thresholds: [] })),
         dataService.getInvoiceRequests().catch(() => []),
         dataService.getGiftcards().catch(() => []),
       ]);
@@ -236,8 +236,8 @@ export const AdminDataProvider: React.FC<{ children: ReactNode }> = ({ children 
           instructors: results[1].status === 'fulfilled' ? results[1].value : [],
           availability: results[2].status === 'fulfilled' ? results[2].value : {},
           scheduleOverrides: results[3].status === 'fulfilled' ? results[3].value : {},
-          classCapacity: results[4].status === 'fulfilled' ? results[4].value : {},
-          capacityMessages: results[5].status === 'fulfilled' ? results[5].value : {},
+          classCapacity: results[4].status === 'fulfilled' ? results[4].value : { potters_wheel: 0, molding: 0, introductory_class: 0 },
+          capacityMessages: results[5].status === 'fulfilled' ? results[5].value : { thresholds: [] },
           invoiceRequests: results[6].status === 'fulfilled' ? results[6].value : [],
           giftcards: results[7].status === 'fulfilled' ? results[7].value : [],
         }
@@ -253,8 +253,8 @@ export const AdminDataProvider: React.FC<{ children: ReactNode }> = ({ children 
           instructors: [],
           availability: {},
           scheduleOverrides: {},
-          classCapacity: {},
-          capacityMessages: {},
+          classCapacity: { potters_wheel: 0, molding: 0, introductory_class: 0 },
+          capacityMessages: { thresholds: [] },
           invoiceRequests: [],
         }
       });

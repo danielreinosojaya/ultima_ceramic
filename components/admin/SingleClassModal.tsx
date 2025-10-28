@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import type { Product } from '../../types';
+import type { Product, ClassPackageDetails } from '../../types';
 
 interface SingleClassModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: { name: string; description: string; price: number; details: { duration: string }; }, id?: number) => void;
+  onSave: (data: { name: string; description: string; price: number; details: { duration: string }; }, id?: string) => void;
   classToEdit?: Product | null;
 }
 
@@ -12,13 +12,15 @@ export const SingleClassModal: React.FC<SingleClassModalProps> = ({ isOpen, onCl
   const [name, setName] = useState(classToEdit?.name || '');
   const [description, setDescription] = useState(classToEdit?.description || '');
   const [price, setPrice] = useState(classToEdit?.price ? classToEdit.price.toString() : '');
-  const [duration, setDuration] = useState(classToEdit?.details?.duration || '');
-  // Campos extra de ClassPackageDetails (inhabilitados)
-  const [durationHours] = useState(classToEdit?.details?.durationHours || 0);
-  const [activities] = useState(classToEdit?.details?.activities || []);
-  const [generalRecommendations] = useState(classToEdit?.details?.generalRecommendations || '');
-  const [materials] = useState(classToEdit?.details?.materials || '');
-  const [technique] = useState(classToEdit?.details?.technique || 'potters_wheel');
+  
+  // Type guard para ClassPackageDetails
+  const hasClassPackageDetails = (details: any): details is ClassPackageDetails => {
+    return details && 'duration' in details;
+  };
+  
+  const packageDetails = classToEdit?.details && hasClassPackageDetails(classToEdit.details) ? classToEdit.details : null;
+  
+  const [duration, setDuration] = useState(packageDetails?.duration || '');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -39,12 +41,7 @@ export const SingleClassModal: React.FC<SingleClassModalProps> = ({ isOpen, onCl
       description: description.trim(),
       price: Number(price),
       details: {
-        duration: duration.trim(),
-        durationHours,
-        activities,
-        generalRecommendations,
-        materials,
-        technique
+        duration: duration.trim()
       },
     }, classToEdit?.id))
       .catch(() => {
@@ -81,24 +78,24 @@ export const SingleClassModal: React.FC<SingleClassModalProps> = ({ isOpen, onCl
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold mb-1 text-gray-400">Horas (solo paquetes)</label>
-              <input type="number" value={durationHours} disabled className="w-full px-3 py-2 border rounded-lg bg-gray-100 text-gray-400" />
+              <input type="number" value={packageDetails?.durationHours || 0} disabled className="w-full px-3 py-2 border rounded-lg bg-gray-100 text-gray-400" />
             </div>
             <div>
               <label className="block text-xs font-bold mb-1 text-gray-400">Técnica (solo paquetes)</label>
-              <input type="text" value={technique} disabled className="w-full px-3 py-2 border rounded-lg bg-gray-100 text-gray-400" />
+              <input type="text" value={packageDetails?.technique || ''} disabled className="w-full px-3 py-2 border rounded-lg bg-gray-100 text-gray-400" />
             </div>
           </div>
           <div>
             <label className="block text-xs font-bold mb-1 text-gray-400">Actividades (solo paquetes)</label>
-            <input type="text" value={activities.join(', ')} disabled className="w-full px-3 py-2 border rounded-lg bg-gray-100 text-gray-400" />
+            <input type="text" value={packageDetails?.activities?.join(', ') || ''} disabled className="w-full px-3 py-2 border rounded-lg bg-gray-100 text-gray-400" />
           </div>
           <div>
             <label className="block text-xs font-bold mb-1 text-gray-400">Recomendaciones (solo paquetes)</label>
-            <input type="text" value={generalRecommendations} disabled className="w-full px-3 py-2 border rounded-lg bg-gray-100 text-gray-400" />
+            <input type="text" value={packageDetails?.generalRecommendations || ''} disabled className="w-full px-3 py-2 border rounded-lg bg-gray-100 text-gray-400" />
           </div>
           <div>
             <label className="block text-xs font-bold mb-1 text-gray-400">Materiales (solo paquetes)</label>
-            <input type="text" value={materials} disabled className="w-full px-3 py-2 border rounded-lg bg-gray-100 text-gray-400" />
+            <input type="text" value={packageDetails?.materials || ''} disabled className="w-full px-3 py-2 border rounded-lg bg-gray-100 text-gray-400" />
           </div>
           {error && <div className="text-red-500 text-sm font-semibold">{error}</div>}
           <div className="flex justify-end gap-3 mt-6">

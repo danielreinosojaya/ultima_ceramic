@@ -247,6 +247,5 @@ export const DEFAULT_BANK_DETAILS: BankDetails = {
     accountHolder: "",
     accountNumber: "",
     accountType: "",
-    taxId: "",
-    details: ""
+    taxId: ""
 };

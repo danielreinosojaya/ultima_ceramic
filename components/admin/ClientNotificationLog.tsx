@@ -142,11 +142,11 @@ export const ClientNotificationLog: React.FC = () => {
                                     <div className="text-sm text-brand-secondary">{n.clientEmail}</div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-brand-text">
-                                    {n.type === 'booking' ? 'Reserva' : n.type === 'inquiry' ? 'Consulta' : 'Otro'}
+                                    {n.type === 'PRE_BOOKING_CONFIRMATION' ? 'Reserva' : n.type === 'PAYMENT_RECEIPT' ? 'Recibo' : n.type === 'CLASS_REMINDER' ? 'Recordatorio' : 'Otro'}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
                                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${n.status === 'Sent' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                                        {n.status === 'sent' ? 'Enviada' : n.status === 'failed' ? 'Fallida' : 'Pendiente'}
+                                        {n.status === 'Sent' ? 'Enviada' : n.status === 'Failed' ? 'Fallida' : 'Pendiente'}
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

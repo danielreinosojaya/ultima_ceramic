@@ -24,6 +24,15 @@ export type GiftcardRequest = {
     message?: string;
     status: 'pending' | 'approved' | 'rejected' | 'delivered' | 'deleted';
     createdAt: string;
+    metadata?: {
+        issuedCode?: string;
+        issued_code?: string;
+        emailDelivery?: {
+            buyer?: { sent: boolean };
+            recipient?: { sent: boolean };
+        };
+        voucherUrl?: string;
+    };
 };
 
 export const getGiftcardRequests = async (): Promise<GiftcardRequest[]> => {
@@ -1131,7 +1140,30 @@ export const getBatchedData = async (keys: string[]): Promise<Record<string, any
 
 // Función específica para datos esenciales de la app
 export const getEssentialAppData = async () => {
-    return getBatchedData(['products', 'announcements', 'policies', 'footerInfo', 'uiLabels']);
+    try {
+        const data = await getBatchedData(['products', 'announcements', 'policies', 'footerInfo', 'uiLabels']);
+
+        // Validar que las claves requeridas estén presentes
+        const requiredKeys = ['products', 'announcements', 'policies', 'footerInfo', 'uiLabels'];
+        requiredKeys.forEach((key) => {
+            if (!data[key]) {
+                console.warn(`Missing key: ${key} in essential app data. Using default value.`);
+                data[key] = getDefaultData(key);
+            }
+        });
+
+        return data;
+    } catch (error) {
+        console.error('Error fetching essential app data:', error);
+        // Retornar datos por defecto en caso de error
+        return {
+            products: getDefaultData('products'),
+            announcements: getDefaultData('announcements'),
+            policies: getDefaultData('policies'),
+            footerInfo: getDefaultData('footerInfo'),
+            uiLabels: getDefaultData('uiLabels'),
+        };
+    }
 };
 
 // Función específica para datos de scheduling

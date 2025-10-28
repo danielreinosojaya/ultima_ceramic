@@ -302,7 +302,10 @@ const BankDetailsEditor: React.FC = () => {
     const [saved, setSaved] = useState(false);
 
     useEffect(() => {
-        const fetchDetails = async () => setDetails(await dataService.getBankDetails());
+        const fetchDetails = async () => {
+            const data = await dataService.getBankDetails();
+            setDetails(data[0] || null);
+        };
         fetchDetails();
     }, []);
 
@@ -314,7 +317,7 @@ const BankDetailsEditor: React.FC = () => {
 
     const handleSave = async () => {
         if (!details) return;
-        await dataService.updateBankDetails(details);
+        await dataService.updateBankDetails([details]);
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
     };
@@ -333,10 +336,6 @@ const BankDetailsEditor: React.FC = () => {
                 <SettingsInputField name="accountNumber" label="Número *" value={details.accountNumber} onChange={handleChange} required />
                 <SettingsInputField name="accountType" label="Tipo" value={details.accountType} onChange={handleChange} />
                 <SettingsInputField name="taxId" label="RUC" value={details.taxId} onChange={handleChange} />
-                <div>
-                    <label htmlFor="details" className="block text-xs font-bold text-gray-500 mb-1">Detalles adicionales</label>
-                    <textarea id="details" name="details" value={details.details || ''} onChange={handleChange} rows={3} className="w-full p-2 border border-gray-300 rounded-lg"/>
-                </div>
             </div>
             <div className="mt-4 flex justify-end items-center gap-4">
                 {saved && (<p className="text-sm font-semibold text-brand-success animate-fade-in">Guardado correctamente</p>)}
@@ -664,7 +663,7 @@ const CapacityEditor: React.FC = () => {
             <div className="space-y-3">
                 {messages.thresholds.map((tItem, index) => (
                     <div key={index} className="grid grid-cols-12 gap-2 items-center">
-                        <span className="col-span-2 text-xs font-semibold capitalize">{tItem.level === 'low' ? 'Bajo' : tItem.level === 'medium' ? 'Medio' : 'Alto'}:</span>
+                        <span className="col-span-2 text-xs font-semibold capitalize">{tItem.level === 'available' ? 'Disponible' : tItem.level === 'few' ? 'Pocos' : 'Últimos'}:</span>
                         <div className="col-span-3">
                             <input type="number" value={tItem.threshold} onChange={(e) => handleThresholdChange(index, 'threshold', parseInt(e.target.value, 10) || 0)} className="w-full p-1 border border-gray-300 rounded-md text-xs" max="100" min="0"/>
                         </div>

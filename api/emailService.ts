@@ -1,6 +1,7 @@
 import { Resend } from 'resend';
 import { toZonedTime, format } from 'date-fns-tz';
 import type { Booking, BankDetails, TimeSlot, PaymentDetails } from '../types.js';
+import { sql } from './db.js';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_FROM_ADDRESS || 'no-reply@ceramicalma.com';
@@ -46,7 +47,7 @@ const sendWithRetry = async (payload: any, maxAttempts = 3) => {
     throw lastErr;
 };
 
-type SendEmailResult = { sent: true; providerResponse?: any } | { sent: false; error?: string; dryRunPath?: string };
+type SendEmailResult = { sent: true; providerResponse?: any } | { sent: false, error?: string; dryRunPath?: string };
 
 const wrapHtmlEmail = (maybeHtml: string) => {
     if (!maybeHtml || typeof maybeHtml !== 'string') return '';
@@ -121,8 +122,33 @@ const sendEmail = async (to: string, subject: string, html: string, attachments?
     }
 };
 
+async function logEmailEvent(
+  clientEmail: string,
+  type: string,
+  channel: string,
+  status: string,
+  bookingCode?: string,
+  scheduledAt?: Date
+) {
+  try {
+    await sql`
+      INSERT INTO client_notifications (
+        client_email, type, channel, status, booking_code, scheduled_at, created_at
+      ) VALUES (
+        ${clientEmail}, ${type}, ${channel}, ${status}, ${bookingCode || null}, ${scheduledAt ? scheduledAt.toISOString() : null}, NOW()
+      );
+    `;
+  } catch (error) {
+    console.error('Failed to log email event:', error);
+  }
+}
+
 export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDetails: BankDetails) => {
     const { userInfo, bookingCode, product, price } = booking;
+    
+    // Ensure price is a number
+    const numericPrice = typeof price === 'number' ? price : parseFloat(String(price));
+    
     const subject = `Tu Pre-Reserva en CeramicAlma está confirmada (Código: ${bookingCode})`;
     // Mostrar todas las cuentas en una tabla compacta y profesional
     const accounts = Array.isArray(bankDetails) ? bankDetails : [bankDetails];
@@ -157,7 +183,7 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
             <h2>¡Hola, ${userInfo.firstName}!</h2>
             <p>Gracias por tu pre-reserva para <strong>${product.name}</strong>. Tu lugar ha sido guardado con el código de reserva:</p>
             <p style="font-size: 24px; font-weight: bold; color: #D95F43; margin: 20px 0;">${bookingCode}</p>
-            <p>El monto a pagar es de <strong>$${price.toFixed(2)}</strong>.</p>
+            <p>El monto a pagar es de <strong>$${numericPrice.toFixed(2)}</strong>.</p>
             <p>Para confirmar tu asistencia, por favor realiza una transferencia bancaria con los siguientes datos y envíanos el comprobante por WhatsApp.</p>
             ${accountsHtml}
             <p style="margin-top: 20px;">¡Esperamos verte pronto en el taller!</p>
@@ -165,7 +191,11 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
         </div>
     `;
     const result = await sendEmail(userInfo.email, subject, html);
-    console.info('[emailService] Pre-booking confirmation email result for', userInfo.email, bookingCode, result && (result as any).dryRunPath ? { dryRunPath: (result as any).dryRunPath } : (result && (result as any).providerResponse ? { providerId: (result as any).providerResponse?.id } : result));
+
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(userInfo.email, 'pre-booking-confirmation', 'email', status, bookingCode);
+
+    console.info('[emailService] Pre-booking confirmation email result for', userInfo.email, bookingCode, result);
     return result;
 };
 
@@ -174,6 +204,12 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
 export const sendPaymentReceiptEmail = async (booking: Booking, payment: PaymentDetails) => {
     const { userInfo, bookingCode, product } = booking;
     const subject = `¡Confirmación de Pago para tu reserva en CeramicAlma! (Código: ${bookingCode})`;
+
+    // Ensure amounts are numbers
+    const paymentAmount = typeof payment.amount === 'number' ? payment.amount : parseFloat(String(payment.amount));
+    const giftcardAmount = payment.giftcardAmount 
+        ? (typeof payment.giftcardAmount === 'number' ? payment.giftcardAmount : parseFloat(String(payment.giftcardAmount)))
+        : 0;
 
     // Usar zona horaria de Ecuador
     const timeZone = 'America/Guayaquil';
@@ -187,9 +223,9 @@ export const sendPaymentReceiptEmail = async (booking: Booking, payment: Payment
     }
 
     // Determinar si se aplicó una giftcard y calcular el saldo restante
-    const giftcardInfo = payment.giftcardAmount
-        ? `<p><strong>Monto aplicado con Giftcard:</strong> $${payment.giftcardAmount.toFixed(2)}</p>
-           <p><strong>Saldo restante:</strong> $${(payment.amount - payment.giftcardAmount).toFixed(2)}</p>`
+    const giftcardInfo = giftcardAmount > 0
+        ? `<p><strong>Monto aplicado con Giftcard:</strong> $${giftcardAmount.toFixed(2)}</p>
+           <p><strong>Saldo restante:</strong> $${(paymentAmount - giftcardAmount).toFixed(2)}</p>`
         : '';
 
     const html = `
@@ -200,7 +236,7 @@ export const sendPaymentReceiptEmail = async (booking: Booking, payment: Payment
             <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; margin-top: 20px;">
                 <h3 style="color: #D95F43;">Detalles del Pago</h3>
                 <p><strong>Código de Reserva:</strong> ${bookingCode}</p>
-                <p><strong>Monto Pagado:</strong> $${payment.amount.toFixed(2)}</p>
+                <p><strong>Monto Pagado:</strong> $${paymentAmount.toFixed(2)}</p>
                 ${giftcardInfo}
                 <p><strong>Método:</strong> ${payment.method}</p>
                 <p><strong>Fecha de Pago:</strong> ${fechaPago}</p>

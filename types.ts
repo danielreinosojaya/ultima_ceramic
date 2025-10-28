@@ -1,6 +1,24 @@
 // Basic Types
 export type DayKey = 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday';
-export type AppView = 'welcome' | 'techniques' | 'packages' | 'intro_classes' | 'schedule' | 'summary' | 'group_experience' | 'couples_experience' | 'team_building' | 'confirmation';
+export type AppView =
+  | 'welcome'
+  | 'techniques'
+  | 'packages'
+  | 'intro_classes'
+  | 'schedule'
+  | 'summary'
+  | 'group_experience'
+  | 'couples_experience'
+  | 'team_building'
+  | 'confirmation'
+  | 'giftcard_landing'
+  | 'giftcard_amount'
+  | 'giftcard_personalization'
+  | 'giftcard_delivery'
+  | 'giftcard_payment'
+  | 'giftcard_manual_payment'
+  | 'giftcard_pending_review'
+  | 'giftcard_confirmation';
 export type BookingMode = 'flexible' | 'monthly';
 export type Technique = 'potters_wheel' | 'molding';
 
@@ -88,6 +106,8 @@ export interface BaseProduct {
     imageUrl?: string;
     isActive: boolean;
     sortOrder?: number;
+    price?: number; // Make price optional for all products
+    details?: ClassPackageDetails | OpenStudioSubscriptionDetails; // Allow optional details
 }
 
 export interface ClassPackage extends BaseProduct {
@@ -196,7 +216,8 @@ export interface Booking {
     price: number;
     bookingCode: string;
     bookingMode: BookingMode;
-    paymentDetails?: PaymentDetails[];
+    customer?: Customer; // Adding customer to Booking
+    paymentDetails?: PaymentDetails[]; // Ensure it's treated as an array
     attendance?: Record<string, AttendanceStatus>; // key is `${date}_${time}`
     bookingDate: string;
     participants?: number;
@@ -319,15 +340,13 @@ export interface FooterInfo {
 }
 
 export interface BankDetails {
-    bankName: string;
+    bankName?: string; // Adding bankName as optional
     accountHolder: string;
     accountNumber: string;
     accountType: string;
     taxId: string;
-    details?: string;
 }
 
-// For settings, allow multiple accounts
 export type BankDetailsArray = BankDetails[];
 
 export interface UITexts {
@@ -372,7 +391,7 @@ export interface AppData {
 }
 
 // Admin & Notifications
-export type AdminTab = 'products' | 'calendar' | 'schedule-settings' | 'financials' | 'customers' | 'inquiries' | 'settings' | 'communications' | 'invoicing';
+export type AdminTab = 'calendar' | 'schedule' | 'products' | 'customers' | 'inquiries' | 'instructors' | 'settings' | 'schedule-settings' | 'communications' | 'financials' | 'invoicing';
 
 export interface NavigationState {
     tab: AdminTab;
@@ -390,6 +409,7 @@ export interface Notification {
 }
 
 export type ClientNotificationType = 'PRE_BOOKING_CONFIRMATION' | 'PAYMENT_RECEIPT' | 'CLASS_REMINDER';
+
 export interface ClientNotification {
     id: string;
     createdAt: string | null; // ISO string
@@ -400,4 +420,19 @@ export interface ClientNotification {
     status: 'Sent' | 'Failed' | 'Pending';
     bookingCode: string;
     scheduledAt?: string; // ISO string
+}
+
+// Define DeliveryMethod type
+export type DeliveryMethod = {
+  type: 'email' | 'physical';
+  data: Record<string, any>;
+};
+
+// Adjust activeGiftcardHold and appliedGiftcardHold types
+export interface GiftcardHold {
+  holdId?: string;
+  expiresAt?: string;
+  amount?: number;
+  giftcardId?: string;
+  code?: string;
 }

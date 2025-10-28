@@ -153,7 +153,7 @@ export const AdminConsole: React.FC = () => {
         policies: '', 
         confirmationMessage: { title: '', message: ''}, 
         footerInfo: { address: '', email: '', whatsapp: '', googleMapsLink: '', instagramHandle: '' },
-        bankDetails: { bankName: '', accountHolder: '', accountNumber: '', accountType: '', taxId: '' }
+        bankDetails: [{ bankName: '', accountHolder: '', accountNumber: '', accountType: '', taxId: '' }]
     };
 
     switch (activeTab) {

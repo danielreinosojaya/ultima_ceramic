@@ -329,3 +329,48 @@ export async function seedDatabase() {
 
     console.log("Database seeding check complete.");
 }
+
+/**
+ * Deletes multiple classes from the database by their IDs.
+ * @param classIds - An array of class IDs to delete.
+ * @returns The number of rows deleted.
+ */
+export async function deleteClassesByIds(classIds: string[]): Promise<number> {
+    if (!classIds || classIds.length === 0) {
+        throw new Error('No class IDs provided for deletion.');
+    }
+
+    try {
+        const query = `DELETE FROM classes WHERE id = ANY(ARRAY[${classIds.map(id => `'${id}'`).join(',')}])`;
+        const { rowCount } = await sql`${query}`;
+        return rowCount ?? 0; // Ensure rowCount is never null
+    } catch (error) {
+        console.error('Error deleting classes:', error);
+        throw new Error('Failed to delete classes.');
+    }
+}
+
+/**
+ * Deletes a customer and all related data from the database.
+ * @param customerId - The ID of the customer to delete.
+ * @returns True if the customer was deleted, false if not found.
+ */
+export async function deleteCustomerById(customerId: string): Promise<boolean> {
+    requireDatabase(); // Ensure the database is configured
+
+    try {
+        // Delete related data
+        await sql`DELETE FROM bookings WHERE user_info->>'id' = ${customerId}`;
+        await sql`DELETE FROM deliveries WHERE customer_email = (SELECT email FROM customers WHERE id = ${customerId})`;
+        await sql`DELETE FROM invoice_requests WHERE booking_id IN (SELECT id FROM bookings WHERE user_info->>'id' = ${customerId})`;
+
+        // Delete the customer
+        const { rowCount } = await sql`DELETE FROM customers WHERE id = ${customerId}`;
+        return rowCount ? rowCount > 0 : false; // Ensure rowCount is not null
+    } catch (error) {
+        console.error('Error deleting customer:', error);
+        throw new Error('Failed to delete customer.');
+    }
+}
+
+export { sql };

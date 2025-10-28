@@ -97,16 +97,47 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
         // Estado para eliminar cliente
         const [deleteCustomerModal, setDeleteCustomerModal] = useState(false);
         const [deleteCustomerLoading, setDeleteCustomerLoading] = useState(false);
+        
+        // Estado para feedback de eliminación
+        const [feedbackMsg, setFeedbackMsg] = useState<string>('');
+        const [feedbackType, setFeedbackType] = useState<'success' | 'error'>('success');
+        
         const handleDeleteCustomer = async () => {
             setDeleteCustomerLoading(true);
             try {
-                await dataService.deleteCustomer(customer.email);
-                setDeleteCustomerModal(false);
-                if (typeof onBack === 'function') onBack();
-            } catch (e) {
-                // Manejo de error
+                console.log('[DELETE CUSTOMER] Attempting to delete customer with email:', customer.email);
+                console.log('[DELETE CUSTOMER] Customer object:', customer);
+                
+                const response = await fetch('/api/deleteCustomer', {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ customerEmail: customer.email }),
+                });
+
+                console.log('[DELETE CUSTOMER] Response status:', response.status);
+                const deleteResult = await response.json();
+                console.log('[DELETE CUSTOMER] Response body:', deleteResult);
+
+                if (!response.ok) {
+                    throw new Error(deleteResult.error || 'Failed to delete customer');
+                }
+
+                if (deleteResult.message) {
+                    setFeedbackMsg('Cliente eliminado exitosamente');
+                    setFeedbackType('success');
+                    onBack(); // Redirigir a la lista de clientes
+                } else {
+                    throw new Error('Cliente no encontrado');
+                }
+            } catch (error) {
+                console.error('Error eliminando cliente:', error);
+                setFeedbackMsg('Error al eliminar cliente');
+                setFeedbackType('error');
+            } finally {
+                setDeleteCustomerLoading(false);
             }
-            setDeleteCustomerLoading(false);
         };
 
     const [appData, setAppData] = useState<AppData | null>(null);
@@ -190,7 +221,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                 policies: '',
                 confirmationMessage: { title: '', message: '' },
                 footerInfo: { address: '', email: '', whatsapp: '', googleMapsLink: '', instagramHandle: '' },
-                bankDetails: { bankName: '', accountHolder: '', accountNumber: '', accountType: '', taxId: '' }
+                bankDetails: [{ bankName: '', accountHolder: '', accountNumber: '', accountType: '', taxId: '' }]
             });
         }
     }, [adminData.instructors.length, adminData.products.length, appData]); // Solo depende de que los datos estén disponibles
@@ -258,7 +289,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                 onDataChange();
                             });
                         }}
-                        slotInfo={{ slot: state.selectedBookingToReschedule.slot, attendeeName: customer.userInfo.firstName + ' ' + customer.userInfo.lastName }}
+                        slotInfo={{ slot: state.selectedBookingToReschedule.slot, attendeeName: customer.userInfo.firstName + ' ' + customer.userInfo.lastName, bookingId: state.selectedBookingToReschedule.booking.id }}
                         appData={appData}
                     />
                 )}
@@ -333,7 +364,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                 onDataChange();
                             });
                         }}
-                        slotInfo={{ slot: state.selectedBookingToReschedule.slot, attendeeName: customer.userInfo.firstName + ' ' + customer.userInfo.lastName }}
+                        slotInfo={{ slot: state.selectedBookingToReschedule.slot, attendeeName: customer.userInfo.firstName + ' ' + customer.userInfo.lastName, bookingId: state.selectedBookingToReschedule.booking.id }}
                         appData={appData}
                     />
                 )}
