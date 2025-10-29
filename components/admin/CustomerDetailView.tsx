@@ -243,8 +243,17 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
 
     const handleMarkDeliveryAsReady = async (deliveryId: string) => {
         try {
-            console.log('[handleMarkDeliveryAsReady] Starting for deliveryId:', deliveryId);
-            const result = await dataService.markDeliveryAsReady(deliveryId);
+            // Check if delivery already has ready_at
+            const existingDelivery = state.deliveries.find(d => d.id === deliveryId);
+            const isResend = !!existingDelivery?.readyAt;
+            
+            if (isResend) {
+                const confirmResend = window.confirm('Esta pieza ya fue marcada como lista.\n\n¿Deseas reenviar el email de notificación al cliente?');
+                if (!confirmResend) return;
+            }
+            
+            console.log('[handleMarkDeliveryAsReady] Starting for deliveryId:', deliveryId, 'isResend:', isResend);
+            const result = await dataService.markDeliveryAsReady(deliveryId, isResend);
             console.log('[handleMarkDeliveryAsReady] Result:', result);
             
             if (result.success && result.delivery) {
@@ -253,16 +262,15 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                     deliveries: prev.deliveries.map(d => d.id === result.delivery.id ? result.delivery : d)
                 }));
                 onDataChange();
-                alert('✅ Cliente notificado. La pieza está marcada como lista para recoger.');
+                
+                if (isResend) {
+                    alert('✅ Email reenviado al cliente.');
+                } else {
+                    alert('✅ Cliente notificado. La pieza está marcada como lista para recoger.');
+                }
             } else if (result.error) {
                 console.error('[handleMarkDeliveryAsReady] Error from backend:', result.error);
-                
-                // Si el error es por columna no existente, dar mensaje específico
-                if (result.error.includes('column') || result.error.includes('ready_at')) {
-                    alert('❌ Error: La base de datos necesita ser actualizada.\n\nPor favor aplica la migración SQL primero:\nALTER TABLE deliveries ADD COLUMN ready_at TIMESTAMP;');
-                } else {
-                    alert(`❌ ${result.error}`);
-                }
+                alert(`❌ ${result.error}`);
             } else {
                 console.error('[handleMarkDeliveryAsReady] Unexpected result:', result);
                 alert('❌ Error inesperado. Revisa los logs de Vercel.');
@@ -270,12 +278,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
         } catch (error) {
             console.error('[handleMarkDeliveryAsReady] Exception:', error);
             const errorMsg = error instanceof Error ? error.message : String(error);
-            
-            if (errorMsg.includes('ready_at') || errorMsg.includes('column')) {
-                alert('❌ Error de base de datos: La columna ready_at no existe.\n\nAplica la migración SQL primero (ver README_ready_at.md)');
-            } else {
-                alert(`❌ Error al marcar como lista: ${errorMsg}`);
-            }
+            alert(`❌ Error: ${errorMsg}`);
         }
     };
 

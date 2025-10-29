@@ -324,13 +324,22 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                     </button>
                                 )}
                                 {delivery.status !== 'completed' && delivery.readyAt && (
-                                    <button
-                                        className="px-3 py-2 rounded-full bg-green-50 hover:bg-green-100 text-green-600 shadow flex items-center gap-1 font-semibold text-sm transition-colors"
-                                        title="Completar entrega"
-                                        onClick={() => onComplete(delivery.id)}
-                                    >
-                                        ✓ Completar
-                                    </button>
+                                    <>
+                                        <button
+                                            className="px-3 py-2 rounded-full bg-amber-50 hover:bg-amber-100 text-amber-600 shadow flex items-center gap-1 font-semibold text-sm transition-colors"
+                                            title="Reenviar email de notificación al cliente"
+                                            onClick={() => onMarkReady(delivery.id)}
+                                        >
+                                            📧 Reenviar
+                                        </button>
+                                        <button
+                                            className="px-3 py-2 rounded-full bg-green-50 hover:bg-green-100 text-green-600 shadow flex items-center gap-1 font-semibold text-sm transition-colors"
+                                            title="Completar entrega"
+                                            onClick={() => onComplete(delivery.id)}
+                                        >
+                                            ✓ Completar
+                                        </button>
+                                    </>
                                 )}
                             </div>
                         </div>

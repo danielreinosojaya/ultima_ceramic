@@ -1586,8 +1586,8 @@ export const markDeliveryAsCompleted = async (deliveryId: string, notes?: string
     return result;
 };
 
-export const markDeliveryAsReady = async (deliveryId: string): Promise<{ success: boolean; delivery?: Delivery; error?: string }> => {
-    const result = await postAction('markDeliveryAsReady', { deliveryId });
+export const markDeliveryAsReady = async (deliveryId: string, resend: boolean = false): Promise<{ success: boolean; delivery?: Delivery; error?: string }> => {
+    const result = await postAction('markDeliveryAsReady', { deliveryId, resend });
     if (result.success && result.delivery) {
         return { ...result, delivery: parseDelivery(result.delivery) };
     }
