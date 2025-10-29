@@ -19,14 +19,14 @@ const paymentMethods = [
 
 export const EditPaymentModal: React.FC<EditPaymentModalProps> = ({ isOpen, onClose, payment, onSave, bookingId, paymentIndex }) => {
   const [amount, setAmount] = useState(payment?.amount || 0);
-  const [method, setMethod] = useState(payment?.method || 'Cash');
+  const [method, setMethod] = useState<string>(payment?.method || 'Cash');
   const [receivedAt, setReceivedAt] = useState(payment?.receivedAt || '');
   const [showDelete, setShowDelete] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
 
   const handleSave = () => {
-    onSave({ amount, method, receivedAt });
+    onSave({ amount, method: method as any, receivedAt });
     onClose();
   };
 
@@ -42,7 +42,21 @@ export const EditPaymentModal: React.FC<EditPaymentModalProps> = ({ isOpen, onCl
       // Prefer paymentId if available, fallback to index-based approach
       if (payment.id) {
         console.log('[EditPaymentModal] Deleting payment by ID:', payment.id);
-        await dataService.deletePaymentFromBooking(bookingId, payment.id, cancelReason);
+        const result = await dataService.deletePaymentFromBooking(bookingId, payment.id, cancelReason);
+        
+        if (!result.success) {
+          // Manejo específico para booking no encontrado
+          const errorMsg = (result as any).error || (result as any).message || 'Error desconocido';
+          if (errorMsg.includes('Booking not found') || errorMsg.includes('eliminada')) {
+            alert('La reserva asociada a este pago ya no existe. El pago será removido de la vista automáticamente.');
+            setShowConfirm(false);
+            onClose();
+            // Forzar recarga de datos
+            window.location.reload();
+            return;
+          }
+          throw new Error(errorMsg);
+        }
       } else {
         console.warn('[EditPaymentModal] Payment has no ID, falling back to index-based deletion');
         // Refetch booking to get fresh payment array and correct index
@@ -51,7 +65,10 @@ export const EditPaymentModal: React.FC<EditPaymentModalProps> = ({ isOpen, onCl
         
         if (!freshBooking || !freshBooking.paymentDetails) {
           console.error('[EditPaymentModal] Could not find booking or payment details');
-          alert('Error: No se pudo encontrar la reserva o los pagos actualizados.');
+          alert('La reserva ya no existe. El pago será removido de la vista automáticamente.');
+          setShowConfirm(false);
+          onClose();
+          window.location.reload();
           return;
         }
 
@@ -64,7 +81,10 @@ export const EditPaymentModal: React.FC<EditPaymentModalProps> = ({ isOpen, onCl
 
         if (realIndex === -1) {
           console.error('[EditPaymentModal] Could not find matching payment in fresh data');
-          alert('Error: No se pudo encontrar el pago en los datos actualizados. Puede que ya haya sido eliminado.');
+          alert('El pago ya no existe en los datos actualizados. La vista se actualizará automáticamente.');
+          setShowConfirm(false);
+          onClose();
+          window.location.reload();
           return;
         }
 
@@ -74,9 +94,19 @@ export const EditPaymentModal: React.FC<EditPaymentModalProps> = ({ isOpen, onCl
       
       setShowConfirm(false);
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error('[EditPaymentModal] Error deleting payment:', error);
-      alert(`Error al eliminar el pago: ${error instanceof Error ? error.message : String(error)}`);
+      
+      // Manejo específico para errores de booking no encontrado
+      if (error.message?.includes('Booking not found') || error.message?.includes('eliminada')) {
+        alert('La reserva asociada a este pago fue eliminada. La vista se actualizará automáticamente.');
+        setShowConfirm(false);
+        onClose();
+        window.location.reload();
+        return;
+      }
+      
+      alert(`Error al eliminar el pago: ${error.message || String(error)}`);
     }
   };
 
