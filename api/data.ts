@@ -1830,12 +1830,19 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 return res.status(400).json({ error: 'Either paymentId or valid paymentIndex (>= 0) is required' });
             }
             
-            const { rows: [bookingRow] } = await sql`SELECT payment_details, price FROM bookings WHERE id = ${bookingId}`;
+            // CRÍTICO: Verificar si el booking existe primero
+            const { rows: bookingRows } = await sql`SELECT payment_details, price FROM bookings WHERE id = ${bookingId}`;
 
-            if (!bookingRow) {
-                return res.status(404).json({ error: 'Booking not found.' });
+            if (!bookingRows || bookingRows.length === 0) {
+                console.warn('[API][deletePaymentFromBooking] Booking not found (may have been deleted):', bookingId);
+                return res.status(404).json({ 
+                    success: false, 
+                    error: 'Booking not found', 
+                    message: 'La reserva ya no existe. Puede haber sido eliminada junto con el cliente.' 
+                });
             }
 
+            const bookingRow = bookingRows[0];
             const currentPayments = (bookingRow.payment_details && Array.isArray(bookingRow.payment_details))
                 ? bookingRow.payment_details
                 : [];
@@ -1847,16 +1854,16 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
             if (paymentId) {
                 // New way: Find and remove by ID
-                const paymentIndex = currentPayments.findIndex((p: any) => p.id === paymentId);
+                const paymentIndexFound = currentPayments.findIndex((p: any) => p.id === paymentId);
                 
-                if (paymentIndex === -1) {
+                if (paymentIndexFound === -1) {
                     console.error('[API][deletePaymentFromBooking] Payment not found with ID:', paymentId);
                     return res.status(404).json({ error: `Payment not found with ID: ${paymentId}` });
                 }
                 
-                deletedPayment = currentPayments[paymentIndex];
+                deletedPayment = currentPayments[paymentIndexFound];
                 updatedPayments = currentPayments.filter((p: any) => p.id !== paymentId);
-                console.log('[API][deletePaymentFromBooking] Deleted payment by ID:', paymentId, 'at index:', paymentIndex);
+                console.log('[API][deletePaymentFromBooking] Deleted payment by ID:', paymentId, 'at index:', paymentIndexFound);
             } else {
                 // Legacy way: Use index (for backward compatibility)
                 if (paymentIndex >= 0 && paymentIndex < currentPayments.length) {
@@ -1883,10 +1890,14 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             result = { success: true, booking: updatedBooking };
             
             // Audit log: guardar cancelación en notifications
-            await sql`
-                INSERT INTO notifications (type, target_id, user_name, summary)
-                VALUES ('payment_deleted', ${bookingId}, ${deletedPayment.method || 'N/A'}, ${cancelReason || 'Deleted by admin'});
-            `;
+            try {
+                await sql`
+                    INSERT INTO notifications (type, target_id, user_name, summary)
+                    VALUES ('payment_deleted', ${bookingId}, ${deletedPayment.method || 'N/A'}, ${cancelReason || 'Deleted by admin'});
+                `;
+            } catch (auditErr) {
+                console.warn('[API][deletePaymentFromBooking] Failed to insert audit notification:', auditErr);
+            }
             
             console.log('[API][deletePaymentFromBooking] Success: Deleted payment');
             break;
@@ -2582,6 +2593,29 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
       console.error('[ADD BOOKING] Error sending pre-booking confirmation email:', emailError);
       // Don't fail the booking creation if email fails
       // The booking is already created, just log the error
+    }
+
+    // CRÍTICO: Re-fetch booking para obtener datos actualizados después de payment_details
+    try {
+      const { rows: [updatedBookingRow] } = await sql`
+        SELECT * FROM bookings WHERE booking_code = ${newBookingCode} LIMIT 1
+      `;
+      if (updatedBookingRow) {
+        const refreshedBooking = parseBookingFromDB(updatedBookingRow);
+        console.log('[ADD BOOKING] Returning refreshed booking:', {
+          bookingCode: refreshedBooking.bookingCode,
+          isPaid: refreshedBooking.isPaid,
+          hasPaymentDetails: !!refreshedBooking.paymentDetails?.length,
+          paymentCount: refreshedBooking.paymentDetails?.length || 0
+        });
+        return {
+          success: true,
+          message: 'Booking created successfully',
+          booking: refreshedBooking,
+        };
+      }
+    } catch (refetchError) {
+      console.warn('[ADD BOOKING] Could not refetch updated booking, returning original:', refetchError);
     }
 
     return {
