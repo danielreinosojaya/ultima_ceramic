@@ -4,6 +4,7 @@ import { ActivePackagesDisplay } from './ActivePackagesDisplay';
 import { AcceptPaymentModal } from './AcceptPaymentModal';
 import { InvoiceReminderModal } from './InvoiceReminderModal';
 import { NewDeliveryModal } from './NewDeliveryModal';
+import { EditDeliveryModal } from './EditDeliveryModal';
 import { ManualBookingModal } from './ManualBookingModal';
 import { RescheduleModal } from './RescheduleModal';
 import { useAdminData } from '../../context/AdminDataContext';
@@ -104,6 +105,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
         bookingForReminder: null,
         isNewDeliveryModalOpen: false,
         deliveryToDelete: null,
+        deliveryToEdit: null,
         selectedBookingToReschedule: null,
         isSchedulingModalOpen: false,
     });
@@ -629,7 +631,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                 <button
                                     className="p-2 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-600 shadow"
                                     title="Editar entrega"
-                                    onClick={() => {/* lógica de edición */}}
+                                    onClick={() => setState(prev => ({ ...prev, deliveryToEdit: delivery }))}
                                 >
                                     <PencilIcon className="h-5 w-5" />
                                 </button>
@@ -681,6 +683,33 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                     }}
                     customerEmail={customer.userInfo.email}
                 />
+                {state.deliveryToEdit && (
+                    <EditDeliveryModal
+                        isOpen={true}
+                        delivery={state.deliveryToEdit}
+                        onClose={() => setState(prev => ({ ...prev, deliveryToEdit: null }))}
+                        onSave={async (deliveryId, updates) => {
+                            try {
+                                const result = await dataService.updateDelivery(deliveryId, updates);
+                                if (result.success && result.delivery) {
+                                    setState(prev => ({
+                                        ...prev,
+                                        deliveries: prev.deliveries.map(d => 
+                                            d.id === result.delivery!.id ? result.delivery! : d
+                                        ),
+                                        deliveryToEdit: null
+                                    }));
+                                    onDataChange();
+                                } else {
+                                    setState(prev => ({ ...prev, deliveryToEdit: null }));
+                                }
+                            } catch (error) {
+                                console.error('Error updating delivery:', error);
+                                setState(prev => ({ ...prev, deliveryToEdit: null }));
+                            }
+                        }}
+                    />
+                )}
                 {completeModal.open && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
                         <div className="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full">
