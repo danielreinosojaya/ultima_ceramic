@@ -1586,6 +1586,14 @@ export const markDeliveryAsCompleted = async (deliveryId: string, notes?: string
     return result;
 };
 
+export const markDeliveryAsReady = async (deliveryId: string): Promise<{ success: boolean; delivery?: Delivery; error?: string }> => {
+    const result = await postAction('markDeliveryAsReady', { deliveryId });
+    if (result.success && result.delivery) {
+        return { ...result, delivery: parseDelivery(result.delivery) };
+    }
+    return result;
+};
+
 export const deleteDelivery = async (deliveryId: string): Promise<{ success: boolean }> => {
     return postAction('deleteDelivery', { deliveryId });
 };

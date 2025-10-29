@@ -241,6 +241,25 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
         }
     };
 
+    const handleMarkDeliveryAsReady = async (deliveryId: string) => {
+        try {
+            const result = await dataService.markDeliveryAsReady(deliveryId);
+            if (result.success && result.delivery) {
+                setState(prev => ({
+                    ...prev,
+                    deliveries: prev.deliveries.map(d => d.id === result.delivery.id ? result.delivery : d)
+                }));
+                onDataChange();
+                alert('✅ Cliente notificado. La pieza está marcada como lista para recoger.');
+            } else if (result.error) {
+                alert(`❌ ${result.error}`);
+            }
+        } catch (error) {
+            console.error('Error marking delivery as ready:', error);
+            alert('❌ Error al marcar como lista. Intenta nuevamente.');
+        }
+    };
+
     useEffect(() => {
         // Los datos ahora vienen del AdminDataContext, solo necesitamos configurar appData una vez
         if (!appData && adminData.instructors.length > 0 && adminData.products.length > 0) {
@@ -603,6 +622,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                     onEdit={(delivery) => setState(prev => ({ ...prev, deliveryToEdit: delivery }))}
                     onDelete={(delivery) => setState(prev => ({ ...prev, deliveryToDelete: delivery }))}
                     onComplete={(deliveryId) => setCompleteModal({ open: true, deliveryId })}
+                    onMarkReady={handleMarkDeliveryAsReady}
                     formatDate={formatDate}
                 />
                 <NewDeliveryModal
@@ -614,7 +634,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                 ...deliveryData,
                                 customerEmail: customer.userInfo.email,
                                 customerName: customer.userInfo.firstName
-                            });
+                            } as any);
                             if (result.success && result.delivery) {
                                 setState(prev => ({
                                     ...prev,

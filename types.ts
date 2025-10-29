@@ -45,6 +45,7 @@ export interface Delivery {
     createdAt: string; // ISO date string
     completedAt?: string | null; // ISO date string - fecha real de entrega
     deliveredAt?: string | null; // ISO date string - fecha cuando se marcó como entregada
+    readyAt?: string | null; // ISO date string - fecha cuando se marcó como lista para recoger
     notes?: string | null;
     photos?: string[] | null; // Array de URLs de fotos
 }

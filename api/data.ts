@@ -2221,8 +2221,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 console.log('[createDelivery] Attempting to send email to:', customerEmail, 'name:', finalCustomerName);
                 
                 // Import emailService dynamically
-                const emailService = await import('./emailService.js');
-                await emailService.sendDeliveryCreatedEmail(customerEmail, finalCustomerName, {
+                const emailServiceModule = await import('./emailService.js');
+                await emailServiceModule.sendDeliveryCreatedEmail(customerEmail, finalCustomerName, {
                     description,
                     scheduledDate
                 }).then(() => {
@@ -2295,8 +2295,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         : customerData.user_info;
                     const customerName = userInfo.firstName || 'Cliente';
                     
-                    const emailService = await import('./emailService.js');
-                    emailService.sendDeliveryCompletedEmail(customerData.customer_email || completedDelivery.customer_email, customerName, {
+                    const emailServiceModule = await import('./emailService.js');
+                    emailServiceModule.sendDeliveryCompletedEmail(customerData.customer_email || completedDelivery.customer_email, customerName, {
                         description: completedDelivery.description,
                         deliveredAt: completedDelivery.delivered_at || completedDelivery.completed_at
                     }).catch(err => console.error('[markDeliveryAsCompleted] Email send failed:', err));
@@ -2306,6 +2306,71 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             }
             
             return res.status(200).json({ success: true, delivery: toCamelCase(completedDelivery) });
+        }
+        case 'markDeliveryAsReady': {
+            const { deliveryId } = req.body;
+            
+            if (!deliveryId) {
+                return res.status(400).json({ error: 'deliveryId is required.' });
+            }
+            
+            // Check if already marked as ready
+            const { rows: [existingDelivery] } = await sql`
+                SELECT * FROM deliveries WHERE id = ${deliveryId}
+            `;
+            
+            if (!existingDelivery) {
+                return res.status(404).json({ error: 'Delivery not found.' });
+            }
+            
+            if (existingDelivery.ready_at) {
+                return res.status(400).json({ 
+                    error: 'Delivery already marked as ready',
+                    readyAt: existingDelivery.ready_at
+                });
+            }
+            
+            // Mark as ready
+            const readyAt = new Date().toISOString();
+            const { rows: [readyDelivery] } = await sql`
+                UPDATE deliveries 
+                SET ready_at = ${readyAt}
+                WHERE id = ${deliveryId}
+                RETURNING *;
+            `;
+            
+            console.log('[markDeliveryAsReady] Delivery marked as ready:', deliveryId, 'at:', readyAt);
+            
+            // Send ready notification email
+            try {
+                const { rows: [customerData] } = await sql`
+                    SELECT user_info FROM customers WHERE email = ${readyDelivery.customer_email} LIMIT 1
+                `;
+                
+                let customerName = 'Cliente';
+                if (customerData?.user_info) {
+                    const userInfo = typeof customerData.user_info === 'string' 
+                        ? JSON.parse(customerData.user_info) 
+                        : customerData.user_info;
+                    customerName = userInfo.firstName || 'Cliente';
+                }
+                
+                console.log('[markDeliveryAsReady] Sending ready email to:', readyDelivery.customer_email);
+                
+                const emailServiceModule = await import('./emailService.js');
+                await emailServiceModule.sendDeliveryReadyEmail(readyDelivery.customer_email, customerName, {
+                    description: readyDelivery.description,
+                    readyAt: readyAt
+                }).then(() => {
+                    console.log('[markDeliveryAsReady] ✅ Ready email sent to:', readyDelivery.customer_email);
+                }).catch(err => {
+                    console.error('[markDeliveryAsReady] ❌ Ready email failed:', err);
+                });
+            } catch (emailErr) {
+                console.error('[markDeliveryAsReady] ❌ Email setup failed:', emailErr);
+            }
+            
+            return res.status(200).json({ success: true, delivery: toCamelCase(readyDelivery) });
         }
         case 'deleteDelivery': {
             const { deliveryId } = req.body;
