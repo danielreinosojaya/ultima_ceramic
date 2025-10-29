@@ -1028,17 +1028,24 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
                 console.log('[createGiftcardHold] Giftcard (locked):', { id: gid, balance, balanceType: typeof giftcardRow.balance });
 
-                // LIMPIEZA: Eliminar holds expirados SIEMPRE
-                // Si hay bookingTempRef, también eliminar holds previos de esta misma sesión
+                // LIMPIEZA AGRESIVA: Eliminar TODOS los holds previos de esta giftcard para esta sesión
+                // Esto garantiza que no queden holds huérfanos de intentos previos
                 let deletedHolds = 0;
                 if (bookingTempRef) {
-                    // Con booking_temp_ref: limpiar expirados Y previos de esta sesión
-                    const { rowCount } = await sql`
+                    // Con booking_temp_ref: PRIORIDAD a limpiar todos los holds de esta sesión primero
+                    const { rowCount: sessionDeleted } = await sql`
                         DELETE FROM giftcard_holds
-                        WHERE giftcard_id = ${gid}
-                        AND (expires_at <= NOW() OR booking_temp_ref = ${bookingTempRef})
+                        WHERE giftcard_id = ${gid} AND booking_temp_ref = ${bookingTempRef}
                     `;
-                    deletedHolds = rowCount || 0;
+                    console.log('[createGiftcardHold] Deleted session holds:', sessionDeleted);
+                    
+                    // Luego limpiar todos los expirados de cualquier sesión
+                    const { rowCount: expiredDeleted } = await sql`
+                        DELETE FROM giftcard_holds
+                        WHERE giftcard_id = ${gid} AND expires_at <= NOW()
+                    `;
+                    deletedHolds = (sessionDeleted || 0) + (expiredDeleted || 0);
+                    console.log('[createGiftcardHold] Total cleaned:', { session: sessionDeleted, expired: expiredDeleted, total: deletedHolds });
                 } else {
                     // Sin booking_temp_ref: solo limpiar expirados
                     const { rowCount } = await sql`
@@ -1046,8 +1053,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         WHERE giftcard_id = ${gid} AND expires_at <= NOW()
                     `;
                     deletedHolds = rowCount || 0;
+                    console.log('[createGiftcardHold] Cleaned expired holds:', deletedHolds);
                 }
-                console.log('[createGiftcardHold] Cleaned holds:', { deletedHolds, hadBookingRef: !!bookingTempRef });
 
                 // Sum active holds for this giftcard (inside the same transaction)
                 const { rows: [holdSumRow] } = await sql`
@@ -2378,10 +2385,15 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
     // Process giftcard hold if provided
     const giftcardHoldId = (body as any).holdId;
     const giftcardAmount = typeof (body as any).giftcardAmount === 'number' ? (body as any).giftcardAmount : 0;
+    const expectedPrice = Number(body.price || 0);
 
     if (giftcardHoldId && giftcardAmount > 0) {
       try {
-        console.log('[ADD BOOKING] Processing giftcard hold:', { holdId: giftcardHoldId, amount: giftcardAmount });
+        console.log('[ADD BOOKING] Processing giftcard hold:', { 
+          holdId: giftcardHoldId, 
+          declaredAmount: giftcardAmount,
+          bookingPrice: expectedPrice
+        });
         
         // Begin transaction for giftcard consumption
         await sql`BEGIN`;
@@ -2406,19 +2418,52 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
         const currentBalance = Number(giftcardRow.balance || 0);
         const holdAmount = Number(holdRow.amount || 0);
 
-        if (currentBalance < holdAmount) {
+        // CRÍTICO: Validar que el hold tiene el monto correcto
+        // Si el hold es menor al esperado pero la giftcard tiene saldo suficiente, usar el correcto
+        let actualAmountToConsume = holdAmount;
+        
+        if (holdAmount < giftcardAmount && currentBalance >= giftcardAmount) {
+          console.warn('[ADD BOOKING] Hold amount mismatch - using correct amount:', {
+            holdAmount,
+            declaredAmount: giftcardAmount,
+            balance: currentBalance,
+            willUse: giftcardAmount
+          });
+          actualAmountToConsume = giftcardAmount;
+        }
+        
+        // Validar que el monto a consumir no exceda el precio del booking
+        if (actualAmountToConsume > expectedPrice) {
+          actualAmountToConsume = expectedPrice;
+          console.log('[ADD BOOKING] Capping giftcard amount to booking price:', actualAmountToConsume);
+        }
+
+        if (currentBalance < actualAmountToConsume) {
           await sql`ROLLBACK`;
-          console.error('[ADD BOOKING] Insufficient giftcard balance:', { current: currentBalance, required: holdAmount });
+          console.error('[ADD BOOKING] Insufficient giftcard balance:', { 
+            current: currentBalance, 
+            required: actualAmountToConsume,
+            holdAmount,
+            declaredAmount: giftcardAmount
+          });
           throw new Error('Insufficient giftcard balance');
         }
 
-        // Update giftcard balance
-        await sql`UPDATE giftcards SET balance = ${currentBalance - holdAmount} WHERE id = ${giftcardId}`;
+        // Update giftcard balance with the ACTUAL amount being consumed
+        await sql`UPDATE giftcards SET balance = ${currentBalance - actualAmountToConsume} WHERE id = ${giftcardId}`;
         
         // Delete the hold
         await sql`DELETE FROM giftcard_holds WHERE id = ${giftcardHoldId}`;
 
-        // Insert audit log
+        // Update booking record to reflect giftcard usage
+        await sql`
+          UPDATE bookings 
+          SET giftcard_redeemed_amount = ${actualAmountToConsume},
+              giftcard_id = ${String(giftcardId)}
+          WHERE booking_code = ${newBookingCode}
+        `;
+
+        // Insert audit log with ACTUAL consumed amount
         try {
           await sql`
             INSERT INTO giftcard_audit (
@@ -2427,8 +2472,13 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
               uuid_generate_v4(),
               ${String(giftcardId)},
               'hold_consumed',
-              ${holdAmount},
-              ${JSON.stringify({ holdId: giftcardHoldId, bookingCode: booking.bookingCode })}::jsonb,
+              ${actualAmountToConsume},
+              ${JSON.stringify({ 
+                holdId: giftcardHoldId, 
+                bookingCode: booking.bookingCode,
+                originalHoldAmount: holdAmount,
+                actualConsumed: actualAmountToConsume
+              })}::jsonb,
               NOW()
             )
           `;
@@ -2438,9 +2488,14 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
         }
 
         await sql`COMMIT`;
-        console.log('[ADD BOOKING] Giftcard consumed successfully:', { giftcardId, newBalance: currentBalance - holdAmount });
+        console.log('[ADD BOOKING] Giftcard consumed successfully:', { 
+          giftcardId, 
+          consumedAmount: actualAmountToConsume,
+          newBalance: currentBalance - actualAmountToConsume,
+          hadDiscrepancy: holdAmount !== actualAmountToConsume
+        });
       } catch (giftcardError) {
-        try { await sql`ROLLBACK`; } catch (rbErr) { console.warn('rollback failed after createGiftcardHold error', rbErr); }
+        try { await sql`ROLLBACK`; } catch (rbErr) { console.warn('rollback failed after giftcard processing error', rbErr); }
         console.error('[ADD BOOKING] Error processing giftcard:', giftcardError);
         // Don't fail the booking creation, but log the error
       }
