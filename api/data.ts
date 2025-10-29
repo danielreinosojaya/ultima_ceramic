@@ -2455,13 +2455,44 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
         // Delete the hold
         await sql`DELETE FROM giftcard_holds WHERE id = ${giftcardHoldId}`;
 
-        // Update booking record to reflect giftcard usage
+        // CRÍTICO: Crear registro de pago con giftcard
+        const paymentId = `pay_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const giftcardCode = giftcardRow.code || 'unknown';
+        const paymentDetails = [{
+          id: paymentId,
+          amount: actualAmountToConsume,
+          method: 'Giftcard',
+          receivedAt: new Date().toISOString(),
+          giftcardAmount: actualAmountToConsume,
+          giftcardId: String(giftcardId),
+          metadata: {
+            giftcardCode,
+            holdId: giftcardHoldId,
+            originalHoldAmount: holdAmount
+          }
+        }];
+
+        // Determinar si el booking está completamente pagado
+        const isPaid = actualAmountToConsume >= expectedPrice;
+
+        // Update booking record to reflect giftcard usage AND payment
         await sql`
           UPDATE bookings 
           SET giftcard_redeemed_amount = ${actualAmountToConsume},
-              giftcard_id = ${String(giftcardId)}
+              giftcard_id = ${String(giftcardId)},
+              payment_details = ${JSON.stringify(paymentDetails)}::jsonb,
+              is_paid = ${isPaid}
           WHERE booking_code = ${newBookingCode}
         `;
+
+        console.log('[ADD BOOKING] Payment registered:', {
+          paymentId,
+          amount: actualAmountToConsume,
+          bookingPrice: expectedPrice,
+          isPaid,
+          method: 'Giftcard',
+          code: giftcardCode
+        });
 
         // Insert audit log with ACTUAL consumed amount
         try {
@@ -2477,7 +2508,9 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
                 holdId: giftcardHoldId, 
                 bookingCode: booking.bookingCode,
                 originalHoldAmount: holdAmount,
-                actualConsumed: actualAmountToConsume
+                actualConsumed: actualAmountToConsume,
+                paymentId,
+                isPaid
               })}::jsonb,
               NOW()
             )
@@ -2492,7 +2525,8 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
           giftcardId, 
           consumedAmount: actualAmountToConsume,
           newBalance: currentBalance - actualAmountToConsume,
-          hadDiscrepancy: holdAmount !== actualAmountToConsume
+          hadDiscrepancy: holdAmount !== actualAmountToConsume,
+          bookingPaid: isPaid
         });
       } catch (giftcardError) {
         try { await sql`ROLLBACK`; } catch (rbErr) { console.warn('rollback failed after giftcard processing error', rbErr); }
