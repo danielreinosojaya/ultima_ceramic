@@ -1543,6 +1543,7 @@ const parseDelivery = (d: any): Delivery => {
         createdAt: d.createdAt || d.created_at,
         completedAt: d.completedAt || d.completed_at || null,
         deliveredAt: d.deliveredAt || d.delivered_at || null,
+        readyAt: d.readyAt || d.ready_at || null,
         notes: d.notes || null,
         photos: parsedPhotos
     };
