@@ -1023,11 +1023,23 @@ export const markBookingAsUnpaid = async (bookingId: string): Promise<{ success:
     return result;
 };
 export const rescheduleBookingSlot = async (bookingId: string, oldSlot: any, newSlot: any): Promise<AddBookingResult> => {
+    console.log('[rescheduleBookingSlot] Starting reschedule:', { bookingId, oldSlot, newSlot });
     const result = await postAction('rescheduleBookingSlot', { bookingId, oldSlot, newSlot });
-     if(result.success && result.booking) {
-        invalidateBookingsCache();
+    
+    // CRÍTICO: Siempre invalidar caché para forzar recarga
+    invalidateBookingsCache();
+    console.log('[rescheduleBookingSlot] Cache invalidated, result:', result);
+    
+    if(result.success && result.booking) {
         return { ...result, booking: parseBooking(result.booking) };
     }
+    
+    // Si no hay booking en respuesta pero fue exitoso, aún devolvemos success
+    if (result.success) {
+        console.warn('[rescheduleBookingSlot] Success but no booking returned from backend');
+        return { success: true, message: 'Reschedule successful' };
+    }
+    
     return result;
 };
 export const deleteBookingsInDateRange = async (startDate: Date, endDate: Date): Promise<{ success: boolean }> => {
