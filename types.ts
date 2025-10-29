@@ -217,6 +217,8 @@ export interface Booking {
     bookingCode: string;
     bookingMode: BookingMode;
     customer?: Customer; // Adding customer to Booking
+    // Si la reserva fue aceptada con la condición de "sin reembolsos ni reagendamientos" (para reservas <48h)
+    acceptedNoRefund?: boolean;
     paymentDetails?: PaymentDetails[]; // Ensure it's treated as an array
     attendance?: Record<string, AttendanceStatus>; // key is `${date}_${time}`
     bookingDate: string;
