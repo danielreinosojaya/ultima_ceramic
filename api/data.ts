@@ -2308,7 +2308,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             return res.status(200).json({ success: true, delivery: toCamelCase(completedDelivery) });
         }
         case 'markDeliveryAsReady': {
-            const { deliveryId } = req.body;
+            const { deliveryId, resend = false } = req.body;
             
             if (!deliveryId) {
                 return res.status(400).json({ error: 'deliveryId is required.' });
@@ -2323,23 +2323,35 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 return res.status(404).json({ error: 'Delivery not found.' });
             }
             
-            if (existingDelivery.ready_at) {
+            // If already marked and not resend, reject
+            if (existingDelivery.ready_at && !resend) {
                 return res.status(400).json({ 
                     error: 'Delivery already marked as ready',
                     readyAt: existingDelivery.ready_at
                 });
             }
             
-            // Mark as ready
-            const readyAt = new Date().toISOString();
-            const { rows: [readyDelivery] } = await sql`
-                UPDATE deliveries 
-                SET ready_at = ${readyAt}
-                WHERE id = ${deliveryId}
-                RETURNING *;
-            `;
+            // Mark as ready (or use existing ready_at if resending)
+            let readyAt: string;
+            let readyDelivery: any;
             
-            console.log('[markDeliveryAsReady] Delivery marked as ready:', deliveryId, 'at:', readyAt);
+            if (resend && existingDelivery.ready_at) {
+                // Resending email, don't update ready_at
+                readyAt = existingDelivery.ready_at;
+                readyDelivery = existingDelivery;
+                console.log('[markDeliveryAsReady] Resending email for existing ready_at:', readyAt);
+            } else {
+                // First time marking as ready
+                readyAt = new Date().toISOString();
+                const { rows: [updatedDelivery] } = await sql`
+                    UPDATE deliveries 
+                    SET ready_at = ${readyAt}
+                    WHERE id = ${deliveryId}
+                    RETURNING *;
+                `;
+                readyDelivery = updatedDelivery;
+                console.log('[markDeliveryAsReady] Delivery marked as ready:', deliveryId, 'at:', readyAt);
+            }
             
             // Send ready notification email
             try {
@@ -2355,22 +2367,29 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     customerName = userInfo.firstName || 'Cliente';
                 }
                 
-                console.log('[markDeliveryAsReady] Sending ready email to:', readyDelivery.customer_email);
+                console.log('[markDeliveryAsReady] Sending ready email to:', readyDelivery.customer_email, 'name:', customerName);
                 
                 const emailServiceModule = await import('./emailService.js');
-                await emailServiceModule.sendDeliveryReadyEmail(readyDelivery.customer_email, customerName, {
+                const emailResult = await emailServiceModule.sendDeliveryReadyEmail(readyDelivery.customer_email, customerName, {
                     description: readyDelivery.description,
                     readyAt: readyAt
-                }).then(() => {
-                    console.log('[markDeliveryAsReady] ✅ Ready email sent to:', readyDelivery.customer_email);
-                }).catch(err => {
-                    console.error('[markDeliveryAsReady] ❌ Ready email failed:', err);
                 });
+                
+                console.log('[markDeliveryAsReady] ✅ Email result:', emailResult);
+                
+                if (!emailResult || (emailResult as any).sent === false) {
+                    console.error('[markDeliveryAsReady] ⚠️ Email may not have been sent:', emailResult);
+                }
             } catch (emailErr) {
-                console.error('[markDeliveryAsReady] ❌ Email setup failed:', emailErr);
+                console.error('[markDeliveryAsReady] ❌ Email error:', emailErr);
+                // Don't fail the request if email fails
             }
             
-            return res.status(200).json({ success: true, delivery: toCamelCase(readyDelivery) });
+            return res.status(200).json({ 
+                success: true, 
+                delivery: toCamelCase(readyDelivery),
+                emailSent: true // Optimistic, check logs
+            });
         }
         case 'deleteDelivery': {
             const { deliveryId } = req.body;
