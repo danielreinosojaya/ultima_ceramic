@@ -284,11 +284,18 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                     <RescheduleModal
                         isOpen={true}
                         onClose={() => setState(prev => ({ ...prev, selectedBookingToReschedule: null }))}
-                        onSave={(newSlot) => {
-                            dataService.rescheduleBookingSlot(state.selectedBookingToReschedule.booking.id, state.selectedBookingToReschedule.slot, newSlot).then(() => {
-                                setState(prev => ({ ...prev, selectedBookingToReschedule: null }));
-                                onDataChange();
-                            });
+                        onSave={async (newSlot) => {
+                            // CORREGIDO: Hacer await del reagendamiento y forzar recarga antes de cerrar
+                            await dataService.rescheduleBookingSlot(state.selectedBookingToReschedule.booking.id, state.selectedBookingToReschedule.slot, newSlot);
+                            
+                            // Forzar recarga de datos global
+                            onDataChange();
+                            
+                            // Pequeño delay para permitir que el contexto actualice
+                            await new Promise(resolve => setTimeout(resolve, 300));
+                            
+                            // Cerrar modal después de confirmar la actualización
+                            setState(prev => ({ ...prev, selectedBookingToReschedule: null }));
                         }}
                         slotInfo={{ slot: state.selectedBookingToReschedule.slot, attendeeName: customer.userInfo.firstName + ' ' + customer.userInfo.lastName, bookingId: state.selectedBookingToReschedule.booking.id }}
                         appData={appData}
@@ -359,11 +366,18 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                     <RescheduleModal
                         isOpen={true}
                         onClose={() => setState(prev => ({ ...prev, selectedBookingToReschedule: null }))}
-                        onSave={(newSlot) => {
-                            dataService.rescheduleBookingSlot(state.selectedBookingToReschedule.booking.id, state.selectedBookingToReschedule.slot, newSlot).then(() => {
-                                setState(prev => ({ ...prev, selectedBookingToReschedule: null }));
-                                onDataChange();
-                            });
+                        onSave={async (newSlot) => {
+                            // CORREGIDO: Hacer await del reagendamiento y forzar recarga antes de cerrar
+                            await dataService.rescheduleBookingSlot(state.selectedBookingToReschedule.booking.id, state.selectedBookingToReschedule.slot, newSlot);
+                            
+                            // Forzar recarga de datos global
+                            onDataChange();
+                            
+                            // Pequeño delay para permitir que el contexto actualice
+                            await new Promise(resolve => setTimeout(resolve, 300));
+                            
+                            // Cerrar modal después de confirmar la actualización
+                            setState(prev => ({ ...prev, selectedBookingToReschedule: null }));
                         }}
                         slotInfo={{ slot: state.selectedBookingToReschedule.slot, attendeeName: customer.userInfo.firstName + ' ' + customer.userInfo.lastName, bookingId: state.selectedBookingToReschedule.booking.id }}
                         appData={appData}

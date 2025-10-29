@@ -163,17 +163,23 @@ const parseBookingFromDB = (dbRow: any): Booking => {
             camelCased.paymentDetails = [];
         }
 
-        const totalPaid = (camelCased.paymentDetails || []).reduce((sum: number, p: any) => sum + p.amount, 0);
-        camelCased.isPaid = totalPaid >= camelCased.price;
+        // Ensure slots are not discarded if empty but valid
+        if (!Array.isArray(camelCased.slots)) {
+            camelCased.slots = [];
+        }
 
-        // Calculate giftcard-specific fields
-        const giftcardPayments = (camelCased.paymentDetails || []).filter((p: any) => p.method === 'Giftcard');
-        camelCased.giftcardApplied = giftcardPayments.length > 0;
-        camelCased.giftcardRedeemedAmount = giftcardPayments.reduce((sum: number, p: any) => sum + (p.giftcardAmount || p.amount || 0), 0);
-        camelCased.giftcardId = giftcardPayments.length > 0 ? (giftcardPayments[0].giftcardId || null) : null;
-        camelCased.pendingBalance = Math.max(0, camelCased.price - totalPaid);
+        // Ensure paymentDetails are processed even if empty
+        if (!camelCased.paymentDetails || !Array.isArray(camelCased.paymentDetails)) {
+            camelCased.paymentDetails = [];
+        }
+
+        // Calculate isPaid and pendingBalance robustly
+        const totalPaid = camelCased.paymentDetails.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+        camelCased.isPaid = totalPaid >= (camelCased.price || 0);
+        camelCased.pendingBalance = Math.max(0, (camelCased.price || 0) - totalPaid);
 
         // Debug log for giftcard bookings
+        const giftcardPayments = camelCased.paymentDetails.filter((p: any) => p.method === 'Giftcard');
         if (giftcardPayments.length > 0) {
             console.log('[parseBookingFromDB] Giftcard booking parsed:', {
                 bookingCode: camelCased.bookingCode,
@@ -2428,7 +2434,7 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
         await sql`COMMIT`;
         console.log('[ADD BOOKING] Giftcard consumed successfully:', { giftcardId, newBalance: currentBalance - holdAmount });
       } catch (giftcardError) {
-        try { await sql`ROLLBACK`; } catch (_) {}
+        try { await sql`ROLLBACK`; } catch (rbErr) { console.warn('rollback failed after createGiftcardHold error', rbErr); }
         console.error('[ADD BOOKING] Error processing giftcard:', giftcardError);
         // Don't fail the booking creation, but log the error
       }

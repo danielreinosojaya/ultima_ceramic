@@ -164,8 +164,18 @@ export const AdminDataProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Cargar datos críticos (más frecuentes)
   const fetchCriticalData = useCallback(async (force = false) => {
-    if (!force && !needsUpdate(state.lastUpdated.critical, CRITICAL_CACHE_DURATION)) return;
-    if (state.loadingState.critical) return;
+    // CORREGIDO: Si force=true, ignorar el chequeo de loading para garantizar recarga
+    if (!force) {
+      if (!needsUpdate(state.lastUpdated.critical, CRITICAL_CACHE_DURATION)) return;
+      if (state.loadingState.critical) return;
+    }
+    
+    // Si force=true y ya está cargando, esperar a que termine antes de recargar
+    if (force && state.loadingState.critical) {
+      console.log('[AdminDataContext] Force refresh requested but already loading, waiting...');
+      // Esperar un poco para que termine la carga actual
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
 
     dispatch({ type: 'SET_LOADING', dataType: 'critical', loading: true });
     dispatch({ type: 'SET_ERROR', error: null });
@@ -212,8 +222,17 @@ export const AdminDataProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Cargar datos extendidos (menos frecuentes)
   const fetchExtendedData = useCallback(async (force = false) => {
-    if (!force && !needsUpdate(state.lastUpdated.extended, EXTENDED_CACHE_DURATION)) return;
-    if (state.loadingState.extended) return;
+    // CORREGIDO: Si force=true, ignorar el chequeo de loading para garantizar recarga
+    if (!force) {
+      if (!needsUpdate(state.lastUpdated.extended, EXTENDED_CACHE_DURATION)) return;
+      if (state.loadingState.extended) return;
+    }
+    
+    // Si force=true y ya está cargando, esperar a que termine antes de recargar
+    if (force && state.loadingState.extended) {
+      console.log('[AdminDataContext] Force refresh extended requested but already loading, waiting...');
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
 
     dispatch({ type: 'SET_LOADING', dataType: 'extended', loading: true });
 
