@@ -48,16 +48,20 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
         slots: booking.slots?.length || 0,
         userInfo: !!booking.userInfo
       });
-      
-      if (!booking.isPaid) {
-        booking.slots?.forEach(slot => unpaid.add(slot.date));
+
+      // Ensure bookings with empty slots are not discarded
+      if (!booking.slots || booking.slots.length === 0) {
+        console.warn(`Booking ${booking.id} has no slots but will be included.`);
+        booking.slots = [{ date: 'TBD', time: 'TBD', instructorId: -1 }];
       }
-      
-      booking.slots?.forEach(slot => {
-        if (!booking.userInfo) {
-          console.log('Booking missing userInfo:', booking.id);
-          return;
-        }
+
+      // Ensure userInfo is minimally valid
+      if (!booking.userInfo || !booking.userInfo.firstName) {
+        console.warn(`Booking ${booking.id} has invalid userInfo. Assigning default.`);
+        booking.userInfo = { firstName: 'Unknown', lastName: '', email: '', phone: '', countryCode: '', birthday: null };
+      }
+
+      booking.slots.forEach(slot => {
         if (!acc[slot.date]) acc[slot.date] = {};
         if (!acc[slot.date][slot.time]) acc[slot.date][slot.time] = { attendees: [], instructorId: slot.instructorId };
         acc[slot.date][slot.time].attendees.push({ 
@@ -65,7 +69,15 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
           bookingId: booking.id, 
           isPaid: booking.isPaid, 
           bookingCode: booking.bookingCode, 
-          paymentDetails: booking.paymentDetails 
+          paymentDetails: booking.paymentDetails?.map(detail => ({
+            id: detail.id ?? 'unknown',
+            amount: detail.amount ?? 0,
+            method: detail.method ?? 'Manual',
+            receivedAt: detail.receivedAt ?? new Date().toISOString(),
+            giftcardAmount: detail.giftcardAmount ?? 0,
+            giftcardId: detail.giftcardId ?? null,
+            metadata: detail.metadata ?? {}
+          })) || []
         });
       });
     });

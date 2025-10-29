@@ -229,15 +229,25 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
 
 
     const { pendingPackageBookings, pendingOpenStudioBookings } = useMemo(() => {
-        // Solo mostrar reservas impagas que tengan al menos un slot asignado para paquetes/clases
+        // CORREGIDO: Mostrar TODAS las reservas impagas de paquetes/clases, 
+        // incluyendo pre-reservas sin slots asignados (pendientes de coordinación)
         const packages = allBookings.filter(b => {
-            return !b.isPaid && b.productType !== 'OPEN_STUDIO_SUBSCRIPTION' && Array.isArray(b.slots) && b.slots.length > 0;
+            return !b.isPaid && b.productType !== 'OPEN_STUDIO_SUBSCRIPTION';
+            // ELIMINADO el filtro: && Array.isArray(b.slots) && b.slots.length > 0
+            // Las pre-reservas sin fechas también son pendientes de pago válidos
         }).sort((a,b) => (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0));
 
         // Mostrar todas las reservas impagas de Open Studio, sin filtrar por slots
         const openStudio = allBookings.filter(b => {
             return !b.isPaid && b.productType === 'OPEN_STUDIO_SUBSCRIPTION';
         }).sort((a,b) => (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0));
+
+        console.log('[FinancialDashboard] Pending bookings calculated:', {
+            totalUnpaidPackages: packages.length,
+            withSlots: packages.filter(b => Array.isArray(b.slots) && b.slots.length > 0).length,
+            withoutSlots: packages.filter(b => !Array.isArray(b.slots) || b.slots.length === 0).length,
+            openStudio: openStudio.length
+        });
 
         return { pendingPackageBookings: packages, pendingOpenStudioBookings: openStudio };
     }, [allBookings]); // Remove date dependencies since pending payments should show all unpaid bookings
@@ -719,7 +729,15 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                                 <div className="font-semibold">{b.userInfo?.firstName} {b.userInfo?.lastName}</div>
                                                 <div className="text-xs text-brand-secondary">{b.userInfo?.email}</div>
                                             </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text" role="cell">{b.product?.name || 'N/A'}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text" role="cell">
+                                                {b.product?.name || 'N/A'}
+                                                {/* Indicador visual para pre-reservas sin fechas asignadas */}
+                                                {(!Array.isArray(b.slots) || b.slots.length === 0) && (
+                                                    <span className="inline-flex items-center px-2 py-1 ml-2 text-xs font-semibold rounded bg-amber-100 text-amber-800" title="Pre-reserva sin fechas asignadas aún">
+                                                        ⏳ Sin fechas
+                                                    </span>
+                                                )}
+                                            </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-semibold" role="cell">${(b.price || 0).toFixed(2)}
                                                 {b.giftcardApplied && (
                                                     <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-indigo-50 text-indigo-700 ml-2">
