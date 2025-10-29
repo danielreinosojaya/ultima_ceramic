@@ -239,7 +239,7 @@ const GiftcardRedeemSection: React.FC<{ product: Product; onUseGiftcard?: (holdI
     try {
       const ds = await import('../services/dataService');
 
-      // Re-validate to get most recent balance/available before attempting the hold
+      // CRÍTICO: Re-validate y limpiar holds previos de esta sesión
       const currentCode = giftcardInfo.giftcardId ? undefined : (giftcardInfo.code || code.trim());
       let latestInfo: any = giftcardInfo;
       try {
@@ -257,8 +257,18 @@ const GiftcardRedeemSection: React.FC<{ product: Product; onUseGiftcard?: (holdI
         // ignore validation errors and fallback to existing giftcardInfo
       }
 
-      // Decide initial amount to attempt
-      const desiredAmount = Math.min(Number(product.price || 0), Number(latestInfo.balance || 0));
+      // Decide initial amount to attempt - usar el MENOR entre precio y balance
+      const productPrice = Number(product.price || 0);
+      const giftcardBalance = Number(latestInfo.balance || 0);
+      const desiredAmount = Math.min(productPrice, giftcardBalance);
+      
+      console.log('[BookingSummary] Creating hold:', {
+        productPrice,
+        giftcardBalance,
+        desiredAmount,
+        code: latestInfo.code || code.trim()
+      });
+
       if (!desiredAmount || desiredAmount <= 0) {
         setError('Saldo disponible: 0 — no se puede aplicar la giftcard');
         setCreatingHold(false);
@@ -272,11 +282,18 @@ const GiftcardRedeemSection: React.FC<{ product: Product; onUseGiftcard?: (holdI
       // Attempt to create hold for desired amount.
       const attemptCreate = async (amountToTry: number) => {
         const payload = { ...payloadBase, amount: amountToTry };
+        console.log('[BookingSummary] Hold payload:', payload);
         const res = await ds.createGiftcardHold(payload);
         if (res && res.success && res.hold) {
-          const holdInfo: any = { holdId: res.hold.id, expiresAt: res.hold.expires_at, amount: Number(res.hold.amount) };
+          const holdInfo: any = { 
+            holdId: res.hold.id, 
+            expiresAt: res.hold.expires_at, 
+            amount: Number(res.hold.amount)
+          };
           if (giftcardInfo?.giftcardId) holdInfo.giftcardId = giftcardInfo.giftcardId;
           if (giftcardInfo?.code) holdInfo.code = giftcardInfo.code || code.trim();
+          
+          console.log('[BookingSummary] Hold created successfully:', holdInfo);
           setAppliedHold(holdInfo);
           onUseGiftcard && onUseGiftcard(holdInfo);
           return { ok: true, res };
@@ -293,6 +310,12 @@ const GiftcardRedeemSection: React.FC<{ product: Product; onUseGiftcard?: (holdI
       const res = result.res;
       if (res && res.error === 'insufficient_funds') {
         const available = typeof res.available === 'number' ? Number(res.available) : 0;
+        console.warn('[BookingSummary] Insufficient funds:', { 
+          requested: desiredAmount, 
+          available, 
+          balance: res.balance 
+        });
+        
         if (available > 0) {
           setGiftcardInfo({ ...giftcardInfo, available });
           setError(null);
