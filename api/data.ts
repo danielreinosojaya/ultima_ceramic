@@ -1960,11 +1960,17 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         case 'rescheduleBookingSlot': {
             const rescheduleBody = req.body;
             const { bookingId: rescheduleId, oldSlot, newSlot } = rescheduleBody;
-            const { rows: [bookingToReschedule] } = await sql`SELECT slots FROM bookings WHERE id = ${rescheduleId}`;
+            const { rows: [bookingToReschedule] } = await sql`SELECT * FROM bookings WHERE id = ${rescheduleId}`;
             if (bookingToReschedule) {
                 const otherSlots = bookingToReschedule.slots.filter((s: any) => s.date !== oldSlot.date || s.time !== oldSlot.time);
                 const updatedSlots = [...otherSlots, newSlot];
                 await sql`UPDATE bookings SET slots = ${JSON.stringify(updatedSlots)} WHERE id = ${rescheduleId}`;
+                
+                // Obtener el booking actualizado completo
+                const { rows: [updatedBooking] } = await sql`SELECT * FROM bookings WHERE id = ${rescheduleId}`;
+                result = { success: true, booking: toCamelCase(updatedBooking) };
+            } else {
+                result = { success: false, error: 'Booking not found' };
             }
             break;
         }
