@@ -243,7 +243,10 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
 
     const handleMarkDeliveryAsReady = async (deliveryId: string) => {
         try {
+            console.log('[handleMarkDeliveryAsReady] Starting for deliveryId:', deliveryId);
             const result = await dataService.markDeliveryAsReady(deliveryId);
+            console.log('[handleMarkDeliveryAsReady] Result:', result);
+            
             if (result.success && result.delivery) {
                 setState(prev => ({
                     ...prev,
@@ -252,11 +255,27 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                 onDataChange();
                 alert('✅ Cliente notificado. La pieza está marcada como lista para recoger.');
             } else if (result.error) {
-                alert(`❌ ${result.error}`);
+                console.error('[handleMarkDeliveryAsReady] Error from backend:', result.error);
+                
+                // Si el error es por columna no existente, dar mensaje específico
+                if (result.error.includes('column') || result.error.includes('ready_at')) {
+                    alert('❌ Error: La base de datos necesita ser actualizada.\n\nPor favor aplica la migración SQL primero:\nALTER TABLE deliveries ADD COLUMN ready_at TIMESTAMP;');
+                } else {
+                    alert(`❌ ${result.error}`);
+                }
+            } else {
+                console.error('[handleMarkDeliveryAsReady] Unexpected result:', result);
+                alert('❌ Error inesperado. Revisa los logs de Vercel.');
             }
         } catch (error) {
-            console.error('Error marking delivery as ready:', error);
-            alert('❌ Error al marcar como lista. Intenta nuevamente.');
+            console.error('[handleMarkDeliveryAsReady] Exception:', error);
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            
+            if (errorMsg.includes('ready_at') || errorMsg.includes('column')) {
+                alert('❌ Error de base de datos: La columna ready_at no existe.\n\nAplica la migración SQL primero (ver README_ready_at.md)');
+            } else {
+                alert(`❌ Error al marcar como lista: ${errorMsg}`);
+            }
         }
     };
 
