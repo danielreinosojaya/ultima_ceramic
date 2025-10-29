@@ -212,7 +212,7 @@ const App: React.FC = () => {
         setIsUserInfoModalOpen(true);
     };
 
-    const handleUserInfoSubmit = async (data: { userInfo: UserInfo, needsInvoice: boolean, invoiceData?: any }) => {
+    const handleUserInfoSubmit = async (data: { userInfo: UserInfo, needsInvoice: boolean, invoiceData?: any, acceptedNoRefund?: boolean }) => {
         // Prevent double submission
         if (bookingInProgress) {
             console.warn('[App] Booking already in progress, ignoring duplicate submit');
@@ -238,7 +238,7 @@ const App: React.FC = () => {
             bookingMode: bookingMode || 'flexible',
             bookingDate: new Date().toISOString(),
             invoiceData: data.needsInvoice ? data.invoiceData : undefined,
-            acceptedNoRefund: requiresImmediateAcceptance ? !!(data as any).acceptedNoRefund : false
+            acceptedNoRefund: requiresImmediateAcceptance ? !!data.acceptedNoRefund : false
         };
 
         try {
@@ -616,6 +616,7 @@ const App: React.FC = () => {
                     onClose={() => setIsUserInfoModalOpen(false)}
                     onSubmit={handleUserInfoSubmit}
                     onShowPolicies={() => setIsPolicyModalOpen(true)}
+                    slots={bookingDetails.slots}
                 />
             )}
             {isPolicyModalOpen && appData && (

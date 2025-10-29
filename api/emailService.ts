@@ -186,6 +186,22 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
             <p>El monto a pagar es de <strong>$${numericPrice.toFixed(2)}</strong>.</p>
             <p>Para confirmar tu asistencia, por favor realiza una transferencia bancaria con los siguientes datos y envíanos el comprobante por WhatsApp.</p>
             ${accountsHtml}
+            ${booking.acceptedNoRefund ? `
+            <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin-top: 20px; border-radius: 8px;">
+                <p style="margin: 0; color: #92400E; font-weight: bold;">⚠️ Política de No Reembolso ni Reagendamiento</p>
+                <p style="margin: 8px 0 0 0; color: #78350F; font-size: 14px;">
+                    Has reservado una clase con menos de 48 horas de anticipación. Esta reserva <strong>no es reembolsable ni reagendable</strong> bajo ninguna circunstancia.
+                </p>
+            </div>
+            ` : `
+            <div style="background-color: #EFF6FF; border-left: 4px solid #3B82F6; padding: 15px; margin-top: 20px; border-radius: 8px;">
+                <p style="margin: 0; color: #1E40AF; font-weight: bold;">📋 Política de Cancelación y Reagendamiento</p>
+                <p style="margin: 8px 0 0 0; color: #1E3A8A; font-size: 14px;">
+                    Puedes cancelar o reagendar tu clase sin costo hasta <strong>48 horas antes</strong> de la fecha programada. 
+                    Las reservas realizadas con menos de 48 horas de anticipación no son reembolsables ni reagendables.
+                </p>
+            </div>
+            `}
             <p style="margin-top: 20px;">¡Esperamos verte pronto en el taller!</p>
             <p>Saludos,<br/>El equipo de CeramicAlma</p>
         </div>
@@ -241,6 +257,22 @@ export const sendPaymentReceiptEmail = async (booking: Booking, payment: Payment
                 <p><strong>Método:</strong> ${payment.method}</p>
                 <p><strong>Fecha de Pago:</strong> ${fechaPago}</p>
             </div>
+            ${booking.acceptedNoRefund ? `
+            <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin-top: 20px; border-radius: 8px;">
+                <p style="margin: 0; color: #92400E; font-weight: bold;">⚠️ Política de No Reembolso ni Reagendamiento</p>
+                <p style="margin: 8px 0 0 0; color: #78350F; font-size: 14px;">
+                    Has reservado una clase con menos de 48 horas de anticipación. Esta reserva <strong>no es reembolsable ni reagendable</strong> bajo ninguna circunstancia.
+                </p>
+            </div>
+            ` : `
+            <div style="background-color: #EFF6FF; border-left: 4px solid #3B82F6; padding: 15px; margin-top: 20px; border-radius: 8px;">
+                <p style="margin: 0; color: #1E40AF; font-weight: bold;">📋 Política de Cancelación y Reagendamiento</p>
+                <p style="margin: 8px 0 0 0; color: #1E3A8A; font-size: 14px;">
+                    Puedes cancelar o reagendar tu clase sin costo hasta <strong>48 horas antes</strong> de la fecha programada. 
+                    Las reservas realizadas con menos de 48 horas de anticipación no son reembolsables ni reagendables.
+                </p>
+            </div>
+            `}
              <p style="margin-top: 20px;">Puedes descargar tu ticket de reserva desde la web en cualquier momento. ¡Nos vemos en clase!</p>
             <p>Saludos,<br/>El equipo de CeramicAlma</p>
         </div>

@@ -272,6 +272,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                 <div className="bg-white shadow overflow-hidden sm:rounded-md">
                     {pastSlots.length > 0 ? pastSlots.map(({ slot, booking }, idx) => {
                         const isPaid = booking.isPaid;
+                        const isNoRefund = booking.acceptedNoRefund === true;
                         return (
                             <div key={idx} className={`p-6 border-b last:border-b-0 flex justify-between items-center gap-4 ${isPaid ? '' : 'bg-yellow-50'}`}>
                                 <div>
@@ -283,6 +284,12 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                                 Pago pendiente
                                             </span>
                                         )}
+                                        {isNoRefund && (
+                                            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 ml-2" title="Reserva <48hrs: No reembolsable ni reagendable">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                                No reagendable
+                                            </span>
+                                        )}
                                     </p>
                                     <p className="text-sm text-brand-secondary mb-1">{formatDate(slot.date)} a las {slot.time}</p>
                                     <p className="text-sm text-brand-secondary mb-1">Código: {booking.bookingCode}</p>
@@ -291,8 +298,14 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                 </div>
                                 <div className="flex gap-2">
                                     <button
-                                        className="border border-brand-primary text-brand-primary px-4 py-2 rounded-lg font-semibold flex items-center gap-2 hover:bg-blue-50"
-                                        onClick={() => setState(prev => ({ ...prev, selectedBookingToReschedule: { booking, slot } }))}
+                                        className={`border px-4 py-2 rounded-lg font-semibold flex items-center gap-2 ${
+                                            isNoRefund 
+                                                ? 'border-gray-300 text-gray-400 cursor-not-allowed' 
+                                                : 'border-brand-primary text-brand-primary hover:bg-blue-50'
+                                        }`}
+                                        onClick={() => !isNoRefund && setState(prev => ({ ...prev, selectedBookingToReschedule: { booking, slot } }))}
+                                        disabled={isNoRefund}
+                                        title={isNoRefund ? 'Esta reserva no es reagendable (reservada <48hrs)' : 'Reagendar clase'}
                                     >
                                         <span className="material-icons">schedule</span> Reagendar
                                     </button>
@@ -376,7 +389,9 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                     </button>
                 </div>
                 <div className="bg-white shadow overflow-hidden sm:rounded-md">
-                    {scheduledSlots.length > 0 ? scheduledSlots.map(({ slot, booking }, idx) => (
+                    {scheduledSlots.length > 0 ? scheduledSlots.map(({ slot, booking }, idx) => {
+                        const isNoRefund = booking.acceptedNoRefund === true;
+                        return (
                         <div key={idx} className="p-6 border-b last:border-b-0 flex justify-between items-center gap-4">
                             <div>
                                 <p className="font-bold text-lg text-brand-text mb-1 flex items-center gap-2">
@@ -387,6 +402,12 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                             No confirmada por pago
                                         </span>
                                     )}
+                                    {isNoRefund && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 ml-2" title="Reserva <48hrs: No reembolsable ni reagendable">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                            No reagendable
+                                        </span>
+                                    )}
                                 </p>
                                 <p className="text-sm text-brand-secondary mb-1">{formatDate(slot.date)} a las {slot.time}</p>
                                 <p className="text-sm text-brand-secondary mb-1">Código: {booking.bookingCode}</p>
@@ -395,8 +416,14 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                             </div>
                             <div className="flex gap-2">
                                 <button
-                                    className="border border-brand-primary text-brand-primary px-4 py-2 rounded-lg font-semibold flex items-center gap-2 hover:bg-blue-50"
-                                    onClick={() => setState(prev => ({ ...prev, selectedBookingToReschedule: { booking, slot } }))}
+                                    className={`border px-4 py-2 rounded-lg font-semibold flex items-center gap-2 ${
+                                        isNoRefund 
+                                            ? 'border-gray-300 text-gray-400 cursor-not-allowed' 
+                                            : 'border-brand-primary text-brand-primary hover:bg-blue-50'
+                                    }`}
+                                    onClick={() => !isNoRefund && setState(prev => ({ ...prev, selectedBookingToReschedule: { booking, slot } }))}
+                                    disabled={isNoRefund}
+                                    title={isNoRefund ? 'Esta reserva no es reagendable (reservada <48hrs)' : 'Reagendar clase'}
                                 >
                                     <span className="material-icons">schedule</span> Reagendar
                                 </button>
@@ -409,7 +436,8 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                 </button>
                             </div>
                         </div>
-                    )) : (
+                        );
+                    }) : (
                         <div className="p-6 text-center text-brand-secondary">No hay clases programadas.</div>
                     )}
                 </div>
