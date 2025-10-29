@@ -152,33 +152,56 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
     const [deleteLoading, setDeleteLoading] = useState(false);
     const handleDeleteSlot = async () => {
         if (!deleteModal.bookingId || !deleteModal.slot) return;
-        setDeleteLoading(true);
-        try {
-            await dataService.removeBookingSlot(deleteModal.bookingId, deleteModal.slot);
-            // Validar si el cliente queda sin reservas
-            const bookingsRestantes = customer.bookings.filter(b => {
-                if (b.id !== deleteModal.bookingId) return true;
-                // Si es el booking eliminado, verificar slots
-                if (Array.isArray(b.slots)) {
-                    return b.slots.length > 1;
-                }
-                return false;
-            });
-            if (bookingsRestantes.length === 0) {
-                // Crear cliente standalone si no tiene reservas
-                await dataService.createCustomer({
-                    email: customer.email,
-                    firstName: customer.userInfo?.firstName || '',
-                    lastName: customer.userInfo?.lastName || '',
-                    phone: customer.userInfo?.phone || '',
-                    countryCode: customer.userInfo?.countryCode || '',
-                    birthday: customer.userInfo?.birthday || undefined
+        // --- FIX REAGENDAMIENTO ---
+        // Propaga el cambio de slot a todos los lugares dependientes
+        const handleRescheduleSlot = async (bookingId: string, oldSlot: any, newSlot: any) => {
+            try {
+                // 1. Actualiza el slot en la base de datos
+                await fetch(`/api/data?key=admin&action=rescheduleSlot`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ bookingId, oldSlot, newSlot })
                 });
+                // 2. Actualiza el estado global (AdminDataContext)
+                if (onDataChange) onDataChange();
+                // 3. Opcional: feedback visual
+                setFeedbackMsg('Clase reagendada correctamente.');
+                setFeedbackType('success');
+            } catch (e) {
+                setFeedbackMsg('Error al reagendar la clase.');
+                setFeedbackType('error');
             }
-            setDeleteModal({ open: false, bookingId: null, slot: null });
-            onDataChange();
-        } catch (e) {}
-        setDeleteLoading(false);
+        };
+        // Mantener la función de eliminar slot
+        const handleDeleteSlot = async () => {
+            if (!deleteModal.bookingId || !deleteModal.slot) return;
+            setDeleteLoading(true);
+            try {
+                await dataService.removeBookingSlot(deleteModal.bookingId, deleteModal.slot);
+                // Validar si el cliente queda sin reservas
+                const bookingsRestantes = customer.bookings.filter(b => {
+                    if (b.id !== deleteModal.bookingId) return true;
+                    // Si es el booking eliminado, verificar slots
+                    if (Array.isArray(b.slots)) {
+                        return b.slots.length > 1;
+                    }
+                    return false;
+                });
+                if (bookingsRestantes.length === 0) {
+                    // Crear cliente standalone si no tiene reservas
+                    await dataService.createCustomer({
+                        email: customer.email,
+                        firstName: customer.userInfo?.firstName || '',
+                        lastName: customer.userInfo?.lastName || '',
+                        phone: customer.userInfo?.phone || '',
+                        countryCode: customer.userInfo?.countryCode || '',
+                        birthday: customer.userInfo?.birthday || undefined
+                    });
+                }
+                setDeleteModal({ open: false, bookingId: null, slot: null });
+                onDataChange();
+            } catch (e) {}
+            setDeleteLoading(false);
     };
     const [completeDate, setCompleteDate] = useState<string>("");
     const [completeLoading, setCompleteLoading] = useState(false);
@@ -939,4 +962,5 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
     );
 }
 
+}
 export default CustomerDetailView;
