@@ -2336,10 +2336,10 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             let readyDelivery: any;
             
             if (resend && existingDelivery.ready_at) {
-                // Resending email, don't update ready_at
+                // Resending email, don't update ready_at timestamp
                 readyAt = existingDelivery.ready_at;
                 readyDelivery = existingDelivery;
-                console.log('[markDeliveryAsReady] Resending email for existing ready_at:', readyAt);
+                console.log('[markDeliveryAsReady] RESEND mode - using existing ready_at:', readyAt);
             } else {
                 // First time marking as ready
                 readyAt = new Date().toISOString();
