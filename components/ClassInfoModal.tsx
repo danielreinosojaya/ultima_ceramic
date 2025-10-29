@@ -36,38 +36,43 @@ export const ClassInfoModal: React.FC<ClassInfoModalProps> = ({ product, onConfi
       // wording exacto de la imagen
       return (
         <>
-          {/* Badge de precio prominente */}
-          <div className="mb-6 bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-brand-primary/30 rounded-xl p-5 text-center shadow-sm">
-            <p className="text-sm font-semibold text-brand-secondary uppercase tracking-wide mb-1">Inversión Mensual</p>
-            <div className="flex items-center justify-center gap-2">
-              <span className="text-5xl font-bold text-brand-primary">${product.price}</span>
-              <span className="text-xl text-brand-secondary font-medium">USD</span>
+          {/* Header con título y precio integrados */}
+          <div className="mb-8">
+            <div className="flex items-start justify-between gap-6 mb-4">
+              <div className="flex-grow">
+                <h3 className="text-2xl font-bold text-brand-text mb-2">¿Qué es Open Studio?</h3>
+                <p className="text-brand-secondary text-base leading-relaxed">
+                  Ven a nuestro Open Studio de cerámica y trabaja en tus proyectos a tu propio ritmo. Este es un espacio colaborativo donde puedes usar nuestros tornos, herramientas y hornos. <span className="text-brand-text font-medium">Ideal para quienes ya tienen experiencia y buscan un lugar para crear libremente.</span>
+                </p>
+              </div>
+              <div className="flex-shrink-0 text-right">
+                <div className="inline-block px-4 py-2 bg-brand-surface border border-brand-primary/20 rounded-lg shadow-sm">
+                  <p className="text-xs font-medium text-brand-secondary uppercase tracking-wider mb-0.5">Mensual</p>
+                  <p className="text-3xl font-bold text-brand-primary">${product.price}</p>
+                  <p className="text-xs text-brand-secondary mt-0.5">30 días</p>
+                </div>
+              </div>
             </div>
-            <p className="text-sm text-brand-secondary mt-2">Acceso completo por 30 días</p>
           </div>
 
-          <div className="mb-6">
-            <h3 className="text-xl font-bold text-brand-text mb-2">¿Qué es Open Studio?</h3>
-            <p className="text-brand-secondary text-lg">
-              Ven a nuestro Open Studio de cerámica y trabaja en tus proyectos a tu propio ritmo. Este es un espacio colaborativo donde puedes usar nuestros tornos, herramientas y hornos. Ideal para quienes ya tienen experiencia y buscan un lugar para crear libremente.
-            </p>
-          </div>
           <InfoDetail icon={<ClockIcon className="w-6 h-6" />} label="Duración">
             <p>30 días de acceso</p>
           </InfoDetail>
           <InfoDetail icon={<KeyIcon className="w-6 h-6" />} label="El Acceso Incluye">
             <ul className="list-disc list-inside space-y-1">
-                <li>Sin limites de horarios (según disponibilidad))</li>
-                <li>12.5 libras de pasta cerámica (Material adicional a la venta en nuestro estudio)</li>
+                <li>Sin límites de horarios (según disponibilidad)</li>
+                <li>12 libras de pasta cerámica incluidas</li>
+                <li>Esmaltes de alta temperatura suficientes para tus 12 libras</li>
             </ul>
           </InfoDetail>
           <InfoDetail icon={<InfoCircleIcon className="w-6 h-6" />} label="Cómo Funciona">
             <ul className="list-disc list-inside space-y-1">
-                <li>Uso de equipos : acceso a torno alfarero , mesas de trabajo para modelado a mano , extrusora y áreas de secado para tus piezas.</li>
-                <li>Herramientas: alambres de corte, esponjas, estecas, agujas, espátulas, raspadores, tornetas, variedad de sellos y cortadores.</li>
-                <li>Esmaltes : Variedad de esmaltes de alta temperatura ( que cubran las 12.5 libras de pasta cerámica adquirida). Puedes traer tus propios esmaltes.</li>
-                <li>Servicio de horno: Cocción de bizcocho y esmalte de alta temperatura.</li>
-                <li>Comunidad: Un ambiente colaborativo donde puedes compartir ideas , técnicas y experiencias con otros ceramistas.</li>
+                <li><strong>Uso de equipos:</strong> Acceso a torno alfarero, mesas de trabajo para modelado a mano, extrusora y áreas de secado.</li>
+                <li><strong>Herramientas:</strong> Alambres de corte, esponjas, estecas, agujas, espátulas, raspadores, tornetas, variedad de sellos y cortadores.</li>
+                <li><strong>Pasta cerámica adicional:</strong> Disponible para compra en el estudio. Por políticas de calidad, no se permite traer pasta de otros proveedores.</li>
+                <li><strong>Esmaltes:</strong> Incluimos esmaltes para tus 12 libras. ¿Tienes esmaltes propios? Puedes traerlos, solo necesitamos hacer una prueba previa para confirmar que sean compatibles con nuestras quemas de alta temperatura.</li>
+                <li><strong>Servicio de horno:</strong> Cocción de bizcocho y esmalte de alta temperatura incluidos.</li>
+                <li><strong>Comunidad:</strong> Un ambiente colaborativo donde compartir ideas, técnicas y experiencias con otros ceramistas.</li>
             </ul>
           </InfoDetail>
           <div className="mt-6 border-t border-brand-border pt-6 text-left">

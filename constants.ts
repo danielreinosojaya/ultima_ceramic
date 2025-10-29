@@ -137,9 +137,16 @@ export const DEFAULT_PRODUCTS: Product[] = [
     imageUrl: "https://images.unsplash.com/photo-1548897501-195b095e72b4?q=80&w=1939&auto=format&fit=crop",
     details: {
       durationDays: 30,
-      timeLimit: "Hasta 10 horas por semana durante el horario de estudio abierto.",
-      materialsLimit: "La primera bolsa de arcilla está incluida. Las adicionales tienen costo extra.",
-      howItWorks: ["Reserva tu horario en el torno vía WhatsApp.", "Acceso a todas las herramientas y estanterías.", "Quemas de piezas se coordinan y pagan por separado."]
+      timeLimit: "Sin límites de horarios (según disponibilidad)",
+      materialsLimit: "12 libras de pasta cerámica incluidas. Esmaltes de alta temperatura suficientes para tus 12 libras.",
+      howItWorks: [
+        "Uso de equipos: Acceso a torno alfarero, mesas de trabajo para modelado a mano, extrusora y áreas de secado.",
+        "Herramientas: Alambres de corte, esponjas, estecas, agujas, espátulas, raspadores, tornetas, variedad de sellos y cortadores.",
+        "Pasta cerámica adicional: Disponible para compra en el estudio. Por políticas de calidad, no se permite traer pasta de otros proveedores.",
+        "Esmaltes: Incluimos esmaltes para tus 12 libras. ¿Tienes esmaltes propios? Puedes traerlos, solo necesitamos hacer una prueba previa para confirmar que sean compatibles con nuestras quemas de alta temperatura.",
+        "Servicio de horno: Cocción de bizcocho y esmalte de alta temperatura incluidos.",
+        "Comunidad: Un ambiente colaborativo donde compartir ideas, técnicas y experiencias con otros ceramistas."
+      ]
     },
     isActive: true
   },
