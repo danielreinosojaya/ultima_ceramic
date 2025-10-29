@@ -482,3 +482,161 @@ export const sendGiftcardRecipientEmail = async (
         `;
         return sendEmail(recipientEmail, subject, html);
 };
+
+// --- Delivery emails ---
+export const sendDeliveryCreatedEmail = async (customerEmail: string, customerName: string, delivery: { description: string; scheduledDate: string; }) => {
+    console.log('[sendDeliveryCreatedEmail] Starting email send to:', customerEmail);
+    
+    const formattedDate = new Date(delivery.scheduledDate).toLocaleDateString('es-ES', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
+    
+    const subject = `📦 Recogida programada - ${delivery.description}`;
+    const html = `
+        <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
+            <p style="font-size: 16px;">Hemos programado la recogida de tus piezas de cerámica.</p>
+            
+            <div style="background-color: #f9fafb; border-left: 4px solid #10B981; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #059669; margin-top: 0;">📦 Detalles de la Recogida</h3>
+                <p style="margin: 10px 0;"><strong>Piezas:</strong> ${delivery.description}</p>
+                <p style="margin: 10px 0; font-size: 18px;"><strong>Fecha programada:</strong> <span style="color: #D95F43;">${formattedDate}</span></p>
+            </div>
+
+            <div style="background-color: #EFF6FF; border-left: 4px solid #3B82F6; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #1E40AF; font-weight: bold;">💡 Importante</p>
+                <p style="margin: 8px 0 0 0; color: #1E3A8A; font-size: 14px;">
+                    • Confirmaremos contigo 1-2 días antes de la fecha<br/>
+                    • Las piezas estarán listas para recoger en nuestro taller<br/>
+                    • Horario: Lunes a Viernes 9:00 - 18:00, Sábados 10:00 - 14:00
+                </p>
+            </div>
+
+            <p style="margin-top: 20px;">Si tienes alguna pregunta o necesitas cambiar la fecha, contáctanos por WhatsApp.</p>
+            
+            <div style="margin: 30px 0; text-align: center;">
+                <a href="https://wa.me/593985813327" style="display: inline-block; background-color: #10B981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                    📱 Contactar por WhatsApp
+                </a>
+            </div>
+
+            <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
+                Saludos,<br/>
+                <strong>El equipo de CeramicAlma</strong>
+            </p>
+        </div>
+    `;
+    
+    const result = await sendEmail(customerEmail, subject, html);
+    console.log('[sendDeliveryCreatedEmail] Email send result:', result);
+    return result;
+};
+
+export const sendDeliveryReminderEmail = async (customerEmail: string, customerName: string, delivery: { description: string; scheduledDate: string; }) => {
+    const formattedDate = new Date(delivery.scheduledDate).toLocaleDateString('es-ES', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
+    
+    const subject = `🔔 Recordatorio: Recoge tus piezas mañana - ${delivery.description}`;
+    const html = `
+        <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
+            <p style="font-size: 16px;">Este es un recordatorio de que <strong>mañana</strong> puedes recoger tus piezas.</p>
+            
+            <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #92400E; margin-top: 0;">📦 Tus piezas están listas</h3>
+                <p style="margin: 10px 0;"><strong>Piezas:</strong> ${delivery.description}</p>
+                <p style="margin: 10px 0; font-size: 18px;"><strong>Fecha de recogida:</strong> <span style="color: #D95F43;">${formattedDate}</span></p>
+            </div>
+
+            <div style="background-color: #f9fafb; border: 1px solid #E5E7EB; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; font-weight: bold; color: #374151;">📍 Dirección del Taller</p>
+                <p style="margin: 8px 0 0 0; color: #6B7280; font-size: 14px;">
+                    Sol Plaza - Av. Samborondón Km 2.5<br/>
+                    Samborondón 092501, Ecuador
+                </p>
+            </div>
+
+            <div style="background-color: #EFF6FF; border-left: 4px solid #3B82F6; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #1E40AF; font-weight: bold;">⏰ Horario de Recogida</p>
+                <p style="margin: 8px 0 0 0; color: #1E3A8A; font-size: 14px;">
+                    • Lunes a Viernes: 9:00 AM - 6:00 PM<br/>
+                    • Sábados: 10:00 AM - 2:00 PM<br/>
+                    • Domingos: Cerrado
+                </p>
+            </div>
+
+            <p style="margin-top: 20px;">¡Estamos emocionados de que veas tus piezas terminadas!</p>
+            
+            <div style="margin: 30px 0; text-align: center;">
+                <a href="https://wa.me/593985813327" style="display: inline-block; background-color: #10B981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                    📱 Confirmar por WhatsApp
+                </a>
+            </div>
+
+            <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
+                Saludos,<br/>
+                <strong>El equipo de CeramicAlma</strong>
+            </p>
+        </div>
+    `;
+    
+    await sendEmail(customerEmail, subject, html);
+};
+
+export const sendDeliveryCompletedEmail = async (customerEmail: string, customerName: string, delivery: { description: string; deliveredAt: string; }) => {
+    const formattedDate = new Date(delivery.deliveredAt).toLocaleDateString('es-ES', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+    
+    const subject = `✅ Piezas entregadas - ${delivery.description}`;
+    const html = `
+        <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #10B981;">¡Hola, ${customerName}!</h2>
+            <p style="font-size: 16px;">¡Tus piezas han sido entregadas exitosamente!</p>
+            
+            <div style="background-color: #ECFDF5; border-left: 4px solid #10B981; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #059669; margin-top: 0;">✅ Entrega Completada</h3>
+                <p style="margin: 10px 0;"><strong>Piezas:</strong> ${delivery.description}</p>
+                <p style="margin: 10px 0;"><strong>Fecha de entrega:</strong> ${formattedDate}</p>
+            </div>
+
+            <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #92400E; font-weight: bold;">💡 Cuidado de tus piezas</p>
+                <p style="margin: 8px 0 0 0; color: #78350F; font-size: 14px;">
+                    • Lava con agua tibia y jabón suave<br/>
+                    • Evita cambios bruscos de temperatura<br/>
+                    • No uses en microondas (a menos que esté especificado)<br/>
+                    • Disfruta y comparte tu creación! 🎨
+                </p>
+            </div>
+
+            <p style="margin-top: 20px;">Esperamos que disfrutes tus piezas y vuelvas pronto a crear con nosotros.</p>
+            
+            <div style="margin: 30px 0; text-align: center; padding: 20px; background-color: #F9FAFB; border-radius: 8px;">
+                <p style="margin: 0 0 10px 0; color: #6B7280; font-size: 14px;">¿Te gustó la experiencia?</p>
+                <a href="https://www.ceramicalma.com" style="display: inline-block; background-color: #D95F43; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 10px;">
+                    🎨 Reserva otra clase
+                </a>
+            </div>
+
+            <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
+                ¡Gracias por elegirnos!<br/>
+                <strong>El equipo de CeramicAlma</strong>
+            </p>
+        </div>
+    `;
+    
+    await sendEmail(customerEmail, subject, html);
+};

@@ -2186,7 +2186,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             return res.status(200).json(bookingResult);
         }
         case 'createDelivery': {
-            const { customerEmail, description, scheduledDate, status = 'pending', notes, photos } = req.body;
+            const { customerEmail, customerName, description, scheduledDate, status = 'pending', notes, photos } = req.body;
             
             if (!customerEmail || !description || !scheduledDate) {
                 return res.status(400).json({ error: 'customerEmail, description, and scheduledDate are required.' });
@@ -2200,6 +2200,39 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 VALUES (${customerEmail}, ${description}, ${scheduledDate}, ${status}, ${notes || null}, ${photosJson})
                 RETURNING *;
             `;
+            
+            // Send creation email (fire and forget)
+            try {
+                let finalCustomerName = customerName || 'Cliente';
+                
+                // If customerName not provided, try to get from DB
+                if (!customerName) {
+                    const { rows: [customerData] } = await sql`
+                        SELECT user_info FROM customers WHERE email = ${customerEmail} LIMIT 1
+                    `;
+                    if (customerData?.user_info) {
+                        const userInfo = typeof customerData.user_info === 'string' 
+                            ? JSON.parse(customerData.user_info) 
+                            : customerData.user_info;
+                        finalCustomerName = userInfo.firstName || 'Cliente';
+                    }
+                }
+                
+                console.log('[createDelivery] Attempting to send email to:', customerEmail, 'name:', finalCustomerName);
+                
+                // Import emailService dynamically
+                const emailService = await import('./emailService.js');
+                await emailService.sendDeliveryCreatedEmail(customerEmail, finalCustomerName, {
+                    description,
+                    scheduledDate
+                }).then(() => {
+                    console.log('[createDelivery] ✅ Email sent successfully to:', customerEmail);
+                }).catch(err => {
+                    console.error('[createDelivery] ❌ Email send failed:', err);
+                });
+            } catch (emailErr) {
+                console.error('[createDelivery] ❌ Email setup failed:', emailErr);
+            }
             
             return res.status(200).json({ success: true, delivery: toCamelCase(newDelivery) });
         }
@@ -2249,6 +2282,27 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             
             if (!completedDelivery) {
                 return res.status(404).json({ error: 'Delivery not found.' });
+            }
+            
+            // Send completion email (fire and forget)
+            try {
+                const { rows: [customerData] } = await sql`
+                    SELECT user_info FROM customers WHERE email = ${completedDelivery.customer_email} LIMIT 1
+                `;
+                if (customerData?.user_info) {
+                    const userInfo = typeof customerData.user_info === 'string' 
+                        ? JSON.parse(customerData.user_info) 
+                        : customerData.user_info;
+                    const customerName = userInfo.firstName || 'Cliente';
+                    
+                    const emailService = await import('./emailService.js');
+                    emailService.sendDeliveryCompletedEmail(customerData.customer_email || completedDelivery.customer_email, customerName, {
+                        description: completedDelivery.description,
+                        deliveredAt: completedDelivery.delivered_at || completedDelivery.completed_at
+                    }).catch(err => console.error('[markDeliveryAsCompleted] Email send failed:', err));
+                }
+            } catch (emailErr) {
+                console.warn('[markDeliveryAsCompleted] Could not send email:', emailErr);
             }
             
             return res.status(200).json({ success: true, delivery: toCamelCase(completedDelivery) });

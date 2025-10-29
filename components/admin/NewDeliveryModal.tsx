@@ -6,13 +6,15 @@ interface NewDeliveryModalProps {
     onClose: () => void;
     onSave: (deliveryData: Omit<Delivery, 'id' | 'createdAt'>) => Promise<void>;
     customerEmail: string;
+    customerName?: string;
 }
 
 export const NewDeliveryModal: React.FC<NewDeliveryModalProps> = ({ 
     isOpen, 
     onClose, 
     onSave, 
-    customerEmail 
+    customerEmail,
+    customerName 
 }) => {
     const [description, setDescription] = useState('');
     const [scheduledDate, setScheduledDate] = useState('');
