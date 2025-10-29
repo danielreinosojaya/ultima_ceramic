@@ -7,6 +7,7 @@ interface DeliveryListWithFiltersProps {
     onEdit: (delivery: Delivery) => void;
     onDelete: (delivery: Delivery) => void;
     onComplete: (deliveryId: string) => void;
+    onMarkReady: (deliveryId: string) => void;
     formatDate: (date: string) => string;
 }
 
@@ -17,6 +18,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
     onEdit,
     onDelete,
     onComplete,
+    onMarkReady,
     formatDate
 }) => {
     const [searchQuery, setSearchQuery] = useState('');
@@ -239,6 +241,37 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                 <p className="text-sm text-brand-secondary mb-1">
                                     📅 Fecha programada: <strong>{formatDate(delivery.scheduledDate)}</strong>
                                 </p>
+                                {delivery.readyAt && (
+                                    (() => {
+                                        const readyDate = new Date(delivery.readyAt);
+                                        const expirationDate = new Date(readyDate);
+                                        expirationDate.setMonth(expirationDate.getMonth() + 3);
+                                        const daysUntilExpiration = Math.ceil((expirationDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                                        const isExpiringSoon = daysUntilExpiration <= 30 && daysUntilExpiration > 0;
+                                        const isExpired = daysUntilExpiration <= 0;
+                                        
+                                        return (
+                                            <div className="text-sm mb-1 flex items-center gap-2 flex-wrap">
+                                                <span className="inline-flex items-center px-2 py-1 rounded-full bg-purple-100 text-purple-800 font-semibold text-xs">
+                                                    ✨ Lista desde {formatDate(delivery.readyAt)}
+                                                </span>
+                                                {isExpired ? (
+                                                    <span className="inline-flex items-center px-2 py-1 rounded-full bg-red-100 text-red-800 font-semibold text-xs">
+                                                        ⚠️ Expiró
+                                                    </span>
+                                                ) : isExpiringSoon ? (
+                                                    <span className="inline-flex items-center px-2 py-1 rounded-full bg-yellow-100 text-yellow-800 font-semibold text-xs">
+                                                        ⏰ Expira en {daysUntilExpiration} días
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs">
+                                                        Disponible hasta {formatDate(expirationDate.toISOString())}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        );
+                                    })()
+                                )}
                                 {delivery.deliveredAt && (
                                     <p className="text-sm text-green-600 mb-1">
                                         ✅ Entregada: {formatDate(delivery.deliveredAt)}
@@ -281,7 +314,16 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                 >
                                     🗑️
                                 </button>
-                                {delivery.status !== 'completed' && (
+                                {delivery.status !== 'completed' && !delivery.readyAt && (
+                                    <button
+                                        className="px-3 py-2 rounded-full bg-purple-50 hover:bg-purple-100 text-purple-600 shadow flex items-center gap-1 font-semibold text-sm transition-colors"
+                                        title="Notificar al cliente que su pieza está lista"
+                                        onClick={() => onMarkReady(delivery.id)}
+                                    >
+                                        ✨ Marcar como Lista
+                                    </button>
+                                )}
+                                {delivery.status !== 'completed' && delivery.readyAt && (
                                     <button
                                         className="px-3 py-2 rounded-full bg-green-50 hover:bg-green-100 text-green-600 shadow flex items-center gap-1 font-semibold text-sm transition-colors"
                                         title="Completar entrega"

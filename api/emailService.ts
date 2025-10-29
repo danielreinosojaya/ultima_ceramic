@@ -535,6 +535,88 @@ export const sendDeliveryCreatedEmail = async (customerEmail: string, customerNa
     return result;
 };
 
+export const sendDeliveryReadyEmail = async (customerEmail: string, customerName: string, delivery: { description: string; readyAt: string; }) => {
+    console.log('[sendDeliveryReadyEmail] Starting email send to:', customerEmail);
+    
+    const readyDate = new Date(delivery.readyAt);
+    const expirationDate = new Date(readyDate);
+    expirationDate.setMonth(expirationDate.getMonth() + 3);
+    
+    const formattedReadyDate = readyDate.toLocaleDateString('es-ES', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
+    
+    const formattedExpirationDate = expirationDate.toLocaleDateString('es-ES', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
+    
+    const subject = `✨ ¡Tus piezas están listas! - ${delivery.description}`;
+    const html = `
+        <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
+            <p style="font-size: 18px; font-weight: bold; color: #10B981;">🎉 ¡Buenas noticias! Tus piezas están listas para recoger.</p>
+            
+            <div style="background-color: #f0fdf4; border-left: 4px solid #10B981; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #059669; margin-top: 0;">✨ Tus Piezas</h3>
+                <p style="margin: 10px 0; font-size: 16px;"><strong>${delivery.description}</strong></p>
+                <p style="margin: 10px 0; color: #065F46;">Listas desde: ${formattedReadyDate}</p>
+            </div>
+
+            <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #92400E; margin-top: 0;">⏰ Importante - Plazo de Recogida</h3>
+                <p style="margin: 10px 0; color: #78350F; font-size: 15px;">
+                    Tus piezas estarán disponibles para recoger hasta el <strong style="color: #D97706;">${formattedExpirationDate}</strong> (3 meses desde hoy).
+                </p>
+                <p style="margin: 10px 0; color: #78350F; font-size: 14px;">
+                    ⚠️ Después de esta fecha, no podremos garantizar su disponibilidad.
+                </p>
+            </div>
+
+            <div style="background-color: #f9fafb; border: 1px solid #E5E7EB; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; font-weight: bold; color: #374151;">📍 Dirección del Taller</p>
+                <p style="margin: 8px 0 0 0; color: #6B7280; font-size: 14px;">
+                    Sol Plaza - Av. Samborondón Km 2.5<br/>
+                    Samborondón 092501, Ecuador
+                </p>
+            </div>
+
+            <div style="background-color: #EFF6FF; border-left: 4px solid #3B82F6; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #1E40AF; font-weight: bold;">🕐 Horario de Recogida</p>
+                <p style="margin: 8px 0 0 0; color: #1E3A8A; font-size: 14px;">
+                    • Lunes a Viernes: 9:00 AM - 6:00 PM<br/>
+                    • Sábados: 10:00 AM - 2:00 PM<br/>
+                    • Domingos: Cerrado
+                </p>
+            </div>
+
+            <p style="margin-top: 20px; font-size: 15px;">
+                Para coordinar tu recogida o si tienes alguna pregunta, contáctanos por WhatsApp.
+            </p>
+            
+            <div style="margin: 30px 0; text-align: center;">
+                <a href="https://wa.me/593985813327" style="display: inline-block; background-color: #10B981; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                    📱 Contactar por WhatsApp
+                </a>
+            </div>
+
+            <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
+                ¡Estamos emocionados de que veas tus creaciones terminadas!<br/><br/>
+                Saludos,<br/>
+                <strong>El equipo de CeramicAlma</strong>
+            </p>
+        </div>
+    `;
+    
+    const result = await sendEmail(customerEmail, subject, html);
+    console.log('[sendDeliveryReadyEmail] Email send result:', result);
+    return result;
+};
+
 export const sendDeliveryReminderEmail = async (customerEmail: string, customerName: string, delivery: { description: string; scheduledDate: string; }) => {
     const formattedDate = new Date(delivery.scheduledDate).toLocaleDateString('es-ES', { 
         weekday: 'long', 
