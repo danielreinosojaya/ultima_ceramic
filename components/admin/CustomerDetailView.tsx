@@ -5,6 +5,7 @@ import { AcceptPaymentModal } from './AcceptPaymentModal';
 import { InvoiceReminderModal } from './InvoiceReminderModal';
 import { NewDeliveryModal } from './NewDeliveryModal';
 import { EditDeliveryModal } from './EditDeliveryModal';
+import { DeliveryListWithFilters } from './DeliveryListWithFilters';
 import { ManualBookingModal } from './ManualBookingModal';
 import { RescheduleModal } from './RescheduleModal';
 import { useAdminData } from '../../context/AdminDataContext';
@@ -596,68 +597,14 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                         <PlusIcon className="h-5 w-5" /> Nueva Recogida
                     </button>
                 </div>
-                <div className="bg-white shadow overflow-hidden sm:rounded-md">
-                    {deliveries.length > 0 ? deliveries.map((delivery, idx) => (
-                        <div key={idx} className="p-6 border-b last:border-b-0 flex flex-col md:flex-row justify-between items-center gap-4">
-                            <div className="flex-1">
-                                <p className="font-bold text-lg text-brand-text mb-1 flex items-center gap-2">
-                                    <CheckCircleIcon className={`h-5 w-5 ${delivery.status === 'completed' ? 'text-green-500' : delivery.status === 'pending' ? 'text-yellow-500' : 'text-red-500'}`} />
-                                    {delivery.description}
-                                </p>
-                                <p className="text-sm text-brand-secondary mb-1 flex items-center gap-2">
-                                    <CalendarIcon className="h-4 w-4 text-gray-400" />
-                                    Fecha programada para recogida: {formatDate(delivery.scheduledDate)}
-                                </p>
-                                <p className="text-sm text-brand-secondary mb-1 flex items-center gap-2">
-                                    <ClockIcon className="h-4 w-4 text-gray-400" />
-                                    Estado: <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${delivery.status === 'completed' ? 'bg-green-100 text-green-800' : delivery.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>{delivery.status}</span>
-                                </p>
-                                {delivery.deliveredAt && (
-                                    <p className="text-sm text-brand-secondary mb-1 flex items-center gap-2">
-                                        <CalendarIcon className="h-4 w-4 text-gray-400" />
-                                        Fecha de entrega: {formatDate(delivery.deliveredAt)}
-                                    </p>
-                                )}
-                                {delivery.notes && <p className="text-sm text-brand-secondary mb-1">Notas: {delivery.notes}</p>}
-                                {delivery.photos && delivery.photos.length > 0 && (
-                                    <div className="flex gap-2 mt-2">
-                                        {delivery.photos.map((photo, i) => (
-                                            <img key={i} src={photo} alt="Foto recogida" className="h-16 w-16 object-cover rounded-lg border" />
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                            <div className="flex gap-2 mt-4 md:mt-0">
-                                <button
-                                    className="p-2 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-600 shadow"
-                                    title="Editar entrega"
-                                    onClick={() => setState(prev => ({ ...prev, deliveryToEdit: delivery }))}
-                                >
-                                    <PencilIcon className="h-5 w-5" />
-                                </button>
-                                <button
-                                    className="p-2 rounded-full bg-red-50 hover:bg-red-100 text-red-600 shadow"
-                                    title="Eliminar entrega"
-                                    onClick={() => setState(prev => ({ ...prev, deliveryToDelete: delivery }))}
-                                >
-                                    <TrashIcon className="h-5 w-5" />
-                                </button>
-                                {delivery.status !== 'completed' && (
-                                    <button
-                                        className="p-2 rounded-full bg-green-50 hover:bg-green-100 text-green-600 shadow flex items-center gap-1"
-                                        title="Completar entrega"
-                                        onClick={() => setCompleteModal({ open: true, deliveryId: delivery.id })}
-                                    >
-                                        <CheckCircleIcon className="h-5 w-5" />
-                                        <span className="text-xs font-semibold">Completar</span>
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    )) : (
-                        <div className="p-6 text-center text-brand-secondary">No hay recogidas registradas.</div>
-                    )}
-                </div>
+                
+                <DeliveryListWithFilters
+                    deliveries={deliveries}
+                    onEdit={(delivery) => setState(prev => ({ ...prev, deliveryToEdit: delivery }))}
+                    onDelete={(delivery) => setState(prev => ({ ...prev, deliveryToDelete: delivery }))}
+                    onComplete={(deliveryId) => setCompleteModal({ open: true, deliveryId })}
+                    formatDate={formatDate}
+                />
                 <NewDeliveryModal
                     isOpen={state.isNewDeliveryModalOpen}
                     onClose={() => setState(prev => ({ ...prev, isNewDeliveryModalOpen: false }))}
@@ -665,7 +612,8 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                         try {
                             const result = await dataService.createDelivery({
                                 ...deliveryData,
-                                customerEmail: customer.userInfo.email
+                                customerEmail: customer.userInfo.email,
+                                customerName: customer.userInfo.firstName
                             });
                             if (result.success && result.delivery) {
                                 setState(prev => ({
@@ -682,6 +630,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                         }
                     }}
                     customerEmail={customer.userInfo.email}
+                    customerName={customer.userInfo.firstName}
                 />
                 {state.deliveryToEdit && (
                     <EditDeliveryModal

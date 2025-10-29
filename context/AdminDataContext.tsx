@@ -184,25 +184,30 @@ export const AdminDataProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Usar batch optimizado del dataService para datos críticos con fallback
       const results = await Promise.allSettled([
         dataService.getBookings().catch(() => []),
-        dataService.getCustomers().catch(() => []),
         dataService.getGroupInquiries().catch(() => []),
         dataService.getAnnouncements().catch(() => []),
         dataService.getGiftcardRequests().catch(() => []),
       ]);
+      
+      const bookings = results[0].status === 'fulfilled' ? results[0].value : [];
+      
+      // Get customers with deliveries (includes standalone + bookings)
+      const customersWithDeliveries = await dataService.getCustomersWithDeliveries(bookings).catch(() => []);
+      
       dispatch({
         type: 'SET_CRITICAL_DATA',
         data: {
-          bookings: results[0].status === 'fulfilled' ? results[0].value : [],
-          customers: results[1].status === 'fulfilled' ? results[1].value : [],
-          inquiries: results[2].status === 'fulfilled' ? results[2].value : [],
-          announcements: results[3].status === 'fulfilled' ? results[3].value : [],
+          bookings,
+          customers: customersWithDeliveries,
+          inquiries: results[1].status === 'fulfilled' ? results[1].value : [],
+          announcements: results[2].status === 'fulfilled' ? results[2].value : [],
         }
       });
       dispatch({
         type: 'SET_GIFTCARD_REQUESTS',
-        requests: results[4].status === 'fulfilled' ? results[4].value : [],
+        requests: results[3].status === 'fulfilled' ? results[3].value : [],
       });
-      console.debug('[AdminDataContext] Loaded critical data: booking count', results[0].status === 'fulfilled' ? (results[0].value || []).length : 0, 'giftcardRequests:', results[4].status === 'fulfilled' ? (results[4].value || []).length : 0);
+      console.debug('[AdminDataContext] Loaded critical data: booking count', bookings.length, 'customers count', customersWithDeliveries.length, 'giftcardRequests:', results[3].status === 'fulfilled' ? (results[3].value || []).length : 0);
     } catch (error) {
       console.error('Error loading critical admin data:', error);
       // En lugar de mostrar error, cargar datos vacíos para que funcione
