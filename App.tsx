@@ -24,6 +24,7 @@ import { OpenStudioModal } from './components/admin/OpenStudioModal';
 
 import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession, DeliveryMethod, GiftcardHold } from './types';
 import * as dataService from './services/dataService';
+import { slotsRequireNoRefund } from './utils/bookingPolicy';
 import { InstagramIcon } from './components/icons/InstagramIcon';
 import { WhatsAppIcon } from './components/icons/WhatsAppIcon';
 import { MailIcon } from './components/icons/MailIcon';
@@ -222,6 +223,10 @@ const App: React.FC = () => {
         console.log('[App] Starting booking submission...');
 
         const finalDetails = { ...bookingDetails, userInfo: data.userInfo };
+        
+        // Determine if selected slots require acceptance of no-refund policy
+        const requiresImmediateAcceptance = slotsRequireNoRefund(finalDetails.slots || [], 48);
+        
         const bookingData = {
             product: finalDetails.product!,
             productId: finalDetails.product!.id,
@@ -232,7 +237,8 @@ const App: React.FC = () => {
             price: 'price' in finalDetails.product! ? finalDetails.product.price : 0,
             bookingMode: bookingMode || 'flexible',
             bookingDate: new Date().toISOString(),
-            invoiceData: data.needsInvoice ? data.invoiceData : undefined
+            invoiceData: data.needsInvoice ? data.invoiceData : undefined,
+            acceptedNoRefund: requiresImmediateAcceptance ? !!(data as any).acceptedNoRefund : false
         };
 
         try {

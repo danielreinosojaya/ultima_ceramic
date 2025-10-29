@@ -163,6 +163,9 @@ const parseBookingFromDB = (dbRow: any): Booking => {
             camelCased.paymentDetails = [];
         }
 
+        // Map accepted_no_refund flag from DB to camelCase
+        camelCased.acceptedNoRefund = dbRow.accepted_no_refund === true;
+
         // Ensure slots are not discarded if empty but valid
         if (!Array.isArray(camelCased.slots)) {
             camelCased.slots = [];
@@ -2372,9 +2375,9 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
     const newBookingCode = generateBookingCode();
     const { rows: created } = await sql`
       INSERT INTO bookings (
-        booking_code, product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_date
+        booking_code, product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_date, accepted_no_refund
       ) VALUES (
-        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(body.product)}, ${body.bookingDate}
+        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(body.product)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}
       ) RETURNING *;
     `;
 
