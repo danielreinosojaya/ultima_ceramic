@@ -2599,19 +2599,9 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
         const currentBalance = Number(giftcardRow.balance || 0);
         const holdAmount = Number(holdRow.amount || 0);
 
-        // CRÍTICO: Validar que el hold tiene el monto correcto
-        // Si el hold es menor al esperado pero la giftcard tiene saldo suficiente, usar el correcto
+        // CRÍTICO: El monto a consumir SIEMPRE es el holdAmount retenido
+        // NO permitir consumir más basado en parámetros del cliente
         let actualAmountToConsume = holdAmount;
-        
-        if (holdAmount < giftcardAmount && currentBalance >= giftcardAmount) {
-          console.warn('[ADD BOOKING] Hold amount mismatch - using correct amount:', {
-            holdAmount,
-            declaredAmount: giftcardAmount,
-            balance: currentBalance,
-            willUse: giftcardAmount
-          });
-          actualAmountToConsume = giftcardAmount;
-        }
         
         // Validar que el monto a consumir no exceda el precio del booking
         if (actualAmountToConsume > expectedPrice) {
@@ -2624,8 +2614,7 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
           console.error('[ADD BOOKING] Insufficient giftcard balance:', { 
             current: currentBalance, 
             required: actualAmountToConsume,
-            holdAmount,
-            declaredAmount: giftcardAmount
+            holdAmount
           });
           throw new Error('Insufficient giftcard balance');
         }

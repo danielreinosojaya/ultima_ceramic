@@ -144,10 +144,14 @@ async function logEmailEvent(
 }
 
 export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDetails: BankDetails) => {
-    const { userInfo, bookingCode, product, price } = booking;
+    const { userInfo, bookingCode, product, price, paymentDetails } = booking;
     
     // Ensure price is a number
     const numericPrice = typeof price === 'number' ? price : parseFloat(String(price));
+    
+    // Calculate total paid and pending balance
+    const totalPaid = paymentDetails?.reduce((sum: number, p: any) => sum + (p.amount || 0), 0) || 0;
+    const pendingBalance = Math.max(0, numericPrice - totalPaid);
     
     const subject = `Tu Pre-Reserva en CeramicAlma está confirmada (Código: ${bookingCode})`;
     // Mostrar todas las cuentas en una tabla compacta y profesional
@@ -183,7 +187,17 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
             <h2>¡Hola, ${userInfo.firstName}!</h2>
             <p>Gracias por tu pre-reserva para <strong>${product.name}</strong>. Tu lugar ha sido guardado con el código de reserva:</p>
             <p style="font-size: 24px; font-weight: bold; color: #D95F43; margin: 20px 0;">${bookingCode}</p>
+            ${totalPaid > 0 ? `
+            <div style="background-color: #f0fdf4; border-left: 4px solid #10B981; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #059669; font-weight: bold;">✅ Pago con Giftcard Aplicado</p>
+                <p style="margin: 8px 0 0 0; color: #065F46; font-size: 14px;">
+                    Monto aplicado: <strong>$${totalPaid.toFixed(2)}</strong><br/>
+                    Saldo a pagar: <strong style="font-size: 16px; color: #D95F43;">$${pendingBalance.toFixed(2)}</strong>
+                </p>
+            </div>
+            ` : `
             <p>El monto a pagar es de <strong>$${numericPrice.toFixed(2)}</strong>.</p>
+            `}
             <p>Para confirmar tu asistencia, por favor realiza una transferencia bancaria con los siguientes datos y envíanos el comprobante por WhatsApp.</p>
             ${accountsHtml}
             ${booking.acceptedNoRefund ? `
