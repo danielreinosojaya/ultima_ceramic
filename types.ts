@@ -39,7 +39,7 @@ export type DeliveryStatus = 'pending' | 'completed' | 'overdue';
 export interface Delivery {
     id: string;
     customerEmail: string;
-    description: string;
+    description?: string; // Opcional - puede ser texto genérico si vacío
     scheduledDate: string; // ISO date string - fecha programada tentativa
     status: DeliveryStatus;
     createdAt: string; // ISO date string

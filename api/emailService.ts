@@ -484,7 +484,7 @@ export const sendGiftcardRecipientEmail = async (
 };
 
 // --- Delivery emails ---
-export const sendDeliveryCreatedEmail = async (customerEmail: string, customerName: string, delivery: { description: string; scheduledDate: string; }) => {
+export const sendDeliveryCreatedEmail = async (customerEmail: string, customerName: string, delivery: { description?: string | null; scheduledDate: string; }) => {
     console.log('[sendDeliveryCreatedEmail] Starting email send to:', customerEmail);
     
     const formattedDate = new Date(delivery.scheduledDate).toLocaleDateString('es-ES', { 
@@ -494,7 +494,8 @@ export const sendDeliveryCreatedEmail = async (customerEmail: string, customerNa
         day: 'numeric' 
     });
     
-    const subject = `📦 Recogida programada - ${delivery.description}`;
+    const displayDescription = delivery.description || 'Tus piezas de cerámica';
+    const subject = `📦 Recogida programada - ${displayDescription}`;
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
@@ -502,7 +503,7 @@ export const sendDeliveryCreatedEmail = async (customerEmail: string, customerNa
             
             <div style="background-color: #f9fafb; border-left: 4px solid #10B981; padding: 20px; border-radius: 8px; margin: 20px 0;">
                 <h3 style="color: #059669; margin-top: 0;">📦 Detalles de la Recogida</h3>
-                <p style="margin: 10px 0;"><strong>Piezas:</strong> ${delivery.description}</p>
+                <p style="margin: 10px 0;"><strong>Piezas:</strong> ${displayDescription}</p>
                 <p style="margin: 10px 0; font-size: 18px;"><strong>Fecha programada:</strong> <span style="color: #D95F43;">${formattedDate}</span></p>
             </div>
 
@@ -535,7 +536,7 @@ export const sendDeliveryCreatedEmail = async (customerEmail: string, customerNa
     return result;
 };
 
-export const sendDeliveryReadyEmail = async (customerEmail: string, customerName: string, delivery: { description: string; readyAt: string; }) => {
+export const sendDeliveryReadyEmail = async (customerEmail: string, customerName: string, delivery: { description?: string | null; readyAt: string; }) => {
     console.log('[sendDeliveryReadyEmail] READY EMAIL - Starting send to:', customerEmail);
     
     const readyDate = new Date(delivery.readyAt);
@@ -555,7 +556,8 @@ export const sendDeliveryReadyEmail = async (customerEmail: string, customerName
         day: 'numeric' 
     });
     
-    const subject = `✨ ¡Tus piezas están listas! - ${delivery.description}`;
+    const displayDescription = delivery.description || 'Tus piezas de cerámica';
+    const subject = `✨ ¡Tus piezas están listas! - ${displayDescription}`;
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
@@ -563,7 +565,7 @@ export const sendDeliveryReadyEmail = async (customerEmail: string, customerName
             
             <div style="background-color: #f0fdf4; border-left: 4px solid #10B981; padding: 20px; border-radius: 8px; margin: 20px 0;">
                 <h3 style="color: #059669; margin-top: 0;">✨ Tus Piezas</h3>
-                <p style="margin: 10px 0; font-size: 16px;"><strong>${delivery.description}</strong></p>
+                <p style="margin: 10px 0; font-size: 16px;"><strong>${displayDescription}</strong></p>
                 <p style="margin: 10px 0; color: #065F46;">Listas desde: ${formattedReadyDate}</p>
             </div>
 
@@ -617,7 +619,7 @@ export const sendDeliveryReadyEmail = async (customerEmail: string, customerName
     return result;
 };
 
-export const sendDeliveryReminderEmail = async (customerEmail: string, customerName: string, delivery: { description: string; scheduledDate: string; }) => {
+export const sendDeliveryReminderEmail = async (customerEmail: string, customerName: string, delivery: { description?: string | null; scheduledDate: string; }) => {
     const formattedDate = new Date(delivery.scheduledDate).toLocaleDateString('es-ES', { 
         weekday: 'long', 
         year: 'numeric', 
@@ -625,7 +627,8 @@ export const sendDeliveryReminderEmail = async (customerEmail: string, customerN
         day: 'numeric' 
     });
     
-    const subject = `🔔 Recordatorio: Recoge tus piezas mañana - ${delivery.description}`;
+    const displayDescription = delivery.description || 'Tus piezas de cerámica';
+    const subject = `🔔 Recordatorio: Recoge tus piezas mañana - ${displayDescription}`;
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
@@ -633,7 +636,7 @@ export const sendDeliveryReminderEmail = async (customerEmail: string, customerN
             
             <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 20px; border-radius: 8px; margin: 20px 0;">
                 <h3 style="color: #92400E; margin-top: 0;">📦 Tus piezas están listas</h3>
-                <p style="margin: 10px 0;"><strong>Piezas:</strong> ${delivery.description}</p>
+                <p style="margin: 10px 0;"><strong>Piezas:</strong> ${displayDescription}</p>
                 <p style="margin: 10px 0; font-size: 18px;"><strong>Fecha de recogida:</strong> <span style="color: #D95F43;">${formattedDate}</span></p>
             </div>
 
@@ -672,7 +675,7 @@ export const sendDeliveryReminderEmail = async (customerEmail: string, customerN
     await sendEmail(customerEmail, subject, html);
 };
 
-export const sendDeliveryCompletedEmail = async (customerEmail: string, customerName: string, delivery: { description: string; deliveredAt: string; }) => {
+export const sendDeliveryCompletedEmail = async (customerEmail: string, customerName: string, delivery: { description?: string | null; deliveredAt: string; }) => {
     const formattedDate = new Date(delivery.deliveredAt).toLocaleDateString('es-ES', { 
         weekday: 'long', 
         year: 'numeric', 
@@ -682,7 +685,8 @@ export const sendDeliveryCompletedEmail = async (customerEmail: string, customer
         minute: '2-digit'
     });
     
-    const subject = `✅ Piezas entregadas - ${delivery.description}`;
+    const displayDescription = delivery.description || 'Tus piezas de cerámica';
+    const subject = `✅ Piezas entregadas - ${displayDescription}`;
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #10B981;">¡Hola, ${customerName}!</h2>
@@ -690,7 +694,7 @@ export const sendDeliveryCompletedEmail = async (customerEmail: string, customer
             
             <div style="background-color: #ECFDF5; border-left: 4px solid #10B981; padding: 20px; border-radius: 8px; margin: 20px 0;">
                 <h3 style="color: #059669; margin-top: 0;">✅ Entrega Completada</h3>
-                <p style="margin: 10px 0;"><strong>Piezas:</strong> ${delivery.description}</p>
+                <p style="margin: 10px 0;"><strong>Piezas:</strong> ${displayDescription}</p>
                 <p style="margin: 10px 0;"><strong>Fecha de entrega:</strong> ${formattedDate}</p>
             </div>
 

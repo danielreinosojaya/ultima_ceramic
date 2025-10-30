@@ -235,7 +235,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                         >
                             <div className="flex-1">
                                 <p className="font-bold text-lg text-brand-text mb-1 flex items-center gap-2">
-                                    {delivery.description}
+                                    {delivery.description || <span className="text-gray-400 italic">Piezas de cerámica</span>}
                                     {getStatusBadge(delivery)}
                                 </p>
                                 <p className="text-sm text-brand-secondary mb-1">
