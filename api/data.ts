@@ -2354,7 +2354,10 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             }
             
             // Send ready notification email
+            let emailSentSuccessfully = false;
             try {
+                console.log('[markDeliveryAsReady] 🔍 Step 1: Getting customer name for email:', readyDelivery.customer_email);
+                
                 // Get customer name from most recent booking
                 const { rows: [bookingData] } = await sql`
                     SELECT user_info FROM bookings WHERE user_email = ${readyDelivery.customer_email} 
@@ -2369,28 +2372,48 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     customerName = userInfo.firstName || 'Cliente';
                 }
                 
-                console.log('[markDeliveryAsReady] Sending ready email to:', readyDelivery.customer_email, 'name:', customerName);
+                console.log('[markDeliveryAsReady] 🔍 Step 2: Customer name resolved:', customerName);
+                console.log('[markDeliveryAsReady] 🔍 Step 3: Importing emailService module...');
                 
                 const emailServiceModule = await import('./emailService.js');
-                const emailResult = await emailServiceModule.sendDeliveryReadyEmail(readyDelivery.customer_email, customerName, {
+                
+                console.log('[markDeliveryAsReady] 🔍 Step 4: Calling sendDeliveryReadyEmail with:', {
+                    email: readyDelivery.customer_email,
+                    name: customerName,
                     description: readyDelivery.description,
                     readyAt: readyAt
                 });
                 
-                console.log('[markDeliveryAsReady] ✅ Email result:', emailResult);
+                const emailResult = await emailServiceModule.sendDeliveryReadyEmail(
+                    readyDelivery.customer_email, 
+                    customerName, 
+                    {
+                        description: readyDelivery.description,
+                        readyAt: readyAt
+                    }
+                );
                 
-                if (!emailResult || (emailResult as any).sent === false) {
-                    console.error('[markDeliveryAsReady] ⚠️ Email may not have been sent:', emailResult);
+                console.log('[markDeliveryAsReady] 🔍 Step 5: Email function returned:', JSON.stringify(emailResult));
+                
+                if (emailResult && (emailResult as any).sent === true) {
+                    console.log('[markDeliveryAsReady] ✅ EMAIL SENT SUCCESSFULLY');
+                    emailSentSuccessfully = true;
+                } else {
+                    console.error('[markDeliveryAsReady] ⚠️ EMAIL NOT SENT - Result:', emailResult);
                 }
-            } catch (emailErr) {
-                console.error('[markDeliveryAsReady] ❌ Email error:', emailErr);
-                // Don't fail the request if email fails
+            } catch (emailErr: any) {
+                console.error('[markDeliveryAsReady] ❌ EMAIL ERROR - Type:', typeof emailErr);
+                console.error('[markDeliveryAsReady] ❌ EMAIL ERROR - Message:', emailErr?.message || 'No message');
+                console.error('[markDeliveryAsReady] ❌ EMAIL ERROR - Stack:', emailErr?.stack || 'No stack');
+                console.error('[markDeliveryAsReady] ❌ EMAIL ERROR - Full:', JSON.stringify(emailErr, null, 2));
             }
+            
+            console.log('[markDeliveryAsReady] 🔍 Final: Returning response with emailSent:', emailSentSuccessfully);
             
             return res.status(200).json({ 
                 success: true, 
                 delivery: toCamelCase(readyDelivery),
-                emailSent: true // Optimistic, check logs
+                emailSent: emailSentSuccessfully
             });
         }
         case 'deleteDelivery': {
