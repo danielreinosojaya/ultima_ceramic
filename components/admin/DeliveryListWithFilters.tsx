@@ -245,7 +245,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                     (() => {
                                         const readyDate = new Date(delivery.readyAt);
                                         const expirationDate = new Date(readyDate);
-                                        expirationDate.setMonth(expirationDate.getMonth() + 3);
+                                        expirationDate.setMonth(expirationDate.getMonth() + 2);
                                         const daysUntilExpiration = Math.ceil((expirationDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
                                         const isExpiringSoon = daysUntilExpiration <= 30 && daysUntilExpiration > 0;
                                         const isExpired = daysUntilExpiration <= 0;

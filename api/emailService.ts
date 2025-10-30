@@ -541,7 +541,7 @@ export const sendDeliveryReadyEmail = async (customerEmail: string, customerName
     
     const readyDate = new Date(delivery.readyAt);
     const expirationDate = new Date(readyDate);
-    expirationDate.setMonth(expirationDate.getMonth() + 3);
+    expirationDate.setMonth(expirationDate.getMonth() + 2);
     
     const formattedReadyDate = readyDate.toLocaleDateString('es-ES', { 
         weekday: 'long', 
@@ -572,7 +572,7 @@ export const sendDeliveryReadyEmail = async (customerEmail: string, customerName
             <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 20px; border-radius: 8px; margin: 20px 0;">
                 <h3 style="color: #92400E; margin-top: 0;">⏰ Importante - Plazo de Recogida</h3>
                 <p style="margin: 10px 0; color: #78350F; font-size: 15px;">
-                    Tus piezas estarán disponibles para recoger hasta el <strong style="color: #D97706;">${formattedExpirationDate}</strong> (3 meses desde hoy).
+                    Tus piezas estarán disponibles para recoger hasta el <strong style="color: #D97706;">${formattedExpirationDate}</strong> (2 meses desde hoy).
                 </p>
                 <p style="margin: 10px 0; color: #78350F; font-size: 14px;">
                     ⚠️ Después de esta fecha, no podremos garantizar su disponibilidad.
