@@ -2188,8 +2188,9 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         case 'createDelivery': {
             const { customerEmail, customerName, description, scheduledDate, status = 'pending', notes, photos } = req.body;
             
-            if (!customerEmail || !description || !scheduledDate) {
-                return res.status(400).json({ error: 'customerEmail, description, and scheduledDate are required.' });
+            // description ahora es opcional
+            if (!customerEmail || !scheduledDate) {
+                return res.status(400).json({ error: 'customerEmail and scheduledDate are required.' });
             }
             
             // Convert photos array to JSON string for storage
@@ -2197,7 +2198,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             
             const { rows: [newDelivery] } = await sql`
                 INSERT INTO deliveries (customer_email, description, scheduled_date, status, notes, photos)
-                VALUES (${customerEmail}, ${description}, ${scheduledDate}, ${status}, ${notes || null}, ${photosJson})
+                VALUES (${customerEmail}, ${description || null}, ${scheduledDate}, ${status}, ${notes || null}, ${photosJson})
                 RETURNING *;
             `;
             
@@ -2223,7 +2224,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 // Import emailService dynamically
                 const emailServiceModule = await import('./emailService.js');
                 await emailServiceModule.sendDeliveryCreatedEmail(customerEmail, finalCustomerName, {
-                    description,
+                    description: description || null,
                     scheduledDate
                 }).then(() => {
                     console.log('[createDelivery] ✅ Email sent successfully to:', customerEmail);
