@@ -18,19 +18,23 @@ interface ConfirmationPageProps {
     footerInfo: FooterInfo;
     policies: string;
     onFinish: () => void;
+    appliedGiftcardHold?: { holdId: string; expiresAt?: string; amount: number } | null;
 }
 
-export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, bankDetails, footerInfo, policies, onFinish }) => {
+export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, bankDetails, footerInfo, policies, onFinish, appliedGiftcardHold }) => {
     // Eliminado useLanguage, la app ahora es monolingüe en español
     const language = 'es-ES';
     const [copied, setCopied] = useState(false);
     const [modalOpen, setModalOpen] = useState(false);
 
     const isPackage = booking.product.type === 'CLASS_PACKAGE';
-    const originalPrice = isPackage ? (booking.product as ClassPackage).classes * SINGLE_CLASS_PRICE : booking.price;
+    const originalPrice = isPackage ? booking.product.price : booking.price;
     const subtotal = booking.price / (1 + VAT_RATE);
     const vat = booking.price - subtotal;
     const discount = originalPrice - subtotal;
+
+    // Prefer the explicit prop from App; fallback to booking.appliedGiftcardHold if present
+    const appliedHold = appliedGiftcardHold ?? (booking as any).appliedGiftcardHold ?? null;
 
     const handleCopy = (text: string) => {
         navigator.clipboard.writeText(text).then(() => {
@@ -134,6 +138,29 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                     </button>
                 </div>
             </div>
+
+            {/* Giftcard summary block */}
+            {appliedHold && (
+                <div className="mt-6 bg-white/80 border border-dashed border-brand-border p-4 rounded-lg max-w-md mx-auto text-center">
+                    <h4 className="font-semibold text-brand-text mb-2">Pago con Giftcard</h4>
+                    <div className="flex items-center justify-center gap-4 mb-2">
+                        <div className="px-3 py-2 bg-green-50 border border-green-200 rounded text-sm text-green-800 font-semibold">Aplicado: {formatPrice(appliedHold.amount || 0)}</div>
+                        <div className="text-sm text-brand-secondary">{appliedHold.expiresAt ? `Expira: ${new Date(appliedHold.expiresAt).toLocaleString('es-ES')}` : ''}</div>
+                    </div>
+                    <div className="text-sm text-brand-text font-medium mb-3">Restante a pagar: <span className="font-bold">{formatPrice(Math.max(0, booking.price - (appliedHold.amount || 0)))}</span></div>
+                    { (booking.price - (appliedHold.amount || 0)) <= 0 ? (
+                        <div className="mt-3 flex flex-col items-center gap-2">
+                            <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-full font-bold">
+                                <CheckCircleIcon className="w-5 h-5" />
+                                <span>Reserva pagada</span>
+                            </div>
+                            <p className="text-sm text-brand-secondary">Tu giftcard cubre el total. No es necesario pagar más. Recibirás la confirmación final por correo.</p>
+                        </div>
+                    ) : (
+                        <p className="text-sm text-brand-secondary">Tu cupo está reservado. Para completar la reserva, realiza el pago restante y envía el comprobante por WhatsApp.</p>
+                    )}
+                </div>
+            )}
 
             <div className="mt-8 bg-brand-background p-6 rounded-lg">
                 <div className="flex justify-between text-brand-secondary">

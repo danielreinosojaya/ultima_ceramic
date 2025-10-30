@@ -240,34 +240,34 @@ const CommunicationAutomationManager: React.FC = () => {
             <div className="space-y-4">
                 <div className="flex items-center justify-between">
                     <span className="font-semibold text-sm">Confirmación de pre-reserva</span>
-                    <button onClick={() => handleToggle('preBookingConfirmation')} className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${settings.preBookingConfirmation.enabled ? 'bg-brand-success' : 'bg-gray-300'}`}>
-                        <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${settings.preBookingConfirmation.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                    <button onClick={() => handleToggle('preBookingConfirmation')} className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${settings?.preBookingConfirmation?.enabled ? 'bg-brand-success' : 'bg-gray-300'}`}>
+                        <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${settings?.preBookingConfirmation?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
                     </button>
                 </div>
                  <div className="flex items-center justify-between">
                     <span className="font-semibold text-sm">Recibo de pago</span>
-                    <button onClick={() => handleToggle('paymentReceipt')} className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${settings.paymentReceipt.enabled ? 'bg-brand-success' : 'bg-gray-300'}`}>
-                        <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${settings.paymentReceipt.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                    <button onClick={() => handleToggle('paymentReceipt')} className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${settings?.paymentReceipt?.enabled ? 'bg-brand-success' : 'bg-gray-300'}`}>
+                        <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${settings?.paymentReceipt?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
                     </button>
                 </div>
                  <div>
                     <div className="flex items-center justify-between">
                         <span className="font-semibold text-sm">Recordatorio de clase</span>
-                        <button onClick={() => handleToggle('classReminder')} className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${settings.classReminder.enabled ? 'bg-brand-success' : 'bg-gray-300'}`}>
-                            <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${settings.classReminder.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                        <button onClick={() => handleToggle('classReminder')} className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${settings?.classReminder?.enabled ? 'bg-brand-success' : 'bg-gray-300'}`}>
+                            <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${settings?.classReminder?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
                         </button>
                     </div>
-                    {settings.classReminder.enabled && (
+                    {settings?.classReminder?.enabled && (
                         <div className="flex items-center gap-2 mt-2 pl-4 animate-fade-in-fast">
                             <span className="text-sm">Enviar recordatorio</span>
                             <input
                                 type="number"
-                                value={settings.classReminder.value}
+                                value={settings?.classReminder?.value || 1}
                                 onChange={e => handleReminderChange('value', parseInt(e.target.value) || 1)}
                                 className="w-16 p-1 border rounded-md text-sm"
                             />
                             <select
-                                value={settings.classReminder.unit}
+                                value={settings?.classReminder?.unit || 'hours'}
                                 onChange={e => handleReminderChange('unit', e.target.value)}
                                 className="p-1 border rounded-md text-sm bg-white"
                             >
@@ -302,7 +302,10 @@ const BankDetailsEditor: React.FC = () => {
     const [saved, setSaved] = useState(false);
 
     useEffect(() => {
-        const fetchDetails = async () => setDetails(await dataService.getBankDetails());
+        const fetchDetails = async () => {
+            const data = await dataService.getBankDetails();
+            setDetails(data[0] || null);
+        };
         fetchDetails();
     }, []);
 
@@ -314,7 +317,7 @@ const BankDetailsEditor: React.FC = () => {
 
     const handleSave = async () => {
         if (!details) return;
-        await dataService.updateBankDetails(details);
+        await dataService.updateBankDetails([details]);
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
     };
@@ -333,10 +336,6 @@ const BankDetailsEditor: React.FC = () => {
                 <SettingsInputField name="accountNumber" label="Número *" value={details.accountNumber} onChange={handleChange} required />
                 <SettingsInputField name="accountType" label="Tipo" value={details.accountType} onChange={handleChange} />
                 <SettingsInputField name="taxId" label="RUC" value={details.taxId} onChange={handleChange} />
-                <div>
-                    <label htmlFor="details" className="block text-xs font-bold text-gray-500 mb-1">Detalles adicionales</label>
-                    <textarea id="details" name="details" value={details.details || ''} onChange={handleChange} rows={3} className="w-full p-2 border border-gray-300 rounded-lg"/>
-                </div>
             </div>
             <div className="mt-4 flex justify-end items-center gap-4">
                 {saved && (<p className="text-sm font-semibold text-brand-success animate-fade-in">Guardado correctamente</p>)}
@@ -664,7 +663,7 @@ const CapacityEditor: React.FC = () => {
             <div className="space-y-3">
                 {messages.thresholds.map((tItem, index) => (
                     <div key={index} className="grid grid-cols-12 gap-2 items-center">
-                        <span className="col-span-2 text-xs font-semibold capitalize">{tItem.level === 'low' ? 'Bajo' : tItem.level === 'medium' ? 'Medio' : 'Alto'}:</span>
+                        <span className="col-span-2 text-xs font-semibold capitalize">{tItem.level === 'available' ? 'Disponible' : tItem.level === 'few' ? 'Pocos' : 'Últimos'}:</span>
                         <div className="col-span-3">
                             <input type="number" value={tItem.threshold} onChange={(e) => handleThresholdChange(index, 'threshold', parseInt(e.target.value, 10) || 0)} className="w-full p-1 border border-gray-300 rounded-md text-xs" max="100" min="0"/>
                         </div>

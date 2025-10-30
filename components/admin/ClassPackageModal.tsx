@@ -6,7 +6,7 @@ import { CubeIcon } from '../icons/CubeIcon';
 interface ClassPackageModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (pkgData: Omit<ClassPackage, 'id' | 'isActive' | 'type'>, id?: number) => void;
+  onSave: (pkgData: Omit<ClassPackage, 'id' | 'isActive' | 'type'>, id?: string) => void;
   packageToEdit: ClassPackage | null;
 }
 

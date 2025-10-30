@@ -11,7 +11,7 @@ import { IntroClassCalendar } from './IntroClassCalendar';
 interface IntroClassModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (pkgData: Omit<IntroductoryClass, 'id' | 'isActive' | 'type'>, id?: number) => void;
+  onSave: (pkgData: Omit<IntroductoryClass, 'id' | 'isActive' | 'type'>, id?: string) => void;
   classToEdit: IntroductoryClass | null;
 }
 

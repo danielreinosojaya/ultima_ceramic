@@ -27,6 +27,7 @@ import { sql } from '@vercel/postgres';
 import { seedDatabase, ensureTablesExist, createCustomer } from './db.js';
 import * as emailService from './emailService.js';
 import { VercelRequest, VercelResponse } from '@vercel/node';
+import { generatePaymentId } from '../utils/formatters.js';
 import type {
     Booking,
     ClientNotification,
@@ -162,8 +163,37 @@ const parseBookingFromDB = (dbRow: any): Booking => {
             camelCased.paymentDetails = [];
         }
 
-        const totalPaid = (camelCased.paymentDetails || []).reduce((sum: number, p: any) => sum + p.amount, 0);
-        camelCased.isPaid = totalPaid >= camelCased.price;
+        // Map accepted_no_refund flag from DB to camelCase
+        camelCased.acceptedNoRefund = dbRow.accepted_no_refund === true;
+
+        // Ensure slots are not discarded if empty but valid
+        if (!Array.isArray(camelCased.slots)) {
+            camelCased.slots = [];
+        }
+
+        // Ensure paymentDetails are processed even if empty
+        if (!camelCased.paymentDetails || !Array.isArray(camelCased.paymentDetails)) {
+            camelCased.paymentDetails = [];
+        }
+
+        // Calculate isPaid and pendingBalance robustly
+        const totalPaid = camelCased.paymentDetails.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+        camelCased.isPaid = totalPaid >= (camelCased.price || 0);
+        camelCased.pendingBalance = Math.max(0, (camelCased.price || 0) - totalPaid);
+
+        // Debug log for giftcard bookings
+        const giftcardPayments = camelCased.paymentDetails.filter((p: any) => p.method === 'Giftcard');
+        if (giftcardPayments.length > 0) {
+            console.log('[parseBookingFromDB] Giftcard booking parsed:', {
+                bookingCode: camelCased.bookingCode,
+                isPaid: camelCased.isPaid,
+                price: camelCased.price,
+                totalPaid,
+                giftcardRedeemedAmount: camelCased.giftcardRedeemedAmount,
+                giftcardId: camelCased.giftcardId,
+                paymentDetailsCount: camelCased.paymentDetails?.length || 0
+            });
+        }
 
         return camelCased as Booking;
     } catch (error) {
@@ -329,11 +359,97 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 }
 
 async function handleGet(req: VercelRequest, res: VercelResponse) {
-    const { key } = req.query;
+    const { key, action } = req.query;
+
+    if (action === 'ping') {
+        const info = {
+            ok: true,
+            method: req.method,
+            query: req.query || null,
+            bodyPresent: !!req.body,
+            body: typeof req.body === 'object' ? req.body : String(req.body || null),
+            ts: new Date().toISOString()
+        };
+        console.log('[ping] received', info.method, info.query);
+        return res.status(200).json(info);
+    }
+
     let data;
-    const action = req.query.action as string | undefined;
     if (action) {
         switch (action) {
+            case 'listGiftcardRequests': {
+                // Devuelve todas las solicitudes de giftcard
+                try {
+                    await sql`
+                        CREATE TABLE IF NOT EXISTS giftcard_requests (
+                            id SERIAL PRIMARY KEY,
+                            buyer_name VARCHAR(100) NOT NULL,
+                            buyer_email VARCHAR(100) NOT NULL,
+                            recipient_name VARCHAR(100) NOT NULL,
+                            recipient_email VARCHAR(100),
+                            recipient_whatsapp VARCHAR(30),
+                            amount NUMERIC NOT NULL,
+                            code VARCHAR(32) NOT NULL,
+                            status VARCHAR(20) DEFAULT 'pending',
+                            created_at TIMESTAMP DEFAULT NOW()
+                        )
+                    `;
+                    const { rows } = await sql`SELECT * FROM giftcard_requests ORDER BY created_at DESC`;
+                    // Formatear a camelCase y parsear tipos
+                    const formatted = rows.map(row => ({
+                        id: String(row.id),
+                        buyerName: row.buyer_name,
+                        buyerEmail: row.buyer_email,
+                        recipientName: row.recipient_name,
+                        recipientEmail: row.recipient_email || '',
+                        recipientWhatsapp: row.recipient_whatsapp || '',
+                        amount: typeof row.amount === 'number' ? row.amount : parseFloat(row.amount),
+                        code: row.code,
+                        status: row.status,
+                        createdAt: row.created_at ? new Date(row.created_at).toISOString() : '',
+                        // Include metadata so admin UI can surface issued codes, voucher URLs, etc.
+                        metadata: row.metadata || null
+                    }));
+                    data = formatted;
+                } catch (error) {
+                    console.error('Error al listar giftcards:', error);
+                    data = [];
+                }
+                break;
+            }
+            case 'listGiftcards': {
+                // Devuelve todas las giftcards emitidas (para el panel admin)
+                try {
+                    console.debug('[API] listGiftcards called - fetching issued giftcards');
+                    await sql`CREATE TABLE IF NOT EXISTS giftcards (
+                        id SERIAL PRIMARY KEY,
+                        code VARCHAR(32) NOT NULL UNIQUE,
+                        initial_value NUMERIC,
+                        balance NUMERIC,
+                        giftcard_request_id INTEGER,
+                        expires_at TIMESTAMP,
+                        metadata JSONB,
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )`;
+                    const { rows } = await sql`SELECT * FROM giftcards ORDER BY created_at DESC`;
+                    const formattedG = rows.map(r => ({
+                        id: String(r.id),
+                        code: r.code,
+                        initialValue: typeof r.initial_value === 'number' ? r.initial_value : (r.initial_value ? parseFloat(r.initial_value) : null),
+                        balance: typeof r.balance === 'number' ? r.balance : (r.balance ? parseFloat(r.balance) : 0),
+                        giftcardRequestId: r.giftcard_request_id || null,
+                        expiresAt: r.expires_at ? new Date(r.expires_at).toISOString() : null,
+                        metadata: r.metadata || null,
+                        createdAt: r.created_at ? new Date(r.created_at).toISOString() : null
+                    }));
+                    console.debug('[API] listGiftcards fetched rows:', rows.length);
+                    data = formattedG;
+                } catch (err) {
+                    console.error('Error listing giftcards:', err);
+                    data = [];
+                }
+                break;
+            }
             case 'inquiries': {
                 const { rows: inquiries } = await sql`
                     SELECT
@@ -342,7 +458,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         tentative_time, event_type, message, status,
                         TO_CHAR(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as created_at,
                         inquiry_type
-                    FROM inquiries ORDER BY created_at DESC
+                    FROM inquiries ORDER by created_at DESC
                 `;
                 data = inquiries.map(parseGroupInquiryFromDB);
                 break;
@@ -467,9 +583,13 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
         } else {
             // Special handling for products - fetch from products table
             if (key === 'products') {
-                const { rows: products } = await sql`SELECT * FROM products ORDER BY sort_order ASC NULLS LAST, name ASC`;
-                console.log('GET products from DB:', products.length, 'SINGLE_CLASS:', products.filter(p => p.type === 'SINGLE_CLASS').length);
-                data = products.map(toCamelCase);
+                try {
+                    const { rows: products } = await sql`SELECT * FROM products ORDER BY name ASC`;
+                    data = products.map(toCamelCase);
+                } catch (error) {
+                    console.error('Error fetching products:', error);
+                    data = [];
+                }
             } else if (key === 'bookings') {
                 const { rows: bookings } = await sql`SELECT * FROM bookings ORDER BY created_at DESC`;
                 console.log(`API: Raw database query returned ${bookings.length} rows`);
@@ -710,7 +830,854 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
 
 async function handleAction(action: string, req: VercelRequest, res: VercelResponse) {
     let result: any = { success: true };
-    switch (action) {
+    switch (action) {  // Corregido: Se agregó el paréntesis faltante
+        case 'addGiftcardRequest': {
+            // Inserta una nueva solicitud de giftcard en la base de datos
+            const body = req.body;
+            if (!body || !body.buyerName || !body.buyerEmail || !body.recipientName || !body.amount || !body.code) {
+                return res.status(400).json({ success: false, error: 'Datos incompletos para registrar giftcard.' });
+            }
+            try {
+                // Crear tabla si no existe y agregar columna buyer_message si falta
+                await sql`
+                    CREATE TABLE IF NOT EXISTS giftcard_requests (
+                        id SERIAL PRIMARY KEY,
+                        buyer_name VARCHAR(100) NOT NULL,
+                        buyer_email VARCHAR(100) NOT NULL,
+                        recipient_name VARCHAR(100) NOT NULL,
+                        recipient_email VARCHAR(100),
+                        recipient_whatsapp VARCHAR(30),
+                        amount NUMERIC NOT NULL,
+                        code VARCHAR(32) NOT NULL,
+                        status VARCHAR(20) DEFAULT 'pending',
+                        created_at TIMESTAMP DEFAULT NOW(),
+                        buyer_message TEXT
+                    )
+                `;
+                // Asegura la columna buyer_message si la tabla ya existía
+                try {
+                    await sql`ALTER TABLE giftcard_requests ADD COLUMN IF NOT EXISTS buyer_message TEXT`;
+                } catch (e) {}
+                const { rows } = await sql`
+                    INSERT INTO giftcard_requests (
+                        buyer_name, buyer_email, recipient_name, recipient_email, recipient_whatsapp, amount, code, status, buyer_message
+                    ) VALUES (
+                        ${body.buyerName}, ${body.buyerEmail}, ${body.recipientName}, ${body.recipientEmail || null}, ${body.recipientWhatsapp || null}, ${body.amount}, ${body.code}, 'pending', ${body.message || null}
+                    ) RETURNING id, created_at;
+                `;
+                // Enviar email de confirmación de recepción de solicitud
+                try {
+                    const emailServiceModule = await import('./emailService.js');
+                    await emailServiceModule.sendGiftcardRequestReceivedEmail(
+                        body.buyerEmail,
+                        {
+                            buyerName: body.buyerName,
+                            amount: body.amount,
+                            code: body.code,
+                            recipientName: body.recipientName,
+                            message: body.message || ''
+                        }
+                    );
+                } catch (err) {
+                    console.warn('No se pudo enviar el email de confirmación de solicitud de giftcard:', err);
+                }
+                return res.status(200).json({ success: true, id: rows[0].id, createdAt: rows[0].created_at });
+            } catch (error) {
+                console.error('Error al registrar giftcard:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+
+        case 'validateGiftcard': {
+            // Validate a giftcard code and return balance, expiry and status.
+            const body = req.body || {};
+            const code = (body.code || req.query.code || '').toString();
+            console.debug('[API] validateGiftcard called with code:', code);
+            if (!code) return res.status(400).json({ success: false, error: 'code is required' });
+
+            try {
+                // Try to find an issued giftcard first
+                const { rows: giftcardRows } = await sql`SELECT * FROM giftcards WHERE code = ${code} LIMIT 1`;
+                if (giftcardRows && giftcardRows.length > 0) {
+                    const g = giftcardRows[0];
+                    const balance = (typeof g.balance === 'number') ? g.balance : (g.balance ? parseFloat(g.balance) : 0);
+                    const initialValue = (typeof g.initial_value === 'number') ? g.initial_value : (g.initial_value ? parseFloat(g.initial_value) : null);
+                    const expiresAt = g.expires_at ? new Date(g.expires_at).toISOString() : null;
+                    const isExpired = expiresAt ? (new Date() > new Date(expiresAt)) : false;
+                    return res.status(200).json({
+                        valid: !isExpired,
+                        code: g.code,
+                        giftcardId: g.id,
+                        balance: Number(balance),
+                        initialValue: initialValue !== null ? Number(initialValue) : null,
+                        expiresAt,
+                        status: isExpired ? 'expired' : 'active',
+                        metadata: g.metadata || {}
+                    });
+                }
+
+                // If no issued giftcard, check if there's a request (pending/approved/rejected).
+                // Try to find by request.code first, then by metadata->>'issuedCode' so that
+                // looking up an issued code still returns the original request even if the
+                // giftcard row wasn't successfully created.
+                let reqRows = (await sql`SELECT * FROM giftcard_requests WHERE code = ${code} LIMIT 1`).rows;
+                if ((!reqRows || reqRows.length === 0)) {
+                    try {
+                        reqRows = (await sql`SELECT * FROM giftcard_requests WHERE (metadata->>'issuedCode') = ${code} LIMIT 1`).rows;
+                    } catch (e) {
+                        // If metadata is stored as text, fall back to text search (best-effort)
+                        try {
+                            reqRows = (await sql`SELECT * FROM giftcard_requests WHERE metadata::text LIKE ${'%' + code + '%'} LIMIT 1`).rows;
+                        } catch (inner) {
+                            reqRows = [];
+                        }
+                    }
+                }
+                if (reqRows && reqRows.length > 0) {
+                    const r = reqRows[0];
+                    // If the request exists, return helpful info for the UI.
+                    // If the request was already approved and an issuedCode exists in metadata,
+                    // try to resolve it to an issued giftcard and return that as valid if present.
+                    const reqCamel = toCamelCase(r);
+                    const status = (r.status || '').toString();
+                    let issuedCode: string | null = null;
+                    try {
+                        if (r.metadata && typeof r.metadata === 'object' && r.metadata.issuedCode) {
+                            issuedCode = String(r.metadata.issuedCode);
+                        } else if (r.metadata && typeof r.metadata === 'string') {
+                            // in case metadata is stored as stringified JSON
+                            try { const parsed = JSON.parse(r.metadata); if (parsed && parsed.issuedCode) issuedCode = String(parsed.issuedCode); } catch(e){}
+                        }
+                    } catch (e) { issuedCode = null; }
+
+                    if (status === 'approved' && issuedCode) {
+                        // check if a giftcard with issuedCode exists
+                        try {
+                            const { rows: issuedRows } = await sql`SELECT * FROM giftcards WHERE code = ${issuedCode} LIMIT 1`;
+                            if (issuedRows && issuedRows.length > 0) {
+                                const g = issuedRows[0];
+                                const balance = (typeof g.balance === 'number') ? g.balance : (g.balance ? parseFloat(g.balance) : 0);
+                                const initialValue = (typeof g.initial_value === 'number') ? g.initial_value : (g.initial_value ? parseFloat(g.initial_value) : null);
+                                const expiresAt = g.expires_at ? new Date(g.expires_at).toISOString() : null;
+                                const isExpired = expiresAt ? (new Date() > new Date(expiresAt)) : false;
+                                return res.status(200).json({
+                                    valid: !isExpired,
+                                    code: g.code,
+                                    giftcardId: g.id,
+                                    balance: Number(balance),
+                                    initialValue: initialValue !== null ? Number(initialValue) : null,
+                                    expiresAt,
+                                    status: isExpired ? 'expired' : 'active',
+                                    metadata: g.metadata || {},
+                                    request: reqCamel
+                                });
+                            }
+                        } catch (e) {
+                            console.warn('Error resolving issuedCode for approved request:', e);
+                        }
+                        // If we fallthrough, we'll still inform UI the request is approved and include issuedCode
+                        return res.status(200).json({ valid: false, reason: 'approved_request_has_issued_code', issuedCode, request: reqCamel });
+                    }
+
+                    // generic case: return request info and its status so UI can show a tailored message
+                    return res.status(200).json({ valid: false, reason: 'request_found', request: reqCamel });
+                }
+
+                return res.status(404).json({ valid: false, reason: 'not_found' });
+            } catch (err) {
+                console.error('validateGiftcard error:', err);
+                return res.status(500).json({ success: false, error: err instanceof Error ? err.message : String(err) });
+            }
+        }
+        
+        case 'createGiftcardHold': {
+            // Create a temporary hold on a giftcard balance to avoid double-spend.
+            // Body params: code (giftcard code) OR giftcardId, amount (numeric), bookingTempRef (string), ttlMinutes (optional)
+            const body = req.body || {};
+            const amount = body.amount !== undefined ? Number(body.amount) : null;
+            const ttlMinutes = Number(body.ttlMinutes || 15);
+            const bookingTempRef = body.bookingTempRef || body.booking_temp_ref || null;
+            const code = body.code || null;
+            const giftcardId = body.giftcardId || body.giftcard_id || null;
+
+            console.log('[createGiftcardHold] Request:', { code, giftcardId, amount: body.amount, amountParsed: amount });
+
+            if (!amount || amount <= 0) return res.status(400).json({ success: false, error: 'amount is required and must be > 0' });
+            if (!code && !giftcardId) return res.status(400).json({ success: false, error: 'code or giftcardId is required' });
+
+            try {
+                // Use a transaction + row-level lock to avoid race conditions where
+                // two concurrent requests read the same balance and both create holds
+                // that together exceed the available amount.
+                await sql`BEGIN`;
+
+                // Find giftcard by code or id and lock the row
+                let giftcardRow: any = null;
+                if (code) {
+                    const { rows: gRows } = await sql`SELECT * FROM giftcards WHERE code = ${code} LIMIT 1 FOR UPDATE`;
+                    giftcardRow = gRows && gRows.length > 0 ? gRows[0] : null;
+                } else {
+                    const { rows: gRows } = await sql`SELECT * FROM giftcards WHERE id = ${giftcardId} LIMIT 1 FOR UPDATE`;
+                    giftcardRow = gRows && gRows.length > 0 ? gRows[0] : null;
+                }
+
+                if (!giftcardRow) {
+                    await sql`ROLLBACK`;
+                    return res.status(404).json({ success: false, error: 'giftcard_not_found' });
+                }
+
+                const gid = String(giftcardRow.id);
+                const balance = (typeof giftcardRow.balance === 'number') ? Number(giftcardRow.balance) : (giftcardRow.balance ? Number(giftcardRow.balance) : 0);
+
+                console.log('[createGiftcardHold] Giftcard (locked):', { id: gid, balance, balanceType: typeof giftcardRow.balance });
+
+                // LIMPIEZA AGRESIVA: Eliminar TODOS los holds previos de esta giftcard para esta sesión
+                // Esto garantiza que no queden holds huérfanos de intentos previos
+                let deletedHolds = 0;
+                if (bookingTempRef) {
+                    // Con booking_temp_ref: PRIORIDAD a limpiar todos los holds de esta sesión primero
+                    const { rowCount: sessionDeleted } = await sql`
+                        DELETE FROM giftcard_holds
+                        WHERE giftcard_id = ${gid} AND booking_temp_ref = ${bookingTempRef}
+                    `;
+                    console.log('[createGiftcardHold] Deleted session holds:', sessionDeleted);
+                    
+                    // Luego limpiar todos los expirados de cualquier sesión
+                    const { rowCount: expiredDeleted } = await sql`
+                        DELETE FROM giftcard_holds
+                        WHERE giftcard_id = ${gid} AND expires_at <= NOW()
+                    `;
+                    deletedHolds = (sessionDeleted || 0) + (expiredDeleted || 0);
+                    console.log('[createGiftcardHold] Total cleaned:', { session: sessionDeleted, expired: expiredDeleted, total: deletedHolds });
+                } else {
+                    // Sin booking_temp_ref: solo limpiar expirados
+                    const { rowCount } = await sql`
+                        DELETE FROM giftcard_holds
+                        WHERE giftcard_id = ${gid} AND expires_at <= NOW()
+                    `;
+                    deletedHolds = rowCount || 0;
+                    console.log('[createGiftcardHold] Cleaned expired holds:', deletedHolds);
+                }
+
+                // Sum active holds for this giftcard (inside the same transaction)
+                const { rows: [holdSumRow] } = await sql`
+                    SELECT COALESCE(SUM(amount), 0) AS total_holds
+                    FROM giftcard_holds
+                    WHERE giftcard_id = ${gid} AND expires_at > NOW()
+                `;
+                const totalHolds = holdSumRow ? Number(holdSumRow.total_holds) : 0;
+                const available = Number(balance) - Number(totalHolds);
+
+                console.log('[createGiftcardHold] Calculation (transactional):', { balance, totalHolds, available, requestedAmount: amount, sufficient: available >= amount });
+
+                if (available < Number(amount)) {
+                    console.log('[createGiftcardHold] INSUFFICIENT FUNDS:', { available, balance, requested: amount });
+                    await sql`ROLLBACK`;
+                    return res.status(400).json({ success: false, error: 'insufficient_funds', available, balance });
+                }
+
+                // Insert hold with TTL
+                const { rows: [inserted] } = await sql`
+                    INSERT INTO giftcard_holds (id, giftcard_id, amount, booking_temp_ref, expires_at)
+                    VALUES (uuid_generate_v4(), ${gid}, ${amount}, ${bookingTempRef}, NOW() + (${ttlMinutes} * INTERVAL '1 minute'))
+                    RETURNING *
+                `;
+
+                // Best-effort audit insert (don't fail the whole operation if audit not available)
+                try {
+                    await sql`
+                        INSERT INTO giftcard_audit (id, giftcard_id, event_type, amount, booking_temp_ref, metadata, created_at)
+                        VALUES (uuid_generate_v4(), ${gid}, 'hold_created', ${amount}, ${bookingTempRef}, ${JSON.stringify({ source: 'createGiftcardHold' })}::jsonb, NOW())
+                    `;
+                } catch (auditErr) {
+                    console.warn('[createGiftcardHold] audit insert failed (continuing):', auditErr);
+                }
+
+                await sql`COMMIT`;
+
+                console.log('[createGiftcardHold] Hold created:', inserted.id);
+                return res.status(200).json({ success: true, hold: toCamelCase(inserted), available: Number(available) - Number(amount), balance });
+            } catch (err) {
+                try { await sql`ROLLBACK`; } catch (rbErr) { console.warn('rollback failed after createGiftcardHold error', rbErr); }
+                console.error('createGiftcardHold error:', err);
+                return res.status(500).json({ success: false, error: err instanceof Error ? err.message : String(err) });
+            }
+        }
+        case 'listGiftcardRequests': {
+            // Devuelve todas las solicitudes de giftcard
+            try {
+                await sql`
+                    CREATE TABLE IF NOT EXISTS giftcard_requests (
+                        id SERIAL PRIMARY KEY,
+                        buyer_name VARCHAR(100) NOT NULL,
+                        buyer_email VARCHAR(100) NOT NULL,
+                        recipient_name VARCHAR(100) NOT NULL,
+                        recipient_email VARCHAR(100),
+                        recipient_whatsapp VARCHAR(30),
+                        amount NUMERIC NOT NULL,
+                        code VARCHAR(32) NOT NULL,
+                        status VARCHAR(20) DEFAULT 'pending',
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                `;
+                const { rows } = await sql`SELECT * FROM giftcard_requests WHERE COALESCE(status, '') <> 'deleted' ORDER BY created_at DESC`;
+                // Formatear a camelCase y parsear tipos
+                const formatted = rows.map(row => ({
+                    id: String(row.id),
+                    buyerName: row.buyer_name,
+                    buyerEmail: row.buyer_email,
+                    recipientName: row.recipient_name,
+                    recipientEmail: row.recipient_email || '',
+                    recipientWhatsapp: row.recipient_whatsapp || '',
+                    amount: typeof row.amount === 'number' ? row.amount : parseFloat(row.amount),
+                    code: row.code,
+                        status: row.status,
+                        createdAt: row.created_at ? new Date(row.created_at).toISOString() : '',
+                        // Include metadata so admin UI can surface issued codes, voucher URLs, etc.
+                        metadata: row.metadata || null
+                }));
+                return res.status(200).json(formatted);
+            } catch (error) {
+                console.error('Error al listar giftcards:', error);
+                return res.status(500).json([]);
+            }
+        }
+            break;
+        case 'approveGiftcardRequest': {
+            // Admin action: mark request as approved and insert audit event
+            const body = req.body || {};
+            const id = body.id;
+            const adminUser = req.headers['x-admin-user'] || body.adminUser || null;
+            if (!id || !adminUser) return res.status(400).json({ success: false, error: 'id and adminUser are required.' });
+            try {
+                await sql`BEGIN`;
+
+                // Mark request as approved and add basic metadata
+                const { rows: [updated] } = await sql`
+                    UPDATE giftcard_requests SET status = 'approved', approved_by = ${String(adminUser)}, approved_at = NOW(), metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ approvedBy: adminUser })}::jsonb WHERE id = ${id} RETURNING *;
+                `;
+
+                // Insert approval event
+                await sql`
+                    INSERT INTO giftcard_events (giftcard_request_id, event_type, admin_user, note, metadata)
+                    VALUES (${id}, 'approved', ${String(adminUser)}, ${body.note || null}, ${body.metadata ? JSON.stringify(body.metadata) : null});
+                `;
+
+                // Issue giftcard assets (code, QR, PDF) and persist giftcard record
+                // Generate unique code: GC- + 6 base36 chars (uppercase)
+                const generateCode = () => {
+                    const part = Math.random().toString(36).slice(2, 8).toUpperCase();
+                    return `GC-${part}`;
+                };
+
+                // Ensure giftcards table exists and has required columns (safe, idempotent)
+                try {
+                    await sql`CREATE TABLE IF NOT EXISTS giftcards (
+                        id SERIAL PRIMARY KEY,
+                        code VARCHAR(32) NOT NULL UNIQUE,
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )`;
+                } catch (e) {
+                    console.warn('Could not create giftcards table (it may already exist):', e);
+                }
+
+                // Add missing columns if they don't exist to avoid "column does not exist" errors
+                try {
+                    await sql`ALTER TABLE giftcards ADD COLUMN IF NOT EXISTS initial_value NUMERIC`;
+                    await sql`ALTER TABLE giftcards ADD COLUMN IF NOT EXISTS balance NUMERIC`;
+                    await sql`ALTER TABLE giftcards ADD COLUMN IF NOT EXISTS giftcard_request_id INTEGER`;
+                    await sql`ALTER TABLE giftcards ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP`;
+                    await sql`ALTER TABLE giftcards ADD COLUMN IF NOT EXISTS metadata JSONB`;
+                    await sql`ALTER TABLE giftcards ADD COLUMN IF NOT EXISTS value NUMERIC`;
+                    // Ensure id column has a sequence/default only if id is integer-type
+                    try {
+                        const { rows: [colInfo] } = await sql`
+                            SELECT udt_name FROM information_schema.columns
+                            WHERE table_name = 'giftcards' AND column_name = 'id'
+                        `;
+                        const idType = colInfo ? colInfo.udt_name : null;
+                        if (idType === 'int4' || idType === 'int8' || idType === 'int2') {
+                            await sql`CREATE SEQUENCE IF NOT EXISTS giftcards_id_seq`;
+                            await sql`ALTER TABLE giftcards ALTER COLUMN id SET DEFAULT nextval('giftcards_id_seq')`;
+                            await sql`ALTER SEQUENCE giftcards_id_seq OWNED BY giftcards.id`;
+                            // Safely compute max id as bigint
+                            const { rows: [r] } = await sql`SELECT MAX(id) as max_id FROM giftcards`;
+                            const maxId = r && r.max_id ? Number(r.max_id) : 0;
+                            const next = maxId + 1;
+                            await sql`SELECT setval('giftcards_id_seq', ${next}, false)`;
+                        } else {
+                            console.warn('Skipping giftcards id sequence setup: id column is not integer type:', idType);
+                        }
+                    } catch (seqErr) {
+                        console.warn('Failed to ensure giftcards id sequence/default:', seqErr);
+                    }
+                } catch (e) {
+                    console.warn('Error ensuring giftcards columns exist:', e);
+                }
+
+                // Load helpers dynamically to avoid load errors in tests when env not configured
+                // S3 and QR modules removed to reduce serverless function count
+                let s3Module: any = null;
+                let qrModule: any = null;
+                let pdfModule: any = null;
+                // S3 module no longer available
+                // try {
+                //     s3Module = await import('./s3.js');
+                // } catch (e) {
+                //     // ignore
+                // }
+                // QR module no longer available
+                // try {
+                //     qrModule = await import('./qr.js');
+                // } catch (e) {}
+                try {
+                    pdfModule = await import('./pdf.js');
+                } catch (e) {}
+
+                // Prepare buyer and recipient info for NOT NULL constraints
+                const buyerInfo = JSON.stringify({
+                    name: updated.buyer_name || updated.buyerName || '',
+                    email: updated.buyer_email || updated.buyerEmail || ''
+                });
+                const recipientInfo = JSON.stringify({
+                    name: updated.recipient_name || updated.recipientName || '',
+                    email: updated.recipient_email || updated.recipientEmail || ''
+                });
+
+                // Generate code and attempt to insert (retry if collision)
+                let code = generateCode();
+                let issuedGiftcard: any = null;
+                for (let attempt = 0; attempt < 4; attempt++) {
+                    try {
+                        // Single unified INSERT with ALL required fields for production DB
+                        const { rows: [giftcardRow] } = await sql`
+                            INSERT INTO giftcards (
+                                code, value, balance, initial_value, status,
+                                giftcard_request_id, expires_at, metadata,
+                                buyer_info, recipient_info
+                            )
+                            VALUES (
+                                ${code}, 
+                                ${updated.amount}, 
+                                ${updated.amount}, 
+                                ${updated.amount},
+                                'active',
+                                ${id}, 
+                                NOW() + INTERVAL '3 months', 
+                                ${JSON.stringify({ issuedBy: adminUser })}::jsonb,
+                                ${buyerInfo}::jsonb,
+                                ${recipientInfo}::jsonb
+                            )
+                            RETURNING *;
+                        `;
+                        issuedGiftcard = giftcardRow;
+                        break;
+                    } catch (err: any) {
+                        // If unique constraint violated, generate a new code and retry
+                        console.warn('Giftcard code insert failed, retrying with new code:', err && err.message ? err.message : String(err));
+                        code = generateCode();
+                    }
+                }
+
+                // If insert still failed, log warning but proceed with email delivery
+                if (!issuedGiftcard) {
+                    console.warn('[API][approveGiftcardRequest] Failed to persist giftcard after all retries for code:', code);
+                }
+
+                // Regardless of whether we created a DB giftcard, if not created we will still attempt to send emails using the generated code
+                if (!issuedGiftcard) {
+                    console.warn('Proceeding without persisted giftcard record; will send best-effort emails to buyer/recipient with code:', code);
+                }
+
+                // Generate QR and PDF and upload to S3 (best-effort) — try even if issuedGiftcard is missing
+                const baseUrl = process.env.APP_BASE_URL || (req.headers.host ? `https://${req.headers.host}` : '');
+                const redeemUrl = baseUrl ? `${baseUrl}/giftcard/redeem?code=${encodeURIComponent(code)}` : `code:${code}`;
+
+                let qrS3Url: string | null = null;
+                let pdfS3Url: string | null = null;
+                let localPdfBuffer: Buffer | undefined;
+                try {
+                    let qrBuffer: Buffer | undefined;
+                    if (qrModule && qrModule.generateQrPngBuffer) {
+                        qrBuffer = await qrModule.generateQrPngBuffer(redeemUrl, 400);
+                    }
+
+                    // Use localPdfBuffer for the generated PDF
+                    if (pdfModule && pdfModule.generateVoucherPdfBuffer) {
+                        localPdfBuffer = await pdfModule.generateVoucherPdfBuffer({
+                            buyerName: updated.buyer_name || updated.buyerName,
+                            recipientName: updated.recipient_name || updated.recipientName,
+                            amount: Number(updated.amount),
+                            code,
+                            note: body.note || '' ,
+                            qrPngBuffer: qrBuffer
+                        });
+                    }
+
+                    if (s3Module && s3Module.uploadBufferToS3) {
+                        if (qrBuffer) {
+                            const qrKey = s3Module.generateS3Key('giftcards', `qr-${code}.png`);
+                            const maybe = await s3Module.uploadBufferToS3(qrKey, qrBuffer, 'image/png');
+                            qrS3Url = maybe;
+                        }
+                        if (localPdfBuffer) {
+                            const pdfKey = s3Module.generateS3Key('giftcards', `voucher-${code}.pdf`);
+                            const maybePdf = await s3Module.uploadBufferToS3(pdfKey, localPdfBuffer, 'application/pdf');
+                            pdfS3Url = maybePdf;
+                        }
+                    }
+                } catch (assetErr) {
+                    console.warn('Failed generating/uploading giftcard assets:', assetErr);
+                }
+
+                // Prepare metaPatch for DB (include asset URLs if we have them and issued code)
+                const metaPatch: any = { issuedCode: code };
+                if (issuedGiftcard) metaPatch.issuedGiftcardId = issuedGiftcard.id;
+                if (qrS3Url) metaPatch.qrUrl = qrS3Url;
+                if (pdfS3Url) metaPatch.voucherUrl = pdfS3Url;
+
+                // Persist asset metadata if giftcard row exists
+                try {
+                    if (issuedGiftcard) {
+                        await sql`
+                            UPDATE giftcard_requests SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(metaPatch)}::jsonb WHERE id = ${id}
+                        `;
+                        await sql`
+                            UPDATE giftcards SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(metaPatch)}::jsonb WHERE id = ${issuedGiftcard.id}
+                        `;
+                    } else {
+                        // Update request metadata with issuedCode even if giftcard record missing
+                        await sql`
+                            UPDATE giftcard_requests SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(metaPatch)}::jsonb WHERE id = ${id}
+                        `;
+                    }
+                } catch (persistErr) {
+                    console.warn('Failed to persist giftcard metadata:', persistErr);
+                }
+
+
+                // Send emails: buyer receipt (attach PDF) and optionally recipient email — always attempt
+                let buyerEmailResult: any = null;
+                let recipientEmailResult: any = null;
+                try {
+                    const emailServiceModule = await import('./emailService.js');
+                    let pdfBase64: string | undefined;
+                    let downloadLink: string | undefined;
+                    if (pdfS3Url) {
+                        // If uploaded to S3, create a presigned GET URL for download
+                        // S3 module removed - using S3 URL directly as download link
+                        try {
+                            // S3 module no longer available
+                            // const s3m = await import('./s3.js');
+                            // const key = pdfS3Url.replace(`s3://${s3m.defaultBucket || ''}/`, '');
+                            // const maybe = await s3m.generatePresignedGetUrl(key, 60 * 60 * 24 * 7); // 7 days
+                            // if (maybe) downloadLink = maybe;
+                            downloadLink = pdfS3Url; // Use S3 URL directly
+                        } catch (err) {
+                            console.warn('Failed to generate presigned URL for pdf:', err);
+                        }
+                    } else if (typeof localPdfBuffer !== 'undefined' && localPdfBuffer) {
+                        pdfBase64 = localPdfBuffer.toString('base64');
+                    }
+
+                    if (!downloadLink && pdfS3Url) downloadLink = pdfS3Url;
+
+                    const buyerEmail = updated.buyer_email || updated.buyerEmail;
+                    const buyerName = updated.buyer_name || updated.buyerName;
+                    const buyerMessage = updated.buyer_message || null;
+                    if (buyerEmail) {
+                        try {
+                            buyerEmailResult = await emailServiceModule.sendGiftcardPaymentConfirmedEmail(
+                                buyerEmail,
+                                {
+                                    buyerName,
+                                    amount: Number(updated.amount),
+                                    code,
+                                    recipientName: updated.recipient_name || updated.recipientName,
+                                    recipientEmail: updated.recipient_email || updated.recipientEmail,
+                                    message: buyerMessage
+                                },
+                                pdfBase64,
+                                downloadLink
+                            );
+                        } catch (e) {
+                            console.warn('Buyer email send failed:', e);
+                            buyerEmailResult = { sent: false, error: e instanceof Error ? e.message : String(e) };
+                        }
+                    }
+                    const recipientEmail = updated.recipient_email || updated.recipientEmail;
+                    if (recipientEmail) {
+                        try {
+                            recipientEmailResult = await emailServiceModule.sendGiftcardRecipientEmail(
+                                recipientEmail,
+                                {
+                                    recipientName: updated.recipient_name || updated.recipientName,
+                                    amount: Number(updated.amount),
+                                    code,
+                                    message: buyerMessage,
+                                    buyerName
+                                },
+                                pdfBase64,
+                                downloadLink
+                            );
+                        } catch (e) {
+                            console.warn('Recipient email send failed:', e);
+                            recipientEmailResult = { sent: false, error: e instanceof Error ? e.message : String(e) };
+                        }
+                    }
+
+                    // Persist email result metadata to request
+                    try {
+                        const emailMeta = { buyer: buyerEmailResult, recipient: recipientEmailResult };
+                        await sql`
+                            UPDATE giftcard_requests SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ emailDelivery: emailMeta })}::jsonb WHERE id = ${id}
+                        `;
+                    } catch (metaErr) {
+                        console.warn('Failed to persist email delivery metadata:', metaErr);
+                    }
+                } catch (emailErr) {
+                    console.warn('Failed to send giftcard emails:', emailErr);
+                }
+
+                await sql`COMMIT`;
+                const responsePayload: any = { success: true, request: toCamelCase(updated) };
+                if (issuedGiftcard) responsePayload.giftcard = toCamelCase(issuedGiftcard);
+                return res.status(200).json(responsePayload);
+            } catch (error) {
+                await sql`ROLLBACK`;
+                console.error('approveGiftcardRequest error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+
+        case 'rejectGiftcardRequest': {
+            const body = req.body || {};
+            const id = body.id;
+            const adminUser = req.headers['x-admin-user'] || body.adminUser || null;
+            if (!id || !adminUser) return res.status(400).json({ success: false, error: 'id and adminUser are required.' });
+            try {
+                await sql`BEGIN`;
+                const { rows: [updated] } = await sql`
+                    UPDATE giftcard_requests SET status = 'rejected', rejected_by = ${String(adminUser)}, rejected_at = NOW(), metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ rejectedBy: adminUser })}::jsonb WHERE id = ${id} RETURNING *;
+                `;
+                await sql`
+                    INSERT INTO giftcard_events (giftcard_request_id, event_type, admin_user, note, metadata)
+                    VALUES (${id}, 'rejected', ${String(adminUser)}, ${body.note || null}, ${body.metadata ? JSON.stringify(body.metadata) : null});
+                `;
+                await sql`COMMIT`;
+                return res.status(200).json({ success: true, request: toCamelCase(updated) });
+            } catch (error) {
+                await sql`ROLLBACK`;
+                console.error('rejectGiftcardRequest error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+        
+        case 'deleteGiftcardRequest': {
+            const body = req.body || {};
+            const id = body.id;
+            const adminUser = req.headers['x-admin-user'] || body.adminUser || null;
+            if (!id || !adminUser) return res.status(400).json({ success: false, error: 'id and adminUser are required.' });
+            try {
+                await sql`BEGIN`;
+                const { rows: [updated] } = await sql`
+                    UPDATE giftcard_requests SET status = 'deleted', deleted_by = ${String(adminUser)}, deleted_at = NOW(), metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ deletedBy: adminUser })}::jsonb WHERE id = ${id} RETURNING *;
+                `;
+                await sql`
+                    INSERT INTO giftcard_events (giftcard_request_id, event_type, admin_user, note, metadata)
+                    VALUES (${id}, 'deleted', ${String(adminUser)}, ${body.note || null}, ${body.metadata ? JSON.stringify(body.metadata) : null});
+                `;
+                await sql`COMMIT`;
+                return res.status(200).json({ success: true, request: toCamelCase(updated) });
+            } catch (error) {
+                await sql`ROLLBACK`;
+                console.error('deleteGiftcardRequest error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+
+        case 'hardDeleteGiftcardRequest': {
+            const body = req.body || {};
+            const id = body.id;
+            const adminUser = req.headers['x-admin-user'] || body.adminUser || null;
+            if (!id || !adminUser) return res.status(400).json({ success: false, error: 'id and adminUser are required.' });
+            try {
+                await sql`BEGIN`;
+                // Insert event recording the impending hard delete
+                await sql`
+                    INSERT INTO giftcard_events (giftcard_request_id, event_type, admin_user, note, metadata)
+                    VALUES (${id}, 'hard_deleted', ${String(adminUser)}, ${body.note || null}, ${body.metadata ? JSON.stringify(body.metadata) : null});
+                `;
+                // Perform delete
+                await sql`DELETE FROM giftcard_requests WHERE id = ${id}`;
+                await sql`COMMIT`;
+                return res.status(200).json({ success: true, deletedId: id });
+            } catch (error) {
+                await sql`ROLLBACK`;
+                console.error('hardDeleteGiftcardRequest error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+        case 'sendTestEmail': {
+            // Lightweight test email sender to validate RESEND_API_KEY and EMAIL_FROM at runtime
+            const body = req.body || {};
+            const to = body.to;
+            const type = body.type || 'test';
+            if (!to || typeof to !== 'string') return res.status(400).json({ success: false, error: 'to email is required' });
+            try {
+                const emailModule = await import('./emailService.js');
+                const code = body.code || 'TEST-CODE';
+                const amount = typeof body.amount === 'number' ? body.amount : (body.amount ? Number(body.amount) : 0);
+                const buyerName = body.name || 'Cliente de Prueba';
+                let pdfBase64: string | undefined = undefined;
+                let downloadLink: string | undefined = undefined;
+                if (body.pdfBase64) pdfBase64 = body.pdfBase64;
+                if (body.downloadLink) downloadLink = body.downloadLink;
+
+                // Use the same giftcard email logic depending on 'type'
+                if (type === 'recipient') {
+                    await emailModule.sendGiftcardRecipientEmail(to, { recipientName: buyerName, amount, code, message: body.message || '' }, pdfBase64, downloadLink);
+                } else {
+                    await emailModule.sendGiftcardPaymentConfirmedEmail(to, { buyerName, amount, code }, pdfBase64, downloadLink);
+                }
+
+                return res.status(200).json({ success: true, sentTo: to });
+            } catch (err) {
+                console.error('sendTestEmail failed:', err);
+                return res.status(500).json({ success: false, error: err instanceof Error ? err.message : String(err) });
+            }
+        }
+        case 'attachGiftcardProof': {
+            // Attach proof URL to giftcard request and insert event
+            const body = req.body || {};
+            const id = body.id;
+            const proofUrl = body.proofUrl;
+            const adminUser = req.headers['x-admin-user'] || body.adminUser || null;
+            if (!id || !proofUrl || !adminUser) return res.status(400).json({ success: false, error: 'id, proofUrl and adminUser are required.' });
+            try {
+                await sql`BEGIN`;
+                const { rows: [updated] } = await sql`
+                    UPDATE giftcard_requests SET payment_proof_url = ${proofUrl}, metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ proofUrl })}::jsonb WHERE id = ${id} RETURNING *;
+                `;
+                await sql`
+                    INSERT INTO giftcard_events (giftcard_request_id, event_type, admin_user, note, metadata)
+                    VALUES (${id}, 'attached_proof', ${String(adminUser)}, ${body.note || null}, ${body.metadata ? JSON.stringify(body.metadata) : null});
+                `;
+                await sql`COMMIT`;
+                return res.status(200).json({ success: true, request: toCamelCase(updated) });
+            } catch (error) {
+                await sql`ROLLBACK`;
+                console.error('attachGiftcardProof error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+        case 'repairMissingGiftcards': {
+            // Scan approved giftcard_requests with metadata.issuedCode but no giftcards row, and insert missing giftcards.
+            const body = req.body || {};
+            const dryRun = !!body.dryRun;
+            const limit = body.limit ? Number(body.limit) : 200;
+            try {
+                console.debug('[API] repairMissingGiftcards called, dryRun=', dryRun, 'limit=', limit);
+
+                // Find approved requests with issuedCode
+                const { rows: reqRows } = await sql`
+                    SELECT id, amount, metadata
+                    FROM giftcard_requests
+                    WHERE status = 'approved' AND (metadata->>'issuedCode') IS NOT NULL
+                    ORDER BY created_at DESC
+                `;
+
+                const candidates: Array<{ id: any; issuedCode: string; amount: number | null; metadata: any }> = [];
+                for (const r of reqRows) {
+                    if (!r) continue;
+                    let issuedCode: string | null = null;
+                    try {
+                        if (r.metadata && typeof r.metadata === 'object' && r.metadata.issuedCode) issuedCode = String(r.metadata.issuedCode);
+                        else if (r.metadata && typeof r.metadata === 'string') {
+                            try { const parsed = JSON.parse(r.metadata); if (parsed && parsed.issuedCode) issuedCode = String(parsed.issuedCode); } catch(e) {}
+                        }
+                    } catch (e) { issuedCode = null; }
+                    if (!issuedCode) continue;
+
+                    const { rows: giftRows } = await sql`SELECT id FROM giftcards WHERE code = ${issuedCode} LIMIT 1`;
+                    if (!giftRows || giftRows.length === 0) {
+                        let amountVal: number | null = null;
+                        if (typeof r.amount === 'number') amountVal = r.amount;
+                        else if (r.amount) amountVal = Number(r.amount);
+                        else if (r.metadata && r.metadata.amount) amountVal = Number(r.metadata.amount);
+                        candidates.push({ id: r.id, issuedCode, amount: amountVal, metadata: r.metadata });
+                    }
+                    if (candidates.length >= limit) break;
+                }
+
+                console.debug('[API] repairMissingGiftcards candidates found:', candidates.length);
+
+                // Determine which numeric columns exist in giftcards
+                const { rows: colCheck } = await sql`SELECT column_name FROM information_schema.columns WHERE table_name='giftcards' AND column_name IN ('initial_value','value','balance')`;
+                const cols = (colCheck || []).map((c: any) => c.column_name);
+                const hasInitial = cols.includes('initial_value');
+                const hasValue = cols.includes('value');
+                const hasBalance = cols.includes('balance');
+
+                const repaired: any[] = [];
+                const failed: any[] = [];
+
+                for (const c of candidates) {
+                    try {
+                        if (dryRun) {
+                            repaired.push({ id: c.id, code: c.issuedCode, wouldInsert: true });
+                            continue;
+                        }
+
+                        // Attempt insertion with the safest set of columns available
+                        let inserted: any = null;
+                        if (hasInitial && hasBalance) {
+                            const { rows: [r] } = await sql`
+                                INSERT INTO giftcards (code, initial_value, balance, giftcard_request_id, expires_at, metadata)
+                                VALUES (${c.issuedCode}, ${c.amount || 0}, ${c.amount || 0}, ${c.id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ repairedBy: 'repairMissingGiftcards', repairedAt: new Date().toISOString() })}::jsonb)
+                                RETURNING *;
+                            `;
+                            inserted = r;
+                        } else if (hasInitial) {
+                            const { rows: [r] } = await sql`
+                                INSERT INTO giftcards (code, initial_value, giftcard_request_id, expires_at, metadata)
+                                VALUES (${c.issuedCode}, ${c.amount || 0}, ${c.id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ repairedBy: 'repairMissingGiftcards', repairedAt: new Date().toISOString() })}::jsonb)
+                                RETURNING *;
+                            `;
+                            inserted = r;
+                        } else if (hasValue && hasBalance) {
+                            const { rows: [r] } = await sql`
+                                INSERT INTO giftcards (code, value, balance, giftcard_request_id, expires_at, metadata)
+                                VALUES (${c.issuedCode}, ${c.amount || 0}, ${c.amount || 0}, ${c.id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ repairedBy: 'repairMissingGiftcards', repairedAt: new Date().toISOString() })}::jsonb)
+                                RETURNING *;
+                            `;
+                            inserted = r;
+                        } else {
+                            const { rows: [r] } = await sql`
+                                INSERT INTO giftcards (code, giftcard_request_id, expires_at, metadata)
+                                VALUES (${c.issuedCode}, ${c.id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ repairedBy: 'repairMissingGiftcards', repairedAt: new Date().toISOString(), amount: c.amount })}::jsonb)
+                                RETURNING *;
+                            `;
+                            inserted = r;
+                        }
+
+                        if (inserted) {
+                            repaired.push({ id: c.id, code: c.issuedCode, giftcardId: inserted.id });
+                        } else {
+                            failed.push({ id: c.id, code: c.issuedCode, error: 'insert returned no row' });
+                        }
+                    } catch (err) {
+                        console.error('[API][repairMissingGiftcards] failed inserting for', c.issuedCode, err);
+                        failed.push({ id: c.id, code: c.issuedCode, error: err instanceof Error ? err.message : String(err) });
+                    }
+                }
+
+                return res.status(200).json({ success: true, dryRun, candidates: candidates.length, repaired, failed });
+            } catch (err) {
+                console.error('[API][repairMissingGiftcards] error:', err);
+                return res.status(500).json({ success: false, error: err instanceof Error ? err.message : String(err) });
+            }
+        }
         case 'syncProducts': {
                 // Sincroniza los productos de DEFAULT_PRODUCTS con la base de datos
                 try {
@@ -724,7 +1691,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     let classes = null, price = null, details = null, schedulingRules = null, overrides = null, minParticipants = null, pricePerPerson = null;
                     if ('classes' in p) classes = p.classes;
                     if ('price' in p) price = p.price;
-                    if ('details' in p) details = JSON.stringify(p.details);
+                                                         if ('details' in p) details = JSON.stringify(p.details);
                     if ('schedulingRules' in p) schedulingRules = JSON.stringify((p as any).schedulingRules);
                     if ('overrides' in p) overrides = JSON.stringify((p as any).overrides);
                     if ('minParticipants' in p) minParticipants = (p as any).minParticipants;
@@ -751,11 +1718,6 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                             p.name,
                             classes,
                             price,
-                            p.description || null,
-                            p.imageUrl || null,
-                            details,
-                            p.isActive,
-                            schedulingRules,
                             overrides,
                             minParticipants,
                             pricePerPerson
@@ -774,8 +1736,22 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             if (!email) {
                 return res.status(400).json({ error: 'Email is required.' });
             }
-            await sql`DELETE FROM customers WHERE email = ${email}`;
-            return res.status(200).json({ success: true });
+            
+            // Use the complete deletion function from lib/database
+            const { deleteCustomerByEmail } = await import('../lib/database.js');
+            const result = await deleteCustomerByEmail(email);
+            
+            if (result) {
+                return res.status(200).json({ 
+                    success: true, 
+                    message: 'Customer and related data deleted successfully' 
+                });
+            } else {
+                return res.status(404).json({ 
+                    success: false, 
+                    error: 'Customer not found or no data to delete' 
+                });
+            }
         }
         case 'updateBooking': {
             const { id, userInfo, price, participants } = req.body;
@@ -811,27 +1787,32 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             if (!bookingRow) {
                 return res.status(404).json({ error: 'Booking not found.' });
             }
-                const currentPayments = (bookingRow.payment_details && Array.isArray(bookingRow.payment_details))
-                    ? bookingRow.payment_details
-                    : [];
-                console.log('[API] addPaymentToBooking - Antes de agregar:', { bookingId, currentPayments });
-                const updatedPayments = [...currentPayments, payment];
-                const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
-                const isPaid = totalPaid >= bookingRow.price;
+            const currentPayments = (bookingRow.payment_details && Array.isArray(bookingRow.payment_details))
+                ? bookingRow.payment_details
+                : [];
+            
+            // Generate unique ID for the new payment if not present
+            const paymentWithId = {
+                ...payment,
+                id: payment.id || generatePaymentId()
+            };
+            
+            const updatedPayments = [...currentPayments, paymentWithId];
+            const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
+            const isPaid = totalPaid >= bookingRow.price;
 
-                const { rows: [updatedBookingRow] } = await sql`
-                    UPDATE bookings
-                    SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
-                    WHERE id = ${bookingId}
-                    RETURNING *;
-                `;
-                console.log('[API] addPaymentToBooking - Después de agregar:', { bookingId, updatedPayments, totalPaid, isPaid });
+            const { rows: [updatedBookingRow] } = await sql`
+                UPDATE bookings
+                SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
+                WHERE id = ${bookingId}
+                RETURNING *;
+            `;
 
-                const updatedBooking = parseBookingFromDB(updatedBookingRow);
-                result = { success: true, booking: updatedBooking };
+            const updatedBooking = parseBookingFromDB(updatedBookingRow);
+            result = { success: true, booking: updatedBooking };
 
             try {
-                await emailService.sendPaymentReceiptEmail(updatedBooking, payment);
+                await emailService.sendPaymentReceiptEmail(updatedBooking, paymentWithId);
             } catch (emailError) {
                 console.warn(`Payment receipt email for booking ${updatedBooking.bookingCode} failed to send:`, emailError);
             }
@@ -839,42 +1820,105 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         }
 
         case 'deletePaymentFromBooking': {
-            const { bookingId, paymentIndex, cancelReason } = req.body;
-            const { rows: [bookingRow] } = await sql`SELECT payment_details, price FROM bookings WHERE id = ${bookingId}`;
+            const { bookingId, paymentId, paymentIndex, cancelReason } = req.body;
+            
+            console.log('[API][deletePaymentFromBooking] Request:', { bookingId, paymentId, paymentIndex, cancelReason });
+            
+            if (!bookingId) {
+                return res.status(400).json({ error: 'bookingId is required' });
+            }
+            
+            // Support both paymentId (new way) and paymentIndex (legacy fallback)
+            if (!paymentId && (typeof paymentIndex !== 'number' || paymentIndex < 0)) {
+                return res.status(400).json({ error: 'Either paymentId or valid paymentIndex (>= 0) is required' });
+            }
+            
+            // CRÍTICO: Verificar si el booking existe primero
+            const { rows: bookingRows } = await sql`SELECT payment_details, price FROM bookings WHERE id = ${bookingId}`;
 
-            if (!bookingRow) {
-                return res.status(404).json({ error: 'Booking not found.' });
+            if (!bookingRows || bookingRows.length === 0) {
+                console.warn('[API][deletePaymentFromBooking] Booking not found (may have been deleted):', bookingId);
+                return res.status(404).json({ 
+                    success: false, 
+                    error: 'Booking not found', 
+                    message: 'La reserva ya no existe. Puede haber sido eliminada junto con el cliente.' 
+                });
             }
 
+            const bookingRow = bookingRows[0];
             const currentPayments = (bookingRow.payment_details && Array.isArray(bookingRow.payment_details))
                 ? bookingRow.payment_details
                 : [];
 
-            if (paymentIndex >= 0 && paymentIndex < currentPayments.length) {
-                const deletedPayment = currentPayments[paymentIndex];
-                const updatedPayments = currentPayments.filter((_: any, i: number) => i !== paymentIndex);
-                const totalPaid = updatedPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
-                const isPaid = totalPaid >= bookingRow.price;
-                const { rows: [updatedBookingRow] } = await sql`
-                    UPDATE bookings
-                    SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
-                    WHERE id = ${bookingId}
-                    RETURNING *;
-                `;
-                const updatedBooking = parseBookingFromDB(updatedBookingRow);
-                result = { success: true, booking: updatedBooking };
-                // Audit log: guardar cancelación en notifications
+            console.log('[API][deletePaymentFromBooking] Current payments:', currentPayments.length);
+
+            let deletedPayment: any = null;
+            let updatedPayments: any[] = [];
+
+            if (paymentId) {
+                // New way: Find and remove by ID
+                const paymentIndexFound = currentPayments.findIndex((p: any) => p.id === paymentId);
+                
+                if (paymentIndexFound === -1) {
+                    console.error('[API][deletePaymentFromBooking] Payment not found with ID:', paymentId);
+                    return res.status(404).json({ error: `Payment not found with ID: ${paymentId}` });
+                }
+                
+                deletedPayment = currentPayments[paymentIndexFound];
+                updatedPayments = currentPayments.filter((p: any) => p.id !== paymentId);
+                console.log('[API][deletePaymentFromBooking] Deleted payment by ID:', paymentId, 'at index:', paymentIndexFound);
+            } else {
+                // Legacy way: Use index (for backward compatibility)
+                if (paymentIndex >= 0 && paymentIndex < currentPayments.length) {
+                    deletedPayment = currentPayments[paymentIndex];
+                    updatedPayments = currentPayments.filter((_: any, i: number) => i !== paymentIndex);
+                    console.log('[API][deletePaymentFromBooking] Deleted payment by index:', paymentIndex);
+                } else {
+                    console.error('[API][deletePaymentFromBooking] Invalid index:', paymentIndex, 'for array length:', currentPayments.length);
+                    return res.status(400).json({ error: `Invalid payment index. Request index: ${paymentIndex}, Available payments: ${currentPayments.length}` });
+                }
+            }
+
+            const totalPaid = updatedPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
+            const isPaid = totalPaid >= bookingRow.price;
+            
+            const { rows: [updatedBookingRow] } = await sql`
+                UPDATE bookings
+                SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
+                WHERE id = ${bookingId}
+                RETURNING *;
+            `;
+            
+            const updatedBooking = parseBookingFromDB(updatedBookingRow);
+            result = { success: true, booking: updatedBooking };
+            
+            // Audit log: guardar cancelación en notifications
+            try {
                 await sql`
                     INSERT INTO notifications (type, target_id, user_name, summary)
                     VALUES ('payment_deleted', ${bookingId}, ${deletedPayment.method || 'N/A'}, ${cancelReason || 'Deleted by admin'});
                 `;
-            } else {
-                return res.status(400).json({ error: 'Invalid payment index.' });
+            } catch (auditErr) {
+                console.warn('[API][deletePaymentFromBooking] Failed to insert audit notification:', auditErr);
             }
+            
+            console.log('[API][deletePaymentFromBooking] Success: Deleted payment');
             break;
         }
         case 'updatePaymentDetails': {
-            const { bookingId, paymentIndex, updatedDetails } = req.body;
+            const { bookingId, paymentId, paymentIndex, updatedDetails } = req.body;
+            
+            console.log('[API][updatePaymentDetails] Request:', { bookingId, paymentId, paymentIndex, updatedDetails });
+            
+            if (!bookingId) {
+                return res.status(400).json({ error: 'bookingId is required' });
+            }
+            
+            // Support both paymentId (new way) and paymentIndex (legacy fallback)
+            if (!paymentId && (typeof paymentIndex !== 'number' || paymentIndex < 0)) {
+                return res.status(400).json({ error: 'Either paymentId or valid paymentIndex (>= 0) is required' });
+            }
+            
             const { rows: [bookingRow] } = await sql`SELECT payment_details, price FROM bookings WHERE id = ${bookingId}`;
 
             if (!bookingRow) {
@@ -885,25 +1929,49 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 ? bookingRow.payment_details
                 : [];
 
-            if (paymentIndex >= 0 && paymentIndex < currentPayments.length) {
-                // Actualiza solo los campos enviados en updatedDetails
-                const updatedPayments = currentPayments.map((p: any, i: number) =>
-                    i === paymentIndex ? { ...p, ...updatedDetails } : p
-                );
-                const totalPaid = updatedPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
-                const isPaid = totalPaid >= bookingRow.price;
+            console.log('[API][updatePaymentDetails] Current payments:', currentPayments.length);
 
-                const { rows: [updatedBookingRow] } = await sql`
-                    UPDATE bookings
-                    SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
-                    WHERE id = ${bookingId}
-                    RETURNING *;
-                `;
-                const updatedBooking = parseBookingFromDB(updatedBookingRow);
-                result = { success: true, booking: updatedBooking };
+            let updatedPayments: any[] = [];
+
+            if (paymentId) {
+                // New way: Find and update by ID
+                const targetIndex = currentPayments.findIndex((p: any) => p.id === paymentId);
+                
+                if (targetIndex === -1) {
+                    console.error('[API][updatePaymentDetails] Payment not found with ID:', paymentId);
+                    return res.status(404).json({ error: `Payment not found with ID: ${paymentId}` });
+                }
+                
+                updatedPayments = currentPayments.map((p: any) =>
+                    p.id === paymentId ? { ...p, ...updatedDetails } : p
+                );
+                console.log('[API][updatePaymentDetails] Updated payment by ID:', paymentId);
             } else {
-                return res.status(400).json({ error: 'Invalid payment index.' });
+                // Legacy way: Use index (for backward compatibility)
+                if (paymentIndex >= 0 && paymentIndex < currentPayments.length) {
+                    updatedPayments = currentPayments.map((p: any, i: number) =>
+                        i === paymentIndex ? { ...p, ...updatedDetails } : p
+                    );
+                    console.log('[API][updatePaymentDetails] Updated payment by index:', paymentIndex);
+                } else {
+                    console.error('[API][updatePaymentDetails] Invalid index:', paymentIndex, 'for array length:', currentPayments.length);
+                    return res.status(400).json({ error: `Invalid payment index. Request index: ${paymentIndex}, Available payments: ${currentPayments.length}` });
+                }
             }
+
+            const totalPaid = updatedPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
+            const isPaid = totalPaid >= bookingRow.price;
+
+            const { rows: [updatedBookingRow] } = await sql`
+                UPDATE bookings
+                SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
+                WHERE id = ${bookingId}
+                RETURNING *;
+            `;
+            const updatedBooking = parseBookingFromDB(updatedBookingRow);
+            result = { success: true, booking: updatedBooking };
+            
+            console.log('[API][updatePaymentDetails] Success');
             break;
         }
         case 'markBookingAsUnpaid':
@@ -913,11 +1981,17 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         case 'rescheduleBookingSlot': {
             const rescheduleBody = req.body;
             const { bookingId: rescheduleId, oldSlot, newSlot } = rescheduleBody;
-            const { rows: [bookingToReschedule] } = await sql`SELECT slots FROM bookings WHERE id = ${rescheduleId}`;
+            const { rows: [bookingToReschedule] } = await sql`SELECT * FROM bookings WHERE id = ${rescheduleId}`;
             if (bookingToReschedule) {
                 const otherSlots = bookingToReschedule.slots.filter((s: any) => s.date !== oldSlot.date || s.time !== oldSlot.time);
                 const updatedSlots = [...otherSlots, newSlot];
                 await sql`UPDATE bookings SET slots = ${JSON.stringify(updatedSlots)} WHERE id = ${rescheduleId}`;
+                
+                // Obtener el booking actualizado completo
+                const { rows: [updatedBooking] } = await sql`SELECT * FROM bookings WHERE id = ${rescheduleId}`;
+                result = { success: true, booking: toCamelCase(updatedBooking) };
+            } else {
+                result = { success: false, error: 'Booking not found' };
             }
             break;
         }
@@ -980,7 +2054,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         case 'addGroupInquiry':
             const addInquiryBody = req.body;
             const newInquiry = { ...addInquiryBody, status: 'New', createdAt: new Date().toISOString() };
-            const { rows: [insertedInquiry] } = await sql`INSERT INTO inquiries (name, email, phone, country_code, participants, tentative_date, tentative_time, event_type, message, status, created_at, inquiry_type)
+            const { rows: [insertedInquiry] = [{}] } = await sql`INSERT INTO inquiries (name, email, phone, country_code, participants, tentative_date, tentative_time, event_type, message, status, created_at, inquiry_type)
             VALUES (${newInquiry.name}, ${newInquiry.email}, ${newInquiry.phone}, ${newInquiry.countryCode}, ${newInquiry.participants}, ${newInquiry.tentativeDate || null}, ${newInquiry.tentativeTime || null}, ${newInquiry.eventType}, ${newInquiry.message}, ${newInquiry.status}, ${newInquiry.createdAt}, ${newInquiry.inquiryType})
             RETURNING *;`;
             await sql`INSERT INTO notifications (type, target_id, user_name, summary) VALUES ('new_inquiry', ${insertedInquiry.id}, ${insertedInquiry.name}, ${insertedInquiry.inquiry_type});`;
@@ -1112,10 +2186,11 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             return res.status(200).json(bookingResult);
         }
         case 'createDelivery': {
-            const { customerEmail, description, scheduledDate, status = 'pending', notes, photos } = req.body;
+            const { customerEmail, customerName, description, scheduledDate, status = 'pending', notes, photos } = req.body;
             
-            if (!customerEmail || !description || !scheduledDate) {
-                return res.status(400).json({ error: 'customerEmail, description, and scheduledDate are required.' });
+            // description ahora es opcional
+            if (!customerEmail || !scheduledDate) {
+                return res.status(400).json({ error: 'customerEmail and scheduledDate are required.' });
             }
             
             // Convert photos array to JSON string for storage
@@ -1123,9 +2198,44 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             
             const { rows: [newDelivery] } = await sql`
                 INSERT INTO deliveries (customer_email, description, scheduled_date, status, notes, photos)
-                VALUES (${customerEmail}, ${description}, ${scheduledDate}, ${status}, ${notes || null}, ${photosJson})
+                VALUES (${customerEmail}, ${description || null}, ${scheduledDate}, ${status}, ${notes || null}, ${photosJson})
                 RETURNING *;
             `;
+            
+            // Send creation email (fire and forget)
+            try {
+                let finalCustomerName = customerName || 'Cliente';
+                
+                // If customerName not provided, try to get from bookings
+                if (!customerName) {
+                    const { rows: [bookingData] } = await sql`
+                        SELECT user_info FROM bookings 
+                        WHERE user_info->>'email' = ${customerEmail} 
+                        ORDER BY created_at DESC LIMIT 1
+                    `;
+                    if (bookingData?.user_info) {
+                        const userInfo = typeof bookingData.user_info === 'string' 
+                            ? JSON.parse(bookingData.user_info) 
+                            : bookingData.user_info;
+                        finalCustomerName = userInfo.firstName || 'Cliente';
+                    }
+                }
+                
+                console.log('[createDelivery] Attempting to send email to:', customerEmail, 'name:', finalCustomerName);
+                
+                // Import emailService dynamically
+                const emailServiceModule = await import('./emailService.js');
+                await emailServiceModule.sendDeliveryCreatedEmail(customerEmail, finalCustomerName, {
+                    description: description || null,
+                    scheduledDate
+                }).then(() => {
+                    console.log('[createDelivery] ✅ Email sent successfully to:', customerEmail);
+                }).catch(err => {
+                    console.error('[createDelivery] ❌ Email send failed:', err);
+                });
+            } catch (emailErr) {
+                console.error('[createDelivery] ❌ Email setup failed:', emailErr);
+            }
             
             return res.status(200).json({ success: true, delivery: toCamelCase(newDelivery) });
         }
@@ -1177,7 +2287,138 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 return res.status(404).json({ error: 'Delivery not found.' });
             }
             
+            // Send completion email (fire and forget)
+            try {
+                const { rows: [customerData] } = await sql`
+                    SELECT user_info FROM customers WHERE email = ${completedDelivery.customer_email} LIMIT 1
+                `;
+                if (customerData?.user_info) {
+                    const userInfo = typeof customerData.user_info === 'string' 
+                        ? JSON.parse(customerData.user_info) 
+                        : customerData.user_info;
+                    const customerName = userInfo.firstName || 'Cliente';
+                    
+                    const emailServiceModule = await import('./emailService.js');
+                    emailServiceModule.sendDeliveryCompletedEmail(customerData.customer_email || completedDelivery.customer_email, customerName, {
+                        description: completedDelivery.description,
+                        deliveredAt: completedDelivery.delivered_at || completedDelivery.completed_at
+                    }).catch(err => console.error('[markDeliveryAsCompleted] Email send failed:', err));
+                }
+            } catch (emailErr) {
+                console.warn('[markDeliveryAsCompleted] Could not send email:', emailErr);
+            }
+            
             return res.status(200).json({ success: true, delivery: toCamelCase(completedDelivery) });
+        }
+        case 'markDeliveryAsReady': {
+            const { deliveryId, resend = false } = req.body;
+            
+            if (!deliveryId) {
+                return res.status(400).json({ error: 'deliveryId is required.' });
+            }
+            
+            // Check if already marked as ready
+            const { rows: [existingDelivery] } = await sql`
+                SELECT * FROM deliveries WHERE id = ${deliveryId}
+            `;
+            
+            if (!existingDelivery) {
+                return res.status(404).json({ error: 'Delivery not found.' });
+            }
+            
+            // If already marked and not resend, reject
+            if (existingDelivery.ready_at && !resend) {
+                return res.status(400).json({ 
+                    error: 'Delivery already marked as ready',
+                    readyAt: existingDelivery.ready_at
+                });
+            }
+            
+            // Mark as ready (or use existing ready_at if resending)
+            let readyAt: string;
+            let readyDelivery: any;
+            
+            if (resend && existingDelivery.ready_at) {
+                // Resending email, don't update ready_at timestamp
+                readyAt = existingDelivery.ready_at;
+                readyDelivery = existingDelivery;
+                console.log('[markDeliveryAsReady] RESEND mode - using existing ready_at:', readyAt);
+            } else {
+                // First time marking as ready
+                readyAt = new Date().toISOString();
+                const { rows: [updatedDelivery] } = await sql`
+                    UPDATE deliveries 
+                    SET ready_at = ${readyAt}
+                    WHERE id = ${deliveryId}
+                    RETURNING *;
+                `;
+                readyDelivery = updatedDelivery;
+                console.log('[markDeliveryAsReady] Delivery marked as ready:', deliveryId, 'at:', readyAt);
+            }
+            
+            // Send ready notification email
+            let emailSentSuccessfully = false;
+            try {
+                console.log('[markDeliveryAsReady] 🔍 Step 1: Getting customer name for email:', readyDelivery.customer_email);
+                
+                // Get customer name from most recent booking (email is stored in user_info JSON)
+                const { rows: [bookingData] } = await sql`
+                    SELECT user_info FROM bookings 
+                    WHERE user_info->>'email' = ${readyDelivery.customer_email} 
+                    ORDER BY created_at DESC LIMIT 1
+                `;
+                
+                let customerName = 'Cliente';
+                if (bookingData?.user_info) {
+                    const userInfo = typeof bookingData.user_info === 'string' 
+                        ? JSON.parse(bookingData.user_info) 
+                        : bookingData.user_info;
+                    customerName = userInfo.firstName || 'Cliente';
+                }
+                
+                console.log('[markDeliveryAsReady] 🔍 Step 2: Customer name resolved:', customerName);
+                console.log('[markDeliveryAsReady] 🔍 Step 3: Importing emailService module...');
+                
+                const emailServiceModule = await import('./emailService.js');
+                
+                console.log('[markDeliveryAsReady] 🔍 Step 4: Calling sendDeliveryReadyEmail with:', {
+                    email: readyDelivery.customer_email,
+                    name: customerName,
+                    description: readyDelivery.description,
+                    readyAt: readyAt
+                });
+                
+                const emailResult = await emailServiceModule.sendDeliveryReadyEmail(
+                    readyDelivery.customer_email, 
+                    customerName, 
+                    {
+                        description: readyDelivery.description,
+                        readyAt: readyAt
+                    }
+                );
+                
+                console.log('[markDeliveryAsReady] 🔍 Step 5: Email function returned:', JSON.stringify(emailResult));
+                
+                if (emailResult && (emailResult as any).sent === true) {
+                    console.log('[markDeliveryAsReady] ✅ EMAIL SENT SUCCESSFULLY');
+                    emailSentSuccessfully = true;
+                } else {
+                    console.error('[markDeliveryAsReady] ⚠️ EMAIL NOT SENT - Result:', emailResult);
+                }
+            } catch (emailErr: any) {
+                console.error('[markDeliveryAsReady] ❌ EMAIL ERROR - Type:', typeof emailErr);
+                console.error('[markDeliveryAsReady] ❌ EMAIL ERROR - Message:', emailErr?.message || 'No message');
+                console.error('[markDeliveryAsReady] ❌ EMAIL ERROR - Stack:', emailErr?.stack || 'No stack');
+                console.error('[markDeliveryAsReady] ❌ EMAIL ERROR - Full:', JSON.stringify(emailErr, null, 2));
+            }
+            
+            console.log('[markDeliveryAsReady] 🔍 Final: Returning response with emailSent:', emailSentSuccessfully);
+            
+            return res.status(200).json({ 
+                success: true, 
+                delivery: toCamelCase(readyDelivery),
+                emailSent: emailSentSuccessfully
+            });
         }
         case 'deleteDelivery': {
             const { deliveryId } = req.body;
@@ -1288,158 +2529,312 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
 
 async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookingCode'> & { invoiceData?: Omit<InvoiceRequest, 'id' | 'bookingId' | 'status' | 'requestedAt' | 'processedAt'> }): Promise<AddBookingResult> {
-    const { productId, slots, userInfo, productType, invoiceData, bookingDate, participants, clientNote } = body;
-
-        // Sincronizar cliente en tabla customers
-        try {
-            await createCustomer({
-                email: userInfo.email,
-                firstName: userInfo.firstName,
-                lastName: userInfo.lastName,
-                phone: userInfo.phone,
-                countryCode: userInfo.countryCode,
-                birthday: typeof userInfo.birthday === 'string' ? userInfo.birthday : undefined
-            });
-        } catch (error) {
-            // No romper el flujo si falla la creación del cliente
-            console.error('Error creando/actualizando cliente:', error);
-        }
-    
-    // Atomic deduplication: check for existing booking and slot, prevent race conditions
-    if (productType === 'INTRODUCTORY_CLASS' || productType === 'CLASS_PACKAGE' || productType === 'SINGLE_CLASS' || productType === 'GROUP_CLASS') {
-        for (const newSlot of slots) {
-            // Buscar todas las reservas del usuario
-            const { rows: userBookings } = await sql`
-                SELECT * FROM bookings WHERE user_info->>'email' = ${userInfo.email}
-            `;
-            for (const booking of userBookings) {
-                const bookingSlots = Array.isArray(booking.slots) ? booking.slots : [];
-                // Comparar cada slot existente por date, time, instructorId
-                const duplicateSlot = bookingSlots.find((s: any) =>
-                    s.date === newSlot.date &&
-                    s.time === newSlot.time &&
-                    s.instructorId === newSlot.instructorId
-                );
-                if (duplicateSlot) {
-                    // Si existe, retorna la reserva existente
-                    const parsedExisting = parseBookingFromDB(booking);
-                    return { success: true, message: 'Booking already exists.', booking: parsedExisting };
-                }
-            }
-        }
+  const bookingCodeCheck = (body as any).bookingCode;
+  if (bookingCodeCheck) {
+    const { rows: existingByCode } = await sql`SELECT * FROM bookings WHERE booking_code = ${bookingCodeCheck}`;
+    if (existingByCode.length > 0) {
+      console.log('[IDEMPOTENCY] Booking already exists with code:', bookingCodeCheck);
+      throw new Error('Booking code already exists');
     }
-    
-    const newBooking: Omit<Booking, 'id'> = {
-    ...body,
-    bookingCode: generateBookingCode(),
-    createdAt: new Date(),
+  }
+
+  try {
+    const newBookingCode = generateBookingCode();
+    const { rows: created } = await sql`
+      INSERT INTO bookings (
+        booking_code, product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_date, accepted_no_refund
+      ) VALUES (
+        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(body.product)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}
+      ) RETURNING *;
+    `;
+
+    const booking: Booking = {
+      id: created[0].id,
+      productId: created[0].product_id,
+      productType: created[0].product_type,
+      product: created[0].product,
+      slots: created[0].slots,
+      userInfo: created[0].user_info,
+      createdAt: new Date(created[0].created_at),
+      isPaid: created[0].is_paid,
+      price: created[0].price,
+      bookingCode: created[0].booking_code,
+      bookingMode: created[0].booking_mode,
+      bookingDate: created[0].booking_date,
     };
 
-    const { rows: [insertedRow] } = await sql`
-        INSERT INTO bookings (product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_code, booking_date, participants, client_note)
-        VALUES (
-            ${newBooking.productId},
-            ${newBooking.productType},
-            ${JSON.stringify(newBooking.slots)},
-            ${JSON.stringify(newBooking.userInfo)},
-            ${new Date().toISOString()},
-            ${newBooking.isPaid},
-            ${newBooking.price},
-            ${newBooking.bookingMode},
-            ${JSON.stringify(newBooking.product)},
-            ${newBooking.bookingCode},
-            ${bookingDate},
-            ${participants || 1},
-            ${clientNote || null}
-        )
+    // Process giftcard hold if provided
+    const giftcardHoldId = (body as any).holdId;
+    const giftcardAmount = typeof (body as any).giftcardAmount === 'number' ? (body as any).giftcardAmount : 0;
+    const expectedPrice = Number(body.price || 0);
+
+    if (giftcardHoldId && giftcardAmount > 0) {
+      try {
+        console.log('[ADD BOOKING] Processing giftcard hold:', { 
+          holdId: giftcardHoldId, 
+          declaredAmount: giftcardAmount,
+          bookingPrice: expectedPrice
+        });
+        
+        // Begin transaction for giftcard consumption
+        await sql`BEGIN`;
+        
+        // Lock and fetch the hold
+        const { rows: [holdRow] } = await sql`SELECT * FROM giftcard_holds WHERE id = ${giftcardHoldId} FOR UPDATE`;
+        if (!holdRow) {
+          await sql`ROLLBACK`;
+          console.error('[ADD BOOKING] Giftcard hold not found:', giftcardHoldId);
+          throw new Error('Giftcard hold not found');
+        }
+
+        // Lock and fetch the giftcard
+        const giftcardId = holdRow.giftcard_id;
+        const { rows: [giftcardRow] } = await sql`SELECT * FROM giftcards WHERE id = ${giftcardId} FOR UPDATE`;
+        if (!giftcardRow) {
+          await sql`ROLLBACK`;
+          console.error('[ADD BOOKING] Giftcard not found:', giftcardId);
+          throw new Error('Giftcard not found');
+        }
+
+        const currentBalance = Number(giftcardRow.balance || 0);
+        const holdAmount = Number(holdRow.amount || 0);
+
+        // CRÍTICO: Validar que el hold tiene el monto correcto
+        // Si el hold es menor al esperado pero la giftcard tiene saldo suficiente, usar el correcto
+        let actualAmountToConsume = holdAmount;
+        
+        if (holdAmount < giftcardAmount && currentBalance >= giftcardAmount) {
+          console.warn('[ADD BOOKING] Hold amount mismatch - using correct amount:', {
+            holdAmount,
+            declaredAmount: giftcardAmount,
+            balance: currentBalance,
+            willUse: giftcardAmount
+          });
+          actualAmountToConsume = giftcardAmount;
+        }
+        
+        // Validar que el monto a consumir no exceda el precio del booking
+        if (actualAmountToConsume > expectedPrice) {
+          actualAmountToConsume = expectedPrice;
+          console.log('[ADD BOOKING] Capping giftcard amount to booking price:', actualAmountToConsume);
+        }
+
+        if (currentBalance < actualAmountToConsume) {
+          await sql`ROLLBACK`;
+          console.error('[ADD BOOKING] Insufficient giftcard balance:', { 
+            current: currentBalance, 
+            required: actualAmountToConsume,
+            holdAmount,
+            declaredAmount: giftcardAmount
+          });
+          throw new Error('Insufficient giftcard balance');
+        }
+
+        // Update giftcard balance with the ACTUAL amount being consumed
+        await sql`UPDATE giftcards SET balance = ${currentBalance - actualAmountToConsume} WHERE id = ${giftcardId}`;
+        
+        // Delete the hold
+        await sql`DELETE FROM giftcard_holds WHERE id = ${giftcardHoldId}`;
+
+        // CRÍTICO: Crear registro de pago con giftcard
+        const paymentId = `pay_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const giftcardCode = giftcardRow.code || 'unknown';
+        const paymentDetails = [{
+          id: paymentId,
+          amount: actualAmountToConsume,
+          method: 'Giftcard',
+          receivedAt: new Date().toISOString(),
+          giftcardAmount: actualAmountToConsume,
+          giftcardId: String(giftcardId),
+          metadata: {
+            giftcardCode,
+            holdId: giftcardHoldId,
+            originalHoldAmount: holdAmount
+          }
+        }];
+
+        // Determinar si el booking está completamente pagado
+        const isPaid = actualAmountToConsume >= expectedPrice;
+
+        // Update booking record to reflect giftcard usage AND payment
+        await sql`
+          UPDATE bookings 
+          SET giftcard_redeemed_amount = ${actualAmountToConsume},
+              giftcard_id = ${String(giftcardId)},
+              payment_details = ${JSON.stringify(paymentDetails)}::jsonb,
+              is_paid = ${isPaid}
+          WHERE booking_code = ${newBookingCode}
+        `;
+
+        console.log('[ADD BOOKING] Payment registered:', {
+          paymentId,
+          amount: actualAmountToConsume,
+          bookingPrice: expectedPrice,
+          isPaid,
+          method: 'Giftcard',
+          code: giftcardCode
+        });
+
+        // Insert audit log with ACTUAL consumed amount
+        try {
+          await sql`
+            INSERT INTO giftcard_audit (
+              id, giftcard_id, event_type, amount, metadata, created_at
+            ) VALUES (
+              uuid_generate_v4(),
+              ${String(giftcardId)},
+              'hold_consumed',
+              ${actualAmountToConsume},
+              ${JSON.stringify({ 
+                holdId: giftcardHoldId, 
+                bookingCode: booking.bookingCode,
+                originalHoldAmount: holdAmount,
+                actualConsumed: actualAmountToConsume,
+                paymentId,
+                isPaid
+              })}::jsonb,
+              NOW()
+            )
+          `;
+        } catch (auditErr) {
+          console.warn('[ADD BOOKING] Failed to insert giftcard audit:', auditErr);
+          // Don't fail the transaction if audit fails
+        }
+
+        await sql`COMMIT`;
+        console.log('[ADD BOOKING] Giftcard consumed successfully:', { 
+          giftcardId, 
+          consumedAmount: actualAmountToConsume,
+          newBalance: currentBalance - actualAmountToConsume,
+          hadDiscrepancy: holdAmount !== actualAmountToConsume,
+          bookingPaid: isPaid
+        });
+      } catch (giftcardError) {
+        try { await sql`ROLLBACK`; } catch (rbErr) { console.warn('rollback failed after giftcard processing error', rbErr); }
+        console.error('[ADD BOOKING] Error processing giftcard:', giftcardError);
+        // Don't fail the booking creation, but log the error
+      }
+    }
+
+    // Create invoice request if invoiceData is provided
+    if (body.invoiceData) {
+      try {
+        console.log('[ADD BOOKING] Creating invoice request for booking:', booking.bookingCode);
+        const invoiceData = body.invoiceData;
+        
+        await sql`
+          INSERT INTO invoice_requests (
+            booking_id, company_name, tax_id, address, email, status, requested_at
+          ) VALUES (
+            ${booking.id}, 
+            ${invoiceData.companyName || ''}, 
+            ${invoiceData.taxId || ''}, 
+            ${invoiceData.address || ''}, 
+            ${invoiceData.email || booking.userInfo.email}, 
+            'Pending', 
+            NOW()
+          )
+        `;
+        
+        console.log('[ADD BOOKING] Invoice request created successfully');
+      } catch (invoiceError) {
+        console.error('[ADD BOOKING] Error creating invoice request:', invoiceError);
+        // Don't fail the booking creation if invoice request fails
+        // The booking is already created, just log the error
+      }
+    }
+
+    // Send pre-booking confirmation email
+    try {
+      console.log('[ADD BOOKING] Sending pre-booking confirmation email to:', booking.userInfo.email);
+      
+      // Get bank details from environment or use default
+      const bankDetails = {
+        bankName: 'Banco Pichincha',
+        accountHolder: 'Carolina Massuh Morán',
+        accountNumber: '2100334248',
+        accountType: 'Cuenta Corriente',
+        taxId: '0921343935'
+      };
+      
+      await emailService.sendPreBookingConfirmationEmail(booking, bankDetails);
+      console.log('[ADD BOOKING] Pre-booking confirmation email sent successfully');
+    } catch (emailError) {
+      console.error('[ADD BOOKING] Error sending pre-booking confirmation email:', emailError);
+      // Don't fail the booking creation if email fails
+      // The booking is already created, just log the error
+    }
+
+    // CRÍTICO: Re-fetch booking para obtener datos actualizados después de payment_details
+    try {
+      const { rows: [updatedBookingRow] } = await sql`
+        SELECT * FROM bookings WHERE booking_code = ${newBookingCode} LIMIT 1
+      `;
+      if (updatedBookingRow) {
+        const refreshedBooking = parseBookingFromDB(updatedBookingRow);
+        console.log('[ADD BOOKING] Returning refreshed booking:', {
+          bookingCode: refreshedBooking.bookingCode,
+          isPaid: refreshedBooking.isPaid,
+          hasPaymentDetails: !!refreshedBooking.paymentDetails?.length,
+          paymentCount: refreshedBooking.paymentDetails?.length || 0
+        });
+        return {
+          success: true,
+          message: 'Booking created successfully',
+          booking: refreshedBooking,
+        };
+      }
+    } catch (refetchError) {
+      console.warn('[ADD BOOKING] Could not refetch updated booking, returning original:', refetchError);
+    }
+
+    return {
+      success: true,
+      message: 'Booking created successfully',
+      booking,
+    };
+  } catch (error) {
+    console.error('Error creating booking:', error);
+    throw new Error('Failed to create booking');
+  }
+}
+
+// Eliminar clases por ID
+async function deleteClassesByIds(classIds: number[]): Promise<number> {
+    if (!Array.isArray(classIds) || classIds.length === 0) {
+        throw new Error('Invalid classIds array');
+    }
+    
+    // Convert classIds to an array of strings to ensure compatibility with SQL
+    const stringClassIds = classIds.map(String);
+    const deletedCount = await sql`
+        DELETE FROM products WHERE id = ANY(ARRAY[${stringClassIds.map(id => `'${id}'`).join(',')}])
         RETURNING *;
     `;
-    
-    const fullyParsedBooking = parseBookingFromDB(insertedRow);
 
-    if (invoiceData) {
-        const { rows: [invoiceRequestRow] } = await sql`
-            INSERT INTO invoice_requests (booking_id, status, company_name, tax_id, address, email)
-            VALUES (${fullyParsedBooking.id}, 'Pending', ${invoiceData.companyName}, ${invoiceData.taxId}, ${invoiceData.address}, ${invoiceData.email})
-            RETURNING id;
-        `;
-        await sql`
-            INSERT INTO notifications (type, target_id, user_name, summary)
-            VALUES ('new_invoice_request', ${invoiceRequestRow.id}, ${`${userInfo.firstName} ${userInfo.lastName}`}, ${fullyParsedBooking.bookingCode});
-        `;
-    }
-
-    await sql`
-    INSERT INTO notifications (type, target_id, user_name, summary)
-    VALUES ('new_booking', ${fullyParsedBooking.id}, ${`${userInfo.firstName} ${fullyParsedBooking.userInfo.lastName}`}, ${newBooking.product.name});
-    `;
-    
-    try {
-        const { rows: settingsRows } = await sql`SELECT key, value FROM settings WHERE key = 'automationSettings' OR key = 'bankDetails'`;
-        const automationSettings = settingsRows.find(r => r.key === 'automationSettings')?.value as AutomationSettings;
-    const bankDetails = settingsRows.find(r => r.key === 'bankDetails')?.value as BankDetails[];
-
-        if (automationSettings?.preBookingConfirmation?.enabled && bankDetails && bankDetails.length > 0 && bankDetails[0].accountNumber) {
-            await emailService.sendPreBookingConfirmationEmail(fullyParsedBooking, bankDetails[0]);
-            await sql`
-                INSERT INTO client_notifications (created_at, client_name, client_email, type, channel, status, booking_code)
-                VALUES (
-                    ${new Date().toISOString()},
-                    ${`${fullyParsedBooking.userInfo.firstName} ${fullyParsedBooking.userInfo.lastName}`},
-                    ${fullyParsedBooking.userInfo.email},
-                    'PRE_BOOKING_CONFIRMATION', 'Email', 'Sent',
-                    ${fullyParsedBooking.bookingCode}
-                );
-            `;
-        } else if (automationSettings?.preBookingConfirmation?.enabled) {
-            console.log(`Skipping pre-booking confirmation email for ${fullyParsedBooking.bookingCode}: Bank details are not configured.`);
-        }
-    } catch(emailError) {
-        console.warn(`Booking ${fullyParsedBooking.bookingCode} created, but confirmation email failed to send:`, emailError);
-    }
-
-    return { success: true, message: 'Booking added.', booking: fullyParsedBooking };
+    // Ensure rowCount is not null
+    const rowCount = deletedCount.rowCount || 0;
+    return rowCount;
 }
+
 async function handleDelete(req: VercelRequest, res: VercelResponse) {
-    const { key, id } = req.query;
+    const { action } = req.query;
 
-    if (!key || typeof key !== 'string') {
-        return res.status(400).json({ error: 'A "key" query parameter is required for deletion.' });
-    }
-    if (!id) {
-        return res.status(400).json({ error: 'An "id" query parameter is required for deletion.' });
-    }
+    if (action === 'deleteClassesBatch') {
+        const { classIds } = req.body;
 
-    try {
-        switch (key) {
-            case 'booking':
-                await sql`DELETE FROM bookings WHERE id = ${Array.isArray(id) ? id[0] : id}`;
-                break;
-            case 'inquiry':
-                await sql`DELETE FROM inquiries WHERE id = ${Array.isArray(id) ? id[0] : id}`;
-                break;
-            case 'notification':
-                await sql`DELETE FROM notifications WHERE id = ${Array.isArray(id) ? id[0] : id}`;
-                break;
-            case 'clientNotification':
-                await sql`DELETE FROM client_notifications WHERE id = ${Array.isArray(id) ? id[0] : id}`;
-                break;
-            case 'invoiceRequest':
-                await sql`DELETE FROM invoice_requests WHERE id = ${Array.isArray(id) ? id[0] : id}`;
-                break;
-            case 'instructor':
-                await sql`DELETE FROM instructors WHERE id = ${Array.isArray(id) ? id[0] : id}`;
-                break;
-            case 'product':
-                await sql`DELETE FROM products WHERE id = ${Array.isArray(id) ? id[0] : id}`;
-                break;
-            default:
-                return res.status(400).json({ error: `Unknown key for deletion: ${key}` });
+        if (!Array.isArray(classIds) || classIds.length === 0) {
+            return res.status(400).json({ error: 'classIds must be a non-empty array.' });
         }
-        return res.status(200).json({ success: true });
-    } catch (error) {
-        console.error('Delete Error:', error);
-        const errorMessage = (error instanceof Error) ? error.message : 'An internal server error occurred.';
-        return res.status(500).json({ error: errorMessage });
+
+        try {
+            const deletedCount = await deleteClassesByIds(classIds);
+            return res.status(200).json({ success: true, deletedCount });
+        } catch (error) {
+            console.error('Error deleting classes:', error);
+            return res.status(500).json({ error: 'Failed to delete classes.' });
+        }
     }
+
+    return res.status(400).json({ error: `Unknown action: ${action}` });
 }

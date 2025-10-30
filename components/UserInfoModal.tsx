@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { UserInfo } from '../types';
 // Eliminado useLanguage, la app ahora es monolingüe en español
 import { COUNTRIES } from '@/constants';
@@ -7,6 +7,7 @@ import { MailIcon } from './icons/MailIcon';
 import { PhoneIcon } from './icons/PhoneIcon';
 import { InfoCircleIcon } from './icons/InfoCircleIcon';
 import { GiftIcon } from './icons/GiftIcon';
+import { slotsRequireNoRefund } from '../utils/bookingPolicy';
 
 interface InvoiceData {
     companyName: string;
@@ -16,8 +17,9 @@ interface InvoiceData {
 }
 interface UserInfoModalProps {
   onClose: () => void;
-  onSubmit: (data: { userInfo: UserInfo, needsInvoice: boolean, invoiceData?: InvoiceData }) => void;
+  onSubmit: (data: { userInfo: UserInfo, needsInvoice: boolean, invoiceData?: InvoiceData, acceptedNoRefund?: boolean }) => void;
   onShowPolicies: () => void;
+  slots?: any[];
 }
 
 const InputField: React.FC<{
@@ -59,7 +61,7 @@ const InputField: React.FC<{
     </div>
 );
 
-export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit, onShowPolicies }) => {
+export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit, onShowPolicies, slots = [] }) => {
     // Eliminado useLanguage, la app ahora es monolingüe en español
     // User info state
     const [firstName, setFirstName] = useState('');
@@ -79,6 +81,12 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [isPhoneFocused, setIsPhoneFocused] = useState(false);
     const [acceptedPolicies, setAcceptedPolicies] = useState(false);
+    const [acceptedNoRefund, setAcceptedNoRefund] = useState(false);
+    
+    // Check if booking requires no-refund acceptance (48-hour policy)
+    const requiresNoRefundAcceptance = useMemo(() => {
+        return slotsRequireNoRefund(slots, 48);
+    }, [slots]);
     const [submitDisabled, setSubmitDisabled] = useState(false);
     
     const validatePhone = (phoneNum: string): string | null => {
@@ -126,6 +134,7 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
         if (invoiceData.email && !/\S+@\S+\.\S+/.test(invoiceData.email)) newErrors.invoiceEmail = 'El correo electrónico no es válido.';
 
         if (!acceptedPolicies) newErrors.acceptedPolicies = 'Debes aceptar las políticas.';
+        if (requiresNoRefundAcceptance && !acceptedNoRefund) newErrors.acceptedNoRefund = 'Debes aceptar la política de no reembolso ni reagendamiento.';
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
@@ -146,7 +155,8 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                     birthday: optOutBirthday ? null : birthday
                 },
                 needsInvoice: true,
-                invoiceData: { ...invoiceData, email: invoiceData.email || email }
+                invoiceData: { ...invoiceData, email: invoiceData.email || email },
+                acceptedNoRefund: requiresNoRefundAcceptance ? acceptedNoRefund : false
             });
         }
     };
@@ -250,7 +260,33 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                             <InputField id="invoiceEmail" name="email" label="Email de Facturación (opcional)" value={invoiceData.email} onChange={handleInvoiceDataChange} type="email" placeholder="Dejar en blanco para usar el email principal" error={errors.invoiceEmail} />
                         </div>
                     </div>
-                    <div className="mt-6 pt-4 border-t border-brand-border">
+                    <div className="mt-6 pt-4 border-t border-brand-border space-y-4">
+                        {requiresNoRefundAcceptance && (
+                            <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 flex items-start gap-3">
+                                <InfoCircleIcon className="w-5 h-5 flex-shrink-0 mt-0.5 text-yellow-700" />
+                                <div>
+                                    <h4 className="font-bold text-sm text-yellow-900">Política de No Reembolso ni Reagendamiento</h4>
+                                    <p className="text-xs mt-1 text-yellow-800">
+                                        Has seleccionado una clase que inicia en menos de 48 horas. De acuerdo con nuestras políticas, 
+                                        <strong> las reservas realizadas con menos de 48 horas de anticipación no son reembolsables ni reagendables</strong>.
+                                    </p>
+                                    <div className="flex items-start mt-3">
+                                        <input 
+                                            id="accept-no-refund" 
+                                            type="checkbox" 
+                                            checked={acceptedNoRefund} 
+                                            onChange={(e) => setAcceptedNoRefund(e.target.checked)}
+                                            className="h-4 w-4 text-brand-primary border-yellow-400 rounded focus:ring-brand-primary mt-0.5"
+                                        />
+                                        <label htmlFor="accept-no-refund" className="ml-3 text-sm text-yellow-900 font-medium">
+                                            Entiendo y acepto que esta reserva no es reembolsable ni reagendable
+                                        </label>
+                                    </div>
+                                    {errors.acceptedNoRefund && <p className="text-red-600 text-xs mt-1 ml-7">{errors.acceptedNoRefund}</p>}
+                                </div>
+                            </div>
+                        )}
+                        
                         <div className="flex items-start">
                             <input id="accept-policies" type="checkbox" checked={acceptedPolicies} onChange={(e) => setAcceptedPolicies(e.target.checked)}
                                 className="h-4 w-4 text-brand-primary border-brand-border rounded focus:ring-brand-primary mt-1"

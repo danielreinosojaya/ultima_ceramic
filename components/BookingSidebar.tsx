@@ -23,35 +23,36 @@ export const BookingSidebar: React.FC<BookingSidebarProps> = ({ product, selecte
     safeProduct.price = typeof (safeProduct as any).price === 'number' ? (safeProduct as any).price : parseFloat((safeProduct as any).price) || 0;
   }
 
-  if (safeProduct.type !== 'CLASS_PACKAGE') {
-    return null; // This sidebar is only for class packages
-  }
+ if (safeProduct.type !== 'CLASS_PACKAGE') {
+  return null; // This sidebar is only for class packages
+}
 
-  // Type cast seguro
-  const pkg = safeProduct as ClassPackage;
-  const classesRemaining = pkg.classes - selectedSlots.length;
-  const originalPrice = pkg.classes * SINGLE_CLASS_PRICE;
-  const discount = originalPrice - pkg.price;
-  const subtotal = pkg.price / (1 + VAT_RATE);
-  const vat = pkg.price - subtotal;
+// Type cast seguro
+const pkg = safeProduct as ClassPackage;
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const adjustedDate = new Date(date.valueOf() + date.getTimezoneOffset() * 60 * 1000);
-    return adjustedDate.toLocaleDateString(language, {
-      weekday: 'short',
-      month: 'long',
-      day: 'numeric',
-    });
-  };
+// Calcula las variables necesarias usando `pkg`
+const classesRemaining = pkg.classes - selectedSlots.length;
+const originalPrice = pkg.classes * SINGLE_CLASS_PRICE;
+const discount = originalPrice - pkg.price;
+const subtotal = pkg.price / (1 + VAT_RATE);
+const vat = pkg.price - subtotal;
 
-  return (
-    <div className="bg-brand-background p-6 rounded-lg sticky top-24 h-fit">
-  <h3 className="text-xl font-serif text-brand-text mb-1">Resumen de compra</h3>
-      <div className="border-t border-brand-border pt-4">
-        <div className="space-y-3 mb-4 text-sm">
-            <h4 className="font-bold text-brand-text text-base">{pkg.name}</h4>
-            
+const formatDate = (dateStr: string) => {
+  const date = new Date(dateStr);
+  const adjustedDate = new Date(date.valueOf() + date.getTimezoneOffset() * 60 * 1000);
+  return adjustedDate.toLocaleDateString(language, {
+    weekday: 'short',
+    month: 'long',
+    day: 'numeric',
+  });
+};
+
+return (
+  <div className="bg-brand-background p-6 rounded-lg sticky top-24 h-fit">
+    <h3 className="text-xl font-serif text-brand-text mb-1">Resumen de compra</h3>
+    <div className="border-t border-brand-border pt-4">
+      <div className="space-y-3 mb-4 text-sm">
+        <h4 className="font-bold text-brand-text text-base">{pkg.name}</h4>            
             {/* Savings Breakdown */}
             <div className="space-y-1">
                 <div className="flex justify-between">
@@ -76,11 +77,7 @@ export const BookingSidebar: React.FC<BookingSidebarProps> = ({ product, selecte
                 </div>
                 <div className="flex justify-between font-bold text-lg text-brand-text pt-1 mt-1">
                     <span>Total a pagar</span>
-                    <span>
-                      {typeof pkg.price === 'number' && !isNaN(pkg.price)
-                        ? `$${pkg.price.toFixed(2)}`
-                        : (() => { console.error('BookingSidebar: pkg.price inválido', pkg); return '---'; })()}
-                    </span>
+                    <span>${pkg.price.toFixed(2)}</span>
                 </div>
             </div>
         </div>

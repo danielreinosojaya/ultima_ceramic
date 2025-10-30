@@ -6,13 +6,15 @@ interface NewDeliveryModalProps {
     onClose: () => void;
     onSave: (deliveryData: Omit<Delivery, 'id' | 'createdAt'>) => Promise<void>;
     customerEmail: string;
+    customerName?: string;
 }
 
 export const NewDeliveryModal: React.FC<NewDeliveryModalProps> = ({ 
     isOpen, 
     onClose, 
     onSave, 
-    customerEmail 
+    customerEmail,
+    customerName 
 }) => {
     const [description, setDescription] = useState('');
     const [scheduledDate, setScheduledDate] = useState('');
@@ -24,9 +26,7 @@ export const NewDeliveryModal: React.FC<NewDeliveryModalProps> = ({
     const validateForm = () => {
         const newErrors: { [key: string]: string } = {};
         
-        if (!description.trim()) {
-            newErrors.description = 'La descripción es obligatoria';
-        }
+        // description ahora es opcional - no validar
         
         if (!scheduledDate) {
             newErrors.scheduledDate = 'La fecha de entrega es obligatoria';
@@ -76,7 +76,7 @@ export const NewDeliveryModal: React.FC<NewDeliveryModalProps> = ({
         try {
             await onSave({
                 customerEmail,
-                description: description.trim(),
+                description: description.trim() || null,
                 scheduledDate,
                 status: 'pending',
                 notes: notes.trim() || null,
@@ -128,22 +128,17 @@ export const NewDeliveryModal: React.FC<NewDeliveryModalProps> = ({
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
                         <label htmlFor="description" className="block text-sm font-semibold text-brand-text mb-1">
-                            Descripción *
+                            Descripción <span className="text-gray-400 font-normal">(opcional)</span>
                         </label>
                         <input
                             id="description"
                             type="text"
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
-                            placeholder="Ej: 2 bowls de cerámica"
-                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent ${
-                                errors.description ? 'border-red-500' : 'border-gray-300'
-                            }`}
+                            placeholder="Ej: 2 bowls de cerámica (opcional - útil para identificar piezas específicas)"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                             disabled={isSubmitting}
                         />
-                        {errors.description && (
-                            <p className="text-red-500 text-xs mt-1">{errors.description}</p>
-                        )}
                     </div>
 
                     <div>

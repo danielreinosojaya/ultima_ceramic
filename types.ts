@@ -1,6 +1,24 @@
 // Basic Types
 export type DayKey = 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday';
-export type AppView = 'welcome' | 'techniques' | 'packages' | 'intro_classes' | 'schedule' | 'summary' | 'group_experience' | 'couples_experience' | 'team_building' | 'confirmation';
+export type AppView =
+  | 'welcome'
+  | 'techniques'
+  | 'packages'
+  | 'intro_classes'
+  | 'schedule'
+  | 'summary'
+  | 'group_experience'
+  | 'couples_experience'
+  | 'team_building'
+  | 'confirmation'
+  | 'giftcard_landing'
+  | 'giftcard_amount'
+  | 'giftcard_personalization'
+  | 'giftcard_delivery'
+  | 'giftcard_payment'
+  | 'giftcard_manual_payment'
+  | 'giftcard_pending_review'
+  | 'giftcard_confirmation';
 export type BookingMode = 'flexible' | 'monthly';
 export type Technique = 'potters_wheel' | 'molding';
 
@@ -21,12 +39,13 @@ export type DeliveryStatus = 'pending' | 'completed' | 'overdue';
 export interface Delivery {
     id: string;
     customerEmail: string;
-    description: string;
+    description?: string; // Opcional - puede ser texto genérico si vacío
     scheduledDate: string; // ISO date string - fecha programada tentativa
     status: DeliveryStatus;
     createdAt: string; // ISO date string
     completedAt?: string | null; // ISO date string - fecha real de entrega
     deliveredAt?: string | null; // ISO date string - fecha cuando se marcó como entregada
+    readyAt?: string | null; // ISO date string - fecha cuando se marcó como lista para recoger
     notes?: string | null;
     photos?: string[] | null; // Array de URLs de fotos
 }
@@ -88,6 +107,8 @@ export interface BaseProduct {
     imageUrl?: string;
     isActive: boolean;
     sortOrder?: number;
+    price?: number; // Make price optional for all products
+    details?: ClassPackageDetails | OpenStudioSubscriptionDetails; // Allow optional details
 }
 
 export interface ClassPackage extends BaseProduct {
@@ -175,9 +196,13 @@ export interface EnrichedIntroClassSession {
 export type AttendanceStatus = 'attended' | 'no-show';
 
 export interface PaymentDetails {
+    id?: string;  // UUID único para identificar el pago (opcional para retrocompatibilidad)
     amount: number;
-    method: 'Cash' | 'Card' | 'Transfer';
+    method: 'Cash' | 'Card' | 'Transfer' | 'Giftcard' | 'Manual';
     receivedAt: string; // ISO date string
+    giftcardAmount?: number;  // Monto pagado con giftcard (puede ser parcial)
+    giftcardId?: string;      // ID de la giftcard usada
+    metadata?: Record<string, any>;  // Datos adicionales (código, etc.)
 }
 
 export interface Booking {
@@ -192,12 +217,22 @@ export interface Booking {
     price: number;
     bookingCode: string;
     bookingMode: BookingMode;
-    // FIX: Change to an array of payments
-    paymentDetails?: PaymentDetails[];
+    customer?: Customer; // Adding customer to Booking
+    // Si la reserva fue aceptada con la condición de "sin reembolsos ni reagendamientos" (para reservas <48h)
+    acceptedNoRefund?: boolean;
+    paymentDetails?: PaymentDetails[]; // Ensure it's treated as an array
     attendance?: Record<string, AttendanceStatus>; // key is `${date}_${time}`
     bookingDate: string;
     participants?: number;
     clientNote?: string;
+    giftcardApplied?: boolean;
+    giftcardRedeemedAmount?: number;
+    giftcardId?: string;
+    pendingBalance?: number;
+
+    // Propiedades derivadas
+    date?: string; // Derivada de bookingDate
+    time?: string; // Derivada de slots
 }
 
 export interface BookingDetails {
@@ -308,15 +343,13 @@ export interface FooterInfo {
 }
 
 export interface BankDetails {
-    bankName: string;
+    bankName?: string; // Adding bankName as optional
     accountHolder: string;
     accountNumber: string;
     accountType: string;
     taxId: string;
-    details?: string;
 }
 
-// For settings, allow multiple accounts
 export type BankDetailsArray = BankDetails[];
 
 export interface UITexts {
@@ -361,7 +394,7 @@ export interface AppData {
 }
 
 // Admin & Notifications
-export type AdminTab = 'products' | 'calendar' | 'schedule-settings' | 'financials' | 'customers' | 'inquiries' | 'settings' | 'communications' | 'invoicing';
+export type AdminTab = 'calendar' | 'schedule' | 'products' | 'customers' | 'inquiries' | 'instructors' | 'settings' | 'schedule-settings' | 'communications' | 'financials' | 'invoicing';
 
 export interface NavigationState {
     tab: AdminTab;
@@ -379,6 +412,7 @@ export interface Notification {
 }
 
 export type ClientNotificationType = 'PRE_BOOKING_CONFIRMATION' | 'PAYMENT_RECEIPT' | 'CLASS_REMINDER';
+
 export interface ClientNotification {
     id: string;
     createdAt: string | null; // ISO string
@@ -389,4 +423,19 @@ export interface ClientNotification {
     status: 'Sent' | 'Failed' | 'Pending';
     bookingCode: string;
     scheduledAt?: string; // ISO string
+}
+
+// Define DeliveryMethod type
+export type DeliveryMethod = {
+  type: 'email' | 'physical';
+  data: Record<string, any>;
+};
+
+// Adjust activeGiftcardHold and appliedGiftcardHold types
+export interface GiftcardHold {
+  holdId?: string;
+  expiresAt?: string;
+  amount?: number;
+  giftcardId?: string;
+  code?: string;
 }

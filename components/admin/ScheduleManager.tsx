@@ -462,9 +462,14 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             const result = await dataService.rescheduleBookingSlot(rescheduleInfo.bookingId, rescheduleInfo.slot, newSlot);
             if (!result.success) {
                 alert('Error al reprogramar la reserva: ' + result.message);
+                return;
             }
+            
             closeAllModals();
+            
+            // CORREGIDO: Forzar recarga de datos y dar tiempo al contexto para actualizar
             onDataChange();
+            await new Promise(resolve => setTimeout(resolve, 300));
         }
     };
     
@@ -542,12 +547,16 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     };
 
     const handleNavigateFromSearch = (booking: Booking) => {
+        // CORREGIDO: Manejar pre-reservas sin slots asignados
         if (!booking.slots || booking.slots.length === 0) {
+            // Si no tiene slots, mostrar mensaje informativo al usuario
+            alert(`⏳ Esta es una pre-reserva sin fechas asignadas aún.\n\nCódigo: ${booking.bookingCode}\nCliente: ${booking.userInfo.firstName} ${booking.userInfo.lastName}\n\nPuedes gestionar esta reserva desde el panel de Clientes o Financiero.`);
             setIsSearchPanelOpen(false);
             return;
         }
+        
         const firstSlot = booking.slots.sort((a,b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))[0];
-        if (firstSlot) {
+        if (firstSlot && firstSlot.date && firstSlot.time) {
             const firstSlotDate = new Date(firstSlot.date + 'T00:00:00');
             setCurrentDate(getWeekStartDate(firstSlotDate));
             setBookingToHighlight(booking);
@@ -556,6 +565,10 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             setTimeout(() => {
                 setBookingToHighlight(null);
             }, 4000); 
+        } else {
+            // Slot existe pero no tiene fecha/hora válida
+            alert(`⚠️ Esta reserva tiene slots incompletos.\n\nCódigo: ${booking.bookingCode}\nCliente: ${booking.userInfo.firstName} ${booking.userInfo.lastName}\n\nPor favor, asigna fechas completas desde el panel de Clientes.`);
+            setIsSearchPanelOpen(false);
         }
     };
 
@@ -709,6 +722,60 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 </button>
             </div>
         </div>
+
+        {/* Banner: Pre-reservas sin fechas asignadas */}
+        {(() => {
+            const pendingBookingsWithoutSlots = appData.bookings.filter(b => 
+                !b.isPaid && (!Array.isArray(b.slots) || b.slots.length === 0 || b.slots.every(s => !s.date || !s.time))
+            );
+            
+            if (pendingBookingsWithoutSlots.length > 0) {
+                return (
+                    <div className="mb-4 p-4 bg-amber-50 border-l-4 border-amber-400 rounded-md animate-fade-in">
+                        <div className="flex items-start gap-3">
+                            <div className="flex-shrink-0 mt-0.5">
+                                <span className="text-2xl">⏳</span>
+                            </div>
+                            <div className="flex-1">
+                                <h3 className="text-sm font-bold text-amber-900 mb-1">
+                                    Pre-reservas pendientes de asignar fechas ({pendingBookingsWithoutSlots.length})
+                                </h3>
+                                <p className="text-xs text-amber-800 mb-2">
+                                    Las siguientes reservas aún no tienen fechas asignadas. Usa el panel de Clientes o Financiero para coordinar y asignar horarios.
+                                </p>
+                                <div className="space-y-1">
+                                    {pendingBookingsWithoutSlots.slice(0, 3).map(b => (
+                                        <div key={b.id} className="text-xs text-amber-900 bg-white bg-opacity-50 p-2 rounded flex items-center justify-between">
+                                            <span>
+                                                <strong>{b.bookingCode}</strong> · {b.userInfo.firstName} {b.userInfo.lastName} · {b.product.name}
+                                            </span>
+                                            <button
+                                                onClick={() => {
+                                                    const customer = dataService.generateCustomersFromBookings(appData.bookings).find(c => c.email === b.userInfo.email);
+                                                    if (customer) {
+                                                        setSearchCustomer(customer);
+                                                        setIsSearchPanelOpen(true);
+                                                    }
+                                                }}
+                                                className="text-amber-700 hover:text-amber-900 font-semibold underline"
+                                            >
+                                                Ver detalles →
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {pendingBookingsWithoutSlots.length > 3 && (
+                                        <p className="text-xs text-amber-700 italic">
+                                            ... y {pendingBookingsWithoutSlots.length - 3} más. Ve a "Financiero → Pendientes" para ver todas.
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+            return null;
+        })()}
 
         <div className="flex justify-end mb-4">
             <label className="flex items-center gap-2 cursor-pointer text-sm font-semibold text-brand-secondary">

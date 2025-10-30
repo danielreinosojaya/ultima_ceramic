@@ -1,3 +1,4 @@
+import { GiftcardPersonalization } from './components/giftcard/GiftcardPersonalization';
 import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import type { BankDetails } from './types';
 import { Header } from './components/Header';
@@ -21,14 +22,30 @@ import { AdminDataProvider } from './context/AdminDataContext';
 import { ConfirmationPage } from './components/ConfirmationPage';
 import { OpenStudioModal } from './components/admin/OpenStudioModal';
 
-import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession } from './types';
+import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession, DeliveryMethod, GiftcardHold } from './types';
 import * as dataService from './services/dataService';
+import { slotsRequireNoRefund } from './utils/bookingPolicy';
 import { InstagramIcon } from './components/icons/InstagramIcon';
 import { WhatsAppIcon } from './components/icons/WhatsAppIcon';
 import { MailIcon } from './components/icons/MailIcon';
 import { LocationPinIcon } from './components/icons/LocationPinIcon';
+import { LandingGiftcard } from './components/giftcard/LandingGiftcard';
+import { GiftcardAmountSelector } from './components/giftcard/GiftcardAmountSelector';
+import { GiftcardInviteModal } from './components/giftcard/GiftcardInviteModal';
+import { GiftcardBanner } from './components/giftcard/GiftcardBanner';
+import { GiftcardDeliveryOptions } from './components/giftcard/GiftcardDeliveryOptions';
+import { GiftcardPayment } from './components/giftcard/GiftcardPayment';
+import { GiftcardConfirmation } from './components/giftcard/GiftcardConfirmation';
+import { GiftcardManualPaymentInstructions } from './components/giftcard/GiftcardManualPaymentInstructions';
+import { GiftcardPendingReview } from './components/giftcard/GiftcardPendingReview';
 
 const App: React.FC = () => {
+    const [giftcardPaid, setGiftcardPaid] = useState(false);
+    const [giftcardPersonalization, setGiftcardPersonalization] = useState<any>(null);
+    const [giftcardAmount, setGiftcardAmount] = useState<number | null>(null);
+    const [selectedDelivery, setSelectedDelivery] = useState<DeliveryMethod | null>(null);
+    const [giftcardBuyerEmail, setGiftcardBuyerEmail] = useState<string>('');
+    const [showGiftcardBanner, setShowGiftcardBanner] = useState(true);
     // Modal informativo de Open Studio usando ClassInfoModal
     const handleOpenStudioInfoModalClose = () => {
         setIsOpenStudioModalOpen(false);
@@ -47,8 +64,11 @@ const App: React.FC = () => {
     const [view, setView] = useState<AppView>('welcome');
     const [bookingDetails, setBookingDetails] = useState<BookingDetails>({ product: null, slots: [], userInfo: null });
     const [confirmedBooking, setConfirmedBooking] = useState<Booking | null>(null);
+    const [activeGiftcardHold, setActiveGiftcardHold] = useState<GiftcardHold | null>(null);
+    const [appliedGiftcardHold, setAppliedGiftcardHold] = useState<GiftcardHold | null>(null);
     const [technique, setTechnique] = useState<Technique | 'open_studio' | null>(null);
     const [bookingMode, setBookingMode] = useState<BookingMode | null>(null);
+    const [bookingInProgress, setBookingInProgress] = useState(false); // Prevent double submit
 
     const [isUserInfoModalOpen, setIsUserInfoModalOpen] = useState(false);
     const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
@@ -77,11 +97,20 @@ const App: React.FC = () => {
                 console.log('Loading essential app data...');
                 const essentialData = await dataService.getEssentialAppData();
 
+                // Provide safe defaults so the UI doesn't crash when the API is unavailable
+                const safeFooter = {
+                    whatsapp: (essentialData.footerInfo && essentialData.footerInfo.whatsapp) || '',
+                    email: (essentialData.footerInfo && essentialData.footerInfo.email) || '',
+                    instagramHandle: (essentialData.footerInfo && essentialData.footerInfo.instagramHandle) || '',
+                    address: (essentialData.footerInfo && essentialData.footerInfo.address) || '',
+                    googleMapsLink: (essentialData.footerInfo && essentialData.footerInfo.googleMapsLink) || '#',
+                };
+
                 setAppData({
                     products: essentialData.products || [], 
                     announcements: essentialData.announcements || [], 
                     policies: essentialData.policies || '', 
-                    footerInfo: essentialData.footerInfo || {},
+                    footerInfo: safeFooter,
                     // Initialize empty data structures for lazy loading
                     instructors: [],
                     availability: { Sunday: [], Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [] },
@@ -183,42 +212,79 @@ const App: React.FC = () => {
         setIsUserInfoModalOpen(true);
     };
 
-    const handleUserInfoSubmit = (data: { userInfo: UserInfo, needsInvoice: boolean, invoiceData?: any }) => {
-        setBookingDetails(currentDetails => {
-            const finalDetails = { ...currentDetails, userInfo: data.userInfo };
-            const bookingData = {
-                product: finalDetails.product!,
-                productId: finalDetails.product!.id,
-                productType: finalDetails.product!.type,
-                slots: finalDetails.slots,
-                userInfo: data.userInfo,
-                isPaid: false,
-                price: 'price' in finalDetails.product! ? finalDetails.product.price : 0,
-                bookingMode: bookingMode || 'flexible',
-                bookingDate: new Date().toISOString(),
-                invoiceData: data.needsInvoice ? data.invoiceData : undefined
-            };
+    const handleUserInfoSubmit = async (data: { userInfo: UserInfo, needsInvoice: boolean, invoiceData?: any, acceptedNoRefund?: boolean }) => {
+        // Prevent double submission
+        if (bookingInProgress) {
+            console.warn('[App] Booking already in progress, ignoring duplicate submit');
+            return;
+        }
 
-            const submit = async () => {
-                try {
-                    const result = await dataService.addBooking(bookingData);
-                    if (result.success && result.booking) {
-                        setConfirmedBooking(result.booking);
-                        setIsUserInfoModalOpen(false);
-                        setView('confirmation');
-                    } else {
-                        // NOTE: Using alert() is not recommended in immersive. Please use a custom modal instead.
-                        alert(`Error: ${result.message}`);
-                    }
-                } catch (error) {
-                    console.error("Failed to add booking", error);
-                    // NOTE: Using alert() is not recommended in immersive. Please use a custom modal instead.
-                    alert("An error occurred while creating your booking.");
+        setBookingInProgress(true);
+        console.log('[App] Starting booking submission...');
+
+        const finalDetails = { ...bookingDetails, userInfo: data.userInfo };
+        
+        // Determine if selected slots require acceptance of no-refund policy
+        const requiresImmediateAcceptance = slotsRequireNoRefund(finalDetails.slots || [], 48);
+        
+        const bookingData = {
+            product: finalDetails.product!,
+            productId: finalDetails.product!.id,
+            productType: finalDetails.product!.type,
+            slots: finalDetails.slots,
+            userInfo: data.userInfo,
+            isPaid: false,
+            price: 'price' in finalDetails.product! ? finalDetails.product.price : 0,
+            bookingMode: bookingMode || 'flexible',
+            bookingDate: new Date().toISOString(),
+            invoiceData: data.needsInvoice ? data.invoiceData : undefined,
+            acceptedNoRefund: requiresImmediateAcceptance ? !!data.acceptedNoRefund : false
+        };
+
+        try {
+            // Attach giftcard info if the user applied a giftcard (supports holdId or immediate consume)
+            if (activeGiftcardHold) {
+                if (activeGiftcardHold.holdId) {
+                    (bookingData as any).holdId = activeGiftcardHold.holdId;
                 }
-            };
-            submit();
-            return finalDetails;
-        });
+                if (activeGiftcardHold.giftcardId) {
+                    (bookingData as any).giftcardId = activeGiftcardHold.giftcardId;
+                }
+                if (activeGiftcardHold.code) {
+                    (bookingData as any).giftcardCode = activeGiftcardHold.code;
+                }
+                if (typeof activeGiftcardHold.amount === 'number') {
+                    (bookingData as any).giftcardAmount = activeGiftcardHold.amount;
+                }
+            }
+
+            const result = await dataService.addBooking(bookingData);
+            if (result.success && result.booking) {
+                console.log('[App] Booking created successfully:', result.booking.bookingCode);
+                setBookingDetails(finalDetails);
+                setConfirmedBooking(result.booking);
+                
+                // CRITICAL: Preserve giftcard hold info for ConfirmationPage display
+                if (activeGiftcardHold && activeGiftcardHold.amount > 0) {
+                    setAppliedGiftcardHold(activeGiftcardHold);
+                }
+                
+                setIsUserInfoModalOpen(false);
+                setView('confirmation');
+                // Reset flag after successful navigation
+                setTimeout(() => setBookingInProgress(false), 1000);
+            } else {
+                console.error('[App] Booking failed:', result.message);
+                setBookingInProgress(false);
+                // NOTE: Using alert() is not recommended in immersive. Please use a custom modal instead.
+                alert(`Error: ${result.message}`);
+            }
+        } catch (error) {
+            console.error("[App] Failed to add booking", error);
+            setBookingInProgress(false);
+            // NOTE: Using alert() is not recommended in immersive. Please use a custom modal instead.
+            alert("An error occurred while creating your booking.");
+        }
     };
     
     // Función para cargar datos adicionales bajo demanda
@@ -321,6 +387,66 @@ const App: React.FC = () => {
             console.log("App renderView - current view:", view, "appData available:", !!appData);
 
         switch (view) {
+            case 'giftcard_landing':
+                return <LandingGiftcard onStart={() => setView('giftcard_amount')} />;
+            case 'giftcard_amount':
+                return <GiftcardAmountSelector onSelect={amount => { setGiftcardAmount(amount); setView('giftcard_personalization'); }} />;
+            case 'giftcard_personalization':
+                return giftcardAmount !== null ? (
+                    <GiftcardPersonalization
+                        amount={giftcardAmount}
+                        onPersonalize={data => { setGiftcardPersonalization(data); setView('giftcard_delivery'); }}
+                    />
+                ) : null;
+            case 'giftcard_delivery':
+                return (
+                    <GiftcardDeliveryOptions
+                        onSelect={(option: 'email' | 'physical', data) => {
+  setSelectedDelivery({ type: option, data });
+  setView('giftcard_payment');
+}}
+                        onBack={() => setView('giftcard_personalization')}
+                    />
+                );
+            case 'giftcard_payment':
+                return (
+                    <GiftcardPayment
+                        amount={giftcardAmount || 0}
+                        deliveryMethod={selectedDelivery || { type: 'email', data: {} }}
+                        personalization={giftcardPersonalization}
+                        onPay={(buyerEmail) => {
+                            setGiftcardBuyerEmail(buyerEmail);
+                            setView('giftcard_manual_payment');
+                        }}
+                        onBack={() => setView('giftcard_delivery')}
+                    />
+                );
+            case 'giftcard_manual_payment':
+                return (
+                    <GiftcardManualPaymentInstructions
+                        amount={giftcardAmount || 0}
+                        deliveryMethod={selectedDelivery || { type: 'email', data: {} }} // Ajuste aquí
+                        personalization={giftcardPersonalization}
+                        buyerEmail={giftcardBuyerEmail}
+                        onFinish={() => setView('giftcard_pending_review')}
+                    />
+                );
+            case 'giftcard_pending_review':
+                return (
+                    <GiftcardPendingReview
+                        onFinish={() => { setGiftcardPaid(false); setView('welcome'); }}
+                    />
+                );
+            case 'giftcard_confirmation':
+                return (
+                    <GiftcardConfirmation
+                        amount={giftcardAmount || 0}
+                        deliveryMethod={selectedDelivery || { type: 'email', data: {} }}
+                        personalization={giftcardPersonalization}
+                        onFinish={() => { setView('welcome'); setGiftcardPaid(false); }}
+                        onBack={() => setView('giftcard_payment')}
+                    />
+                );
             case 'welcome':
                 return <WelcomeSelector onSelect={handleWelcomeSelect} />;
             case 'techniques':
@@ -363,20 +489,33 @@ const App: React.FC = () => {
                     }
                 };
                 return <BookingSummary 
-                            bookingDetails={bookingDetails} 
-                            onProceedToConfirmation={handleSummaryConfirm} 
-                            onBack={handleBackFromSummary} 
-                            appData={appData} 
-                        />;
+                    bookingDetails={bookingDetails} 
+                    onProceedToConfirmation={handleSummaryConfirm} 
+                    onBack={handleBackFromSummary} 
+                    appData={appData} 
+                    onUseGiftcard={(holdInfo) => setActiveGiftcardHold(holdInfo)}
+                    activeGiftcardHold={activeGiftcardHold ? {
+                        holdId: activeGiftcardHold.holdId,
+                        expiresAt: activeGiftcardHold.expiresAt,
+                        amount: activeGiftcardHold.amount || 0, // Asegurar que amount sea un número
+                        giftcardId: activeGiftcardHold.giftcardId,
+                        code: activeGiftcardHold.code
+                    } : null} // Ajuste aquí
+                />;
             case 'confirmation':
                 if (!confirmedBooking) return <WelcomeSelector onSelect={handleWelcomeSelect} />;
                 return <ConfirmationPage 
-                            booking={confirmedBooking} 
-                            bankDetails={Array.isArray(appData.bankDetails) ? appData.bankDetails : appData.bankDetails ? [appData.bankDetails] : []}
-                            footerInfo={appData.footerInfo}
-                            policies={appData.policies}
-                            onFinish={resetFlow} 
-                        />;
+                    booking={confirmedBooking} 
+                    bankDetails={Array.isArray(appData.bankDetails) ? appData.bankDetails : appData.bankDetails ? [appData.bankDetails] : []}
+                    footerInfo={appData.footerInfo}
+                    policies={appData.policies}
+                    onFinish={resetFlow}
+                    appliedGiftcardHold={appliedGiftcardHold && appliedGiftcardHold.amount > 0 ? {
+                        holdId: appliedGiftcardHold.holdId || '',
+                        expiresAt: appliedGiftcardHold.expiresAt,
+                        amount: appliedGiftcardHold.amount
+                    } : null}
+                />;
             case 'group_experience':
             case 'couples_experience':
             case 'team_building':
@@ -417,7 +556,21 @@ const App: React.FC = () => {
     console.log("App - rendering main app, view:", view, "loading:", loading);
     return (
         <div className="bg-brand-background min-h-screen text-brand-text font-sans relative flex flex-col">
+            <GiftcardBanner
+                open={showGiftcardBanner}
+                onClose={() => setShowGiftcardBanner(false)}
+                onCTA={() => { setShowGiftcardBanner(false); setView('giftcard_landing'); }}
+            />
             <Header />
+            <div className="absolute top-4 right-4 z-50">
+                <button
+                    className="border border-brand-primary bg-white/80 text-brand-primary font-semibold py-1.5 px-4 rounded-full shadow-sm hover:bg-brand-primary/10 transition-colors text-base"
+                    style={{letterSpacing: '0.03em'}} 
+                    onClick={() => setView('giftcard_landing')}
+                >
+                    <span className="inline-block align-middle">Giftcard</span>
+                </button>
+            </div>
             <main className="container mx-auto px-4 py-8 flex-grow">
                 {appData && <AnnouncementsBoard announcements={appData.announcements} />}
                 <div className="mt-8">
@@ -437,17 +590,17 @@ const App: React.FC = () => {
                         <div className="flex items-center gap-3">
                             <LocationPinIcon className="w-5 h-5 flex-shrink-0" />
                             <a href={appData.footerInfo.googleMapsLink || '#'} target="_blank" rel="noopener noreferrer" className="hover:text-brand-primary transition-colors">
-                                {appData.footerInfo.address}
+                                {appData.footerInfo.address || 'Dirección no disponible'}
                             </a>
                         </div>
                         <div className="flex items-center justify-center gap-6 mt-2">
-                            <a href={`https://wa.me/${appData.footerInfo.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp" className="hover:text-brand-primary transition-colors">
+                            <a href={`https://wa.me/${(appData.footerInfo.whatsapp || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp" className="hover:text-brand-primary transition-colors">
                                 <WhatsAppIcon className="w-6 h-6" />
                             </a>
-                            <a href={`mailto:${appData.footerInfo.email}`} aria-label="Correo" className="hover:text-brand-primary transition-colors">
+                            <a href={`mailto:${appData.footerInfo.email || ''}`} aria-label="Correo" className="hover:text-brand-primary transition-colors">
                                 <MailIcon className="w-6 h-6" />
                             </a>
-                            <a href={`https://instagram.com/${appData.footerInfo.instagramHandle}`} target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="hover:text-brand-primary transition-colors">
+                            <a href={`https://instagram.com/${(appData.footerInfo.instagramHandle || '').replace(/^@/, '')}`} target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="hover:text-brand-primary transition-colors">
                                 <InstagramIcon className="w-6 h-6" />
                             </a>
                         </div>
@@ -463,6 +616,7 @@ const App: React.FC = () => {
                     onClose={() => setIsUserInfoModalOpen(false)}
                     onSubmit={handleUserInfoSubmit}
                     onShowPolicies={() => setIsPolicyModalOpen(true)}
+                    slots={bookingDetails.slots}
                 />
             )}
             {isPolicyModalOpen && appData && (

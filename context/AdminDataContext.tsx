@@ -14,6 +14,8 @@ interface AdminData {
   capacityMessages: CapacityMessageSettings;
   announcements: Announcement[];
   invoiceRequests: InvoiceRequest[];
+  giftcardRequests: import('../services/dataService').GiftcardRequest[];
+  giftcards: any[];
   loading: boolean; // ✅ Cambiar a boolean para compatibilidad
   loadingState: {
     critical: boolean;
@@ -39,10 +41,12 @@ const initialState = {
   instructors: [],
   availability: {},
   scheduleOverrides: {},
-  classCapacity: {},
-  capacityMessages: {},
+  classCapacity: { potters_wheel: 0, molding: 0, introductory_class: 0 },
+  capacityMessages: { thresholds: [] },
   announcements: [],
   invoiceRequests: [],
+  giftcardRequests: [],
+  giftcards: [],
   loadingState: {
     critical: false,
     extended: false,
@@ -64,11 +68,17 @@ type AdminAction =
   | { type: 'SET_EXTENDED_DATA'; data: Partial<AdminState> }
   | { type: 'SET_INDIVIDUAL_DATA'; dataType: string; data: any }
   | { type: 'SET_ERROR'; error: string | null }
-  | { type: 'UPDATE_TIMESTAMP'; dataType: 'critical' | 'extended' };
+  | { type: 'UPDATE_TIMESTAMP'; dataType: 'critical' | 'extended' }
+  | { type: 'SET_GIFTCARD_REQUESTS'; requests: import('../services/dataService').GiftcardRequest[] };
 
 // Reducer
 function adminReducer(state: AdminState, action: AdminAction): AdminState {
   switch (action.type) {
+    case 'SET_GIFTCARD_REQUESTS':
+      return {
+        ...state,
+        giftcardRequests: action.requests,
+      };
     case 'SET_LOADING':
       if (action.dataType === 'critical' || action.dataType === 'extended') {
         return {
@@ -154,8 +164,18 @@ export const AdminDataProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Cargar datos críticos (más frecuentes)
   const fetchCriticalData = useCallback(async (force = false) => {
-    if (!force && !needsUpdate(state.lastUpdated.critical, CRITICAL_CACHE_DURATION)) return;
-    if (state.loadingState.critical) return;
+    // CORREGIDO: Si force=true, ignorar el chequeo de loading para garantizar recarga
+    if (!force) {
+      if (!needsUpdate(state.lastUpdated.critical, CRITICAL_CACHE_DURATION)) return;
+      if (state.loadingState.critical) return;
+    }
+    
+    // Si force=true y ya está cargando, esperar a que termine antes de recargar
+    if (force && state.loadingState.critical) {
+      console.log('[AdminDataContext] Force refresh requested but already loading, waiting...');
+      // Esperar un poco para que termine la carga actual
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
 
     dispatch({ type: 'SET_LOADING', dataType: 'critical', loading: true });
     dispatch({ type: 'SET_ERROR', error: null });
@@ -164,20 +184,30 @@ export const AdminDataProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Usar batch optimizado del dataService para datos críticos con fallback
       const results = await Promise.allSettled([
         dataService.getBookings().catch(() => []),
-        dataService.getCustomers().catch(() => []),
         dataService.getGroupInquiries().catch(() => []),
         dataService.getAnnouncements().catch(() => []),
+        dataService.getGiftcardRequests().catch(() => []),
       ]);
+      
+      const bookings = results[0].status === 'fulfilled' ? results[0].value : [];
+      
+      // Get customers with deliveries (includes standalone + bookings)
+      const customersWithDeliveries = await dataService.getCustomersWithDeliveries(bookings).catch(() => []);
       
       dispatch({
         type: 'SET_CRITICAL_DATA',
         data: {
-          bookings: results[0].status === 'fulfilled' ? results[0].value : [],
-          customers: results[1].status === 'fulfilled' ? results[1].value : [],
-          inquiries: results[2].status === 'fulfilled' ? results[2].value : [],
-          announcements: results[3].status === 'fulfilled' ? results[3].value : [],
+          bookings,
+          customers: customersWithDeliveries,
+          inquiries: results[1].status === 'fulfilled' ? results[1].value : [],
+          announcements: results[2].status === 'fulfilled' ? results[2].value : [],
         }
       });
+      dispatch({
+        type: 'SET_GIFTCARD_REQUESTS',
+        requests: results[3].status === 'fulfilled' ? results[3].value : [],
+      });
+      console.debug('[AdminDataContext] Loaded critical data: booking count', bookings.length, 'customers count', customersWithDeliveries.length, 'giftcardRequests:', results[3].status === 'fulfilled' ? (results[3].value || []).length : 0);
     } catch (error) {
       console.error('Error loading critical admin data:', error);
       // En lugar de mostrar error, cargar datos vacíos para que funcione
@@ -197,8 +227,17 @@ export const AdminDataProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Cargar datos extendidos (menos frecuentes)
   const fetchExtendedData = useCallback(async (force = false) => {
-    if (!force && !needsUpdate(state.lastUpdated.extended, EXTENDED_CACHE_DURATION)) return;
-    if (state.loadingState.extended) return;
+    // CORREGIDO: Si force=true, ignorar el chequeo de loading para garantizar recarga
+    if (!force) {
+      if (!needsUpdate(state.lastUpdated.extended, EXTENDED_CACHE_DURATION)) return;
+      if (state.loadingState.extended) return;
+    }
+    
+    // Si force=true y ya está cargando, esperar a que termine antes de recargar
+    if (force && state.loadingState.extended) {
+      console.log('[AdminDataContext] Force refresh extended requested but already loading, waiting...');
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
 
     dispatch({ type: 'SET_LOADING', dataType: 'extended', loading: true });
 
@@ -208,9 +247,10 @@ export const AdminDataProvider: React.FC<{ children: ReactNode }> = ({ children 
         dataService.getInstructors().catch(() => []),
         dataService.getAvailability().catch(() => ({})),
         dataService.getScheduleOverrides().catch(() => ({})),
-        dataService.getClassCapacity().catch(() => ({})),
-        dataService.getCapacityMessageSettings().catch(() => ({})),
+        dataService.getClassCapacity().catch(() => ({ potters_wheel: 0, molding: 0, introductory_class: 0 })),
+        dataService.getCapacityMessageSettings().catch(() => ({ thresholds: [] })),
         dataService.getInvoiceRequests().catch(() => []),
+        dataService.getGiftcards().catch(() => []),
       ]);
 
       dispatch({
@@ -220,11 +260,13 @@ export const AdminDataProvider: React.FC<{ children: ReactNode }> = ({ children 
           instructors: results[1].status === 'fulfilled' ? results[1].value : [],
           availability: results[2].status === 'fulfilled' ? results[2].value : {},
           scheduleOverrides: results[3].status === 'fulfilled' ? results[3].value : {},
-          classCapacity: results[4].status === 'fulfilled' ? results[4].value : {},
-          capacityMessages: results[5].status === 'fulfilled' ? results[5].value : {},
+          classCapacity: results[4].status === 'fulfilled' ? results[4].value : { potters_wheel: 0, molding: 0, introductory_class: 0 },
+          capacityMessages: results[5].status === 'fulfilled' ? results[5].value : { thresholds: [] },
           invoiceRequests: results[6].status === 'fulfilled' ? results[6].value : [],
+          giftcards: results[7].status === 'fulfilled' ? results[7].value : [],
         }
       });
+      console.debug('[AdminDataContext] Loaded extended data: giftcards count', results[7].status === 'fulfilled' ? (results[7].value || []).length : 0);
     } catch (error) {
       console.error('Error loading extended admin data:', error);
       // Fallback con datos vacíos
@@ -235,8 +277,8 @@ export const AdminDataProvider: React.FC<{ children: ReactNode }> = ({ children 
           instructors: [],
           availability: {},
           scheduleOverrides: {},
-          classCapacity: {},
-          capacityMessages: {},
+          classCapacity: { potters_wheel: 0, molding: 0, introductory_class: 0 },
+          capacityMessages: { thresholds: [] },
           invoiceRequests: [],
         }
       });
@@ -285,11 +327,11 @@ export const AdminDataProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, []); // Sin dependencias - solo se ejecuta al montar
 
   const adminData: AdminData = {
-    ...state,
-    loading: state.loadingState.critical || state.loadingState.extended, // ✅ Boolean para compatibilidad
-    refresh,
-    refreshCritical,
-    refreshExtended,
+  ...state,
+  loading: state.loadingState.critical || state.loadingState.extended, // ✅ Boolean para compatibilidad
+  refresh,
+  refreshCritical,
+  refreshExtended,
   };
 
   return (
