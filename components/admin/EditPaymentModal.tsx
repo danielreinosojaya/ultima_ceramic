@@ -6,7 +6,7 @@ interface EditPaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   payment: PaymentDetails;
-  paymentIndex: number;
+  paymentIndex: number;  // Mantener para retrocompatibilidad, pero preferir paymentId
   bookingId: string;
   onSave: (updated: Partial<PaymentDetails>) => void;
 }
@@ -19,14 +19,14 @@ const paymentMethods = [
 
 export const EditPaymentModal: React.FC<EditPaymentModalProps> = ({ isOpen, onClose, payment, onSave, bookingId, paymentIndex }) => {
   const [amount, setAmount] = useState(payment?.amount || 0);
-  const [method, setMethod] = useState(payment?.method || 'Cash');
+  const [method, setMethod] = useState<string>(payment?.method || 'Cash');
   const [receivedAt, setReceivedAt] = useState(payment?.receivedAt || '');
   const [showDelete, setShowDelete] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
 
   const handleSave = () => {
-    onSave({ amount, method, receivedAt });
+    onSave({ amount, method: method as any, receivedAt });
     onClose();
   };
 
@@ -36,9 +36,78 @@ export const EditPaymentModal: React.FC<EditPaymentModalProps> = ({ isOpen, onCl
   };
 
   const handleConfirmDelete = async () => {
-    await import('../../services/dataService').then(ds => ds.deletePaymentFromBooking(bookingId, paymentIndex, cancelReason));
-    setShowConfirm(false);
-    onClose();
+    try {
+      const dataService = await import('../../services/dataService');
+      
+      // Prefer paymentId if available, fallback to index-based approach
+      if (payment.id) {
+        console.log('[EditPaymentModal] Deleting payment by ID:', payment.id);
+        const result = await dataService.deletePaymentFromBooking(bookingId, payment.id, cancelReason);
+        
+        if (!result.success) {
+          // Manejo específico para booking no encontrado
+          const errorMsg = (result as any).error || (result as any).message || 'Error desconocido';
+          if (errorMsg.includes('Booking not found') || errorMsg.includes('eliminada')) {
+            alert('La reserva asociada a este pago ya no existe. El pago será removido de la vista automáticamente.');
+            setShowConfirm(false);
+            onClose();
+            // Forzar recarga de datos
+            window.location.reload();
+            return;
+          }
+          throw new Error(errorMsg);
+        }
+      } else {
+        console.warn('[EditPaymentModal] Payment has no ID, falling back to index-based deletion');
+        // Refetch booking to get fresh payment array and correct index
+        const freshBookings = await dataService.getBookings();
+        const freshBooking = freshBookings.find((b: any) => b.id === bookingId);
+        
+        if (!freshBooking || !freshBooking.paymentDetails) {
+          console.error('[EditPaymentModal] Could not find booking or payment details');
+          alert('La reserva ya no existe. El pago será removido de la vista automáticamente.');
+          setShowConfirm(false);
+          onClose();
+          window.location.reload();
+          return;
+        }
+
+        // Find the real index by matching payment properties
+        const realIndex = freshBooking.paymentDetails.findIndex((p: any) => 
+          p.amount === payment.amount && 
+          p.method === payment.method && 
+          p.receivedAt === payment.receivedAt
+        );
+
+        if (realIndex === -1) {
+          console.error('[EditPaymentModal] Could not find matching payment in fresh data');
+          alert('El pago ya no existe en los datos actualizados. La vista se actualizará automáticamente.');
+          setShowConfirm(false);
+          onClose();
+          window.location.reload();
+          return;
+        }
+
+        console.log('[EditPaymentModal] Deleting payment with realIndex:', realIndex, 'from', freshBooking.paymentDetails.length, 'payments');
+        await dataService.deletePaymentFromBooking(bookingId, realIndex, cancelReason);
+      }
+      
+      setShowConfirm(false);
+      onClose();
+    } catch (error: any) {
+      console.error('[EditPaymentModal] Error deleting payment:', error);
+      
+      // Manejo específico para errores de booking no encontrado
+      if (error.message?.includes('Booking not found') || error.message?.includes('eliminada')) {
+        alert('La reserva asociada a este pago fue eliminada. La vista se actualizará automáticamente.');
+        setShowConfirm(false);
+        onClose();
+        window.location.reload();
+        return;
+      }
+      
+      alert(`Error al eliminar el pago: ${error.message || String(error)}`);
+    }
   };
 
   if (!isOpen) return null;

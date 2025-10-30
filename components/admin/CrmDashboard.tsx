@@ -616,16 +616,19 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
                                 const openStudioBookings = bookings.filter(b => b.productType === 'OPEN_STUDIO_SUBSCRIPTION');
                                 const now = new Date();
                                 const active = openStudioBookings.filter(b => {
-                                    if (!b.paymentDetails?.receivedAt) return false;
-                                    const start = new Date(b.paymentDetails.receivedAt);
-                                    const duration = b.product.details.durationDays;
+                                    const paymentDetail = b.paymentDetails?.[0]; // Access the first payment detail
+                                    if (!paymentDetail?.receivedAt || !b.product?.details) return false;
+
+                                    const start = new Date(paymentDetail.receivedAt);
+                                    const duration = 'durationDays' in b.product.details ? b.product.details.durationDays : 0;
                                     const expiry = new Date(start);
                                     expiry.setDate(expiry.getDate() + duration);
                                     return now <= expiry;
                                 });
                                 const expiringSoon = active.filter(b => {
-                                    const start = new Date(b.paymentDetails.receivedAt);
-                                    const duration = b.product.details.durationDays;
+                                    const paymentDetail = b.paymentDetails?.[0];
+                                    const start = new Date(paymentDetail?.receivedAt || 0);
+                                    const duration = 'durationDays' in b.product.details ? b.product.details.durationDays : 0;
                                     const expiry = new Date(start);
                                     expiry.setDate(expiry.getDate() + duration);
                                     const daysLeft = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -642,14 +645,19 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
                                 filteredBookings = [...filteredBookings];
                                 if (studioSort === 'expiry') {
                                     filteredBookings.sort((a, b) => {
-                                        const aStart = a.paymentDetails?.receivedAt ? new Date(a.paymentDetails.receivedAt) : new Date(0);
-                                        const aDuration = a.product.details.durationDays;
+                                        const aPaymentDetail = a.paymentDetails?.[0];
+                                        const bPaymentDetail = b.paymentDetails?.[0];
+
+                                        const aStart = aPaymentDetail?.receivedAt ? new Date(aPaymentDetail.receivedAt) : new Date(0);
+                                        const aDuration = 'durationDays' in a.product.details ? a.product.details.durationDays : 0;
                                         const aExpiry = new Date(aStart);
                                         aExpiry.setDate(aExpiry.getDate() + aDuration);
-                                        const bStart = b.paymentDetails?.receivedAt ? new Date(b.paymentDetails.receivedAt) : new Date(0);
-                                        const bDuration = b.product.details.durationDays;
+
+                                        const bStart = bPaymentDetail?.receivedAt ? new Date(bPaymentDetail.receivedAt) : new Date(0);
+                                        const bDuration = 'durationDays' in b.product.details ? b.product.details.durationDays : 0;
                                         const bExpiry = new Date(bStart);
                                         bExpiry.setDate(bExpiry.getDate() + bDuration);
+
                                         return aExpiry.getTime() - bExpiry.getTime();
                                     });
                                 } else if (studioSort === 'name') {

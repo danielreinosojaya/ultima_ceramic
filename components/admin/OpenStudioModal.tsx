@@ -6,7 +6,7 @@ import { CubeIcon } from '../icons/CubeIcon';
 interface OpenStudioModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (pkgData: Omit<OpenStudioSubscription, 'id' | 'isActive' | 'type'>, id?: number) => void;
+  onSave: (pkgData: Omit<OpenStudioSubscription, 'id' | 'isActive' | 'type'>, id?: string) => void;
   subscriptionToEdit: OpenStudioSubscription | null;
 }
 

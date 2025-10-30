@@ -86,16 +86,18 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
       const startOfWeek = new Date(currentDate);
       const dates: Date[] = [];
       for (let i = 0; i < 7; i++) {
-          const date = new Date(startOfWeek);
-          date.setDate(date.getDate() + i);
-          dates.push(date);
+        const date = new Date(startOfWeek);
+        date.setDate(date.getDate() + i);
+        dates.push(date);
       }
-      
+
       const data: Record<string, EnrichedAvailableSlot[]> = {};
       dates.forEach(date => {
-          const dateStr = formatDateToYYYYMMDD(date);
+        const dateStr = formatDateToYYYYMMDD(date);
+        if (!data[dateStr]) { // Verifica si los datos ya están en caché
           data[dateStr] = dataService.getAllConfiguredTimesForDate(date, appData, pkg.details.technique)
             .sort((a, b) => a.time.localeCompare(b.time));
+        }
       });
 
       return { weekDates: dates, scheduleData: data };

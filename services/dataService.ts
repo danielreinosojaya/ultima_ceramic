@@ -1,3 +1,154 @@
+export const addGiftcardRequest = async (request: Omit<GiftcardRequest, 'id' | 'status' | 'createdAt'>): Promise<{ success: boolean; id?: string; error?: string }> => {
+    try {
+        const response = await fetch('/api/data?action=addGiftcardRequest', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(request),
+        });
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+};
+// Giftcard Requests
+export type GiftcardRequest = {
+    id: string;
+    buyerName: string;
+    buyerEmail: string;
+    recipientName: string;
+    recipientEmail?: string;
+    recipientWhatsapp?: string;
+    amount: number;
+    code: string;
+    message?: string;
+    status: 'pending' | 'approved' | 'rejected' | 'delivered' | 'deleted';
+    createdAt: string;
+    metadata?: {
+        issuedCode?: string;
+        issued_code?: string;
+        emailDelivery?: {
+            buyer?: { sent: boolean };
+            recipient?: { sent: boolean };
+        };
+        voucherUrl?: string;
+    };
+};
+
+export const getGiftcardRequests = async (): Promise<GiftcardRequest[]> => {
+    try {
+        const response = await fetch('/api/data?action=listGiftcardRequests');
+        if (!response.ok) throw new Error('Error fetching giftcard requests');
+        const data = await response.json();
+        if (!Array.isArray(data)) return [];
+        return data.map((req: any) => ({
+            id: req.id || '',
+            buyerName: req.buyerName || '',
+            buyerEmail: req.buyerEmail || '',
+            recipientName: req.recipientName || '',
+            recipientEmail: req.recipientEmail || '',
+            recipientWhatsapp: req.recipientWhatsapp || '',
+            amount: typeof req.amount === 'number' ? req.amount : parseFloat(req.amount || '0'),
+            code: req.code || '',
+            status: req.status || 'pending',
+            createdAt: req.createdAt || '',
+            // Preserve metadata from the server so admin UI can display issuedCode, voucherUrl, etc.
+            metadata: req.metadata || null
+        }));
+    } catch (error) {
+        console.error('getGiftcardRequests error:', error);
+        return [];
+    }
+};
+// Admin actions for giftcard requests (client wrappers)
+export const approveGiftcardRequest = async (
+    id: string,
+    adminUser: string,
+    note?: string,
+    metadata?: any
+): Promise<{ success: boolean; request?: GiftcardRequest; error?: string }> => {
+    try {
+        const res = await postAction('approveGiftcardRequest', { id, adminUser, note, metadata });
+        if (res && res.success && res.request) {
+            return { success: true, request: res.request as GiftcardRequest };
+        }
+        return { success: false, error: res?.error || 'Failed to approve giftcard request' };
+    } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+};
+
+export const rejectGiftcardRequest = async (
+    id: string,
+    adminUser: string,
+    note?: string,
+    metadata?: any
+): Promise<{ success: boolean; request?: GiftcardRequest; error?: string }> => {
+    try {
+    const res = await postAction('rejectGiftcardRequest', { id, adminUser, note, metadata });
+        if (res && res.success && res.request) {
+            return { success: true, request: res.request as GiftcardRequest };
+        }
+        return { success: false, error: res?.error || 'Failed to reject giftcard request' };
+    } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+};
+
+export const attachGiftcardProof = async (
+    id: string,
+    proofUrl: string,
+    adminUser: string,
+    note?: string,
+    metadata?: any
+): Promise<{ success: boolean; request?: GiftcardRequest; error?: string }> => {
+    try {
+    const res = await postAction('attachGiftcardProof', { id, proofUrl, adminUser, note, metadata });
+        if (res && res.success && res.request) {
+            return { success: true, request: res.request as GiftcardRequest };
+        }
+        return { success: false, error: res?.error || 'Failed to attach proof to giftcard request' };
+    } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+};
+
+// Soft-delete a giftcard request (admin)
+export const deleteGiftcardRequest = async (
+    id: string,
+    adminUser: string,
+    note?: string,
+    metadata?: any
+): Promise<{ success: boolean; request?: GiftcardRequest; error?: string }> => {
+    try {
+        const res = await postAction('deleteGiftcardRequest', { id, adminUser, note, metadata });
+        if (res && res.success && res.request) {
+            return { success: true, request: res.request as GiftcardRequest };
+        }
+        return { success: false, error: res?.error || 'Failed to delete giftcard request' };
+    } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+};
+
+// Hard-delete a giftcard request (admin) - permanent removal
+export const hardDeleteGiftcardRequest = async (
+    id: string,
+    adminUser: string,
+    note?: string,
+    metadata?: any
+): Promise<{ success: boolean; deleted?: any; error?: string }> => {
+    try {
+        const res = await postAction('hardDeleteGiftcardRequest', { id, adminUser, note, metadata });
+        if (res && res.success) {
+            return { success: true, deleted: res.deleted };
+        }
+        return { success: false, error: res?.error || 'Failed to hard delete giftcard request' };
+    } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+};
+
 // Si el cliente no tiene reservas, agregarlo como standalone
 export const ensureStandaloneCustomer = async (customerData: {
     email: string;
@@ -67,13 +218,19 @@ export const createCustomer = async (customerData: {
 // Edit payment details for a booking (amount, method, date)
 // import type { PaymentDetails } from '../types';
 
+// Update payment by ID (new way) or by index (legacy fallback)
 export const updatePaymentDetails = async (
     bookingId: string,
-    paymentIndex: number,
+    paymentIdOrIndex: string | number,
     updatedDetails: Partial<PaymentDetails>
 ): Promise<{ success: boolean }> => {
-    return postAction('updatePaymentDetails', { bookingId, paymentIndex, updatedDetails });
+    const params = typeof paymentIdOrIndex === 'string'
+        ? { bookingId, paymentId: paymentIdOrIndex, updatedDetails }
+        : { bookingId, paymentIndex: paymentIdOrIndex, updatedDetails };
+    
+    return postAction('updatePaymentDetails', params);
 };
+
 // Bulk actions for FinancialDashboard
 export const acceptPaymentForBooking = async (bookingId: string): Promise<{ success: boolean }> => {
     // Placeholder: Integrate with backend/payment API as needed
@@ -83,6 +240,17 @@ export const acceptPaymentForBooking = async (bookingId: string): Promise<{ succ
 export const sendReminderForBooking = async (bookingId: string): Promise<{ success: boolean }> => {
     // Placeholder: Integrate with backend/notification API as needed
     return postAction('sendReminderForBooking', { bookingId });
+};
+
+// Send a test email from the server (useful to verify RESEND_API_KEY / EMAIL_FROM in runtime)
+export const sendTestEmail = async (to: string, options: { type?: 'buyer' | 'recipient' | 'test'; name?: string; amount?: number; code?: string; pdfBase64?: string; downloadLink?: string; message?: string } = {}) => {
+    try {
+        const payload = { to, type: options.type || 'test', name: options.name, amount: options.amount, code: options.code, pdfBase64: options.pdfBase64, downloadLink: options.downloadLink, message: options.message };
+        const res = await postAction('sendTestEmail', payload);
+        return res;
+    } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
 };
 import type { 
     Product, Booking, ScheduleOverrides, Notification, Announcement, Instructor, 
@@ -98,7 +266,7 @@ import { DAY_NAMES } from '../constants';
 // --- API Helpers ---
 
 const fetchData = async (url: string, options?: RequestInit, retries: number = 3) => {
-    let lastError: Error;
+    let lastError: Error | null = null; // Inicialización de la variable
     
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
@@ -162,8 +330,12 @@ const fetchData = async (url: string, options?: RequestInit, retries: number = 3
     }
     
     // Si todos los intentos fallaron, lanzar el último error
-    console.error(`All ${retries} fetch attempts failed for ${url}`);
-    throw lastError;
+    if (lastError) {
+        console.error(`All ${retries} fetch attempts failed for ${url}`);
+        throw lastError;
+    } else {
+        throw new Error('Unknown error occurred during fetch attempts.');
+    }
 };
 
 // Cache más agresivo para evitar requests innecesarias
@@ -286,10 +458,34 @@ const setData = async <T>(key: string, data: T): Promise<{ success: boolean }> =
     });
 };
 
-const postAction = async <T>(action: string, body: any): Promise<T> => {
+const postAction = async (action: string, body: any): Promise<any> => {
+    // Determine admin user for automatic header propagation when available.
+    // Priority: explicit body.adminUser > payment.metadata.adminName > localStorage.adminUser > window.__ADMIN_USER__
+    let adminUserHeader: string | null = null;
+    try {
+        if (body && typeof body === 'object') {
+            if (body.adminUser) adminUserHeader = String(body.adminUser);
+            else if (body.payment && body.payment.metadata && (body.payment.metadata.adminName || body.payment.metadata.adminUser)) {
+                adminUserHeader = String(body.payment.metadata.adminName || body.payment.metadata.adminUser);
+            }
+        }
+        if (!adminUserHeader && typeof window !== 'undefined') {
+            // localStorage may contain admin user if the app sets it during admin login
+            const ls = window.localStorage.getItem('adminUser');
+            if (ls) adminUserHeader = ls;
+            // global override (rare) -- small safety check
+            if (!adminUserHeader && (window as any).__ADMIN_USER__) adminUserHeader = String((window as any).__ADMIN_USER__);
+        }
+    } catch (e) {
+        // ignore any issues reading window/localStorage in non-browser contexts
+    }
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (adminUserHeader) headers['x-admin-user'] = adminUserHeader;
+
     return fetchData(`/api/data?action=${action}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(body),
     });
 };
@@ -619,13 +815,165 @@ export const getBookings = async (): Promise<Booking[]> => {
     }
 };
 export const addBooking = async (bookingData: any): Promise<AddBookingResult> => {
-    const result = await postAction<any>('addBooking', bookingData);
+    const result = await postAction('addBooking', bookingData);
     if(result.success && result.booking) {
         // Invalidar cache después de crear booking exitosamente
         invalidateBookingsCache();
         return { ...result, booking: parseBooking(result.booking) };
     }
     return result;
+};
+
+// Obtener un booking por su ID
+export const getBookingById = async (bookingId: string): Promise<Booking> => {
+    try {
+        const response = await fetch(`/api/data?action=getBookingById&bookingId=${encodeURIComponent(bookingId)}`);
+        if (!response.ok) throw new Error('Error fetching booking by ID');
+        return response.json();
+    } catch (error) {
+        console.error('getBookingById error:', error);
+        throw error;
+    }
+};
+
+// Giftcard client helpers
+export const validateGiftcard = async (code: string): Promise<any> => {
+    try {
+        console.debug('[dataService.validateGiftcard] requesting validation for code:', code);
+        // Prefer dedicated endpoint (more reliable routing)
+        const response = await fetch('/api/giftcards/validate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code })
+        });
+        // If we get any JSON response from the dedicated endpoint, return it (even on 4xx/5xx)
+        try {
+            const body = await response.json().catch(() => null);
+            if (body) return body;
+        } catch (e) {}
+        // If POST didn't return JSON or body, try GET fallback to the same endpoint
+        if (response.status === 404 || response.status === 405) {
+            const resp = await fetch(`/api/giftcards/validate?code=${encodeURIComponent(code)}`, { method: 'GET' });
+            try {
+                const body = await resp.json().catch(() => null);
+                if (body) return body;
+            } catch (e) {}
+        }
+        // Last resort: try legacy action router via POST (legacy router expects actions via POST)
+        try {
+            const legacyPost = await fetch(`/api/data?action=validateGiftcard`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code })
+            });
+            // Return any JSON payload from legacy route even if status is 4xx/5xx
+            const legacyBody = await legacyPost.json().catch(() => null);
+            console.debug('[dataService.validateGiftcard] legacyPost response body:', legacyBody);
+            if (legacyBody) return legacyBody;
+        } catch (legacyErr) {
+            console.warn('Legacy POST fallback failed for validateGiftcard:', legacyErr);
+        }
+        console.debug('[dataService.validateGiftcard] all fallbacks failed for code:', code, 'response status:', response.status);
+        return { success: false, error: `validateGiftcard failed (${response.status})` };
+    } catch (err) {
+        console.error('[dataService.validateGiftcard] unexpected error for code:', code, err);
+        return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+};
+
+export const createGiftcardHold = async (payload: { code?: string; giftcardId?: string; amount: number; bookingTempRef?: string; ttlMinutes?: number }): Promise<any> => {
+    try {
+        const response = await fetch('/api/giftcards/create-hold', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        // If we received JSON from dedicated endpoint return it even if status is 4xx
+        try {
+            const body = await response.json().catch(() => null);
+            if (body) return body;
+        } catch (e) {}
+
+        // Fallback: use legacy action router which supports POST actions
+        try {
+            const legacy = await fetch(`/api/data?action=createGiftcardHold`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const legacyBody = await legacy.json().catch(() => null);
+            if (legacyBody) return legacyBody;
+        } catch (legacyErr) {
+            console.warn('Legacy POST fallback failed for createGiftcardHold:', legacyErr);
+        }
+        return { success: false, error: `createGiftcardHold failed (${response.status})` };
+    } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+};
+export const releaseGiftcardHold = async (payload: { holdId: string }): Promise<any> => {
+    try {
+        const response = await fetch('/api/giftcards/release-hold', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        try {
+            const body = await response.json().catch(() => null);
+            if (body) return body;
+        } catch (e) {}
+
+        // Fallback to legacy router if needed
+        try {
+            const legacy = await fetch(`/api/data?action=releaseGiftcardHold`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const legacyBody = await legacy.json().catch(() => null);
+            if (legacyBody) return legacyBody;
+        } catch (legacyErr) {
+            console.warn('Legacy POST fallback failed for releaseGiftcardHold:', legacyErr);
+        }
+
+        return { success: false, error: `releaseGiftcardHold failed (${response.status})` };
+    } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+};
+
+// Admin: get all issued giftcards (for admin console)
+export const getGiftcards = async (): Promise<any[]> => {
+    try {
+        console.debug('[dataService.getGiftcards] fetching listGiftcards from /api/data');
+        const response = await fetch('/api/data?action=listGiftcards');
+        if (!response.ok) throw new Error('Error fetching giftcards');
+        const data = await response.json();
+        console.debug('[dataService.getGiftcards] raw response length:', Array.isArray(data) ? data.length : 'non-array');
+        if (!Array.isArray(data)) return [];
+        return data.map((g: any) => ({
+            id: String(g.id),
+            code: g.code,
+            balance: typeof g.balance === 'number' ? g.balance : (g.balance ? parseFloat(g.balance) : 0),
+            initialValue: typeof g.initialValue === 'number' ? g.initialValue : (g.initial_value ? parseFloat(g.initial_value) : (g.initialValue ? parseFloat(g.initialValue) : null)),
+            expiresAt: g.expiresAt || g.expires_at || null,
+            metadata: g.metadata || g.meta || null,
+            giftcardRequestId: g.giftcardRequestId || g.giftcard_request_id || null,
+        }));
+    } catch (err) {
+        console.error('[dataService.getGiftcards] error fetching giftcards:', err);
+        return [];
+    }
+};
+// Admin: repair missing giftcards generated from approved requests
+export const repairMissingGiftcards = async (options: { dryRun?: boolean; limit?: number } = {}): Promise<any> => {
+    try {
+        const res = await postAction('repairMissingGiftcards', { dryRun: !!options.dryRun, limit: options.limit || 200 });
+        return res;
+    } catch (err) {
+        console.error('[dataService.repairMissingGiftcards] error:', err);
+        return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
 };
 export const updateBooking = async (booking: Booking): Promise<{ success: boolean }> => {
     const result = await postAction('updateBooking', booking);
@@ -635,44 +983,67 @@ export const updateBooking = async (booking: Booking): Promise<{ success: boolea
     return result;
 };
 export const removeBookingSlot = async (bookingId: string, slotToRemove: any): Promise<{ success: boolean }> => {
-    const result = await postAction<{ success: boolean }>('removeBookingSlot', { bookingId, slotToRemove });
+    const result = await postAction('removeBookingSlot', { bookingId, slotToRemove });
     if (result.success) {
         invalidateBookingsCache();
     }
     return result;
 };
 export const addPaymentToBooking = async (bookingId: string, payment: PaymentDetails): Promise<{ success: boolean; booking?: Booking }> => {
-    const result = await postAction<{ success: boolean; booking?: any }>('addPaymentToBooking', { bookingId, payment });
+    const result = await postAction('addPaymentToBooking', { bookingId, payment });
     if(result.success && result.booking) {
         return { ...result, booking: parseBooking(result.booking) };
     }
     return result;
 };
-export const deletePaymentFromBooking = async (bookingId: string, paymentIndex: number, cancelReason?: string): Promise<{ success: boolean; booking?: Booking }> => {
-    const result = await postAction<{ success: boolean; booking?: any }>('deletePaymentFromBooking', { bookingId, paymentIndex, cancelReason });
+
+// Delete payment by ID (new way) or by index (legacy fallback)
+export const deletePaymentFromBooking = async (
+    bookingId: string, 
+    paymentIdOrIndex: string | number, 
+    cancelReason?: string
+): Promise<{ success: boolean; booking?: Booking }> => {
+    const params = typeof paymentIdOrIndex === 'string'
+        ? { bookingId, paymentId: paymentIdOrIndex, cancelReason }
+        : { bookingId, paymentIndex: paymentIdOrIndex, cancelReason };
+    
+    const result = await postAction('deletePaymentFromBooking', params);
     if(result.success && result.booking) {
         return { ...result, booking: parseBooking(result.booking) };
     }
     return result;
 };
+
 export const markBookingAsPaid = (bookingId: string, details: Omit<PaymentDetails, 'receivedAt'>): Promise<{ success: boolean }> => postAction('markBookingAsPaid', { bookingId, details });
 export const markBookingAsUnpaid = async (bookingId: string): Promise<{ success: boolean }> => {
-    const result = await postAction<{ success: boolean }>('markBookingAsUnpaid', { bookingId });
+    const result = await postAction('markBookingAsUnpaid', { bookingId });
     if (result.success) {
         invalidateBookingsCache();
     }
     return result;
 };
 export const rescheduleBookingSlot = async (bookingId: string, oldSlot: any, newSlot: any): Promise<AddBookingResult> => {
-    const result = await postAction<any>('rescheduleBookingSlot', { bookingId, oldSlot, newSlot });
-     if(result.success && result.booking) {
-        invalidateBookingsCache();
+    console.log('[rescheduleBookingSlot] Starting reschedule:', { bookingId, oldSlot, newSlot });
+    const result = await postAction('rescheduleBookingSlot', { bookingId, oldSlot, newSlot });
+    
+    // CRÍTICO: Siempre invalidar caché para forzar recarga
+    invalidateBookingsCache();
+    console.log('[rescheduleBookingSlot] Cache invalidated, result:', result);
+    
+    if(result.success && result.booking) {
         return { ...result, booking: parseBooking(result.booking) };
     }
+    
+    // Si no hay booking en respuesta pero fue exitoso, aún devolvemos success
+    if (result.success) {
+        console.warn('[rescheduleBookingSlot] Success but no booking returned from backend');
+        return { success: true, message: 'Reschedule successful' };
+    }
+    
     return result;
 };
 export const deleteBookingsInDateRange = async (startDate: Date, endDate: Date): Promise<{ success: boolean }> => {
-    const result = await postAction<{ success: boolean }>('deleteBookingsInDateRange', { startDate, endDate });
+    const result = await postAction('deleteBookingsInDateRange', { startDate, endDate });
     if (result.success) {
         invalidateBookingsCache();
     }
@@ -680,7 +1051,7 @@ export const deleteBookingsInDateRange = async (startDate: Date, endDate: Date):
 };
 export const updateAttendanceStatus = (bookingId: string, slot: any, status: AttendanceStatus): Promise<{ success: boolean }> => postAction('updateAttendanceStatus', { bookingId, slot, status });
 export const deleteBooking = async (bookingId: string): Promise<{ success: boolean }> => {
-    const result = await postAction<{ success: boolean }>('deleteBooking', { bookingId });
+    const result = await postAction('deleteBooking', { bookingId });
     if (result.success) {
         invalidateBookingsCache();
     }
@@ -716,7 +1087,7 @@ export const getGroupInquiries = async (): Promise<GroupInquiry[]> => {
     return rawInquiries.map(parseGroupInquiry);
 };
 export const addGroupInquiry = async (inquiryData: Omit<GroupInquiry, 'id' | 'status' | 'createdAt'>): Promise<GroupInquiry> => {
-    const result = await postAction<any>('addGroupInquiry', inquiryData);
+    const result = await postAction('addGroupInquiry', inquiryData);
     return parseGroupInquiry(result);
 };
 export const updateGroupInquiry = (inquiry: GroupInquiry): Promise<{ success: boolean }> => postAction('updateGroupInquiry', inquiry);
@@ -781,7 +1152,30 @@ export const getBatchedData = async (keys: string[]): Promise<Record<string, any
 
 // Función específica para datos esenciales de la app
 export const getEssentialAppData = async () => {
-    return getBatchedData(['products', 'announcements', 'policies', 'footerInfo', 'uiLabels']);
+    try {
+        const data = await getBatchedData(['products', 'announcements', 'policies', 'footerInfo', 'uiLabels']);
+
+        // Validar que las claves requeridas estén presentes
+        const requiredKeys = ['products', 'announcements', 'policies', 'footerInfo', 'uiLabels'];
+        requiredKeys.forEach((key) => {
+            if (!data[key]) {
+                console.warn(`Missing key: ${key} in essential app data. Using default value.`);
+                data[key] = getDefaultData(key);
+            }
+        });
+
+        return data;
+    } catch (error) {
+        console.error('Error fetching essential app data:', error);
+        // Retornar datos por defecto en caso de error
+        return {
+            products: getDefaultData('products'),
+            announcements: getDefaultData('announcements'),
+            policies: getDefaultData('policies'),
+            footerInfo: getDefaultData('footerInfo'),
+            uiLabels: getDefaultData('uiLabels'),
+        };
+    }
 };
 
 // Función específica para datos de scheduling
@@ -964,66 +1358,45 @@ export const generateIntroClassSessions = (
         const dateStr = formatDateToYYYYMMDD(date);
         const dayOfWeek = date.getDay();
 
-        let todaysSessions: Omit<EnrichedIntroClassSession, 'paidBookingsCount' | 'totalBookingsCount'>[] = [];
-        const override = overridesByDate[dateStr];
+        const rulesForDay = (product.schedulingRules || []).filter((rule) => rule.dayOfWeek === dayOfWeek);
+        let todaysSessions = rulesForDay.map((rule) => ({
+            id: `${dateStr}-${rule.time.replace(':', '')}-${rule.instructorId}`,
+            date: dateStr,
+            time: rule.time,
+            instructorId: rule.instructorId,
+            capacity: rule.capacity || 0,
+            paidBookingsCount: 0,
+            totalBookingsCount: 0,
+            isOverride: false,
+        }));
 
-        if (override !== undefined) { 
-            if (override !== null) { 
-                todaysSessions = override.map(s => ({
+        const override = overridesByDate[dateStr];
+        if (override !== undefined) {
+            if (override !== null) {
+                todaysSessions = override.map((s) => ({
                     id: `${dateStr}-${s.time.replace(':', '')}-${s.instructorId}`,
                     date: dateStr,
-                    time: new Date(`1970-01-01T${s.time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+                    time: s.time,
                     instructorId: s.instructorId,
                     capacity: s.capacity,
-                    isOverride: true
+                    paidBookingsCount: 0,
+                    totalBookingsCount: 0,
+                    isOverride: true,
                 }));
+            } else {
+                todaysSessions = [];
             }
-        } else { 
-            const rulesForDay = (product.schedulingRules || []).filter(rule => rule.dayOfWeek === dayOfWeek);
-            todaysSessions = rulesForDay.map(rule => ({
-                id: `${dateStr}-${rule.time.replace(':', '')}-${rule.instructorId}`,
-                date: dateStr,
-                time: new Date(`1970-01-01T${rule.time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
-                instructorId: rule.instructorId,
-                capacity: rule.capacity,
-                isOverride: false
-            }));
         }
 
-        const normalizeTime = (time: string) => {
-            // Devuelve siempre en formato "HH:mm" 24h para comparación
-            if (!time) return '';
-            // Si ya está en formato "HH:mm", úsalo
-            if (/^\d{2}:\d{2}$/.test(time)) return time;
-            // Si está en formato "h:mm AM/PM", conviértelo
-            const d = new Date(`1970-01-01T${time}`);
-            if (!isNaN(d.getTime())) {
-                return d.toISOString().substr(11,5); // "HH:mm"
+        todaysSessions.forEach((session) => {
+            const isFull = appData.bookings.some((b) => b.date === session.date && b.time === session.time);
+            if (includeFull || !isFull) {
+                allSessions.push(session);
             }
-            // Si no es parseable, devolver en minúsculas y sin espacios
-            return time.trim().toLowerCase();
-        };
-
-        const enrichedSessions = todaysSessions.map(session => {
-            const sessionTimeNorm = normalizeTime(session.time);
-            const bookingsForSession = (appData?.bookings || []).filter(b => 
-                b.productId === product.id &&
-                b.slots.some(s => 
-                    s.date === session.date &&
-                    normalizeTime(s.time) === sessionTimeNorm &&
-                    s.instructorId === session.instructorId
-                )
-            );
-            return {
-                ...session,
-                paidBookingsCount: bookingsForSession.filter(b => b.isPaid).length,
-                totalBookingsCount: bookingsForSession.length,
-            };
         });
-        
-        allSessions.push(...(includeFull ? enrichedSessions : enrichedSessions.filter(s => s.paidBookingsCount < s.capacity)));
     }
-    return allSessions.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime() || a.time.localeCompare(b.time));
+
+    return allSessions;
 };
 
 const getBookingsForSlot = (date: Date, slot: AvailableSlot, appData: Pick<AppData, 'bookings'>): Booking[] => {
@@ -1170,6 +1543,7 @@ const parseDelivery = (d: any): Delivery => {
         createdAt: d.createdAt || d.created_at,
         completedAt: d.completedAt || d.completed_at || null,
         deliveredAt: d.deliveredAt || d.delivered_at || null,
+        readyAt: d.readyAt || d.ready_at || null,
         notes: d.notes || null,
         photos: parsedPhotos
     };
@@ -1186,7 +1560,7 @@ export const getDeliveriesByCustomer = async (customerEmail: string): Promise<De
 };
 
 export const createDelivery = async (deliveryData: Omit<Delivery, 'id' | 'createdAt'>): Promise<{ success: boolean; delivery?: Delivery }> => {
-    const result = await postAction<{ success: boolean; delivery?: any }>('createDelivery', deliveryData);
+    const result = await postAction('createDelivery', deliveryData);
     if (result.success && result.delivery) {
         return { ...result, delivery: parseDelivery(result.delivery) };
     }
@@ -1194,7 +1568,7 @@ export const createDelivery = async (deliveryData: Omit<Delivery, 'id' | 'create
 };
 
 export const updateDelivery = async (deliveryId: string, updates: Partial<Omit<Delivery, 'id' | 'customerEmail' | 'createdAt'>>): Promise<{ success: boolean; delivery?: Delivery }> => {
-    const result = await postAction<{ success: boolean; delivery?: any }>('updateDelivery', { deliveryId, updates });
+    const result = await postAction('updateDelivery', { deliveryId, updates });
     if (result.success && result.delivery) {
         return { ...result, delivery: parseDelivery(result.delivery) };
     }
@@ -1202,11 +1576,19 @@ export const updateDelivery = async (deliveryId: string, updates: Partial<Omit<D
 };
 
 export const markDeliveryAsCompleted = async (deliveryId: string, notes?: string): Promise<{ success: boolean; delivery?: Delivery }> => {
-    const result = await postAction<{ success: boolean; delivery?: any }>('markDeliveryAsCompleted', { 
+    const result = await postAction('markDeliveryAsCompleted', { 
         deliveryId, 
         notes,
         deliveredAt: new Date().toISOString()
     });
+    if (result.success && result.delivery) {
+        return { ...result, delivery: parseDelivery(result.delivery) };
+    }
+    return result;
+};
+
+export const markDeliveryAsReady = async (deliveryId: string, resend: boolean = false): Promise<{ success: boolean; delivery?: Delivery; error?: string }> => {
+    const result = await postAction('markDeliveryAsReady', { deliveryId, resend });
     if (result.success && result.delivery) {
         return { ...result, delivery: parseDelivery(result.delivery) };
     }
@@ -1224,7 +1606,7 @@ export const updateDeliveryStatuses = async (): Promise<{ success: boolean; upda
 // Función para migrar productos existentes y asignar sort_order
 export const migrateSortOrderForProducts = async (): Promise<{ success: boolean }> => {
     // Limpiar cache después de la migración
-    const result = await postAction<{ success: boolean }>('migrateSortOrderForProducts', {});
+    const result = await postAction('migrateSortOrderForProducts', {}) as { success: boolean };
     if (result.success) {
         clearCache('products');
     }
@@ -1234,7 +1616,7 @@ export const migrateSortOrderForProducts = async (): Promise<{ success: boolean 
 // Función para agregar la columna sort_order si no existe
 export const addSortOrderColumn = async (): Promise<{ success: boolean }> => {
     // Limpiar cache después de agregar columna
-    const result = await postAction<{ success: boolean }>('addSortOrderColumn', {});
+    const result = await postAction('addSortOrderColumn', {}) as { success: boolean };
     if (result.success) {
         clearCache('products');
     }

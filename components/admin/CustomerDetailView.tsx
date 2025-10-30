@@ -4,6 +4,8 @@ import { ActivePackagesDisplay } from './ActivePackagesDisplay';
 import { AcceptPaymentModal } from './AcceptPaymentModal';
 import { InvoiceReminderModal } from './InvoiceReminderModal';
 import { NewDeliveryModal } from './NewDeliveryModal';
+import { EditDeliveryModal } from './EditDeliveryModal';
+import { DeliveryListWithFilters } from './DeliveryListWithFilters';
 import { ManualBookingModal } from './ManualBookingModal';
 import { RescheduleModal } from './RescheduleModal';
 import { useAdminData } from '../../context/AdminDataContext';
@@ -28,21 +30,34 @@ import {
 import * as dataService from '../../services/dataService';
 import { formatDate, formatCurrency, normalizeHour } from '../../utils/formatters';
 
-function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, setNavigateTo }) {
+interface CustomerDetailViewProps {
+    customer: Customer;
+    onBack: () => void;
+    onDataChange: () => void;
+    invoiceRequests?: InvoiceRequest[];
+    setNavigateTo?: (view: string) => void;
+}
+
+function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, setNavigateTo }: CustomerDetailViewProps) {
+    // Estado para rescatar cliente
+    const [rescueStatus, setRescueStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
+    const [rescuedCustomer, setRescuedCustomer] = useState<Customer | null>(null);
+    
+    // Estado para modal de auditoría de giftcard
+    const [giftcardAuditModal, setGiftcardAuditModal] = useState<{ open: boolean; giftcardId: string | null }>({ open: false, giftcardId: null });
+
     // Usar AdminDataContext para datos compartidos
     const adminData = useAdminData();
-    
-    // Si el cliente no existe, intentar rescatarlo como standalone (solo una vez)
-    const [rescueStatus, setRescueStatus] = useState<'idle'|'pending'|'success'|'error'>('idle');
-    const [rescuedCustomer, setRescuedCustomer] = useState<Customer|null>(null);
+
+    // useEffect para rescatar cliente si no tiene userInfo
     useEffect(() => {
         if ((!customer || !customer.userInfo) && rescueStatus === 'idle') {
             setRescueStatus('pending');
             (async () => {
                 try {
-                    const result = await import('../../services/dataService').then(ds => ds.ensureStandaloneCustomer({
-                        email: customer?.email || 'estefania.alava@email.com', // Usar email dinámico si está disponible
-                    }));
+                    const result = await dataService.ensureStandaloneCustomer({
+                        email: customer?.email || 'estefania.alava@email.com',
+                    });
                     if (result.success && result.customer) {
                         setRescuedCustomer(result.customer);
                         setRescueStatus('success');
@@ -56,23 +71,25 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
         }
     }, [customer, rescueStatus]);
 
-    if (!customer || !customer.userInfo) {
-        if (rescueStatus === 'pending') {
-            return <div className="p-8 text-center text-brand-secondary font-bold">Buscando cliente en la base de datos...</div>;
-        }
-        if (rescueStatus === 'success' && rescuedCustomer) {
-            return <CustomerDetailView customer={rescuedCustomer} onBack={onBack} onDataChange={onDataChange} invoiceRequests={invoiceRequests} setNavigateTo={setNavigateTo} />;
-        }
-        if (rescueStatus === 'error') {
-            return (
-                <div className="p-8 text-center text-red-500 font-bold">
-                    Error: No se encontró información del cliente y no fue posible rescatarlo.
-                </div>
-            );
-        }
-        // Estado inicial, no intentar rescatar aún
-        return null;
+    // Si estamos rescatando, mostrar loading
+    if (rescueStatus === 'pending') {
+        return <div className="p-8 text-center text-brand-secondary font-bold">Buscando cliente en la base de datos...</div>;
     }
+    
+    // Si rescatamos exitosamente, usar el cliente rescatado
+    if (rescueStatus === 'success' && rescuedCustomer) {
+        return <CustomerDetailView customer={rescuedCustomer} onBack={onBack} onDataChange={onDataChange} invoiceRequests={invoiceRequests} setNavigateTo={setNavigateTo} />;
+    }
+    
+    // Si falló el rescate
+    if (rescueStatus === 'error') {
+        return (
+            <div className="p-8 text-center text-red-500 font-bold">
+                Error: No se encontró información del cliente y no fue posible rescatarlo.
+            </div>
+        );
+    }
+
     const [state, setState] = useState({
         editMode: false,
         activeTab: 'info',
@@ -89,33 +106,72 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
         bookingForReminder: null,
         isNewDeliveryModalOpen: false,
         deliveryToDelete: null,
+        deliveryToEdit: null,
         selectedBookingToReschedule: null,
         isSchedulingModalOpen: false,
     });
-        // Estado para eliminar cliente
-        const [deleteCustomerModal, setDeleteCustomerModal] = useState(false);
-        const [deleteCustomerLoading, setDeleteCustomerLoading] = useState(false);
-        const handleDeleteCustomer = async () => {
-            setDeleteCustomerLoading(true);
-            try {
-                await dataService.deleteCustomer(customer.email);
-                setDeleteCustomerModal(false);
-                if (typeof onBack === 'function') onBack();
-            } catch (e) {
-                // Manejo de error
+
+    // Estado para eliminar cliente
+    const [deleteCustomerModal, setDeleteCustomerModal] = useState(false);
+    const [deleteCustomerLoading, setDeleteCustomerLoading] = useState(false);
+    
+    // Estado para feedback de eliminación
+    const [feedbackMsg, setFeedbackMsg] = useState<string>('');
+    const [feedbackType, setFeedbackType] = useState<'success' | 'error'>('success');
+    
+    const handleDeleteCustomer = async () => {
+        setDeleteCustomerLoading(true);
+        try {
+            console.log('[DELETE CUSTOMER] Attempting to delete customer with email:', customer.email);
+            console.log('[DELETE CUSTOMER] Customer object:', customer);
+            
+            const response = await fetch('/api/data?action=deleteCustomer', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email: customer.email }),
+            });
+
+            console.log('[DELETE CUSTOMER] Response status:', response.status);
+            const deleteResult = await response.json();
+            console.log('[DELETE CUSTOMER] Response body:', deleteResult);
+
+            if (!response.ok) {
+                throw new Error(deleteResult.error || 'Failed to delete customer');
             }
+
+            if (deleteResult.success) {
+                setFeedbackMsg('Cliente eliminado exitosamente');
+                setFeedbackType('success');
+                onDataChange(); // Refresh data
+                onBack(); // Redirigir a la lista de clientes
+            } else {
+                throw new Error(deleteResult.error || 'Cliente no encontrado');
+            }
+        } catch (error) {
+            console.error('Error eliminando cliente:', error);
+            setFeedbackMsg('Error al eliminar cliente');
+            setFeedbackType('error');
+        } finally {
             setDeleteCustomerLoading(false);
-        };
+        }
+    };
 
     const [appData, setAppData] = useState<AppData | null>(null);
     // Usar datos del AdminDataContext en lugar de cargar localmente
     const allProducts = adminData.products;
     const allBookings = adminData.bookings;
-    // Hooks para completar entrega (deben estar fuera de renderDeliveryTab)
+    
+    // Hooks para completar entrega
     const [completeModal, setCompleteModal] = useState<{ open: boolean; deliveryId: string | null }>({ open: false, deliveryId: null });
-    // Hooks para eliminar clase programada (deben estar fuera de renderScheduledClassesTab)
+    const [completeDate, setCompleteDate] = useState<string>("");
+    const [completeLoading, setCompleteLoading] = useState(false);
+    
+    // Hooks para eliminar clase programada
     const [deleteModal, setDeleteModal] = useState<{ open: boolean; bookingId: string | null; slot: any | null }>({ open: false, bookingId: null, slot: null });
     const [deleteLoading, setDeleteLoading] = useState(false);
+
     const handleDeleteSlot = async () => {
         if (!deleteModal.bookingId || !deleteModal.slot) return;
         setDeleteLoading(true);
@@ -143,11 +199,12 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
             }
             setDeleteModal({ open: false, bookingId: null, slot: null });
             onDataChange();
-        } catch (e) {}
+        } catch (e) {
+            console.error('Error deleting slot:', e);
+        }
         setDeleteLoading(false);
     };
-    const [completeDate, setCompleteDate] = useState<string>("");
-    const [completeLoading, setCompleteLoading] = useState(false);
+
     const handleCompleteDelivery = async () => {
         if (!completeModal.deliveryId || !completeDate) return;
         setCompleteLoading(true);
@@ -167,14 +224,66 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                 }
             }
         } catch (e) {
-            // Manejo de error
+            console.error('Error completing delivery:', e);
         }
         setCompleteLoading(false);
     };
 
+    const handleDeleteDelivery = async (deliveryId: string) => {
+        try {
+            await dataService.deleteDelivery(deliveryId);
+            setState(prev => ({
+                ...prev,
+                deliveries: prev.deliveries.filter(d => d.id !== deliveryId)
+            }));
+        } catch (error) {
+            console.error('Error deleting delivery:', error);
+        }
+    };
+
+    const handleMarkDeliveryAsReady = async (deliveryId: string) => {
+        try {
+            // Check if delivery already has ready_at
+            const existingDelivery = state.deliveries.find(d => d.id === deliveryId);
+            const isResend = !!existingDelivery?.readyAt;
+            
+            if (isResend) {
+                const confirmResend = window.confirm('Esta pieza ya fue marcada como lista.\n\n¿Deseas reenviar el email de notificación al cliente?');
+                if (!confirmResend) return;
+            }
+            
+            console.log('[handleMarkDeliveryAsReady] Starting for deliveryId:', deliveryId, 'isResend:', isResend);
+            const result = await dataService.markDeliveryAsReady(deliveryId, isResend);
+            console.log('[handleMarkDeliveryAsReady] Result:', result);
+            
+            if (result.success && result.delivery) {
+                setState(prev => ({
+                    ...prev,
+                    deliveries: prev.deliveries.map(d => d.id === result.delivery.id ? result.delivery : d)
+                }));
+                onDataChange();
+                
+                if (isResend) {
+                    alert('✅ Email reenviado al cliente.');
+                } else {
+                    alert('✅ Cliente notificado. La pieza está marcada como lista para recoger.');
+                }
+            } else if (result.error) {
+                console.error('[handleMarkDeliveryAsReady] Error from backend:', result.error);
+                alert(`❌ ${result.error}`);
+            } else {
+                console.error('[handleMarkDeliveryAsReady] Unexpected result:', result);
+                alert('❌ Error inesperado. Revisa los logs de Vercel.');
+            }
+        } catch (error) {
+            console.error('[handleMarkDeliveryAsReady] Exception:', error);
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            alert(`❌ Error: ${errorMsg}`);
+        }
+    };
+
     useEffect(() => {
         // Los datos ahora vienen del AdminDataContext, solo necesitamos configurar appData una vez
-        // cuando tenemos los datos básicos disponibles
         if (!appData && adminData.instructors.length > 0 && adminData.products.length > 0) {
             setAppData({ 
                 instructors: adminData.instructors, 
@@ -188,15 +297,14 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                 policies: '',
                 confirmationMessage: { title: '', message: '' },
                 footerInfo: { address: '', email: '', whatsapp: '', googleMapsLink: '', instagramHandle: '' },
-                bankDetails: { bankName: '', accountHolder: '', accountNumber: '', accountType: '', taxId: '' }
+                bankDetails: [{ bankName: '', accountHolder: '', accountNumber: '', accountType: '', taxId: '' }]
             });
         }
-    }, [adminData.instructors.length, adminData.products.length, appData]); // Solo depende de que los datos estén disponibles
+    }, [adminData.instructors.length, adminData.products.length, appData]);
 
     // Clases pasadas = slots anteriores
     const renderPastClassesTab = () => {
         const now = new Date();
-        // Mostrar todas las clases pasadas, pagadas o no
         const pastSlots = customer.bookings
             .flatMap(booking => booking.slots
                 .filter(slot => new Date(slot.date + 'T00:00:00') < now)
@@ -208,6 +316,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                 <div className="bg-white shadow overflow-hidden sm:rounded-md">
                     {pastSlots.length > 0 ? pastSlots.map(({ slot, booking }, idx) => {
                         const isPaid = booking.isPaid;
+                        const isNoRefund = booking.acceptedNoRefund === true;
                         return (
                             <div key={idx} className={`p-6 border-b last:border-b-0 flex justify-between items-center gap-4 ${isPaid ? '' : 'bg-yellow-50'}`}>
                                 <div>
@@ -219,6 +328,12 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                                 Pago pendiente
                                             </span>
                                         )}
+                                        {isNoRefund && (
+                                            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 ml-2" title="Reserva <48hrs: No reembolsable ni reagendable">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                                No reagendable
+                                            </span>
+                                        )}
                                     </p>
                                     <p className="text-sm text-brand-secondary mb-1">{formatDate(slot.date)} a las {slot.time}</p>
                                     <p className="text-sm text-brand-secondary mb-1">Código: {booking.bookingCode}</p>
@@ -227,8 +342,14 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                 </div>
                                 <div className="flex gap-2">
                                     <button
-                                        className="border border-brand-primary text-brand-primary px-4 py-2 rounded-lg font-semibold flex items-center gap-2 hover:bg-blue-50"
-                                        onClick={() => setState(prev => ({ ...prev, selectedBookingToReschedule: { booking, slot } }))}
+                                        className={`border px-4 py-2 rounded-lg font-semibold flex items-center gap-2 ${
+                                            isNoRefund 
+                                                ? 'border-gray-300 text-gray-400 cursor-not-allowed' 
+                                                : 'border-brand-primary text-brand-primary hover:bg-blue-50'
+                                        }`}
+                                        onClick={() => !isNoRefund && setState(prev => ({ ...prev, selectedBookingToReschedule: { booking, slot } }))}
+                                        disabled={isNoRefund}
+                                        title={isNoRefund ? 'Esta reserva no es reagendable (reservada <48hrs)' : 'Reagendar clase'}
                                     >
                                         <span className="material-icons">schedule</span> Reagendar
                                     </button>
@@ -250,13 +371,41 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                     <RescheduleModal
                         isOpen={true}
                         onClose={() => setState(prev => ({ ...prev, selectedBookingToReschedule: null }))}
-                        onSave={(newSlot) => {
-                            dataService.rescheduleBookingSlot(state.selectedBookingToReschedule.booking.id, state.selectedBookingToReschedule.slot, newSlot).then(() => {
-                                setState(prev => ({ ...prev, selectedBookingToReschedule: null }));
-                                onDataChange();
+                        onSave={async (newSlot) => {
+                            console.log('[CustomerDetailView-PastClasses] Reschedule initiated:', { 
+                                bookingId: state.selectedBookingToReschedule.booking.id, 
+                                oldSlot: state.selectedBookingToReschedule.slot, 
+                                newSlot 
                             });
+                            
+                            // 1. Ejecutar reagendamiento
+                            const result = await dataService.rescheduleBookingSlot(
+                                state.selectedBookingToReschedule.booking.id, 
+                                state.selectedBookingToReschedule.slot, 
+                                newSlot
+                            );
+                            
+                            console.log('[CustomerDetailView-PastClasses] Reschedule result:', result);
+                            
+                            // 2. Forzar recarga inmediata de datos críticos (bookings y customers)
+                            if (adminData.refreshCritical) {
+                                console.log('[CustomerDetailView-PastClasses] Forcing critical data refresh...');
+                                adminData.refreshCritical();
+                            } else {
+                                // Fallback: usar onDataChange si refreshCritical no está disponible
+                                console.log('[CustomerDetailView-PastClasses] Using onDataChange fallback...');
+                                onDataChange();
+                            }
+                            
+                            // 3. Esperar a que los datos se actualicen
+                            await new Promise(resolve => setTimeout(resolve, 500));
+                            
+                            // 4. Cerrar modal
+                            setState(prev => ({ ...prev, selectedBookingToReschedule: null }));
+                            
+                            console.log('[CustomerDetailView-PastClasses] Reschedule complete and modal closed');
                         }}
-                        slotInfo={{ slot: state.selectedBookingToReschedule.slot, attendeeName: customer.userInfo.firstName + ' ' + customer.userInfo.lastName }}
+                        slotInfo={{ slot: state.selectedBookingToReschedule.slot, attendeeName: customer.userInfo.firstName + ' ' + customer.userInfo.lastName, bookingId: state.selectedBookingToReschedule.booking.id }}
                         appData={appData}
                     />
                 )}
@@ -264,7 +413,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
         );
     };
 
-    // Clases programadas = todos los slots futuros (pagados o no)
+    // Clases programadas = todos los slots futuros
     const renderScheduledClassesTab = () => {
         const now = new Date();
         const scheduledSlots = customer.bookings
@@ -275,16 +424,18 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
         return (
             <div className="space-y-6">
                 <h3 className="text-lg font-medium">Clases Programadas</h3>
-                   <div className="flex justify-end mb-4">
-                       <button
-                           className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg shadow hover:bg-indigo-700 transition font-semibold"
-                           onClick={() => setState(prev => ({ ...prev, isSchedulingModalOpen: true }))}
-                       >
-                           <PlusIcon className="h-5 w-5" /> Agendar clase
-                       </button>
-                   </div>
+                <div className="flex justify-end mb-4">
+                    <button
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg shadow hover:bg-indigo-700 transition font-semibold"
+                        onClick={() => setState(prev => ({ ...prev, isSchedulingModalOpen: true }))}
+                    >
+                        <PlusIcon className="h-5 w-5" /> Agendar clase
+                    </button>
+                </div>
                 <div className="bg-white shadow overflow-hidden sm:rounded-md">
-                    {scheduledSlots.length > 0 ? scheduledSlots.map(({ slot, booking }, idx) => (
+                    {scheduledSlots.length > 0 ? scheduledSlots.map(({ slot, booking }, idx) => {
+                        const isNoRefund = booking.acceptedNoRefund === true;
+                        return (
                         <div key={idx} className="p-6 border-b last:border-b-0 flex justify-between items-center gap-4">
                             <div>
                                 <p className="font-bold text-lg text-brand-text mb-1 flex items-center gap-2">
@@ -295,6 +446,12 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                             No confirmada por pago
                                         </span>
                                     )}
+                                    {isNoRefund && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 ml-2" title="Reserva <48hrs: No reembolsable ni reagendable">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                            No reagendable
+                                        </span>
+                                    )}
                                 </p>
                                 <p className="text-sm text-brand-secondary mb-1">{formatDate(slot.date)} a las {slot.time}</p>
                                 <p className="text-sm text-brand-secondary mb-1">Código: {booking.bookingCode}</p>
@@ -303,8 +460,14 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                             </div>
                             <div className="flex gap-2">
                                 <button
-                                    className="border border-brand-primary text-brand-primary px-4 py-2 rounded-lg font-semibold flex items-center gap-2 hover:bg-blue-50"
-                                    onClick={() => setState(prev => ({ ...prev, selectedBookingToReschedule: { booking, slot } }))}
+                                    className={`border px-4 py-2 rounded-lg font-semibold flex items-center gap-2 ${
+                                        isNoRefund 
+                                            ? 'border-gray-300 text-gray-400 cursor-not-allowed' 
+                                            : 'border-brand-primary text-brand-primary hover:bg-blue-50'
+                                    }`}
+                                    onClick={() => !isNoRefund && setState(prev => ({ ...prev, selectedBookingToReschedule: { booking, slot } }))}
+                                    disabled={isNoRefund}
+                                    title={isNoRefund ? 'Esta reserva no es reagendable (reservada <48hrs)' : 'Reagendar clase'}
                                 >
                                     <span className="material-icons">schedule</span> Reagendar
                                 </button>
@@ -317,7 +480,8 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                 </button>
                             </div>
                         </div>
-                    )) : (
+                        );
+                    }) : (
                         <div className="p-6 text-center text-brand-secondary">No hay clases programadas.</div>
                     )}
                 </div>
@@ -325,32 +489,57 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                     <RescheduleModal
                         isOpen={true}
                         onClose={() => setState(prev => ({ ...prev, selectedBookingToReschedule: null }))}
-                        onSave={(newSlot) => {
-                            dataService.rescheduleBookingSlot(state.selectedBookingToReschedule.booking.id, state.selectedBookingToReschedule.slot, newSlot).then(() => {
-                                setState(prev => ({ ...prev, selectedBookingToReschedule: null }));
-                                onDataChange();
+                        onSave={async (newSlot) => {
+                            console.log('[CustomerDetailView-Scheduled] Reschedule initiated:', { 
+                                bookingId: state.selectedBookingToReschedule.booking.id, 
+                                oldSlot: state.selectedBookingToReschedule.slot, 
+                                newSlot 
                             });
+                            
+                            // 1. Ejecutar reagendamiento
+                            const result = await dataService.rescheduleBookingSlot(
+                                state.selectedBookingToReschedule.booking.id, 
+                                state.selectedBookingToReschedule.slot, 
+                                newSlot
+                            );
+                            
+                            console.log('[CustomerDetailView-Scheduled] Reschedule result:', result);
+                            
+                            // 2. Forzar recarga inmediata de datos críticos (bookings y customers)
+                            if (adminData.refreshCritical) {
+                                console.log('[CustomerDetailView-Scheduled] Forcing critical data refresh...');
+                                adminData.refreshCritical();
+                            } else {
+                                // Fallback: usar onDataChange si refreshCritical no está disponible
+                                console.log('[CustomerDetailView-Scheduled] Using onDataChange fallback...');
+                                onDataChange();
+                            }
+                            
+                            // 3. Esperar a que los datos se actualicen
+                            await new Promise(resolve => setTimeout(resolve, 500));
+                            
+                            // 4. Cerrar modal
+                            setState(prev => ({ ...prev, selectedBookingToReschedule: null }));
+                            
+                            console.log('[CustomerDetailView-Scheduled] Reschedule complete and modal closed');
                         }}
-                        slotInfo={{ slot: state.selectedBookingToReschedule.slot, attendeeName: customer.userInfo.firstName + ' ' + customer.userInfo.lastName }}
+                        slotInfo={{ slot: state.selectedBookingToReschedule.slot, attendeeName: customer.userInfo.firstName + ' ' + customer.userInfo.lastName, bookingId: state.selectedBookingToReschedule.booking.id }}
                         appData={appData}
                     />
                 )}
-                {/* Modal de confirmación para eliminar clase */}
-                {/* El modal se renderiza fuera de la función, en el componente principal */}
-                   {/* Modal de agendamiento flexible */}
-                   {state.isSchedulingModalOpen && (
-                       <    ManualBookingModal
-                           isOpen={state.isSchedulingModalOpen}
-                           onClose={() => setState(prev => ({ ...prev, isSchedulingModalOpen: false }))}
-                           onBookingAdded={() => {
-                               setState(prev => ({ ...prev, isSchedulingModalOpen: false }));
-                               onDataChange();
-                           }}
-                           existingBookings={allBookings}
-                           availableProducts={allProducts}
-                           preselectedCustomer={customer}
-                       />
-                   )}
+                {state.isSchedulingModalOpen && (
+                    <ManualBookingModal
+                        isOpen={state.isSchedulingModalOpen}
+                        onClose={() => setState(prev => ({ ...prev, isSchedulingModalOpen: false }))}
+                        onBookingAdded={() => {
+                            setState(prev => ({ ...prev, isSchedulingModalOpen: false }));
+                            onDataChange();
+                        }}
+                        existingBookings={allBookings}
+                        availableProducts={allProducts}
+                        preselectedCustomer={customer}
+                    />
+                )}
             </div>
         );
     };
@@ -359,6 +548,13 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
     const renderPaymentsTab = () => {
         const payments = customer.bookings
             .flatMap(booking => (booking.paymentDetails || []).map((payment, idx) => ({ payment, booking, idx })));
+        console.log('CustomerDetailView - Render payments tab - payments:', payments);
+        payments.forEach(({ payment, booking, idx }) => {
+            if (payment.giftcardAmount) {
+                console.log(`Giftcard detectada en pago idx=${idx}, bookingId=${booking.id}, amount=${payment.giftcardAmount}, giftcardId=${payment.giftcardId}`);
+            }
+        });
+        
         return (
             <div className="space-y-6">
                 <h3 className="text-lg font-medium flex items-center gap-2">
@@ -377,6 +573,12 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                     <span className="inline-flex items-center px-2 py-1 text-sm font-semibold rounded bg-green-50 text-green-700 ml-2">
                                         ${formatCurrency(payment.amount).replace('€', '')}
                                     </span>
+                                    {payment.giftcardAmount && (
+                                        <span className="inline-flex items-center px-2 py-1 text-sm font-semibold rounded bg-indigo-50 text-indigo-700 ml-2">
+                                            Giftcard: ${formatCurrency(payment.giftcardAmount || 0).replace('€', '')}
+                                            {payment.giftcardId ? ` · ID:${payment.giftcardId}` : ''}
+                                        </span>
+                                    )}
                                 </p>
                                 <p className="text-sm text-brand-secondary mb-1 flex items-center gap-2">
                                     <ClockIcon className="h-4 w-4 text-gray-400" />
@@ -388,6 +590,14 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                     <TagIcon className="h-4 w-4 text-gray-400" />
                                     <span className="font-mono">Código: {booking.bookingCode}</span>
                                 </p>
+                                {payment.giftcardAmount && (
+                                    <div className="mt-2">
+                                        <button
+                                            onClick={() => setGiftcardAuditModal({ open: true, giftcardId: payment.giftcardId || null })}
+                                            className="inline-flex items-center gap-2 px-3 py-1 text-xs font-semibold rounded bg-gray-100 hover:bg-gray-200 text-gray-700"
+                                        >Ver auditoría de giftcard</button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )) : (
@@ -397,10 +607,19 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                         </div>
                     )}
                 </div>
+                {giftcardAuditModal.open && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+                        <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md relative animate-fade-in">
+                            <button className="absolute top-2 right-2 text-gray-500 hover:text-gray-700" onClick={() => setGiftcardAuditModal({ open: false, giftcardId: null })} aria-label="Cerrar">&times;</button>
+                            <h3 className="text-lg font-bold mb-4 text-indigo-700">Auditoría de Giftcard</h3>
+                            <p className="mb-2 text-sm text-brand-secondary">Giftcard ID: <span className="font-mono font-bold">{giftcardAuditModal.giftcardId}</span></p>
+                            <div className="bg-gray-50 p-3 rounded text-xs text-gray-700">(Próximamente: historial de uso, saldos y logs de auditoría)</div>
+                        </div>
+                    </div>
+                )}
             </div>
         );
     };
-
 
     // Delivery de piezas
     const renderDeliveryTab = () => {
@@ -419,79 +638,25 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                         <PlusIcon className="h-5 w-5" /> Nueva Recogida
                     </button>
                 </div>
-                <div className="bg-white shadow overflow-hidden sm:rounded-md">
-                    {deliveries.length > 0 ? deliveries.map((delivery, idx) => (
-                        <div key={idx} className="p-6 border-b last:border-b-0 flex flex-col md:flex-row justify-between items-center gap-4">
-                            <div className="flex-1">
-                                <p className="font-bold text-lg text-brand-text mb-1 flex items-center gap-2">
-                                    <CheckCircleIcon className={`h-5 w-5 ${delivery.status === 'completed' ? 'text-green-500' : delivery.status === 'pending' ? 'text-yellow-500' : 'text-red-500'}`} />
-                                    {delivery.description}
-                                </p>
-                                <p className="text-sm text-brand-secondary mb-1 flex items-center gap-2">
-                                    <CalendarIcon className="h-4 w-4 text-gray-400" />
-                                    Fecha programada para recogida: {formatDate(delivery.scheduledDate)}
-                                </p>
-                                <p className="text-sm text-brand-secondary mb-1 flex items-center gap-2">
-                                    <ClockIcon className="h-4 w-4 text-gray-400" />
-                                    Estado: <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${delivery.status === 'completed' ? 'bg-green-100 text-green-800' : delivery.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>{delivery.status}</span>
-                                </p>
-                                {delivery.deliveredAt && (
-                                    <p className="text-sm text-brand-secondary mb-1 flex items-center gap-2">
-                                        <CalendarIcon className="h-4 w-4 text-gray-400" />
-                                        Fecha de entrega: {formatDate(delivery.deliveredAt)}
-                                    </p>
-                                )}
-                                {delivery.notes && <p className="text-sm text-brand-secondary mb-1">Notas: {delivery.notes}</p>}
-                                {delivery.photos && delivery.photos.length > 0 && (
-                                    <div className="flex gap-2 mt-2">
-                                        {delivery.photos.map((photo, i) => (
-                                            <img key={i} src={photo} alt="Foto recogida" className="h-16 w-16 object-cover rounded-lg border" />
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                            <div className="flex gap-2 mt-4 md:mt-0">
-                                <button
-                                    className="p-2 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-600 shadow"
-                                    title="Editar entrega"
-                                    onClick={() => {/* lógica de edición */}}
-                                >
-                                    <PencilIcon className="h-5 w-5" />
-                                </button>
-                                <button
-                                    className="p-2 rounded-full bg-red-50 hover:bg-red-100 text-red-600 shadow"
-                                    title="Eliminar entrega"
-                                    onClick={() => setState(prev => ({ ...prev, deliveryToDelete: delivery }))}
-                                >
-                                    <TrashIcon className="h-5 w-5" />
-                                </button>
-                                {delivery.status !== 'completed' && (
-                                    <button
-                                        className="p-2 rounded-full bg-green-50 hover:bg-green-100 text-green-600 shadow flex items-center gap-1"
-                                        title="Completar entrega"
-                                        onClick={() => setCompleteModal({ open: true, deliveryId: delivery.id })}
-                                    >
-                                        <CheckCircleIcon className="h-5 w-5" />
-                                        <span className="text-xs font-semibold">Completar</span>
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    )) : (
-                        <div className="p-6 text-center text-brand-secondary">No hay recogidas registradas.</div>
-                    )}
-                </div>
-                {/* Modal para crear entrega */}
+                
+                <DeliveryListWithFilters
+                    deliveries={deliveries}
+                    onEdit={(delivery) => setState(prev => ({ ...prev, deliveryToEdit: delivery }))}
+                    onDelete={(delivery) => setState(prev => ({ ...prev, deliveryToDelete: delivery }))}
+                    onComplete={(deliveryId) => setCompleteModal({ open: true, deliveryId })}
+                    onMarkReady={handleMarkDeliveryAsReady}
+                    formatDate={formatDate}
+                />
                 <NewDeliveryModal
                     isOpen={state.isNewDeliveryModalOpen}
                     onClose={() => setState(prev => ({ ...prev, isNewDeliveryModalOpen: false }))}
                     onSave={async (deliveryData) => {
                         try {
-                            // Persist delivery and get parsed delivery from backend
                             const result = await dataService.createDelivery({
                                 ...deliveryData,
-                                customerEmail: customer.userInfo.email
-                            });
+                                customerEmail: customer.userInfo.email,
+                                customerName: customer.userInfo.firstName
+                            } as any);
                             if (result.success && result.delivery) {
                                 setState(prev => ({
                                     ...prev,
@@ -507,8 +672,35 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                         }
                     }}
                     customerEmail={customer.userInfo.email}
+                    customerName={customer.userInfo.firstName}
                 />
-                {/* Modal de completar entrega */}
+                {state.deliveryToEdit && (
+                    <EditDeliveryModal
+                        isOpen={true}
+                        delivery={state.deliveryToEdit}
+                        onClose={() => setState(prev => ({ ...prev, deliveryToEdit: null }))}
+                        onSave={async (deliveryId, updates) => {
+                            try {
+                                const result = await dataService.updateDelivery(deliveryId, updates);
+                                if (result.success && result.delivery) {
+                                    setState(prev => ({
+                                        ...prev,
+                                        deliveries: prev.deliveries.map(d => 
+                                            d.id === result.delivery!.id ? result.delivery! : d
+                                        ),
+                                        deliveryToEdit: null
+                                    }));
+                                    onDataChange();
+                                } else {
+                                    setState(prev => ({ ...prev, deliveryToEdit: null }));
+                                }
+                            } catch (error) {
+                                console.error('Error updating delivery:', error);
+                                setState(prev => ({ ...prev, deliveryToEdit: null }));
+                            }
+                        }}
+                    />
+                )}
                 {completeModal.open && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
                         <div className="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full">
@@ -549,7 +741,6 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                         </div>
                     </div>
                 )}
-                {/* Modal de confirmación para eliminar */}
                 {state.deliveryToDelete && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
                         <div className="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full">
@@ -731,13 +922,8 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
         }
     };
 
-    const handleDeleteDelivery = async (deliveryId: string) => {
-        // Aquí va la lógica de eliminación de delivery
-        // ...existing code...
-    };
-
     return (
-    <div className="w-full max-w-4xl px-4 py-8">
+        <div className="w-full max-w-4xl px-4 py-8">
             {/* Header mejorado */}
             <div className="grid grid-cols-12 gap-0 items-center bg-brand-surface rounded-xl shadow border border-brand-border mb-4 py-4 px-6">
                 <div className="col-span-3 flex items-center">
@@ -755,7 +941,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                 <div className="col-span-3"></div>
             </div>
 
-            {/* Tabs mejor alineados y responsivos */}
+            {/* Tabs */}
             <div className="bg-brand-surface rounded-xl shadow border border-brand-border mb-6">
                 <nav className="grid grid-cols-5 gap-0 px-2 py-2">
                     <button
@@ -800,6 +986,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
             <div className="mt-6">
                 {renderTabContent()}
             </div>
+
             {/* Modal de confirmación para eliminar clase programada */}
             {deleteModal.open && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
@@ -824,30 +1011,31 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                     </div>
                 </div>
             )}
-                {/* Modal de confirmación para eliminar cliente */}
-                {deleteCustomerModal && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
-                        <div className="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full">
-                            <h4 className="text-lg font-bold mb-4 flex items-center gap-2 text-red-600">
-                                <TrashIcon className="h-6 w-6" />
-                                Eliminar cliente
-                            </h4>
-                            <p className="mb-6">¿Seguro que deseas eliminar al cliente <span className="font-semibold">{customer.userInfo.firstName} {customer.userInfo.lastName}</span>?<br />Esta acción eliminará todos sus datos y no se puede deshacer.</p>
-                            <div className="flex gap-4 justify-end">
-                                <button
-                                    className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold"
-                                    onClick={() => setDeleteCustomerModal(false)}
-                                    disabled={deleteCustomerLoading}
-                                >Cancelar</button>
-                                <button
-                                    className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white font-semibold"
-                                    onClick={handleDeleteCustomer}
-                                    disabled={deleteCustomerLoading}
-                                >{deleteCustomerLoading ? 'Eliminando...' : 'Eliminar'}</button>
-                            </div>
+
+            {/* Modal de confirmación para eliminar cliente */}
+            {deleteCustomerModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
+                    <div className="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full">
+                        <h4 className="text-lg font-bold mb-4 flex items-center gap-2 text-red-600">
+                            <TrashIcon className="h-6 w-6" />
+                            Eliminar cliente
+                        </h4>
+                        <p className="mb-6">¿Seguro que deseas eliminar al cliente <span className="font-semibold">{customer.userInfo.firstName} {customer.userInfo.lastName}</span>?<br />Esta acción eliminará todos sus datos y no se puede deshacer.</p>
+                        <div className="flex gap-4 justify-end">
+                            <button
+                                className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold"
+                                onClick={() => setDeleteCustomerModal(false)}
+                                disabled={deleteCustomerLoading}
+                            >Cancelar</button>
+                            <button
+                                className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white font-semibold"
+                                onClick={handleDeleteCustomer}
+                                disabled={deleteCustomerLoading}
+                            >{deleteCustomerLoading ? 'Eliminando...' : 'Eliminar'}</button>
                         </div>
                     </div>
-                )}
+                </div>
+            )}
         </div>
     );
 }
