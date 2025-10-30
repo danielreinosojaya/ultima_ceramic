@@ -2355,15 +2355,17 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             
             // Send ready notification email
             try {
-                const { rows: [customerData] } = await sql`
-                    SELECT user_info FROM customers WHERE email = ${readyDelivery.customer_email} LIMIT 1
+                // Get customer name from most recent booking
+                const { rows: [bookingData] } = await sql`
+                    SELECT user_info FROM bookings WHERE email = ${readyDelivery.customer_email} 
+                    ORDER BY created_at DESC LIMIT 1
                 `;
                 
                 let customerName = 'Cliente';
-                if (customerData?.user_info) {
-                    const userInfo = typeof customerData.user_info === 'string' 
-                        ? JSON.parse(customerData.user_info) 
-                        : customerData.user_info;
+                if (bookingData?.user_info) {
+                    const userInfo = typeof bookingData.user_info === 'string' 
+                        ? JSON.parse(bookingData.user_info) 
+                        : bookingData.user_info;
                     customerName = userInfo.firstName || 'Cliente';
                 }
                 
