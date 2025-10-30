@@ -2737,6 +2737,21 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
     try {
       console.log('[ADD BOOKING] Sending pre-booking confirmation email to:', booking.userInfo.email);
       
+      // CRÍTICO: Re-fetch booking ANTES de enviar email para obtener payment_details actualizados
+      let bookingForEmail = booking;
+      try {
+        const { rows: [updatedBookingRow] } = await sql`
+          SELECT * FROM bookings WHERE booking_code = ${newBookingCode} LIMIT 1
+        `;
+        if (updatedBookingRow) {
+          bookingForEmail = parseBookingFromDB(updatedBookingRow);
+          console.log('[ADD BOOKING] Refreshed booking before email - paymentDetails:', bookingForEmail.paymentDetails?.length || 0);
+        }
+      } catch (refetchErr) {
+        console.warn('[ADD BOOKING] Could not refresh booking before email:', refetchErr);
+        // Continue with original booking if refetch fails
+      }
+      
       // Get bank details from environment or use default
       const bankDetails = {
         bankName: 'Banco Pichincha',
@@ -2746,7 +2761,7 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
         taxId: '0921343935'
       };
       
-      await emailService.sendPreBookingConfirmationEmail(booking, bankDetails);
+      await emailService.sendPreBookingConfirmationEmail(bookingForEmail, bankDetails);
       console.log('[ADD BOOKING] Pre-booking confirmation email sent successfully');
     } catch (emailError) {
       console.error('[ADD BOOKING] Error sending pre-booking confirmation email:', emailError);
@@ -2754,7 +2769,7 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
       // The booking is already created, just log the error
     }
 
-    // CRÍTICO: Re-fetch booking para obtener datos actualizados después de payment_details
+    // Re-fetch booking para obtener datos actualizados después de payment_details
     try {
       const { rows: [updatedBookingRow] } = await sql`
         SELECT * FROM bookings WHERE booking_code = ${newBookingCode} LIMIT 1
