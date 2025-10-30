@@ -30,7 +30,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       case 'create-hold': {
         const body = req.body || {};
         const amount = body.amount !== undefined ? Number(body.amount) : null;
-        const ttlMinutes = Number(body.ttlMinutes || 15);
+        const ttlMinutes = Number(body.ttlMinutes || 3);
         const bookingTempRef = body.bookingTempRef || null;
         const code = body.code || null;
         const giftcardId = body.giftcardId || null;
