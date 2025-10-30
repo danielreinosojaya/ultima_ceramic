@@ -2357,7 +2357,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             try {
                 // Get customer name from most recent booking
                 const { rows: [bookingData] } = await sql`
-                    SELECT user_info FROM bookings WHERE email = ${readyDelivery.customer_email} 
+                    SELECT user_info FROM bookings WHERE user_email = ${readyDelivery.customer_email} 
                     ORDER BY created_at DESC LIMIT 1
                 `;
                 
