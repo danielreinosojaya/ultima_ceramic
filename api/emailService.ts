@@ -536,7 +536,7 @@ export const sendDeliveryCreatedEmail = async (customerEmail: string, customerNa
 };
 
 export const sendDeliveryReadyEmail = async (customerEmail: string, customerName: string, delivery: { description: string; readyAt: string; }) => {
-    console.log('[sendDeliveryReadyEmail] Starting email send to:', customerEmail);
+    console.log('[sendDeliveryReadyEmail] READY EMAIL - Starting send to:', customerEmail);
     
     const readyDate = new Date(delivery.readyAt);
     const expirationDate = new Date(readyDate);
