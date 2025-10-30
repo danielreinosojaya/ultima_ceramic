@@ -512,7 +512,7 @@ export const sendDeliveryCreatedEmail = async (customerEmail: string, customerNa
                 <p style="margin: 8px 0 0 0; color: #1E3A8A; font-size: 14px;">
                     • Confirmaremos contigo 1-2 días antes de la fecha<br/>
                     • Las piezas estarán listas para recoger en nuestro taller<br/>
-                    • Horario: Lunes a Viernes 9:00 - 18:00, Sábados 10:00 - 14:00
+                    • Horario: Martes a Sábado 10:00 AM - 8:00 PM, Domingos 12:00 PM - 5:00 PM
                 </p>
             </div>
 
@@ -590,9 +590,9 @@ export const sendDeliveryReadyEmail = async (customerEmail: string, customerName
             <div style="background-color: #EFF6FF; border-left: 4px solid #3B82F6; padding: 20px; margin: 20px 0; border-radius: 8px;">
                 <p style="margin: 0; color: #1E40AF; font-weight: bold;">🕐 Horario de Recogida</p>
                 <p style="margin: 8px 0 0 0; color: #1E3A8A; font-size: 14px;">
-                    • Lunes a Viernes: 9:00 AM - 6:00 PM<br/>
-                    • Sábados: 10:00 AM - 2:00 PM<br/>
-                    • Domingos: Cerrado
+                    • Martes a Sábado: 10:00 AM - 8:00 PM<br/>
+                    • Domingos: 12:00 PM - 5:00 PM<br/>
+                    • Lunes: Cerrado
                 </p>
             </div>
 
@@ -651,9 +651,9 @@ export const sendDeliveryReminderEmail = async (customerEmail: string, customerN
             <div style="background-color: #EFF6FF; border-left: 4px solid #3B82F6; padding: 15px; margin: 20px 0; border-radius: 8px;">
                 <p style="margin: 0; color: #1E40AF; font-weight: bold;">⏰ Horario de Recogida</p>
                 <p style="margin: 8px 0 0 0; color: #1E3A8A; font-size: 14px;">
-                    • Lunes a Viernes: 9:00 AM - 6:00 PM<br/>
-                    • Sábados: 10:00 AM - 2:00 PM<br/>
-                    • Domingos: Cerrado
+                    • Martes a Sábado: 10:00 AM - 8:00 PM<br/>
+                    • Domingos: 12:00 PM - 5:00 PM<br/>
+                    • Lunes: Cerrado
                 </p>
             </div>
 
