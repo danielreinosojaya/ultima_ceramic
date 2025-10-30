@@ -2358,9 +2358,10 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             try {
                 console.log('[markDeliveryAsReady] 🔍 Step 1: Getting customer name for email:', readyDelivery.customer_email);
                 
-                // Get customer name from most recent booking
+                // Get customer name from most recent booking (email is stored in user_info JSON)
                 const { rows: [bookingData] } = await sql`
-                    SELECT user_info FROM bookings WHERE user_email = ${readyDelivery.customer_email} 
+                    SELECT user_info FROM bookings 
+                    WHERE user_info->>'email' = ${readyDelivery.customer_email} 
                     ORDER BY created_at DESC LIMIT 1
                 `;
                 
