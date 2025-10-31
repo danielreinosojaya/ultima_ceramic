@@ -165,7 +165,8 @@ const SCHEMA_SQL = `
         completed_at TIMESTAMPTZ,
         delivered_at TIMESTAMPTZ,
         notes TEXT,
-        photos JSONB DEFAULT '[]'::jsonb
+        photos JSONB DEFAULT '[]'::jsonb,
+        created_by_client BOOLEAN DEFAULT false
     );
     
     CREATE INDEX IF NOT EXISTS idx_deliveries_customer_email ON deliveries(customer_email);
