@@ -49,6 +49,7 @@ export interface Delivery {
     readyAt?: string | null; // ISO date string - fecha cuando se marcó como lista para recoger
     notes?: string | null;
     photos?: string[] | null; // Array de URLs de fotos
+    createdByClient?: boolean; // true si el cliente subió las fotos directamente
 }
 
 export interface Customer {

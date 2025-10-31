@@ -1567,6 +1567,35 @@ export const createDelivery = async (deliveryData: Omit<Delivery, 'id' | 'create
     return result;
 };
 
+export const createDeliveryFromClient = async (data: {
+    email: string;
+    userInfo: UserInfo;
+    description: string | null;
+    scheduledDate: string;
+    photos: string[] | null;
+}): Promise<{ success: boolean; delivery?: Delivery; isNewCustomer?: boolean; error?: string; message?: string }> => {
+    try {
+        const result = await postAction('createDeliveryFromClient', data);
+        if (result.success && result.delivery) {
+            return { 
+                ...result, 
+                delivery: parseDelivery(result.delivery),
+                message: result.message || '✅ ¡Gracias! Hemos recibido tu información.'
+            };
+        }
+        return { 
+            success: false, 
+            error: result.error || 'Error al procesar tu solicitud'
+        };
+    } catch (error) {
+        console.error('createDeliveryFromClient error:', error);
+        return { 
+            success: false, 
+            error: error instanceof Error ? error.message : 'Error desconocido'
+        };
+    }
+};
+
 export const updateDelivery = async (deliveryId: string, updates: Partial<Omit<Delivery, 'id' | 'customerEmail' | 'createdAt'>>): Promise<{ success: boolean; delivery?: Delivery }> => {
     const result = await postAction('updateDelivery', { deliveryId, updates });
     if (result.success && result.delivery) {
