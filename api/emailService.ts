@@ -187,6 +187,13 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
             <h2>¡Hola, ${userInfo.firstName}!</h2>
             <p>Gracias por tu pre-reserva para <strong>${product.name}</strong>. Tu lugar ha sido guardado con el código de reserva:</p>
             <p style="font-size: 24px; font-weight: bold; color: #D95F43; margin: 20px 0;">${bookingCode}</p>
+            <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #92400E; font-weight: bold;">⏰ Pre-Reserva Válida por 2 Horas</p>
+                <p style="margin: 8px 0 0 0; color: #78350F; font-size: 14px;">
+                    Esta pre-reserva estará disponible solo durante las próximas <strong>2 horas</strong>. Si no realizas el pago en este tiempo, 
+                    tu lugar será liberado y tendrás que volver a hacer el proceso de reserva.
+                </p>
+            </div>
             ${totalPaid > 0 ? `
             <div style="background-color: #f0fdf4; border-left: 4px solid #10B981; padding: 15px; margin: 20px 0; border-radius: 8px;">
                 <p style="margin: 0; color: #059669; font-weight: bold;">✅ Pago con Giftcard Aplicado</p>

@@ -667,40 +667,93 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
             {activeTab === 'pending' && (
                 <div className="animate-fade-in">
                     <p className="text-brand-secondary mb-6">Rastrea y gestiona todas las pre-reservas pendientes de pago.</p>
-                    <div className="border-b border-gray-200 mb-6">
-                        <nav className="-mb-px flex space-x-8" aria-label="Pending Tabs">
-                            <button
-                                className={`relative flex items-center pb-2 transition-colors font-serif text-[1.5rem] font-bold leading-tight ${pendingSubTab === 'packages' ? 'text-[#7B8692] border-b-4 border-[#7B8692]' : 'text-[#434A54] border-b-4 border-transparent hover:text-[#7B8692]'} `}
-                                style={{ outline: 'none', background: 'none' }}
-                                onClick={() => setPendingSubTab('packages')}
-                            >
-                                <span className="mr-2">Paquetes y Clases</span>
-                                <span className={`flex items-center justify-center font-sans text-sm font-bold ${pendingSubTab === 'packages' ? 'bg-[#7B8692] text-white' : 'bg-[#B0B7BE] text-white'} rounded-full w-9 h-9`} style={{lineHeight:'2.2rem'}}>
-                                    {pendingPackageBookings.length}
-                                </span>
-                            </button>
-                            <button
-                                className={`relative flex items-center pb-2 transition-colors font-serif text-[1.5rem] font-bold leading-tight ${pendingSubTab === 'openStudio' ? 'text-[#7B8692] border-b-4 border-[#7B8692]' : 'text-[#434A54] border-b-4 border-transparent hover:text-[#7B8692]'} `}
-                                style={{ outline: 'none', background: 'none' }}
-                                onClick={() => setPendingSubTab('openStudio')}
-                            >
-                                <span>Open Studio</span>
-                            </button>
-                        </nav>
+                    
+                    {/* KPI Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                        <KPICard 
+                            title="Pre-reservas Totales" 
+                            value={pendingPackageBookings.length + pendingOpenStudioBookings.length}
+                            subtext="Pendientes de pago"
+                        />
+                        <KPICard 
+                            title="Monto en Espera" 
+                            value={`$${(pendingPackageBookings.reduce((sum, b) => sum + (b.pendingBalance || 0), 0) + pendingOpenStudioBookings.reduce((sum, b) => sum + (b.pendingBalance || 0), 0)).toFixed(2)}`}
+                            subtext="Total a cobrar"
+                        />
+                        <KPICard 
+                            title="Urgentes (< 1h)" 
+                            value={pendingPackageBookings.filter(b => b.expiresAt && new Date(b.expiresAt).getTime() - new Date().getTime() < 3600000).length}
+                            subtext="Próximas a expirar"
+                        />
+                        <KPICard 
+                            title="Con Giftcard" 
+                            value={pendingPackageBookings.filter(b => b.giftcardApplied).length}
+                            subtext="Pago parcial"
+                        />
                     </div>
+
+                    {/* Search & Advanced Filters */}
                     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
-                        <div className="p-3 bg-blue-50 border-l-4 border-blue-400 mb-4" style={{marginBottom:'0'}}>
-                            <p className="text-sm text-blue-800" style={{marginBottom:'0'}}>
-                                <strong>📋 Todas las reservas pendientes:</strong> Se muestran TODAS las reservas sin pagar, independientemente de la fecha. Incluye clases individuales, paquetes, introducciones y clases grupales.
-                            </p>
+                        <div className="space-y-4">
+                            {/* Search Bar */}
+                            <input 
+                                type="text" 
+                                placeholder="🔍 Buscar por nombre, email o código de reserva..." 
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
+                                onChange={(e) => {
+                                    // Implementar lógica de búsqueda
+                                }}
+                            />
+                            
+                            {/* Filter Buttons */}
+                            <div className="flex flex-wrap gap-2 items-center">
+                                <span className="text-sm font-semibold text-brand-secondary">Filtrar por:</span>
+                                <button className="px-3 py-1 text-sm font-semibold rounded-full bg-red-100 text-red-800 hover:bg-red-200 transition-colors">
+                                    Críticas (&lt; 30 min)
+                                </button>
+                                <button className="px-3 py-1 text-sm font-semibold rounded-full bg-yellow-100 text-yellow-800 hover:bg-yellow-200 transition-colors">
+                                    Próximas a expirar
+                                </button>
+                                <button className="px-3 py-1 text-sm font-semibold rounded-full bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors">
+                                    Con Giftcard
+                                </button>
+                                <button className="px-3 py-1 text-sm font-semibold rounded-full bg-purple-100 text-purple-800 hover:bg-purple-200 transition-colors">
+                                    Sin fechas
+                                </button>
+                                <button className="px-3 py-1 text-sm font-semibold rounded-full border-2 border-gray-300 text-gray-800 hover:bg-gray-50 transition-colors">
+                                    Limpiar filtros
+                                </button>
+                            </div>
+
+                            {/* Sort & View Options */}
+                            <div className="flex gap-4 items-center justify-between">
+                                <div className="flex gap-2">
+                                    <label className="text-sm font-semibold text-brand-secondary">Ordenar por:</label>
+                                    <select className="px-3 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary">
+                                        <option>Más recientes primero</option>
+                                        <option>Más antiguos primero</option>
+                                        <option>Mayor monto pendiente</option>
+                                        <option>Menor tiempo restante</option>
+                                    </select>
+                                </div>
+                                <div className="flex gap-2">
+                                    <label className="text-sm font-semibold text-brand-secondary">Ver:</label>
+                                    <select className="px-3 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary">
+                                        <option>Todos</option>
+                                        <option>Paquetes de clases</option>
+                                        <option>Open Studio</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     </div>
+
                     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                         <div className="mb-4 flex gap-2 items-center">
-                             <button onClick={handleBulkAcceptPayment} disabled={selectedBookings.length === 0} className="px-3 py-1 text-sm font-semibold rounded-md bg-green-100 text-green-800 disabled:opacity-50">Aceptar pagos</button>
-                             <button onClick={handleBulkSendReminder} disabled={selectedBookings.length === 0} className="px-3 py-1 text-sm font-semibold rounded-md bg-yellow-100 text-yellow-800 disabled:opacity-50">Enviar recordatorio</button>
-                             <button onClick={handleBulkDelete} disabled={selectedBookings.length === 0} className="px-3 py-1 text-sm font-semibold rounded-md bg-red-100 text-red-800 disabled:opacity-50">Eliminar</button>
-                             <span className="ml-auto text-xs text-brand-secondary">Seleccionados: {selectedBookings.length}</span>
+                         <div className="mb-4 flex gap-2 items-center flex-wrap">
+                             <button onClick={handleBulkAcceptPayment} disabled={selectedBookings.length === 0} className="px-3 py-1.5 text-sm font-semibold rounded-md bg-green-100 text-green-800 hover:bg-green-200 disabled:opacity-50 transition-colors">✓ Aceptar pagos ({selectedBookings.length})</button>
+                             <button onClick={handleBulkSendReminder} disabled={selectedBookings.length === 0} className="px-3 py-1.5 text-sm font-semibold rounded-md bg-yellow-100 text-yellow-800 hover:bg-yellow-200 disabled:opacity-50 transition-colors">📧 Enviar recordatorio ({selectedBookings.length})</button>
+                             <button onClick={handleBulkDelete} disabled={selectedBookings.length === 0} className="px-3 py-1.5 text-sm font-semibold rounded-md bg-red-100 text-red-800 hover:bg-red-200 disabled:opacity-50 transition-colors">🗑️ Eliminar ({selectedBookings.length})</button>
+                             <span className="ml-auto text-xs text-brand-secondary font-semibold">Seleccionados: {selectedBookings.length} / {paginatedBookings.length}</span>
                          </div>
                          <div className="overflow-x-auto" role="region" aria-label="Tabla de reservas pendientes">
                             {loadingBulk && (
@@ -712,46 +765,61 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                 <thead className="bg-brand-background" role="rowgroup">
                                     <tr role="row">
                                         <th className="px-2 py-2" role="columnheader"><input type="checkbox" checked={selectedBookings.length === paginatedBookings.length && paginatedBookings.length > 0} onChange={handleSelectAll} aria-label="Seleccionar todos" /></th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">Fecha</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">Cliente</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">Producto</th>
-                                        <th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">Monto</th>
-                                        <th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">Saldo pendiente</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider cursor-pointer hover:bg-gray-200" role="columnheader">📅 Fecha</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">👤 Cliente</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">📦 Producto</th>
+                                        <th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">💰 Monto</th>
+                                        <th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">⏳ Vence en</th>
+                                        <th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">Pendiente</th>
                                         <th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200" role="rowgroup">
-                                    {paginatedBookings.length > 0 ? paginatedBookings.map(b => (
-                                        <tr key={b.id} role="row">
+                                    {paginatedBookings.length > 0 ? paginatedBookings.map(b => {
+                                        const timeUntilExpire = b.expiresAt ? new Date(b.expiresAt).getTime() - new Date().getTime() : null;
+                                        const isUrgent = timeUntilExpire && timeUntilExpire < 1800000; // < 30 min
+                                        const isCritical = timeUntilExpire && timeUntilExpire < 600000; // < 10 min
+                                        
+                                        return (
+                                        <tr key={b.id} className={`transition-colors ${isCritical ? 'bg-red-50' : isUrgent ? 'bg-yellow-50' : 'hover:bg-gray-50'}`} role="row">
                                             <td className="px-2 py-2" role="cell"><input type="checkbox" checked={selectedBookings.includes(b.id)} onChange={() => handleSelectBooking(b.id)} aria-label={`Seleccionar reserva ${b.id}`} /></td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text" role="cell">{formatDate(b.createdAt, { year: 'numeric', month: 'short', day: 'numeric'})}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text" role="cell">
-                                                <div className="font-semibold">{b.userInfo?.firstName} {b.userInfo?.lastName}</div>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text font-medium" role="cell">{formatDate(b.createdAt, { year: 'numeric', month: 'short', day: 'numeric'})}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm" role="cell">
+                                                <div className="font-semibold text-brand-text">{b.userInfo?.firstName} {b.userInfo?.lastName}</div>
                                                 <div className="text-xs text-brand-secondary">{b.userInfo?.email}</div>
                                             </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text" role="cell">
                                                 {b.product?.name || 'N/A'}
-                                                {/* Indicador visual para pre-reservas sin fechas asignadas */}
                                                 {(!Array.isArray(b.slots) || b.slots.length === 0) && (
-                                                    <span className="inline-flex items-center px-2 py-1 ml-2 text-xs font-semibold rounded bg-amber-100 text-amber-800" title="Pre-reserva sin fechas asignadas aún">
+                                                    <span className="inline-flex items-center px-2 py-1 ml-2 text-xs font-semibold rounded bg-amber-100 text-amber-800" title="Sin fechas asignadas aún">
                                                         ⏳ Sin fechas
                                                     </span>
                                                 )}
                                             </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-semibold" role="cell">${(b.price || 0).toFixed(2)}
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-bold" role="cell">
+                                                ${(b.price || 0).toFixed(2)}
                                                 {b.giftcardApplied && (
-                                                    <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-indigo-50 text-indigo-700 ml-2">
-                                                        Giftcard: ${(b.giftcardRedeemedAmount || 0).toFixed(2)}
-                                                    </span>
+                                                    <div className="text-xs text-indigo-700 font-semibold mt-1">-${(b.giftcardRedeemedAmount || 0).toFixed(2)}</div>
                                                 )}
                                             </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-semibold" role="cell">${(b.pendingBalance || 0).toFixed(2)}</td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-right" role="cell">
-                                                <div className="flex items-center justify-end gap-2">
+                                                {b.expiresAt ? (
+                                                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-bold ${isCritical ? 'bg-red-100 text-red-800' : isUrgent ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
+                                                        {timeUntilExpire && timeUntilExpire > 0 
+                                                            ? `${Math.floor(timeUntilExpire / 60000)}m` 
+                                                            : '⚠️ Expirado'}
+                                                    </span>
+                                                ) : '---'}
+                                            </td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-bold" role="cell">
+                                                <span className="text-red-600">${(b.pendingBalance || 0).toFixed(2)}</span>
+                                            </td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-right" role="cell">
+                                                <div className="flex items-center justify-end gap-1.5">
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); setNavigateTo({ tab: 'customers', targetId: b.userInfo.email }); }}
-                                                        title="View Customer Profile"
-                                                        className="flex items-center gap-1.5 bg-gray-100 text-gray-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-gray-200 transition-colors"
+                                                        title="Ver Perfil"
+                                                        className="flex items-center gap-1 bg-gray-100 text-gray-800 text-xs font-bold py-1 px-2 rounded hover:bg-gray-200 transition-colors"
                                                         tabIndex={0}
                                                         aria-label="Ver perfil del cliente"
                                                     >
@@ -759,26 +827,24 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                                     </button>
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleAcceptPaymentClick(b); }}
-                                                        className="flex items-center gap-1.5 bg-green-100 text-green-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-green-200 transition-colors"
+                                                        className="flex items-center gap-1 bg-green-100 text-green-800 text-xs font-bold py-1 px-2 rounded hover:bg-green-200 transition-colors"
                                                         tabIndex={0}
                                                            aria-label="Aceptar pago"
                                                     >
                                                         <CurrencyDollarIcon className="w-4 h-4" />
-                                                           Aceptar pago
                                                     </button>
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); setBookingToViewDates(b); }}
-                                                        className="flex items-center gap-1.5 bg-blue-100 text-blue-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-blue-200 transition-colors"
+                                                        className="flex items-center gap-1 bg-blue-100 text-blue-800 text-xs font-bold py-1 px-2 rounded hover:bg-blue-200 transition-colors"
                                                         tabIndex={0}
-                                                        aria-label="Ver Fechas Reservadas"
+                                                        aria-label="Ver Fechas"
                                                     >
                                                         <CalendarIcon className="w-4 h-4" />
-                                                        Ver Fechas
                                                     </button>
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); setBookingToDelete(b); }}
-                                                        title="Eliminar reserva"
-                                                        className="flex items-center gap-1.5 bg-red-100 text-red-800 text-xs font-bold py-1 px-2.5 rounded-md hover:bg-red-200 transition-colors"
+                                                        title="Eliminar"
+                                                        className="flex items-center gap-1 bg-red-100 text-red-800 text-xs font-bold py-1 px-2 rounded hover:bg-red-200 transition-colors"
                                                         tabIndex={0}
                                                         aria-label="Eliminar reserva"
                                                     >
@@ -787,39 +853,40 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                                 </div>
                                             </td>
                                         </tr>
-                                    )) : (
+                                        );
+                                    }) : (
                                         <tr role="row">
-                                            <td colSpan={6} className="text-center py-10 text-brand-secondary" role="cell">
-                                                No hay reservas pendientes
+                                            <td colSpan={8} className="text-center py-10 text-brand-secondary" role="cell">
+                                                ✨ ¡Excelente! No hay reservas pendientes
                                             </td>
                                         </tr>
                                     )}
                                 </tbody>
                             </table>
                             {/* Pagination controls */}
-                            <div className="flex justify-between items-center mt-4">
+                            <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-200">
                                 <div className="flex gap-2 items-center">
-                                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2 py-1 rounded bg-gray-100 text-gray-800 disabled:opacity-50" tabIndex={0} aria-label="Página anterior">
-                                        Página anterior
+                                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1 rounded bg-gray-100 text-gray-800 disabled:opacity-50 hover:bg-gray-200 transition-colors text-sm font-semibold" tabIndex={0} aria-label="Página anterior">
+                                        ← Anterior
                                     </button>
-                                    <span className="text-sm">Página {currentPage} de {totalPages}</span>
-                                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-2 py-1 rounded bg-gray-100 text-gray-800 disabled:opacity-50" tabIndex={0} aria-label="Página siguiente">
-                                        Página siguiente
+                                    <span className="text-sm font-semibold text-brand-secondary">Página {currentPage} de {totalPages}</span>
+                                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1 rounded bg-gray-100 text-gray-800 disabled:opacity-50 hover:bg-gray-200 transition-colors text-sm font-semibold" tabIndex={0} aria-label="Página siguiente">
+                                        Siguiente →
                                     </button>
                                 </div>
                                 <div className="flex gap-2 items-center">
-                                    <span className="text-sm">Filas por página</span>
-                                    <select value={rowsPerPage} onChange={e => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="text-sm p-1 border rounded-md" aria-label="Filas por página"> 
-                                        <option value={5}>5</option>
+                                    <span className="text-sm font-semibold text-brand-secondary">Filas por página:</span>
+                                    <select value={rowsPerPage} onChange={e => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="text-sm p-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary" aria-label="Filas por página"> 
                                         <option value={10}>10</option>
                                         <option value={25}>25</option>
                                         <option value={50}>50</option>
+                                        <option value={100}>100</option>
                                     </select>
                                 </div>
                             </div>
                             {/* Feedback message */}
                             {feedbackMsg && (
-                                <div className={`mt-4 p-2 rounded text-sm font-bold ${feedbackType === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`} role="alert">
+                                <div className={`mt-4 p-3 rounded-lg text-sm font-bold ${feedbackType === 'success' ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200'}`} role="alert">
                                     {feedbackMsg}
                                 </div>
                             )}

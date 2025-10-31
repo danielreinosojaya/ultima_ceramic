@@ -18,7 +18,8 @@ export type AppView =
   | 'giftcard_payment'
   | 'giftcard_manual_payment'
   | 'giftcard_pending_review'
-  | 'giftcard_confirmation';
+  | 'giftcard_confirmation'
+  | 'giftcard_check_balance';
 export type BookingMode = 'flexible' | 'monthly';
 export type Technique = 'potters_wheel' | 'molding';
 
@@ -229,6 +230,8 @@ export interface Booking {
     giftcardRedeemedAmount?: number;
     giftcardId?: string;
     pendingBalance?: number;
+    expiresAt?: Date; // Pre-reserva válida hasta esta fecha (NOW + 2 hours)
+    status?: 'active' | 'expired' | 'paid'; // Estado de la reserva
 
     // Propiedades derivadas
     date?: string; // Derivada de bookingDate
