@@ -5,14 +5,14 @@ function toCamelCase(obj: any): any {
     } else if (obj !== null && typeof obj === 'object') {
         // Handle Date objects specially
         if (obj instanceof Date) {
-            return obj.toISOString().split('T')[0]; // Return YYYY-MM-DD format
+            return obj.toISOString(); // Return full ISO string with time
         }
         return Object.keys(obj).reduce((acc, key) => {
             const camelKey = key.replace(/_([a-z])/g, g => g[1].toUpperCase());
             let value = obj[key];
-            // Convert Date objects to strings
+            // Convert Date objects to strings - preserve full timestamp for expires_at
             if (value instanceof Date) {
-                value = value.toISOString().split('T')[0];
+                value = value.toISOString();
             } else {
                 value = toCamelCase(value);
             }
@@ -138,6 +138,8 @@ const parseBookingFromDB = (dbRow: any): Booking => {
 
         camelCased.createdAt = safeParseDate(camelCased.createdAt);
         camelCased.bookingDate = safeParseDate(camelCased.bookingDate)?.toISOString();
+        camelCased.expiresAt = safeParseDate(camelCased.expiresAt); // Parse expires_at
+        camelCased.status = dbRow.status || 'active'; // Default to 'active' if not set
 
         if (camelCased.paymentDetails) {
             try {
@@ -2520,6 +2522,44 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 });
             }
         }
+        case 'expireOldBookings': {
+            // Marcar pre-reservas expiradas (> 2 horas sin pago)
+            try {
+                const { rows: expiredBookings } = await sql`
+                    UPDATE bookings 
+                    SET status = 'expired'
+                    WHERE status = 'active' 
+                      AND is_paid = false 
+                      AND expires_at < NOW()
+                    RETURNING id, booking_code, user_info
+                `;
+                
+                // Actualizar último tiempo de ejecución en admin_tasks
+                try {
+                    await sql`
+                        UPDATE admin_tasks 
+                        SET last_executed_at = NOW(), updated_at = NOW()
+                        WHERE task_name = 'expire_old_bookings'
+                    `;
+                } catch (taskErr) {
+                    console.warn('[EXPIRE BOOKINGS] Could not update admin_tasks:', taskErr);
+                }
+                
+                console.log(`[EXPIRE BOOKINGS] Marked ${expiredBookings.length} bookings as expired`);
+                
+                return res.status(200).json({ 
+                    success: true, 
+                    message: 'Pre-reservas expiradas marcadas',
+                    expired: expiredBookings.length
+                });
+            } catch (error) {
+                console.error('Error expiring old bookings:', error);
+                return res.status(500).json({ 
+                    success: false, 
+                    error: error instanceof Error ? error.message : String(error) 
+                });
+            }
+        }
         default:
             return res.status(400).json({ error: `Unknown action: ${action}` });
     }
@@ -2540,11 +2580,20 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
 
   try {
     const newBookingCode = generateBookingCode();
+    
+    // Intentar agregar columnas si no existen
+    try {
+      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITH TIME ZONE`;
+      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active'`;
+    } catch (e) {
+      console.warn('[ADD BOOKING] Could not add columns (may already exist):', e);
+    }
+    
     const { rows: created } = await sql`
       INSERT INTO bookings (
-        booking_code, product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_date, accepted_no_refund
+        booking_code, product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_date, accepted_no_refund, expires_at, status
       ) VALUES (
-        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(body.product)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}
+        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(body.product)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}, NOW() + INTERVAL '2 hours', 'active'
       ) RETURNING *;
     `;
 
@@ -2561,6 +2610,8 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
       bookingCode: created[0].booking_code,
       bookingMode: created[0].booking_mode,
       bookingDate: created[0].booking_date,
+      expiresAt: created[0].expires_at ? new Date(created[0].expires_at) : undefined,
+      status: created[0].status || 'active',
     };
 
     // Process giftcard hold if provided
@@ -2599,19 +2650,9 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
         const currentBalance = Number(giftcardRow.balance || 0);
         const holdAmount = Number(holdRow.amount || 0);
 
-        // CRÍTICO: Validar que el hold tiene el monto correcto
-        // Si el hold es menor al esperado pero la giftcard tiene saldo suficiente, usar el correcto
+        // CRÍTICO: El monto a consumir SIEMPRE es el holdAmount retenido
+        // NO permitir consumir más basado en parámetros del cliente
         let actualAmountToConsume = holdAmount;
-        
-        if (holdAmount < giftcardAmount && currentBalance >= giftcardAmount) {
-          console.warn('[ADD BOOKING] Hold amount mismatch - using correct amount:', {
-            holdAmount,
-            declaredAmount: giftcardAmount,
-            balance: currentBalance,
-            willUse: giftcardAmount
-          });
-          actualAmountToConsume = giftcardAmount;
-        }
         
         // Validar que el monto a consumir no exceda el precio del booking
         if (actualAmountToConsume > expectedPrice) {
@@ -2624,8 +2665,7 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
           console.error('[ADD BOOKING] Insufficient giftcard balance:', { 
             current: currentBalance, 
             required: actualAmountToConsume,
-            holdAmount,
-            declaredAmount: giftcardAmount
+            holdAmount
           });
           throw new Error('Insufficient giftcard balance');
         }
@@ -2748,6 +2788,21 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
     try {
       console.log('[ADD BOOKING] Sending pre-booking confirmation email to:', booking.userInfo.email);
       
+      // CRÍTICO: Re-fetch booking ANTES de enviar email para obtener payment_details actualizados
+      let bookingForEmail = booking;
+      try {
+        const { rows: [updatedBookingRow] } = await sql`
+          SELECT * FROM bookings WHERE booking_code = ${newBookingCode} LIMIT 1
+        `;
+        if (updatedBookingRow) {
+          bookingForEmail = parseBookingFromDB(updatedBookingRow);
+          console.log('[ADD BOOKING] Refreshed booking before email - paymentDetails:', bookingForEmail.paymentDetails?.length || 0);
+        }
+      } catch (refetchErr) {
+        console.warn('[ADD BOOKING] Could not refresh booking before email:', refetchErr);
+        // Continue with original booking if refetch fails
+      }
+      
       // Get bank details from environment or use default
       const bankDetails = {
         bankName: 'Banco Pichincha',
@@ -2757,7 +2812,7 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
         taxId: '0921343935'
       };
       
-      await emailService.sendPreBookingConfirmationEmail(booking, bankDetails);
+      await emailService.sendPreBookingConfirmationEmail(bookingForEmail, bankDetails);
       console.log('[ADD BOOKING] Pre-booking confirmation email sent successfully');
     } catch (emailError) {
       console.error('[ADD BOOKING] Error sending pre-booking confirmation email:', emailError);
@@ -2765,7 +2820,7 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
       // The booking is already created, just log the error
     }
 
-    // CRÍTICO: Re-fetch booking para obtener datos actualizados después de payment_details
+    // Re-fetch booking para obtener datos actualizados después de payment_details
     try {
       const { rows: [updatedBookingRow] } = await sql`
         SELECT * FROM bookings WHERE booking_code = ${newBookingCode} LIMIT 1

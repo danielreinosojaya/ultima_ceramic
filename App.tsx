@@ -38,6 +38,7 @@ import { GiftcardPayment } from './components/giftcard/GiftcardPayment';
 import { GiftcardConfirmation } from './components/giftcard/GiftcardConfirmation';
 import { GiftcardManualPaymentInstructions } from './components/giftcard/GiftcardManualPaymentInstructions';
 import { GiftcardPendingReview } from './components/giftcard/GiftcardPendingReview';
+import { GiftcardBalanceChecker } from './components/giftcard/GiftcardBalanceChecker';
 
 const App: React.FC = () => {
     const [giftcardPaid, setGiftcardPaid] = useState(false);
@@ -388,7 +389,12 @@ const App: React.FC = () => {
 
         switch (view) {
             case 'giftcard_landing':
-                return <LandingGiftcard onStart={() => setView('giftcard_amount')} />;
+                return <LandingGiftcard 
+                    onStart={() => setView('giftcard_amount')} 
+                    onCheckBalance={() => setView('giftcard_check_balance')}
+                />;
+            case 'giftcard_check_balance':
+                return <GiftcardBalanceChecker onBack={() => setView('giftcard_landing')} />;
             case 'giftcard_amount':
                 return <GiftcardAmountSelector onSelect={amount => { setGiftcardAmount(amount); setView('giftcard_personalization'); }} />;
             case 'giftcard_personalization':

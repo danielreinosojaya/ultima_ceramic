@@ -316,7 +316,11 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                 <div className="bg-white shadow overflow-hidden sm:rounded-md">
                     {pastSlots.length > 0 ? pastSlots.map(({ slot, booking }, idx) => {
                         const isPaid = booking.isPaid;
-                        const isNoRefund = booking.acceptedNoRefund === true;
+                        // Verificar si ESTE slot específico fue reservado con <48hrs
+                        const slotDate = new Date(slot.date + 'T00:00:00');
+                        const bookingCreatedAt = new Date(booking.createdAt);
+                        const hoursDiff = (slotDate.getTime() - bookingCreatedAt.getTime()) / (1000 * 60 * 60);
+                        const isNoRefund = hoursDiff < 48;
                         return (
                             <div key={idx} className={`p-6 border-b last:border-b-0 flex justify-between items-center gap-4 ${isPaid ? '' : 'bg-yellow-50'}`}>
                                 <div>
@@ -434,7 +438,11 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                 </div>
                 <div className="bg-white shadow overflow-hidden sm:rounded-md">
                     {scheduledSlots.length > 0 ? scheduledSlots.map(({ slot, booking }, idx) => {
-                        const isNoRefund = booking.acceptedNoRefund === true;
+                        // Verificar si ESTE slot específico fue reservado con <48hrs
+                        const slotDate = new Date(slot.date + 'T00:00:00');
+                        const bookingCreatedAt = new Date(booking.createdAt);
+                        const hoursDiff = (slotDate.getTime() - bookingCreatedAt.getTime()) / (1000 * 60 * 60);
+                        const isNoRefund = hoursDiff < 48;
                         return (
                         <div key={idx} className="p-6 border-b last:border-b-0 flex justify-between items-center gap-4">
                             <div>

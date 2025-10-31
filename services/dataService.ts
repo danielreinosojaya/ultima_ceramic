@@ -1622,3 +1622,30 @@ export const addSortOrderColumn = async (): Promise<{ success: boolean }> => {
     }
     return result;
 };
+
+// Check giftcard balance by code
+export const checkGiftcardBalance = async (code: string): Promise<{ 
+    success: boolean; 
+    giftcard?: { 
+        balance: number; 
+        beneficiaryName: string; 
+        beneficiaryEmail: string; 
+        expiresAt: string 
+    }; 
+    message?: string 
+}> => {
+    try {
+        const response = await fetch('/api/giftcards?action=checkBalance', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code })
+        });
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        return { 
+            success: false, 
+            message: error instanceof Error ? error.message : 'Error checking balance' 
+        };
+    }
+};
