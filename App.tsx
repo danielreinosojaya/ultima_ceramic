@@ -15,6 +15,7 @@ import { BookingTypeModal } from './components/BookingTypeModal';
 import { ClassInfoModal } from './components/ClassInfoModal';
 import { PrerequisiteModal } from './components/PrerequisiteModal';
 import { AnnouncementsBoard } from './components/AnnouncementsBoard';
+import { ClientDeliveryForm } from './components/ClientDeliveryForm';
 // Lazy load AdminConsole to reduce initial bundle size
 const AdminConsole = lazy(() => import('./components/admin/AdminConsole').then(module => ({ default: module.AdminConsole })));
 import { NotificationProvider } from './context/NotificationContext';
@@ -62,6 +63,7 @@ const App: React.FC = () => {
     const [openStudioProduct, setOpenStudioProduct] = useState<Product | null>(null);
     // Traducciones eliminadas, usar texto en español directamente
     const [isAdmin, setIsAdmin] = useState(false);
+    const [isClientDeliveryMode, setIsClientDeliveryMode] = useState(false);
     const [view, setView] = useState<AppView>('welcome');
     const [bookingDetails, setBookingDetails] = useState<BookingDetails>({ product: null, slots: [], userInfo: null });
     const [confirmedBooking, setConfirmedBooking] = useState<Booking | null>(null);
@@ -84,6 +86,9 @@ const App: React.FC = () => {
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('admin') === 'true') {
             setIsAdmin(true);
+        }
+        if (urlParams.get('clientMode') === 'delivery') {
+            setIsClientDeliveryMode(true);
         }
     }, []);
 
@@ -556,6 +561,15 @@ const App: React.FC = () => {
                     </AdminDataProvider>
                 </Suspense>
             </NotificationProvider>
+        );
+    }
+
+    // Modo formulario de cliente (QR)
+    if (isClientDeliveryMode) {
+        return (
+            <div className="bg-brand-background min-h-screen text-brand-text font-sans relative flex flex-col">
+                <ClientDeliveryForm />
+            </div>
         );
     }
 

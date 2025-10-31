@@ -2241,6 +2241,118 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             
             return res.status(200).json({ success: true, delivery: toCamelCase(newDelivery) });
         }
+        case 'createDeliveryFromClient': {
+            const { email, userInfo, description, scheduledDate, photos } = req.body;
+            
+            if (!email || !scheduledDate) {
+                return res.status(400).json({ 
+                    success: false,
+                    error: 'Email y fecha de recogida son requeridos' 
+                });
+            }
+
+            try {
+                // 1️⃣ Validar email (debe ser cliente existente o crear uno nuevo)
+                let { rows: [existingCustomer] } = await sql`
+                    SELECT * FROM customers WHERE email = ${email}
+                `;
+
+                // 2️⃣ Si no existe, crear cliente nuevo
+                if (!existingCustomer) {
+                    console.log('[createDeliveryFromClient] Creating new customer:', email);
+                    
+                    if (!userInfo) {
+                        return res.status(400).json({ 
+                            success: false,
+                            error: 'userInfo es requerido para clientes nuevos' 
+                        });
+                    }
+
+                    const userInfoJson = JSON.stringify(userInfo);
+                    
+                    try {
+                        const { rows: [newCustomer] } = await sql`
+                            INSERT INTO customers (email, user_info)
+                            VALUES (${email}, ${userInfoJson}::jsonb)
+                            RETURNING *
+                        `;
+                        existingCustomer = newCustomer;
+                        console.log('[createDeliveryFromClient] ✅ New customer created:', email);
+                    } catch (customerError: any) {
+                        // Si falla por email duplicado, obtener el existente
+                        if (customerError?.code === '23505') {
+                            const { rows: [duplicate] } = await sql`
+                                SELECT * FROM customers WHERE email = ${email}
+                            `;
+                            existingCustomer = duplicate;
+                        } else {
+                            throw customerError;
+                        }
+                    }
+                }
+
+                // 3️⃣ Crear entrega con created_by_client = true
+                const photosJson = photos && Array.isArray(photos) ? JSON.stringify(photos) : null;
+                
+                const { rows: [newDelivery] } = await sql`
+                    INSERT INTO deliveries (
+                        customer_email, 
+                        description, 
+                        scheduled_date, 
+                        status, 
+                        photos,
+                        created_by_client
+                    )
+                    VALUES (
+                        ${email}, 
+                        ${description || null}, 
+                        ${scheduledDate}, 
+                        'pending', 
+                        ${photosJson},
+                        true
+                    )
+                    RETURNING *
+                `;
+
+                console.log('[createDeliveryFromClient] ✅ Delivery created:', newDelivery.id);
+
+                // 4️⃣ Enviar email de confirmación (fire and forget)
+                try {
+                    const customerName = userInfo?.firstName || 'Cliente';
+                    const emailServiceModule = await import('./emailService.js');
+                    
+                    emailServiceModule.sendDeliveryCreatedByClientEmail(
+                        email, 
+                        customerName, 
+                        {
+                            description: description || null,
+                            scheduledDate,
+                            photos: photos?.length || 0
+                        }
+                    ).then(() => {
+                        console.log('[createDeliveryFromClient] ✅ Confirmation email sent to:', email);
+                    }).catch(err => {
+                        console.error('[createDeliveryFromClient] ⚠️ Email send failed:', err);
+                    });
+                } catch (emailErr) {
+                    console.error('[createDeliveryFromClient] ⚠️ Email setup failed:', emailErr);
+                }
+
+                return res.status(200).json({ 
+                    success: true, 
+                    delivery: toCamelCase(newDelivery),
+                    isNewCustomer: !existingCustomer,
+                    message: '✅ Información recibida exitosamente'
+                });
+
+            } catch (error: any) {
+                console.error('[createDeliveryFromClient] Error:', error);
+                return res.status(500).json({ 
+                    success: false,
+                    error: error.message || 'Error al procesar la solicitud'
+                });
+            }
+        }
         case 'updateDelivery': {
             const { deliveryId, updates } = req.body;
             if (!deliveryId || !updates) {
