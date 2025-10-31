@@ -312,6 +312,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     console.log('Using database URL:', dbUrl.substring(0, 30) + '...');
 
+    // Ensure tables exist and migrations are applied
+    try {
+        await ensureTablesExist();
+    } catch (err) {
+        console.error('Error ensuring tables exist:', err);
+        // Continue anyway, don't fail the request
+    }
+
     // Test database connectivity with a simple query and timeout
     try {
         console.log('Testing database connectivity...');
