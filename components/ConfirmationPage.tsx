@@ -94,7 +94,37 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                 <p className="text-brand-secondary mt-2">Tu cupo está guardado. Sigue las instrucciones de pago para completar tu reserva.</p>
             </div>
 
-            {/* Sección de pasos a seguir */}
+            {/* Alerta de expiración en 2 horas */}
+            <div className="mt-6 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-md">
+                <div className="flex items-start gap-3">
+                    <span className="text-yellow-600 text-xl font-bold">⏰</span>
+                    <div>
+                        <h3 className="font-semibold text-yellow-800 mb-1">Pre-reserva válida por 2 horas</h3>
+                        <p className="text-sm text-yellow-700">
+                            Esta pre-reserva estará disponible solo durante las próximas 2 horas. Si no realizas el pago en este tiempo, 
+                            tu lugar será liberado y tendrás que volver a hacer el proceso de reserva.
+                        </p>
+                        {(() => {
+                            // Calcular hora de expiración: createdAt + 2 horas
+                            const createdDate = new Date(booking.createdAt);
+                            const expirationTime = new Date(createdDate.getTime() + (2 * 60 * 60 * 1000)); // +2 hours
+                            const now = new Date();
+                            const diffMs = expirationTime.getTime() - now.getTime();
+                            
+                            // Si ya expiró
+                            if (diffMs <= 0) {
+                                return <p className="text-xs text-red-600 mt-2 font-mono">YA EXPIRÓ</p>;
+                            }
+                            
+                            return (
+                                <p className="text-xs text-yellow-600 mt-2 font-mono">
+                                    Expira a las: {expirationTime.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                            );
+                        })()}
+                    </div>
+                </div>
+            </div>
             <div className="mt-8 bg-brand-background p-6 rounded-lg shadow-subtle">
                 <h3 className="text-lg font-semibold text-brand-text mb-4">¿Qué sigue?</h3>
                 <ol className="space-y-4 text-left">
