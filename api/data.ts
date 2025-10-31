@@ -2268,12 +2268,17 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         });
                     }
 
-                    const userInfoJson = JSON.stringify(userInfo);
-                    
                     try {
                         const { rows: [newCustomer] } = await sql`
-                            INSERT INTO customers (email, user_info)
-                            VALUES (${email}, ${userInfoJson}::jsonb)
+                            INSERT INTO customers (email, first_name, last_name, phone, country_code, birthday)
+                            VALUES (
+                                ${email}, 
+                                ${userInfo.firstName || null}, 
+                                ${userInfo.lastName || null}, 
+                                ${userInfo.phone || null}, 
+                                ${userInfo.countryCode || null}, 
+                                ${userInfo.birthday || null}
+                            )
                             RETURNING *
                         `;
                         existingCustomer = newCustomer;
