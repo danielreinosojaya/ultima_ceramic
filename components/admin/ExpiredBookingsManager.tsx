@@ -29,10 +29,21 @@ export const ExpiredBookingsManager: React.FC = () => {
 
 
   useEffect(() => {
+    // Limpiar reservas expiradas cuando se carga el componente
+    expireOldBookings();
     loadBookings();
     const interval = setInterval(loadBookings, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  const expireOldBookings = async () => {
+    try {
+      await fetch('/api/data?action=expireOldBookings', { method: 'GET' });
+      console.log('[ExpiredBookingsManager] Old bookings expired');
+    } catch (error) {
+      console.error('[ExpiredBookingsManager] Error expiring bookings:', error);
+    }
+  };
 
   const loadBookings = async () => {
     try {

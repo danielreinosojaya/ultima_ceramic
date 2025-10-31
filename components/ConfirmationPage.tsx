@@ -11,6 +11,7 @@ import { generateBookingPDF } from '../services/pdfService';
 import { formatPrice } from '../utils/formatters';
 import { DownloadIcon } from './icons/DownloadIcon';
 import { SINGLE_CLASS_PRICE, VAT_RATE } from '../constants';
+import { useEffect } from 'react';
 
 interface ConfirmationPageProps {
     booking: Booking;
@@ -35,6 +36,18 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
 
     // Prefer the explicit prop from App; fallback to booking.appliedGiftcardHold if present
     const appliedHold = appliedGiftcardHold ?? (booking as any).appliedGiftcardHold ?? null;
+
+    // Limpiar pre-reservas expiradas cuando se muestra la confirmación
+    useEffect(() => {
+        const expireOldBookings = async () => {
+            try {
+                await fetch('/api/data?action=expireOldBookings', { method: 'GET' });
+            } catch (error) {
+                console.error('[ConfirmationPage] Error expiring bookings:', error);
+            }
+        };
+        expireOldBookings();
+    }, []);
 
     const handleCopy = (text: string) => {
         navigator.clipboard.writeText(text).then(() => {

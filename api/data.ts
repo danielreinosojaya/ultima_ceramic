@@ -2534,6 +2534,17 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     RETURNING id, booking_code, user_info
                 `;
                 
+                // Actualizar último tiempo de ejecución en admin_tasks
+                try {
+                    await sql`
+                        UPDATE admin_tasks 
+                        SET last_executed_at = NOW(), updated_at = NOW()
+                        WHERE task_name = 'expire_old_bookings'
+                    `;
+                } catch (taskErr) {
+                    console.warn('[EXPIRE BOOKINGS] Could not update admin_tasks:', taskErr);
+                }
+                
                 console.log(`[EXPIRE BOOKINGS] Marked ${expiredBookings.length} bookings as expired`);
                 
                 return res.status(200).json({ 
