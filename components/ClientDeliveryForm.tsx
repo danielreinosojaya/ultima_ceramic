@@ -32,100 +32,56 @@ export const ClientDeliveryForm: React.FC = () => {
     const [successMessage, setSuccessMessage] = useState('');
     const [errorMessage, setErrorMessage] = useState('');
     
-    // Camera states
-    const [cameraActive, setCameraActive] = useState(false);
-    const [cameraError, setCameraError] = useState('');
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
+    // Refs para inputs de cámara y galería
+    const cameraInputRef = useRef<HTMLInputElement>(null);
+    const galleryInputRef = useRef<HTMLInputElement>(null);
 
     const validateEmail = (email: string): boolean => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return emailRegex.test(email);
     };
 
-    // Inicializar cámara
-    const startCamera = async () => {
-        try {
-            setCameraError('');
-            // Cámara trasera (normal) para fotos de las piezas
-            const constraints = {
-                video: {
-                    facingMode: 'environment',  // Cámara trasera/normal
-                    width: { ideal: 1920 },
-                    height: { ideal: 1440 },
-                    focusMode: 'continuous'
-                },
-                audio: false
-            };
-            
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-                videoRef.current.play().catch(err => console.error('Error playing video:', err));
-                setCameraActive(true);
-            }
-        } catch (err: any) {
-            console.error('Error al acceder a la cámara:', err);
-            setCameraError('No se pudo acceder a la cámara. Verifica los permisos.');
-        }
+    // Abrir cámara nativa del celular (modo foto)
+    const openCameraCapture = () => {
+        cameraInputRef.current?.click();
     };
 
-    // Detener cámara
-    const stopCamera = () => {
-        if (videoRef.current?.srcObject) {
-            const stream = videoRef.current.srcObject as MediaStream;
-            stream.getTracks().forEach(track => track.stop());
-            setCameraActive(false);
-            setCameraError('');
-        }
+    // Abrir galería para seleccionar fotos
+    const openGallery = () => {
+        galleryInputRef.current?.click();
     };
 
-    // Capturar foto desde cámara
-    const capturePhoto = () => {
-        if (!videoRef.current || !canvasRef.current) return;
-        
-        try {
-            const video = videoRef.current;
-            const canvas = canvasRef.current;
-            const context = canvas.getContext('2d');
-            
-            if (!context) return;
-            
-            // Asegurar que video tiene dimensiones correctas
-            if (video.videoWidth === 0 || video.videoHeight === 0) {
-                console.warn('Video not ready yet');
-                return;
+    // Procesar fotos capturadas (desde cámara o galería)
+    const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files) return;
+
+        Array.from(files).forEach((file: File) => {
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    if (event.target?.result) {
+                        setFormData(prev => ({
+                            ...prev,
+                            photos: [...prev.photos, event.target!.result as string]
+                        }));
+                    }
+                };
+                reader.readAsDataURL(file);
             }
-            
-            // Configurar canvas con las dimensiones reales del video
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            
-            // Dibujar el frame actual del video en el canvas
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            // Convertir a JPEG comprimido
-            const photoData = canvas.toDataURL('image/jpeg', 0.85);
-            
-            setFormData(prev => ({
-                ...prev,
-                photos: [...prev.photos, photoData]
-            }));
-            
-            // Limpiar errores
-            if (errors.photos) {
-                setErrors(prev => {
-                    const newErrors = { ...prev };
-                    delete newErrors.photos;
-                    return newErrors;
-                });
-            }
-            
-            console.log('✅ Foto capturada correctamente');
-        } catch (error) {
-            console.error('Error capturando foto:', error);
-            setCameraError('Error al capturar la foto. Intenta de nuevo.');
+        });
+
+        // Limpiar errores
+        if (errors.photos) {
+            setErrors(prev => {
+                const newErrors = { ...prev };
+                delete newErrors.photos;
+                return newErrors;
+            });
         }
+
+        // Reset input para permitir capturar la misma foto otra vez
+        e.target.value = '';
     };
 
     const validateStep = (): boolean => {
@@ -232,9 +188,6 @@ export const ClientDeliveryForm: React.FC = () => {
     };
 
     const handlePreviousStep = () => {
-        if (cameraActive) {
-            stopCamera();
-        }
         if (currentStep === 'photos') {
             setCurrentStep('info');
         } else if (currentStep === 'confirmation') {
@@ -285,14 +238,6 @@ export const ClientDeliveryForm: React.FC = () => {
             setIsSubmitting(false);
         }
     };
-
-    useEffect(() => {
-        return () => {
-            if (cameraActive) {
-                stopCamera();
-            }
-        };
-    }, [cameraActive]);
 
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -448,55 +393,25 @@ export const ClientDeliveryForm: React.FC = () => {
                     <div className="space-y-4">
                         <h3 className="text-lg font-bold text-brand-text mb-4">Sube Fotos de tu Pieza</h3>
 
-                        {/* Camera Section */}
-                        {!cameraActive ? (
-                            <button
-                                type="button"
-                                onClick={startCamera}
-                                disabled={isSubmitting}
-                                className="w-full px-4 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                            >
-                                📷 Tomar Foto con Cámara
-                            </button>
-                        ) : (
-                            <div className="space-y-2">
-                                <div className="relative rounded-lg border-2 border-blue-400 overflow-hidden" style={{ aspectRatio: '4/3', backgroundColor: '#000' }}>
-                                    <video
-                                        ref={videoRef}
-                                        autoPlay
-                                        playsInline
-                                        muted
-                                        disablePictureInPicture
-                                        className="w-full h-full object-cover"
-                                    />
-                                </div>
-                                <canvas ref={canvasRef} className="hidden" />
-                                <div className="flex gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={capturePhoto}
-                                        disabled={isSubmitting}
-                                        className="flex-1 px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                                    >
-                                        ✅ Capturar Foto
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={stopCamera}
-                                        disabled={isSubmitting}
-                                        className="flex-1 px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-                                    >
-                                        ✕ Cerrar Cámara
-                                    </button>
-                                </div>
-                            </div>
-                        )}
+                        {/* Camera Button - Opens native camera app */}
+                        <button
+                            type="button"
+                            onClick={openCameraCapture}
+                            disabled={isSubmitting}
+                            className="w-full px-4 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                            📷 Tomar Foto con Cámara
+                        </button>
 
-                        {cameraError && (
-                            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                                <p className="text-red-600 text-sm">{cameraError}</p>
-                            </div>
-                        )}
+                        {/* Hidden camera input - triggers native camera app */}
+                        <input
+                            ref={cameraInputRef}
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            onChange={handlePhotoCapture}
+                            className="hidden"
+                        />
 
                         {/* OR Divider */}
                         <div className="relative">
@@ -508,23 +423,25 @@ export const ClientDeliveryForm: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* File Upload */}
-                        <div>
-                            <label htmlFor="photos" className="block text-sm font-semibold text-brand-text mb-2">
-                                Selecciona Fotos de tu Galería
-                            </label>
-                            <input
-                                id="photos"
-                                type="file"
-                                multiple
-                                accept="image/*"
-                                onChange={handlePhotoUpload}
-                                disabled={isSubmitting}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">Puedes subir múltiples fotos (JPG, PNG, WebP)</p>
-                            {errors.photos && <p className="text-red-500 text-xs mt-1">{errors.photos}</p>}
-                        </div>
+                        {/* Gallery Button - Opens native gallery */}
+                        <button
+                            type="button"
+                            onClick={openGallery}
+                            disabled={isSubmitting}
+                            className="w-full px-4 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                            🖼️ Selecciona desde Galería
+                        </button>
+
+                        {/* Hidden gallery input */}
+                        <input
+                            ref={galleryInputRef}
+                            type="file"
+                            multiple
+                            accept="image/*"
+                            onChange={handlePhotoCapture}
+                            className="hidden"
+                        />
 
                         {/* Photo Preview Grid */}
                         {formData.photos.length > 0 && (
