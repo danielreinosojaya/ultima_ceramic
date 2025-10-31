@@ -47,11 +47,21 @@ export const ClientDeliveryForm: React.FC = () => {
     const startCamera = async () => {
         try {
             setCameraError('');
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-            });
+            // Cámara trasera (normal) para fotos de las piezas
+            const constraints = {
+                video: {
+                    facingMode: 'environment',  // Cámara trasera/normal
+                    width: { ideal: 1920 },
+                    height: { ideal: 1440 },
+                    focusMode: 'continuous'
+                },
+                audio: false
+            };
+            
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
+                videoRef.current.play().catch(err => console.error('Error playing video:', err));
                 setCameraActive(true);
             }
         } catch (err: any) {
@@ -72,26 +82,49 @@ export const ClientDeliveryForm: React.FC = () => {
 
     // Capturar foto desde cámara
     const capturePhoto = () => {
-        if (videoRef.current && canvasRef.current) {
-            const context = canvasRef.current.getContext('2d');
-            if (context) {
-                canvasRef.current.width = videoRef.current.videoWidth;
-                canvasRef.current.height = videoRef.current.videoHeight;
-                context.drawImage(videoRef.current, 0, 0);
-                const photoData = canvasRef.current.toDataURL('image/jpeg', 0.8);
-                setFormData(prev => ({
-                    ...prev,
-                    photos: [...prev.photos, photoData]
-                }));
-                // Limpiar errores
-                if (errors.photos) {
-                    setErrors(prev => {
-                        const newErrors = { ...prev };
-                        delete newErrors.photos;
-                        return newErrors;
-                    });
-                }
+        if (!videoRef.current || !canvasRef.current) return;
+        
+        try {
+            const video = videoRef.current;
+            const canvas = canvasRef.current;
+            const context = canvas.getContext('2d');
+            
+            if (!context) return;
+            
+            // Asegurar que video tiene dimensiones correctas
+            if (video.videoWidth === 0 || video.videoHeight === 0) {
+                console.warn('Video not ready yet');
+                return;
             }
+            
+            // Configurar canvas con las dimensiones reales del video
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            // Dibujar el frame actual del video en el canvas
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Convertir a JPEG comprimido
+            const photoData = canvas.toDataURL('image/jpeg', 0.85);
+            
+            setFormData(prev => ({
+                ...prev,
+                photos: [...prev.photos, photoData]
+            }));
+            
+            // Limpiar errores
+            if (errors.photos) {
+                setErrors(prev => {
+                    const newErrors = { ...prev };
+                    delete newErrors.photos;
+                    return newErrors;
+                });
+            }
+            
+            console.log('✅ Foto capturada correctamente');
+        } catch (error) {
+            console.error('Error capturando foto:', error);
+            setCameraError('Error al capturar la foto. Intenta de nuevo.');
         }
     };
 
@@ -427,13 +460,16 @@ export const ClientDeliveryForm: React.FC = () => {
                             </button>
                         ) : (
                             <div className="space-y-2">
-                                <video
-                                    ref={videoRef}
-                                    autoPlay
-                                    playsInline
-                                    className="w-full rounded-lg border-2 border-blue-400"
-                                    style={{ aspectRatio: '4/3' }}
-                                />
+                                <div className="relative rounded-lg border-2 border-blue-400 overflow-hidden" style={{ aspectRatio: '4/3', backgroundColor: '#000' }}>
+                                    <video
+                                        ref={videoRef}
+                                        autoPlay
+                                        playsInline
+                                        muted
+                                        disablePictureInPicture
+                                        className="w-full h-full object-cover"
+                                    />
+                                </div>
                                 <canvas ref={canvasRef} className="hidden" />
                                 <div className="flex gap-2">
                                     <button
