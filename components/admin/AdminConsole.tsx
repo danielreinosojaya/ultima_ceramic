@@ -16,7 +16,7 @@ import { CogIcon } from '../icons/CogIcon';
 import { SettingsManager } from './SettingsManager';
 import type { AdminTab, Notification, Product, Booking, Customer, GroupInquiry, Instructor, ScheduleOverrides, DayKey, AvailableSlot, ClassCapacity, CapacityMessageSettings, Announcement, AppData, BankDetails, InvoiceRequest, NavigationState } from '../../types';
 
-type ExtendedAdminTab = AdminTab | 'giftcards';
+type ExtendedAdminTab = AdminTab | 'giftcards' | 'expired-bookings';
 import { ScheduleSettingsManager } from './ScheduleSettingsManager';
 import { CalendarEditIcon } from '../icons/CalendarEditIcon';
 import { InquiryManager } from './InquiryManager';
@@ -31,6 +31,7 @@ import { DocumentTextIcon } from '../icons/DocumentTextIcon';
 import { InvoiceManager } from './InvoiceManager';
 import { formatDistanceToNow } from 'date-fns';
 import ErrorBoundary from './ErrorBoundary';
+import { ExpiredBookingsManager } from './ExpiredBookingsManager';
 
 interface AdminData {
   products: Product[];
@@ -209,6 +210,8 @@ export const AdminConsole: React.FC = () => {
         return <InvoiceManager invoiceRequests={adminData.invoiceRequests} onDataChange={handleSync} navigateToId={targetId} setNavigateTo={setNavigateTo} />;
       case 'communications':
         return <ClientNotificationLog />;
+      case 'expired-bookings':
+        return <ExpiredBookingsManager />;
       case 'settings':
         return <SettingsManager />; 
       default:
@@ -263,6 +266,7 @@ export const AdminConsole: React.FC = () => {
               <TabButton tab="customers" icon={<UserGroupIcon className="w-4 h-4" />}>Clientes</TabButton>
               <TabButton tab="invoicing" icon={<DocumentTextIcon className="w-4 h-4" />}>Facturación</TabButton>
               <TabButton tab="giftcards" icon={<svg className="w-4 h-4" viewBox="0 0 24 24" fill="none"><rect x="3" y="7" width="18" height="10" rx="2" stroke="#A89C94" strokeWidth="2" fill="#F5F3EA"/><path d="M3 7l9 7 9-7" stroke="#A89C94" strokeWidth="2" fill="none"/></svg>}>Giftcards</TabButton>
+              <TabButton tab="expired-bookings" icon={<svg className="w-4 h-4" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#E11D48" strokeWidth="2"/><path d="M12 7v5" stroke="#E11D48" strokeWidth="2"/><circle cx="12" cy="19" r="1" fill="#E11D48"/></svg>}>Pre-Reservas</TabButton>
               <TabButton tab="settings" icon={<CogIcon className="w-4 h-4" />}>Ajustes</TabButton>
             </div>
           </div>

@@ -30,7 +30,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       case 'create-hold': {
         const body = req.body || {};
         const amount = body.amount !== undefined ? Number(body.amount) : null;
-        const ttlMinutes = Number(body.ttlMinutes || 15);
+        const ttlMinutes = Number(body.ttlMinutes || 3);
         const bookingTempRef = body.bookingTempRef || null;
         const code = body.code || null;
         const giftcardId = body.giftcardId || null;
@@ -170,6 +170,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } catch (err) {
           console.error('giftcards/validate error:', err);
           return res.status(500).json({ success: false, error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+      case 'checkBalance': {
+        const code = (req.body && req.body.code) || '';
+        const codeStr = String(code || '').trim();
+        if (!codeStr) return res.status(400).json({ success: false, message: 'Código requerido' });
+
+        try {
+          const { rows } = await sql`
+            SELECT 
+              g.*,
+              gr.recipient_name,
+              gr.recipient_email
+            FROM giftcards g
+            LEFT JOIN giftcard_requests gr ON g.giftcard_request_id = gr.id
+            WHERE g.code = ${codeStr}
+            LIMIT 1
+          `;
+          
+          if (!rows || rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Giftcard no encontrado' });
+          }
+
+          const g = rows[0];
+          const balance = (typeof g.balance === 'number') ? g.balance : (g.balance ? parseFloat(g.balance) : 0);
+          const expiresAt = g.expires_at ? new Date(g.expires_at).toISOString() : null;
+          const beneficiaryName = g.recipient_name || g.metadata?.beneficiaryName || 'Sin nombre';
+          const beneficiaryEmail = g.recipient_email || g.metadata?.beneficiaryEmail || 'Sin email';
+
+          return res.status(200).json({
+            success: true,
+            giftcard: {
+              balance: Number(balance),
+              beneficiaryName,
+              beneficiaryEmail,
+              expiresAt
+            }
+          });
+        } catch (err) {
+          console.error('giftcards/checkBalance error:', err);
+          return res.status(500).json({ success: false, message: 'Error consultando saldo' });
         }
       }
       default:
