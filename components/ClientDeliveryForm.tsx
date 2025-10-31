@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { UserInfo } from '../types';
 import * as dataService from '../services/dataService';
 
@@ -31,10 +31,68 @@ export const ClientDeliveryForm: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
     const [errorMessage, setErrorMessage] = useState('');
+    
+    // Camera states
+    const [cameraActive, setCameraActive] = useState(false);
+    const [cameraError, setCameraError] = useState('');
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
 
     const validateEmail = (email: string): boolean => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return emailRegex.test(email);
+    };
+
+    // Inicializar cámara
+    const startCamera = async () => {
+        try {
+            setCameraError('');
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+            });
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                setCameraActive(true);
+            }
+        } catch (err: any) {
+            console.error('Error al acceder a la cámara:', err);
+            setCameraError('No se pudo acceder a la cámara. Verifica los permisos.');
+        }
+    };
+
+    // Detener cámara
+    const stopCamera = () => {
+        if (videoRef.current?.srcObject) {
+            const stream = videoRef.current.srcObject as MediaStream;
+            stream.getTracks().forEach(track => track.stop());
+            setCameraActive(false);
+            setCameraError('');
+        }
+    };
+
+    // Capturar foto desde cámara
+    const capturePhoto = () => {
+        if (videoRef.current && canvasRef.current) {
+            const context = canvasRef.current.getContext('2d');
+            if (context) {
+                canvasRef.current.width = videoRef.current.videoWidth;
+                canvasRef.current.height = videoRef.current.videoHeight;
+                context.drawImage(videoRef.current, 0, 0);
+                const photoData = canvasRef.current.toDataURL('image/jpeg', 0.8);
+                setFormData(prev => ({
+                    ...prev,
+                    photos: [...prev.photos, photoData]
+                }));
+                // Limpiar errores
+                if (errors.photos) {
+                    setErrors(prev => {
+                        const newErrors = { ...prev };
+                        delete newErrors.photos;
+                        return newErrors;
+                    });
+                }
+            }
+        }
     };
 
     const validateStep = (): boolean => {
@@ -84,7 +142,6 @@ export const ClientDeliveryForm: React.FC = () => {
 
     const handleInfoChange = (field: string, value: string) => {
         setFormData(prev => ({ ...prev, [field]: value }));
-        // Clear error for this field when user starts typing
         if (errors[field]) {
             setErrors(prev => {
                 const newErrors = { ...prev };
@@ -113,7 +170,6 @@ export const ClientDeliveryForm: React.FC = () => {
             }
         });
 
-        // Clear errors
         if (errors.photos) {
             setErrors(prev => {
                 const newErrors = { ...prev };
@@ -143,6 +199,9 @@ export const ClientDeliveryForm: React.FC = () => {
     };
 
     const handlePreviousStep = () => {
+        if (cameraActive) {
+            stopCamera();
+        }
         if (currentStep === 'photos') {
             setCurrentStep('info');
         } else if (currentStep === 'confirmation') {
@@ -160,7 +219,6 @@ export const ClientDeliveryForm: React.FC = () => {
         setSuccessMessage('');
 
         try {
-            // Prepare user info
             const userInfo: UserInfo = {
                 firstName: formData.firstName.trim(),
                 lastName: formData.lastName.trim(),
@@ -170,7 +228,6 @@ export const ClientDeliveryForm: React.FC = () => {
                 birthday: null
             };
 
-            // Call backend
             const result = await dataService.createDeliveryFromClient({
                 email: formData.email.trim(),
                 userInfo,
@@ -181,7 +238,6 @@ export const ClientDeliveryForm: React.FC = () => {
 
             if (result.success) {
                 setSuccessMessage('¡Gracias! Hemos recibido tu información. Pronto procesaremos tu entrega. Te enviaremos un email con los detalles.');
-                // Reset form after 2 seconds
                 setTimeout(() => {
                     setFormData(INITIAL_STEP);
                     setCurrentStep('info');
@@ -197,7 +253,14 @@ export const ClientDeliveryForm: React.FC = () => {
         }
     };
 
-    // Get tomorrow as default date
+    useEffect(() => {
+        return () => {
+            if (cameraActive) {
+                stopCamera();
+            }
+        };
+    }, [cameraActive]);
+
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = tomorrow.toISOString().split('T')[0];
@@ -352,9 +415,67 @@ export const ClientDeliveryForm: React.FC = () => {
                     <div className="space-y-4">
                         <h3 className="text-lg font-bold text-brand-text mb-4">Sube Fotos de tu Pieza</h3>
 
+                        {/* Camera Section */}
+                        {!cameraActive ? (
+                            <button
+                                type="button"
+                                onClick={startCamera}
+                                disabled={isSubmitting}
+                                className="w-full px-4 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                📷 Tomar Foto con Cámara
+                            </button>
+                        ) : (
+                            <div className="space-y-2">
+                                <video
+                                    ref={videoRef}
+                                    autoPlay
+                                    playsInline
+                                    className="w-full rounded-lg border-2 border-blue-400"
+                                    style={{ aspectRatio: '4/3' }}
+                                />
+                                <canvas ref={canvasRef} className="hidden" />
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={capturePhoto}
+                                        disabled={isSubmitting}
+                                        className="flex-1 px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                                    >
+                                        ✅ Capturar Foto
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={stopCamera}
+                                        disabled={isSubmitting}
+                                        className="flex-1 px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                                    >
+                                        ✕ Cerrar Cámara
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {cameraError && (
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                                <p className="text-red-600 text-sm">{cameraError}</p>
+                            </div>
+                        )}
+
+                        {/* OR Divider */}
+                        <div className="relative">
+                            <div className="absolute inset-0 flex items-center">
+                                <div className="w-full border-t border-gray-300"></div>
+                            </div>
+                            <div className="relative flex justify-center text-sm">
+                                <span className="px-2 bg-white text-gray-500">O</span>
+                            </div>
+                        </div>
+
+                        {/* File Upload */}
                         <div>
                             <label htmlFor="photos" className="block text-sm font-semibold text-brand-text mb-2">
-                                Fotos *
+                                Selecciona Fotos de tu Galería
                             </label>
                             <input
                                 id="photos"
