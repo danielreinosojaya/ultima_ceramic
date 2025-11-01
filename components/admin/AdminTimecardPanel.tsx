@@ -13,6 +13,10 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [employeeHistory, setEmployeeHistory] = useState<Timecard[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [newEmployeeForm, setNewEmployeeForm] = useState({ code: '', name: '', email: '', position: '' });
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createMessage, setCreateMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   // Cargar dashboard
   useEffect(() => {
@@ -92,6 +96,47 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
       }
     } catch (error) {
       console.error('Error downloading report:', error);
+    }
+  };
+
+  const handleCreateEmployee = async () => {
+    if (!newEmployeeForm.code.trim() || !newEmployeeForm.name.trim()) {
+      setCreateMessage({ text: 'Código y nombre son requeridos', type: 'error' });
+      return;
+    }
+
+    setCreateLoading(true);
+    setCreateMessage(null);
+
+    try {
+      const response = await fetch(`/api/timecards?action=create_employee&adminCode=${adminCode}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: newEmployeeForm.code.toUpperCase(),
+          name: newEmployeeForm.name,
+          email: newEmployeeForm.email || null,
+          position: newEmployeeForm.position || null
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setCreateMessage({ text: `✅ Empleado ${newEmployeeForm.name} creado exitosamente`, type: 'success' });
+        setNewEmployeeForm({ code: '', name: '', email: '', position: '' });
+        setTimeout(() => {
+          setIsCreateModalOpen(false);
+          loadEmployees();
+        }, 1500);
+      } else {
+        setCreateMessage({ text: result.error || 'Error al crear empleado', type: 'error' });
+      }
+    } catch (error) {
+      setCreateMessage({ text: 'Error al crear empleado', type: 'error' });
+      console.error('Error:', error);
+    } finally {
+      setCreateLoading(false);
     }
   };
 
@@ -235,7 +280,15 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
         {/* EMPLOYEES TAB */}
         {activeTab === 'employees' && (
           <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow-sm border border-brand-border/50 overflow-hidden">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-brand-text">Gestión de Empleados</h2>
+              <button
+                onClick={() => setIsCreateModalOpen(true)}
+                className="px-6 py-3 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 transition-colors"
+              >
+                ➕ Nuevo Empleado
+              </button>
+            </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-brand-surface border-b border-brand-border/50">
@@ -285,7 +338,97 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
           </div>
         )}
 
-        {/* HISTORY TAB */}
+        {/* MODAL: Crear Empleado */}
+        {isCreateModalOpen && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4">
+              <h2 className="text-2xl font-bold text-brand-text mb-6">➕ Nuevo Empleado</h2>
+
+              {createMessage && (
+                <div
+                  className={`p-3 rounded-lg mb-4 text-sm font-semibold ${
+                    createMessage.type === 'success'
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-red-100 text-red-800'
+                  }`}
+                >
+                  {createMessage.text}
+                </div>
+              )}
+
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-sm font-semibold text-brand-secondary mb-2">Código (EMP001, EMP002, etc)</label>
+                  <input
+                    type="text"
+                    value={newEmployeeForm.code}
+                    onChange={e => setNewEmployeeForm({ ...newEmployeeForm, code: e.target.value.toUpperCase() })}
+                    placeholder="EMP001"
+                    className="w-full px-4 py-2 border border-brand-border rounded-lg focus:ring-2 focus:ring-brand-primary focus:outline-none"
+                    disabled={createLoading}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-brand-secondary mb-2">Nombre Completo*</label>
+                  <input
+                    type="text"
+                    value={newEmployeeForm.name}
+                    onChange={e => setNewEmployeeForm({ ...newEmployeeForm, name: e.target.value })}
+                    placeholder="Ej: Juan Pérez"
+                    className="w-full px-4 py-2 border border-brand-border rounded-lg focus:ring-2 focus:ring-brand-primary focus:outline-none"
+                    disabled={createLoading}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-brand-secondary mb-2">Email</label>
+                  <input
+                    type="email"
+                    value={newEmployeeForm.email}
+                    onChange={e => setNewEmployeeForm({ ...newEmployeeForm, email: e.target.value })}
+                    placeholder="juan@example.com"
+                    className="w-full px-4 py-2 border border-brand-border rounded-lg focus:ring-2 focus:ring-brand-primary focus:outline-none"
+                    disabled={createLoading}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-brand-secondary mb-2">Puesto/Cargo</label>
+                  <input
+                    type="text"
+                    value={newEmployeeForm.position}
+                    onChange={e => setNewEmployeeForm({ ...newEmployeeForm, position: e.target.value })}
+                    placeholder="Ej: Instructor, Asistente"
+                    className="w-full px-4 py-2 border border-brand-border rounded-lg focus:ring-2 focus:ring-brand-primary focus:outline-none"
+                    disabled={createLoading}
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setIsCreateModalOpen(false);
+                    setNewEmployeeForm({ code: '', name: '', email: '', position: '' });
+                    setCreateMessage(null);
+                  }}
+                  disabled={createLoading}
+                  className="flex-1 px-4 py-2 border border-brand-border text-brand-text font-semibold rounded-lg hover:bg-brand-surface transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleCreateEmployee}
+                  disabled={createLoading}
+                  className="flex-1 px-4 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50"
+                >
+                  {createLoading ? '⏳ Creando...' : '✅ Crear'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {activeTab === 'history' && (
           <div className="space-y-6">
             {selectedEmployee && (
