@@ -11,12 +11,14 @@ const ChoiceCard: React.FC<{
     buttonText: string;
     onClick: () => void;
 }> = ({ title, subtitle, buttonText, onClick }) => (
-    <div className="bg-brand-surface p-6 sm:p-8 rounded-xl shadow-subtle hover:shadow-lifted transition-shadow duration-300 flex flex-col items-center text-center">
-        <h3 className="text-xl sm:text-2xl font-semibold text-brand-text mb-3">{title}</h3>
-        <p className="text-sm sm:text-base text-brand-secondary mb-6 flex-grow">{subtitle}</p>
+    <div className="bg-brand-surface p-5 sm:p-7 rounded-xl shadow-subtle hover:shadow-lifted transition-all duration-300 flex flex-col h-full">
+        <div className="text-center flex-1 flex flex-col">
+            <h3 className="text-lg sm:text-xl font-semibold text-brand-text mb-2">{title}</h3>
+            <p className="text-xs sm:text-sm text-brand-secondary flex-1 mb-4">{subtitle}</p>
+        </div>
         <button
             onClick={onClick}
-            className="bg-brand-primary text-white font-bold py-2.5 sm:py-3 px-6 sm:px-8 rounded-lg w-full max-w-xs hover:opacity-90 transition-opacity duration-300"
+            className="bg-brand-primary text-white font-semibold py-2 px-5 rounded-lg w-full hover:opacity-90 transition-opacity text-sm sm:text-base"
         >
             {buttonText}
         </button>
@@ -30,14 +32,14 @@ const ExperienceCard: React.FC<{
     onClick: () => void;
 }> = ({ title, subtitle, buttonText, onClick }) => (
      <div 
-        className="bg-brand-surface p-6 sm:p-8 rounded-xl shadow-subtle hover:shadow-lifted transition-shadow duration-300 flex flex-col sm:flex-row items-center gap-4 sm:gap-6 cursor-pointer"
+        className="bg-brand-surface p-5 sm:p-6 rounded-xl shadow-subtle hover:shadow-lifted transition-all duration-300 flex flex-col sm:flex-row items-center gap-4 cursor-pointer"
         onClick={onClick}
       >
-        <div className="flex-grow text-center sm:text-left">
-            <h3 className="text-xl sm:text-2xl font-semibold text-brand-text">{title}</h3>
-            <p className="text-sm sm:text-base text-brand-secondary mt-1 sm:mt-2">{subtitle}</p>
+        <div className="flex-1 text-center sm:text-left">
+            <h3 className="text-lg sm:text-xl font-semibold text-brand-text mb-1">{title}</h3>
+            <p className="text-xs sm:text-sm text-brand-secondary">{subtitle}</p>
         </div>
-        <button className="bg-brand-accent text-white font-bold py-2 sm:py-3 px-6 sm:px-8 rounded-lg w-full sm:w-auto hover:opacity-90 transition-opacity duration-300 flex-shrink-0">
+        <button className="bg-brand-accent text-white font-semibold py-2 px-5 rounded-lg w-full sm:w-auto hover:opacity-90 transition-opacity flex-shrink-0 text-sm sm:text-base">
             {buttonText}
         </button>
       </div>
@@ -45,17 +47,16 @@ const ExperienceCard: React.FC<{
 
 
 export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) => {
-  // Traducción eliminada, usar texto en español directamente
-
   return (
-    <div className="text-center bg-transparent animate-fade-in-up max-w-6xl mx-auto w-full">
-      <div className="mb-6 sm:mb-10">
-        <h2 className="text-2xl sm:text-3xl font-serif font-bold text-brand-text mb-2">Bienvenido a Ceramicalma</h2>
+    <div className="w-full max-w-6xl mx-auto">
+      {/* Header */}
+      <div className="text-center mb-8 sm:mb-10 animate-fade-in-up">
+        <h2 className="text-2xl sm:text-3xl font-serif font-bold text-brand-text mb-1">Bienvenido a Ceramicalma</h2>
         <p className="text-sm sm:text-base text-brand-secondary">¿Es tu primera vez con nosotros?</p>
       </div>
       
       {/* Top 3 Choice Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5 mb-6 sm:mb-8">
         <ChoiceCard
           title="Soy Nuevo Aquí"
           subtitle="Comienza tu aventura con nuestra Clase Introductoria, diseñada para principiantes absolutos."
@@ -77,7 +78,7 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
       </div>
 
       {/* Experience Cards */}
-      <div className="space-y-4 sm:space-y-6">
+      <div className="space-y-3 sm:space-y-4">
         <ExperienceCard 
           title="Experiencias para Parejas"
           subtitle="Una cita creativa y diferente. Moldeen una pieza juntos en el torno o creen piezas individuales, con la guía de un instructor."
