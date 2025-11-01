@@ -165,7 +165,8 @@ const SCHEMA_SQL = `
         completed_at TIMESTAMPTZ,
         delivered_at TIMESTAMPTZ,
         notes TEXT,
-        photos JSONB DEFAULT '[]'::jsonb
+        photos JSONB DEFAULT '[]'::jsonb,
+        created_by_client BOOLEAN DEFAULT false
     );
     
     CREATE INDEX IF NOT EXISTS idx_deliveries_customer_email ON deliveries(customer_email);
@@ -254,6 +255,9 @@ export async function ensureTablesExist() {
         await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS price_per_person NUMERIC(10, 2);`;
         await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS sort_order INT DEFAULT 0;`;
         await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS participants INT DEFAULT 1;`;
+        
+        // Migration: Add created_by_client column to deliveries table
+        await sql`ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS created_by_client BOOLEAN DEFAULT false;`;
         console.log("Essential columns ensured.");
     } catch (error) {
         console.error("Error during column checks:", error);

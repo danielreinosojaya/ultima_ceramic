@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR - Seguimiento de Piezas | Última Cerámica</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #D95F43 0%, #8B4513 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+        
+        .header {
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            color: #D95F43;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .qr-wrapper {
+            background: #f9fafb;
+            border: 3px dashed #D95F43;
+            border-radius: 12px;
+            padding: 30px;
+            margin: 30px 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #qrcode {
+            display: inline-block;
+        }
+        
+        .url-section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #EFF6FF;
+            border-radius: 8px;
+            border-left: 4px solid #3B82F6;
+        }
+        
+        .url-section p {
+            font-size: 12px;
+            color: #1E40AF;
+            margin-bottom: 8px;
+        }
+        
+        .url-section .url {
+            font-family: monospace;
+            background: white;
+            padding: 12px;
+            border-radius: 6px;
+            word-break: break-all;
+            color: #1E40AF;
+            font-weight: bold;
+            font-size: 14px;
+            border: 1px solid #3B82F6;
+        }
+        
+        .instructions {
+            background: #f0fdf4;
+            border-left: 4px solid #22c55e;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: left;
+        }
+        
+        .instructions h3 {
+            color: #15803d;
+            margin-bottom: 12px;
+            font-size: 16px;
+        }
+        
+        .instructions ol {
+            margin-left: 20px;
+            color: #166534;
+            font-size: 14px;
+            line-height: 1.8;
+        }
+        
+        .instructions li {
+            margin-bottom: 8px;
+        }
+        
+        .download-section {
+            margin-top: 30px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+        
+        .btn-primary {
+            background: #D95F43;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #8B4513;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(217, 95, 67, 0.3);
+        }
+        
+        .btn-secondary {
+            background: #e5e7eb;
+            color: #374151;
+        }
+        
+        .btn-secondary:hover {
+            background: #d1d5db;
+        }
+        
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+            color: #999;
+            font-size: 12px;
+        }
+        
+        @media print {
+            body {
+                background: white;
+            }
+            .container {
+                box-shadow: none;
+                border: 1px solid #ddd;
+            }
+            .download-section,
+            .footer {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎨 Última Cerámica</h1>
+            <p>Seguimiento de Piezas</p>
+        </div>
+        
+        <div class="qr-wrapper">
+            <div id="qrcode"></div>
+        </div>
+        
+        <div class="url-section">
+            <p>📱 URL del Código QR:</p>
+            <div class="url">www.ceramicalma.com/?clientMode=delivery</div>
+        </div>
+        
+        <div class="instructions">
+            <h3>📋 Instrucciones de Uso</h3>
+            <ol>
+                <li>Imprime este código QR</li>
+                <li>Pégalo en tu taller o punto de venta</li>
+                <li>El cliente escanea con su teléfono</li>
+                <li>Se abre automáticamente el formulario de seguimiento</li>
+                <li>El cliente ingresa su información y sube fotos</li>
+                <li>¡Listo! La entrega se registra automáticamente</li>
+            </ol>
+        </div>
+        
+        <div class="download-section">
+            <button class="btn btn-primary" onclick="downloadQR()">
+                ⬇️ Descargar Imagen
+            </button>
+            <button class="btn btn-secondary" onclick="window.print()">
+                🖨️ Imprimir
+            </button>
+        </div>
+        
+        <div class="footer">
+            <p>Generado: {{ currentDate }}</p>
+            <p>Para más información, contacta con el equipo técnico</p>
+        </div>
+    </div>
+    
+    <script>
+        // Generar QR code
+        const qrUrl = "www.ceramicalma.com/?clientMode=delivery";
+        new QRCode(document.getElementById("qrcode"), {
+            text: qrUrl,
+            width: 300,
+            height: 300,
+            colorDark: "#D95F43",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.H
+        });
+        
+        // Descargar QR como imagen
+        function downloadQR() {
+            const canvas = document.querySelector('#qrcode canvas');
+            if (canvas) {
+                const link = document.createElement('a');
+                link.href = canvas.toDataURL('image/png');
+                link.download = 'qr-ceramicalma-delivery.png';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+    </script>
+</body>
+</html>

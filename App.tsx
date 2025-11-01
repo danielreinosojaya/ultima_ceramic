@@ -15,6 +15,7 @@ import { BookingTypeModal } from './components/BookingTypeModal';
 import { ClassInfoModal } from './components/ClassInfoModal';
 import { PrerequisiteModal } from './components/PrerequisiteModal';
 import { AnnouncementsBoard } from './components/AnnouncementsBoard';
+import { ClientDeliveryForm } from './components/ClientDeliveryForm';
 // Lazy load AdminConsole to reduce initial bundle size
 const AdminConsole = lazy(() => import('./components/admin/AdminConsole').then(module => ({ default: module.AdminConsole })));
 import { NotificationProvider } from './context/NotificationContext';
@@ -62,6 +63,7 @@ const App: React.FC = () => {
     const [openStudioProduct, setOpenStudioProduct] = useState<Product | null>(null);
     // Traducciones eliminadas, usar texto en español directamente
     const [isAdmin, setIsAdmin] = useState(false);
+    const [isClientDeliveryMode, setIsClientDeliveryMode] = useState(false);
     const [view, setView] = useState<AppView>('welcome');
     const [bookingDetails, setBookingDetails] = useState<BookingDetails>({ product: null, slots: [], userInfo: null });
     const [confirmedBooking, setConfirmedBooking] = useState<Booking | null>(null);
@@ -84,6 +86,9 @@ const App: React.FC = () => {
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('admin') === 'true') {
             setIsAdmin(true);
+        }
+        if (urlParams.get('clientMode') === 'delivery') {
+            setIsClientDeliveryMode(true);
         }
     }, []);
 
@@ -559,28 +564,33 @@ const App: React.FC = () => {
         );
     }
 
+    // Modo formulario de cliente (QR)
+    if (isClientDeliveryMode) {
+        return (
+            <div className="bg-brand-background min-h-screen text-brand-text font-sans relative flex flex-col">
+                <ClientDeliveryForm />
+            </div>
+        );
+    }
+
     console.log("App - rendering main app, view:", view, "loading:", loading);
     return (
-        <div className="bg-brand-background min-h-screen text-brand-text font-sans relative flex flex-col">
-            <GiftcardBanner
-                open={showGiftcardBanner}
-                onClose={() => setShowGiftcardBanner(false)}
-                onCTA={() => { setShowGiftcardBanner(false); setView('giftcard_landing'); }}
-            />
-            <Header />
-            <div className="absolute top-4 right-4 z-50">
-                <button
-                    className="border border-brand-primary bg-white/80 text-brand-primary font-semibold py-1.5 px-4 rounded-full shadow-sm hover:bg-brand-primary/10 transition-colors text-base"
-                    style={{letterSpacing: '0.03em'}} 
-                    onClick={() => setView('giftcard_landing')}
-                >
-                    <span className="inline-block align-middle">Giftcard</span>
-                </button>
-            </div>
-            <main className="container mx-auto px-4 py-8 flex-grow">
-                {appData && <AnnouncementsBoard announcements={appData.announcements} />}
-                <div className="mt-8">
-                    {renderView()}
+        <div className="bg-brand-background min-h-screen text-brand-text font-sans flex flex-col">
+            <Header onGiftcardClick={() => setView('giftcard_landing')} />
+            <main className="flex-grow w-full">
+                <div className="container mx-auto px-4 py-6 sm:py-8">
+                    {appData && <AnnouncementsBoard announcements={appData.announcements} />}
+                    {view === 'welcome' && showGiftcardBanner && (
+                        <div className={appData?.announcements && appData.announcements.length > 0 ? "mt-6" : ""}>
+                            <GiftcardBanner
+                                open={showGiftcardBanner}
+                                onClose={() => setShowGiftcardBanner(false)}
+                                onCTA={() => { setShowGiftcardBanner(false); setView('giftcard_landing'); }}
+                            />
+                        </div>
+                    )}
+                    <div className={appData?.announcements && appData.announcements.length > 0 ? "mt-6" : ""}>
+                        {renderView()}
                     {isOpenStudioModalOpen && openStudioProduct && (
                         <ClassInfoModal
                             product={openStudioProduct}
@@ -588,6 +598,7 @@ const App: React.FC = () => {
                             onConfirm={handleOpenStudioInfoModalConfirm}
                         />
                     )}
+                    </div>
                 </div>
             </main>
             {appData?.footerInfo && (
