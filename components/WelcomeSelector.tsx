@@ -11,23 +11,15 @@ const ChoiceCard: React.FC<{
     buttonText: string;
     onClick: () => void;
 }> = ({ title, subtitle, buttonText, onClick }) => (
-    <div 
-        className="group bg-brand-surface rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden cursor-pointer transform hover:-translate-y-1"
-        onClick={onClick}
-    >
-        <div className="p-8 sm:p-10 flex flex-col h-full min-h-[280px] sm:min-h-[320px]">
-            <div className="flex-1 flex flex-col items-center text-center">
-                <h3 className="text-xl sm:text-2xl font-bold text-brand-text mb-4 group-hover:text-brand-primary transition-colors">
-                    {title}
-                </h3>
-                <p className="text-sm sm:text-base text-brand-secondary leading-relaxed mb-6">
-                    {subtitle}
-                </p>
-            </div>
-            <button className="bg-brand-primary text-white font-bold py-3.5 px-8 rounded-xl w-full hover:bg-brand-secondary transition-all duration-300 text-base shadow-sm group-hover:shadow-md">
-                {buttonText}
-            </button>
-        </div>
+    <div className="bg-brand-surface p-8 rounded-xl shadow-subtle hover:shadow-lifted transition-shadow duration-300 flex flex-col items-center text-center h-full">
+        <h3 className="text-2xl font-semibold text-brand-text mb-4">{title}</h3>
+        <p className="text-brand-secondary mb-8 flex-grow">{subtitle}</p>
+        <button
+            onClick={onClick}
+            className="bg-brand-primary text-white font-bold py-3 px-8 rounded-lg w-full max-w-xs hover:opacity-90 transition-opacity duration-300"
+        >
+            {buttonText}
+        </button>
     </div>
 );
 
@@ -38,41 +30,26 @@ const ExperienceCard: React.FC<{
     onClick: () => void;
 }> = ({ title, subtitle, buttonText, onClick }) => (
      <div 
-        className="group bg-brand-surface rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 cursor-pointer overflow-hidden transform hover:-translate-y-1"
+        className="bg-brand-surface p-8 rounded-xl shadow-subtle hover:shadow-lifted transition-shadow duration-300 flex flex-col md:flex-row items-center text-center md:text-left gap-6 cursor-pointer"
         onClick={onClick}
       >
-        <div className="p-6 sm:p-8 flex flex-col sm:flex-row items-center gap-6 sm:gap-8">
-            <div className="flex-1 text-center sm:text-left">
-                <h3 className="text-xl sm:text-2xl font-bold text-brand-text mb-2 group-hover:text-brand-accent transition-colors">
-                    {title}
-                </h3>
-                <p className="text-sm sm:text-base text-brand-secondary leading-relaxed">
-                    {subtitle}
-                </p>
-            </div>
-            <button className="bg-brand-accent text-white font-bold py-3.5 px-8 rounded-xl hover:bg-brand-accent/90 transition-all duration-300 flex-shrink-0 whitespace-nowrap text-base shadow-sm group-hover:shadow-md min-w-[200px] sm:min-w-[180px]">
-                {buttonText}
-            </button>
+        <div className="flex-grow">
+            <h3 className="text-2xl font-semibold text-brand-text mb-2">{title}</h3>
+            <p className="text-brand-secondary">{subtitle}</p>
         </div>
+        <button className="bg-brand-accent text-white font-bold py-3 px-8 rounded-lg w-full md:w-auto hover:opacity-90 transition-opacity duration-300 flex-shrink-0">
+            {buttonText}
+        </button>
       </div>
 );
 
 
 export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) => {
   return (
-    <div className="w-full max-w-7xl mx-auto px-2 sm:px-4">
-      {/* Header */}
-      <div className="text-center mb-12 sm:mb-16 animate-fade-in-up">
-        <h2 className="text-3xl sm:text-4xl lg:text-5xl font-serif font-bold text-brand-text mb-3 tracking-tight">
-          Bienvenido a Ceramicalma
-        </h2>
-        <p className="text-base sm:text-lg text-brand-secondary font-light">
-          ¿Es tu primera vez con nosotros?
-        </p>
-      </div>
-      
-      {/* Top 3 Choice Cards - Perfect Square Aspect */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 mb-10 sm:mb-14">
+    <div className="text-center p-4 sm:p-6 bg-transparent animate-fade-in-up max-w-6xl mx-auto w-full">
+      <h2 className="text-3xl sm:text-4xl font-serif font-bold text-brand-text mb-2">Bienvenido a Ceramicalma</h2>
+      <p className="text-base sm:text-lg text-brand-secondary mb-8 sm:mb-10">¿Es tu primera vez con nosotros?</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 mb-8 md:mb-10">
         <ChoiceCard
           title="Soy Nuevo Aquí"
           subtitle="Comienza tu aventura con nuestra Clase Introductoria, diseñada para principiantes absolutos."
@@ -92,9 +69,7 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
           onClick={() => onSelect('open_studio')}
         />
       </div>
-
-      {/* Experience Cards - Wide Horizontal */}
-      <div className="space-y-5 sm:space-y-6">
+      <div className="space-y-6 md:space-y-8">
         <ExperienceCard 
           title="Experiencias para Parejas"
           subtitle="Una cita creativa y diferente. Moldeen una pieza juntos en el torno o creen piezas individuales, con la guía de un instructor."
