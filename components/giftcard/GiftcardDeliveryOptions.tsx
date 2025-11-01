@@ -49,32 +49,41 @@ export const GiftcardDeliveryOptions: React.FC<{ onSelect: (id: string, data?: a
       </button>
       <h2 className="text-lg font-bold mb-6 text-brand-primary">¿Cómo quieres entregar la giftcard?</h2>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 mb-8 w-full max-w-xl mx-auto justify-items-center">
-        {deliveryOptions.map(opt => (
-          <button
-            key={opt.id}
-            type="button"
-            className={`flex flex-col items-center gap-2 px-8 py-8 rounded-2xl border-2 transition-all duration-150 focus:outline-none shadow-sm w-full max-w-xs ${selected === opt.id ? 'border-brand-primary bg-brand-primary/10 scale-105' : 'border-brand-border bg-white hover:border-brand-primary'}`}
-            onClick={() => { setSelected(opt.id); }}
-            aria-label={opt.label}
-          >
-            <span className="mb-1">{React.cloneElement(opt.icon, { width: 40, height: 40 })}</span>
-            <span className="text-base font-semibold text-brand-secondary text-center whitespace-normal leading-tight">{opt.label}</span>
-          </button>
-        ))}
+        {deliveryOptions.map(opt => {
+          const isDisabled = opt.id === 'whatsapp' || opt.id === 'schedule';
+          return (
+            <div key={opt.id} className="relative w-full max-w-xs">
+              <button
+                type="button"
+                className={`flex flex-col items-center gap-2 px-8 py-8 rounded-2xl border-2 transition-all duration-150 focus:outline-none shadow-sm w-full ${
+                  isDisabled
+                    ? 'opacity-50 cursor-not-allowed border-brand-border bg-brand-border/20'
+                    : selected === opt.id
+                    ? 'border-brand-primary bg-brand-primary/10 scale-105'
+                    : 'border-brand-border bg-white hover:border-brand-primary'
+                }`}
+                onClick={() => {
+                  if (!isDisabled) {
+                    setSelected(opt.id);
+                  }
+                }}
+                disabled={isDisabled}
+                aria-label={opt.label}
+              >
+                <span className="mb-1">{React.cloneElement(opt.icon, { width: 40, height: 40 })}</span>
+                <span className="text-base font-semibold text-brand-secondary text-center whitespace-normal leading-tight">{opt.label}</span>
+              </button>
+              {isDisabled && (
+                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 px-3 py-1 bg-brand-secondary text-white text-xs font-semibold rounded-full shadow-md whitespace-nowrap">
+                  Muy pronto
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
       {/* Formulario dinámico según método de entrega */}
       <div className="w-full max-w-md mx-auto mb-6">
-        {selected === 'whatsapp' && (
-          <input
-            type="tel"
-            className="w-full px-4 py-2 rounded-lg border border-brand-border mb-2 text-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary"
-            placeholder="Número de WhatsApp del destinatario"
-            value={inputData.whatsapp || ''}
-            onChange={e => setInputData({ ...inputData, whatsapp: e.target.value })}
-            pattern="^\+?[0-9]{7,15}$"
-            required
-          />
-        )}
         {selected === 'email' && (
           <input
             type="email"
@@ -84,25 +93,6 @@ export const GiftcardDeliveryOptions: React.FC<{ onSelect: (id: string, data?: a
             onChange={e => setInputData({ ...inputData, email: e.target.value })}
             required
           />
-        )}
-        {selected === 'schedule' && (
-          <div className="flex flex-col gap-2">
-            <input
-              type="email"
-              className="w-full px-4 py-2 rounded-lg border border-brand-border mb-2 text-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary"
-              placeholder="Correo electrónico del destinatario"
-              value={inputData.email || ''}
-              onChange={e => setInputData({ ...inputData, email: e.target.value })}
-              required
-            />
-            <input
-              type="date"
-              className="w-full px-4 py-2 rounded-lg border border-brand-border mb-2 text-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary"
-              value={inputData.date || ''}
-              onChange={e => setInputData({ ...inputData, date: e.target.value })}
-              required
-            />
-          </div>
         )}
       </div>
       <button

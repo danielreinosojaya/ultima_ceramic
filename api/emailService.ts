@@ -557,6 +557,69 @@ export const sendDeliveryCreatedEmail = async (customerEmail: string, customerNa
     return result;
 };
 
+export const sendDeliveryCreatedByClientEmail = async (customerEmail: string, customerName: string, delivery: { description?: string | null; scheduledDate: string; photos?: number; }) => {
+    console.log('[sendDeliveryCreatedByClientEmail] Starting email send to:', customerEmail);
+    
+    const formattedDate = new Date(delivery.scheduledDate).toLocaleDateString('es-ES', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
+    
+    const displayDescription = delivery.description || 'Tus piezas de cerámica';
+    const photoCount = delivery.photos || 0;
+    const subject = `✅ Recibimos tus fotos - ${displayDescription}`;
+    const html = `
+        <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
+            <p style="font-size: 16px;">¡Gracias por subir las fotos de tu pieza! Hemos recibido tu solicitud de entrega.</p>
+            
+            <div style="background-color: #f0fdf4; border-left: 4px solid #22c55e; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #15803d; margin-top: 0;">📸 Información Recibida</h3>
+                <p style="margin: 10px 0;"><strong>Descripción:</strong> ${displayDescription}</p>
+                <p style="margin: 10px 0;"><strong>Fotos subidas:</strong> ${photoCount}</p>
+                <p style="margin: 10px 0; font-size: 18px;"><strong>Fecha de recogida:</strong> <span style="color: #D95F43;">${formattedDate}</span></p>
+            </div>
+
+            <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #92400E; font-weight: bold;">⏳ Próximos Pasos</p>
+                <p style="margin: 8px 0 0 0; color: #78350F; font-size: 14px;">
+                    • Nuestro equipo revisará tus fotos y piezas<br/>
+                    • Nos pondremos en contacto contigo en 1-2 días hábiles<br/>
+                    • Te confirmaremos si hay que hacer arreglos o si está listo para recoger
+                </p>
+            </div>
+
+            <div style="background-color: #EFF6FF; border-left: 4px solid #3B82F6; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #1E40AF; font-weight: bold;">💡 Información Importante</p>
+                <p style="margin: 8px 0 0 0; color: #1E3A8A; font-size: 14px;">
+                    • Horario de recogida: Martes a Sábado 10:00 AM - 8:00 PM<br/>
+                    • Domingos: 12:00 PM - 5:00 PM<br/>
+                    • Ubicación: [Tu ubicación del taller]
+                </p>
+            </div>
+
+            <p style="margin-top: 20px;">Si tienes dudas o necesitas hacer cambios, no dudes en contactarnos.</p>
+            
+            <div style="margin: 30px 0; text-align: center;">
+                <a href="https://wa.me/593985813327" style="display: inline-block; background-color: #10B981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                    📱 Contactar por WhatsApp
+                </a>
+            </div>
+
+            <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
+                Saludos,<br/>
+                <strong>El equipo de CeramicAlma</strong>
+            </p>
+        </div>
+    `;
+    
+    const result = await sendEmail(customerEmail, subject, html);
+    console.log('[sendDeliveryCreatedByClientEmail] Email send result:', result);
+    return result;
+};
+
 export const sendDeliveryReadyEmail = async (customerEmail: string, customerName: string, delivery: { description?: string | null; readyAt: string; }) => {
     console.log('[sendDeliveryReadyEmail] READY EMAIL - Starting send to:', customerEmail);
     
