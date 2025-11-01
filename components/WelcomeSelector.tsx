@@ -11,14 +11,12 @@ const ChoiceCard: React.FC<{
     buttonText: string;
     onClick: () => void;
 }> = ({ title, subtitle, buttonText, onClick }) => (
-    <div className="bg-brand-surface p-6 sm:p-8 rounded-xl shadow-subtle hover:shadow-lifted transition-shadow duration-300 flex flex-col items-center text-center h-full min-h-[300px] sm:min-h-[350px] justify-between">
-        <div className="flex-1 flex flex-col justify-center">
-            <h3 className="text-xl sm:text-2xl font-semibold text-brand-text">{title}</h3>
-            <p className="text-sm sm:text-base text-brand-secondary mt-2">{subtitle}</p>
-        </div>
+    <div className="bg-brand-surface p-6 sm:p-8 rounded-xl shadow-subtle hover:shadow-lifted transition-shadow duration-300 flex flex-col items-center text-center">
+        <h3 className="text-xl sm:text-2xl font-semibold text-brand-text mb-3">{title}</h3>
+        <p className="text-sm sm:text-base text-brand-secondary mb-6 flex-grow">{subtitle}</p>
         <button
             onClick={onClick}
-            className="bg-brand-primary text-white font-bold py-2 sm:py-3 px-6 sm:px-8 rounded-lg w-full hover:opacity-90 transition-opacity duration-300 mt-4"
+            className="bg-brand-primary text-white font-bold py-2.5 sm:py-3 px-6 sm:px-8 rounded-lg w-full max-w-xs hover:opacity-90 transition-opacity duration-300"
         >
             {buttonText}
         </button>
@@ -50,56 +48,54 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
   // Traducción eliminada, usar texto en español directamente
 
   return (
-    <div className="min-h-screen bg-transparent p-4 sm:p-6 flex flex-col">
-      <div className="text-center mb-8 sm:mb-12 animate-fade-in-up">
-        <h2 className="text-2xl sm:text-3xl font-serif font-bold text-brand-text mb-1 sm:mb-2">Bienvenido a Ceramicalma</h2>
+    <div className="text-center bg-transparent animate-fade-in-up max-w-6xl mx-auto w-full">
+      <div className="mb-6 sm:mb-10">
+        <h2 className="text-2xl sm:text-3xl font-serif font-bold text-brand-text mb-2">Bienvenido a Ceramicalma</h2>
         <p className="text-sm sm:text-base text-brand-secondary">¿Es tu primera vez con nosotros?</p>
       </div>
       
-      <div className="flex-1 flex flex-col gap-6 sm:gap-8 max-w-6xl mx-auto w-full">
-        {/* Top 3 Choice Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 w-full">
-          <ChoiceCard
-            title="Soy Nuevo Aquí"
-            subtitle="Comienza tu aventura con nuestra Clase Introductoria, diseñada para principiantes absolutos."
-            buttonText="¡Quiero Empezar!"
-            onClick={() => onSelect('new')}
-          />
-          <ChoiceCard
-            title="Ya Soy Alumno"
-            subtitle="Continúa tu práctica seleccionando uno de nuestros paquetes de clases continuas."
-            buttonText="Ver Paquetes"
-            onClick={() => onSelect('returning')}
-          />
-          <ChoiceCard
-            title="Open Studio"
-            subtitle="Elige nuestra membresía Open Studio y accede al taller sin límites."
-            buttonText="Ir a Open Studio"
-            onClick={() => onSelect('open_studio')}
-          />
-        </div>
+      {/* Top 3 Choice Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+        <ChoiceCard
+          title="Soy Nuevo Aquí"
+          subtitle="Comienza tu aventura con nuestra Clase Introductoria, diseñada para principiantes absolutos."
+          buttonText="¡Quiero Empezar!"
+          onClick={() => onSelect('new')}
+        />
+        <ChoiceCard
+          title="Ya Soy Alumno"
+          subtitle="Continúa tu práctica seleccionando uno de nuestros paquetes de clases continuas."
+          buttonText="Ver Paquetes"
+          onClick={() => onSelect('returning')}
+        />
+        <ChoiceCard
+          title="Open Studio"
+          subtitle="Elige nuestra membresía Open Studio y accede al taller sin límites."
+          buttonText="Ir a Open Studio"
+          onClick={() => onSelect('open_studio')}
+        />
+      </div>
 
-        {/* Experience Cards */}
-        <div className="space-y-4 sm:space-y-6 w-full">
-          <ExperienceCard 
-            title="Experiencias para Parejas"
-            subtitle="Una cita creativa y diferente. Moldeen una pieza juntos en el torno o creen piezas individuales, con la guía de un instructor."
-            buttonText="Planifica tu Cita"
-            onClick={() => onSelect('couples_experience')}
-          />
-          <ExperienceCard 
-            title="Experiencias Grupales"
-            subtitle="Ideal para cumpleaños, team building o una reunión creativa entre amigos. Contáctanos para crear un evento a tu medida."
-            buttonText="Planifica Tu Evento"
-            onClick={() => onSelect('group_experience')}
-          />
-          <ExperienceCard 
-            title="Team Building Corporativo"
-            subtitle="Fortalece a tu equipo con un taller de cerámica creativo y colaborativo."
-            buttonText="Planifica tu Evento"
-            onClick={() => onSelect('team_building')}
-          />
-        </div>
+      {/* Experience Cards */}
+      <div className="space-y-4 sm:space-y-6">
+        <ExperienceCard 
+          title="Experiencias para Parejas"
+          subtitle="Una cita creativa y diferente. Moldeen una pieza juntos en el torno o creen piezas individuales, con la guía de un instructor."
+          buttonText="Planifica tu Cita"
+          onClick={() => onSelect('couples_experience')}
+        />
+        <ExperienceCard 
+          title="Experiencias Grupales"
+          subtitle="Ideal para cumpleaños, team building o una reunión creativa entre amigos. Contáctanos para crear un evento a tu medida."
+          buttonText="Planifica Tu Evento"
+          onClick={() => onSelect('group_experience')}
+        />
+        <ExperienceCard 
+          title="Team Building Corporativo"
+          subtitle="Fortalece a tu equipo con un taller de cerámica creativo y colaborativo."
+          buttonText="Planifica tu Evento"
+          onClick={() => onSelect('team_building')}
+        />
       </div>
     </div>
   );

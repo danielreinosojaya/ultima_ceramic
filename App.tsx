@@ -581,16 +581,7 @@ const App: React.FC = () => {
                 onClose={() => setShowGiftcardBanner(false)}
                 onCTA={() => { setShowGiftcardBanner(false); setView('giftcard_landing'); }}
             />
-            <Header />
-            <div className="absolute top-4 right-4 z-50">
-                <button
-                    className="border border-brand-primary bg-white/80 text-brand-primary font-semibold py-1.5 px-4 rounded-full shadow-sm hover:bg-brand-primary/10 transition-colors text-base"
-                    style={{letterSpacing: '0.03em'}} 
-                    onClick={() => setView('giftcard_landing')}
-                >
-                    <span className="inline-block align-middle">Giftcard</span>
-                </button>
-            </div>
+            <Header onGiftcardClick={() => setView('giftcard_landing')} />
             <main className="container mx-auto px-4 py-8 flex-grow">
                 {appData && <AnnouncementsBoard announcements={appData.announcements} />}
                 <div className="mt-8">
