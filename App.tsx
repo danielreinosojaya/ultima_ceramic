@@ -16,6 +16,8 @@ import { ClassInfoModal } from './components/ClassInfoModal';
 import { PrerequisiteModal } from './components/PrerequisiteModal';
 import { AnnouncementsBoard } from './components/AnnouncementsBoard';
 import { ClientDeliveryForm } from './components/ClientDeliveryForm';
+import { ModuloMarcacion } from './components/ModuloMarcacion';
+import { AdminTimecardPanel } from './components/admin/AdminTimecardPanel';
 // Lazy load AdminConsole to reduce initial bundle size
 const AdminConsole = lazy(() => import('./components/admin/AdminConsole').then(module => ({ default: module.AdminConsole })));
 import { NotificationProvider } from './context/NotificationContext';
@@ -64,6 +66,8 @@ const App: React.FC = () => {
     // Traducciones eliminadas, usar texto en español directamente
     const [isAdmin, setIsAdmin] = useState(false);
     const [isClientDeliveryMode, setIsClientDeliveryMode] = useState(false);
+    const [adminModule, setAdminModule] = useState<'main' | 'timecards' | null>(null);
+    const [adminCode, setAdminCode] = useState<string>('');
     const [view, setView] = useState<AppView>('welcome');
     const [bookingDetails, setBookingDetails] = useState<BookingDetails>({ product: null, slots: [], userInfo: null });
     const [confirmedBooking, setConfirmedBooking] = useState<Booking | null>(null);
@@ -86,9 +90,15 @@ const App: React.FC = () => {
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('admin') === 'true') {
             setIsAdmin(true);
+            const code = urlParams.get('code');
+            if (code) setAdminCode(code);
         }
         if (urlParams.get('clientMode') === 'delivery') {
             setIsClientDeliveryMode(true);
+        }
+        const moduleParam = urlParams.get('module');
+        if (moduleParam === 'timecards') {
+            setAdminModule('timecards');
         }
     }, []);
 
@@ -557,11 +567,20 @@ const App: React.FC = () => {
                     </div>
                 }>
                     <AdminDataProvider>
-                        <AdminConsole />
+                        {adminModule === 'timecards' ? (
+                            <AdminTimecardPanel adminCode={adminCode} />
+                        ) : (
+                            <AdminConsole />
+                        )}
                     </AdminDataProvider>
                 </Suspense>
             </NotificationProvider>
         );
+    }
+
+    // Módulo de marcación para empleados
+    if (adminModule === 'timecards' && !isAdmin) {
+        return <ModuloMarcacion />;
     }
 
     // Modo formulario de cliente (QR)
