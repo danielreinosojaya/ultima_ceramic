@@ -289,6 +289,7 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
                 ➕ Nuevo Empleado
               </button>
             </div>
+            <div className="bg-white rounded-lg shadow-sm border border-brand-border/50 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-brand-surface border-b border-brand-border/50">
@@ -429,6 +430,8 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
             </div>
           </div>
         )}
+
+        {/* HISTORY TAB */}
         {activeTab === 'history' && (
           <div className="space-y-6">
             {selectedEmployee && (
