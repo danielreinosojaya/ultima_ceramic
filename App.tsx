@@ -575,17 +575,18 @@ const App: React.FC = () => {
 
     console.log("App - rendering main app, view:", view, "loading:", loading);
     return (
-        <div className="bg-brand-background min-h-screen text-brand-text font-sans relative flex flex-col">
+        <div className="bg-brand-background min-h-screen text-brand-text font-sans flex flex-col">
             <GiftcardBanner
                 open={showGiftcardBanner}
                 onClose={() => setShowGiftcardBanner(false)}
                 onCTA={() => { setShowGiftcardBanner(false); setView('giftcard_landing'); }}
             />
             <Header onGiftcardClick={() => setView('giftcard_landing')} />
-            <main className="container mx-auto px-4 py-8 flex-grow">
-                {appData && <AnnouncementsBoard announcements={appData.announcements} />}
-                <div className="mt-8">
-                    {renderView()}
+            <main className="flex-grow w-full">
+                <div className="container mx-auto px-4 py-6 sm:py-8">
+                    {appData && <AnnouncementsBoard announcements={appData.announcements} />}
+                    <div className={appData?.announcements && appData.announcements.length > 0 ? "mt-6" : ""}>
+                        {renderView()}
                     {isOpenStudioModalOpen && openStudioProduct && (
                         <ClassInfoModal
                             product={openStudioProduct}
@@ -593,6 +594,7 @@ const App: React.FC = () => {
                             onConfirm={handleOpenStudioInfoModalConfirm}
                         />
                     )}
+                    </div>
                 </div>
             </main>
             {appData?.footerInfo && (
