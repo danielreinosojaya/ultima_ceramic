@@ -1701,7 +1701,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     let classes = null, price = null, details = null, schedulingRules = null, overrides = null, minParticipants = null, pricePerPerson = null;
                     if ('classes' in p) classes = p.classes;
                     if ('price' in p) price = p.price;
-                                                         if ('details' in p) details = JSON.stringify(p.details);
+                    if ('details' in p) details = JSON.stringify(p.details);
                     if ('schedulingRules' in p) schedulingRules = JSON.stringify((p as any).schedulingRules);
                     if ('overrides' in p) overrides = JSON.stringify((p as any).overrides);
                     if ('minParticipants' in p) minParticipants = (p as any).minParticipants;
