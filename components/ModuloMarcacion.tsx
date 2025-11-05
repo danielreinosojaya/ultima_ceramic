@@ -102,7 +102,7 @@ export const ModuloMarcacion: React.FC = () => {
             setTodayStatus(newTimecard);
           }
         }
-        setCode('');
+        // NO limpiar código - el empleado necesita ver su estado actual
       } else {
         setMessage({ text: result.message, type: 'error' });
       }
@@ -158,8 +158,7 @@ export const ModuloMarcacion: React.FC = () => {
             }
           }
         }
-        
-        setCode('');
+        // NO limpiar código - el empleado necesita ver su estado actual
       } else {
         setMessage({ text: result.message, type: 'error' });
       }
