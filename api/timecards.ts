@@ -647,29 +647,16 @@ async function handleGetEmployeeReport(req: any, res: any, code: string, month: 
         }))
       });
 
-      const rawRow = todayResult.rows[0];
-      console.log('[handleGetEmployeeReport] Raw row from DB:', {
-        keys: rawRow ? Object.keys(rawRow) : [],
-        time_in_value: rawRow?.time_in,
-        time_in_type: typeof rawRow?.time_in
-      });
-      
-      const camelCased = todayResult.rows.length > 0 
-        ? toCamelCase(todayResult.rows[0])
+      // NO usar toCamelCase - el tipo Timecard espera snake_case
+      const todayStatus = todayResult.rows.length > 0 
+        ? todayResult.rows[0] as unknown as Timecard
         : null;
-      
-      console.log('[handleGetEmployeeReport] After toCamelCase:', {
-        keys: camelCased ? Object.keys(camelCased) : [],
-        timeIn: camelCased?.timeIn,
-        time_in: camelCased?.time_in
-      });
-      
-      const todayStatus = camelCased as Timecard;
 
       console.log('[handleGetEmployeeReport] Returning todayStatus:', {
         isNull: todayStatus === null,
         hasTimeIn: todayStatus?.time_in ? 'YES' : 'NO',
-        timeInValue: todayStatus?.time_in
+        timeInValue: todayStatus?.time_in,
+        keys: todayStatus ? Object.keys(todayStatus) : []
       });
 
       return res.status(200).json({
@@ -688,7 +675,8 @@ async function handleGetEmployeeReport(req: any, res: any, code: string, month: 
       ORDER BY date DESC
     `;
 
-    const timecards = result.rows.map(row => toCamelCase(row)) as Timecard[];
+    // NO usar toCamelCase - el tipo Timecard espera snake_case
+    const timecards = result.rows.map(row => row as unknown as Timecard);
 
     const totalHours = timecards.reduce((sum, t) => sum + (t.hours_worked || 0), 0);
     const averageHours = timecards.length > 0 ? Math.round(totalHours / timecards.length * 100) / 100 : 0;
