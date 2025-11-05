@@ -201,16 +201,27 @@ async function getTodayTimecard(employeeId: number): Promise<Timecard | null> {
     });
     const today = formatter.format(now);
     
-    console.log('[getTodayTimecard] Querying for:', { employeeId, date: today });
+    console.log('[getTodayTimecard] Query params:', { employeeId, todayFormatted: today, nowUTC: now.toISOString() });
+    
+    // DEBUG: Ver todos los registros para este empleado
+    const allRecords = await sql`
+      SELECT id, employee_id, date, time_in FROM timecards
+      WHERE employee_id = ${employeeId}
+      ORDER BY date DESC
+      LIMIT 10
+    `;
+    console.log('[getTodayTimecard] Last 10 timecards for employee:', { employeeId, count: allRecords.rows.length, records: allRecords.rows.map((r: any) => ({ date: r.date, time_in: r.time_in })) });
     
     const result = await sql`
       SELECT * FROM timecards
-      WHERE employee_id = ${employeeId} AND date = ${today}
+      WHERE employee_id = ${employeeId} AND date = ${today}::DATE
       LIMIT 1
     `;
 
+    console.log('[getTodayTimecard] Query result for today:', { dateQueried: today, rowsFound: result.rows.length });
+    
     if (result.rows.length === 0) {
-      console.log('[getTodayTimecard] No timecard found for today');
+      console.log('[getTodayTimecard] NO MATCH - Checking date types:', { today: today, type: typeof today });
       return null;
     }
 
