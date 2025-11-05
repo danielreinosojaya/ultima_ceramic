@@ -193,8 +193,13 @@ async function getTodayTimecard(employeeId: number): Promise<Timecard | null> {
 
     // Obtener la fecha de hoy en zona horaria de Bogotá (UTC-5)
     const now = new Date();
-    const bogotaTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
-    const today = bogotaTime.toISOString().split('T')[0];
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      timeZone: 'America/Bogota'
+    });
+    const today = formatter.format(now);
     
     console.log('[getTodayTimecard] Querying for:', { employeeId, date: today });
     
@@ -322,8 +327,13 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
 
     const now = new Date();
     // Obtener fecha/hora en zona horaria de Bogotá
-    const bogotaTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
-    const today = bogotaTime.toISOString().split('T')[0];
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      timeZone: 'America/Bogota'
+    });
+    const today = formatter.format(now);
     const isoTimestamp = now.toISOString();
 
     console.log('[handleClockIn] Inserting timecard:', {
@@ -482,8 +492,13 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
 
     // Obtener la fecha de hoy en zona horaria de Bogotá
     const now = new Date();
-    const bogotaTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
-    const today = bogotaTime.toISOString().split('T')[0];
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      timeZone: 'America/Bogota'
+    });
+    const today = formatter.format(now);
 
     // Total empleados activos
     const employeesResult = await sql`SELECT COUNT(*) as count FROM employees WHERE status = 'active'`;
@@ -573,8 +588,13 @@ async function handleGetEmployeeReport(req: any, res: any, code: string, month: 
     if (!month || !year) {
       // Obtener la fecha de hoy en zona horaria de Bogotá
       const now = new Date();
-      const bogotaTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
-      const todayStr = bogotaTime.toISOString().split('T')[0];
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        timeZone: 'America/Bogota'
+      });
+      const todayStr = formatter.format(now);
       
       const todayResult = await sql`
         SELECT * FROM timecards
