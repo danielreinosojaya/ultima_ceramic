@@ -281,7 +281,7 @@ export const ClientDeliveryForm: React.FC = () => {
                 {/* Logo/Header */}
             <div className="text-center mb-8">
                 <h1 className="text-3xl font-bold text-brand-text mb-2">
-                    🎨 Última Cerámica
+                    🎨 CeramicAlma
                 </h1>
                 <p className="text-brand-secondary text-sm">
                     Seguimiento de Piezas
