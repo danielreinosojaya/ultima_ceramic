@@ -4,27 +4,52 @@ import type { Employee, ClockInResponse, ClockOutResponse, Timecard } from '../t
 export const ModuloMarcacion: React.FC = () => {
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [searching, setSearching] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' }>({ text: '', type: 'success' });
   const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
   const [todayStatus, setTodayStatus] = useState<Timecard | null>(null);
 
-  // Cargar estado actual al abrir módulo
+  // Al cambiar el código, verificar si empleado ya tiene marcación hoy
   useEffect(() => {
-    loadTodayStatus();
-  }, []);
-
-  const loadTodayStatus = async () => {
-    if (!currentEmployee) return;
-    try {
-      const response = await fetch(`/api/timecards?action=get_timecard_history&adminCode=INTERNAL&employeeId=${currentEmployee.id}&startDate=${new Date().toISOString().split('T')[0]}`);
-      const result = await response.json();
-      if (result.success && result.data?.length > 0) {
-        setTodayStatus(result.data[0]);
-      }
-    } catch (error) {
-      console.error('Error loading status:', error);
+    if (!code.trim()) {
+      setCurrentEmployee(null);
+      setTodayStatus(null);
+      setSearching(false);
+      return;
     }
-  };
+
+    // Buscar el estado actual del empleado
+    const checkEmployeeStatus = async () => {
+      setSearching(true);
+      try {
+        // Usar endpoint que busca por código y retorna estado del día
+        const response = await fetch(`/api/timecards?action=get_employee_report&code=${code}&adminCode=INTERNAL`);
+        const result = await response.json();
+        
+        if (result.success && result.employee) {
+          setCurrentEmployee(result.employee);
+          // Si el endpoint retorna el estado de hoy, usarlo
+          if (result.todayStatus) {
+            setTodayStatus(result.todayStatus);
+          } else {
+            setTodayStatus(null);
+          }
+        } else {
+          setCurrentEmployee(null);
+          setTodayStatus(null);
+        }
+      } catch (error) {
+        console.error('Error checking employee status:', error);
+        setCurrentEmployee(null);
+        setTodayStatus(null);
+      } finally {
+        setSearching(false);
+      }
+    };
+
+    const debounceTimer = setTimeout(checkEmployeeStatus, 500);
+    return () => clearTimeout(debounceTimer);
+  }, [code]);
 
   const handleClockIn = async () => {
     if (!code.trim()) {
@@ -46,10 +71,25 @@ export const ModuloMarcacion: React.FC = () => {
 
       if (result.success) {
         setMessage({ text: result.message, type: 'success' });
+        
+        // Crear estado actualizado con la entrada de hoy
+        const todayStr = new Date().toISOString().split('T')[0];
+        const newTimecard: Timecard = {
+          id: 0,
+          employee_id: result.employee?.id || 0,
+          date: todayStr,
+          time_in: result.timestamp,
+          time_out: undefined,
+          hours_worked: 0,
+          notes: undefined,
+          edited_by: undefined,
+          edited_at: undefined,
+          created_at: result.timestamp,
+          updated_at: result.timestamp
+        };
         setCurrentEmployee(result.employee || null);
+        setTodayStatus(newTimecard);
         setCode('');
-        // Recarga estado
-        setTimeout(() => loadTodayStatus(), 500);
       } else {
         setMessage({ text: result.message, type: 'error' });
       }
@@ -81,9 +121,19 @@ export const ModuloMarcacion: React.FC = () => {
 
       if (result.success) {
         setMessage({ text: result.message, type: 'success' });
+        
+        // Actualizar estado local con la salida
+        if (todayStatus) {
+          const updatedTimecard: Timecard = {
+            ...todayStatus,
+            time_out: result.timestamp,
+            hours_worked: result.hours_worked,
+            updated_at: result.timestamp
+          };
+          setTodayStatus(updatedTimecard);
+        }
+        
         setCode('');
-        // Recarga estado
-        setTimeout(() => loadTodayStatus(), 500);
       } else {
         setMessage({ text: result.message, type: 'error' });
       }
@@ -119,6 +169,30 @@ export const ModuloMarcacion: React.FC = () => {
             className="w-full px-4 py-3 rounded-lg border-2 border-brand-border focus:border-brand-primary focus:outline-none text-center font-mono text-lg transition-colors"
             disabled={loading}
           />
+          
+          {/* Indicador de búsqueda */}
+          {code.trim() && searching && (
+            <div className="mt-3 flex items-center justify-center gap-2 text-sm text-brand-secondary">
+              <div className="animate-spin">⏳</div>
+              <span>Buscando tu registro...</span>
+            </div>
+          )}
+          
+          {/* Indicador de empleado encontrado */}
+          {code.trim() && !searching && currentEmployee && (
+            <div className="mt-3 flex items-center justify-center gap-2 text-sm text-green-600 font-semibold">
+              <span>✅</span>
+              <span>{currentEmployee.name}</span>
+            </div>
+          )}
+          
+          {/* Indicador de empleado no encontrado */}
+          {code.trim() && !searching && !currentEmployee && (
+            <div className="mt-3 flex items-center justify-center gap-2 text-sm text-red-600 font-semibold">
+              <span>❌</span>
+              <span>Empleado no encontrado</span>
+            </div>
+          )}
         </div>
 
         {/* Mensaje */}
@@ -131,6 +205,28 @@ export const ModuloMarcacion: React.FC = () => {
             }`}
           >
             {message.text}
+          </div>
+        )}
+
+        {/* Indicador de estado de entrada */}
+        {code.trim() && currentEmployee && !searching && (
+          <div className="mb-6 p-4 rounded-lg bg-blue-50 border border-blue-200">
+            {isCheckedIn ? (
+              <div className="flex items-center justify-center gap-2 text-sm text-blue-700">
+                <span className="text-xl">✅</span>
+                <div className="text-left">
+                  <p className="font-bold">Entrada registrada</p>
+                  <p className="text-xs text-blue-600">
+                    {todayStatus?.time_in && new Date(todayStatus.time_in).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' })}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center gap-2 text-sm text-blue-700">
+                <span className="text-xl">📋</span>
+                <span className="font-semibold">Aún no has marcado entrada hoy</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -169,7 +265,7 @@ export const ModuloMarcacion: React.FC = () => {
                 <div className="flex justify-between">
                   <span className="text-brand-secondary">Entrada:</span>
                   <span className="font-mono font-semibold text-green-600">
-                    {new Date(todayStatus.time_in).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(todayStatus.time_in).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'America/Bogota' })}
                   </span>
                 </div>
               )}
@@ -177,7 +273,7 @@ export const ModuloMarcacion: React.FC = () => {
                 <div className="flex justify-between">
                   <span className="text-brand-secondary">Salida:</span>
                   <span className="font-mono font-semibold text-red-600">
-                    {new Date(todayStatus.time_out).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(todayStatus.time_out).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'America/Bogota' })}
                   </span>
                 </div>
               )}
