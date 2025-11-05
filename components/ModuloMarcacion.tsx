@@ -23,7 +23,7 @@ export const ModuloMarcacion: React.FC = () => {
       setSearching(true);
       try {
         // Usar endpoint que busca por código y retorna estado del día
-        const response = await fetch(`/api/timecards?action=get_employee_report&code=${code}&adminCode=INTERNAL`);
+        const response = await fetch(`/api/timecards?action=get_employee_report&code=${code}`);
         const result = await response.json();
         
         if (result.success && result.employee) {
@@ -77,7 +77,7 @@ export const ModuloMarcacion: React.FC = () => {
         if (result.employee?.code) {
           try {
             await new Promise(resolve => setTimeout(resolve, 1000)); // Esperar a que se propague en BD
-            const refreshResponse = await fetch(`/api/timecards?action=get_employee_report&code=${result.employee.code}&adminCode=INTERNAL`);
+            const refreshResponse = await fetch(`/api/timecards?action=get_employee_report&code=${result.employee.code}`);
             const refreshResult = await refreshResponse.json();
             if (refreshResult.success && refreshResult.todayStatus) {
               setTodayStatus(refreshResult.todayStatus);
@@ -139,7 +139,7 @@ export const ModuloMarcacion: React.FC = () => {
         if (currentEmployee?.code) {
           try {
             await new Promise(resolve => setTimeout(resolve, 1000)); // Esperar a que se propague en BD
-            const refreshResponse = await fetch(`/api/timecards?action=get_employee_report&code=${currentEmployee.code}&adminCode=INTERNAL`);
+            const refreshResponse = await fetch(`/api/timecards?action=get_employee_report&code=${currentEmployee.code}`);
             const refreshResult = await refreshResponse.json();
             if (refreshResult.success && refreshResult.todayStatus) {
               setTodayStatus(refreshResult.todayStatus);

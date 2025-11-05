@@ -262,6 +262,14 @@ async function calculateHours(timeIn: Date, timeOut: Date): Promise<number> {
 export default async function handler(req: any, res: any) {
   const { action, code, adminCode, month, year, startDate, endDate, format } = req.query;
 
+  console.log('[timecards handler] Request received:', {
+    action,
+    code,
+    adminCode,
+    method: req.method,
+    url: req.url
+  });
+
   try {
     switch (action) {
       case 'clock_in':
@@ -639,14 +647,29 @@ async function handleGetEmployeeReport(req: any, res: any, code: string, month: 
         }))
       });
 
-      const todayStatus = todayResult.rows.length > 0 
-        ? toCamelCase(todayResult.rows[0]) as Timecard
+      const rawRow = todayResult.rows[0];
+      console.log('[handleGetEmployeeReport] Raw row from DB:', {
+        keys: rawRow ? Object.keys(rawRow) : [],
+        time_in_value: rawRow?.time_in,
+        time_in_type: typeof rawRow?.time_in
+      });
+      
+      const camelCased = todayResult.rows.length > 0 
+        ? toCamelCase(todayResult.rows[0])
         : null;
+      
+      console.log('[handleGetEmployeeReport] After toCamelCase:', {
+        keys: camelCased ? Object.keys(camelCased) : [],
+        timeIn: camelCased?.timeIn,
+        time_in: camelCased?.time_in
+      });
+      
+      const todayStatus = camelCased as Timecard;
 
       console.log('[handleGetEmployeeReport] Returning todayStatus:', {
         isNull: todayStatus === null,
         hasTimeIn: todayStatus?.time_in ? 'YES' : 'NO',
-        timeIn: todayStatus?.time_in
+        timeInValue: todayStatus?.time_in
       });
 
       return res.status(200).json({
