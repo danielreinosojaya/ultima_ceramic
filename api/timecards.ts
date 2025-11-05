@@ -178,7 +178,11 @@ async function findEmployeeByCode(code: string): Promise<Employee | null> {
 
 async function getTodayTimecard(employeeId: number): Promise<Timecard | null> {
   try {
-    const today = new Date().toISOString().split('T')[0];
+    // Obtener la fecha de hoy en zona horaria de Bogotá (UTC-5)
+    const now = new Date();
+    const bogotaTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
+    const today = bogotaTime.toISOString().split('T')[0];
+    
     const result = await sql`
       SELECT * FROM timecards
       WHERE employee_id = ${employeeId} AND date = ${today}
@@ -273,7 +277,9 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
 
   try {
     const now = new Date();
-    const today = now.toISOString().split('T')[0];
+    // Obtener fecha/hora en zona horaria de Bogotá
+    const bogotaTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
+    const today = bogotaTime.toISOString().split('T')[0];
     const isoTimestamp = now.toISOString();
 
     await sql`
@@ -373,7 +379,10 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
     // Asegurar que las tablas existen
     await ensureTablesExist();
 
-    const today = new Date().toISOString().split('T')[0];
+    // Obtener la fecha de hoy en zona horaria de Bogotá
+    const now = new Date();
+    const bogotaTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
+    const today = bogotaTime.toISOString().split('T')[0];
 
     // Total empleados activos
     const employeesResult = await sql`SELECT COUNT(*) as count FROM employees WHERE status = 'active'`;
@@ -461,7 +470,11 @@ async function handleGetEmployeeReport(req: any, res: any, code: string, month: 
   try {
     // Si no hay mes/año, retornar solo el estado de hoy (para UI de marcación)
     if (!month || !year) {
-      const todayStr = new Date().toISOString().split('T')[0];
+      // Obtener la fecha de hoy en zona horaria de Bogotá
+      const now = new Date();
+      const bogotaTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
+      const todayStr = bogotaTime.toISOString().split('T')[0];
+      
       const todayResult = await sql`
         SELECT * FROM timecards
         WHERE employee_id = ${employee.id}
