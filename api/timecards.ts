@@ -614,6 +614,14 @@ async function handleGetEmployeeReport(req: any, res: any, code: string, month: 
       const day = String(bogotaTime.getUTCDate()).padStart(2, '0');
       const todayStr = `${year}-${month}-${day}`;
       
+      console.log('[handleGetEmployeeReport] Querying for today:', {
+        employeeId: employee.id,
+        employeeCode: employee.code,
+        todayStr,
+        nowUTC: now.toISOString(),
+        bogotaTime: `${year}-${month}-${day}`
+      });
+      
       const todayResult = await sql`
         SELECT * FROM timecards
         WHERE employee_id = ${employee.id}
@@ -621,9 +629,25 @@ async function handleGetEmployeeReport(req: any, res: any, code: string, month: 
         LIMIT 1
       `;
 
+      console.log('[handleGetEmployeeReport] Query result:', {
+        rowsFound: todayResult.rows.length,
+        rows: todayResult.rows.map(r => ({
+          id: r.id,
+          employee_id: r.employee_id,
+          date: r.date,
+          time_in: r.time_in
+        }))
+      });
+
       const todayStatus = todayResult.rows.length > 0 
         ? toCamelCase(todayResult.rows[0]) as Timecard
         : null;
+
+      console.log('[handleGetEmployeeReport] Returning todayStatus:', {
+        isNull: todayStatus === null,
+        hasTimeIn: todayStatus?.time_in ? 'YES' : 'NO',
+        timeIn: todayStatus?.time_in
+      });
 
       return res.status(200).json({
         success: true,
