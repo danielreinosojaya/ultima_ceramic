@@ -99,6 +99,9 @@ const App: React.FC = () => {
         const moduleParam = urlParams.get('module');
         if (moduleParam === 'timecards') {
             setAdminModule('timecards');
+            // Si accede al módulo de timecards, usar código por defecto si no está especificado
+            const code = urlParams.get('code') || 'ADMIN2025';
+            setAdminCode(code);
         }
     }, []);
 

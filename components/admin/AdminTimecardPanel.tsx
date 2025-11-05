@@ -17,13 +17,22 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
   const [newEmployeeForm, setNewEmployeeForm] = useState({ code: '', name: '', email: '', position: '' });
   const [createLoading, setCreateLoading] = useState(false);
   const [createMessage, setCreateMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  
+  // Estados para edición y eliminación
+  const [editingTimecard, setEditingTimecard] = useState<Timecard | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editForm, setEditForm] = useState({ time_in: '', time_out: '', notes: '' });
+  const [confirmDeleteTimecard, setConfirmDeleteTimecard] = useState<Timecard | null>(null);
+  const [confirmDeleteEmployee, setConfirmDeleteEmployee] = useState<Employee | null>(null);
 
   // Cargar dashboard
   useEffect(() => {
+    if (!adminCode) return;
+    
     loadDashboard();
-    const interval = setInterval(loadDashboard, 30000); // Actualizar cada 30 segundos
+    const interval = setInterval(loadDashboard, 60000); // Actualizar cada 60 segundos
     return () => clearInterval(interval);
-  }, []);
+  }, [adminCode]);
 
   const loadDashboard = async () => {
     setLoading(true);
@@ -123,10 +132,18 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
       const result = await response.json();
 
       if (result.success) {
+        // Agregar el nuevo empleado a la lista inmediatamente (optimistic update)
+        const newEmployee = result.data as Employee;
+        setEmployees(prev => [...prev, newEmployee]);
+        
         setCreateMessage({ text: `✅ Empleado ${newEmployeeForm.name} creado exitosamente`, type: 'success' });
         setNewEmployeeForm({ code: '', name: '', email: '', position: '' });
+        
+        // Cerrar modal después de mostrar el mensaje
         setTimeout(() => {
           setIsCreateModalOpen(false);
+          setCreateMessage(null);
+          // Recargar empleados para asegurar sincronización
           loadEmployees();
         }, 1500);
       } else {
@@ -138,6 +155,101 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
     } finally {
       setCreateLoading(false);
     }
+  };
+
+  const handleDeleteTimecard = async (timecard: Timecard) => {
+    try {
+      const response = await fetch(
+        `/api/timecards?action=delete_timecard&adminCode=${adminCode}&timecardId=${timecard.id}`,
+        { method: 'POST' }
+      );
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Eliminar de la lista local
+        setEmployeeHistory(prev => prev.filter(t => t.id !== timecard.id));
+        setConfirmDeleteTimecard(null);
+        alert('✅ Marcación eliminada correctamente');
+      } else {
+        alert(`❌ Error: ${result.error}`);
+      }
+    } catch (error) {
+      alert('❌ Error al eliminar marcación');
+      console.error('Error:', error);
+    }
+  };
+
+  const handleUpdateTimecard = async () => {
+    if (!editingTimecard) return;
+
+    try {
+      const response = await fetch(
+        `/api/timecards?action=update_timecard&adminCode=${adminCode}&timecardId=${editingTimecard.id}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            time_in: editForm.time_in || undefined,
+            time_out: editForm.time_out || undefined,
+            notes: editForm.notes || undefined
+          })
+        }
+      );
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Actualizar en la lista local
+        setEmployeeHistory(prev =>
+          prev.map(t => (t.id === editingTimecard.id ? (result.data as Timecard) : t))
+        );
+        setIsEditModalOpen(false);
+        setEditingTimecard(null);
+        alert('✅ Marcación actualizada correctamente');
+      } else {
+        alert(`❌ Error: ${result.error}`);
+      }
+    } catch (error) {
+      alert('❌ Error al actualizar marcación');
+      console.error('Error:', error);
+    }
+  };
+
+  const handleDeleteEmployee = async (employee: Employee, hardDelete: boolean = false) => {
+    try {
+      const action = hardDelete ? 'hard_delete_employee' : 'delete_employee';
+      const response = await fetch(
+        `/api/timecards?action=${action}&adminCode=${adminCode}&employeeId=${employee.id}`,
+        { method: 'POST' }
+      );
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Eliminar de la lista local
+        setEmployees(prev => prev.filter(e => e.id !== employee.id));
+        setConfirmDeleteEmployee(null);
+        setSelectedEmployee(null);
+        setEmployeeHistory([]);
+        alert(`✅ ${hardDelete ? 'Empleado eliminado permanentemente' : 'Empleado desactivado'}`);
+      } else {
+        alert(`❌ Error: ${result.error}`);
+      }
+    } catch (error) {
+      alert('❌ Error al eliminar empleado');
+      console.error('Error:', error);
+    }
+  };
+
+  const openEditTimecard = (timecard: Timecard) => {
+    setEditingTimecard(timecard);
+    setEditForm({
+      time_in: timecard.time_in ? new Date(timecard.time_in).toISOString().slice(0, 16) : '',
+      time_out: timecard.time_out ? new Date(timecard.time_out).toISOString().slice(0, 16) : '',
+      notes: timecard.notes || ''
+    });
+    setIsEditModalOpen(true);
   };
 
   if (loading) {
@@ -167,7 +279,8 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
               key={tab}
               onClick={() => {
                 setActiveTab(tab);
-                if (tab === 'employees' && employees.length === 0) {
+                // Cargar datos cuando se cambia a tab
+                if (tab === 'employees') {
                   loadEmployees();
                 }
               }}
@@ -281,7 +394,7 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
         {activeTab === 'employees' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-brand-text">Gestión de Empleados</h2>
+              <h2 className="text-2xl font-bold text-brand-text">Gestión de Empleados ({employees.length})</h2>
               <button
                 onClick={() => setIsCreateModalOpen(true)}
                 className="px-6 py-3 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 transition-colors"
@@ -289,53 +402,74 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
                 ➕ Nuevo Empleado
               </button>
             </div>
-            <div className="bg-white rounded-lg shadow-sm border border-brand-border/50 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-brand-surface border-b border-brand-border/50">
-                    <tr>
-                      <th className="px-6 py-3 text-left font-semibold text-brand-text">Código</th>
-                      <th className="px-6 py-3 text-left font-semibold text-brand-text">Nombre</th>
-                      <th className="px-6 py-3 text-left font-semibold text-brand-text">Puesto</th>
-                      <th className="px-6 py-3 text-left font-semibold text-brand-text">Estado</th>
-                      <th className="px-6 py-3 text-left font-semibold text-brand-text">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {employees.map(emp => (
-                      <tr key={emp.id} className="border-b border-brand-border/30 hover:bg-brand-surface/50">
-                        <td className="px-6 py-4 font-mono font-bold text-brand-primary">{emp.code}</td>
-                        <td className="px-6 py-4">{emp.name}</td>
-                        <td className="px-6 py-4 text-brand-secondary">{emp.position || '-'}</td>
-                        <td className="px-6 py-4">
-                          <span
-                            className={`px-3 py-1 rounded-full text-xs font-bold ${
-                              emp.status === 'active'
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}
-                          >
-                            {emp.status === 'active' ? '✅ Activo' : '❌ Inactivo'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <button
-                            onClick={() => {
-                              setSelectedEmployee(emp);
-                              loadEmployeeHistory(emp.id);
-                              setActiveTab('history');
-                            }}
-                            className="text-blue-500 hover:text-blue-700 font-semibold"
-                          >
-                            Ver Historial
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            
+            {employees.length === 0 ? (
+              <div className="bg-white rounded-lg shadow-sm border border-brand-border/50 p-8 text-center">
+                <p className="text-brand-secondary mb-4">No hay empleados registrados</p>
+                <button
+                  onClick={() => setIsCreateModalOpen(true)}
+                  className="px-6 py-2 bg-brand-primary text-white font-semibold rounded-lg hover:opacity-90"
+                >
+                  Crear el primer empleado
+                </button>
               </div>
-            </div>
+            ) : (
+              <div className="bg-white rounded-lg shadow-sm border border-brand-border/50 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-brand-surface border-b border-brand-border/50">
+                      <tr>
+                        <th className="px-6 py-3 text-left font-semibold text-brand-text">Código</th>
+                        <th className="px-6 py-3 text-left font-semibold text-brand-text">Nombre</th>
+                        <th className="px-6 py-3 text-left font-semibold text-brand-text">Puesto</th>
+                        <th className="px-6 py-3 text-left font-semibold text-brand-text">Estado</th>
+                        <th className="px-6 py-3 text-left font-semibold text-brand-text">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {employees.map(emp => (
+                        <tr key={emp.id} className="border-b border-brand-border/30 hover:bg-brand-surface/50">
+                          <td className="px-6 py-4 font-mono font-bold text-brand-primary">{emp.code}</td>
+                          <td className="px-6 py-4">{emp.name}</td>
+                          <td className="px-6 py-4 text-brand-secondary">{emp.position || '-'}</td>
+                          <td className="px-6 py-4">
+                            <span
+                              className={`px-3 py-1 rounded-full text-xs font-bold ${
+                                emp.status === 'active'
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'bg-red-100 text-red-800'
+                              }`}
+                            >
+                              {emp.status === 'active' ? '✅ Activo' : '❌ Inactivo'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => {
+                                  setSelectedEmployee(emp);
+                                  loadEmployeeHistory(emp.id);
+                                  setActiveTab('history');
+                                }}
+                                className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-xs font-semibold"
+                              >
+                                📋 Historial
+                              </button>
+                              <button
+                                onClick={() => setConfirmDeleteEmployee(emp)}
+                                className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-xs font-semibold"
+                              >
+                                🗑️ Eliminar
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -458,6 +592,7 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
                               <th className="px-6 py-3 text-left font-semibold text-brand-text">Entrada</th>
                               <th className="px-6 py-3 text-left font-semibold text-brand-text">Salida</th>
                               <th className="px-6 py-3 text-left font-semibold text-brand-text">Horas</th>
+                              <th className="px-6 py-3 text-center font-semibold text-brand-text">Acciones</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -481,6 +616,22 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
                                     : '-'}
                                 </td>
                                 <td className="px-6 py-4 font-mono font-bold">{record.hours_worked?.toFixed(2) || '-'}h</td>
+                                <td className="px-6 py-4">
+                                  <div className="flex gap-2 justify-center">
+                                    <button
+                                      onClick={() => openEditTimecard(record)}
+                                      className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-xs font-semibold"
+                                    >
+                                      ✏️ Editar
+                                    </button>
+                                    <button
+                                      onClick={() => setConfirmDeleteTimecard(record)}
+                                      className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-xs font-semibold"
+                                    >
+                                      🗑️ Eliminar
+                                    </button>
+                                  </div>
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -491,6 +642,134 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
                 )}
               </>
             )}
+          </div>
+        )}
+
+        {/* MODAL: Editar Marcación */}
+        {isEditModalOpen && editingTimecard && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full mx-4">
+              <h2 className="text-2xl font-bold text-brand-primary mb-6">✏️ Editar Marcación</h2>
+
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-sm font-semibold text-brand-secondary mb-2">Entrada</label>
+                  <input
+                    type="datetime-local"
+                    value={editForm.time_in}
+                    onChange={e => setEditForm({ ...editForm, time_in: e.target.value })}
+                    className="w-full px-4 py-2 border border-brand-border rounded-lg focus:ring-2 focus:ring-brand-primary focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-brand-secondary mb-2">Salida</label>
+                  <input
+                    type="datetime-local"
+                    value={editForm.time_out}
+                    onChange={e => setEditForm({ ...editForm, time_out: e.target.value })}
+                    className="w-full px-4 py-2 border border-brand-border rounded-lg focus:ring-2 focus:ring-brand-primary focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-brand-secondary mb-2">Notas</label>
+                  <textarea
+                    value={editForm.notes}
+                    onChange={e => setEditForm({ ...editForm, notes: e.target.value })}
+                    placeholder="Ej: Llegó tarde, etc."
+                    className="w-full px-4 py-2 border border-brand-border rounded-lg focus:ring-2 focus:ring-brand-primary focus:outline-none resize-none"
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setIsEditModalOpen(false);
+                    setEditingTimecard(null);
+                  }}
+                  className="flex-1 px-4 py-2 border border-brand-border text-brand-text font-semibold rounded-lg hover:bg-brand-surface"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleUpdateTimecard}
+                  className="flex-1 px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600"
+                >
+                  💾 Guardar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL: Confirmar Eliminar Marcación */}
+        {confirmDeleteTimecard && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full mx-4">
+              <h2 className="text-2xl font-bold text-red-600 mb-4">🗑️ Eliminar Marcación</h2>
+              <p className="text-brand-secondary mb-6">
+                ¿Seguro que deseas eliminar la marcación del {new Date(confirmDeleteTimecard.date).toLocaleDateString('es-ES')}?
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setConfirmDeleteTimecard(null)}
+                  className="flex-1 px-4 py-2 border border-brand-border text-brand-text font-semibold rounded-lg hover:bg-brand-surface"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => handleDeleteTimecard(confirmDeleteTimecard)}
+                  className="flex-1 px-4 py-2 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600"
+                >
+                  Eliminar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL: Confirmar Eliminar Empleado */}
+        {confirmDeleteEmployee && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full mx-4">
+              <h2 className="text-2xl font-bold text-red-600 mb-4">🗑️ Eliminar Empleado</h2>
+              <p className="text-brand-secondary mb-4">
+                ¿Qué deseas hacer con <strong>{confirmDeleteEmployee.name}</strong>?
+              </p>
+
+              <div className="bg-blue-50 p-4 rounded mb-6 text-sm text-blue-800">
+                <p className="font-semibold mb-2">Opciones:</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li><strong>Desactivar:</strong> El empleado no podrá marcar entrada, pero sus datos se preservan</li>
+                  <li><strong>Eliminar permanentemente:</strong> Se eliminará el empleado y TODOS sus registros</li>
+                </ul>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setConfirmDeleteEmployee(null)}
+                  className="flex-1 px-4 py-2 border border-brand-border text-brand-text font-semibold rounded-lg hover:bg-brand-surface"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => handleDeleteEmployee(confirmDeleteEmployee, false)}
+                  className="flex-1 px-4 py-2 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600"
+                >
+                  ⚠️ Desactivar
+                </button>
+                <button
+                  onClick={() => handleDeleteEmployee(confirmDeleteEmployee, true)}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700"
+                >
+                  🔴 Eliminar
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -30,11 +30,10 @@ CREATE TABLE IF NOT EXISTS timecards (
 CREATE TABLE IF NOT EXISTS timecard_audit (
   id SERIAL PRIMARY KEY,
   timecard_id INTEGER REFERENCES timecards(id) ON DELETE CASCADE,
-  admin_id INTEGER REFERENCES employees(id),
+  employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
   action VARCHAR(50),
-  old_value TEXT,
-  new_value TEXT,
-  reason VARCHAR(255),
+  changes TEXT,
+  admin_code VARCHAR(20),
   created_at TIMESTAMP DEFAULT NOW()
 );
 
