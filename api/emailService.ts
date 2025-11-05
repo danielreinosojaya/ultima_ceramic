@@ -579,14 +579,14 @@ export const sendDeliveryCreatedByClientEmail = async (customerEmail: string, cu
                 <h3 style="color: #15803d; margin-top: 0;">📸 Información Recibida</h3>
                 <p style="margin: 10px 0;"><strong>Descripción:</strong> ${displayDescription}</p>
                 <p style="margin: 10px 0;"><strong>Fotos subidas:</strong> ${photoCount}</p>
-                <p style="margin: 10px 0; font-size: 18px;"><strong>Fecha de recogida:</strong> <span style="color: #D95F43;">${formattedDate}</span></p>
+                <p style="margin: 10px 0; font-size: 18px;"><strong>Fecha estimada de recogida:</strong> <span style="color: #D95F43;">${formattedDate}</span></p>
             </div>
 
             <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 8px;">
                 <p style="margin: 0; color: #92400E; font-weight: bold;">⏳ Próximos Pasos</p>
                 <p style="margin: 8px 0 0 0; color: #78350F; font-size: 14px;">
                     • Nuestro equipo revisará tus fotos y piezas<br/>
-                    • Nos pondremos en contacto contigo en 1-2 días hábiles<br/>
+                    • Nos pondremos en contacto contigo <strong>1-2 días hábiles ANTES</strong> de tu fecha de recogida<br/>
                     • Te confirmaremos si hay que hacer arreglos o si está listo para recoger
                 </p>
             </div>

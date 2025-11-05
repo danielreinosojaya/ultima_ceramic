@@ -36,6 +36,14 @@ export const ClientDeliveryForm: React.FC = () => {
     const cameraInputRef = useRef<HTMLInputElement>(null);
     const galleryInputRef = useRef<HTMLInputElement>(null);
 
+    // Log component mount for debugging
+    useEffect(() => {
+        console.log('[ClientDeliveryForm] Component mounted successfully');
+        return () => {
+            console.log('[ClientDeliveryForm] Component unmounted');
+        };
+    }, []);
+
     const validateEmail = (email: string): boolean => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return emailRegex.test(email);
@@ -205,6 +213,8 @@ export const ClientDeliveryForm: React.FC = () => {
         setSuccessMessage('');
 
         try {
+            console.log('[ClientDeliveryForm] Starting submission...');
+            
             const userInfo: UserInfo = {
                 firstName: formData.firstName.trim(),
                 lastName: formData.lastName.trim(),
@@ -214,6 +224,13 @@ export const ClientDeliveryForm: React.FC = () => {
                 birthday: null
             };
 
+            console.log('[ClientDeliveryForm] Calling createDeliveryFromClient with:', {
+                email: formData.email.trim(),
+                firstName: formData.firstName.trim(),
+                photosCount: formData.photos.length,
+                scheduledDate: formData.scheduledDate
+            });
+
             const result = await dataService.createDeliveryFromClient({
                 email: formData.email.trim(),
                 userInfo,
@@ -222,18 +239,33 @@ export const ClientDeliveryForm: React.FC = () => {
                 photos: formData.photos.length > 0 ? formData.photos : null
             });
 
+            console.log('[ClientDeliveryForm] API Response:', result);
+
             if (result.success) {
-                setSuccessMessage('¡Gracias! Hemos recibido tu información. Pronto procesaremos tu entrega. Te enviaremos un email con los detalles.');
+                console.log('[ClientDeliveryForm] Submission successful');
+                setSuccessMessage('✅ ¡Gracias! Hemos recibido tu información y fotos. CeramicAlma se pondrá en contacto 1-2 días hábiles antes de tu fecha de recogida.');
                 setTimeout(() => {
                     setFormData(INITIAL_STEP);
                     setCurrentStep('info');
                 }, 2000);
             } else {
+                console.error('[ClientDeliveryForm] API error:', result.error);
                 setErrorMessage(result.error || 'Error al enviar la información. Intenta de nuevo.');
             }
         } catch (error) {
-            console.error('Error submitting delivery form:', error);
+            console.error('[ClientDeliveryForm] Exception during submission:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             setErrorMessage('Error al procesar tu solicitud. Por favor intenta de nuevo.');
+            
+            // Log to Vercel
+            console.log('[ERROR_LOG_FOR_VERCEL]', JSON.stringify({
+                timestamp: new Date().toISOString(),
+                component: 'ClientDeliveryForm',
+                action: 'handleSubmit',
+                error: errorMessage,
+                errorStack: error instanceof Error ? error.stack : 'No stack available',
+                userAgent: navigator.userAgent
+            }));
         } finally {
             setIsSubmitting(false);
         }
@@ -247,13 +279,14 @@ export const ClientDeliveryForm: React.FC = () => {
         <div className="min-h-screen bg-gradient-to-br from-brand-primary/5 to-brand-secondary/5 flex items-center justify-center p-4">
             <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md">
                 {/* Logo/Header */}
-                <div className="text-center mb-8">
-                    <h1 className="text-3xl font-bold text-brand-primary mb-2">🎨 Última Cerámica</h1>
-                    <h2 className="text-lg font-semibold text-brand-text mb-1">Seguimiento de Piezas</h2>
-                    <p className="text-sm text-gray-500">Carga información y fotos de tu pieza</p>
-                </div>
-
-                {/* Progress Indicator */}
+            <div className="text-center mb-8">
+                <h1 className="text-3xl font-bold text-brand-text mb-2">
+                    🎨 CeramicAlma
+                </h1>
+                <p className="text-brand-secondary text-sm">
+                    Seguimiento de Piezas
+                </p>
+            </div>                {/* Progress Indicator */}
                 <div className="flex justify-between mb-8">
                     <div className={`flex-1 h-2 rounded-full mr-2 transition-colors ${currentStep === 'info' || currentStep === 'photos' || currentStep === 'confirmation' ? 'bg-brand-primary' : 'bg-gray-300'}`} />
                     <div className={`flex-1 h-2 rounded-full mr-2 transition-colors ${currentStep === 'photos' || currentStep === 'confirmation' ? 'bg-brand-primary' : 'bg-gray-300'}`} />
@@ -360,8 +393,9 @@ export const ClientDeliveryForm: React.FC = () => {
 
                         <div>
                             <label className="block text-sm font-semibold text-brand-text mb-1">
-                                Fecha de Recogida Programada *
+                                Fecha Estimada de Recogida *
                             </label>
+                            <p className="text-xs text-gray-500 mb-2">Nos contactaremos 1-2 días hábiles antes de esta fecha</p>
                             <input
                                 type="date"
                                 value={formData.scheduledDate}
@@ -514,7 +548,7 @@ export const ClientDeliveryForm: React.FC = () => {
                                 </div>
                             )}
                             <div>
-                                <p className="text-xs text-gray-600">Fecha de Recogida</p>
+                                <p className="text-xs text-gray-600">Fecha Estimada de Recogida</p>
                                 <p className="font-semibold text-brand-text">
                                     {new Date(formData.scheduledDate).toLocaleDateString('es-ES', {
                                         weekday: 'long',
@@ -530,9 +564,14 @@ export const ClientDeliveryForm: React.FC = () => {
                             </div>
                         </div>
 
-                        <p className="text-sm text-gray-600 bg-blue-50 border border-blue-200 rounded-lg p-3">
-                            📧 Recibirás un email de confirmación con los detalles de tu entrega. ¡Gracias por confiar en nosotros!
-                        </p>
+                        <div className="space-y-3">
+                            <p className="text-sm text-gray-600 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                📧 Recibirás un email de confirmación con los detalles de tu entrega. ¡Gracias por confiar en CeramicAlma!
+                            </p>
+                            <p className="text-sm text-gray-700 bg-green-50 border border-green-300 rounded-lg p-3 font-semibold">
+                                📅 <strong>Nos pondremos en contacto contigo 1-2 días hábiles antes de la fecha de recogida</strong> para coordinar los detalles finales.
+                            </p>
+                        </div>
 
                         <div className="flex justify-between pt-4">
                             <button

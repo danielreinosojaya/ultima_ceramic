@@ -1575,23 +1575,53 @@ export const createDeliveryFromClient = async (data: {
     photos: string[] | null;
 }): Promise<{ success: boolean; delivery?: Delivery; isNewCustomer?: boolean; error?: string; message?: string }> => {
     try {
-        const result = await postAction('createDeliveryFromClient', data);
-        if (result.success && result.delivery) {
+        console.log('[dataService] createDeliveryFromClient called');
+        
+        // Add 30-second timeout protection
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+        try {
+            const result = await Promise.race([
+                postAction('createDeliveryFromClient', data),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Request timeout after 30 seconds')), 30000)
+                )
+            ]) as any;
+
+            clearTimeout(timeoutId);
+            
+            console.log('[dataService] createDeliveryFromClient response:', result);
+            
+            if (result.success && result.delivery) {
+                return { 
+                    ...result, 
+                    delivery: parseDelivery(result.delivery),
+                    message: result.message || '✅ ¡Gracias! Hemos recibido tu información.'
+                };
+            }
             return { 
-                ...result, 
-                delivery: parseDelivery(result.delivery),
-                message: result.message || '✅ ¡Gracias! Hemos recibido tu información.'
+                success: false, 
+                error: result.error || 'Error al procesar tu solicitud'
             };
+        } catch (timeoutError) {
+            clearTimeout(timeoutId);
+            console.error('[dataService] createDeliveryFromClient timeout:', timeoutError);
+            throw timeoutError;
         }
-        return { 
-            success: false, 
-            error: result.error || 'Error al procesar tu solicitud'
-        };
     } catch (error) {
-        console.error('createDeliveryFromClient error:', error);
+        console.error('[dataService] createDeliveryFromClient error:', error);
+        const errorMsg = error instanceof Error ? error.message : 'Error desconocido';
+        console.log('[ERROR_LOG_FOR_VERCEL]', JSON.stringify({
+            timestamp: new Date().toISOString(),
+            service: 'dataService',
+            method: 'createDeliveryFromClient',
+            error: errorMsg,
+            errorStack: error instanceof Error ? error.stack : 'No stack available'
+        }));
         return { 
             success: false, 
-            error: error instanceof Error ? error.message : 'Error desconocido'
+            error: errorMsg
         };
     }
 };
