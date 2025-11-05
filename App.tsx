@@ -1,5 +1,5 @@
 import { GiftcardPersonalization } from './components/giftcard/GiftcardPersonalization';
-import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, ReactNode } from 'react';
 import type { BankDetails } from './types';
 import { Header } from './components/Header';
 import { WelcomeSelector } from './components/WelcomeSelector';
@@ -16,6 +16,7 @@ import { ClassInfoModal } from './components/ClassInfoModal';
 import { PrerequisiteModal } from './components/PrerequisiteModal';
 import { AnnouncementsBoard } from './components/AnnouncementsBoard';
 import { ClientDeliveryForm } from './components/ClientDeliveryForm';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { ModuloMarcacion } from './components/ModuloMarcacion';
 import { AdminTimecardPanel } from './components/admin/AdminTimecardPanel';
 // Lazy load AdminConsole to reduce initial bundle size
@@ -589,9 +590,20 @@ const App: React.FC = () => {
     // Modo formulario de cliente (QR)
     if (isClientDeliveryMode) {
         return (
-            <div className="bg-brand-background min-h-screen text-brand-text font-sans relative flex flex-col">
-                <ClientDeliveryForm />
-            </div>
+            <ErrorBoundary componentName="ClientDeliveryForm">
+                <div className="bg-brand-background min-h-screen text-brand-text font-sans relative flex flex-col">
+                    <React.Suspense fallback={
+                        <div className="min-h-screen flex items-center justify-center">
+                            <div className="text-center">
+                                <p className="text-lg mb-4">Cargando formulario...</p>
+                                <div className="animate-spin">⏳</div>
+                            </div>
+                        </div>
+                    }>
+                        <ClientDeliveryForm />
+                    </React.Suspense>
+                </div>
+            </ErrorBoundary>
         );
     }
 
