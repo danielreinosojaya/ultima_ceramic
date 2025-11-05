@@ -71,24 +71,37 @@ export const ModuloMarcacion: React.FC = () => {
 
       if (result.success) {
         setMessage({ text: result.message, type: 'success' });
-        
-        // Crear estado actualizado con la entrada de hoy
-        const todayStr = new Date().toISOString().split('T')[0];
-        const newTimecard: Timecard = {
-          id: 0,
-          employee_id: result.employee?.id || 0,
-          date: todayStr,
-          time_in: result.timestamp,
-          time_out: undefined,
-          hours_worked: 0,
-          notes: undefined,
-          edited_by: undefined,
-          edited_at: undefined,
-          created_at: result.timestamp,
-          updated_at: result.timestamp
-        };
         setCurrentEmployee(result.employee || null);
-        setTodayStatus(newTimecard);
+        
+        // Refrescar el estado desde el servidor para garantizar consistencia
+        if (result.employee?.code) {
+          try {
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Esperar a que se propague en BD
+            const refreshResponse = await fetch(`/api/timecards?action=get_employee_report&code=${result.employee.code}&adminCode=INTERNAL`);
+            const refreshResult = await refreshResponse.json();
+            if (refreshResult.success && refreshResult.todayStatus) {
+              setTodayStatus(refreshResult.todayStatus);
+            }
+          } catch (refreshError) {
+            console.error('Error refreshing employee status:', refreshError);
+            // Fallback al timecard local si el refresh falla
+            const todayStr = new Date().toISOString().split('T')[0];
+            const newTimecard: Timecard = {
+              id: 0,
+              employee_id: result.employee?.id || 0,
+              date: todayStr,
+              time_in: result.timestamp,
+              time_out: undefined,
+              hours_worked: 0,
+              notes: undefined,
+              edited_by: undefined,
+              edited_at: undefined,
+              created_at: result.timestamp,
+              updated_at: result.timestamp
+            };
+            setTodayStatus(newTimecard);
+          }
+        }
         setCode('');
       } else {
         setMessage({ text: result.message, type: 'error' });
@@ -122,15 +135,28 @@ export const ModuloMarcacion: React.FC = () => {
       if (result.success) {
         setMessage({ text: result.message, type: 'success' });
         
-        // Actualizar estado local con la salida
-        if (todayStatus) {
-          const updatedTimecard: Timecard = {
-            ...todayStatus,
-            time_out: result.timestamp,
-            hours_worked: result.hours_worked,
-            updated_at: result.timestamp
-          };
-          setTodayStatus(updatedTimecard);
+        // Refrescar el estado desde el servidor para garantizar consistencia
+        if (currentEmployee?.code) {
+          try {
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Esperar a que se propague en BD
+            const refreshResponse = await fetch(`/api/timecards?action=get_employee_report&code=${currentEmployee.code}&adminCode=INTERNAL`);
+            const refreshResult = await refreshResponse.json();
+            if (refreshResult.success && refreshResult.todayStatus) {
+              setTodayStatus(refreshResult.todayStatus);
+            }
+          } catch (refreshError) {
+            console.error('Error refreshing employee status:', refreshError);
+            // Fallback al timecard local si el refresh falla
+            if (todayStatus) {
+              const updatedTimecard: Timecard = {
+                ...todayStatus,
+                time_out: result.timestamp,
+                hours_worked: result.hours_worked,
+                updated_at: result.timestamp
+              };
+              setTodayStatus(updatedTimecard);
+            }
+          }
         }
         
         setCode('');
