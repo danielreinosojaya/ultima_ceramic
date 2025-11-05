@@ -2329,24 +2329,26 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
                 console.log('[createDeliveryFromClient] ✅ Delivery created:', newDelivery.id);
 
-                // 4️⃣ Enviar email de confirmación (fire and forget)
+                // 4️⃣ Enviar email de confirmación
                 try {
                     const customerName = userInfo?.firstName || 'Cliente';
                     const emailServiceModule = await import('./emailService.js');
                     
-                    emailServiceModule.sendDeliveryCreatedByClientEmail(
-                        email, 
-                        customerName, 
-                        {
-                            description: description || null,
-                            scheduledDate,
-                            photos: photos?.length || 0
-                        }
-                    ).then(() => {
+                    try {
+                        await emailServiceModule.sendDeliveryCreatedByClientEmail(
+                            email, 
+                            customerName, 
+                            {
+                                description: description || null,
+                                scheduledDate,
+                                photos: photos?.length || 0
+                            }
+                        );
                         console.log('[createDeliveryFromClient] ✅ Confirmation email sent to:', email);
-                    }).catch(err => {
+                    } catch (err) {
                         console.error('[createDeliveryFromClient] ⚠️ Email send failed:', err);
-                    });
+                        // No retornar error, continuar de todas formas
+                    }
                 } catch (emailErr) {
                     console.error('[createDeliveryFromClient] ⚠️ Email setup failed:', emailErr);
                 }
