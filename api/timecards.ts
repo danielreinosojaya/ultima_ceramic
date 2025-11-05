@@ -62,32 +62,7 @@ async function verifyAdminCode(adminCode: string): Promise<boolean> {
 
 async function ensureTablesExist(): Promise<void> {
   try {
-    // Verificar si employees existe y si tiene la columna code
-    let needsRecreate = false;
-    try {
-      const checkTable = await sql`
-        SELECT column_name FROM information_schema.columns 
-        WHERE table_name = 'employees' AND column_name = 'code'
-      `;
-      
-      // Si la tabla existe pero no tiene columna code, recrearla
-      if (checkTable.rows.length === 0) {
-        const tableExists = await sql`
-          SELECT table_name FROM information_schema.tables 
-          WHERE table_name = 'employees'
-        `;
-        needsRecreate = tableExists.rows.length > 0;
-      }
-    } catch (e) {
-      // Tabla no existe, crearla normalmente
-    }
-
-    // Si necesita recrearse, dropear primero
-    if (needsRecreate) {
-      await sql`DROP TABLE IF EXISTS timecard_audit CASCADE`;
-      await sql`DROP TABLE IF EXISTS timecards CASCADE`;
-      await sql`DROP TABLE IF EXISTS employees CASCADE`;
-    }
+    console.log('[ensureTablesExist] Starting table initialization');
 
     // Crear tabla employees
     await sql`
@@ -103,36 +78,42 @@ async function ensureTablesExist(): Promise<void> {
         updated_at TIMESTAMP DEFAULT NOW()
       )
     `;
+    console.log('[ensureTablesExist] employees table ready');
 
-    // Crear tabla timecards
+    // Crear tabla timecards con estructura robusta
     await sql`
       CREATE TABLE IF NOT EXISTS timecards (
         id SERIAL PRIMARY KEY,
-        employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+        employee_id INTEGER NOT NULL,
         date DATE NOT NULL,
         time_in TIMESTAMP,
         time_out TIMESTAMP,
         hours_worked DECIMAL(5,2),
         notes VARCHAR(255),
-        edited_by INTEGER REFERENCES employees(id),
+        edited_by INTEGER,
         edited_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
+        updated_at TIMESTAMP DEFAULT NOW(),
+        CONSTRAINT fk_timecards_employee FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
       )
     `;
+    console.log('[ensureTablesExist] timecards table ready');
 
-    // Crear tabla timecard_audit CON SCHEMA CORRECTO
+    // Crear tabla timecard_audit
     await sql`
       CREATE TABLE IF NOT EXISTS timecard_audit (
         id SERIAL PRIMARY KEY,
-        timecard_id INTEGER REFERENCES timecards(id) ON DELETE CASCADE,
-        employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+        timecard_id INTEGER,
+        employee_id INTEGER NOT NULL,
         action VARCHAR(50),
         changes TEXT,
         admin_code VARCHAR(20),
-        created_at TIMESTAMP DEFAULT NOW()
+        created_at TIMESTAMP DEFAULT NOW(),
+        CONSTRAINT fk_audit_timecard FOREIGN KEY (timecard_id) REFERENCES timecards(id) ON DELETE CASCADE,
+        CONSTRAINT fk_audit_employee FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
       )
     `;
+    console.log('[ensureTablesExist] timecard_audit table ready');
 
     // Crear tabla admin_codes
     await sql`
@@ -145,8 +126,9 @@ async function ensureTablesExist(): Promise<void> {
         updated_at TIMESTAMP DEFAULT NOW()
       )
     `;
+    console.log('[ensureTablesExist] admin_codes table ready');
 
-    // Crear índices
+    // Crear índices (sin restricciones UNIQUE adicionales que compliquen inserciones)
     await sql`CREATE INDEX IF NOT EXISTS idx_timecards_employee ON timecards(employee_id)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_timecards_date ON timecards(date)`;
     await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_timecards_per_day ON timecards(employee_id, date)`;
@@ -154,9 +136,12 @@ async function ensureTablesExist(): Promise<void> {
     await sql`CREATE INDEX IF NOT EXISTS idx_employees_status ON employees(status)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_audit_timecard ON timecard_audit(timecard_id)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_audit_employee ON timecard_audit(employee_id)`;
+    console.log('[ensureTablesExist] All indexes created');
+
+    console.log('[ensureTablesExist] Table initialization completed successfully');
   } catch (error) {
     console.error('[ensureTablesExist] Error:', error);
-    // Continuar de todas formas, las tablas podrían ya existir
+    // No lanzar error, intentar continuar
   }
 }
 
@@ -169,7 +154,29 @@ async function findEmployeeByCode(code: string): Promise<Employee | null> {
     `;
 
     if (result.rows.length === 0) return null;
-    return toCamelCase(result.rows[0]) as Employee;
+    
+    const row = result.rows[0];
+    
+    // Asegurar que el ID sea un número válido
+    const employee: Employee = {
+      id: Number(row.id),
+      code: String(row.code),
+      name: String(row.name),
+      email: row.email ? String(row.email) : undefined,
+      position: row.position ? String(row.position) : undefined,
+      status: (row.status || 'active') as 'active' | 'inactive' | 'on_leave',
+      hire_date: row.hire_date ? String(row.hire_date) : undefined,
+      created_at: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+      updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString()
+    };
+
+    if (isNaN(employee.id)) {
+      console.error('[findEmployeeByCode] Invalid employee ID conversion:', { original: row.id, converted: employee.id });
+      return null;
+    }
+
+    console.log('[findEmployeeByCode] Found employee:', { code, id: employee.id });
+    return employee;
   } catch (error) {
     console.error('[findEmployeeByCode] Error:', error);
     return null;
@@ -178,10 +185,18 @@ async function findEmployeeByCode(code: string): Promise<Employee | null> {
 
 async function getTodayTimecard(employeeId: number): Promise<Timecard | null> {
   try {
+    // Validar que employeeId sea un número válido
+    if (!Number.isInteger(employeeId) || employeeId <= 0) {
+      console.error('[getTodayTimecard] Invalid employeeId:', employeeId);
+      return null;
+    }
+
     // Obtener la fecha de hoy en zona horaria de Bogotá (UTC-5)
     const now = new Date();
     const bogotaTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
     const today = bogotaTime.toISOString().split('T')[0];
+    
+    console.log('[getTodayTimecard] Querying for:', { employeeId, date: today });
     
     const result = await sql`
       SELECT * FROM timecards
@@ -189,8 +204,28 @@ async function getTodayTimecard(employeeId: number): Promise<Timecard | null> {
       LIMIT 1
     `;
 
-    if (result.rows.length === 0) return null;
-    return toCamelCase(result.rows[0]) as Timecard;
+    if (result.rows.length === 0) {
+      console.log('[getTodayTimecard] No timecard found for today');
+      return null;
+    }
+
+    const row = result.rows[0];
+    const timecard: Timecard = {
+      id: Number(row.id),
+      employee_id: Number(row.employee_id),
+      date: String(row.date),
+      time_in: row.time_in ? new Date(row.time_in).toISOString() : undefined,
+      time_out: row.time_out ? new Date(row.time_out).toISOString() : undefined,
+      hours_worked: row.hours_worked ? Number(row.hours_worked) : undefined,
+      notes: row.notes ? String(row.notes) : undefined,
+      edited_by: row.edited_by ? Number(row.edited_by) : undefined,
+      edited_at: row.edited_at ? new Date(row.edited_at).toISOString() : undefined,
+      created_at: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+      updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString()
+    };
+
+    console.log('[getTodayTimecard] Found timecard:', { id: timecard.id, employee_id: timecard.employee_id });
+    return timecard;
   } catch (error) {
     console.error('[getTodayTimecard] Error:', error);
     return null;
@@ -276,16 +311,40 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
   }
 
   try {
+    // Validaciones previas
+    if (!employee.id || typeof employee.id !== 'number') {
+      console.error('[handleClockIn] Invalid employee.id:', { id: employee.id, type: typeof employee.id });
+      return res.status(500).json({ success: false, message: 'Error: ID de empleado inválido' } as ClockInResponse);
+    }
+
+    // Asegurar que las tablas existen antes de insertar
+    await ensureTablesExist();
+
     const now = new Date();
     // Obtener fecha/hora en zona horaria de Bogotá
     const bogotaTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
     const today = bogotaTime.toISOString().split('T')[0];
     const isoTimestamp = now.toISOString();
 
-    await sql`
+    console.log('[handleClockIn] Inserting timecard:', {
+      employee_id: employee.id,
+      date: today,
+      time_in: isoTimestamp,
+      employeeCode: employee.code
+    });
+
+    const insertResult = await sql`
       INSERT INTO timecards (employee_id, date, time_in)
       VALUES (${employee.id}, ${today}, ${isoTimestamp})
+      RETURNING id
     `;
+
+    if (!insertResult.rows || insertResult.rows.length === 0) {
+      console.error('[handleClockIn] Insert returned no rows');
+      return res.status(500).json({ success: false, message: 'Error al guardar entrada' } as ClockInResponse);
+    }
+
+    console.log('[handleClockIn] Timecard inserted successfully:', insertResult.rows[0]);
 
     // Formato de hora con zona horaria para display
     const timeStr = now.toLocaleTimeString('es-CO', { 
@@ -304,8 +363,50 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
       displayTime: timeStr
     } as ClockInResponse);
   } catch (error) {
-    console.error('[handleClockIn] Error:', error);
-    return res.status(500).json({ success: false, message: 'Error al registrar entrada' } as ClockInResponse);
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    const errorCode = (error as any)?.code;
+    
+    console.error('[handleClockIn] Error details:', {
+      errorMessage: errorMsg,
+      errorCode: errorCode,
+      errorDetail: (error as any)?.detail,
+      employeeId: employee.id,
+      employeeCode: employee.code
+    });
+
+    // Manejar errores específicos de PostgreSQL
+    if (errorCode === '23505') {
+      // UNIQUE constraint violation - ya existe un registro para hoy
+      console.warn('[handleClockIn] Already has entry today');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Ya has marcado entrada hoy'
+      } as ClockInResponse);
+    }
+
+    if (errorCode === '23502') {
+      // NOT NULL constraint violation
+      console.error('[handleClockIn] NOT NULL constraint failed');
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Error: datos inválidos para registrar entrada'
+      } as ClockInResponse);
+    }
+
+    if (errorCode === '23503') {
+      // FOREIGN KEY constraint violation
+      console.error('[handleClockIn] FOREIGN KEY constraint failed - employee_id might be invalid');
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Error: empleado no existe en la base de datos'
+      } as ClockInResponse);
+    }
+
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Error al registrar entrada',
+      debug: errorMsg
+    } as any);
   }
 }
 
