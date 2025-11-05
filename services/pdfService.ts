@@ -367,7 +367,6 @@ export const generateScheduleReportPDF = (
                       `${translations.time}: ${time}`,
                       translations.attendee,
                       'Asistentes',
-                      translations.contact,
                       translations.package,
                       translations.paymentStatus
                   ]],
@@ -375,7 +374,6 @@ export const generateScheduleReportPDF = (
                                             '', // Empty first column for grouping
                                             `${b.userInfo.firstName} ${b.userInfo.lastName}`,
                                             typeof b.participants === 'number' ? b.participants : 1,
-                                            `${b.userInfo.email}\n${b.userInfo.countryCode} ${b.userInfo.phone}`,
                                             b.product?.name || 'N/A',
                                             b.isPaid ? translations.paid : translations.unpaid
                                     ]),
@@ -389,8 +387,8 @@ export const generateScheduleReportPDF = (
                   columnStyles: {
                       0: { halign: 'center', cellWidth: 20 },
                       2: { halign: 'center', cellWidth: 20 },
-                      4: { cellWidth: 40 },
-                      5: { halign: 'center' }
+                      3: { cellWidth: 50 },
+                      4: { halign: 'center' }
                   },
                   styles: {
                       font: 'helvetica',
