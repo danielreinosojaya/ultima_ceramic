@@ -36,6 +36,14 @@ export const ClientDeliveryForm: React.FC = () => {
     const cameraInputRef = useRef<HTMLInputElement>(null);
     const galleryInputRef = useRef<HTMLInputElement>(null);
 
+    // Log component mount for debugging
+    useEffect(() => {
+        console.log('[ClientDeliveryForm] Component mounted successfully');
+        return () => {
+            console.log('[ClientDeliveryForm] Component unmounted');
+        };
+    }, []);
+
     const validateEmail = (email: string): boolean => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return emailRegex.test(email);
@@ -205,6 +213,8 @@ export const ClientDeliveryForm: React.FC = () => {
         setSuccessMessage('');
 
         try {
+            console.log('[ClientDeliveryForm] Starting submission...');
+            
             const userInfo: UserInfo = {
                 firstName: formData.firstName.trim(),
                 lastName: formData.lastName.trim(),
@@ -214,6 +224,13 @@ export const ClientDeliveryForm: React.FC = () => {
                 birthday: null
             };
 
+            console.log('[ClientDeliveryForm] Calling createDeliveryFromClient with:', {
+                email: formData.email.trim(),
+                firstName: formData.firstName.trim(),
+                photosCount: formData.photos.length,
+                scheduledDate: formData.scheduledDate
+            });
+
             const result = await dataService.createDeliveryFromClient({
                 email: formData.email.trim(),
                 userInfo,
@@ -222,18 +239,33 @@ export const ClientDeliveryForm: React.FC = () => {
                 photos: formData.photos.length > 0 ? formData.photos : null
             });
 
+            console.log('[ClientDeliveryForm] API Response:', result);
+
             if (result.success) {
+                console.log('[ClientDeliveryForm] Submission successful');
                 setSuccessMessage('¡Gracias! Hemos recibido tu información. Pronto procesaremos tu entrega. Te enviaremos un email con los detalles.');
                 setTimeout(() => {
                     setFormData(INITIAL_STEP);
                     setCurrentStep('info');
                 }, 2000);
             } else {
+                console.error('[ClientDeliveryForm] API error:', result.error);
                 setErrorMessage(result.error || 'Error al enviar la información. Intenta de nuevo.');
             }
         } catch (error) {
-            console.error('Error submitting delivery form:', error);
+            console.error('[ClientDeliveryForm] Exception during submission:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             setErrorMessage('Error al procesar tu solicitud. Por favor intenta de nuevo.');
+            
+            // Log to Vercel
+            console.log('[ERROR_LOG_FOR_VERCEL]', JSON.stringify({
+                timestamp: new Date().toISOString(),
+                component: 'ClientDeliveryForm',
+                action: 'handleSubmit',
+                error: errorMessage,
+                errorStack: error instanceof Error ? error.stack : 'No stack available',
+                userAgent: navigator.userAgent
+            }));
         } finally {
             setIsSubmitting(false);
         }
