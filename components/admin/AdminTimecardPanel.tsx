@@ -338,12 +338,12 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
                         <td className="px-6 py-4 font-mono text-sm">{emp.employee.code}</td>
                         <td className="px-6 py-4">
                           {emp.time_in
-                            ? new Date(emp.time_in).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+                            ? new Date(emp.time_in).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })
                             : '-'}
                         </td>
                         <td className="px-6 py-4">
                           {emp.time_out
-                            ? new Date(emp.time_out).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+                            ? new Date(emp.time_out).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })
                             : '-'}
                         </td>
                         <td className="px-6 py-4 font-mono">{emp.hours_worked?.toFixed(2) || '-'}h</td>
@@ -601,17 +601,19 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
                                 <td className="px-6 py-4">{new Date(record.date).toLocaleDateString('es-ES')}</td>
                                 <td className="px-6 py-4">
                                   {record.time_in
-                                    ? new Date(record.time_in).toLocaleTimeString('es-ES', {
+                                    ? new Date(record.time_in).toLocaleTimeString('es-CO', {
                                         hour: '2-digit',
-                                        minute: '2-digit'
+                                        minute: '2-digit',
+                                        timeZone: 'America/Bogota'
                                       })
                                     : '-'}
                                 </td>
                                 <td className="px-6 py-4">
                                   {record.time_out
-                                    ? new Date(record.time_out).toLocaleTimeString('es-ES', {
+                                    ? new Date(record.time_out).toLocaleTimeString('es-CO', {
                                         hour: '2-digit',
-                                        minute: '2-digit'
+                                        minute: '2-digit',
+                                        timeZone: 'America/Bogota'
                                       })
                                     : '-'}
                                 </td>
