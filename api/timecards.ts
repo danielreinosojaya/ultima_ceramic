@@ -218,7 +218,7 @@ async function getTodayTimecard(employeeId: number): Promise<Timecard | null> {
     
     const result = await sql`
       SELECT * FROM timecards
-      WHERE employee_id = ${employeeId} AND date = ${today}::DATE
+      WHERE employee_id = ${employeeId} AND CAST(date AS DATE) = ${today}::DATE
       LIMIT 1
     `;
 
@@ -361,7 +361,7 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
 
     const insertResult = await sql`
       INSERT INTO timecards (employee_id, date, time_in)
-      VALUES (${employee.id}, ${today}, ${isoTimestamp})
+      VALUES (${employee.id}, ${today}::DATE, ${isoTimestamp})
       RETURNING id
     `;
 
@@ -617,7 +617,7 @@ async function handleGetEmployeeReport(req: any, res: any, code: string, month: 
       const todayResult = await sql`
         SELECT * FROM timecards
         WHERE employee_id = ${employee.id}
-        AND date = ${todayStr}
+        AND date = ${todayStr}::DATE
         LIMIT 1
       `;
 
