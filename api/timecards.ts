@@ -193,15 +193,19 @@ async function getTodayTimecard(employeeId: number): Promise<Timecard | null> {
 
     // Obtener la fecha de hoy en zona horaria de Bogotá (UTC-5)
     const now = new Date();
-    const formatter = new Intl.DateTimeFormat('en-CA', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      timeZone: 'America/Bogota'
-    });
-    const today = formatter.format(now);
     
-    console.log('[getTodayTimecard] Query params:', { employeeId, todayFormatted: today, nowUTC: now.toISOString() });
+    // Método 100% confiable: calcular offset UTC-5 manualmente
+    const bogotaOffset = -5; // UTC-5
+    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60 * 1000);
+    const bogotaTime = new Date(utcTime + (bogotaOffset * 60 * 60 * 1000));
+    
+    // Construir fecha en formato YYYY-MM-DD manualmente
+    const year = bogotaTime.getUTCFullYear();
+    const month = String(bogotaTime.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(bogotaTime.getUTCDate()).padStart(2, '0');
+    const today = `${year}-${month}-${day}`;
+    
+    console.log('[getTodayTimecard] Calculated date (Bogota UTC-5):', { today, year, month, day, now: now.toISOString() });
     
     // DEBUG: Ver todos los registros para este empleado
     const allRecords = await sql`
@@ -221,7 +225,7 @@ async function getTodayTimecard(employeeId: number): Promise<Timecard | null> {
     console.log('[getTodayTimecard] Query result for today:', { dateQueried: today, rowsFound: result.rows.length });
     
     if (result.rows.length === 0) {
-      console.log('[getTodayTimecard] NO MATCH - Checking date types:', { today: today, type: typeof today });
+      console.log('[getTodayTimecard] NO MATCH - Review database records above');
       return null;
     }
 
@@ -337,14 +341,15 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
     await ensureTablesExist();
 
     const now = new Date();
-    // Obtener fecha/hora en zona horaria de Bogotá
-    const formatter = new Intl.DateTimeFormat('en-CA', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      timeZone: 'America/Bogota'
-    });
-    const today = formatter.format(now);
+    // Obtener fecha/hora en zona horaria de Bogotá - método 100% confiable
+    const bogotaOffset = -5; // UTC-5
+    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60 * 1000);
+    const bogotaTime = new Date(utcTime + (bogotaOffset * 60 * 60 * 1000));
+    
+    const year = bogotaTime.getUTCFullYear();
+    const month = String(bogotaTime.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(bogotaTime.getUTCDate()).padStart(2, '0');
+    const today = `${year}-${month}-${day}`;
     const isoTimestamp = now.toISOString();
 
     console.log('[handleClockIn] Inserting timecard:', {
@@ -503,13 +508,14 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
 
     // Obtener la fecha de hoy en zona horaria de Bogotá
     const now = new Date();
-    const formatter = new Intl.DateTimeFormat('en-CA', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      timeZone: 'America/Bogota'
-    });
-    const today = formatter.format(now);
+    const bogotaOffset = -5; // UTC-5
+    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60 * 1000);
+    const bogotaTime = new Date(utcTime + (bogotaOffset * 60 * 60 * 1000));
+    
+    const year = bogotaTime.getUTCFullYear();
+    const month = String(bogotaTime.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(bogotaTime.getUTCDate()).padStart(2, '0');
+    const today = `${year}-${month}-${day}`;
 
     // Total empleados activos
     const employeesResult = await sql`SELECT COUNT(*) as count FROM employees WHERE status = 'active'`;
@@ -599,13 +605,14 @@ async function handleGetEmployeeReport(req: any, res: any, code: string, month: 
     if (!month || !year) {
       // Obtener la fecha de hoy en zona horaria de Bogotá
       const now = new Date();
-      const formatter = new Intl.DateTimeFormat('en-CA', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        timeZone: 'America/Bogota'
-      });
-      const todayStr = formatter.format(now);
+      const bogotaOffset = -5; // UTC-5
+      const utcTime = now.getTime() + (now.getTimezoneOffset() * 60 * 1000);
+      const bogotaTime = new Date(utcTime + (bogotaOffset * 60 * 60 * 1000));
+      
+      const year = bogotaTime.getUTCFullYear();
+      const month = String(bogotaTime.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(bogotaTime.getUTCDate()).padStart(2, '0');
+      const todayStr = `${year}-${month}-${day}`;
       
       const todayResult = await sql`
         SELECT * FROM timecards
