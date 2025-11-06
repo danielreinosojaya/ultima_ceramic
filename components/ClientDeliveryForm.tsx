@@ -49,6 +49,56 @@ export const ClientDeliveryForm: React.FC = () => {
         return emailRegex.test(email);
     };
 
+    // Comprimir imagen a base64 con límite de tamaño
+    const compressImage = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+
+                    // Reducir tamaño más agresivo para móviles (máx 800x800)
+                    const maxWidth = 800;
+                    const maxHeight = 800;
+                    if (width > maxWidth || height > maxHeight) {
+                        const ratio = Math.min(maxWidth / width, maxHeight / height);
+                        width *= ratio;
+                        height *= ratio;
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                        reject(new Error('No se pudo comprimir la imagen'));
+                        return;
+                    }
+
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    // Convertir a JPEG con mayor compresión (0.6 = 60% de calidad)
+                    const compressed = canvas.toDataURL('image/jpeg', 0.6);
+                    
+                    // Si aún es muy grande (>1MB base64), comprimir más
+                    if (compressed.length > 1000000) {
+                        const evenMoreCompressed = canvas.toDataURL('image/jpeg', 0.4);
+                        resolve(evenMoreCompressed);
+                    } else {
+                        resolve(compressed);
+                    }
+                };
+                img.onerror = () => reject(new Error('Error al procesar la imagen'));
+                img.src = event.target?.result as string;
+            };
+            reader.onerror = () => reject(new Error('Error al leer la imagen'));
+            reader.readAsDataURL(file);
+        });
+    };
+
     // Abrir cámara nativa del celular (modo foto)
     const openCameraCapture = () => {
         cameraInputRef.current?.click();
@@ -66,16 +116,22 @@ export const ClientDeliveryForm: React.FC = () => {
 
         Array.from(files).forEach((file: File) => {
             if (file.type.startsWith('image/')) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    if (event.target?.result) {
+                // Comprimir imagen antes de guardar
+                compressImage(file)
+                    .then((compressedDataUrl) => {
                         setFormData(prev => ({
                             ...prev,
-                            photos: [...prev.photos, event.target!.result as string]
+                            photos: [...prev.photos, compressedDataUrl]
                         }));
-                    }
-                };
-                reader.readAsDataURL(file);
+                    })
+                    .catch((error) => {
+                        console.error('[ClientDeliveryForm] Error compressing image:', error);
+                        // Si falla la compresión, mostrar error
+                        setErrors(prev => ({
+                            ...prev,
+                            photos: 'Error al procesar la foto. Intenta con otra imagen.'
+                        }));
+                    });
             }
         });
 
@@ -154,16 +210,21 @@ export const ClientDeliveryForm: React.FC = () => {
 
         Array.from(files).forEach((file: File) => {
             if (file.type.startsWith('image/')) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    if (event.target?.result) {
+                // Comprimir imagen antes de guardar
+                compressImage(file)
+                    .then((compressedDataUrl) => {
                         setFormData(prev => ({
                             ...prev,
-                            photos: [...prev.photos, event.target!.result as string]
+                            photos: [...prev.photos, compressedDataUrl]
                         }));
-                    }
-                };
-                reader.readAsDataURL(file);
+                    })
+                    .catch((error) => {
+                        console.error('[ClientDeliveryForm] Error compressing image:', error);
+                        setErrors(prev => ({
+                            ...prev,
+                            photos: 'Error al procesar la foto. Intenta con otra imagen.'
+                        }));
+                    });
             }
         });
 
@@ -210,7 +271,7 @@ export const ClientDeliveryForm: React.FC = () => {
 
         setIsSubmitting(true);
         setErrorMessage('');
-        setSuccessMessage('');
+        setSuccessMessage('Enviando información... esto puede tardar hasta 1 minuto.');
 
         try {
             console.log('[ClientDeliveryForm] Starting submission...');
