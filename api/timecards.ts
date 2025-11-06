@@ -647,15 +647,15 @@ async function handleGetEmployeeReport(req: any, res: any, code: string, month: 
         }))
       });
 
-      // NO usar toCamelCase - el tipo Timecard espera snake_case
+      // Convertir snake_case a camelCase para consistencia con frontend
       const todayStatus = todayResult.rows.length > 0 
-        ? todayResult.rows[0] as unknown as Timecard
+        ? toCamelCase(todayResult.rows[0])
         : null;
 
       console.log('[handleGetEmployeeReport] Returning todayStatus:', {
         isNull: todayStatus === null,
-        hasTimeIn: todayStatus?.time_in ? 'YES' : 'NO',
-        timeInValue: todayStatus?.time_in,
+        hasTimeIn: todayStatus?.timeIn ? 'YES' : 'NO',
+        timeInValue: todayStatus?.timeIn,
         keys: todayStatus ? Object.keys(todayStatus) : []
       });
 
@@ -675,10 +675,10 @@ async function handleGetEmployeeReport(req: any, res: any, code: string, month: 
       ORDER BY date DESC
     `;
 
-    // NO usar toCamelCase - el tipo Timecard espera snake_case
-    const timecards = result.rows.map(row => row as unknown as Timecard);
+    // Convertir snake_case a camelCase
+    const timecards = result.rows.map(row => toCamelCase(row));
 
-    const totalHours = timecards.reduce((sum, t) => sum + (t.hours_worked || 0), 0);
+    const totalHours = timecards.reduce((sum, t) => sum + (t.hoursWorked || 0), 0);
     const averageHours = timecards.length > 0 ? Math.round(totalHours / timecards.length * 100) / 100 : 0;
     const daysPresent = timecards.filter(t => t.time_in).length;
 
