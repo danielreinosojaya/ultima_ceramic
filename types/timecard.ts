@@ -24,6 +24,15 @@ export interface Timecard {
   edited_at?: string;
   created_at: string;
   updated_at: string;
+  // camelCase aliases for flexibility
+  employeeId?: number;
+  timeIn?: string;
+  timeOut?: string;
+  hoursWorked?: number;
+  editedBy?: number;
+  editedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface TimecardAudit {
