@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import type { Delivery } from '../../types';
 import { MagnifyingGlassIcon, FunnelIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { PhotoViewerModal } from './PhotoViewerModal';
 
 interface DeliveryListWithFiltersProps {
     deliveries: Delivery[];
@@ -24,6 +25,9 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
     const [showFilters, setShowFilters] = useState(false);
+    const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
+    const [photosToView, setPhotosToView] = useState<string[]>([]);
+    const [photoStartIndex, setPhotoStartIndex] = useState(0);
 
     const filteredDeliveries = useMemo(() => {
         const today = new Date();
@@ -84,6 +88,12 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
             }).length
         };
     }, [deliveries]);
+
+    const handleOpenPhotos = (photos: string[], startIndex: number = 0) => {
+        setPhotosToView(photos);
+        setPhotoStartIndex(startIndex);
+        setPhotoViewerOpen(true);
+    };
 
     const getStatusBadge = (delivery: Delivery) => {
         const today = new Date();
@@ -288,28 +298,16 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                                 src={photo} 
                                                 alt={`Foto ${i + 1}`}
                                                 className="h-16 w-16 object-cover rounded-lg border cursor-pointer hover:scale-105 transition-transform"
-                                                onClick={() => {
-                                                    if (photo && photo.trim()) {
-                                                        try {
-                                                            // Validate that it's a valid URL or data URL
-                                                            if (photo.startsWith('data:') || photo.startsWith('http://') || photo.startsWith('https://')) {
-                                                                window.open(photo, '_blank');
-                                                            } else {
-                                                                console.warn('[DeliveryListWithFilters] Invalid photo URL:', photo);
-                                                                alert('⚠️ URL de foto inválida. Verifica que la foto se guardó correctamente.');
-                                                            }
-                                                        } catch (error) {
-                                                            console.error('[DeliveryListWithFilters] Error opening photo:', error);
-                                                            alert('❌ Error al abrir la foto. Intenta nuevamente.');
-                                                        }
-                                                    } else {
-                                                        alert('⚠️ La foto no tiene URL válida.');
-                                                    }
-                                                }}
+                                                onClick={() => handleOpenPhotos(delivery.photos, i)}
+                                                title="Click para ver en grande"
                                             />
                                         ))}
                                         {delivery.photos.length > 3 && (
-                                            <div className="h-16 w-16 flex items-center justify-center bg-gray-100 rounded-lg border text-gray-600 text-xs font-semibold">
+                                            <div 
+                                                className="h-16 w-16 flex items-center justify-center bg-gray-100 rounded-lg border text-gray-600 text-xs font-semibold cursor-pointer hover:bg-gray-200 transition-colors"
+                                                onClick={() => handleOpenPhotos(delivery.photos, 3)}
+                                                title="Ver todas las fotos"
+                                            >
                                                 +{delivery.photos.length - 3}
                                             </div>
                                         )}
@@ -373,6 +371,18 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                     </div>
                 )}
             </div>
+
+            {/* Photo Viewer Modal */}
+            <PhotoViewerModal
+                isOpen={photoViewerOpen}
+                photos={photosToView}
+                initialIndex={photoStartIndex}
+                onClose={() => {
+                    setPhotoViewerOpen(false);
+                    setPhotosToView([]);
+                    setPhotoStartIndex(0);
+                }}
+            />
         </div>
     );
 };
