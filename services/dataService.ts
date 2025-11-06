@@ -1577,15 +1577,15 @@ export const createDeliveryFromClient = async (data: {
     try {
         console.log('[dataService] createDeliveryFromClient called');
         
-        // Add 30-second timeout protection
+        // Add 60-second timeout protection (increased for mobile connections)
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        const timeoutId = setTimeout(() => controller.abort(), 60000);
 
         try {
             const result = await Promise.race([
                 postAction('createDeliveryFromClient', data),
                 new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Request timeout after 30 seconds')), 30000)
+                    setTimeout(() => reject(new Error('Request timeout after 60 seconds')), 60000)
                 )
             ]) as any;
 

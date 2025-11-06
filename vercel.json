@@ -1,4 +1,21 @@
 {
   "framework": "vite",
-  "devCommand": "vite --port $PORT"
+  "devCommand": "vite --port $PORT",
+  "functions": {
+    "api/**/*.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "content-length",
+          "value": "52428800"
+        }
+      ]
+    }
+  ]
 }
