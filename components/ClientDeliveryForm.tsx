@@ -60,9 +60,9 @@ export const ClientDeliveryForm: React.FC = () => {
                     let width = img.width;
                     let height = img.height;
 
-                    // Reducir tamaño si es muy grande
-                    const maxWidth = 1200;
-                    const maxHeight = 1200;
+                    // Reducir tamaño más agresivo para móviles (máx 800x800)
+                    const maxWidth = 800;
+                    const maxHeight = 800;
                     if (width > maxWidth || height > maxHeight) {
                         const ratio = Math.min(maxWidth / width, maxHeight / height);
                         width *= ratio;
@@ -80,9 +80,16 @@ export const ClientDeliveryForm: React.FC = () => {
 
                     ctx.drawImage(img, 0, 0, width, height);
 
-                    // Convertir a JPEG con compresión (0.7 = 70% de calidad)
-                    const compressed = canvas.toDataURL('image/jpeg', 0.7);
-                    resolve(compressed);
+                    // Convertir a JPEG con mayor compresión (0.6 = 60% de calidad)
+                    const compressed = canvas.toDataURL('image/jpeg', 0.6);
+                    
+                    // Si aún es muy grande (>1MB base64), comprimir más
+                    if (compressed.length > 1000000) {
+                        const evenMoreCompressed = canvas.toDataURL('image/jpeg', 0.4);
+                        resolve(evenMoreCompressed);
+                    } else {
+                        resolve(compressed);
+                    }
                 };
                 img.onerror = () => reject(new Error('Error al procesar la imagen'));
                 img.src = event.target?.result as string;
@@ -264,7 +271,7 @@ export const ClientDeliveryForm: React.FC = () => {
 
         setIsSubmitting(true);
         setErrorMessage('');
-        setSuccessMessage('');
+        setSuccessMessage('Enviando información... esto puede tardar hasta 1 minuto.');
 
         try {
             console.log('[ClientDeliveryForm] Starting submission...');
