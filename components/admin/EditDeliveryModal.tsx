@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { Delivery } from '../../types';
+import { PhotoViewerModal } from './PhotoViewerModal';
 
 interface EditDeliveryModalProps {
     isOpen: boolean;
@@ -20,6 +21,9 @@ export const EditDeliveryModal: React.FC<EditDeliveryModalProps> = ({
     const [photos, setPhotos] = useState<string[]>(delivery.photos || []);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errors, setErrors] = useState<{ [key: string]: string }>({});
+    const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
+    const [photosToView, setPhotosToView] = useState<string[]>([]);
+    const [photoStartIndex, setPhotoStartIndex] = useState(0);
 
     // Update form when delivery changes
     useEffect(() => {
@@ -196,7 +200,13 @@ export const EditDeliveryModal: React.FC<EditDeliveryModalProps> = ({
                                         <img 
                                             src={photo} 
                                             alt={`Foto ${index + 1}`}
-                                            className="w-full h-20 object-cover rounded-lg border border-gray-200"
+                                            className="w-full h-20 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
+                                            onClick={() => {
+                                                setPhotosToView(photos);
+                                                setPhotoStartIndex(index);
+                                                setPhotoViewerOpen(true);
+                                            }}
+                                            title="Click para ver en grande"
                                         />
                                         <button
                                             type="button"
@@ -260,6 +270,18 @@ export const EditDeliveryModal: React.FC<EditDeliveryModalProps> = ({
                     </div>
                 </form>
             </div>
+
+            {/* Photo Viewer Modal */}
+            <PhotoViewerModal
+                isOpen={photoViewerOpen}
+                photos={photosToView}
+                initialIndex={photoStartIndex}
+                onClose={() => {
+                    setPhotoViewerOpen(false);
+                    setPhotosToView([]);
+                    setPhotoStartIndex(0);
+                }}
+            />
         </div>
     );
 };
