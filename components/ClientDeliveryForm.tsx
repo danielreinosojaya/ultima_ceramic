@@ -292,12 +292,17 @@ export const ClientDeliveryForm: React.FC = () => {
                 scheduledDate: formData.scheduledDate
             });
 
+            // Limit to 2 photos max to avoid 413 Payload Too Large error
+            const photosToSend = formData.photos.length > 0 ? formData.photos.slice(0, 2) : null;
+            
+            console.log('[ClientDeliveryForm] Sending', formData.photos.length, 'photos (limited to 2 for payload size)');
+
             const result = await dataService.createDeliveryFromClient({
                 email: formData.email.trim(),
                 userInfo,
                 description: formData.description.trim() || null,
                 scheduledDate: formData.scheduledDate,
-                photos: formData.photos.length > 0 ? formData.photos : null
+                photos: photosToSend
             });
 
             console.log('[ClientDeliveryForm] API Response:', result);
@@ -487,6 +492,9 @@ export const ClientDeliveryForm: React.FC = () => {
                 {currentStep === 'photos' && (
                     <div className="space-y-4">
                         <h3 className="text-lg font-bold text-brand-text mb-4">Sube Fotos de tu Pieza</h3>
+                        <p className="text-sm text-blue-600 bg-blue-50 p-2 rounded">
+                            ℹ️ Máximo 2 fotos. Sube las más importantes (mejor vista de tu pieza).
+                        </p>
 
                         {/* Camera Button - Opens native camera app */}
                         <button
