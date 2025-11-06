@@ -288,7 +288,24 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                                 src={photo} 
                                                 alt={`Foto ${i + 1}`}
                                                 className="h-16 w-16 object-cover rounded-lg border cursor-pointer hover:scale-105 transition-transform"
-                                                onClick={() => window.open(photo, '_blank')}
+                                                onClick={() => {
+                                                    if (photo && photo.trim()) {
+                                                        try {
+                                                            // Validate that it's a valid URL or data URL
+                                                            if (photo.startsWith('data:') || photo.startsWith('http://') || photo.startsWith('https://')) {
+                                                                window.open(photo, '_blank');
+                                                            } else {
+                                                                console.warn('[DeliveryListWithFilters] Invalid photo URL:', photo);
+                                                                alert('⚠️ URL de foto inválida. Verifica que la foto se guardó correctamente.');
+                                                            }
+                                                        } catch (error) {
+                                                            console.error('[DeliveryListWithFilters] Error opening photo:', error);
+                                                            alert('❌ Error al abrir la foto. Intenta nuevamente.');
+                                                        }
+                                                    } else {
+                                                        alert('⚠️ La foto no tiene URL válida.');
+                                                    }
+                                                }}
                                             />
                                         ))}
                                         {delivery.photos.length > 3 && (
