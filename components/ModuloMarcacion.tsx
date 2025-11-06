@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import type { Employee, ClockInResponse, ClockOutResponse, Timecard } from '../types/timecard';
 
+// Helper para validar y formatear horas
+const formatHours = (value: any): string | null => {
+  if (!value) return null;
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(num) || num === 0) return null;
+  return Number(num).toFixed(2);
+};
+
 export const ModuloMarcacion: React.FC = () => {
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
@@ -170,8 +178,10 @@ export const ModuloMarcacion: React.FC = () => {
     }
   };
 
-  const isCheckedIn = todayStatus?.time_in && !todayStatus?.time_out;
-  const isCheckedOut = todayStatus?.time_in && todayStatus?.time_out;
+  const timeIn = todayStatus?.timeIn || todayStatus?.time_in;
+  const timeOut = todayStatus?.timeOut || todayStatus?.time_out;
+  const isCheckedIn = timeIn && !timeOut;
+  const isCheckedOut = timeIn && timeOut;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-background to-brand-surface flex items-center justify-center p-4">
@@ -242,7 +252,7 @@ export const ModuloMarcacion: React.FC = () => {
                 <div className="text-left">
                   <p className="font-bold">Entrada registrada</p>
                   <p className="text-xs text-blue-600">
-                    {todayStatus?.time_in && new Date(todayStatus.time_in).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' })}
+                    {timeIn && new Date(timeIn).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' })}
                   </p>
                 </div>
               </div>
@@ -286,29 +296,31 @@ export const ModuloMarcacion: React.FC = () => {
           <div className="bg-brand-surface rounded-lg p-6 border border-brand-border/50">
             <h3 className="font-bold text-brand-text mb-4">📍 Hoy</h3>
             <div className="space-y-3 text-sm">
-              {todayStatus.time_in && (
+              {(todayStatus.timeIn || todayStatus.time_in) && (
                 <div className="flex justify-between">
                   <span className="text-brand-secondary">Entrada:</span>
                   <span className="font-mono font-semibold text-green-600">
-                    {new Date(todayStatus.time_in).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'America/Bogota' })}
+                    {new Date(todayStatus.timeIn || todayStatus.time_in!).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'America/Bogota' })}
                   </span>
                 </div>
               )}
-              {todayStatus.time_out && (
+              {(todayStatus.timeOut || todayStatus.time_out) && (
                 <div className="flex justify-between">
                   <span className="text-brand-secondary">Salida:</span>
                   <span className="font-mono font-semibold text-red-600">
-                    {new Date(todayStatus.time_out).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'America/Bogota' })}
+                    {new Date(todayStatus.timeOut || todayStatus.time_out!).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'America/Bogota' })}
                   </span>
                 </div>
               )}
-              {todayStatus.hours_worked && (
+              {(todayStatus.hoursWorked || todayStatus.hours_worked) && (
                 <div className="flex justify-between pt-2 border-t border-brand-border/50">
                   <span className="text-brand-secondary">Horas trabajadas:</span>
-                  <span className="font-mono font-bold text-brand-primary">{todayStatus.hours_worked}h</span>
+                  <span className="font-mono font-bold text-brand-primary">
+                    {formatHours(todayStatus.hoursWorked || todayStatus.hours_worked) || '0.00'}h
+                  </span>
                 </div>
               )}
-              {!todayStatus.time_in && (
+              {!(todayStatus.timeIn || todayStatus.time_in) && (
                 <p className="text-center text-brand-secondary italic">Aún no has marcado entrada</p>
               )}
             </div>
