@@ -1532,7 +1532,27 @@ export const deleteCustomer = async (email: string): Promise<{ success: boolean 
 };
 
 const parseDelivery = (d: any): Delivery => {
-    const parsedPhotos = d.photos ? (Array.isArray(d.photos) ? d.photos : JSON.parse(d.photos || '[]')) : [];
+    let parsedPhotos: string[] = [];
+    
+    if (d.photos) {
+        try {
+            if (Array.isArray(d.photos)) {
+                parsedPhotos = d.photos;
+            } else if (typeof d.photos === 'string') {
+                parsedPhotos = JSON.parse(d.photos || '[]');
+            }
+            // Filter out invalid/empty photos
+            parsedPhotos = parsedPhotos.filter((photo: any) => {
+                if (typeof photo === 'string' && photo.trim()) {
+                    return photo.startsWith('data:') || photo.startsWith('http://') || photo.startsWith('https://');
+                }
+                return false;
+            });
+        } catch (error) {
+            console.error('[parseDelivery] Error parsing photos:', error, 'raw:', d.photos);
+            parsedPhotos = [];
+        }
+    }
     
     return {
         id: d.id,

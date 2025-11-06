@@ -596,7 +596,7 @@ export const sendDeliveryCreatedByClientEmail = async (customerEmail: string, cu
                 <p style="margin: 8px 0 0 0; color: #1E3A8A; font-size: 14px;">
                     • Horario de recogida: Martes a Sábado 10:00 AM - 8:00 PM<br/>
                     • Domingos: 12:00 PM - 5:00 PM<br/>
-                    • Ubicación: [Tu ubicación del taller]
+                    • Ubicación: Carrera 5 #18-45, Bogotá, Colombia
                 </p>
             </div>
 
