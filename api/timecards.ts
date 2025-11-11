@@ -835,23 +835,8 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
         hours_worked_converted: hoursWorked
       });
       
-      // Si hay time_in pero NO time_out, calcular horas trabajadas hasta ahora
-      if (row.time_in && !row.time_out) {
-        const timeIn = new Date(row.time_in);
-        const now = new Date();
-        const diffMs = now.getTime() - timeIn.getTime();
-        const calculatedHours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
-        hoursWorked = Math.max(0, calculatedHours); // Evitar horas negativas
-        
-        console.log('[handleGetAdminDashboard] Calculated hours for in-progress:', {
-          code: row.code,
-          timeIn: timeIn.toISOString(),
-          now: now.toISOString(),
-          diffMs,
-          calculatedHours,
-          finalHours: hoursWorked
-        });
-      }
+      // NO calcular horas en progreso en backend (timezone issues)
+      // El frontend lo calculará con hora local del usuario
       
       return {
         employee: {
@@ -864,7 +849,7 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
         date: row.date || today,
         time_in: row.time_in,
         time_out: row.time_out,
-        hours_worked: hoursWorked,
+        hours_worked: hoursWorked, // null si está en progreso
         status: !row.time_in ? 'absent' : row.time_out ? 'present' : 'in_progress',
         is_current_day: true
       };

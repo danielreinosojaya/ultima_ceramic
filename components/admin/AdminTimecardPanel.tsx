@@ -433,13 +433,44 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
                           {(() => {
                             console.log('[AdminPanel DEBUG] hours_worked:', emp.hours_worked, 'type:', typeof emp.hours_worked);
                             
+                            // Si hay hours_worked de BD, mostrarlo
                             if (emp.hours_worked && typeof emp.hours_worked === 'number') {
                               return emp.hours_worked.toFixed(2);
                             } else if (emp.hours_worked) {
                               return Number(emp.hours_worked).toFixed(2);
-                            } else {
-                              return '-';
                             }
+                            
+                            // Si está en progreso (time_in pero no time_out), calcular con hora local
+                            if (emp.time_in && !emp.time_out && emp.status === 'in_progress') {
+                              try {
+                                const timeInDate = new Date(emp.time_in);
+                                const now = new Date();
+                                
+                                // Extraer hora local del timestamp ISO usando getUTCHours
+                                const timeInHours = timeInDate.getUTCHours();
+                                const timeInMinutes = timeInDate.getUTCMinutes();
+                                const timeInSeconds = timeInDate.getUTCSeconds();
+                                
+                                // Hora actual local
+                                const nowHours = now.getHours();
+                                const nowMinutes = now.getMinutes();
+                                const nowSeconds = now.getSeconds();
+                                
+                                // Calcular diferencia en segundos
+                                const timeInTotalSeconds = timeInHours * 3600 + timeInMinutes * 60 + timeInSeconds;
+                                const nowTotalSeconds = nowHours * 3600 + nowMinutes * 60 + nowSeconds;
+                                
+                                const diffSeconds = nowTotalSeconds - timeInTotalSeconds;
+                                const hours = Math.max(0, diffSeconds / 3600);
+                                
+                                return hours.toFixed(2);
+                              } catch (e) {
+                                console.error('[AdminPanel] Error calculando horas en progreso:', e);
+                                return '-';
+                              }
+                            }
+                            
+                            return '-';
                           })()}h
                         </td>
                         <td className="px-6 py-4 text-center">
