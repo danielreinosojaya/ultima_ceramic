@@ -39,14 +39,17 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
 
     // Limpiar pre-reservas expiradas cuando se muestra la confirmación
     useEffect(() => {
-        const expireOldBookings = async () => {
-            try {
-                await fetch('/api/data?action=expireOldBookings', { method: 'GET' });
-            } catch (error) {
-                console.error('[ConfirmationPage] Error expiring bookings:', error);
-            }
-        };
-        expireOldBookings();
+        // OPTIMIZACIÓN: Esta llamada es redundante con ExpiredBookingsManager que ya limpia
+        // automáticamente las reservas expiradas cada 5 minutos con smart polling.
+        // Comentado para reducir network calls en 1 request por confirmación.
+        // const expireOldBookings = async () => {
+        //     try {
+        //         await fetch('/api/data?action=expireOldBookings', { method: 'GET' });
+        //     } catch (error) {
+        //         console.error('[ConfirmationPage] Error expiring bookings:', error);
+        //     }
+        // };
+        // expireOldBookings();
     }, []);
 
     const handleCopy = (text: string) => {
