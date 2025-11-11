@@ -5,7 +5,7 @@ import type { Employee, Timecard, ClockInResponse, ClockOutResponse, AdminDashbo
 const ADMIN_CODE_PREFIX = 'ADMIN';
 const EMPLOYEE_CODE_PREFIX = 'EMP';
 
-// Convertir snake_case a camelCase
+// Convertir snake_case a camelCase y DECIMALS a números
 function toCamelCase(obj: any): any {
   if (Array.isArray(obj)) {
     return obj.map(v => toCamelCase(v));
@@ -13,7 +13,14 @@ function toCamelCase(obj: any): any {
   if (obj !== null && obj.constructor === Object) {
     return Object.keys(obj).reduce((result: any, key) => {
       const camelKey = key.replace(/_([a-z])/g, (_, char) => char.toUpperCase());
-      result[camelKey] = toCamelCase(obj[key]);
+      let value = obj[key];
+      
+      // Convertir DECIMAL strings a números (PostgreSQL puede retornarlos como strings)
+      if (typeof value === 'string' && /^\d+(\.\d+)?$/.test(value)) {
+        value = parseFloat(value);
+      }
+      
+      result[camelKey] = toCamelCase(value);
       return result;
     }, {});
   }
@@ -128,7 +135,47 @@ async function ensureTablesExist(): Promise<void> {
     `;
     console.log('[ensureTablesExist] admin_codes table ready');
 
-    // Crear índices (sin restricciones UNIQUE adicionales que compliquen inserciones)
+    // Crear tabla employee_schedules (horarios)
+    await sql`
+      CREATE TABLE IF NOT EXISTS employee_schedules (
+        id SERIAL PRIMARY KEY,
+        employee_id INTEGER NOT NULL,
+        day_of_week SMALLINT NOT NULL CHECK (day_of_week >= 0 AND day_of_week <= 6),
+        check_in_time TIME NOT NULL,
+        check_out_time TIME NOT NULL,
+        grace_period_minutes INTEGER DEFAULT 10,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        CONSTRAINT fk_schedule_employee FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+        CONSTRAINT uq_employee_day UNIQUE (employee_id, day_of_week)
+      )
+    `;
+    console.log('[ensureTablesExist] employee_schedules table ready');
+
+    // Crear tabla de tardanzas/retrasos
+    await sql`
+      CREATE TABLE IF NOT EXISTS tardanzas (
+        id SERIAL PRIMARY KEY,
+        timecard_id INTEGER NOT NULL,
+        employee_id INTEGER NOT NULL,
+        retraso_minutos INTEGER NOT NULL,
+        tipo_retraso VARCHAR(20) DEFAULT 'normal', -- 'leve' (≤15min), 'normal' (≤30min), 'grave' (>30min)
+        horario_esperado TIME,
+        horario_real TIME,
+        fecha DATE NOT NULL,
+        admin_notes VARCHAR(255),
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        CONSTRAINT fk_tardanzas_timecard FOREIGN KEY (timecard_id) REFERENCES timecards(id) ON DELETE CASCADE,
+        CONSTRAINT fk_tardanzas_employee FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+      )
+    `;
+    console.log('[ensureTablesExist] tardanzas table ready');
+
+    // Crear índices para horarios
+    await sql`CREATE INDEX IF NOT EXISTS idx_schedules_employee ON employee_schedules(employee_id)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_schedules_active ON employee_schedules(is_active)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_timecards_employee ON timecards(employee_id)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_timecards_date ON timecards(date)`;
     await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_timecards_per_day ON timecards(employee_id, date)`;
@@ -136,6 +183,9 @@ async function ensureTablesExist(): Promise<void> {
     await sql`CREATE INDEX IF NOT EXISTS idx_employees_status ON employees(status)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_audit_timecard ON timecard_audit(timecard_id)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_audit_employee ON timecard_audit(employee_id)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_tardanzas_employee ON tardanzas(employee_id)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_tardanzas_fecha ON tardanzas(fecha)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_tardanzas_timecard ON tardanzas(timecard_id)`;
     console.log('[ensureTablesExist] All indexes created');
 
     console.log('[ensureTablesExist] Table initialization completed successfully');
@@ -193,11 +243,7 @@ async function getTodayTimecard(employeeId: number): Promise<Timecard | null> {
 
     // Obtener la fecha de hoy en zona horaria de Bogotá (UTC-5)
     const now = new Date();
-    
-    // Método 100% confiable: calcular offset UTC-5 manualmente
-    const bogotaOffset = -5; // UTC-5
-    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60 * 1000);
-    const bogotaTime = new Date(utcTime + (bogotaOffset * 60 * 60 * 1000));
+    const bogotaTime = new Date(now.getTime() - (5 * 60 * 60 * 1000)); // Restar 5 horas al UTC
     
     // Construir fecha en formato YYYY-MM-DD manualmente
     const year = bogotaTime.getUTCFullYear();
@@ -205,16 +251,7 @@ async function getTodayTimecard(employeeId: number): Promise<Timecard | null> {
     const day = String(bogotaTime.getUTCDate()).padStart(2, '0');
     const today = `${year}-${month}-${day}`;
     
-    console.log('[getTodayTimecard] Calculated date (Bogota UTC-5):', { today, year, month, day, now: now.toISOString() });
-    
-    // DEBUG: Ver todos los registros para este empleado
-    const allRecords = await sql`
-      SELECT id, employee_id, date, time_in FROM timecards
-      WHERE employee_id = ${employeeId}
-      ORDER BY date DESC
-      LIMIT 10
-    `;
-    console.log('[getTodayTimecard] Last 10 timecards for employee:', { employeeId, count: allRecords.rows.length, records: allRecords.rows.map((r: any) => ({ date: r.date, time_in: r.time_in })) });
+    console.log('[getTodayTimecard] Calculated date (Bogota UTC-5):', { today, year, month, day, nowUTC: now.toISOString() });
     
     const result = await sql`
       SELECT * FROM timecards
@@ -225,26 +262,28 @@ async function getTodayTimecard(employeeId: number): Promise<Timecard | null> {
     console.log('[getTodayTimecard] Query result for today:', { dateQueried: today, rowsFound: result.rows.length });
     
     if (result.rows.length === 0) {
-      console.log('[getTodayTimecard] NO MATCH - Review database records above');
+      console.log('[getTodayTimecard] NO MATCH');
       return null;
     }
 
     const row = result.rows[0];
+    // IMPORTANTE: Los timestamps están guardados como UTC real, no los reconvertir
+    // Solo retornarlos como están
     const timecard: Timecard = {
       id: Number(row.id),
       employee_id: Number(row.employee_id),
       date: String(row.date),
-      time_in: row.time_in ? new Date(row.time_in).toISOString() : undefined,
-      time_out: row.time_out ? new Date(row.time_out).toISOString() : undefined,
+      time_in: row.time_in ? String(row.time_in) : undefined,  // Mantener como string ISO UTC
+      time_out: row.time_out ? String(row.time_out) : undefined, // Mantener como string ISO UTC
       hours_worked: row.hours_worked ? Number(row.hours_worked) : undefined,
       notes: row.notes ? String(row.notes) : undefined,
       edited_by: row.edited_by ? Number(row.edited_by) : undefined,
-      edited_at: row.edited_at ? new Date(row.edited_at).toISOString() : undefined,
-      created_at: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
-      updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString()
+      edited_at: row.edited_at ? String(row.edited_at) : undefined,
+      created_at: row.created_at ? String(row.created_at) : new Date().toISOString(),
+      updated_at: row.updated_at ? String(row.updated_at) : new Date().toISOString()
     };
 
-    console.log('[getTodayTimecard] Found timecard:', { id: timecard.id, employee_id: timecard.employee_id });
+    console.log('[getTodayTimecard] Found timecard:', { id: timecard.id, employee_id: timecard.employee_id, time_in: timecard.time_in });
     return timecard;
   } catch (error) {
     console.error('[getTodayTimecard] Error:', error);
@@ -252,15 +291,45 @@ async function getTodayTimecard(employeeId: number): Promise<Timecard | null> {
   }
 }
 
-async function calculateHours(timeIn: Date, timeOut: Date): Promise<number> {
-  const diffMs = timeOut.getTime() - timeIn.getTime();
+async function calculateHours(timeIn: string, timeOut: string): Promise<number> {
+  // Recibe ISO strings UTC
+  const timeInDate = new Date(timeIn);
+  const timeOutDate = new Date(timeOut);
+  
+  const timeInMs = timeInDate.getTime();
+  const timeOutMs = timeOutDate.getTime();
+  const diffMs = timeOutMs - timeInMs;
+  
+  // Convertir a horas
   const hours = diffMs / (1000 * 60 * 60);
+  
+  console.log('[calculateHours] Detalles del cálculo:', {
+    timeIn,
+    timeOut,
+    timeInMs,
+    timeOutMs,
+    diffMs,
+    diffSeconds: diffMs / 1000,
+    diffMinutes: diffMs / (1000 * 60),
+    hoursBeforeRounding: hours,
+    hoursAfterRounding: Math.round(hours * 100) / 100
+  });
+  
+  // Si el resultado es negativo, significa que timeOut < timeIn
+  if (hours < 0) {
+    console.warn('[calculateHours] Negative hours detected:', { timeIn, timeOut, hours, diffMs });
+    return 0;
+  }
+  
   return Math.round(hours * 100) / 100; // Redondear a 2 decimales
 }
 
 // Handler principal
 export default async function handler(req: any, res: any) {
-  const { action, code, adminCode, month, year, startDate, endDate, format } = req.query;
+  const { action, code, adminCode: queryAdminCode, month, year, startDate, endDate, format } = req.query;
+  
+  // adminCode puede venir en query (GET) o en body (POST)
+  const adminCode = queryAdminCode || req.body?.adminCode;
 
   console.log('[timecards handler] Request received:', {
     action,
@@ -283,6 +352,9 @@ export default async function handler(req: any, res: any) {
       
       case 'get_employee_report':
         return await handleGetEmployeeReport(req, res, code, month, year);
+      
+      case 'get_tardanzas':
+        return await handleGetTardanzas(req, res, code, month, year);
       
       case 'download_report':
         return await handleDownloadReport(req, res, adminCode, format, startDate, endDate);
@@ -308,6 +380,15 @@ export default async function handler(req: any, res: any) {
       case 'hard_delete_employee':
         return await handleHardDeleteEmployee(req, res, adminCode, req.query.employeeId);
       
+      case 'get_employee_schedules':
+        return await handleGetEmployeeSchedules(req, res, adminCode, req.query.employeeId as string);
+      
+      case 'save_employee_schedule':
+        return await handleSaveEmployeeSchedule(req, res, adminCode);
+      
+      case 'delete_employee_schedule':
+        return await handleDeleteEmployeeSchedule(req, res, adminCode, req.query.scheduleId as string);
+      
       default:
         return res.status(400).json({ success: false, error: 'Acción no válida' });
     }
@@ -329,15 +410,6 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
     return res.status(404).json({ success: false, message: 'Empleado no encontrado' } as ClockInResponse);
   }
 
-  const existingTimecard = await getTodayTimecard(employee.id);
-  if (existingTimecard && existingTimecard.time_in) {
-    return res.status(400).json({ 
-      success: false, 
-      message: `Ya marcaste entrada hoy a las ${new Date(existingTimecard.time_in).toLocaleTimeString()}`,
-      today_hours: existingTimecard.hours_worked || 0
-    } as ClockInResponse);
-  }
-
   try {
     // Validaciones previas
     if (!employee.id || typeof employee.id !== 'number') {
@@ -348,29 +420,83 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
     // Asegurar que las tablas existen antes de insertar
     await ensureTablesExist();
 
-    const now = new Date();
-    // Obtener fecha/hora en zona horaria de Bogotá - método 100% confiable
-    const bogotaOffset = -5; // UTC-5
-    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60 * 1000);
-    const bogotaTime = new Date(utcTime + (bogotaOffset * 60 * 60 * 1000));
+    // ESTRATEGIA CORRECTA: Usar localTime del cliente, convertir considerando timezone del servidor
+    const localTime = req.body?.localTime;
     
+    let nowUTC: Date;
+    
+    if (localTime && localTime.year && localTime.month && localTime.day && 
+        typeof localTime.hour === 'number' && typeof localTime.minute === 'number' && typeof localTime.second === 'number') {
+      
+      console.log('[handleClockIn] Usando localTime del cliente:', localTime);
+      
+      // Detectar timezone del servidor
+      const serverDate = new Date();
+      const serverOffsetMinutes = serverDate.getTimezoneOffset(); // Negativo si está adelantado a UTC
+      const serverOffsetHours = -serverOffsetMinutes / 60; // Convertir a horas (positivo = adelantado)
+      
+      console.log('[handleClockIn] Server timezone info:', {
+        offsetMinutes: serverOffsetMinutes,
+        offsetHours: serverOffsetHours,
+        example: serverOffsetMinutes === 300 ? 'UTC-5 (Guayaquil)' : serverOffsetMinutes === 0 ? 'UTC (Vercel cloud)' : 'Other'
+      });
+      
+      // NUEVA ESTRATEGIA: Guardar hora LOCAL directamente sin conversión
+      // PostgreSQL TIMESTAMP (sin TZ) guarda el valor literal
+      console.log('[handleClockIn] Guardando hora local sin conversión');
+      
+      // Crear timestamp con los valores locales DIRECTOS (sin Date.UTC)
+      nowUTC = new Date(
+        localTime.year,
+        localTime.month - 1,
+        localTime.day,
+        localTime.hour,
+        localTime.minute,
+        localTime.second
+      );
+      
+      console.log('[handleClockIn] Timestamp final:', {
+        localInput: `${localTime.year}-${String(localTime.month).padStart(2, '0')}-${String(localTime.day).padStart(2, '0')} ${String(localTime.hour).padStart(2, '0')}:${String(localTime.minute).padStart(2, '0')}:${String(localTime.second).padStart(2, '0')}`,
+        isoOutput: nowUTC.toISOString(),
+        timeDisplay: nowUTC.toString()
+      });
+      
+    } else {
+      console.warn('[handleClockIn] NO se recibió localTime válido, usando hora del servidor');
+      nowUTC = new Date();
+    }
+    
+    console.log('[handleClockIn] CRITICAL DEBUG:', {
+      nowUTC_toString: nowUTC.toString(),
+      nowUTC_toISOString: nowUTC.toISOString(),
+      nowUTC_getTime: nowUTC.getTime(),
+      nowUTC_getHours_LOCAL: nowUTC.getHours(),
+      nowUTC_getUTCHours: nowUTC.getUTCHours(),
+      timezone_offset_minutes: nowUTC.getTimezoneOffset()
+    });
+    
+    // Calcular fecha de hoy en Bogotá para la columna DATE
+    const bogotaMs = nowUTC.getTime() - (5 * 60 * 60 * 1000);
+    const bogotaTime = new Date(bogotaMs);
     const year = bogotaTime.getUTCFullYear();
     const month = String(bogotaTime.getUTCMonth() + 1).padStart(2, '0');
     const day = String(bogotaTime.getUTCDate()).padStart(2, '0');
     const today = `${year}-${month}-${day}`;
-    const isoTimestamp = now.toISOString();
-
-    console.log('[handleClockIn] Inserting timecard:', {
-      employee_id: employee.id,
-      date: today,
-      time_in: isoTimestamp,
-      employeeCode: employee.code
+    
+    console.log('[handleClockIn] Registro:', {
+      localHour: localTime.hour,
+      localMinute: localTime.minute,
+      dateObjCreated: nowUTC.toString(),
+      willStore: `${localTime.year}-${String(localTime.month).padStart(2, '0')}-${String(localTime.day).padStart(2, '0')} ${String(localTime.hour).padStart(2, '0')}:${String(localTime.minute).padStart(2, '0')}:${String(localTime.second).padStart(2, '0')}`
     });
 
+    // Formatear como string TIMESTAMP literal (sin timezone)
+    const timestampString = `${localTime.year}-${String(localTime.month).padStart(2, '0')}-${String(localTime.day).padStart(2, '0')} ${String(localTime.hour).padStart(2, '0')}:${String(localTime.minute).padStart(2, '0')}:${String(localTime.second).padStart(2, '0')}`;
+    
     const insertResult = await sql`
       INSERT INTO timecards (employee_id, date, time_in)
-      VALUES (${employee.id}, ${today}::DATE, ${isoTimestamp})
-      RETURNING id
+      VALUES (${employee.id}, ${today}::DATE, ${timestampString}::TIMESTAMP)
+      RETURNING id, time_in
     `;
 
     if (!insertResult.rows || insertResult.rows.length === 0) {
@@ -380,20 +506,94 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
 
     console.log('[handleClockIn] Timecard inserted successfully:', insertResult.rows[0]);
 
-    // Formato de hora con zona horaria para display
-    const timeStr = now.toLocaleTimeString('es-CO', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true,
-      timeZone: 'America/Bogota'
-    });
+    // VALIDAR RETRASOS
+    try {
+      const timecardId = insertResult.rows[0].id;
+      
+      // Obtener horario esperado del empleado para hoy (día de semana)
+      const dayOfWeek = new Date(localTime.year, localTime.month - 1, localTime.day).getDay();
+      
+      const scheduleResult = await sql`
+        SELECT check_in_time, grace_period_minutes
+        FROM employee_schedules
+        WHERE employee_id = ${employee.id}
+        AND day_of_week = ${dayOfWeek}
+        AND is_active = true
+        LIMIT 1
+      `;
+
+      if (scheduleResult.rows.length > 0) {
+        const schedule = scheduleResult.rows[0];
+        const expectedCheckInStr = schedule.check_in_time; // Format: "HH:MM:SS"
+        const gracePeriodMinutes = schedule.grace_period_minutes || 10;
+
+        // Parsear hora esperada
+        const [expectedHour, expectedMin] = expectedCheckInStr.split(':').map(Number);
+        const expectedTimeInMinutes = expectedHour * 60 + expectedMin;
+        const actualTimeInMinutes = localTime.hour * 60 + localTime.minute;
+
+        // Calcular retraso
+        const retrasominutos = Math.max(0, actualTimeInMinutes - expectedTimeInMinutes);
+
+        console.log('[handleClockIn] Retraso detectado:', {
+          expectedTime: `${String(expectedHour).padStart(2, '0')}:${String(expectedMin).padStart(2, '0')}`,
+          actualTime: `${String(localTime.hour).padStart(2, '0')}:${String(localTime.minute).padStart(2, '0')}`,
+          retrasominutos,
+          gracePeriod: gracePeriodMinutes,
+          esRetrasoReal: retrasominutos > gracePeriodMinutes
+        });
+
+        // Si hay retraso mayor al período de gracia, registrar
+        if (retrasominutos > gracePeriodMinutes) {
+          let tipoRetraso = 'leve'; // ≤15 min
+          if (retrasominutos > 30) tipoRetraso = 'grave';
+          else if (retrasominutos > 15) tipoRetraso = 'normal';
+
+          await sql`
+            INSERT INTO tardanzas (
+              timecard_id, 
+              employee_id, 
+              retraso_minutos, 
+              tipo_retraso, 
+              horario_esperado, 
+              horario_real, 
+              fecha
+            )
+            VALUES (
+              ${timecardId},
+              ${employee.id},
+              ${retrasominutos},
+              ${tipoRetraso}::VARCHAR,
+              ${expectedCheckInStr}::TIME,
+              ${`${String(localTime.hour).padStart(2, '0')}:${String(localTime.minute).padStart(2, '0')}:${String(localTime.second).padStart(2, '0')}`}::TIME,
+              ${today}::DATE
+            )
+          `;
+
+          console.log('[handleClockIn] Tardanza registrada:', {
+            empleado: employee.code,
+            retrasominutos,
+            tipo: tipoRetraso,
+            fecha: today
+          });
+        }
+      }
+    } catch (tardanzaError) {
+      console.warn('[handleClockIn] Advertencia al registrar tardanza:', tardanzaError);
+      // No bloquear el clock in si falla la detección de tardanza
+    }
+
+    // Display: ya está en hora local, solo formatear AM/PM
+    const ampm_in = localTime.hour >= 12 ? 'p. m.' : 'a. m.';
+    const hour12_in = localTime.hour === 0 ? 12 : localTime.hour > 12 ? localTime.hour - 12 : localTime.hour;
+    
+    const timeStr = `${String(hour12_in).padStart(2, '0')}:${String(localTime.minute).padStart(2, '0')}:${String(localTime.second).padStart(2, '0')} ${ampm_in}`;
 
     return res.status(200).json({
       success: true,
       message: `Entrada registrada correctamente a las ${timeStr}`,
       employee,
-      timestamp: isoTimestamp,
+      timestamp: timestampString,
       displayTime: timeStr
     } as ClockInResponse);
   } catch (error) {
@@ -410,7 +610,6 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
 
     // Manejar errores específicos de PostgreSQL
     if (errorCode === '23505') {
-      // UNIQUE constraint violation - ya existe un registro para hoy
       console.warn('[handleClockIn] Already has entry today');
       return res.status(400).json({ 
         success: false, 
@@ -419,7 +618,6 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
     }
 
     if (errorCode === '23502') {
-      // NOT NULL constraint violation
       console.error('[handleClockIn] NOT NULL constraint failed');
       return res.status(500).json({ 
         success: false, 
@@ -428,7 +626,6 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
     }
 
     if (errorCode === '23503') {
-      // FOREIGN KEY constraint violation
       console.error('[handleClockIn] FOREIGN KEY constraint failed - employee_id might be invalid');
       return res.status(500).json({ 
         success: false, 
@@ -470,32 +667,84 @@ async function handleClockOut(req: any, res: any, code: string): Promise<any> {
   }
 
   try {
-    const now = new Date();
-    const timeIn = new Date(timecard.time_in);
-    const hoursWorked = await calculateHours(timeIn, now);
+    // ESTRATEGIA CORRECTA: Usar localTime del cliente, convertir considerando timezone del servidor
+    const localTime = req.body?.localTime;
+    
+    let nowUTC: Date;
+    
+    if (localTime && localTime.year && localTime.month && localTime.day && 
+        typeof localTime.hour === 'number' && typeof localTime.minute === 'number' && typeof localTime.second === 'number') {
+      
+      console.log('[handleClockOut] Usando localTime del cliente:', localTime);
+      
+      // Guardar hora LOCAL directamente (igual que clockIn)
+      nowUTC = new Date(
+        localTime.year,
+        localTime.month - 1,
+        localTime.day,
+        localTime.hour,
+        localTime.minute,
+        localTime.second
+      );
+      
+      console.log('[handleClockOut] Timestamp local creado:', nowUTC.toString());
+      
+    } else {
+      console.warn('[handleClockOut] NO se recibió localTime válido, usando hora del servidor');
+      nowUTC = new Date();
+    }
+    
+    // Formatear como string TIMESTAMP literal
+    const timestampString = `${localTime.year}-${String(localTime.month).padStart(2, '0')}-${String(localTime.day).padStart(2, '0')} ${String(localTime.hour).padStart(2, '0')}:${String(localTime.minute).padStart(2, '0')}:${String(localTime.second).padStart(2, '0')}`;
+    
+    // Calcular horas usando los timestamps guardados en DB
+    const hoursWorked = await calculateHours(timecard.time_in, timestampString);
 
-    await sql`
+    console.log('[handleClockOut] Cálculo de horas:', {
+      timeIn: timecard.time_in,
+      timeOut: timestampString,
+      hoursCalculated: hoursWorked
+    });
+
+    // Validar que no sea negativo
+    const finalHours = Math.max(0, hoursWorked);
+
+    // Actualizar en BD
+    const updateResult = await sql`
       UPDATE timecards
-      SET time_out = ${now.toISOString()},
-          hours_worked = ${hoursWorked},
+      SET time_out = ${timestampString}::TIMESTAMP,
+          hours_worked = ${finalHours}::DECIMAL(5,2),
           updated_at = NOW()
       WHERE id = ${timecard.id}
+      RETURNING *
     `;
+    
+    if (updateResult.rows.length === 0) {
+      console.error('[handleClockOut] UPDATE no retornó registros');
+      return res.status(500).json({ success: false, message: 'Error al guardar salida' } as ClockOutResponse);
+    }
+    
+    const updatedRecord = updateResult.rows[0];
+    const hoursFromDB = updatedRecord.hours_worked ? Number(updatedRecord.hours_worked) : 0;
 
-    // Formato de hora con zona horaria para display
-    const timeStr = now.toLocaleTimeString('es-CO', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true,
-      timeZone: 'America/Bogota'
+    console.log('[handleClockOut] Registro actualizado:', {
+      id: updatedRecord.id,
+      time_in: updatedRecord.time_in,
+      time_out: updatedRecord.time_out,
+      hours_worked_from_db: hoursFromDB
     });
+
+    // Display: ya está en hora local
+    const ampm = localTime.hour >= 12 ? 'p. m.' : 'a. m.';
+    const hour12 = localTime.hour === 0 ? 12 : localTime.hour > 12 ? localTime.hour - 12 : localTime.hour;
+    
+    const timeStr = `${String(hour12).padStart(2, '0')}:${String(localTime.minute).padStart(2, '0')}:${String(localTime.second).padStart(2, '0')} ${ampm}`;
 
     return res.status(200).json({
       success: true,
-      message: `Salida registrada correctamente a las ${timeStr}`,
-      hours_worked: hoursWorked,
-      timestamp: now.toISOString(),
+      message: `Salida registrada correctamente a las ${timeStr}. Horas trabajadas: ${hoursFromDB.toFixed(2)}h`,
+      hours_worked: hoursFromDB,
+      timestamp: timestampString,
       displayTime: timeStr
     } as ClockOutResponse);
   } catch (error) {
@@ -514,16 +763,22 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
     // Asegurar que las tablas existen
     await ensureTablesExist();
 
-    // Obtener la fecha de hoy en zona horaria de Bogotá
-    const now = new Date();
-    const bogotaOffset = -5; // UTC-5
-    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60 * 1000);
-    const bogotaTime = new Date(utcTime + (bogotaOffset * 60 * 60 * 1000));
+    // Obtener la fecha de hoy CORRECTAMENTE en zona horaria de Bogotá
+    const nowUTC = new Date(); // UTC actual
+    
+    // Convertir UTC a Bogotá (UTC-5)
+    const bogotaTime = new Date(nowUTC.getTime() - (5 * 60 * 60 * 1000));
     
     const year = bogotaTime.getUTCFullYear();
     const month = String(bogotaTime.getUTCMonth() + 1).padStart(2, '0');
     const day = String(bogotaTime.getUTCDate()).padStart(2, '0');
     const today = `${year}-${month}-${day}`;
+    
+    console.log('[handleGetAdminDashboard] Today date:', {
+      serverUTC: nowUTC.toISOString(),
+      bogotaTime: bogotaTime.toISOString(),
+      calculatedDate: today
+    });
 
     // Total empleados activos
     const employeesResult = await sql`SELECT COUNT(*) as count FROM employees WHERE status = 'active'`;
@@ -532,7 +787,7 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
     // Presentes hoy
     const presentResult = await sql`
       SELECT COUNT(DISTINCT employee_id) as count FROM timecards
-      WHERE date = ${today} AND time_in IS NOT NULL
+      WHERE date = ${today}::DATE AND time_in IS NOT NULL
     `;
     const activeToday = parseInt(presentResult.rows[0].count);
 
@@ -540,18 +795,20 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
     const absentToday = totalEmployees - activeToday;
 
     // Tardanzas (entrada después de las 09:00)
+    // Los timestamps están guardados como "hora local disfrazada de UTC"
+    // Entonces EXTRACT(HOUR FROM time_in) da directamente la hora local
     const lateResult = await sql`
       SELECT COUNT(*) as count FROM timecards
-      WHERE date = ${today}
+      WHERE date = ${today}::DATE
       AND time_in IS NOT NULL
-      AND EXTRACT(HOUR FROM time_in) > 9 OR (EXTRACT(HOUR FROM time_in) = 9 AND EXTRACT(MINUTE FROM time_in) > 0)
+      AND (EXTRACT(HOUR FROM time_in) > 9 OR (EXTRACT(HOUR FROM time_in) = 9 AND EXTRACT(MINUTE FROM time_in) > 0))
     `;
     const lateToday = parseInt(lateResult.rows[0].count);
 
     // Promedio de horas
     const avgResult = await sql`
       SELECT AVG(hours_worked) as avg_hours FROM timecards
-      WHERE date = ${today} AND hours_worked IS NOT NULL
+      WHERE date = ${today}::DATE AND hours_worked IS NOT NULL
     `;
     const averageHours = avgResult.rows[0].avg_hours ? Math.round(parseFloat(avgResult.rows[0].avg_hours) * 100) / 100 : 0;
 
@@ -561,26 +818,57 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
         e.id, e.code, e.name, e.position,
         t.date, t.time_in, t.time_out, t.hours_worked
       FROM employees e
-      LEFT JOIN timecards t ON e.id = t.employee_id AND t.date = ${today}
+      LEFT JOIN timecards t ON e.id = t.employee_id AND t.date::DATE = ${today}::DATE
       WHERE e.status = 'active'
       ORDER BY e.name
     `;
 
-    const employeesStatus = statusResult.rows.map((row: any) => ({
-      employee: {
-        id: row.id,
+    const employeesStatus = statusResult.rows.map((row: any) => {
+      let hoursWorked = row.hours_worked ? Number(row.hours_worked) : null;
+      
+      console.log('[handleGetAdminDashboard] Processing employee:', {
         code: row.code,
         name: row.name,
-        position: row.position,
-        status: 'active'
-      },
-      date: row.date || today,
-      time_in: row.time_in,
-      time_out: row.time_out,
-      hours_worked: row.hours_worked,
-      status: !row.time_in ? 'absent' : row.time_out ? 'present' : 'in_progress',
-      is_current_day: true
-    }));
+        time_in: row.time_in,
+        time_out: row.time_out,
+        hours_worked_raw: row.hours_worked,
+        hours_worked_converted: hoursWorked
+      });
+      
+      // Si hay time_in pero NO time_out, calcular horas trabajadas hasta ahora
+      if (row.time_in && !row.time_out) {
+        const timeIn = new Date(row.time_in);
+        const now = new Date();
+        const diffMs = now.getTime() - timeIn.getTime();
+        const calculatedHours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
+        hoursWorked = Math.max(0, calculatedHours); // Evitar horas negativas
+        
+        console.log('[handleGetAdminDashboard] Calculated hours for in-progress:', {
+          code: row.code,
+          timeIn: timeIn.toISOString(),
+          now: now.toISOString(),
+          diffMs,
+          calculatedHours,
+          finalHours: hoursWorked
+        });
+      }
+      
+      return {
+        employee: {
+          id: row.id,
+          code: row.code,
+          name: row.name,
+          position: row.position,
+          status: 'active'
+        },
+        date: row.date || today,
+        time_in: row.time_in,
+        time_out: row.time_out,
+        hours_worked: hoursWorked,
+        status: !row.time_in ? 'absent' : row.time_out ? 'present' : 'in_progress',
+        is_current_day: true
+      };
+    });
 
     const dashboard: AdminDashboardStats = {
       total_employees: totalEmployees,
@@ -613,9 +901,7 @@ async function handleGetEmployeeReport(req: any, res: any, code: string, month: 
     if (!month || !year) {
       // Obtener la fecha de hoy en zona horaria de Bogotá
       const now = new Date();
-      const bogotaOffset = -5; // UTC-5
-      const utcTime = now.getTime() + (now.getTimezoneOffset() * 60 * 1000);
-      const bogotaTime = new Date(utcTime + (bogotaOffset * 60 * 60 * 1000));
+      const bogotaTime = new Date(now.getTime() - (5 * 60 * 60 * 1000)); // Restar 5 horas al UTC
       
       const year = bogotaTime.getUTCFullYear();
       const month = String(bogotaTime.getUTCMonth() + 1).padStart(2, '0');
@@ -626,43 +912,46 @@ async function handleGetEmployeeReport(req: any, res: any, code: string, month: 
         employeeId: employee.id,
         employeeCode: employee.code,
         todayStr,
-        nowUTC: now.toISOString(),
-        bogotaTime: `${year}-${month}-${day}`
+        nowUTC: now.toISOString()
       });
       
+      // Obtener TODOS los registros de hoy (puede haber múltiples turnos)
       const todayResult = await sql`
         SELECT * FROM timecards
         WHERE employee_id = ${employee.id}
         AND date = ${todayStr}::DATE
-        LIMIT 1
+        ORDER BY created_at DESC
       `;
 
       console.log('[handleGetEmployeeReport] Query result:', {
         rowsFound: todayResult.rows.length,
+        todayStr,
         rows: todayResult.rows.map(r => ({
           id: r.id,
           employee_id: r.employee_id,
           date: r.date,
-          time_in: r.time_in
+          time_in: r.time_in,
+          time_out: r.time_out
         }))
       });
 
-      // Convertir snake_case a camelCase para consistencia con frontend
-      const todayStatus = todayResult.rows.length > 0 
-        ? toCamelCase(todayResult.rows[0])
-        : null;
+      // Convertir snake_case a camelCase
+      const todayRecords = todayResult.rows.map(row => toCamelCase(row));
+      
+      // El último registro (más reciente) es el todayStatus
+      const todayStatus = todayRecords.length > 0 ? todayRecords[0] : null;
 
-      console.log('[handleGetEmployeeReport] Returning todayStatus:', {
-        isNull: todayStatus === null,
-        hasTimeIn: todayStatus?.timeIn ? 'YES' : 'NO',
-        timeInValue: todayStatus?.timeIn,
-        keys: todayStatus ? Object.keys(todayStatus) : []
+      console.log('[handleGetEmployeeReport] Returning:', {
+        totalRecordsToday: todayRecords.length,
+        hasStatus: todayStatus !== null,
+        statusHasTimeIn: todayStatus?.timeIn ? 'YES' : 'NO'
       });
 
       return res.status(200).json({
         success: true,
         employee,
-        todayStatus
+        todayStatus,
+        todayRecords // Todos los registros del día
       });
     }
 
@@ -697,6 +986,92 @@ async function handleGetEmployeeReport(req: any, res: any, code: string, month: 
   } catch (error) {
     console.error('[handleGetEmployeeReport] Error:', error);
     return res.status(500).json({ success: false, error: 'Error al obtener reporte' });
+  }
+}
+
+async function handleGetTardanzas(req: any, res: any, code: string, month: string, year: string): Promise<any> {
+  if (!code) {
+    return res.status(400).json({ success: false, error: 'Código requerido' });
+  }
+
+  const employee = await findEmployeeByCode(code);
+  if (!employee) {
+    return res.status(404).json({ success: false, error: 'Empleado no encontrado' });
+  }
+
+  try {
+    let query;
+    
+    if (month && year) {
+      // Reporte de tardanzas de un mes específico
+      query = sql`
+        SELECT 
+          id,
+          timecard_id,
+          retraso_minutos,
+          tipo_retraso,
+          horario_esperado,
+          horario_real,
+          fecha,
+          admin_notes,
+          created_at
+        FROM tardanzas
+        WHERE employee_id = ${employee.id}
+        AND EXTRACT(MONTH FROM fecha) = ${month}
+        AND EXTRACT(YEAR FROM fecha) = ${year}
+        ORDER BY fecha DESC
+      `;
+    } else {
+      // Últimas 30 tardanzas (histórico general)
+      query = sql`
+        SELECT 
+          id,
+          timecard_id,
+          retraso_minutos,
+          tipo_retraso,
+          horario_esperado,
+          horario_real,
+          fecha,
+          admin_notes,
+          created_at
+        FROM tardanzas
+        WHERE employee_id = ${employee.id}
+        ORDER BY fecha DESC
+        LIMIT 30
+      `;
+    }
+
+    const result = await query;
+    const tardanzas = result.rows.map(row => toCamelCase(row));
+
+    // Estadísticas
+    const totalTardanzas = tardanzas.length;
+    const tardanzasLeves = tardanzas.filter(t => t.tipoRetraso === 'leve').length;
+    const tardanzasNormales = tardanzas.filter(t => t.tipoRetraso === 'normal').length;
+    const tardanzasGraves = tardanzas.filter(t => t.tipoRetraso === 'grave').length;
+    const promedioRetrasoMinutos = tardanzas.length > 0 
+      ? Math.round(tardanzas.reduce((sum, t) => sum + t.retrasominutos, 0) / tardanzas.length * 100) / 100
+      : 0;
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        employee,
+        month: month ? parseInt(month) : null,
+        year: year ? parseInt(year) : null,
+        tardanzas,
+        estadisticas: {
+          total: totalTardanzas,
+          leves: tardanzasLeves,
+          normales: tardanzasNormales,
+          graves: tardanzasGraves,
+          promedioMinutos: promedioRetrasoMinutos
+        }
+      }
+    });
+  } catch (error) {
+    console.error('[handleGetTardanzas] Error:', error);
+    return res.status(500).json({ success: false, error: 'Error al obtener tardanzas' });
   }
 }
 
@@ -1062,5 +1437,165 @@ async function handleHardDeleteEmployee(req: any, res: any, adminCode: string, e
   } catch (error: any) {
     console.error('[handleHardDeleteEmployee] Error:', error);
     return res.status(500).json({ success: false, error: error?.message || 'Error al eliminar empleado' });
+  }
+}
+
+// ============ HORARIOS (SCHEDULES) ============
+
+async function getEmployeeSchedule(employeeId: number, dayOfWeek?: number): Promise<any[]> {
+  try {
+    if (dayOfWeek !== undefined) {
+      const result = await sql`
+        SELECT * FROM employee_schedules
+        WHERE employee_id = ${employeeId}
+        AND day_of_week = ${dayOfWeek}
+        AND is_active = true
+        LIMIT 1
+      `;
+      return result.rows.length > 0 ? [toCamelCase(result.rows[0])] : [];
+    }
+    
+    const result = await sql`
+      SELECT * FROM employee_schedules
+      WHERE employee_id = ${employeeId}
+      AND is_active = true
+      ORDER BY day_of_week
+    `;
+    return result.rows.map(row => toCamelCase(row));
+  } catch (error) {
+    console.error('[getEmployeeSchedule] Error:', error);
+    return [];
+  }
+}
+
+async function calculateLateArrival(employeeId: number, checkInTime: string, date: string): Promise<{ isLate: boolean; minutesLate: number; scheduledTime: string | null } | null> {
+  try {
+    const dateObj = new Date(date);
+    const dayOfWeek = dateObj.getDay();
+
+    const schedule = await getEmployeeSchedule(employeeId, dayOfWeek);
+    if (schedule.length === 0) {
+      return null; // No hay horario para este día
+    }
+
+    const scheduledCheckIn = schedule[0].checkInTime || schedule[0].check_in_time;
+    const gracePeriod = schedule[0].gracePeriodMinutes || schedule[0].grace_period_minutes || 10;
+
+    const [scheduledHours, scheduledMinutes] = scheduledCheckIn.split(':').map(Number);
+    const scheduledTimeMs = scheduledHours * 60 + scheduledMinutes;
+
+    const checkInObj = new Date(checkInTime);
+    const actualHours = checkInObj.getHours();
+    const actualMinutes = checkInObj.getMinutes();
+    const actualTimeMs = actualHours * 60 + actualMinutes;
+
+    const minutesLate = Math.max(0, actualTimeMs - scheduledTimeMs - gracePeriod);
+    const isLate = minutesLate > 0;
+
+    return {
+      isLate,
+      minutesLate,
+      scheduledTime: scheduledCheckIn
+    };
+  } catch (error) {
+    console.error('[calculateLateArrival] Error:', error);
+    return null;
+  }
+}
+
+async function handleGetEmployeeSchedules(req: any, res: any, adminCode: string, employeeId: string): Promise<any> {
+  const isAdmin = await verifyAdminCode(adminCode);
+  if (!isAdmin) {
+    return res.status(403).json({ success: false, error: 'Código admin inválido' });
+  }
+
+  try {
+    const empId = parseInt(employeeId, 10);
+    if (isNaN(empId)) {
+      return res.status(400).json({ success: false, error: 'ID de empleado inválido' });
+    }
+
+    const schedules = await getEmployeeSchedule(empId);
+    
+    return res.status(200).json({
+      success: true,
+      data: schedules
+    });
+  } catch (error) {
+    console.error('[handleGetEmployeeSchedules] Error:', error);
+    return res.status(500).json({ success: false, error: 'Error al obtener horarios' });
+  }
+}
+
+async function handleSaveEmployeeSchedule(req: any, res: any, adminCode: string): Promise<any> {
+  const isAdmin = await verifyAdminCode(adminCode);
+  if (!isAdmin) {
+    return res.status(403).json({ success: false, error: 'Código admin inválido' });
+  }
+
+  try {
+    const { employeeId, dayOfWeek, checkInTime, checkOutTime, gracePeriodMinutes } = req.body;
+
+    if (!employeeId || dayOfWeek === undefined || !checkInTime || !checkOutTime) {
+      return res.status(400).json({ success: false, error: 'Datos incompletos' });
+    }
+
+    const empId = parseInt(employeeId, 10);
+    const day = parseInt(dayOfWeek, 10);
+    const grace = parseInt(gracePeriodMinutes || '10', 10);
+
+    if (isNaN(empId) || isNaN(day) || day < 0 || day > 6) {
+      return res.status(400).json({ success: false, error: 'Datos inválidos' });
+    }
+
+    // Verificar que el empleado existe
+    const empResult = await sql`SELECT id FROM employees WHERE id = ${empId}`;
+    if (empResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Empleado no encontrado' });
+    }
+
+    // Insertar o actualizar
+    const result = await sql`
+      INSERT INTO employee_schedules (employee_id, day_of_week, check_in_time, check_out_time, grace_period_minutes, is_active)
+      VALUES (${empId}, ${day}, ${checkInTime}::TIME, ${checkOutTime}::TIME, ${grace}, true)
+      ON CONFLICT (employee_id, day_of_week) DO UPDATE SET
+        check_in_time = ${checkInTime}::TIME,
+        check_out_time = ${checkOutTime}::TIME,
+        grace_period_minutes = ${grace},
+        updated_at = NOW()
+      RETURNING *
+    `;
+
+    return res.status(200).json({
+      success: true,
+      data: toCamelCase(result.rows[0])
+    });
+  } catch (error) {
+    console.error('[handleSaveEmployeeSchedule] Error:', error);
+    return res.status(500).json({ success: false, error: 'Error al guardar horario' });
+  }
+}
+
+async function handleDeleteEmployeeSchedule(req: any, res: any, adminCode: string, scheduleId: string): Promise<any> {
+  const isAdmin = await verifyAdminCode(adminCode);
+  if (!isAdmin) {
+    return res.status(403).json({ success: false, error: 'Código admin inválido' });
+  }
+
+  try {
+    const schId = parseInt(scheduleId, 10);
+    if (isNaN(schId)) {
+      return res.status(400).json({ success: false, error: 'ID inválido' });
+    }
+
+    await sql`DELETE FROM employee_schedules WHERE id = ${schId}`;
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Horario eliminado'
+    });
+  } catch (error) {
+    console.error('[handleDeleteEmployeeSchedule] Error:', error);
+    return res.status(500).json({ success: false, error: 'Error al eliminar horario' });
   }
 }

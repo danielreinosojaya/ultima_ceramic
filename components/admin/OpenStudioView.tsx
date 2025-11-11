@@ -92,7 +92,9 @@ export const OpenStudioView: React.FC<OpenStudioViewProps> = ({ bookings, onNavi
     const [now, setNow] = useState(new Date());
 
     useEffect(() => {
-        const timer = setInterval(() => setNow(new Date()), 1000 * 30); // Update "now" every 30s for status check
+        // OPTIMIZACIÓN: Reducir de 30 segundos a 5 minutos para actualizaciones de estado
+        // El timestamp visual se actualiza localmente, solo necesitamos verificar estado cada 5min
+        const timer = setInterval(() => setNow(new Date()), 1000 * 300); // Update "now" every 5min for status check
         return () => clearInterval(timer);
     }, []);
 

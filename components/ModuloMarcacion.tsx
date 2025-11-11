@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import type { Employee, ClockInResponse, ClockOutResponse, Timecard } from '../types/timecard';
+import { fetchWithAbort } from '../utils/fetchWithAbort';
 
 // Helper para validar y formatear horas
 const formatHours = (value: any): string | null => {
-  if (!value) return null;
+  if (value === null || value === undefined) return null;
   const num = typeof value === 'string' ? parseFloat(value) : value;
-  if (isNaN(num) || num === 0) return null;
+  if (isNaN(num) || num < 0) return null; // Evitar mostrar horas negativas
+  // Permitir valores >= 0 (incluyendo 0.00 si es lo que hay)
+  // Si trabajó aunque sea 1 segundo, mostrar el valor
   return Number(num).toFixed(2);
 };
 
@@ -26,17 +29,26 @@ export const ModuloMarcacion: React.FC = () => {
       return;
     }
 
+    // Validación local: formato típico de código (EMP + 3 dígitos, por ejemplo)
+    // Esto evita hacer fetch de códigos claramente inválidos
+    if (code.length < 3) {
+      // Código muy corto, no hacer búsqueda
+      setSearching(false);
+      return;
+    }
+
     // Buscar el estado actual del empleado
     const checkEmployeeStatus = async () => {
       setSearching(true);
       try {
-        // Usar endpoint que busca por código y retorna estado del día
-        const response = await fetch(`/api/timecards?action=get_employee_report&code=${code}`);
-        const result = await response.json();
+        // Usar AbortController para cancelar si el usuario cambia el código
+        const result = await fetchWithAbort(
+          `employee-status-${code}`,
+          `/api/timecards?action=get_employee_report&code=${code}`
+        );
         
         if (result.success && result.employee) {
           setCurrentEmployee(result.employee);
-          // Si el endpoint retorna el estado de hoy, usarlo
           if (result.todayStatus) {
             setTodayStatus(result.todayStatus);
           } else {
@@ -47,7 +59,10 @@ export const ModuloMarcacion: React.FC = () => {
           setTodayStatus(null);
         }
       } catch (error) {
-        console.error('Error checking employee status:', error);
+        // No mostrar error si fue cancelado (normal)
+        if (!(error instanceof Error && error.message === 'Request cancelled')) {
+          console.error('Error checking employee status:', error);
+        }
         setCurrentEmployee(null);
         setTodayStatus(null);
       } finally {
@@ -55,7 +70,9 @@ export const ModuloMarcacion: React.FC = () => {
       }
     };
 
-    const debounceTimer = setTimeout(checkEmployeeStatus, 500);
+    // Debounce aumentado a 1000ms para reducir requests de búsqueda agresivamente
+    // (Reducir búsquedas de "EMP001" de 6 requests a 1-2)
+    const debounceTimer = setTimeout(checkEmployeeStatus, 1000);
     return () => clearTimeout(debounceTimer);
   }, [code]);
 
@@ -69,10 +86,24 @@ export const ModuloMarcacion: React.FC = () => {
     setMessage({ text: '', type: 'success' });
 
     try {
+      // Enviar componentes de fecha EXACTOS del navegador
+      const now = new Date();
+      const localTime = {
+        year: now.getFullYear(),
+        month: now.getMonth() + 1,
+        day: now.getDate(),
+        hour: now.getHours(),
+        minute: now.getMinutes(),
+        second: now.getSeconds()
+      };
+      
       const response = await fetch(`/api/timecards?action=clock_in&code=${code}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code })
+        body: JSON.stringify({ 
+          code,
+          localTime // Enviar hora local EXACTA
+        })
       });
 
       const result = (await response.json()) as ClockInResponse;
@@ -81,36 +112,21 @@ export const ModuloMarcacion: React.FC = () => {
         setMessage({ text: result.message, type: 'success' });
         setCurrentEmployee(result.employee || null);
         
-        // Refrescar el estado desde el servidor para garantizar consistencia
-        if (result.employee?.code) {
-          try {
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Esperar a que se propague en BD
-            const refreshResponse = await fetch(`/api/timecards?action=get_employee_report&code=${result.employee.code}`);
-            const refreshResult = await refreshResponse.json();
-            if (refreshResult.success && refreshResult.todayStatus) {
-              setTodayStatus(refreshResult.todayStatus);
-            }
-          } catch (refreshError) {
-            console.error('Error refreshing employee status:', refreshError);
-            // Fallback al timecard local si el refresh falla
-            const todayStr = new Date().toISOString().split('T')[0];
-            const newTimecard: Timecard = {
-              id: 0,
-              employee_id: result.employee?.id || 0,
-              date: todayStr,
-              time_in: result.timestamp,
-              time_out: undefined,
-              hours_worked: 0,
-              notes: undefined,
-              edited_by: undefined,
-              edited_at: undefined,
-              created_at: result.timestamp,
-              updated_at: result.timestamp
-            };
-            setTodayStatus(newTimecard);
-          }
+        // Usar la respuesta directa sin refresh innecesario
+        // La respuesta de clock_in ya incluye el estado actualizado
+        if (result.timestamp) {
+          const updatedTimecard: Timecard = {
+            id: todayStatus?.id || 0,
+            employee_id: result.employee?.id || 0,
+            date: new Date().toISOString().split('T')[0],
+            time_in: result.timestamp,
+            time_out: undefined,
+            hours_worked: undefined,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          setTodayStatus(updatedTimecard);
         }
-        // NO limpiar código - el empleado necesita ver su estado actual
       } else {
         setMessage({ text: result.message, type: 'error' });
       }
@@ -132,10 +148,24 @@ export const ModuloMarcacion: React.FC = () => {
     setMessage({ text: '', type: 'success' });
 
     try {
+      // Enviar componentes de fecha EXACTOS del navegador
+      const now = new Date();
+      const localTime = {
+        year: now.getFullYear(),
+        month: now.getMonth() + 1,
+        day: now.getDate(),
+        hour: now.getHours(),
+        minute: now.getMinutes(),
+        second: now.getSeconds()
+      };
+      
       const response = await fetch(`/api/timecards?action=clock_out&code=${code}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code })
+        body: JSON.stringify({ 
+          code,
+          localTime // Enviar hora local EXACTA
+        })
       });
 
       const result = (await response.json()) as ClockOutResponse;
@@ -143,28 +173,16 @@ export const ModuloMarcacion: React.FC = () => {
       if (result.success) {
         setMessage({ text: result.message, type: 'success' });
         
-        // Refrescar el estado desde el servidor para garantizar consistencia
-        if (currentEmployee?.code) {
-          try {
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Esperar a que se propague en BD
-            const refreshResponse = await fetch(`/api/timecards?action=get_employee_report&code=${currentEmployee.code}`);
-            const refreshResult = await refreshResponse.json();
-            if (refreshResult.success && refreshResult.todayStatus) {
-              setTodayStatus(refreshResult.todayStatus);
-            }
-          } catch (refreshError) {
-            console.error('Error refreshing employee status:', refreshError);
-            // Fallback al timecard local si el refresh falla
-            if (todayStatus) {
-              const updatedTimecard: Timecard = {
-                ...todayStatus,
-                time_out: result.timestamp,
-                hours_worked: result.hours_worked,
-                updated_at: result.timestamp
-              };
-              setTodayStatus(updatedTimecard);
-            }
-          }
+        // Usar la respuesta directa sin refresh innecesario
+        // La respuesta de clock_out ya incluye horas_worked calculadas
+        if (todayStatus && result.timestamp) {
+          const updatedTimecard: Timecard = {
+            ...todayStatus,
+            time_out: result.timestamp,
+            hours_worked: result.hours_worked,
+            updated_at: result.timestamp
+          };
+          setTodayStatus(updatedTimecard);
         }
         // NO limpiar código - el empleado necesita ver su estado actual
       } else {
@@ -252,7 +270,7 @@ export const ModuloMarcacion: React.FC = () => {
                 <div className="text-left">
                   <p className="font-bold">Entrada registrada</p>
                   <p className="text-xs text-blue-600">
-                    {timeIn && new Date(timeIn).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' })}
+                    {timeIn && new Date(timeIn).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true })}
                   </p>
                 </div>
               </div>
@@ -300,7 +318,7 @@ export const ModuloMarcacion: React.FC = () => {
                 <div className="flex justify-between">
                   <span className="text-brand-secondary">Entrada:</span>
                   <span className="font-mono font-semibold text-green-600">
-                    {new Date(todayStatus.timeIn || todayStatus.time_in!).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'America/Bogota' })}
+                    {new Date(todayStatus.timeIn || todayStatus.time_in!).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
                   </span>
                 </div>
               )}
@@ -308,7 +326,7 @@ export const ModuloMarcacion: React.FC = () => {
                 <div className="flex justify-between">
                   <span className="text-brand-secondary">Salida:</span>
                   <span className="font-mono font-semibold text-red-600">
-                    {new Date(todayStatus.timeOut || todayStatus.time_out!).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'America/Bogota' })}
+                    {new Date(todayStatus.timeOut || todayStatus.time_out!).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
                   </span>
                 </div>
               )}
