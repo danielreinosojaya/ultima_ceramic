@@ -402,18 +402,13 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
                           {emp.time_in
                             ? (() => {
                                 const date = new Date(emp.time_in);
-                                console.log('[AdminPanel DEBUG v4.0] time_in raw:', emp.time_in, 'parsed:', date);
-                                
-                                // TIMESTAMP guardado es HORA LOCAL (Guayaquil) - leer directamente
-                                const localHours = (date.getHours() + 5) % 24; // Compensar pseudo-UTC
-                                const localMinutes = date.getMinutes();
-                                
-                                console.log('[AdminPanel DEBUG v4.0] localHours:', localHours, 'localMinutes:', localMinutes);
+                                // Backend guarda HORA LOCAL como ISO: 2025-11-11T17:59:07.000Z representa 12:59 PM
+                                // getUTCHours() es la hora local guardada, getHours() es hora del navegador
+                                const localHours = date.getUTCHours();
+                                const localMinutes = date.getUTCMinutes();
                                 
                                 const ampm = localHours >= 12 ? 'p.m.' : 'a.m.';
                                 const hour12 = localHours === 0 ? 12 : localHours > 12 ? localHours - 12 : localHours;
-                                
-                                console.log('[AdminPanel DEBUG v4.0] FINAL DISPLAY:', `${String(hour12).padStart(2, '0')}:${String(localMinutes).padStart(2, '0')} ${ampm}`);
                                 
                                 return `${String(hour12).padStart(2, '0')}:${String(localMinutes).padStart(2, '0')} ${ampm}`;
                               })()
@@ -423,8 +418,9 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
                           {emp.time_out
                             ? (() => {
                                 const date = new Date(emp.time_out);
-                                const localHoursOut = (date.getHours() + 5) % 24; // Compensar pseudo-UTC
-                                const localMinutesOut = date.getMinutes();
+                                // Backend guarda HORA LOCAL como ISO
+                                const localHoursOut = date.getUTCHours();
+                                const localMinutesOut = date.getUTCMinutes();
                                 
                                 const ampm = localHoursOut >= 12 ? 'p.m.' : 'a.m.';
                                 const hour12 = localHoursOut === 0 ? 12 : localHoursOut > 12 ? localHoursOut - 12 : localHoursOut;
