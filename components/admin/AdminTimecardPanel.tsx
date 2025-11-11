@@ -403,7 +403,7 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
                                 console.log('[AdminPanel DEBUG v4.0] time_in raw:', emp.time_in, 'parsed:', date);
                                 
                                 // TIMESTAMP guardado es HORA LOCAL (Guayaquil) - leer directamente
-                                const localHours = date.getHours(); // Hora local del servidor
+                                const localHours = (date.getHours() + 5) % 24; // Compensar pseudo-UTC
                                 const localMinutes = date.getMinutes();
                                 
                                 console.log('[AdminPanel DEBUG v4.0] localHours:', localHours, 'localMinutes:', localMinutes);
@@ -421,7 +421,7 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
                           {emp.time_out
                             ? (() => {
                                 const date = new Date(emp.time_out);
-                                const localHoursOut = date.getHours();
+                                const localHoursOut = (date.getHours() + 5) % 24; // Compensar pseudo-UTC
                                 const localMinutesOut = date.getMinutes();
                                 
                                 const ampm = localHoursOut >= 12 ? 'p.m.' : 'a.m.';
