@@ -268,19 +268,19 @@ async function getTodayTimecard(employeeId: number): Promise<Timecard | null> {
 
     const row = result.rows[0];
     // IMPORTANTE: Los timestamps están guardados como UTC real, no los reconvertir
-    // Solo retornarlos como están
+    // Solo retornarlos como están EN FORMATO ISO
     const timecard: Timecard = {
       id: Number(row.id),
       employee_id: Number(row.employee_id),
       date: String(row.date),
-      time_in: row.time_in ? String(row.time_in) : undefined,  // Mantener como string ISO UTC
-      time_out: row.time_out ? String(row.time_out) : undefined, // Mantener como string ISO UTC
+      time_in: row.time_in ? (row.time_in instanceof Date ? row.time_in.toISOString() : new Date(row.time_in).toISOString()) : undefined,
+      time_out: row.time_out ? (row.time_out instanceof Date ? row.time_out.toISOString() : new Date(row.time_out).toISOString()) : undefined,
       hours_worked: row.hours_worked ? Number(row.hours_worked) : undefined,
       notes: row.notes ? String(row.notes) : undefined,
       edited_by: row.edited_by ? Number(row.edited_by) : undefined,
-      edited_at: row.edited_at ? String(row.edited_at) : undefined,
-      created_at: row.created_at ? String(row.created_at) : new Date().toISOString(),
-      updated_at: row.updated_at ? String(row.updated_at) : new Date().toISOString()
+      edited_at: row.edited_at ? (row.edited_at instanceof Date ? row.edited_at.toISOString() : new Date(row.edited_at).toISOString()) : undefined,
+      created_at: row.created_at ? (row.created_at instanceof Date ? row.created_at.toISOString() : new Date(row.created_at).toISOString()) : new Date().toISOString(),
+      updated_at: row.updated_at ? (row.updated_at instanceof Date ? row.updated_at.toISOString() : new Date(row.updated_at).toISOString()) : new Date().toISOString()
     };
 
     console.log('[getTodayTimecard] Found timecard:', { id: timecard.id, employee_id: timecard.employee_id, time_in: timecard.time_in });
