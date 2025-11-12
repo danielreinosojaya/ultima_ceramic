@@ -80,8 +80,10 @@ export interface AdminDashboardStats {
 export interface ClockInResponse {
   success: boolean;
   message: string;
+  warning?: string | null;
   employee?: Employee;
   timestamp?: string;
+  displayTime?: string;
   today_hours?: number;
 }
 
@@ -90,4 +92,46 @@ export interface ClockOutResponse {
   message: string;
   hours_worked?: number;
   timestamp?: string;
+  displayTime?: string;
+}
+
+// Horarios de empleados
+export interface EmployeeSchedule {
+  id: number;
+  employee_id: number;
+  day_of_week: 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0 = Domingo, 1 = Lunes, ..., 6 = Sábado
+  check_in_time: string; // HH:mm formato (ej: "09:00")
+  check_out_time: string; // HH:mm formato (ej: "17:00")
+  grace_period_minutes: number; // Minutos de tolerancia (default: 10)
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  // camelCase aliases
+  employeeId?: number;
+  dayOfWeek?: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  checkInTime?: string;
+  checkOutTime?: string;
+  gracePeriodMinutes?: number;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface LateArrival {
+  timecard_id: number;
+  employee_id: number;
+  scheduled_time: string;
+  actual_time: string;
+  minutes_late: number;
+  date: string;
+  employee_name: string;
+  employee_code: string;
+  // camelCase aliases
+  timecardId?: number;
+  employeeId?: number;
+  scheduledTime?: string;
+  actualTime?: string;
+  minutesLate?: number;
+  employeeName?: string;
+  employeeCode?: string;
 }
