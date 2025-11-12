@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import type { AdminDashboardStats, Employee, Timecard } from '../../types/timecard';
+import { TardanzasView } from './TardanzasView';
+import { EmployeeScheduleManager } from './EmployeeScheduleManager';
+import { MonthlyReportViewer } from './MonthlyReportViewer';
+import { fetchWithAbort } from '../../utils/fetchWithAbort';
 
 interface AdminTimecardPanelProps {
   adminCode: string;
@@ -8,7 +12,7 @@ interface AdminTimecardPanelProps {
 export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCode }) => {
   const [dashboard, setDashboard] = useState<AdminDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'history'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'history' | 'tardanzas' | 'reportes'>('dashboard');
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [employeeHistory, setEmployeeHistory] = useState<Timecard[]>([]);
@@ -25,25 +29,79 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
   const [confirmDeleteTimecard, setConfirmDeleteTimecard] = useState<Timecard | null>(null);
   const [confirmDeleteEmployee, setConfirmDeleteEmployee] = useState<Employee | null>(null);
 
+  // Estados para schedule manager
+  const [showScheduleManager, setShowScheduleManager] = useState(false);
+  const [selectedEmployeeForSchedule, setSelectedEmployeeForSchedule] = useState<Employee | null>(null);
+
   // Cargar dashboard
   useEffect(() => {
     if (!adminCode) return;
     
     loadDashboard();
-    const interval = setInterval(loadDashboard, 60000); // Actualizar cada 60 segundos
-    return () => clearInterval(interval);
+    
+    // Smart polling con AbortController para cancelar fetches pendientes
+    const abortController = new AbortController();
+    let isActive = true;
+    let pollTimer: NodeJS.Timeout | null = null;
+    
+    const schedulePoll = () => {
+      if (!isActive) return;
+      
+      // Determinar intervalo basado en estado actual
+      let nextInterval = 300000; // Default 5 minutos
+      
+      if (dashboard?.employees_status) {
+        const inProgressCount = dashboard.employees_status.filter((e: any) => e.status === 'in_progress').length;
+        const presentCount = dashboard.employees_status.filter((e: any) => e.status === 'present').length;
+        
+        if (inProgressCount > 0) {
+          // Hay empleados trabajando: poll cada 30 segundos
+          nextInterval = 30000;
+        } else if (presentCount > 0) {
+          // Hay empleados presentes: poll cada 2 minutos
+          nextInterval = 120000;
+        } else {
+          // Nadie activo: poll cada 5 minutos
+          nextInterval = 300000;
+        }
+      }
+      
+      // Cancelar timer anterior si existe
+      if (pollTimer) clearTimeout(pollTimer);
+      
+      // Programar siguiente poll
+      pollTimer = setTimeout(() => {
+        if (isActive) {
+          loadDashboard();
+          schedulePoll(); // Programar siguiente
+        }
+      }, nextInterval);
+    };
+    
+    // Programar primer poll después de carga inicial
+    schedulePoll();
+    
+    return () => {
+      isActive = false;
+      if (pollTimer) clearTimeout(pollTimer);
+      abortController.abort(); // Cancelar todas las fetches pendientes
+    };
   }, [adminCode]);
 
   const loadDashboard = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/timecards?action=get_admin_dashboard&adminCode=${adminCode}`);
-      const result = await response.json();
+      const result = await fetchWithAbort(
+        'admin-dashboard-stats',
+        `/api/timecards?action=get_admin_dashboard&adminCode=${adminCode}`
+      );
       if (result.success) {
         setDashboard(result.data);
       }
     } catch (error) {
-      console.error('Error loading dashboard:', error);
+      if (!(error instanceof Error && error.message === 'Request cancelled')) {
+        console.error('Error loading dashboard:', error);
+      }
     } finally {
       setLoading(false);
     }
@@ -51,13 +109,17 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
 
   const loadEmployees = async () => {
     try {
-      const response = await fetch(`/api/timecards?action=list_employees&adminCode=${adminCode}`);
-      const result = await response.json();
+      const result = await fetchWithAbort(
+        'admin-employees-list',
+        `/api/timecards?action=list_employees&adminCode=${adminCode}`
+      );
       if (result.success) {
         setEmployees(result.data);
       }
     } catch (error) {
-      console.error('Error loading employees:', error);
+      if (!(error instanceof Error && error.message === 'Request cancelled')) {
+        console.error('Error loading employees:', error);
+      }
     }
   };
 
@@ -274,7 +336,7 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
 
         {/* Tabs */}
         <div className="flex gap-4 mb-8 border-b border-brand-border">
-          {(['dashboard', 'employees', 'history'] as const).map(tab => (
+          {(['dashboard', 'employees', 'history', 'tardanzas', 'reportes'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => {
@@ -293,6 +355,8 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
               {tab === 'dashboard' && '📈 Dashboard'}
               {tab === 'employees' && '👥 Empleados'}
               {tab === 'history' && '📋 Historial'}
+              {tab === 'tardanzas' && '⏰ Tardanzas'}
+              {tab === 'reportes' && '📊 Reportes'}
             </button>
           ))}
         </div>
@@ -338,15 +402,79 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
                         <td className="px-6 py-4 font-mono text-sm">{emp.employee.code}</td>
                         <td className="px-6 py-4">
                           {emp.time_in
-                            ? new Date(emp.time_in).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })
+                            ? (() => {
+                                const date = new Date(emp.time_in);
+                                // Backend guarda HORA LOCAL como ISO: 2025-11-11T17:59:07.000Z representa 12:59 PM
+                                // getUTCHours() es la hora local guardada, getHours() es hora del navegador
+                                const localHours = date.getUTCHours();
+                                const localMinutes = date.getUTCMinutes();
+                                
+                                const ampm = localHours >= 12 ? 'p.m.' : 'a.m.';
+                                const hour12 = localHours === 0 ? 12 : localHours > 12 ? localHours - 12 : localHours;
+                                
+                                return `${String(hour12).padStart(2, '0')}:${String(localMinutes).padStart(2, '0')} ${ampm}`;
+                              })()
                             : '-'}
                         </td>
                         <td className="px-6 py-4">
                           {emp.time_out
-                            ? new Date(emp.time_out).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })
+                            ? (() => {
+                                const date = new Date(emp.time_out);
+                                // Backend guarda HORA LOCAL como ISO
+                                const localHoursOut = date.getUTCHours();
+                                const localMinutesOut = date.getUTCMinutes();
+                                
+                                const ampm = localHoursOut >= 12 ? 'p.m.' : 'a.m.';
+                                const hour12 = localHoursOut === 0 ? 12 : localHoursOut > 12 ? localHoursOut - 12 : localHoursOut;
+                                
+                                return `${String(hour12).padStart(2, '0')}:${String(localMinutesOut).padStart(2, '0')} ${ampm}`;
+                              })()
                             : '-'}
                         </td>
-                        <td className="px-6 py-4 font-mono">{emp.hours_worked?.toFixed(2) || '-'}h</td>
+                        <td className="px-6 py-4 font-mono">
+                          {(() => {
+                            console.log('[AdminPanel DEBUG] hours_worked:', emp.hours_worked, 'type:', typeof emp.hours_worked);
+                            
+                            // Si hay hours_worked de BD, mostrarlo
+                            if (emp.hours_worked && typeof emp.hours_worked === 'number') {
+                              return emp.hours_worked.toFixed(2);
+                            } else if (emp.hours_worked) {
+                              return Number(emp.hours_worked).toFixed(2);
+                            }
+                            
+                            // Si está en progreso (time_in pero no time_out), calcular con hora local
+                            if (emp.time_in && !emp.time_out && emp.status === 'in_progress') {
+                              try {
+                                const timeInDate = new Date(emp.time_in);
+                                const now = new Date();
+                                
+                                // Extraer hora local del timestamp ISO usando getUTCHours
+                                const timeInHours = timeInDate.getUTCHours();
+                                const timeInMinutes = timeInDate.getUTCMinutes();
+                                const timeInSeconds = timeInDate.getUTCSeconds();
+                                
+                                // Hora actual local
+                                const nowHours = now.getHours();
+                                const nowMinutes = now.getMinutes();
+                                const nowSeconds = now.getSeconds();
+                                
+                                // Calcular diferencia en segundos
+                                const timeInTotalSeconds = timeInHours * 3600 + timeInMinutes * 60 + timeInSeconds;
+                                const nowTotalSeconds = nowHours * 3600 + nowMinutes * 60 + nowSeconds;
+                                
+                                const diffSeconds = nowTotalSeconds - timeInTotalSeconds;
+                                const hours = Math.max(0, diffSeconds / 3600);
+                                
+                                return hours.toFixed(2);
+                              } catch (e) {
+                                console.error('[AdminPanel] Error calculando horas en progreso:', e);
+                                return '-';
+                              }
+                            }
+                            
+                            return '-';
+                          })()}h
+                        </td>
                         <td className="px-6 py-4 text-center">
                           <span
                             className={`px-3 py-1 rounded-full text-xs font-bold ${
@@ -445,6 +573,15 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex gap-2">
+                              <button
+                                onClick={() => {
+                                  setSelectedEmployeeForSchedule(emp);
+                                  setShowScheduleManager(true);
+                                }}
+                                className="px-3 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 text-xs font-semibold"
+                              >
+                                ⏱️ Horarios
+                              </button>
                               <button
                                 onClick={() => {
                                   setSelectedEmployee(emp);
@@ -617,7 +754,11 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
                                       })
                                     : '-'}
                                 </td>
-                                <td className="px-6 py-4 font-mono font-bold">{record.hours_worked?.toFixed(2) || '-'}h</td>
+                                <td className="px-6 py-4 font-mono font-bold">
+                                  {record.hours_worked && typeof record.hours_worked === 'number' 
+                                    ? record.hours_worked.toFixed(2)
+                                    : record.hours_worked ? Number(record.hours_worked).toFixed(2) : '-'}h
+                                </td>
                                 <td className="px-6 py-4">
                                   <div className="flex gap-2 justify-center">
                                     <button
@@ -645,6 +786,16 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
               </>
             )}
           </div>
+        )}
+
+        {/* TARDANZAS TAB */}
+        {activeTab === 'tardanzas' && (
+          <TardanzasView adminCode={adminCode} />
+        )}
+
+        {/* REPORTES TAB */}
+        {activeTab === 'reportes' && (
+          <MonthlyReportViewer adminCode={adminCode} />
         )}
 
         {/* MODAL: Editar Marcación */}
@@ -773,6 +924,17 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
               </div>
             </div>
           </div>
+        )}
+
+        {showScheduleManager && selectedEmployeeForSchedule && (
+          <EmployeeScheduleManager
+            employee={selectedEmployeeForSchedule}
+            adminCode={adminCode}
+            onClose={() => {
+              setShowScheduleManager(false);
+              setSelectedEmployeeForSchedule(null);
+            }}
+          />
         )}
       </div>
     </div>

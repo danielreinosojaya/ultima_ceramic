@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { Booking } from '../../types';
 import * as dataService from '../../services/dataService';
+import { fetchWithAbort } from '../../utils/fetchWithAbort';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { XIcon } from '../icons/XIcon';
@@ -32,16 +33,51 @@ export const ExpiredBookingsManager: React.FC = () => {
     // Limpiar reservas expiradas cuando se carga el componente
     expireOldBookings();
     loadBookings();
-    const interval = setInterval(loadBookings, 60000);
-    return () => clearInterval(interval);
+    
+    // Smart polling con AbortController para evitar memory leaks
+    const abortController = new AbortController();
+    let isActive = true;
+    let pollTimer: NodeJS.Timeout | null = null;
+    
+    const schedulePoll = (currentBookings: ExpiredBooking[]) => {
+      if (!isActive) return;
+      
+      // Determinar si hay reservas críticas
+      const hasExpiredSoon = currentBookings.some(b => {
+        const hoursLeft = b.hoursUntilExpiry || 0;
+        return hoursLeft < 1 && hoursLeft > 0; // Expira en menos de 1 hora
+      });
+      
+      const nextInterval = hasExpiredSoon ? 30000 : 300000; // 30s si crítico, 5min normal
+      
+      if (pollTimer) clearTimeout(pollTimer);
+      
+      pollTimer = setTimeout(() => {
+        if (isActive) {
+          loadBookings();
+          // Volver a programar con nuevo intervalo
+          schedulePoll(bookings);
+        }
+      }, nextInterval);
+    };
+    
+    schedulePoll(bookings);
+    
+    return () => {
+      isActive = false;
+      if (pollTimer) clearTimeout(pollTimer);
+      abortController.abort();
+    };
   }, []);
 
   const expireOldBookings = async () => {
     try {
-      await fetch('/api/data?action=expireOldBookings', { method: 'GET' });
+      await fetchWithAbort('expire-old-bookings', '/api/data?action=expireOldBookings', { method: 'GET' });
       console.log('[ExpiredBookingsManager] Old bookings expired');
     } catch (error) {
-      console.error('[ExpiredBookingsManager] Error expiring bookings:', error);
+      if (!(error instanceof Error && error.message === 'Request cancelled')) {
+        console.error('[ExpiredBookingsManager] Error expiring bookings:', error);
+      }
     }
   };
 
@@ -57,7 +93,9 @@ export const ExpiredBookingsManager: React.FC = () => {
       });
       setBookings(enrichedBookings);
     } catch (error) {
-      console.error('Error loading bookings:', error);
+      if (!(error instanceof Error && error.message === 'Request cancelled')) {
+        console.error('Error loading bookings:', error);
+      }
     } finally {
       setLoading(false);
     }
