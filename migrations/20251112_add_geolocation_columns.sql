@@ -79,10 +79,8 @@ CREATE TABLE IF NOT EXISTS geofences (
 CREATE INDEX IF NOT EXISTS idx_geofences_active ON geofences(is_active);
 CREATE INDEX IF NOT EXISTS idx_geofences_created ON geofences(created_at DESC);
 
--- Seed default geofence for Última Ceramic Bogotá
-INSERT INTO geofences (name, latitude, longitude, radius_meters, is_active, created_at, updated_at)
-VALUES ('Última Ceramic - Bogotá', 4.7169, -74.0842, 300, true, NOW(), NOW())
-ON CONFLICT DO NOTHING;
+-- NOTE: Do NOT seed default geofence here - users should create geofences via Admin Panel
+-- This prevents duplicate geofences from being created repeatedly
 
 -- Add role column to admin_codes if it doesn't exist
 DO $$

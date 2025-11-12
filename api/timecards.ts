@@ -273,16 +273,8 @@ async function ensureTablesExist(): Promise<void> {
     `;
     console.log('[ensureTablesExist] geofences table ready');
 
-    // Insertar ubicación por defecto (Última Ceramic en Bogotá)
-    try {
-      await sql`
-        INSERT INTO geofences (name, latitude, longitude, radius_meters, is_active)
-        VALUES ('Última Ceramic - Bogotá', 4.7169, -74.0842, 300, true)
-        ON CONFLICT DO NOTHING
-      `;
-    } catch (e) {
-      // Tabla podría no tener UNIQUE constraint, ignorar
-    }
+    // NO insertar geofences por defecto - el usuario los crea en el Admin Panel
+    // Esto evita duplicados cada vez que se ejecuta ensureTablesExist()
 
     // Crear índices para horarios
     await sql`CREATE INDEX IF NOT EXISTS idx_schedules_employee ON employee_schedules(employee_id)`;
