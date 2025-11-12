@@ -549,6 +549,9 @@ export default async function handler(req: any, res: any) {
       case 'download_report':
         return await handleDownloadReport(req, res, adminCode, format, startDate, endDate);
       
+      case 'get_monthly_report':
+        return await handleGetMonthlyReport(req, res, adminCode, req.query.year, req.query.month, req.query.format);
+      
       case 'create_employee':
         return await handleCreateEmployee(req, res, adminCode);
       
@@ -1296,6 +1299,150 @@ async function handleDownloadReport(req: any, res: any, adminCode: string, forma
   } catch (error) {
     console.error('[handleDownloadReport] Error:', error);
     return res.status(500).json({ success: false, error: 'Error al descargar reporte' });
+  }
+}
+
+async function handleGetMonthlyReport(req: any, res: any, adminCode: string, year: string, month: string, format?: string): Promise<any> {
+  const isAdmin = await verifyAdminCode(adminCode);
+  if (!isAdmin) {
+    return res.status(403).json({ success: false, error: 'Código admin inválido' });
+  }
+
+  // ✅ Verificar permiso de exportación de reportes
+  const hasPermission = await verifyPermission(adminCode, 'canExportReports');
+  if (!hasPermission) {
+    return res.status(403).json({
+      success: false,
+      error: 'Sin permiso',
+      message: 'Tu rol no tiene permiso para exportar reportes'
+    });
+  }
+
+  if (!year || !month) {
+    return res.status(400).json({ success: false, error: 'Año y mes requeridos' });
+  }
+
+  const yearNum = parseInt(year, 10);
+  const monthNum = parseInt(month, 10);
+
+  if (isNaN(yearNum) || isNaN(monthNum) || monthNum < 1 || monthNum > 12) {
+    return res.status(400).json({ success: false, error: 'Año o mes inválido' });
+  }
+
+  try {
+    // Obtener todos los registros del mes con tardanzas
+    const timecardResult = await sql`
+      SELECT 
+        e.id,
+        e.code,
+        e.name,
+        e.position,
+        t.id as timecard_id,
+        t.date,
+        t.time_in,
+        t.time_out,
+        t.hours_worked,
+        t.notes,
+        COUNT(ta.id) as tardanzas_count,
+        MAX(CASE WHEN ta.id IS NOT NULL THEN ta.retraso_minutos ELSE 0 END) as max_retraso
+      FROM employees e
+      LEFT JOIN timecards t ON e.id = t.employee_id
+        AND EXTRACT(YEAR FROM t.date) = ${yearNum}
+        AND EXTRACT(MONTH FROM t.date) = ${monthNum}
+      LEFT JOIN tardanzas ta ON t.id = ta.timecard_id
+      WHERE e.status = 'active'
+      GROUP BY e.id, e.code, e.name, e.position, t.id, t.date, t.time_in, t.time_out, t.hours_worked, t.notes
+      ORDER BY e.name, t.date DESC
+    `;
+
+    // Procesar datos
+    const reportData: Record<string, any> = {};
+    let totalHours = 0;
+    let totalDays = 0;
+    let totalTardanzas = 0;
+
+    timecardResult.rows.forEach((row: any) => {
+      if (!reportData[row.code]) {
+        reportData[row.code] = {
+          employee_code: row.code,
+          employee_name: row.name,
+          employee_position: row.position,
+          records: [],
+          stats: {
+            total_hours: 0,
+            days_worked: 0,
+            days_absent: 0,
+            tardanzas_count: 0
+          }
+        };
+      }
+
+      if (row.timecard_id) {
+        reportData[row.code].records.push({
+          date: row.date,
+          time_in: row.time_in,
+          time_out: row.time_out,
+          hours_worked: row.hours_worked,
+          tardanzas: row.tardanzas_count,
+          max_retraso: row.max_retraso,
+          notes: row.notes
+        });
+
+        if (row.hours_worked) {
+          reportData[row.code].stats.total_hours += Number(row.hours_worked);
+          totalHours += Number(row.hours_worked);
+        }
+        if (row.time_in) {
+          reportData[row.code].stats.days_worked++;
+          totalDays++;
+        }
+        if (row.tardanzas_count > 0) {
+          reportData[row.code].stats.tardanzas_count += Number(row.tardanzas_count);
+          totalTardanzas += Number(row.tardanzas_count);
+        }
+      }
+    });
+
+    // Si pide CSV, generar
+    if (format === 'csv') {
+      let csv = 'Código,Nombre,Puesto,Fecha,Entrada,Salida,Horas,Tardanzas,Retraso(min),Notas\n';
+      
+      Object.values(reportData).forEach((employee: any) => {
+        employee.records.forEach((record: any) => {
+          const timeIn = record.time_in ? new Date(record.time_in).toLocaleString('es-CO', { timeZone: 'America/Bogota' }) : '';
+          const timeOut = record.time_out ? new Date(record.time_out).toLocaleString('es-CO', { timeZone: 'America/Bogota' }) : '';
+          
+          csv += `${employee.employee_code},"${employee.employee_name}",${employee.employee_position || ''},`;
+          csv += `${record.date},${timeIn},${timeOut},${record.hours_worked || ''},`;
+          csv += `${record.tardanzas},${record.max_retraso || ''},"${record.notes || ''}\n`;
+        });
+      });
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="reporte_asistencia_${yearNum}-${String(monthNum).padStart(2, '0')}.csv"`);
+      return res.send('\uFEFF' + csv); // Agregar BOM para Excel
+    }
+
+    // Si no especifica formato, retornar JSON
+    const summary = {
+      year: yearNum,
+      month: monthNum,
+      month_name: new Intl.DateTimeFormat('es-ES', { month: 'long' }).format(new Date(yearNum, monthNum - 1)),
+      total_employees: Object.keys(reportData).length,
+      total_hours: Math.round(totalHours * 100) / 100,
+      total_days_worked: totalDays,
+      total_tardanzas: totalTardanzas
+    };
+
+    return res.status(200).json({
+      success: true,
+      summary,
+      data: Object.values(reportData)
+    });
+
+  } catch (error) {
+    console.error('[handleGetMonthlyReport] Error:', error);
+    return res.status(500).json({ success: false, error: 'Error al generar reporte' });
   }
 }
 
