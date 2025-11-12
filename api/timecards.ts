@@ -836,11 +836,28 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
     // Formatear como string TIMESTAMP literal (sin timezone)
     const timestampString = `${localTime.year}-${String(localTime.month).padStart(2, '0')}-${String(localTime.day).padStart(2, '0')} ${String(localTime.hour).padStart(2, '0')}:${String(localTime.minute).padStart(2, '0')}:${String(localTime.second).padStart(2, '0')}`;
     
-    const insertResult = await sql`
-      INSERT INTO timecards (employee_id, date, time_in, location_in_lat, location_in_lng, location_in_accuracy, device_ip_in)
-      VALUES (${employee.id}, ${today}::DATE, ${timestampString}::TIMESTAMP, ${geolocation?.latitude || null}, ${geolocation?.longitude || null}, ${geolocation?.accuracy || null}, ${deviceIP})
-      RETURNING id, time_in
-    `;
+    // Intentar insertar con todas las columnas de geolocalización
+    // Si falla por columnas faltantes, reintentar sin ellas
+    let insertResult;
+    try {
+      insertResult = await sql`
+        INSERT INTO timecards (employee_id, date, time_in, location_in_lat, location_in_lng, location_in_accuracy, device_ip_in)
+        VALUES (${employee.id}, ${today}::DATE, ${timestampString}::TIMESTAMP, ${geolocation?.latitude || null}, ${geolocation?.longitude || null}, ${geolocation?.accuracy || null}, ${deviceIP})
+        RETURNING id, time_in
+      `;
+    } catch (insertError: any) {
+      // Si las columnas de geolocalización no existen, intentar sin ellas
+      if (insertError?.message?.includes('does not exist') || insertError?.code === '42703') {
+        console.warn('[handleClockIn] Geolocation columns not found, attempting basic insert:', insertError.message);
+        insertResult = await sql`
+          INSERT INTO timecards (employee_id, date, time_in)
+          VALUES (${employee.id}, ${today}::DATE, ${timestampString}::TIMESTAMP)
+          RETURNING id, time_in
+        `;
+      } else {
+        throw insertError;
+      }
+    }
 
     if (!insertResult.rows || insertResult.rows.length === 0) {
       console.error('[handleClockIn] Insert returned no rows');
@@ -1056,19 +1073,37 @@ async function handleClockOut(req: any, res: any, code: string): Promise<any> {
     // Validar que no sea negativo
     const finalHours = Math.max(0, hoursWorked);
 
-    // Actualizar en BD
-    const updateResult = await sql`
-      UPDATE timecards
-      SET time_out = ${timestampString}::TIMESTAMP,
-          hours_worked = ${finalHours}::DECIMAL(5,2),
-          location_out_lat = ${geolocation?.latitude || null},
-          location_out_lng = ${geolocation?.longitude || null},
-          location_out_accuracy = ${geolocation?.accuracy || null},
-          device_ip_out = ${deviceIP},
-          updated_at = NOW()
-      WHERE id = ${timecard.id}
-      RETURNING *
-    `;
+    // Actualizar en BD - intentar con geolocation columns, fallback si no existen
+    let updateResult;
+    try {
+      updateResult = await sql`
+        UPDATE timecards
+        SET time_out = ${timestampString}::TIMESTAMP,
+            hours_worked = ${finalHours}::DECIMAL(5,2),
+            location_out_lat = ${geolocation?.latitude || null},
+            location_out_lng = ${geolocation?.longitude || null},
+            location_out_accuracy = ${geolocation?.accuracy || null},
+            device_ip_out = ${deviceIP},
+            updated_at = NOW()
+        WHERE id = ${timecard.id}
+        RETURNING *
+      `;
+    } catch (updateError: any) {
+      // Si las columnas de geolocalización no existen, intentar sin ellas
+      if (updateError?.message?.includes('does not exist') || updateError?.code === '42703') {
+        console.warn('[handleClockOut] Geolocation columns not found, attempting basic update:', updateError.message);
+        updateResult = await sql`
+          UPDATE timecards
+          SET time_out = ${timestampString}::TIMESTAMP,
+              hours_worked = ${finalHours}::DECIMAL(5,2),
+              updated_at = NOW()
+          WHERE id = ${timecard.id}
+          RETURNING *
+        `;
+      } else {
+        throw updateError;
+      }
+    }
     
     if (updateResult.rows.length === 0) {
       console.error('[handleClockOut] UPDATE no retornó registros');
