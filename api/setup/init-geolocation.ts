@@ -178,21 +178,8 @@ export default async function handler(req: any, res: any) {
       console.log('ℹ️  Geofence indexes already exist');
     }
 
-    // Seed default geofence
-    try {
-      await sql`
-        INSERT INTO geofences (name, latitude, longitude, radius_meters, is_active, created_at, updated_at)
-        VALUES ('Última Ceramic - Bogotá', 4.7169, -74.0842, 300, true, NOW(), NOW())
-        ON CONFLICT DO NOTHING
-      `;
-      console.log('✅ Seeded/Verified default geofence');
-    } catch (e: any) {
-      if (e.message?.includes('UNIQUE') || e.message?.includes('ON CONFLICT')) {
-        console.log('ℹ️  Default geofence already exists');
-      } else {
-        throw e;
-      }
-    }
+    // ✅ DO NOT seed default geofence - let users create geofences via Admin Panel
+    // This prevents duplicate geofences being created every time the endpoint is called
 
     console.log('\n✨ Geolocation schema initialization completed successfully!');
     
