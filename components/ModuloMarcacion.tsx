@@ -2,6 +2,20 @@ import React, { useState, useEffect } from 'react';
 import type { Employee, ClockInResponse, ClockOutResponse, Timecard } from '../types/timecard';
 import { fetchWithAbort } from '../utils/fetchWithAbort';
 
+// Helper para formatear timestamps ISO a hora local
+const formatTimestamp = (isoString: string): string => {
+  const date = new Date(isoString);
+  // Usar getUTCHours/Minutes/Seconds porque el backend guarda hora local como ISO UTC
+  const hours = date.getUTCHours();
+  const minutes = date.getUTCMinutes();
+  const seconds = date.getUTCSeconds();
+  
+  const ampm = hours >= 12 ? 'p. m.' : 'a. m.';
+  const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+  
+  return `${String(hour12).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')} ${ampm}`;
+};
+
 // Helper para validar y formatear horas
 const formatHours = (value: any): string | null => {
   if (value === null || value === undefined) return null;
@@ -270,7 +284,7 @@ export const ModuloMarcacion: React.FC = () => {
                 <div className="text-left">
                   <p className="font-bold">Entrada registrada</p>
                   <p className="text-xs text-blue-600">
-                    {timeIn && new Date(timeIn).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                    {timeIn && formatTimestamp(timeIn)}
                   </p>
                 </div>
               </div>
@@ -318,7 +332,7 @@ export const ModuloMarcacion: React.FC = () => {
                 <div className="flex justify-between">
                   <span className="text-brand-secondary">Entrada:</span>
                   <span className="font-mono font-semibold text-green-600">
-                    {new Date(todayStatus.timeIn || todayStatus.time_in!).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
+                    {formatTimestamp(todayStatus.timeIn || todayStatus.time_in!)}
                   </span>
                 </div>
               )}
@@ -326,7 +340,7 @@ export const ModuloMarcacion: React.FC = () => {
                 <div className="flex justify-between">
                   <span className="text-brand-secondary">Salida:</span>
                   <span className="font-mono font-semibold text-red-600">
-                    {new Date(todayStatus.timeOut || todayStatus.time_out!).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
+                    {formatTimestamp(todayStatus.timeOut || todayStatus.time_out!)}
                   </span>
                 </div>
               )}
