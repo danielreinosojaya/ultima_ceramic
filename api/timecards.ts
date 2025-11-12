@@ -324,6 +324,119 @@ async function calculateHours(timeIn: string, timeOut: string): Promise<number> 
   return Math.round(hours * 100) / 100; // Redondear a 2 decimales
 }
 
+// ============ VALIDACIONES ROBUSTAS ============
+
+interface ValidationError {
+  field: string;
+  message: string;
+  severity: 'error' | 'warning';
+}
+
+interface ValidationResult {
+  isValid: boolean;
+  errors: ValidationError[];
+}
+
+async function validateTimecardUpdate(
+  timecardId: number,
+  newTimeIn?: string,
+  newTimeOut?: string,
+  employeeId?: number
+): Promise<ValidationResult> {
+  const errors: ValidationError[] = [];
+
+  try {
+    // Obtener el timecard actual
+    const currentResult = await sql`SELECT * FROM timecards WHERE id = ${timecardId}`;
+    if (currentResult.rows.length === 0) {
+      errors.push({
+        field: 'timecard_id',
+        message: 'Marcación no encontrada',
+        severity: 'error'
+      });
+      return { isValid: false, errors };
+    }
+
+    const currentTimecard = currentResult.rows[0];
+
+    // Validación 1: No editar registros más viejos de 30 días
+    const recordDate = new Date(currentTimecard.date);
+    const today = new Date();
+    const daysDifference = Math.floor((today.getTime() - recordDate.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (daysDifference > 30) {
+      errors.push({
+        field: 'date',
+        message: `No se pueden editar registros con más de 30 días (este registro tiene ${daysDifference} días)`,
+        severity: 'error'
+      });
+    }
+
+    // Validación 2: time_in debe ser anterior a time_out
+    if (newTimeIn && newTimeOut) {
+      const timeInDate = new Date(newTimeIn);
+      const timeOutDate = new Date(newTimeOut);
+      
+      if (timeInDate >= timeOutDate) {
+        errors.push({
+          field: 'time_out',
+          message: 'La hora de salida debe ser posterior a la de entrada',
+          severity: 'error'
+        });
+      }
+
+      // Validación 3: Horas razonables (máximo 12 horas de trabajo)
+      const diffMs = timeOutDate.getTime() - timeInDate.getTime();
+      const hoursWorked = diffMs / (1000 * 60 * 60);
+      
+      if (hoursWorked > 12) {
+        errors.push({
+          field: 'hours_worked',
+          message: `Horas trabajadas (${hoursWorked.toFixed(2)}h) exceden lo razonable (máx 12h)`,
+          severity: 'warning'
+        });
+      }
+    }
+
+    // Validación 4: No editar horas futuras
+    if (newTimeIn) {
+      const timeInDate = new Date(newTimeIn);
+      if (timeInDate > new Date()) {
+        errors.push({
+          field: 'time_in',
+          message: 'No se pueden registrar horas futuras',
+          severity: 'error'
+        });
+      }
+    }
+
+    // Validación 5: Employee debe estar activo
+    if (employeeId) {
+      const empResult = await sql`SELECT status FROM employees WHERE id = ${employeeId}`;
+      if (empResult.rows.length > 0 && empResult.rows[0].status !== 'active') {
+        errors.push({
+          field: 'employee_id',
+          message: 'El empleado no está activo',
+          severity: 'error'
+        });
+      }
+    }
+
+    // Si hay errores de severidad 'error', no es válido
+    const hasErrors = errors.some(e => e.severity === 'error');
+    return { isValid: !hasErrors, errors };
+
+  } catch (error) {
+    console.error('[validateTimecardUpdate] Error:', error);
+    errors.push({
+      field: 'validation',
+      message: 'Error al validar los datos',
+      severity: 'error'
+    });
+    return { isValid: false, errors };
+  }
+}
+
 // Handler principal
 export default async function handler(req: any, res: any) {
   const { action, code, adminCode: queryAdminCode, month, year, startDate, endDate, format } = req.query;
@@ -1240,14 +1353,36 @@ async function handleDeleteTimecard(req: any, res: any, adminCode: string, timec
       return res.status(400).json({ success: false, error: 'ID de marcación inválido' });
     }
 
-    // Guardar en audit antes de eliminar
-    const timecard = await sql`SELECT * FROM timecards WHERE id = ${tcId}`;
-    if (timecard.rows.length > 0) {
-      await sql`
-        INSERT INTO timecard_audit (timecard_id, employee_id, action, changes, admin_code, created_at)
-        VALUES (${tcId}, ${timecard.rows[0].employee_id}, 'DELETE', ${'{"deleted": true}'}, ${adminCode}, NOW())
-      `;
+    // Guardar registro completo en audit antes de eliminar
+    const timecardResult = await sql`SELECT * FROM timecards WHERE id = ${tcId}`;
+    if (timecardResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Marcación no encontrada' });
     }
+
+    const deletedRecord = timecardResult.rows[0];
+
+    // ✅ AUDITORÍA COMPLETA: Guardar todo el registro antes de eliminarlo
+    const deletionDetails = {
+      action: 'DELETE',
+      deletedRecord: {
+        id: deletedRecord.id,
+        employee_id: deletedRecord.employee_id,
+        date: deletedRecord.date,
+        time_in: deletedRecord.time_in,
+        time_out: deletedRecord.time_out,
+        hours_worked: deletedRecord.hours_worked,
+        notes: deletedRecord.notes,
+        created_at: deletedRecord.created_at,
+        updated_at: deletedRecord.updated_at
+      },
+      deletedAt: new Date().toISOString(),
+      deletedBy: adminCode
+    };
+
+    await sql`
+      INSERT INTO timecard_audit (timecard_id, employee_id, action, changes, admin_code, created_at)
+      VALUES (${tcId}, ${deletedRecord.employee_id}, 'DELETE', ${JSON.stringify(deletionDetails)}, ${adminCode}, NOW())
+    `;
 
     // Eliminar
     const result = await sql`DELETE FROM timecards WHERE id = ${tcId} RETURNING id`;
@@ -1256,9 +1391,20 @@ async function handleDeleteTimecard(req: any, res: any, adminCode: string, timec
       return res.status(404).json({ success: false, error: 'Marcación no encontrada' });
     }
 
+    console.log('[handleDeleteTimecard] Successfully deleted:', {
+      timecardId: tcId,
+      employeeId: deletedRecord.employee_id,
+      adminCode
+    });
+
     return res.status(200).json({
       success: true,
-      message: 'Marcación eliminada correctamente'
+      message: 'Marcación eliminada correctamente',
+      deletedRecord: {
+        id: deletedRecord.id,
+        employee_id: deletedRecord.employee_id,
+        date: deletedRecord.date
+      }
     });
   } catch (error: any) {
     console.error('[handleDeleteTimecard] Error:', error);
@@ -1293,24 +1439,66 @@ async function handleUpdateTimecard(req: any, res: any, adminCode: string, timec
       return res.status(404).json({ success: false, error: 'Marcación no encontrada' });
     }
 
+    const oldRecord = oldTimecard.rows[0];
+
+    // ✅ NUEVAS VALIDACIONES ROBUSTAS
+    const validation = await validateTimecardUpdate(
+      tcId,
+      time_in,
+      time_out,
+      oldRecord.employee_id
+    );
+
+    if (!validation.isValid) {
+      const errorMessages = validation.errors
+        .filter(e => e.severity === 'error')
+        .map(e => e.message);
+      
+      return res.status(400).json({
+        success: false,
+        error: 'Validación fallida',
+        details: errorMessages,
+        validationErrors: validation.errors
+      });
+    }
+
+    // Advertencias (si las hay)
+    const warnings = validation.errors.filter(e => e.severity === 'warning');
+
     // Calcular horas si hay ambas marcas
     let hoursWorked = 0;
     if (time_in && time_out) {
-      const inTime = new Date(time_in).getTime();
-      const outTime = new Date(time_out).getTime();
-      hoursWorked = Math.round((outTime - inTime) / (1000 * 60 * 60) * 100) / 100;
+      hoursWorked = await calculateHours(time_in, time_out);
     }
 
-    // Guardar cambios en audit
-    const changes = {
-      time_in: time_in ? time_in : oldTimecard.rows[0].time_in,
-      time_out: time_out ? time_out : oldTimecard.rows[0].time_out,
-      notes: notes || null
+    // ✅ AUDITORÍA COMPLETA: Capturar ANTES y DESPUÉS
+    const changeDetails = {
+      before: {
+        time_in: oldRecord.time_in,
+        time_out: oldRecord.time_out,
+        hours_worked: oldRecord.hours_worked,
+        notes: oldRecord.notes,
+        edited_at: oldRecord.edited_at,
+        updated_at: oldRecord.updated_at
+      },
+      after: {
+        time_in: time_in || oldRecord.time_in,
+        time_out: time_out || oldRecord.time_out,
+        hours_worked: hoursWorked || oldRecord.hours_worked,
+        notes: notes || oldRecord.notes
+      },
+      changedFields: [] as string[]
     };
 
+    // Marcar qué campos fueron modificados
+    if (time_in && time_in !== oldRecord.time_in) changeDetails.changedFields.push('time_in');
+    if (time_out && time_out !== oldRecord.time_out) changeDetails.changedFields.push('time_out');
+    if (notes !== undefined && notes !== oldRecord.notes) changeDetails.changedFields.push('notes');
+
+    // Guardar en auditoría
     await sql`
       INSERT INTO timecard_audit (timecard_id, employee_id, action, changes, admin_code, created_at)
-      VALUES (${tcId}, ${oldTimecard.rows[0].employee_id}, 'UPDATE', ${JSON.stringify(changes)}, ${adminCode}, NOW())
+      VALUES (${tcId}, ${oldRecord.employee_id}, 'UPDATE', ${JSON.stringify(changeDetails)}, ${adminCode}, NOW())
     `;
 
     // Actualizar
@@ -1319,8 +1507,8 @@ async function handleUpdateTimecard(req: any, res: any, adminCode: string, timec
       SET 
         time_in = COALESCE(${time_in}::TIMESTAMP, time_in),
         time_out = COALESCE(${time_out}::TIMESTAMP, time_out),
-        hours_worked = ${hoursWorked},
-        notes = ${notes || null},
+        hours_worked = ${hoursWorked || oldRecord.hours_worked}::DECIMAL(5,2),
+        notes = ${notes !== undefined ? notes : oldRecord.notes},
         edited_by = ${adminCode},
         edited_at = NOW(),
         updated_at = NOW()
@@ -1332,10 +1520,18 @@ async function handleUpdateTimecard(req: any, res: any, adminCode: string, timec
       return res.status(404).json({ success: false, error: 'Marcación no encontrada' });
     }
 
+    console.log('[handleUpdateTimecard] Successfully updated:', {
+      timecardId: tcId,
+      adminCode,
+      changedFields: changeDetails.changedFields,
+      warnings: warnings.length > 0 ? warnings : 'none'
+    });
+
     return res.status(200).json({
       success: true,
       data: toCamelCase(result.rows[0]),
-      message: 'Marcación actualizada correctamente'
+      message: 'Marcación actualizada correctamente',
+      warnings: warnings.length > 0 ? warnings : undefined
     });
   } catch (error: any) {
     console.error('[handleUpdateTimecard] Error:', error);
