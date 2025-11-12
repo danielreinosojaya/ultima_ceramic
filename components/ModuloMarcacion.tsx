@@ -129,11 +129,14 @@ export const ModuloMarcacion: React.FC = () => {
         // Usar la respuesta directa sin refresh innecesario
         // La respuesta de clock_in ya incluye el estado actualizado
         if (result.timestamp) {
+          // Convertir timestamp "YYYY-MM-DD HH:MM:SS" a ISO "YYYY-MM-DDTHH:MM:SS.000Z"
+          const isoTimestamp = result.timestamp.replace(' ', 'T') + '.000Z';
+          
           const updatedTimecard: Timecard = {
             id: todayStatus?.id || 0,
             employee_id: result.employee?.id || 0,
             date: new Date().toISOString().split('T')[0],
-            time_in: result.timestamp,
+            time_in: isoTimestamp,
             time_out: undefined,
             hours_worked: undefined,
             created_at: new Date().toISOString(),
@@ -190,11 +193,14 @@ export const ModuloMarcacion: React.FC = () => {
         // Usar la respuesta directa sin refresh innecesario
         // La respuesta de clock_out ya incluye horas_worked calculadas
         if (todayStatus && result.timestamp) {
+          // Convertir timestamp "YYYY-MM-DD HH:MM:SS" a ISO "YYYY-MM-DDTHH:MM:SS.000Z"
+          const isoTimestamp = result.timestamp.replace(' ', 'T') + '.000Z';
+          
           const updatedTimecard: Timecard = {
             ...todayStatus,
-            time_out: result.timestamp,
+            time_out: isoTimestamp,
             hours_worked: result.hours_worked,
-            updated_at: result.timestamp
+            updated_at: isoTimestamp
           };
           setTodayStatus(updatedTimecard);
         }
