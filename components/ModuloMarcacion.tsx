@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { Employee, ClockInResponse, ClockOutResponse, Timecard } from '../types/timecard';
 import { fetchWithAbort } from '../utils/fetchWithAbort';
+import { useGeolocation } from '../hooks/useGeolocation';
 
 // Helper para formatear timestamps ISO a hora local
 const formatTimestamp = (isoString: string): string => {
@@ -33,6 +34,9 @@ export const ModuloMarcacion: React.FC = () => {
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' }>({ text: '', type: 'success' });
   const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
   const [todayStatus, setTodayStatus] = useState<Timecard | null>(null);
+  
+  // ✅ Hook para geolocalización
+  const { coords, loading: geoLoading, error: geoError, requestLocation } = useGeolocation();
 
   // Al cambiar el código, verificar si empleado ya tiene marcación hoy
   useEffect(() => {
@@ -96,6 +100,27 @@ export const ModuloMarcacion: React.FC = () => {
       return;
     }
 
+    // ✅ Solicitar geolocalización antes de marcar
+    setMessage({ text: 'Obteniendo ubicación...', type: 'success' });
+    setLoading(true);
+
+    // Solicitar ubicación
+    await new Promise(resolve => {
+      requestLocation();
+      // Esperar a que se obtenga la ubicación (máx 10s)
+      const maxWait = 10000;
+      const interval = setInterval(() => {
+        if (coords) {
+          clearInterval(interval);
+          resolve(true);
+        }
+      }, 100);
+      setTimeout(() => {
+        clearInterval(interval);
+        resolve(false);
+      }, maxWait);
+    });
+
     setLoading(true);
     setMessage({ text: '', type: 'success' });
 
@@ -116,11 +141,16 @@ export const ModuloMarcacion: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           code,
-          localTime // Enviar hora local EXACTA
+          localTime,
+          geolocation: coords ? {
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+            accuracy: coords.accuracy
+          } : undefined
         })
       });
 
-      const result = (await response.json()) as ClockInResponse;
+      const result = (await response.json()) as any;
 
       if (result.success) {
         setMessage({ text: result.message, type: 'success' });
@@ -145,7 +175,15 @@ export const ModuloMarcacion: React.FC = () => {
           setTodayStatus(updatedTimecard);
         }
       } else {
-        setMessage({ text: result.message, type: 'error' });
+        // ✅ Mostrar advertencia de geofence si aplicable
+        if (result.geofenceCheck) {
+          setMessage({ 
+            text: `${result.message || 'Error'} (Distancia: ${result.geofenceCheck.distance}m)`, 
+            type: 'error' 
+          });
+        } else {
+          setMessage({ text: result.message, type: 'error' });
+        }
       }
     } catch (error) {
       setMessage({ text: 'Error al marcar entrada', type: 'error' });
@@ -160,6 +198,27 @@ export const ModuloMarcacion: React.FC = () => {
       setMessage({ text: 'Ingresa tu código', type: 'error' });
       return;
     }
+
+    // ✅ Solicitar geolocalización antes de marcar salida
+    setMessage({ text: 'Obteniendo ubicación...', type: 'success' });
+    setLoading(true);
+
+    // Solicitar ubicación
+    await new Promise(resolve => {
+      requestLocation();
+      // Esperar a que se obtenga la ubicación (máx 10s)
+      const maxWait = 10000;
+      const interval = setInterval(() => {
+        if (coords) {
+          clearInterval(interval);
+          resolve(true);
+        }
+      }, 100);
+      setTimeout(() => {
+        clearInterval(interval);
+        resolve(false);
+      }, maxWait);
+    });
 
     setLoading(true);
     setMessage({ text: '', type: 'success' });
@@ -181,11 +240,16 @@ export const ModuloMarcacion: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           code,
-          localTime // Enviar hora local EXACTA
+          localTime,
+          geolocation: coords ? {
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+            accuracy: coords.accuracy
+          } : undefined
         })
       });
 
-      const result = (await response.json()) as ClockOutResponse;
+      const result = (await response.json()) as any;
 
       if (result.success) {
         setMessage({ text: result.message, type: 'success' });

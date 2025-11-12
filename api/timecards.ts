@@ -175,6 +175,14 @@ async function ensureTablesExist(): Promise<void> {
         notes VARCHAR(255),
         edited_by INTEGER,
         edited_at TIMESTAMP,
+        location_in_lat DECIMAL(10,7),
+        location_in_lng DECIMAL(10,7),
+        location_in_accuracy DECIMAL(5,2),
+        location_out_lat DECIMAL(10,7),
+        location_out_lng DECIMAL(10,7),
+        location_out_accuracy DECIMAL(5,2),
+        device_ip_in VARCHAR(45),
+        device_ip_out VARCHAR(45),
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW(),
         CONSTRAINT fk_timecards_employee FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
@@ -249,6 +257,32 @@ async function ensureTablesExist(): Promise<void> {
       )
     `;
     console.log('[ensureTablesExist] tardanzas table ready');
+
+    // Crear tabla geofences (ubicaciones permitidas para check-in)
+    await sql`
+      CREATE TABLE IF NOT EXISTS geofences (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        latitude DECIMAL(10,7) NOT NULL,
+        longitude DECIMAL(10,7) NOT NULL,
+        radius_meters INTEGER NOT NULL DEFAULT 200,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `;
+    console.log('[ensureTablesExist] geofences table ready');
+
+    // Insertar ubicación por defecto (Última Ceramic en Bogotá)
+    try {
+      await sql`
+        INSERT INTO geofences (name, latitude, longitude, radius_meters, is_active)
+        VALUES ('Última Ceramic - Bogotá', 4.7169, -74.0842, 300, true)
+        ON CONFLICT DO NOTHING
+      `;
+    } catch (e) {
+      // Tabla podría no tener UNIQUE constraint, ignorar
+    }
 
     // Crear índices para horarios
     await sql`CREATE INDEX IF NOT EXISTS idx_schedules_employee ON employee_schedules(employee_id)`;
@@ -399,6 +433,89 @@ async function calculateHours(timeIn: string, timeOut: string): Promise<number> 
   }
   
   return Math.round(hours * 100) / 100; // Redondear a 2 decimales
+}
+
+// ============ VALIDACIONES DE GEOLOCALIZACIÓN ============
+
+interface GeolocationData {
+  latitude: number;
+  longitude: number;
+  accuracy?: number;
+  ipAddress?: string;
+}
+
+interface GeofenceCheckResult {
+  isWithinGeofence: boolean;
+  distance: number;
+  geofenceName: string;
+  warning?: string;
+}
+
+function calculateDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  // Haversine formula para calcular distancia en metros
+  const R = 6371000; // Radio de la Tierra en metros
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+async function validateGeofence(
+  latitude: number,
+  longitude: number
+): Promise<GeofenceCheckResult> {
+  try {
+    const result = await sql`
+      SELECT id, name, latitude, longitude, radius_meters
+      FROM geofences
+      WHERE is_active = true
+      ORDER BY ABS(latitude - ${latitude}) + ABS(longitude - ${longitude})
+      LIMIT 1
+    `;
+
+    if (result.rows.length === 0) {
+      return {
+        isWithinGeofence: false,
+        distance: Infinity,
+        geofenceName: 'No hay geofences configurados',
+        warning: 'Sistema de geofence no configurado'
+      };
+    }
+
+    const geofence = result.rows[0];
+    const distance = calculateDistance(
+      latitude,
+      longitude,
+      parseFloat(geofence.latitude),
+      parseFloat(geofence.longitude)
+    );
+
+    const isWithin = distance <= geofence.radius_meters;
+
+    return {
+      isWithinGeofence: isWithin,
+      distance: Math.round(distance),
+      geofenceName: geofence.name,
+      warning: !isWithin ? `Fuera de rango: ${Math.round(distance)}m de ${geofence.name}` : undefined
+    };
+  } catch (error) {
+    console.error('[validateGeofence] Error:', error);
+    return {
+      isWithinGeofence: false,
+      distance: Infinity,
+      geofenceName: 'Error',
+      warning: 'Error al validar ubicación'
+    };
+  }
 }
 
 // ============ VALIDACIONES ROBUSTAS ============
@@ -582,6 +699,21 @@ export default async function handler(req: any, res: any) {
       case 'delete_employee_schedule':
         return await handleDeleteEmployeeSchedule(req, res, adminCode, req.query.scheduleId as string);
       
+      case 'get_geofences':
+        return await handleGetGeofences(req, res, adminCode);
+      
+      case 'create_geofence':
+        return await handleCreateGeofence(req, res, adminCode);
+      
+      case 'update_geofence':
+        return await handleUpdateGeofence(req, res, adminCode, req.query.geofenceId);
+      
+      case 'toggle_geofence':
+        return await handleToggleGeofence(req, res, adminCode, req.query.geofenceId);
+      
+      case 'delete_geofence':
+        return await handleDeleteGeofence(req, res, adminCode, req.query.geofenceId);
+      
       default:
         return res.status(400).json({ success: false, error: 'Acción no válida' });
     }
@@ -615,6 +747,24 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
 
     // ESTRATEGIA CORRECTA: Usar localTime del cliente, convertir considerando timezone del servidor
     const localTime = req.body?.localTime;
+    const geolocation = req.body?.geolocation; // { latitude, longitude, accuracy }
+    const deviceIP = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+    
+    // ✅ Validar geofence si hay ubicación
+    let geofenceCheck: GeofenceCheckResult | null = null;
+    if (geolocation?.latitude && geolocation?.longitude) {
+      geofenceCheck = await validateGeofence(geolocation.latitude, geolocation.longitude);
+      console.log('[handleClockIn] Geofence check:', geofenceCheck);
+      
+      if (!geofenceCheck.isWithinGeofence) {
+        return res.status(403).json({
+          success: false,
+          message: `❌ ${geofenceCheck.warning}`,
+          geofenceCheck,
+          instruction: 'Debes estar en la ubicación de trabajo para marcar entrada'
+        } as any);
+      }
+    }
     
     let nowUTC: Date;
     
@@ -686,11 +836,28 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
     // Formatear como string TIMESTAMP literal (sin timezone)
     const timestampString = `${localTime.year}-${String(localTime.month).padStart(2, '0')}-${String(localTime.day).padStart(2, '0')} ${String(localTime.hour).padStart(2, '0')}:${String(localTime.minute).padStart(2, '0')}:${String(localTime.second).padStart(2, '0')}`;
     
-    const insertResult = await sql`
-      INSERT INTO timecards (employee_id, date, time_in)
-      VALUES (${employee.id}, ${today}::DATE, ${timestampString}::TIMESTAMP)
-      RETURNING id, time_in
-    `;
+    // Intentar insertar con todas las columnas de geolocalización
+    // Si falla por columnas faltantes, reintentar sin ellas
+    let insertResult;
+    try {
+      insertResult = await sql`
+        INSERT INTO timecards (employee_id, date, time_in, location_in_lat, location_in_lng, location_in_accuracy, device_ip_in)
+        VALUES (${employee.id}, ${today}::DATE, ${timestampString}::TIMESTAMP, ${geolocation?.latitude || null}, ${geolocation?.longitude || null}, ${geolocation?.accuracy || null}, ${deviceIP})
+        RETURNING id, time_in
+      `;
+    } catch (insertError: any) {
+      // Si las columnas de geolocalización no existen, intentar sin ellas
+      if (insertError?.message?.includes('does not exist') || insertError?.code === '42703') {
+        console.warn('[handleClockIn] Geolocation columns not found, attempting basic insert:', insertError.message);
+        insertResult = await sql`
+          INSERT INTO timecards (employee_id, date, time_in)
+          VALUES (${employee.id}, ${today}::DATE, ${timestampString}::TIMESTAMP)
+          RETURNING id, time_in
+        `;
+      } else {
+        throw insertError;
+      }
+    }
 
     if (!insertResult.rows || insertResult.rows.length === 0) {
       console.error('[handleClockIn] Insert returned no rows');
@@ -890,6 +1057,10 @@ async function handleClockOut(req: any, res: any, code: string): Promise<any> {
     // Formatear como string TIMESTAMP literal
     const timestampString = `${localTime.year}-${String(localTime.month).padStart(2, '0')}-${String(localTime.day).padStart(2, '0')} ${String(localTime.hour).padStart(2, '0')}:${String(localTime.minute).padStart(2, '0')}:${String(localTime.second).padStart(2, '0')}`;
     
+    // Capturar geolocalización y IP
+    const geolocation = req.body?.geolocation; // { latitude, longitude, accuracy }
+    const deviceIP = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+    
     // Calcular horas usando los timestamps guardados en DB
     const hoursWorked = await calculateHours(timecard.time_in, timestampString);
 
@@ -902,15 +1073,37 @@ async function handleClockOut(req: any, res: any, code: string): Promise<any> {
     // Validar que no sea negativo
     const finalHours = Math.max(0, hoursWorked);
 
-    // Actualizar en BD
-    const updateResult = await sql`
-      UPDATE timecards
-      SET time_out = ${timestampString}::TIMESTAMP,
-          hours_worked = ${finalHours}::DECIMAL(5,2),
-          updated_at = NOW()
-      WHERE id = ${timecard.id}
-      RETURNING *
-    `;
+    // Actualizar en BD - intentar con geolocation columns, fallback si no existen
+    let updateResult;
+    try {
+      updateResult = await sql`
+        UPDATE timecards
+        SET time_out = ${timestampString}::TIMESTAMP,
+            hours_worked = ${finalHours}::DECIMAL(5,2),
+            location_out_lat = ${geolocation?.latitude || null},
+            location_out_lng = ${geolocation?.longitude || null},
+            location_out_accuracy = ${geolocation?.accuracy || null},
+            device_ip_out = ${deviceIP},
+            updated_at = NOW()
+        WHERE id = ${timecard.id}
+        RETURNING *
+      `;
+    } catch (updateError: any) {
+      // Si las columnas de geolocalización no existen, intentar sin ellas
+      if (updateError?.message?.includes('does not exist') || updateError?.code === '42703') {
+        console.warn('[handleClockOut] Geolocation columns not found, attempting basic update:', updateError.message);
+        updateResult = await sql`
+          UPDATE timecards
+          SET time_out = ${timestampString}::TIMESTAMP,
+              hours_worked = ${finalHours}::DECIMAL(5,2),
+              updated_at = NOW()
+          WHERE id = ${timecard.id}
+          RETURNING *
+        `;
+      } else {
+        throw updateError;
+      }
+    }
     
     if (updateResult.rows.length === 0) {
       console.error('[handleClockOut] UPDATE no retornó registros');
@@ -2032,5 +2225,181 @@ async function handleDeleteEmployeeSchedule(req: any, res: any, adminCode: strin
   } catch (error) {
     console.error('[handleDeleteEmployeeSchedule] Error:', error);
     return res.status(500).json({ success: false, error: 'Error al eliminar horario' });
+  }
+}
+
+// ============ GEOFENCE HANDLERS ============
+
+async function handleGetGeofences(req: any, res: any, adminCode: string): Promise<any> {
+  const isAdmin = await verifyAdminCode(adminCode);
+  if (!isAdmin) {
+    return res.status(403).json({ success: false, error: 'Código admin inválido' });
+  }
+
+  try {
+    const result = await sql`
+      SELECT id, name, latitude, longitude, radius_meters, is_active, created_at
+      FROM geofences
+      ORDER BY created_at DESC
+    `;
+
+    return res.status(200).json({
+      success: true,
+      data: result.rows.map(row => ({
+        ...row,
+        latitude: parseFloat(row.latitude),
+        longitude: parseFloat(row.longitude),
+        radius_meters: parseInt(row.radius_meters)
+      }))
+    });
+  } catch (error) {
+    console.error('[handleGetGeofences] Error:', error);
+    return res.status(500).json({ success: false, error: 'Error al obtener geofences' });
+  }
+}
+
+async function handleCreateGeofence(req: any, res: any, adminCode: string): Promise<any> {
+  const isAdmin = await verifyAdminCode(adminCode);
+  if (!isAdmin) {
+    return res.status(403).json({ success: false, error: 'Código admin inválido' });
+  }
+
+  const { name, latitude, longitude, radius_meters } = req.body;
+
+  if (!name || latitude === undefined || longitude === undefined || !radius_meters) {
+    return res.status(400).json({ success: false, error: 'Todos los campos son requeridos' });
+  }
+
+  try {
+    const result = await sql`
+      INSERT INTO geofences (name, latitude, longitude, radius_meters, is_active)
+      VALUES (${name}, ${latitude}, ${longitude}, ${radius_meters}, true)
+      RETURNING id, name, latitude, longitude, radius_meters, is_active, created_at
+    `;
+
+    if (result.rows.length === 0) {
+      return res.status(500).json({ success: false, error: 'Error al crear geofence' });
+    }
+
+    const row = result.rows[0];
+    return res.status(201).json({
+      success: true,
+      data: {
+        ...row,
+        latitude: parseFloat(row.latitude),
+        longitude: parseFloat(row.longitude),
+        radius_meters: parseInt(row.radius_meters)
+      }
+    });
+  } catch (error) {
+    console.error('[handleCreateGeofence] Error:', error);
+    return res.status(500).json({ success: false, error: 'Error al crear geofence' });
+  }
+}
+
+async function handleUpdateGeofence(req: any, res: any, adminCode: string, geofenceId: any): Promise<any> {
+  const isAdmin = await verifyAdminCode(adminCode);
+  if (!isAdmin) {
+    return res.status(403).json({ success: false, error: 'Código admin inválido' });
+  }
+
+  const { name, latitude, longitude, radius_meters } = req.body;
+  const gfId = parseInt(geofenceId, 10);
+
+  if (isNaN(gfId)) {
+    return res.status(400).json({ success: false, error: 'ID inválido' });
+  }
+
+  try {
+    const result = await sql`
+      UPDATE geofences
+      SET name = ${name}, latitude = ${latitude}, longitude = ${longitude}, radius_meters = ${radius_meters}, updated_at = NOW()
+      WHERE id = ${gfId}
+      RETURNING id, name, latitude, longitude, radius_meters, is_active, created_at
+    `;
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Geofence no encontrado' });
+    }
+
+    const row = result.rows[0];
+    return res.status(200).json({
+      success: true,
+      data: {
+        ...row,
+        latitude: parseFloat(row.latitude),
+        longitude: parseFloat(row.longitude),
+        radius_meters: parseInt(row.radius_meters)
+      }
+    });
+  } catch (error) {
+    console.error('[handleUpdateGeofence] Error:', error);
+    return res.status(500).json({ success: false, error: 'Error al actualizar geofence' });
+  }
+}
+
+async function handleToggleGeofence(req: any, res: any, adminCode: string, geofenceId: any): Promise<any> {
+  const isAdmin = await verifyAdminCode(adminCode);
+  if (!isAdmin) {
+    return res.status(403).json({ success: false, error: 'Código admin inválido' });
+  }
+
+  const { is_active } = req.body;
+  const gfId = parseInt(geofenceId, 10);
+
+  if (isNaN(gfId)) {
+    return res.status(400).json({ success: false, error: 'ID inválido' });
+  }
+
+  try {
+    const result = await sql`
+      UPDATE geofences
+      SET is_active = ${is_active}, updated_at = NOW()
+      WHERE id = ${gfId}
+      RETURNING id, name, latitude, longitude, radius_meters, is_active, created_at
+    `;
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Geofence no encontrado' });
+    }
+
+    const row = result.rows[0];
+    return res.status(200).json({
+      success: true,
+      data: {
+        ...row,
+        latitude: parseFloat(row.latitude),
+        longitude: parseFloat(row.longitude),
+        radius_meters: parseInt(row.radius_meters)
+      }
+    });
+  } catch (error) {
+    console.error('[handleToggleGeofence] Error:', error);
+    return res.status(500).json({ success: false, error: 'Error al actualizar geofence' });
+  }
+}
+
+async function handleDeleteGeofence(req: any, res: any, adminCode: string, geofenceId: any): Promise<any> {
+  const isAdmin = await verifyAdminCode(adminCode);
+  if (!isAdmin) {
+    return res.status(403).json({ success: false, error: 'Código admin inválido' });
+  }
+
+  const gfId = parseInt(geofenceId, 10);
+
+  if (isNaN(gfId)) {
+    return res.status(400).json({ success: false, error: 'ID inválido' });
+  }
+
+  try {
+    await sql`DELETE FROM geofences WHERE id = ${gfId}`;
+
+    return res.status(200).json({
+      success: true,
+      message: 'Geofence eliminado'
+    });
+  } catch (error) {
+    console.error('[handleDeleteGeofence] Error:', error);
+    return res.status(500).json({ success: false, error: 'Error al eliminar geofence' });
   }
 }
