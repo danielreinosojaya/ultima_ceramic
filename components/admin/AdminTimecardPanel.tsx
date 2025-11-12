@@ -3,6 +3,7 @@ import type { AdminDashboardStats, Employee, Timecard } from '../../types/timeca
 import { TardanzasView } from './TardanzasView';
 import { EmployeeScheduleManager } from './EmployeeScheduleManager';
 import { MonthlyReportViewer } from './MonthlyReportViewer';
+import { GeofenceManager } from './GeofenceManager';
 import { fetchWithAbort } from '../../utils/fetchWithAbort';
 
 interface AdminTimecardPanelProps {
@@ -12,7 +13,7 @@ interface AdminTimecardPanelProps {
 export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCode }) => {
   const [dashboard, setDashboard] = useState<AdminDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'history' | 'tardanzas' | 'reportes'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'history' | 'tardanzas' | 'reportes' | 'geofences'>('dashboard');
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [employeeHistory, setEmployeeHistory] = useState<Timecard[]>([]);
@@ -336,7 +337,7 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
 
         {/* Tabs */}
         <div className="flex gap-4 mb-8 border-b border-brand-border">
-          {(['dashboard', 'employees', 'history', 'tardanzas', 'reportes'] as const).map(tab => (
+          {(['dashboard', 'employees', 'history', 'tardanzas', 'reportes', 'geofences'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => {
@@ -357,6 +358,7 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
               {tab === 'history' && '📋 Historial'}
               {tab === 'tardanzas' && '⏰ Tardanzas'}
               {tab === 'reportes' && '📊 Reportes'}
+              {tab === 'geofences' && '📍 Ubicaciones'}
             </button>
           ))}
         </div>
@@ -796,6 +798,11 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
         {/* REPORTES TAB */}
         {activeTab === 'reportes' && (
           <MonthlyReportViewer adminCode={adminCode} />
+        )}
+
+        {/* GEOFENCES TAB */}
+        {activeTab === 'geofences' && (
+          <GeofenceManager adminCode={adminCode} />
         )}
 
         {/* MODAL: Editar Marcación */}
