@@ -38,8 +38,8 @@ async function verifyAdminCode(adminCode: string): Promise<boolean> {
       // Intentar crear el código si no existe
       try {
         await sql`
-          INSERT INTO admin_codes (code, password_hash, active, created_at)
-          VALUES ('ADMIN2025', '$2b$10$xK1.kJ3mL9oP2qR4sT5uG.u9mW8xY7zA6bC5dE4fG3hI2jK1lM0nO', true, NOW())
+          INSERT INTO admin_codes (code, password_hash, role, active, created_at)
+          VALUES ('ADMIN2025', '$2b$10$xK1.kJ3mL9oP2qR4sT5uG.u9mW8xY7zA6bC5dE4fG3hI2jK1lM0nO', 'admin', true, NOW())
           ON CONFLICT (code) DO UPDATE SET active = true
         `;
       } catch (e) {
@@ -64,6 +64,82 @@ async function verifyAdminCode(adminCode: string): Promise<boolean> {
     console.error('[verifyAdminCode] Error:', error);
     // Si hay error de BD, permitir ADMIN2025
     return adminCode === 'ADMIN2025';
+  }
+}
+
+// ============ CONTROL DE ACCESO POR ROLES ============
+
+type AdminRole = 'admin' | 'manager' | 'viewer';
+
+interface RolePermission {
+  canViewDashboard: boolean;
+  canEditTimecard: boolean;
+  canDeleteTimecard: boolean;
+  canManageEmployees: boolean;
+  canExportReports: boolean;
+  canManageRoles: boolean;
+}
+
+const ROLE_PERMISSIONS: Record<AdminRole, RolePermission> = {
+  admin: {
+    canViewDashboard: true,
+    canEditTimecard: true,
+    canDeleteTimecard: true,
+    canManageEmployees: true,
+    canExportReports: true,
+    canManageRoles: true
+  },
+  manager: {
+    canViewDashboard: true,
+    canEditTimecard: true,
+    canDeleteTimecard: false, // Los managers no pueden eliminar
+    canManageEmployees: false,
+    canExportReports: true,
+    canManageRoles: false
+  },
+  viewer: {
+    canViewDashboard: true,
+    canEditTimecard: false,
+    canDeleteTimecard: false,
+    canManageEmployees: false,
+    canExportReports: false,
+    canManageRoles: false
+  }
+};
+
+async function getRoleByAdminCode(adminCode: string): Promise<AdminRole | null> {
+  try {
+    if (adminCode === 'ADMIN2025') {
+      return 'admin'; // Super admin
+    }
+
+    const result = await sql`
+      SELECT role FROM admin_codes
+      WHERE code = ${adminCode} AND active = true
+      LIMIT 1
+    `;
+
+    if (result.rows.length === 0) return null;
+    return (result.rows[0].role as AdminRole) || 'viewer';
+  } catch (error) {
+    console.error('[getRoleByAdminCode] Error:', error);
+    return null;
+  }
+}
+
+async function verifyPermission(adminCode: string, permission: keyof RolePermission): Promise<boolean> {
+  try {
+    const isAdmin = await verifyAdminCode(adminCode);
+    if (!isAdmin) return false;
+
+    const role = await getRoleByAdminCode(adminCode);
+    if (!role) return false;
+
+    const permissions = ROLE_PERMISSIONS[role];
+    return permissions[permission];
+  } catch (error) {
+    console.error('[verifyPermission] Error:', error);
+    return false;
   }
 }
 
@@ -128,6 +204,7 @@ async function ensureTablesExist(): Promise<void> {
         id SERIAL PRIMARY KEY,
         code VARCHAR(20) UNIQUE NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
+        role VARCHAR(20) DEFAULT 'admin',
         active BOOLEAN DEFAULT true,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
@@ -872,6 +949,16 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
     return res.status(403).json({ success: false, error: 'Código admin inválido' });
   }
 
+  // ✅ Verificar permiso de lectura del dashboard
+  const hasPermission = await verifyPermission(adminCode, 'canViewDashboard');
+  if (!hasPermission) {
+    return res.status(403).json({
+      success: false,
+      error: 'Sin permiso',
+      message: 'Tu rol no tiene permiso para ver el dashboard'
+    });
+  }
+
   try {
     // Asegurar que las tablas existen
     await ensureTablesExist();
@@ -1340,6 +1427,16 @@ async function handleDeleteTimecard(req: any, res: any, adminCode: string, timec
     return res.status(403).json({ success: false, error: 'Código admin inválido' });
   }
 
+  // ✅ Verificar permiso específico
+  const hasPermission = await verifyPermission(adminCode, 'canDeleteTimecard');
+  if (!hasPermission) {
+    return res.status(403).json({
+      success: false,
+      error: 'Sin permiso',
+      message: 'Tu rol no tiene permiso para eliminar marcaciones'
+    });
+  }
+
   if (!timecardId) {
     return res.status(400).json({ success: false, error: 'ID de marcación requerido' });
   }
@@ -1416,6 +1513,16 @@ async function handleUpdateTimecard(req: any, res: any, adminCode: string, timec
   const isAdmin = await verifyAdminCode(adminCode);
   if (!isAdmin) {
     return res.status(403).json({ success: false, error: 'Código admin inválido' });
+  }
+
+  // ✅ Verificar permiso específico
+  const hasPermission = await verifyPermission(adminCode, 'canEditTimecard');
+  if (!hasPermission) {
+    return res.status(403).json({
+      success: false,
+      error: 'Sin permiso',
+      message: 'Tu rol no tiene permiso para editar marcaciones'
+    });
   }
 
   if (!timecardId) {
