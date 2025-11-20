@@ -62,3 +62,18 @@ export function generatePaymentId(): string {
         return v.toString(16);
     });
 }
+
+/**
+ * Generate a unique giftcard code
+ * Format: 8 uppercase alphanumeric characters (no ambiguous: 0, O, 1, I, L)
+ * Example: "A7K2M9X5"
+ */
+export function generateGiftcardCode(): string {
+    // Caracteres válidos: excluir 0, O, 1, I, L para evitar confusiones
+    const chars = 'ABCDEFGHJKMNPQRSTVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 8; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+}
