@@ -570,7 +570,7 @@ const App: React.FC = () => {
                         </div>
                     </div>
                 }>
-                    <AdminDataProvider>
+                    <AdminDataProvider isAdmin={isAdmin}>
                         {adminModule === 'timecards' ? (
                             <AdminTimecardPanel adminCode={adminCode} />
                         ) : (
