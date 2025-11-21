@@ -855,7 +855,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 return res.status(400).json({ success: false, error: 'Datos incompletos para registrar giftcard.' });
             }
             try {
-                // Crear tabla si no existe y agregar columna buyer_message si falta
+                // Crear tabla si no existe y agregar columnas si faltan
                 await sql`
                     CREATE TABLE IF NOT EXISTS giftcard_requests (
                         id SERIAL PRIMARY KEY,
@@ -868,18 +868,22 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         code VARCHAR(32) NOT NULL,
                         status VARCHAR(20) DEFAULT 'pending',
                         created_at TIMESTAMP DEFAULT NOW(),
-                        buyer_message TEXT
+                        buyer_message TEXT,
+                        send_method VARCHAR(20),
+                        scheduled_send_at TIMESTAMP
                     )
                 `;
-                // Asegura la columna buyer_message si la tabla ya existía
+                // Asegura las columnas si la tabla ya existía
                 try {
                     await sql`ALTER TABLE giftcard_requests ADD COLUMN IF NOT EXISTS buyer_message TEXT`;
+                    await sql`ALTER TABLE giftcard_requests ADD COLUMN IF NOT EXISTS send_method VARCHAR(20)`;
+                    await sql`ALTER TABLE giftcard_requests ADD COLUMN IF NOT EXISTS scheduled_send_at TIMESTAMP`;
                 } catch (e) {}
                 const { rows } = await sql`
                     INSERT INTO giftcard_requests (
-                        buyer_name, buyer_email, recipient_name, recipient_email, recipient_whatsapp, amount, code, status, buyer_message
+                        buyer_name, buyer_email, recipient_name, recipient_email, recipient_whatsapp, amount, code, status, buyer_message, send_method, scheduled_send_at
                     ) VALUES (
-                        ${body.buyerName}, ${body.buyerEmail}, ${body.recipientName}, ${body.recipientEmail || null}, ${body.recipientWhatsapp || null}, ${body.amount}, ${body.code}, 'pending', ${body.message || null}
+                        ${body.buyerName}, ${body.buyerEmail}, ${body.recipientName}, ${body.recipientEmail || null}, ${body.recipientWhatsapp || null}, ${body.amount}, ${body.code}, 'pending', ${body.message || null}, ${body.sendMethod || null}, ${body.scheduledSendAt || null}
                     ) RETURNING id, created_at;
                 `;
                 // Enviar email de confirmación de recepción de solicitud

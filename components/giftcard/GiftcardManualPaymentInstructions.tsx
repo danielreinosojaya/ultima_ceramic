@@ -95,11 +95,13 @@ export const GiftcardManualPaymentInstructions: React.FC<{ onFinish: () => void;
               buyerName: personalization?.sender || '',
               buyerEmail: buyerEmail,
               recipientName: personalization?.recipient || '',
-              recipientEmail: deliveryMethod?.type === 'email' || deliveryMethod?.type === 'schedule' ? deliveryMethod?.data?.email || '' : '',
-              recipientWhatsapp: deliveryMethod?.type === 'whatsapp' ? deliveryMethod?.data?.whatsapp || '' : '',
+              recipientEmail: deliveryMethod?.type === 'email' ? deliveryMethod?.data?.email || '' : '',
+              recipientWhatsapp: deliveryMethod?.type === 'whatsapp' ? deliveryMethod?.data?.phone || '' : '',
               amount,
               code,
-              message: personalization?.message || ''
+              message: personalization?.message || '',
+              sendMethod: deliveryMethod?.type,
+              scheduledSendAt: deliveryMethod?.data?.scheduled ? `${deliveryMethod.data.sendDate}T${deliveryMethod.data.sendTime}:00` : null
             });
             onFinish();
           }}
