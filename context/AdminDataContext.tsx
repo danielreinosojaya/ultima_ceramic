@@ -225,6 +225,27 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
         type: 'SET_GIFTCARD_REQUESTS',
         requests: results[3].status === 'fulfilled' ? results[3].value : [],
       });
+      const giftcards = results[3].status === 'fulfilled' ? results[3].value : [];
+      console.log('[AdminDataContext] 🎁 Giftcard requests loaded:', giftcards.length);
+      if (giftcards.length > 0) {
+        const first = giftcards[0];
+        console.log('[AdminDataContext] 📋 Primer giftcard COMPLETO:', {
+          id: first.id,
+          buyerName: first.buyerName,
+          recipientName: first.recipientName,
+          amount: first.amount,
+          sendMethod: first.sendMethod,
+          scheduledSendAt: first.scheduledSendAt,
+          status: first.status,
+          createdAt: first.createdAt
+        });
+        console.log('[AdminDataContext] Primeros 3 giftcards:', giftcards.slice(0, 3).map((g: any) => ({
+          id: g.id,
+          recipientName: g.recipientName,
+          sendMethod: g.sendMethod,
+          scheduledSendAt: g.scheduledSendAt
+        })));
+      }
       console.debug('[AdminDataContext] Loaded critical data: booking count', bookings.length, 'customers count', customersWithDeliveries.length, 'giftcardRequests:', results[3].status === 'fulfilled' ? (results[3].value || []).length : 0);
     } catch (error) {
       console.error('Error loading critical admin data:', error);
