@@ -24,6 +24,8 @@ export type GiftcardRequest = {
     message?: string;
     status: 'pending' | 'approved' | 'rejected' | 'delivered' | 'deleted';
     createdAt: string;
+    sendMethod?: 'email' | 'whatsapp';
+    scheduledSendAt?: string | null;
     metadata?: {
         issuedCode?: string;
         issued_code?: string;
