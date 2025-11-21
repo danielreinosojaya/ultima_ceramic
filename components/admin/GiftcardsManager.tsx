@@ -145,7 +145,30 @@ const GiftcardsManager: React.FC = () => {
       ) : adminData.giftcardRequests.length === 0 ? (
         <div className="w-full text-center text-brand-border italic">No hay solicitudes de giftcard registradas.</div>
       ) : (
-        <table className="w-full max-w-3xl mx-auto border rounded-xl overflow-hidden shadow">
+        <>
+          {(() => {
+            const pendingScheduled = adminData.giftcardRequests.filter((req: any) => req.scheduledSendAt && req.status === 'approved');
+            if (pendingScheduled.length > 0) {
+              return (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-300 rounded-lg flex items-center justify-between">
+                  <span className="text-blue-700 font-semibold">
+                    📅 {pendingScheduled.length} giftcard{pendingScheduled.length !== 1 ? 's' : ''} pendiente{pendingScheduled.length !== 1 ? 's' : ''} de envío programado
+                  </span>
+                  <button
+                    className="px-3 py-1 text-xs bg-blue-600 text-white rounded-full hover:bg-blue-700"
+                    onClick={() => {
+                      const list = pendingScheduled.map((r: any) => `- ${r.recipientName} (${r.recipientEmail || r.recipientWhatsapp}): ${new Date(r.scheduledSendAt).toLocaleString('es-ES')}`).join('\n');
+                      alert('Giftcards programadas:\n\n' + list);
+                    }}
+                  >
+                    Ver detalles
+                  </button>
+                </div>
+              );
+            }
+            return null;
+          })()}
+          <table className="w-full max-w-3xl mx-auto border rounded-xl overflow-hidden shadow">
           <thead className="bg-brand-background">
             <tr>
               <th className="px-4 py-2 text-left text-brand-secondary">Comprador</th>
@@ -212,6 +235,7 @@ const GiftcardsManager: React.FC = () => {
             ))}
           </tbody>
         </table>
+        </>
       )}
       {selected && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
@@ -314,6 +338,49 @@ const GiftcardsManager: React.FC = () => {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+            {/* Scheduling Info */}
+            {((selected as any).scheduledSendAt || (selected as any).sendMethod) && (
+              <div className="mt-4 p-3 bg-blue-50 rounded-md border border-blue-200">
+                <div className="text-sm font-semibold text-blue-700 mb-2">📅 Envío programado</div>
+                <div className="text-sm text-blue-700">
+                  <div>
+                    <span className="font-semibold">Método:</span> {(selected as any).sendMethod === 'whatsapp' ? '💬 WhatsApp' : '📧 Email'}
+                  </div>
+                  {(selected as any).scheduledSendAt && (
+                    <div>
+                      <span className="font-semibold">Programado para:</span> {new Date((selected as any).scheduledSendAt).toLocaleString('es-ES')}
+                    </div>
+                  )}
+                </div>
+                <button
+                  className="mt-2 w-full px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
+                  onClick={async () => {
+                    if (!selected) return;
+                    const confirm = window.confirm('¿Enviar giftcard ahora a ' + (selected.recipientEmail || selected.recipientWhatsapp) + '?');
+                    if (!confirm) return;
+                    setIsProcessing(true);
+                    try {
+                      const res = await dataService.sendGiftcardNow(selected.id);
+                      if (res && res.success) {
+                        alert('✅ Giftcard enviada exitosamente');
+                        adminData.refreshCritical();
+                        setSelected(null);
+                      } else {
+                        alert('❌ Error enviando giftcard: ' + (res?.error || 'error desconocido'));
+                      }
+                    } catch (err) {
+                      console.error(err);
+                      alert('Error: ' + (err instanceof Error ? err.message : 'error desconocido'));
+                    } finally {
+                      setIsProcessing(false);
+                    }
+                  }}
+                  disabled={isProcessing}
+                >
+                  🚀 Enviar ahora
+                </button>
               </div>
             )}
             <div className="mt-4">
