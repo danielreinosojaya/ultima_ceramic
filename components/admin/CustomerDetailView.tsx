@@ -687,6 +687,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                         isOpen={true}
                         delivery={state.deliveryToEdit}
                         onClose={() => setState(prev => ({ ...prev, deliveryToEdit: null }))}
+                        formatDate={formatDate}
                         onSave={async (deliveryId, updates) => {
                             try {
                                 const result = await dataService.updateDelivery(deliveryId, updates);

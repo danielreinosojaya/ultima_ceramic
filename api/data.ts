@@ -27,7 +27,8 @@ import { sql } from '@vercel/postgres';
 import { seedDatabase, ensureTablesExist, createCustomer } from './db.js';
 import * as emailService from './emailService.js';
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { generatePaymentId } from '../utils/formatters.js';
+import { generatePaymentId, generateGiftcardCode } from '../utils/formatters.js';
+import { checkRateLimit } from './rateLimiter.js';
 import type {
     Booking,
     ClientNotification,
@@ -844,6 +845,12 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         case 'addGiftcardRequest': {
             // Inserta una nueva solicitud de giftcard en la base de datos
             const body = req.body;
+            
+            // Rate limit: 10 requests/día por email
+            if (!checkRateLimit(req, res, 'email', body?.buyerEmail)) {
+                return; // checkRateLimit ya envió la respuesta 429
+            }
+            
             if (!body || !body.buyerName || !body.buyerEmail || !body.recipientName || !body.amount || !body.code) {
                 return res.status(400).json({ success: false, error: 'Datos incompletos para registrar giftcard.' });
             }
@@ -900,6 +907,12 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
         case 'validateGiftcard': {
             // Validate a giftcard code and return balance, expiry and status.
+            
+            // Rate limit: 5 requests/minuto por IP (prevenir brute-force)
+            if (!checkRateLimit(req, res, 'ip')) {
+                return; // checkRateLimit ya envió la respuesta 429
+            }
+            
             const body = req.body || {};
             const code = (body.code || req.query.code || '').toString();
             console.debug('[API] validateGiftcard called with code:', code);
@@ -1002,6 +1015,11 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         
         case 'createGiftcardHold': {
             // Create a temporary hold on a giftcard balance to avoid double-spend.
+            // Rate limit: 5 requests/minuto por IP
+            if (!checkRateLimit(req, res, 'ip')) {
+                return; // checkRateLimit ya envió la respuesta 429
+            }
+            
             // Body params: code (giftcard code) OR giftcardId, amount (numeric), bookingTempRef (string), ttlMinutes (optional)
             const body = req.body || {};
             const amount = body.amount !== undefined ? Number(body.amount) : null;
@@ -1155,6 +1173,10 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             break;
         case 'approveGiftcardRequest': {
             // Admin action: mark request as approved and insert audit event
+            // Rate limit: 5 requests/minuto por IP
+            if (!checkRateLimit(req, res, 'ip')) {
+                return; // checkRateLimit ya envió la respuesta 429
+            }
             const body = req.body || {};
             const id = body.id;
             const adminUser = req.headers['x-admin-user'] || body.adminUser || null;
@@ -1528,6 +1550,220 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
             }
         }
+        
+        case 'createGiftcardManual': {
+            // Admin panel: crear giftcard manualmente sin pasar por solicitud
+            // Rate limit: 5 requests/minuto por IP
+            if (!checkRateLimit(req, res, 'ip')) {
+                return;
+            }
+            
+            const body = req.body || {};
+            const adminUser = req.headers['x-admin-user'] || body.adminUser || 'unknown';
+            
+            // Validaciones
+            if (!body.buyerName || !body.buyerEmail || !body.recipientName || !body.amount) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'buyerName, buyerEmail, recipientName, amount son requeridos' 
+                });
+            }
+            
+            if (typeof body.amount !== 'number' || body.amount < 10 || body.amount > 500) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'amount debe estar entre $10 y $500' 
+                });
+            }
+            
+            try {
+                // Generar código único
+                let code = generateGiftcardCode();
+                let attempts = 0;
+                const maxAttempts = 5;
+                
+                // Asegurar que el código sea único
+                while (attempts < maxAttempts) {
+                    const { rows: existing } = await sql`SELECT id FROM giftcards WHERE code = ${code} LIMIT 1`;
+                    if (!existing || existing.length === 0) {
+                        break; // Código único encontrado
+                    }
+                    code = generateGiftcardCode();
+                    attempts++;
+                }
+                
+                if (attempts >= maxAttempts) {
+                    return res.status(500).json({ 
+                        success: false, 
+                        error: 'No se pudo generar código único después de varios intentos' 
+                    });
+                }
+                
+                await sql`BEGIN`;
+                
+                // 1. Crear tabla si no existe
+                await sql`
+                    CREATE TABLE IF NOT EXISTS giftcard_requests (
+                        id SERIAL PRIMARY KEY,
+                        buyer_name VARCHAR(100) NOT NULL,
+                        buyer_email VARCHAR(100) NOT NULL,
+                        recipient_name VARCHAR(100) NOT NULL,
+                        recipient_email VARCHAR(100),
+                        recipient_whatsapp VARCHAR(30),
+                        amount NUMERIC NOT NULL,
+                        code VARCHAR(32) NOT NULL,
+                        status VARCHAR(20) DEFAULT 'pending',
+                        created_at TIMESTAMP DEFAULT NOW(),
+                        buyer_message TEXT,
+                        approved_by VARCHAR(100),
+                        approved_at TIMESTAMP,
+                        metadata JSONB
+                    )
+                `;
+                
+                // 2. Crear solicitud con status 'manual' (bypass approval)
+                const { rows: [request] } = await sql`
+                    INSERT INTO giftcard_requests (
+                        buyer_name, buyer_email, recipient_name, recipient_email, 
+                        recipient_whatsapp, amount, code, status, approved_by, 
+                        approved_at, metadata
+                    ) VALUES (
+                        ${body.buyerName},
+                        ${body.buyerEmail},
+                        ${body.recipientName},
+                        ${body.recipientEmail || null},
+                        ${body.recipientWhatsapp || null},
+                        ${body.amount},
+                        ${code},
+                        'approved',
+                        ${String(adminUser)},
+                        NOW(),
+                        ${JSON.stringify({ 
+                            createdManually: true,
+                            createdBy: adminUser,
+                            createdAt: new Date().toISOString()
+                        })}
+                    )
+                    RETURNING id, created_at
+                `;
+                
+                // 3. Crear tabla giftcards si no existe
+                await sql`
+                    CREATE TABLE IF NOT EXISTS giftcards (
+                        id SERIAL PRIMARY KEY,
+                        code VARCHAR(32) NOT NULL UNIQUE,
+                        initial_value NUMERIC,
+                        balance NUMERIC,
+                        giftcard_request_id INTEGER,
+                        expires_at TIMESTAMP,
+                        metadata JSONB,
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                `;
+                
+                // 4. Crear giftcard emitida
+                const { rows: [giftcard] } = await sql`
+                    INSERT INTO giftcards (
+                        code, initial_value, balance, giftcard_request_id, 
+                        expires_at, metadata
+                    ) VALUES (
+                        ${code},
+                        ${body.amount},
+                        ${body.amount},
+                        ${request.id},
+                        NOW() + INTERVAL '3 months',
+                        ${JSON.stringify({ 
+                            createdManually: true,
+                            createdBy: adminUser
+                        })}
+                    )
+                    RETURNING id, code, balance, expires_at
+                `;
+                
+                // 5. Crear tabla eventos si no existe
+                await sql`
+                    CREATE TABLE IF NOT EXISTS giftcard_events (
+                        id SERIAL PRIMARY KEY,
+                        giftcard_request_id INTEGER,
+                        event_type VARCHAR(50),
+                        admin_user VARCHAR(100),
+                        note TEXT,
+                        metadata JSONB,
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                `;
+                
+                // 6. Registrar evento
+                await sql`
+                    INSERT INTO giftcard_events (
+                        giftcard_request_id, event_type, admin_user, 
+                        note, metadata
+                    ) VALUES (
+                        ${request.id},
+                        'created_manually',
+                        ${String(adminUser)},
+                        'Giftcard creada manualmente desde admin panel',
+                        ${JSON.stringify({ code, amount: body.amount })}
+                    )
+                `;
+                
+                await sql`COMMIT`;
+                
+                // 7. Enviar emails
+                try {
+                    // Email al comprador
+                    await emailService.sendGiftcardPaymentConfirmedEmail(
+                        body.buyerEmail,
+                        {
+                            buyerName: body.buyerName,
+                            recipientName: body.recipientName,
+                            amount: body.amount,
+                            code: code,
+                            recipientEmail: body.recipientEmail || undefined,
+                            message: body.message || ''
+                        }
+                    );
+                    
+                    // Email al destinatario (si tiene)
+                    if (body.recipientEmail) {
+                        await emailService.sendGiftcardRecipientEmail(
+                            body.recipientEmail,
+                            {
+                                code: code,
+                                amount: body.amount,
+                                message: body.message || '',
+                                buyerName: body.buyerName,
+                                recipientName: body.recipientName
+                            }
+                        );
+                    }
+                } catch (emailError) {
+                    console.warn('Error enviando emails de giftcard manual:', emailError);
+                    // No retornar error - giftcard se creó ok
+                }
+                
+                return res.status(200).json({
+                    success: true,
+                    giftcard: {
+                        id: giftcard.id,
+                        code: giftcard.code,
+                        balance: Number(giftcard.balance),
+                        expiresAt: giftcard.expires_at,
+                        requestId: request.id
+                    },
+                    message: `Giftcard ${code} creada exitosamente`
+                });
+                
+            } catch (error) {
+                await sql`ROLLBACK`;
+                console.error('createGiftcardManual error:', error);
+                return res.status(500).json({ 
+                    success: false, 
+                    error: error instanceof Error ? error.message : String(error) 
+                });
+            }
+        }
+        
         case 'sendTestEmail': {
             // Lightweight test email sender to validate RESEND_API_KEY and EMAIL_FROM at runtime
             const body = req.body || {};

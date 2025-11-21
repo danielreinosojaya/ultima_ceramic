@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback, useRef } from 'react';
 import type { Notification } from '../types';
 import * as dataService from '../services/dataService';
+import { useAdminData } from './AdminDataContext';
 
 interface NotificationContextType {
     notifications: Notification[];
@@ -32,6 +33,14 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     const lastRefreshTime = useRef<number>(0);
     const REFRESH_THROTTLE = 2000; // 2 segundos
 
+    // Obtener adminData del contexto - puede ser undefined si está fuera del scope
+    let adminData;
+    try {
+        adminData = useAdminData();
+    } catch {
+        adminData = null;
+    }
+
     const forceRefresh = useCallback(() => {
         const now = Date.now();
         if (now - lastRefreshTime.current < REFRESH_THROTTLE) {
@@ -40,17 +49,19 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         }
         lastRefreshTime.current = now;
         setDataVersion(v => v + 1);
-    }, []);
+        // También refrescar AdminDataContext si está disponible
+        if (adminData?.refreshExtended) {
+            adminData.refreshExtended();
+        }
+    }, [adminData]);
 
-    const loadNotifications = useCallback(async () => {
-        const storedNotifications = await dataService.getNotifications();
-        setNotifications(storedNotifications.sort((a, b) => safeGetTime(b.timestamp) - safeGetTime(a.timestamp)));
-    }, []);
-
-    // Refetch notifications when dataVersion changes (e.g., manual sync)
+    // Actualizar notifications desde AdminDataContext cuando estén disponibles
     useEffect(() => {
-        loadNotifications();
-    }, [dataVersion, loadNotifications]);
+        if (adminData?.notifications) {
+            const sorted = [...adminData.notifications].sort((a, b) => safeGetTime(b.timestamp) - safeGetTime(a.timestamp));
+            setNotifications(sorted);
+        }
+    }, [adminData?.notifications]);
     
     // Logic to show toast for new notifications
     useEffect(() => {
