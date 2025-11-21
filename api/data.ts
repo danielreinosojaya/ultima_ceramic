@@ -1170,7 +1170,6 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 return res.status(500).json([]);
             }
         }
-            break;
         case 'approveGiftcardRequest': {
             // Admin action: mark request as approved and insert audit event
             // Rate limit: 5 requests/minuto por IP
@@ -2055,7 +2054,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 try {
                     // Find giftcard by code and update balance
                     const { rows: [giftcard] } = await sql`
-                        SELECT id, balance FROM giftcards WHERE code = ${giftcardCode}
+                        SELECT id, balance, giftcard_request_id FROM giftcards WHERE code = ${giftcardCode}
                     `;
                     
                     if (giftcard) {
@@ -2067,22 +2066,25 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                             WHERE id = ${giftcard.id}
                         `;
                         
-                        // Log the redemption in giftcard_events
-                        await sql`
-                            INSERT INTO giftcard_events (giftcard_id, event_type, admin_user, note, metadata)
-                            VALUES (
-                                ${giftcard.id},
-                                'redemption_payment',
-                                'admin_console',
-                                'Used as payment for booking ' || ${String(bookingId)},
-                                ${JSON.stringify({
-                                    bookingId,
-                                    redeemedAmount: redemptionAmount,
-                                    newBalance: newBalance,
-                                    previousBalance: giftcard.balance
-                                })}
-                            )
-                        `;
+                        // Log the redemption in giftcard_events (using giftcard_request_id if available)
+                        if (giftcard.giftcard_request_id) {
+                            await sql`
+                                INSERT INTO giftcard_events (giftcard_request_id, event_type, admin_user, note, metadata)
+                                VALUES (
+                                    ${giftcard.giftcard_request_id},
+                                    'redemption_payment',
+                                    'admin_console',
+                                    'Used as payment for booking ' || ${String(bookingId)},
+                                    ${JSON.stringify({
+                                        bookingId,
+                                        giftcardCode: giftcardCode,
+                                        redeemedAmount: redemptionAmount,
+                                        newBalance: newBalance,
+                                        previousBalance: giftcard.balance
+                                    })}
+                                )
+                            `;
+                        }
                     }
                 } catch (giftcardError) {
                     console.error('[addPaymentToBooking] Error updating giftcard:', giftcardError);
