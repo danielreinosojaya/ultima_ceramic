@@ -8,6 +8,7 @@ import { UserGroupIcon } from '../icons/UserGroupIcon';
 import { UserIcon } from '../icons/UserIcon';
 import { OpenStudioView } from './OpenStudioView';
 import { DeliveryMetrics } from './DeliveryMetrics';
+import { DeliveriesTab } from './DeliveriesTab';
 import { COUNTRIES } from '../../constants';
 
 interface NavigationState {
@@ -264,7 +265,7 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
     const [searchTerm, setSearchTerm] = useState('');
     const [filterByClassesRemaining, setFilterByClassesRemaining] = useState<FilterType>('all');
     const [deliveryFilter, setDeliveryFilter] = useState<'all' | 'with-pending' | 'with-overdue' | 'with-completed' | 'none'>('all');
-    const [activeTab, setActiveTab] = useState<'all' | 'openStudio'>('all');
+    const [activeTab, setActiveTab] = useState<'all' | 'openStudio' | 'entregas'>('all');
     // Customer creation modal state
     const [isNewCustomerModalOpen, setIsNewCustomerModalOpen] = useState(false);
     // FIX: Move these hooks to top level to avoid hook order errors
@@ -531,6 +532,14 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
                     Open Studio
                 </button>
                 <button
+                    className={`flex items-center px-3 py-1.5 rounded-md font-semibold transition-colors text-base ${
+                        activeTab === 'entregas' ? 'bg-brand-primary text-white' : 'bg-brand-background hover:bg-brand-primary/20 text-brand-text'
+                    }`}
+                    onClick={() => setActiveTab('entregas')}
+                >
+                    📦 Entregas
+                </button>
+                <button
                     className="ml-auto flex items-center px-4 py-2 bg-brand-secondary text-white rounded-md font-semibold hover:bg-brand-primary transition-colors text-base"
                     onClick={() => setIsNewCustomerModalOpen(true)}
                 >
@@ -700,6 +709,12 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
                                     </>
                                 );
                             })()}
+                        </div>
+                    )}
+                    
+                    {activeTab === 'entregas' && (
+                        <div className="animate-fade-in">
+                            <DeliveriesTab customers={customers} onDataChange={onDataChange} />
                         </div>
                     )}
                 </>

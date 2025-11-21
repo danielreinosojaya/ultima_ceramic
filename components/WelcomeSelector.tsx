@@ -1,4 +1,5 @@
 import React from 'react';
+// ...existing code...
 
 interface WelcomeSelectorProps {
   onSelect: (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio') => void;
@@ -10,12 +11,12 @@ const ChoiceCard: React.FC<{
     buttonText: string;
     onClick: () => void;
 }> = ({ title, subtitle, buttonText, onClick }) => (
-    <div className="bg-brand-surface p-4 sm:p-6 md:p-8 rounded-xl shadow-subtle hover:shadow-lifted transition-shadow duration-300 flex flex-col items-center text-center h-full">
-        <h3 className="text-lg sm:text-xl md:text-2xl font-semibold text-brand-text mb-3 sm:mb-4 break-words">{title}</h3>
-        <p className="text-sm sm:text-base text-brand-secondary mb-4 sm:mb-8 flex-grow line-clamp-4">{subtitle}</p>
+    <div className="bg-brand-surface p-8 rounded-xl shadow-subtle hover:shadow-lifted transition-shadow duration-300 flex flex-col items-center text-center h-full">
+        <h3 className="text-2xl font-semibold text-brand-text mb-4">{title}</h3>
+        <p className="text-brand-secondary mb-8 flex-grow">{subtitle}</p>
         <button
             onClick={onClick}
-            className="bg-brand-primary text-white font-bold py-2 sm:py-3 px-6 sm:px-8 rounded-lg w-full max-w-xs hover:opacity-90 transition-opacity duration-300 text-sm sm:text-base"
+            className="bg-brand-primary text-white font-bold py-3 px-8 rounded-lg w-full max-w-xs hover:opacity-90 transition-opacity duration-300"
         >
             {buttonText}
         </button>
@@ -28,27 +29,27 @@ const ExperienceCard: React.FC<{
     buttonText: string;
     onClick: () => void;
 }> = ({ title, subtitle, buttonText, onClick }) => (
-    <div 
-        className="bg-brand-surface p-4 sm:p-6 md:p-8 rounded-xl shadow-subtle hover:shadow-lifted transition-shadow duration-300 flex flex-col md:flex-row items-stretch md:items-center text-center md:text-left gap-4 md:gap-6 cursor-pointer"
+     <div 
+        className="bg-brand-surface p-8 rounded-xl shadow-subtle hover:shadow-lifted transition-shadow duration-300 flex flex-col md:flex-row items-center text-center md:text-left gap-6 cursor-pointer"
         onClick={onClick}
-    >
-        <div className="flex-grow min-w-0">
-            <h3 className="text-lg sm:text-xl md:text-2xl font-semibold text-brand-text mb-1 md:mb-2 break-words">{title}</h3>
-            <p className="text-xs sm:text-sm md:text-base text-brand-secondary line-clamp-3">{subtitle}</p>
+      >
+        <div className="flex-grow">
+            <h3 className="text-2xl font-semibold text-brand-text mb-2">{title}</h3>
+            <p className="text-brand-secondary">{subtitle}</p>
         </div>
-        <button className="bg-brand-accent text-white font-bold py-2 sm:py-3 px-6 sm:px-8 rounded-lg w-full md:w-auto hover:opacity-90 transition-opacity duration-300 flex-shrink-0 text-sm sm:text-base mt-3 md:mt-0">
+        <button className="bg-brand-accent text-white font-bold py-3 px-8 rounded-lg w-full md:w-auto hover:opacity-90 transition-opacity duration-300 flex-shrink-0">
             {buttonText}
         </button>
-    </div>
+      </div>
 );
+
 
 export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) => {
   return (
     <div className="text-center p-4 sm:p-6 bg-transparent animate-fade-in-up max-w-6xl mx-auto w-full">
       <h2 className="text-3xl sm:text-4xl font-serif font-bold text-brand-text mb-2">Bienvenido a Ceramicalma</h2>
-      <p className="text-sm sm:text-base md:text-lg text-brand-secondary mb-8 sm:mb-10">¿Es tu primera vez con nosotros?</p>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 md:gap-8 mb-8 md:mb-10">
+      <p className="text-base sm:text-lg text-brand-secondary mb-8 sm:mb-10">¿Es tu primera vez con nosotros?</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 mb-8 md:mb-10">
         <ChoiceCard
           title="Soy Nuevo Aquí"
           subtitle="Comienza tu aventura con nuestra Clase Introductoria, diseñada para principiantes absolutos."
@@ -68,8 +69,7 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
           onClick={() => onSelect('open_studio')}
         />
       </div>
-      
-      <div className="space-y-4 sm:space-y-6 md:space-y-8">
+      <div className="space-y-6 md:space-y-8">
         <ExperienceCard 
           title="Experiencias para Parejas"
           subtitle="Una cita creativa y diferente. Moldeen una pieza juntos en el torno o creen piezas individuales, con la guía de un instructor."
