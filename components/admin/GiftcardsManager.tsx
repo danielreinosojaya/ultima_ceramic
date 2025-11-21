@@ -7,10 +7,17 @@ import { GiftcardManualCreateModal } from './GiftcardManualCreateModal';
 // Función para convertir UTC a hora local (Quito UTC-5)
 const utcToLocal = (isoString: string | null): Date | null => {
   if (!isoString) return null;
+  
+  // La fecha viene en UTC desde la BD
+  // Necesitamos mostrarla como hora de Quito (UTC-5)
+  // Ejemplo: "2025-11-22T03:00:00Z" (UTC) = 2025-11-21 22:00 (Quito)
+  
   const utcDate = new Date(isoString);
-  // Quito es UTC-5, entonces restar 5 horas
-  const localDate = new Date(utcDate.getTime() - (5 * 60 * 60 * 1000));
-  return localDate;
+  
+  // Obtener componentes UTC y restarlos 5 horas para Quito
+  const quitoDate = new Date(utcDate.getTime() - (5 * 60 * 60 * 1000));
+  
+  return quitoDate;
 };
 
 const GiftcardsManager: React.FC = () => {
