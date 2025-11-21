@@ -44,8 +44,7 @@ const COLOR_PALETTES = {
 const createTextOverlaySVG = (data: GiftcardData, version: GiftcardVersion): string => {
   const colors = COLOR_PALETTES[version];
   
-  // NO escapar - Sharp maneja UTF-8 correctamente en text content
-  // Solo sanitizar para prevenir </text> u otros tags que rompan el SVG
+  // Sanitizar para prevenir inyección SVG
   const sanitize = (str: string) => String(str || '').replace(/<|>/g, '');
   
   const recipientName = sanitize(data.recipientName || '');
@@ -56,30 +55,20 @@ const createTextOverlaySVG = (data: GiftcardData, version: GiftcardVersion): str
   
   if (version === 'v1') {
     return `
-        <!-- Recipient name right after "para:" -->
-        <text x="130" y="162" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#958985">${recipientName}</text>
-        
-        <!-- Sender name right after "de:" -->
-        <text x="130" y="202" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#958985">${senderName}</text>
-        
-        <!-- Amount on left side -->
-        <text x="100" y="235" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#958985">Valor : $ ${amount}</text>
-        
-        <!-- Code GC-XXXXX centered -->
-        <text x="280" y="330" font-family="Courier New, monospace" font-size="13" font-weight="bold" fill="${colors.accentPrimary}" letter-spacing="1.5" text-anchor="middle">${code}</text>
-        
-        <!-- Message (if present) -->
-        ${
-          message
-            ? `<text x="280" y="370" font-family="Arial, sans-serif" font-size="11" fill="${colors.text}" text-anchor="middle" font-style="italic">"${message}"</text>`
-            : ''
-        }
+        <g id="overlay-text">
+          <!-- Usar monospace que siempre está disponible -->
+          <text x="130" y="162" font-family="monospace" font-size="11" font-weight="400" fill="#958985">${recipientName}</text>
+          <text x="130" y="202" font-family="monospace" font-size="11" font-weight="400" fill="#958985">${senderName}</text>
+          <text x="100" y="235" font-family="monospace" font-size="11" font-weight="400" fill="#958985">Valor : $ ${amount}</text>
+          <text x="280" y="330" font-family="monospace" font-size="13" font-weight="bold" fill="${colors.accentPrimary}" letter-spacing="1.5" text-anchor="middle">${code}</text>
+          ${message ? `<text x="280" y="370" font-family="monospace" font-size="11" fill="${colors.text}" text-anchor="middle" font-style="italic">"${message}"</text>` : ''}
+        </g>
     `;
   } else {
-    // v2: only code, no names
     return `
-        <!-- Code GC-XXXXX centered below all, above logo -->
-        <text x="280" y="360" font-family="Courier New, monospace" font-size="18" font-weight="bold" fill="${colors.accentPrimary}" letter-spacing="2" text-anchor="middle">${code}</text>
+        <g id="overlay-text">
+          <text x="280" y="360" font-family="monospace" font-size="18" font-weight="bold" fill="${colors.accentPrimary}" letter-spacing="2" text-anchor="middle">${code}</text>
+        </g>
     `;
   }
 };
