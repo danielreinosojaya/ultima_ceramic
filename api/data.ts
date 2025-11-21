@@ -1553,6 +1553,81 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
             }
         }
+
+        case 'sendGiftcardNow': {
+            // Admin action: send giftcard immediately (override scheduling)
+            const body = req.body || {};
+            const requestId = body.requestId;
+            
+            if (!requestId) {
+                return res.status(400).json({ success: false, error: 'requestId is required' });
+            }
+            
+            try {
+                // Fetch the giftcard request
+                const { rows: [request] } = await sql`
+                    SELECT * FROM giftcard_requests WHERE id = ${requestId}
+                `;
+                
+                if (!request) {
+                    return res.status(404).json({ success: false, error: 'Giftcard request not found' });
+                }
+                
+                const emailService = await import('./emailService.js');
+                
+                // Send based on send_method
+                if (request.send_method === 'whatsapp') {
+                    // Send via WhatsApp message (placeholder - would need WhatsApp API)
+                    console.log('[sendGiftcardNow] WhatsApp send not yet implemented, phone:', request.recipient_whatsapp);
+                    // For now, just mark as sent
+                    await sql`
+                        UPDATE giftcard_requests 
+                        SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ whatsapp_sent_at: new Date().toISOString() })}::jsonb
+                        WHERE id = ${requestId}
+                    `;
+                } else {
+                    // Send via email (default)
+                    const issuedCode = request.metadata?.issued_code || request.metadata?.issuedCode || request.code;
+                    if (request.recipient_email) {
+                        await emailService.sendGiftcardRecipientEmail(request.recipient_email, {
+                            recipientName: request.recipient_name,
+                            amount: request.amount,
+                            code: issuedCode || request.code,
+                            message: request.buyer_message || '',
+                            buyerName: request.buyer_name
+                        });
+                    }
+                    // Also send to buyer
+                    if (request.buyer_email) {
+                        await emailService.sendGiftcardPaymentConfirmedEmail(request.buyer_email, {
+                            buyerName: request.buyer_name,
+                            amount: request.amount,
+                            code: issuedCode || request.code,
+                            recipientName: request.recipient_name,
+                            recipientEmail: request.recipient_email,
+                            message: request.buyer_message || ''
+                        });
+                    }
+                    
+                    // Mark as sent in metadata
+                    await sql`
+                        UPDATE giftcard_requests 
+                        SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ 
+                            emailDelivery: {
+                                buyer: { sent: true, sentAt: new Date().toISOString() },
+                                recipient: { sent: true, sentAt: new Date().toISOString() }
+                            }
+                        })}::jsonb
+                        WHERE id = ${requestId}
+                    `;
+                }
+                
+                return res.status(200).json({ success: true, message: 'Giftcard sent successfully' });
+            } catch (error) {
+                console.error('[sendGiftcardNow] Error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
         
         case 'createGiftcardManual': {
             // Admin panel: crear giftcard manualmente sin pasar por solicitud

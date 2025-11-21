@@ -1727,3 +1727,18 @@ export const checkGiftcardBalance = async (code: string): Promise<{
         };
     }
 };
+
+// Send giftcard immediately (override scheduling)
+export const sendGiftcardNow = async (requestId: string | number): Promise<{ success: boolean; error?: string }> => {
+    try {
+        const response = await fetch('/api/data?action=sendGiftcardNow', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requestId })
+        });
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : 'Error sending giftcard' };
+    }
+};
