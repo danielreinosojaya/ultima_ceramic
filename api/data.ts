@@ -2047,6 +2047,49 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
             const isPaid = totalPaid >= bookingRow.price;
 
+            // If payment is via Giftcard, update giftcard balance
+            if (payment.method === 'Giftcard' && payment.metadata?.giftcardCode) {
+                const giftcardCode = payment.metadata.giftcardCode;
+                const redemptionAmount = payment.amount;
+                
+                try {
+                    // Find giftcard by code and update balance
+                    const { rows: [giftcard] } = await sql`
+                        SELECT id, balance FROM giftcards WHERE code = ${giftcardCode}
+                    `;
+                    
+                    if (giftcard) {
+                        const newBalance = Math.max(0, giftcard.balance - redemptionAmount);
+                        
+                        await sql`
+                            UPDATE giftcards 
+                            SET balance = ${newBalance}
+                            WHERE id = ${giftcard.id}
+                        `;
+                        
+                        // Log the redemption in giftcard_events
+                        await sql`
+                            INSERT INTO giftcard_events (giftcard_id, event_type, admin_user, note, metadata)
+                            VALUES (
+                                ${giftcard.id},
+                                'redemption_payment',
+                                'admin_console',
+                                'Used as payment for booking ' || ${String(bookingId)},
+                                ${JSON.stringify({
+                                    bookingId,
+                                    redeemedAmount: redemptionAmount,
+                                    newBalance: newBalance,
+                                    previousBalance: giftcard.balance
+                                })}
+                            )
+                        `;
+                    }
+                } catch (giftcardError) {
+                    console.error('[addPaymentToBooking] Error updating giftcard:', giftcardError);
+                    // Continue anyway - payment should still be recorded even if giftcard update fails
+                }
+            }
+
             const { rows: [updatedBookingRow] } = await sql`
                 UPDATE bookings
                 SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
