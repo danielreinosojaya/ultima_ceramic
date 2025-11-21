@@ -3,33 +3,30 @@ import * as dataService from '../../services/dataService';
 
 // Función para convertir hora local (Quito UTC-5) a UTC
 const localToUTC = (dateStr: string, timeStr: string): string => {
-  // dateStr: "2025-11-21", timeStr: "13:11" (hora que el input devuelve)
-  // El input time devuelve hora en formato local del cliente
-  // Necesitamos tratar esto como "hora de Quito" y convertir a UTC
+  // dateStr: "2025-11-21", timeStr: "21:41" (hora local de Quito)
+  // Necesitamos convertir esta hora a UTC (UTC-5 significa UTC = Quito + 5 horas)
+  // Ejemplo: 21:41 Quito (UTC-5) = 02:41 UTC (día siguiente)
   
-  // Crear timestamp como si fuera Quito (UTC-5)
-  // Quito UTC-5 significa: Quito = UTC - 5
-  // O dicho de otra forma: UTC = Quito + 5 horas
-  
-  // El input devuelve "13:11" como si fuera la hora local del navegador
-  // Pero nosotros lo tratamos como "13:11 en Quito"
-  // JavaScript lo interpreta en zona horaria del servidor o navegador
-  
-  // Solución: Construir manualmente el UTC sumando 5 horas
   const [hours, minutes] = timeStr.split(':').map(Number);
-  const date = new Date(dateStr);
   
-  // Establecer hora como Quito (UTC-5)
-  // Si queremos que 13:11 Quito = 18:11 UTC, entonces sumamos 5
-  date.setUTCHours(hours + 5, minutes, 0, 0);
+  // Crear fecha UTC explícitamente usando el string "2025-11-21" como UTC
+  // dateStr es en formato YYYY-MM-DD
+  const [year, month, day] = dateStr.split('-').map(Number);
+  
+  // Crear fecha en UTC (no en hora local del navegador)
+  const utcDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+  
+  // Ahora sumar 5 horas para convertir de "Quito" a UTC
+  utcDate.setUTCHours(hours + 5, minutes, 0, 0);
   
   console.log('🌍 Conversión localToUTC:', {
     input: `${dateStr}T${timeStr}`,
-    quicoTime: `${dateStr}T${timeStr}:00`,
-    utcResult: date.toISOString()
+    quitoTime: `${dateStr}T${timeStr}:00 (Quito, UTC-5)`,
+    utcResult: utcDate.toISOString(),
+    explanation: `${hours}:${minutes.toString().padStart(2, '0')} Quito = ${utcDate.getUTCHours()}:${utcDate.getUTCMinutes().toString().padStart(2, '0')} UTC`
   });
   
-  return date.toISOString();
+  return utcDate.toISOString();
 };
 
 export const GiftcardManualPaymentInstructions: React.FC<{ onFinish: () => void; amount: number; personalization: any; deliveryMethod: { type: string; data?: any }; buyerEmail: string }> = ({ onFinish, amount, personalization, deliveryMethod, buyerEmail }) => {
