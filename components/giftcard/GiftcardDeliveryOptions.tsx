@@ -24,19 +24,23 @@ const deliveryOptions = [
 ];
 
 export const GiftcardDeliveryOptions: React.FC<{ onSelect: (id: string, data?: any) => void; onBack?: () => void }> = ({ onSelect, onBack }) => {
-  const [selected, setSelected] = useState<string>('email');
-  const [inputData, setInputData] = useState<any>({ scheduled: false });
-
-  const getTomorrow = () => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate()); // Today, not tomorrow
-    return tomorrow.toISOString().split('T')[0];
+  // Funciones helper
+  const getTodayString = () => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
   };
 
   const getMinTime = () => {
     const now = new Date();
     return now.toTimeString().slice(0, 5);
   };
+
+  const [selected, setSelected] = useState<string>('email');
+  const [inputData, setInputData] = useState<any>({ 
+    scheduled: false,
+    sendDate: getTodayString(),
+    sendTime: '12:00'
+  });
 
   return (
     <div className="w-full flex flex-col items-center">
@@ -116,9 +120,9 @@ export const GiftcardDeliveryOptions: React.FC<{ onSelect: (id: string, data?: a
               <input
                 type="date"
                 className="w-full px-4 py-2 rounded-lg border border-brand-border text-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary"
-                value={inputData.sendDate || getTomorrow()}
+                value={inputData.sendDate || getTodayString()}
                 onChange={e => setInputData({ ...inputData, sendDate: e.target.value })}
-                min={getTomorrow()}
+                min={getTodayString()}
                 required
               />
             </div>
