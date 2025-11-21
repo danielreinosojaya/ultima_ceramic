@@ -14,6 +14,8 @@ const deliveryOptions = [
   {
     id: 'whatsapp',
     label: 'WhatsApp',
+    disabled: true,
+    badge: 'Próximamente',
     icon: (
       <svg width="32" height="32" fill="none" viewBox="0 0 32 32">
         <circle cx="16" cy="16" r="14" fill="#E3F5EA" stroke="#A89C94" strokeWidth="2" />
@@ -32,14 +34,21 @@ export const GiftcardDeliveryOptions: React.FC<{ onSelect: (id: string, data?: a
 
   const getMinTime = () => {
     const now = new Date();
-    return now.toTimeString().slice(0, 5);
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+
+  const getLocalTimeString = () => {
+    const now = new Date();
+    return now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
   };
 
   const [selected, setSelected] = useState<string>('email');
   const [inputData, setInputData] = useState<any>({ 
     scheduled: false,
     sendDate: getTodayString(),
-    sendTime: '12:00'
+    sendTime: getMinTime()
   });
 
   return (
@@ -58,19 +67,34 @@ export const GiftcardDeliveryOptions: React.FC<{ onSelect: (id: string, data?: a
             <div key={opt.id} className="relative w-full max-w-xs">
               <button
                 type="button"
+                disabled={(opt as any).disabled}
                 className={`flex flex-col items-center gap-2 px-8 py-8 rounded-2xl border-2 transition-all duration-150 focus:outline-none shadow-sm w-full ${
-                  selected === opt.id
+                  (opt as any).disabled
+                    ? 'border-gray-300 bg-gray-50 opacity-60 cursor-not-allowed'
+                    : selected === opt.id
                     ? 'border-brand-primary bg-brand-primary/10 scale-105'
                     : 'border-brand-border bg-white hover:border-brand-primary'
                 }`}
                 onClick={() => {
-                  setSelected(opt.id);
-                  setInputData({ scheduled: false });
+                  if (!(opt as any).disabled) {
+                    setSelected(opt.id);
+                    setInputData(prev => ({ 
+                      ...prev, 
+                      scheduled: false,
+                      email: '',
+                      phone: ''
+                    }));
+                  }
                 }}
                 aria-label={opt.label}
               >
                 <span className="mb-1">{React.cloneElement(opt.icon, { width: 40, height: 40 })}</span>
                 <span className="text-base font-semibold text-brand-secondary text-center whitespace-normal leading-tight">{opt.label}</span>
+                {(opt as any).badge && (
+                  <span className="text-xs font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-full mt-2">
+                    {(opt as any).badge}
+                  </span>
+                )}
               </button>
             </div>
           );
@@ -114,28 +138,33 @@ export const GiftcardDeliveryOptions: React.FC<{ onSelect: (id: string, data?: a
 
         {/* Fecha y hora si está programado */}
         {inputData.scheduled && (
-          <div className="space-y-3 p-4 bg-brand-primary/5 rounded-lg border border-brand-primary/20">
+          <div className="space-y-3 p-4 bg-brand-primary/5 rounded-lg border-2 border-brand-primary/30">
+            <div className="text-sm font-semibold text-brand-primary mb-2">📅 Programa la fecha y hora de envío</div>
             <div>
-              <label className="block text-sm font-semibold text-brand-secondary mb-2">Fecha de envío</label>
+              <label className="block text-sm font-semibold text-brand-secondary mb-2">📆 Fecha de envío</label>
               <input
                 type="date"
-                className="w-full px-4 py-2 rounded-lg border border-brand-border text-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                className="w-full px-4 py-2 rounded-lg border-2 border-brand-primary/50 text-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary bg-white"
                 value={inputData.sendDate || getTodayString()}
                 onChange={e => setInputData({ ...inputData, sendDate: e.target.value })}
                 min={getTodayString()}
                 required
               />
+              <p className="text-xs text-brand-secondary mt-1">Mínimo: Hoy ({getTodayString()})</p>
             </div>
             <div>
-              <label className="block text-sm font-semibold text-brand-secondary mb-2">Hora de envío</label>
+              <label className="block text-sm font-semibold text-brand-secondary mb-2">⏰ Hora de envío (Hora Quito)</label>
               <input
                 type="time"
-                className="w-full px-4 py-2 rounded-lg border border-brand-border text-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary"
-                value={inputData.sendTime || '12:00'}
+                className="w-full px-4 py-2 rounded-lg border-2 border-brand-primary/50 text-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary bg-white"
+                value={inputData.sendTime || getMinTime()}
                 onChange={e => setInputData({ ...inputData, sendTime: e.target.value })}
+                min={getTodayString() === inputData.sendDate ? getMinTime() : undefined}
                 required
               />
-              <p className="text-xs text-brand-secondary mt-1">Hora local: {new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</p>
+              <p className="text-xs text-brand-secondary mt-1">
+                ⌚ Hora local ahora: <strong>{getLocalTimeString()}</strong> (UTC-5)
+              </p>
             </div>
           </div>
         )}
@@ -145,8 +174,10 @@ export const GiftcardDeliveryOptions: React.FC<{ onSelect: (id: string, data?: a
         className="w-full max-w-md py-3 rounded-full bg-brand-primary text-white font-bold text-lg shadow-md hover:bg-brand-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         onClick={() => onSelect(selected, inputData)}
         disabled={
-          !inputData.email && !inputData.phone ||
-          inputData.scheduled && (!inputData.sendDate || !inputData.sendTime)
+          // Validar que el contacto correspondiente esté completo
+          (selected === 'email' ? !inputData.email : !inputData.phone) ||
+          // Si está programado, validar que tenga fecha y hora
+          (inputData.scheduled && (!inputData.sendDate || !inputData.sendTime))
         }
       >
         Continuar

@@ -404,16 +404,20 @@ export const sendGiftcardPaymentConfirmedEmail = async (
         recipientName?: string;
         recipientEmail?: string;
         message?: string;
+        schedulingInfo?: string;
     },
     _pdfBase64?: string,
     downloadLink?: string
 ) => {
-    const subject = `¡Tu pago fue recibido! La giftcard ya fue enviada 🎁`;
+    const isScheduled = !!payload.schedulingInfo;
+    const subject = isScheduled 
+        ? `¡Tu pago fue recibido! La giftcard será enviada en la fecha programada 🎁` 
+        : `¡Tu pago fue recibido! La giftcard ya fue enviada 🎁`;
     const downloadHtml = downloadLink ? `<p style="margin:10px 0;"><a href="${downloadLink}" style="color:#1d4ed8; text-decoration:none;">Descargar comprobante PDF</a></p>` : '';
     const html = `
         <div style="font-family: Arial, Helvetica, sans-serif; color:#222; max-width:600px; margin:0 auto; background:#fff; border-radius:16px; box-shadow:0 2px 12px #0001; padding:36px 28px 32px 28px;">
             <h1 style="color:#D95F43; font-size:2.1rem; margin-bottom:0.5rem; text-align:center; font-weight:800; letter-spacing:0.01em;">¡Gracias por tu regalo!</h1>
-            <p style="font-size:1.15rem; color:#444; text-align:center; margin-bottom:1.2rem;">Tu pago fue confirmado y la giftcard ya fue enviada al destinatario.</p>
+            <p style="font-size:1.15rem; color:#444; text-align:center; margin-bottom:1.2rem;">${isScheduled ? 'Tu pago fue confirmado. La giftcard será enviada en la fecha programada.' : 'Tu pago fue confirmado y la giftcard ya fue enviada al destinatario.'}</p>
             <div style="background:#f9fafb; border:1px solid #e5e7eb; padding:18px 20px; border-radius:10px; margin-bottom:18px;">
                 <div style="font-size:16px; color:#555; margin-bottom:8px;">Para: <strong>${payload.recipientName || '—'}</strong></div>
                 <div style="font-size:16px; color:#555; margin-bottom:8px;">Email/WhatsApp: <strong>${payload.recipientEmail || '—'}</strong></div>
@@ -423,11 +427,17 @@ export const sendGiftcardPaymentConfirmedEmail = async (
             </div>
             ${payload.message ? `
                 <div style="margin-bottom:24px; background:#fff7ed; border-left:6px solid #D95F43; border-radius:8px; padding:18px 24px; font-size:17px; color:#222; box-shadow:0 2px 8px #0001; display:flex; align-items:flex-start; gap:12px;">
-                    <span style="font-size:28px; color:#D95F43; font-family:serif; line-height:1;">“</span>
+                    <span style="font-size:28px; color:#D95F43; font-family:serif; line-height:1;">"</span>
                     <div>
                         <div style="font-weight:600; color:#D95F43; margin-bottom:4px;">Mensaje que enviaste al destinatario:</div>
                         <div style="font-style:italic;">${payload.message}</div>
                     </div>
+                </div>
+            ` : ''}
+            ${payload.schedulingInfo ? `
+                <div style="margin-bottom:24px; background:#f0f9ff; border-left:6px solid #3b82f6; border-radius:8px; padding:18px 24px; font-size:16px; color:#1e40af; box-shadow:0 2px 8px #0001;">
+                    <div style="font-weight:600; margin-bottom:6px;">📅 Información de envío:</div>
+                    <div>${payload.schedulingInfo}</div>
                 </div>
             ` : ''}
             <div style="margin-bottom:18px;">

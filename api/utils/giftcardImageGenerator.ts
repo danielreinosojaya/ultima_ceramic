@@ -35,43 +35,61 @@ const COLOR_PALETTES = {
 };
 
 /**
+ * Escapes XML special characters to prevent encoding issues
+ */
+const escapeXml = (str: string): string => {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+};
+
+/**
  * Creates an SVG overlay with dynamic text positioned on the dotted lines
- * Text uses proper color palettes for each version
+ * Properly escapes text to handle UTF-8 characters (names, accents, etc)
  * v1: includes names and code | v2: only code (no names)
  */
 const createTextOverlaySVG = (data: GiftcardData, version: GiftcardVersion): string => {
   const colors = COLOR_PALETTES[version];
   
-  // v1 includes names, v2 does not
+  // Escape all text inputs to prevent encoding issues
+  const recipientName = escapeXml(data.recipientName || '');
+  const senderName = escapeXml(data.senderName || '');
+  const amount = escapeXml(String(data.amount || ''));
+  const code = escapeXml(data.code);
+  const message = escapeXml(data.message || '');
+  
   if (version === 'v1') {
     return `
       <svg width="559" height="397" viewBox="0 0 559 397" xmlns="http://www.w3.org/2000/svg">
         <!-- Recipient name right after "para:" -->
         <text x="130" y="162" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#958985">
-          ${data.recipientName || ''}
+          ${recipientName}
         </text>
         
         <!-- Sender name right after "de:" -->
         <text x="130" y="202" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#958985">
-          ${data.senderName || ''}
+          ${senderName}
         </text>
         
         <!-- Amount on left side -->
         <text x="100" y="235" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#958985">
-          Valor : $ ${data.amount}
+          Valor : $ ${amount}
         </text>
         
         <!-- Code GC-XXXXX centered -->
         <text x="280" y="330" font-family="Courier New, monospace" font-size="13" font-weight="bold" fill="${colors.accentPrimary}" letter-spacing="1.5" text-anchor="middle">
-          ${data.code}
+          ${code}
         </text>
         
         <!-- Message (if present) -->
         ${
-          data.message
+          message
             ? `
           <text x="280" y="370" font-family="Arial, sans-serif" font-size="11" fill="${colors.text}" text-anchor="middle" font-style="italic">
-            "${data.message}"
+            "${message}"
           </text>
             `
             : ''
@@ -84,7 +102,7 @@ const createTextOverlaySVG = (data: GiftcardData, version: GiftcardVersion): str
       <svg width="559" height="397" viewBox="0 0 559 397" xmlns="http://www.w3.org/2000/svg">
         <!-- Code GC-XXXXX centered below all, above logo -->
         <text x="280" y="360" font-family="Courier New, monospace" font-size="18" font-weight="bold" fill="${colors.accentPrimary}" letter-spacing="2" text-anchor="middle">
-          ${data.code}
+          ${code}
         </text>
       </svg>
     `;
@@ -94,6 +112,7 @@ const createTextOverlaySVG = (data: GiftcardData, version: GiftcardVersion): str
 /**
  * Generates a PNG image by converting SVG template to PNG using Sharp
  * Uses original SVG templates with text overlay positioned on dotted lines
+ * Handles UTF-8 encoding properly for all character sets
  */
 export const generateGiftcardImage = async (data: GiftcardData, version: GiftcardVersion = 'v1'): Promise<Buffer> => {
   try {
@@ -112,9 +131,13 @@ export const generateGiftcardImage = async (data: GiftcardData, version: Giftcar
     // Combine template SVG with text overlay
     const combinedSVG = templateSVG.replace('</svg>', `${textOverlay}</svg>`);
 
+    // Convert to UTF-8 buffer with BOM or proper encoding
+    const svgBuffer = Buffer.from(combinedSVG, 'utf-8');
+
     // Convert combined SVG to PNG using Sharp
-    const buffer = await sharp(Buffer.from(combinedSVG))
-      .png({ quality: 95, progressive: true })
+    // density increased for better text rendering
+    const buffer = await sharp(svgBuffer, { density: 150 })
+      .png({ quality: 95, progressive: true, force: true })
       .toBuffer();
 
     return buffer;
