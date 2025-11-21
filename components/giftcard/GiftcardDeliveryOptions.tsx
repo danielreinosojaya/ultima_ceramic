@@ -29,7 +29,7 @@ export const GiftcardDeliveryOptions: React.FC<{ onSelect: (id: string, data?: a
 
   const getTomorrow = () => {
     const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setDate(tomorrow.getDate()); // Today, not tomorrow
     return tomorrow.toISOString().split('T')[0];
   };
 
@@ -127,10 +127,11 @@ export const GiftcardDeliveryOptions: React.FC<{ onSelect: (id: string, data?: a
               <input
                 type="time"
                 className="w-full px-4 py-2 rounded-lg border border-brand-border text-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary"
-                value={inputData.sendTime || '09:00'}
+                value={inputData.sendTime || '12:00'}
                 onChange={e => setInputData({ ...inputData, sendTime: e.target.value })}
                 required
               />
+              <p className="text-xs text-brand-secondary mt-1">Hora local: {new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</p>
             </div>
           </div>
         )}
