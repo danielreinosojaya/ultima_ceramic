@@ -532,8 +532,8 @@ export const sendGiftcardRecipientEmail = async (
             message: payload.message
         });
         
-        // Prepare attachments with both giftcard versions
-        const attachments = [
+        // NO enviar attachments si están vacíos (Vercel no soporta canvas/fonts)
+        const attachments = (v1 && v2) ? [
             {
                 filename: 'giftcard-v1.png',
                 data: v1,
@@ -544,7 +544,7 @@ export const sendGiftcardRecipientEmail = async (
                 data: v2,
                 type: 'image/png'
             }
-        ];
+        ] : undefined;
         
         return sendEmail(recipientEmail, subject, html, attachments);
     } catch (error) {
