@@ -41,6 +41,39 @@ const DeliveryBadges: React.FC<{ deliveries?: Delivery[] }> = ({ deliveries }) =
         return null;
     }
 
+    // Helper function to detect critical deliveries
+    const isCritical = (delivery: Delivery): boolean => {
+        const msPerDay = 1000 * 60 * 60 * 24;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // CRITICAL 1: Scheduled date is past and still pending
+        if (delivery.status === 'pending') {
+            const scheduledDate = new Date(delivery.scheduledDate);
+            scheduledDate.setHours(0, 0, 0, 0);
+            if (scheduledDate < today) {
+                return true;
+            }
+        }
+
+        // CRITICAL 2 & 3: Ready exists and within 30 days or already expired
+        if (delivery.readyAt && delivery.status !== 'completed') {
+            const readyDate = new Date(delivery.readyAt);
+            const expirationDate = new Date(readyDate);
+            expirationDate.setDate(expirationDate.getDate() + 60);
+            
+            const nowTime = new Date().getTime();
+            const daysUntilExpiration = Math.ceil((expirationDate.getTime() - nowTime) / msPerDay);
+            
+            // Within 30 days OR already expired
+            if (daysUntilExpiration <= 30) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
     const pendingCount = deliveries.filter(d => d.status === 'pending').length;
     const overdueCount = deliveries.filter(d => {
         const today = new Date();
@@ -48,9 +81,15 @@ const DeliveryBadges: React.FC<{ deliveries?: Delivery[] }> = ({ deliveries }) =
         return d.status === 'pending' && scheduledDate < today;
     }).length;
     const completedCount = deliveries.filter(d => d.status === 'completed').length;
+    const criticalCount = deliveries.filter(d => isCritical(d)).length;
 
     return (
         <div className="flex items-center gap-1 ml-2">
+            {criticalCount > 0 && (
+                <span className="px-1.5 py-0.5 text-xs font-bold rounded-full bg-red-600 text-white animate-pulse" title="Entregas críticas que necesitan atención">
+                    🚨 {criticalCount}
+                </span>
+            )}
             {overdueCount > 0 && (
                 <span className="px-1.5 py-0.5 text-xs font-bold rounded-full bg-red-100 text-red-800">
                     {overdueCount} vencida{overdueCount > 1 ? 's' : ''}

@@ -2,6 +2,7 @@ import * as React from 'react';
 import type { GiftcardRequest } from '../../services/dataService';
 import * as dataService from '../../services/dataService';
 import { useAdminData } from '../../context/AdminDataContext';
+import { GiftcardManualCreateModal } from './GiftcardManualCreateModal';
 
 const GiftcardsManager: React.FC = () => {
   const adminData = useAdminData();
@@ -9,113 +10,78 @@ const GiftcardsManager: React.FC = () => {
   const [isProcessing, setIsProcessing] = React.useState(false);
   const [noteText, setNoteText] = React.useState('');
   const [proofPreview, setProofPreview] = React.useState<string | null>(null);
+  const [showManualCreateModal, setShowManualCreateModal] = React.useState(false);
   // Map of requestId -> giftcard validation info (balance, initialValue, metadata, giftcardId)
   const [requestBalances, setRequestBalances] = React.useState<Record<string, any>>({});
+  const [visibleRows, setVisibleRows] = React.useState<Set<string>>(new Set());
+  
+  // Cache para evitar re-validaciones innecesarias
+  const cacheRef = React.useRef<Record<string, { data: any; timestamp: number }>>({});
+  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
+  const validationInProgressRef = React.useRef<Set<string>>(new Set());
 
-  // When adminData.giftcardRequests change, fetch balances for approved requests that have an issuedCode or code
-  React.useEffect(() => {
-    const reqs = adminData.giftcardRequests || [];
-    if (!reqs || reqs.length === 0) return;
+  // Lazy load: validar código solo cuando es necesario (cuando entra en viewport o se abre modal)
+  const validateCodeLazy = React.useCallback((code: string, requestId: string) => {
+    // Si ya está en caché, skip
+    const cached = cacheRef.current[code];
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      setRequestBalances(prev => ({ ...prev, [requestId]: cached.data }));
+      return;
+    }
 
-    let mounted = true;
+    // Si ya está validando, skip
+    if (validationInProgressRef.current.has(code)) {
+      return;
+    }
+
+    // Marcar como en progreso
+    validationInProgressRef.current.add(code);
 
     (async () => {
       try {
-        // For immediate UX, request validation for every request that has a code or an issuedCode
-        console.debug('[GiftcardsManager] starting batch validation of giftcard requests, totalRequests=', reqs.length);
-        const toFetch = reqs.filter(r => r && ((r as any).metadata?.issuedCode || (r as any).metadata?.issued_code || r.code));
-
-        // Mark all as loading first
-        setRequestBalances(prev => {
-          const copy = { ...prev } as Record<string, any>;
-          toFetch.forEach(r => { copy[r.id] = copy[r.id] || { loading: true }; });
-          return copy;
-        });
-
-        // Fetch sequentially with small concurrency to be friendly to API
-        const concurrency = 4;
-        for (let i = 0; i < toFetch.length; i += concurrency) {
-          const batch = toFetch.slice(i, i + concurrency);
-          await Promise.all(batch.map(async (r) => {
-            const issuedCode = (r as any).metadata?.issuedCode || (r as any).metadata?.issued_code || r.code;
-            if (!issuedCode) return;
-            try {
-              console.debug('[GiftcardsManager] validating code for request', r.id, 'code=', issuedCode);
-              const info = await dataService.validateGiftcard(issuedCode);
-              console.debug('[GiftcardsManager] validateGiftcard result for request', r.id, info);
-              if (!mounted) return;
-              // If the validate endpoint informs us the request was approved and provides an issuedCode
-              // but didn't find an issued giftcard row (reason === 'approved_request_has_issued_code'),
-              // attempt a second lookup using the issuedCode to resolve the actual giftcard row.
-              if (info && info.reason === 'approved_request_has_issued_code' && info.issuedCode) {
-                console.debug('[GiftcardsManager] attempting secondary validate for issuedCode', info.issuedCode, 'for request', r.id);
-                try {
-                  const resolved = await dataService.validateGiftcard(info.issuedCode);
-                  console.debug('[GiftcardsManager] secondary validate result for issuedCode', info.issuedCode, resolved);
-                  if (!mounted) return;
-                  // Prefer resolved result if it contains balance/giftcard info; otherwise keep original info
-                  setRequestBalances(prev => ({ ...prev, [r.id]: (resolved && typeof resolved.balance !== 'undefined') ? resolved : info }));
-                } catch (secondaryErr) {
-                  console.warn('[GiftcardsManager] secondary validate failed for issuedCode', info.issuedCode, secondaryErr);
-                  if (!mounted) return;
-                  setRequestBalances(prev => ({ ...prev, [r.id]: info }));
-                }
-              } else {
-                setRequestBalances(prev => ({ ...prev, [r.id]: info }));
-              }
-            } catch (err) {
-              console.warn('[GiftcardsManager] validateGiftcard error for request', r.id, err);
-              if (!mounted) return;
-              setRequestBalances(prev => ({ ...prev, [r.id]: { error: String(err) } }));
-            }
-          }));
-        }
-      } catch (e) {
-        console.warn('Error fetching giftcard balances for admin view', e);
-      }
-    })();
-
-    return () => { mounted = false; };
-  }, [adminData.giftcardRequests, adminData.giftcards]);
-
-  // If admin opens a modal for a request without a cached balance, fetch validation on demand
-  React.useEffect(() => {
-    if (!selected) return;
-    if (requestBalances[selected.id]) return; // already have info
-    let mounted = true;
-    (async () => {
-      const issuedCode = (selected as any).metadata?.issuedCode || (selected as any).metadata?.issued_code || selected.code;
-      console.debug('[GiftcardsManager] modal opened for request', selected.id, 'issuedCode=', issuedCode, 'hasCached=', !!requestBalances[selected.id]);
-      if (!issuedCode) return;
-      try {
-        const info = await dataService.validateGiftcard(issuedCode);
-        console.debug('[GiftcardsManager] on-demand validate result for selected', selected.id, info);
-        if (!mounted) return;
-        // If validate tells us there's an issuedCode but no giftcard row, attempt secondary resolve
-        if (info && info.reason === 'approved_request_has_issued_code' && info.issuedCode) {
-          console.debug('[GiftcardsManager] on-demand: attempting secondary validate for issuedCode', info.issuedCode);
-          try {
-            const resolved = await dataService.validateGiftcard(info.issuedCode);
-            console.debug('[GiftcardsManager] on-demand secondary validate result for', info.issuedCode, resolved);
-            if (!mounted) return;
-            setRequestBalances(prev => ({ ...prev, [selected.id]: (resolved && typeof resolved.balance !== 'undefined') ? resolved : info }));
-          } catch (secondaryErr) {
-            console.warn('[GiftcardsManager] on-demand secondary validate failed for', info.issuedCode, secondaryErr);
-            if (!mounted) return;
-            setRequestBalances(prev => ({ ...prev, [selected.id]: info }));
-          }
-        } else {
-          setRequestBalances(prev => ({ ...prev, [selected.id]: info }));
-        }
+        const info = await dataService.validateGiftcard(code);
+        
+        // Guardar en caché
+        cacheRef.current[code] = { data: info, timestamp: Date.now() };
+        
+        // Actualizar estado
+        setRequestBalances(prev => ({ ...prev, [requestId]: info }));
       } catch (err) {
-        console.warn('[GiftcardsManager] on-demand validate error for selected', selected.id, err);
-        if (!mounted) return;
-        setRequestBalances(prev => ({ ...prev, [selected.id]: { error: String(err) } }));
+        console.warn('[GiftcardsManager] error validating:', code, err);
+        cacheRef.current[code] = { data: { error: String(err) }, timestamp: Date.now() };
+      } finally {
+        validationInProgressRef.current.delete(code);
       }
     })();
-    return () => { mounted = false; };
-  }, [selected]);
-  // Helper to get balance for rendering (checks cached requestBalances first, then adminData.giftcards)
+  }, []);
+
+  // ✅ CORRECTO: useEffect en top level del componente
+  // Validar lazily cuando filas se hacen visibles
+  React.useEffect(() => {
+    if (!adminData.giftcardRequests) return;
+    
+    // Validar todas las filas visibles
+    for (const req of adminData.giftcardRequests) {
+      if (!visibleRows.has(String(req.id))) continue;
+      
+      const code = (req as any).metadata?.issuedCode || (req as any).metadata?.issued_code || req.code;
+      if (!code) continue;
+      
+      // Si ya está en caché o validando, skip
+      const cached = cacheRef.current[code];
+      if (cached) continue;
+      if (validationInProgressRef.current.has(code)) continue;
+      
+      // Validar
+      validateCodeLazy(code, req.id);
+    }
+  }, [visibleRows, adminData.giftcardRequests, validateCodeLazy]);
+
+  // REMOVED: No validar en bulk en carga inicial
+  // El useEffect anterior se ha removido para evitar 21 requests de una vez
+  // Ahora se valida lazy: solo cuando se necesita (Intersection Observer o cuando abre modal)
+
+  // Helper para obtener saldo de un request
   const getBalanceForRequest = (req: GiftcardRequest) => {
     const cached = requestBalances[req.id];
     const issuedGiftcards = adminData.giftcards || [];
@@ -154,7 +120,25 @@ const GiftcardsManager: React.FC = () => {
   };
   return (
     <div className="w-full flex flex-col items-center gap-6">
-      <h2 className="text-2xl font-bold text-brand-primary mb-4">Gestión de Giftcards</h2>
+      <div className="w-full flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-brand-primary mb-4">Gestión de Giftcards</h2>
+        <button
+          onClick={() => setShowManualCreateModal(true)}
+          className="px-4 py-2 rounded-full bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors shadow"
+        >
+          + Crear Giftcard
+        </button>
+      </div>
+      
+      <GiftcardManualCreateModal
+        isOpen={showManualCreateModal}
+        onClose={() => setShowManualCreateModal(false)}
+        onSuccess={() => {
+          // Refrescar lista de giftcards
+          adminData.refreshCritical?.();
+        }}
+      />
+      
       <p className="text-brand-secondary text-center mb-2">Aquí podrás gestionar todas las solicitudes de giftcard recibidas.</p>
       {adminData.loading ? (
         <div className="w-full text-center text-brand-border italic">Cargando solicitudes...</div>
@@ -177,13 +161,21 @@ const GiftcardsManager: React.FC = () => {
           </thead>
           <tbody>
             {adminData.giftcardRequests.map(req => (
-              <tr key={req.id} className="border-t">
+              <tr 
+                key={req.id} 
+                className="border-t"
+                onMouseEnter={() => setVisibleRows(prev => new Set([...prev, String(req.id)]))}
+              >
                 <td className="px-4 py-2">{req.buyerName} <br /><span className="text-xs text-brand-secondary">{req.buyerEmail}</span></td>
                 <td className="px-4 py-2">{req.recipientName} <br /><span className="text-xs text-brand-secondary">{req.recipientEmail || req.recipientWhatsapp}</span></td>
                 <td className="px-4 py-2 font-bold text-brand-primary">${req.amount}</td>
                 <td className="px-4 py-2 font-medium text-brand-secondary">
                   {(() => {
+                    const code = (req as any).metadata?.issuedCode || (req as any).metadata?.issued_code || req.code;
                     const bal = getBalanceForRequest(req);
+                    
+                    // ✅ NO HOOKS HERE: Solo renderizar, la validación se hace en useEffect arriba
+                    
                     if (bal === null) return <span className="text-xs text-gray-500">—</span>;
                     return <span className={`font-mono text-sm ${bal <= 0 ? 'text-red-600' : 'text-brand-primary'}`}>${bal.toFixed(2)}</span>;
                   })()}
@@ -206,7 +198,14 @@ const GiftcardsManager: React.FC = () => {
                 <td className="px-4 py-2">
                   <button
                     className="px-3 py-1 rounded-full bg-brand-primary text-white text-xs font-semibold shadow hover:bg-brand-primary/90 transition-colors"
-                    onClick={() => setSelected(req)}
+                    onClick={() => {
+                      setSelected(req);
+                      // Trigger lazy load cuando se abre el modal
+                      const code = (req as any).metadata?.issuedCode || (req as any).metadata?.issued_code || req.code;
+                      if (code) {
+                        validateCodeLazy(code, req.id);
+                      }
+                    }}
                   >Ver detalles</button>
                 </td>
               </tr>

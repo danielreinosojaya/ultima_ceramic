@@ -78,6 +78,40 @@ export const approveGiftcardRequest = async (
     }
 };
 
+export const createGiftcardManual = async (
+    buyerName: string,
+    buyerEmail: string,
+    recipientName: string,
+    amount: number,
+    recipientEmail?: string,
+    recipientWhatsapp?: string,
+    message?: string,
+    adminUser?: string
+): Promise<{ success: boolean; giftcard?: any; error?: string; message?: string }> => {
+    try {
+        const res = await postAction('createGiftcardManual', {
+            buyerName,
+            buyerEmail,
+            recipientName,
+            amount,
+            recipientEmail,
+            recipientWhatsapp,
+            message,
+            adminUser
+        });
+        if (res && res.success) {
+            return {
+                success: true,
+                giftcard: res.giftcard,
+                message: res.message
+            };
+        }
+        return { success: false, error: res?.error || 'Failed to create giftcard' };
+    } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+};
+
 export const rejectGiftcardRequest = async (
     id: string,
     adminUser: string,
@@ -266,76 +300,91 @@ import { DAY_NAMES } from '../constants';
 // --- API Helpers ---
 
 const fetchData = async (url: string, options?: RequestInit, retries: number = 3) => {
+    // Deduplicar requests - si la URL ya está siendo fetched, retornar la promesa existente
+    const requestKey = `${url}_${JSON.stringify(options || {})}`;
+    if (pendingRequests.has(requestKey)) {
+        console.log(`[DEDUP] Request already pending for ${url}, returning cached promise...`);
+        return pendingRequests.get(requestKey);
+    }
+
     let lastError: Error | null = null; // Inicialización de la variable
     
-    for (let attempt = 1; attempt <= retries; attempt++) {
-        try {
-            // Solo log en primer intento o errores
-            if (attempt === 1) {
-                console.log(`Fetching ${url}`);
-            } else {
-                console.log(`Retry attempt ${attempt}/${retries} for ${url}`);
-            }
-            
-            const response = await fetch(url, {
-                ...options,
-                // Timeout más largo para mejor compatibilidad
-                signal: AbortSignal.timeout(30000) // 30 segundos timeout
-            });
-            
-            if (!response.ok) {
-                const errorText = await response.text();
-                // Vercel might return HTML for 404, so we can't assume JSON
-                if (response.headers.get('content-type')?.includes('application/json')) {
-                    const errorData = JSON.parse(errorText || '{}');
-                    throw new Error(errorData.message || errorData.error || `HTTP error! status: ${response.status}`);
+    const fetchPromise = (async () => {
+        for (let attempt = 1; attempt <= retries; attempt++) {
+            try {
+                // Solo log en primer intento o errores
+                if (attempt === 1) {
+                    console.log(`Fetching ${url}`);
                 } else {
-                    throw new Error(`${response.status} ${response.statusText}`);
+                    console.log(`Retry attempt ${attempt}/${retries} for ${url}`);
                 }
-            }
-            
-            const text = await response.text();
-            // Handle cases where the response might be empty
-            return text ? JSON.parse(text) : null;
-            
-        } catch (error) {
-            lastError = error instanceof Error ? error : new Error(String(error));
-            console.warn(`Fetch attempt ${attempt} failed:`, lastError.message);
-            
-            // Si es timeout, intentar con timeout más largo en el último intento
-            if (attempt === retries && lastError.message.includes('timed out')) {
-                console.log('Final attempt with longer timeout...');
-                try {
-                    const response = await fetch(url, {
-                        ...options,
-                        signal: AbortSignal.timeout(60000) // 60 segundos para último intento
-                    });
-                    
-                    if (response.ok) {
-                        const text = await response.text();
-                        return text ? JSON.parse(text) : null;
+                
+                const response = await fetch(url, {
+                    ...options,
+                    // Timeout más largo para mejor compatibilidad
+                    signal: AbortSignal.timeout(30000) // 30 segundos timeout
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    // Vercel might return HTML for 404, so we can't assume JSON
+                    if (response.headers.get('content-type')?.includes('application/json')) {
+                        const errorData = JSON.parse(errorText || '{}');
+                        throw new Error(errorData.message || errorData.error || `HTTP error! status: ${response.status}`);
+                    } else {
+                        throw new Error(`${response.status} ${response.statusText}`);
                     }
-                } catch (finalError) {
-                    console.error('Even extended timeout failed:', finalError);
                 }
-            }
-            
-            // Si no es el último intento, esperar antes de reintentar
-            if (attempt < retries) {
-                const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Exponential backoff, max 5s
-                console.log(`Retrying in ${delay}ms...`);
-                await new Promise(resolve => setTimeout(resolve, delay));
+                
+                const text = await response.text();
+                // Handle cases where the response might be empty
+                return text ? JSON.parse(text) : null;
+                
+            } catch (error) {
+                lastError = error instanceof Error ? error : new Error(String(error));
+                console.warn(`Fetch attempt ${attempt} failed:`, lastError.message);
+                
+                // Si es timeout, intentar con timeout más largo en el último intento
+                if (attempt === retries && lastError.message.includes('timed out')) {
+                    console.log('Final attempt with longer timeout...');
+                    try {
+                        const response = await fetch(url, {
+                            ...options,
+                            signal: AbortSignal.timeout(60000) // 60 segundos para último intento
+                        });
+                        
+                        if (response.ok) {
+                            const text = await response.text();
+                            return text ? JSON.parse(text) : null;
+                        }
+                    } catch (finalError) {
+                        console.error('Even extended timeout failed:', finalError);
+                    }
+                }
+                
+                // Si no es el último intento, esperar antes de reintentar
+                if (attempt < retries) {
+                    const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Exponential backoff, max 5s
+                    console.log(`Retrying in ${delay}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
             }
         }
-    }
+        
+        // Si todos los intentos fallaron, lanzar el último error
+        if (lastError) {
+            console.error(`All ${retries} fetch attempts failed for ${url}`);
+            throw lastError;
+        } else {
+            throw new Error('Unknown error occurred during fetch attempts.');
+        }
+    })();
     
-    // Si todos los intentos fallaron, lanzar el último error
-    if (lastError) {
-        console.error(`All ${retries} fetch attempts failed for ${url}`);
-        throw lastError;
-    } else {
-        throw new Error('Unknown error occurred during fetch attempts.');
-    }
+    pendingRequests.set(requestKey, fetchPromise);
+    
+    return fetchPromise.finally(() => {
+        pendingRequests.delete(requestKey);
+    });
 };
 
 // Cache más agresivo para evitar requests innecesarias
@@ -839,105 +888,53 @@ export const getBookingById = async (bookingId: string): Promise<Booking> => {
 // Giftcard client helpers
 export const validateGiftcard = async (code: string): Promise<any> => {
     try {
-        console.debug('[dataService.validateGiftcard] requesting validation for code:', code);
-        // Prefer dedicated endpoint (more reliable routing)
-        const response = await fetch('/api/giftcards/validate', {
+        console.debug('[dataService.validateGiftcard] validating code:', code);
+        
+        // Usar endpoint principal que ya existe y funciona
+        const response = await fetch(`/api/data?action=validateGiftcard`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ code })
         });
-        // If we get any JSON response from the dedicated endpoint, return it (even on 4xx/5xx)
-        try {
-            const body = await response.json().catch(() => null);
-            if (body) return body;
-        } catch (e) {}
-        // If POST didn't return JSON or body, try GET fallback to the same endpoint
-        if (response.status === 404 || response.status === 405) {
-            const resp = await fetch(`/api/giftcards/validate?code=${encodeURIComponent(code)}`, { method: 'GET' });
-            try {
-                const body = await resp.json().catch(() => null);
-                if (body) return body;
-            } catch (e) {}
-        }
-        // Last resort: try legacy action router via POST (legacy router expects actions via POST)
-        try {
-            const legacyPost = await fetch(`/api/data?action=validateGiftcard`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code })
-            });
-            // Return any JSON payload from legacy route even if status is 4xx/5xx
-            const legacyBody = await legacyPost.json().catch(() => null);
-            console.debug('[dataService.validateGiftcard] legacyPost response body:', legacyBody);
-            if (legacyBody) return legacyBody;
-        } catch (legacyErr) {
-            console.warn('Legacy POST fallback failed for validateGiftcard:', legacyErr);
-        }
-        console.debug('[dataService.validateGiftcard] all fallbacks failed for code:', code, 'response status:', response.status);
-        return { success: false, error: `validateGiftcard failed (${response.status})` };
+        
+        const body = await response.json();
+        console.debug('[dataService.validateGiftcard] result:', body);
+        
+        return body;
     } catch (err) {
-        console.error('[dataService.validateGiftcard] unexpected error for code:', code, err);
-        return { success: false, error: err instanceof Error ? err.message : String(err) };
+        console.error('[dataService.validateGiftcard] error:', err);
+        return { valid: false, error: err instanceof Error ? err.message : String(err) };
     }
 };
 
 export const createGiftcardHold = async (payload: { code?: string; giftcardId?: string; amount: number; bookingTempRef?: string; ttlMinutes?: number }): Promise<any> => {
     try {
-        const response = await fetch('/api/giftcards/create-hold', {
+        const response = await fetch(`/api/data?action=createGiftcardHold`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-        // If we received JSON from dedicated endpoint return it even if status is 4xx
-        try {
-            const body = await response.json().catch(() => null);
-            if (body) return body;
-        } catch (e) {}
-
-        // Fallback: use legacy action router which supports POST actions
-        try {
-            const legacy = await fetch(`/api/data?action=createGiftcardHold`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            const legacyBody = await legacy.json().catch(() => null);
-            if (legacyBody) return legacyBody;
-        } catch (legacyErr) {
-            console.warn('Legacy POST fallback failed for createGiftcardHold:', legacyErr);
-        }
-        return { success: false, error: `createGiftcardHold failed (${response.status})` };
+        
+        const body = await response.json();
+        return body;
     } catch (err) {
+        console.error('[dataService.createGiftcardHold] error:', err);
         return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
 };
+
 export const releaseGiftcardHold = async (payload: { holdId: string }): Promise<any> => {
     try {
-        const response = await fetch('/api/giftcards/release-hold', {
+        const response = await fetch(`/api/data?action=releaseGiftcardHold`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-        try {
-            const body = await response.json().catch(() => null);
-            if (body) return body;
-        } catch (e) {}
-
-        // Fallback to legacy router if needed
-        try {
-            const legacy = await fetch(`/api/data?action=releaseGiftcardHold`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            const legacyBody = await legacy.json().catch(() => null);
-            if (legacyBody) return legacyBody;
-        } catch (legacyErr) {
-            console.warn('Legacy POST fallback failed for releaseGiftcardHold:', legacyErr);
-        }
-
-        return { success: false, error: `releaseGiftcardHold failed (${response.status})` };
+        
+        const body = await response.json();
+        return body;
     } catch (err) {
+        console.error('[dataService.releaseGiftcardHold] error:', err);
         return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
 };
