@@ -11,192 +11,147 @@ export interface GiftcardData {
 
 export type GiftcardVersion = 'v1' | 'v2';
 
-// Diseño minimalista con HTML/CSS que Satori convierte a PNG
-const createGiftcardSVG = (data: GiftcardData): any => {
-  return {
-    type: 'div',
-    props: {
-      style: {
-        display: 'flex',
-        flexDirection: 'column',
-        width: '600px',
-        height: '400px',
-        background: 'linear-gradient(135deg, #f5f3ea 0%, #e8e3d6 100%)',
-        border: '3px solid #a89c94',
-        borderRadius: '20px',
-        padding: '40px',
-        fontFamily: 'Arial, sans-serif',
-        position: 'relative',
-      },
-      children: [
-        // Título
-        {
-          type: 'div',
-          props: {
-            style: {
-              fontSize: '48px',
-              fontWeight: 'bold',
-              color: '#958985',
-              textAlign: 'center',
-              marginBottom: '40px',
-              letterSpacing: '2px',
-            },
-            children: 'REGALO ESPECIAL',
-          },
-        },
-        // Para y De
-        {
-          type: 'div',
-          props: {
-            style: {
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '20px',
-              marginBottom: '30px',
-            },
-            children: [
-              {
-                type: 'div',
-                props: {
-                  style: {
-                    display: 'flex',
-                    fontSize: '18px',
-                    color: '#666',
-                  },
-                  children: [
-                    {
-                      type: 'span',
-                      props: {
-                        style: { width: '80px', fontWeight: 'normal' },
-                        children: 'para:',
-                      },
-                    },
-                    {
-                      type: 'span',
-                      props: {
-                        style: { fontWeight: 'bold', color: '#333' },
-                        children: data.recipientName || '',
-                      },
-                    },
-                  ],
-                },
-              },
-              {
-                type: 'div',
-                props: {
-                  style: {
-                    display: 'flex',
-                    fontSize: '18px',
-                    color: '#666',
-                  },
-                  children: [
-                    {
-                      type: 'span',
-                      props: {
-                        style: { width: '80px', fontWeight: 'normal' },
-                        children: 'de:',
-                      },
-                    },
-                    {
-                      type: 'span',
-                      props: {
-                        style: { fontWeight: 'bold', color: '#333' },
-                        children: data.senderName || '',
-                      },
-                    },
-                  ],
-                },
-              },
-            ],
-          },
-        },
-        // Valor y Código
-        {
-          type: 'div',
-          props: {
-            style: {
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '15px',
-              marginTop: 'auto',
-            },
-            children: [
-              {
-                type: 'div',
-                props: {
-                  style: {
-                    fontSize: '22px',
-                    color: '#666',
-                  },
-                  children: `Valor: $${data.amount}`,
-                },
-              },
-              {
-                type: 'div',
-                props: {
-                  style: {
-                    fontSize: '28px',
-                    fontWeight: 'bold',
-                    color: '#9D277D',
-                    letterSpacing: '3px',
-                    marginTop: '10px',
-                  },
-                  children: data.code,
-                },
-              },
-            ],
-          },
-        },
-        // Mensaje si existe
-        data.message
-          ? {
-              type: 'div',
-              props: {
-                style: {
-                  fontSize: '14px',
-                  fontStyle: 'italic',
-                  color: '#555',
-                  textAlign: 'center',
-                  marginTop: '20px',
-                },
-                children: `"${data.message}"`,
-              },
-            }
-          : null,
-        // Logo/Marca
-        {
-          type: 'div',
-          props: {
-            style: {
-              position: 'absolute',
-              bottom: '20px',
-              right: '30px',
-              fontSize: '14px',
-              color: '#999',
-              fontWeight: 'bold',
-            },
-            children: 'CERAMICALMA',
-          },
-        },
-      ].filter(Boolean),
-    },
-  };
-};
-
 export const generateGiftcardImage = async (
   data: GiftcardData,
   version: GiftcardVersion = 'v1'
 ): Promise<Buffer> => {
   try {
-    // Crear SVG con Satori
-    const svg = await satori(createGiftcardSVG(data), {
+    // JSX element para convertir a SVG
+    const jsx = (
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          width: '600px',
+          height: '400px',
+          background: 'linear-gradient(135deg, #f5f3ea 0%, #e8e3d6 100%)',
+          border: '6px solid #a89c94',
+          borderRadius: '20px',
+          padding: '40px',
+          fontFamily: 'system-ui, sans-serif',
+          position: 'relative',
+          boxSizing: 'border-box',
+        }}
+      >
+        {/* Título */}
+        <div
+          style={{
+            fontSize: '48px',
+            fontWeight: 'bold',
+            color: '#958985',
+            textAlign: 'center',
+            marginBottom: '40px',
+            letterSpacing: '2px',
+          }}
+        >
+          REGALO ESPECIAL
+        </div>
+
+        {/* Para y De */}
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+            marginBottom: '30px',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              fontSize: '18px',
+              color: '#666',
+            }}
+          >
+            <span style={{ width: '80px', fontWeight: '400' }}>para:</span>
+            <span style={{ fontWeight: 'bold', color: '#333', flex: 1 }}>
+              {data.recipientName || 'María'}
+            </span>
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              fontSize: '18px',
+              color: '#666',
+            }}
+          >
+            <span style={{ width: '80px', fontWeight: '400' }}>de:</span>
+            <span style={{ fontWeight: 'bold', color: '#333', flex: 1 }}>
+              {data.senderName || 'Juan'}
+            </span>
+          </div>
+        </div>
+
+        {/* Valor y Código */}
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '15px',
+            marginTop: 'auto',
+          }}
+        >
+          <div
+            style={{
+              fontSize: '22px',
+              color: '#666',
+            }}
+          >
+            Valor: ${data.amount}
+          </div>
+          <div
+            style={{
+              fontSize: '28px',
+              fontWeight: 'bold',
+              color: '#9D277D',
+              letterSpacing: '3px',
+              marginTop: '10px',
+            }}
+          >
+            {data.code}
+          </div>
+        </div>
+
+        {/* Mensaje si existe */}
+        {data.message && (
+          <div
+            style={{
+              fontSize: '14px',
+              fontStyle: 'italic',
+              color: '#555',
+              textAlign: 'center',
+              marginTop: '20px',
+            }}
+          >
+            "{data.message}"
+          </div>
+        )}
+
+        {/* Logo */}
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '20px',
+            right: '30px',
+            fontSize: '14px',
+            color: '#999',
+            fontWeight: 'bold',
+          }}
+        >
+          CERAMICALMA
+        </div>
+      </div>
+    );
+
+    // Convertir JSX a SVG sin necesitar fonts especificados
+    const svg = await satori(jsx as any, {
       width: 600,
       height: 400,
-      fonts: [], // Satori usa fuentes embebidas
+      fonts: [],
     });
 
-    // Convertir SVG a PNG con Sharp
+    // Convertir SVG a PNG
     const pngBuffer = await sharp(Buffer.from(svg))
       .png()
       .toBuffer();
