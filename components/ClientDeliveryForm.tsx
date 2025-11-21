@@ -169,18 +169,6 @@ export const ClientDeliveryForm: React.FC = () => {
             if (!formData.phone.trim()) {
                 newErrors.phone = 'El teléfono es requerido';
             }
-
-            if (!formData.scheduledDate) {
-                newErrors.scheduledDate = 'La fecha de recogida es requerida';
-            } else {
-                const selectedDate = new Date(formData.scheduledDate);
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-
-                if (selectedDate < today) {
-                    newErrors.scheduledDate = 'La fecha no puede ser anterior a hoy';
-                }
-            }
         }
 
         if (currentStep === 'photos') {
@@ -288,9 +276,14 @@ export const ClientDeliveryForm: React.FC = () => {
             console.log('[ClientDeliveryForm] Calling createDeliveryFromClient with:', {
                 email: formData.email.trim(),
                 firstName: formData.firstName.trim(),
-                photosCount: formData.photos.length,
-                scheduledDate: formData.scheduledDate
+                photosCount: formData.photos.length
             });
+
+            // Calculate scheduled date: today + 15 days
+            const today = new Date();
+            const scheduledDate = new Date(today);
+            scheduledDate.setDate(scheduledDate.getDate() + 15);
+            const scheduledDateStr = scheduledDate.toISOString().split('T')[0];
 
             // Limit to 2 photos max to avoid 413 Payload Too Large error
             const photosToSend = formData.photos.length > 0 ? formData.photos.slice(0, 2) : null;
@@ -301,7 +294,7 @@ export const ClientDeliveryForm: React.FC = () => {
                 email: formData.email.trim(),
                 userInfo,
                 description: formData.description.trim() || null,
-                scheduledDate: formData.scheduledDate,
+                scheduledDate: scheduledDateStr,
                 photos: photosToSend
             });
 
@@ -457,23 +450,14 @@ export const ClientDeliveryForm: React.FC = () => {
                             />
                         </div>
 
-                        <div>
-                            <label className="block text-sm font-semibold text-brand-text mb-1">
-                                Fecha Estimada de Recogida *
-                            </label>
-                            <p className="text-xs text-gray-500 mb-2">Nos contactaremos 1-2 días hábiles antes de esta fecha</p>
-                            <input
-                                type="date"
-                                value={formData.scheduledDate}
-                                onChange={(e) => handleInfoChange('scheduledDate', e.target.value)}
-                                min={tomorrowStr}
-                                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent ${
-                                    errors.scheduledDate ? 'border-red-500' : 'border-gray-300'
-                                }`}
-                            />
-                            {errors.scheduledDate && (
-                                <p className="text-red-500 text-xs mt-1">{errors.scheduledDate}</p>
-                            )}
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <p className="text-sm font-semibold text-blue-900 mb-2">⏱️ Plazo de elaboración</p>
+                            <p className="text-sm text-blue-800">
+                                Nuestras piezas de cerámica tardan aproximadamente <strong>15 días</strong> en estar listas desde el llenado de este formulario.
+                            </p>
+                            <p className="text-xs text-blue-700 mt-2">
+                                Te enviaremos un email de confirmación con la fecha exacta de entrega. 📧
+                            </p>
                         </div>
 
                         <div className="flex justify-end pt-4">
@@ -617,14 +601,19 @@ export const ClientDeliveryForm: React.FC = () => {
                                 </div>
                             )}
                             <div>
-                                <p className="text-xs text-gray-600">Fecha Estimada de Recogida</p>
+                                <p className="text-xs text-gray-600">Fecha Estimada de Recogida (Hoy + 15 días)</p>
                                 <p className="font-semibold text-brand-text">
-                                    {new Date(formData.scheduledDate).toLocaleDateString('es-ES', {
-                                        weekday: 'long',
-                                        year: 'numeric',
-                                        month: 'long',
-                                        day: 'numeric'
-                                    })}
+                                    {(() => {
+                                        const today = new Date();
+                                        const scheduledDate = new Date(today);
+                                        scheduledDate.setDate(scheduledDate.getDate() + 15);
+                                        return scheduledDate.toLocaleDateString('es-ES', {
+                                            weekday: 'long',
+                                            year: 'numeric',
+                                            month: 'long',
+                                            day: 'numeric'
+                                        });
+                                    })()}
                                 </p>
                             </div>
                             <div>

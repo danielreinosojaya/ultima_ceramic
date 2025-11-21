@@ -35,18 +35,18 @@ export interface UserInfo {
 }
 
 // Delivery System Types
-export type DeliveryStatus = 'pending' | 'ready' | 'completed' | 'overdue';
+export type DeliveryStatus = 'pending' | 'completed' | 'overdue';
 
 export interface Delivery {
     id: string;
     customerEmail: string;
     description?: string; // Opcional - puede ser texto genérico si vacío
     scheduledDate: string; // ISO date string - fecha programada tentativa
-    status: DeliveryStatus; // 'pending'=creada/sin comenzar, 'ready'=lista para recoger, 'completed'=entregada, 'overdue'=vencida
+    status: DeliveryStatus;
     createdAt: string; // ISO date string
-    readyAt?: string | null; // ISO date string - fecha cuando se marcó como lista para recoger
     completedAt?: string | null; // ISO date string - fecha real de entrega
-    deliveredAt?: string | null; // ISO date string - DEPRECATED: usar completedAt
+    deliveredAt?: string | null; // ISO date string - fecha cuando se marcó como entregada
+    readyAt?: string | null; // ISO date string - fecha cuando se marcó como lista para recoger
     notes?: string | null;
     photos?: string[] | null; // Array de URLs de fotos
     createdByClient?: boolean; // true si el cliente subió las fotos directamente
