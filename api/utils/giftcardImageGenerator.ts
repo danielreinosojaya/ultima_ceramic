@@ -34,17 +34,7 @@ const COLOR_PALETTES = {
   },
 };
 
-/**
- * Escapes XML special characters to prevent encoding issues
- */
-const escapeXml = (str: string): string => {
-  return String(str || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-};
+
 
 /**
  * Creates an SVG overlay with dynamic text positioned on the dotted lines
@@ -54,41 +44,34 @@ const escapeXml = (str: string): string => {
 const createTextOverlaySVG = (data: GiftcardData, version: GiftcardVersion): string => {
   const colors = COLOR_PALETTES[version];
   
-  // Escape all text inputs to prevent encoding issues
-  const recipientName = escapeXml(data.recipientName || '');
-  const senderName = escapeXml(data.senderName || '');
-  const amount = escapeXml(String(data.amount || ''));
-  const code = escapeXml(data.code);
-  const message = escapeXml(data.message || '');
+  // NO escapar - Sharp maneja UTF-8 correctamente en text content
+  // Solo sanitizar para prevenir </text> u otros tags que rompan el SVG
+  const sanitize = (str: string) => String(str || '').replace(/<|>/g, '');
+  
+  const recipientName = sanitize(data.recipientName || '');
+  const senderName = sanitize(data.senderName || '');
+  const amount = sanitize(String(data.amount || ''));
+  const code = sanitize(data.code);
+  const message = sanitize(data.message || '');
   
   if (version === 'v1') {
     return `
         <!-- Recipient name right after "para:" -->
-        <text x="130" y="162" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#958985">
-          <tspan>${recipientName}</tspan>
-        </text>
+        <text x="130" y="162" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#958985">${recipientName}</text>
         
         <!-- Sender name right after "de:" -->
-        <text x="130" y="202" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#958985">
-          <tspan>${senderName}</tspan>
-        </text>
+        <text x="130" y="202" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#958985">${senderName}</text>
         
         <!-- Amount on left side -->
-        <text x="100" y="235" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#958985">
-          <tspan>Valor : $ ${amount}</tspan>
-        </text>
+        <text x="100" y="235" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#958985">Valor : $ ${amount}</text>
         
         <!-- Code GC-XXXXX centered -->
-        <text x="280" y="330" font-family="Courier New, monospace" font-size="13" font-weight="bold" fill="${colors.accentPrimary}" letter-spacing="1.5" text-anchor="middle">
-          <tspan>${code}</tspan>
-        </text>
+        <text x="280" y="330" font-family="Courier New, monospace" font-size="13" font-weight="bold" fill="${colors.accentPrimary}" letter-spacing="1.5" text-anchor="middle">${code}</text>
         
         <!-- Message (if present) -->
         ${
           message
-            ? `<text x="280" y="370" font-family="Arial, sans-serif" font-size="11" fill="${colors.text}" text-anchor="middle" font-style="italic">
-          <tspan>"${message}"</tspan>
-        </text>`
+            ? `<text x="280" y="370" font-family="Arial, sans-serif" font-size="11" fill="${colors.text}" text-anchor="middle" font-style="italic">"${message}"</text>`
             : ''
         }
     `;
@@ -96,9 +79,7 @@ const createTextOverlaySVG = (data: GiftcardData, version: GiftcardVersion): str
     // v2: only code, no names
     return `
         <!-- Code GC-XXXXX centered below all, above logo -->
-        <text x="280" y="360" font-family="Courier New, monospace" font-size="18" font-weight="bold" fill="${colors.accentPrimary}" letter-spacing="2" text-anchor="middle">
-          <tspan>${code}</tspan>
-        </text>
+        <text x="280" y="360" font-family="Courier New, monospace" font-size="18" font-weight="bold" fill="${colors.accentPrimary}" letter-spacing="2" text-anchor="middle">${code}</text>
     `;
   }
 };
