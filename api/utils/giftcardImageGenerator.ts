@@ -63,48 +63,42 @@ const createTextOverlaySVG = (data: GiftcardData, version: GiftcardVersion): str
   
   if (version === 'v1') {
     return `
-      <svg width="559" height="397" viewBox="0 0 559 397" xmlns="http://www.w3.org/2000/svg">
         <!-- Recipient name right after "para:" -->
         <text x="130" y="162" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#958985">
-          ${recipientName}
+          <tspan>${recipientName}</tspan>
         </text>
         
         <!-- Sender name right after "de:" -->
         <text x="130" y="202" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#958985">
-          ${senderName}
+          <tspan>${senderName}</tspan>
         </text>
         
         <!-- Amount on left side -->
         <text x="100" y="235" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#958985">
-          Valor : $ ${amount}
+          <tspan>Valor : $ ${amount}</tspan>
         </text>
         
         <!-- Code GC-XXXXX centered -->
         <text x="280" y="330" font-family="Courier New, monospace" font-size="13" font-weight="bold" fill="${colors.accentPrimary}" letter-spacing="1.5" text-anchor="middle">
-          ${code}
+          <tspan>${code}</tspan>
         </text>
         
         <!-- Message (if present) -->
         ${
           message
-            ? `
-          <text x="280" y="370" font-family="Arial, sans-serif" font-size="11" fill="${colors.text}" text-anchor="middle" font-style="italic">
-            "${message}"
-          </text>
-            `
+            ? `<text x="280" y="370" font-family="Arial, sans-serif" font-size="11" fill="${colors.text}" text-anchor="middle" font-style="italic">
+          <tspan>"${message}"</tspan>
+        </text>`
             : ''
         }
-      </svg>
     `;
   } else {
     // v2: only code, no names
     return `
-      <svg width="559" height="397" viewBox="0 0 559 397" xmlns="http://www.w3.org/2000/svg">
         <!-- Code GC-XXXXX centered below all, above logo -->
         <text x="280" y="360" font-family="Courier New, monospace" font-size="18" font-weight="bold" fill="${colors.accentPrimary}" letter-spacing="2" text-anchor="middle">
-          ${code}
+          <tspan>${code}</tspan>
         </text>
-      </svg>
     `;
   }
 };
@@ -129,7 +123,8 @@ export const generateGiftcardImage = async (data: GiftcardData, version: Giftcar
     const textOverlay = createTextOverlaySVG(data, version);
     
     // Combine template SVG with text overlay
-    const combinedSVG = templateSVG.replace('</svg>', `${textOverlay}</svg>`);
+    const combinedSVG = templateSVG.replace('</svg>', `${textOverlay}
+</svg>`);
 
     // Convert to UTF-8 buffer with BOM or proper encoding
     const svgBuffer = Buffer.from(combinedSVG, 'utf-8');
