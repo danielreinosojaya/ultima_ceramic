@@ -11,146 +11,192 @@ export interface GiftcardData {
 
 export type GiftcardVersion = 'v1' | 'v2';
 
-// Usar Satori para convertir JSX-like a SVG, luego Sharp a PNG
-// Satori NO requiere fonts del sistema, usa Google Fonts embebidas
-export const generateGiftcardImage = async (data: GiftcardData, version: GiftcardVersion = 'v1'): Promise<Buffer> => {
-  try {
-    const width = 600;
-    const height = 400;
-    
-    // JSX-like template para Satori
-    const markup = {
-      type: 'div',
-      props: {
-        style: {
-          width: '100%',
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'linear-gradient(135deg, #f5f3ea 0%, #e8e4d8 100%)',
-          border: '6px solid #a89c94',
-          borderRadius: '20px',
-          padding: '40px',
-          fontFamily: 'sans-serif',
-        },
-        children: [
-          {
-            type: 'div',
-            props: {
-              style: {
-                fontSize: '48px',
-                fontWeight: 'bold',
-                color: '#9D8B7F',
-                marginBottom: '30px',
-                textAlign: 'center',
-                letterSpacing: '2px',
-              },
-              children: 'REGALO ESPECIAL',
-            },
-          },
-          {
-            type: 'div',
-            props: {
-              style: {
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '15px',
-                width: '100%',
-                fontSize: '18px',
-                color: '#5a5a5a',
-              },
-              children: [
-                {
-                  type: 'div',
-                  props: {
-                    style: { display: 'flex', alignItems: 'center' },
-                    children: [
-                      { type: 'span', props: { style: { marginRight: '10px', color: '#9D8B7F' }, children: 'Para:' } },
-                      { type: 'span', props: { style: { fontWeight: 'bold' }, children: data.recipientName || '___________' } },
-                    ],
-                  },
-                },
-                {
-                  type: 'div',
-                  props: {
-                    style: { display: 'flex', alignItems: 'center' },
-                    children: [
-                      { type: 'span', props: { style: { marginRight: '10px', color: '#9D8B7F' }, children: 'De:' } },
-                      { type: 'span', props: { style: { fontWeight: 'bold' }, children: data.senderName || '___________' } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-          {
-            type: 'div',
-            props: {
-              style: {
-                fontSize: '32px',
-                fontWeight: 'bold',
-                color: '#D95F43',
-                margin: '30px 0',
-              },
-              children: `$${data.amount}`,
-            },
-          },
-          {
-            type: 'div',
-            props: {
-              style: {
-                fontSize: '24px',
-                fontWeight: 'bold',
-                color: '#9D277D',
-                letterSpacing: '3px',
-                padding: '15px 30px',
-                border: '2px dashed #9D277D',
-                borderRadius: '10px',
-                backgroundColor: '#fff',
-              },
-              children: data.code,
-            },
-          },
-          data.message ? {
-            type: 'div',
-            props: {
-              style: {
-                fontSize: '14px',
-                fontStyle: 'italic',
-                color: '#666',
-                marginTop: '20px',
-                textAlign: 'center',
-                maxWidth: '400px',
-              },
-              children: `"${data.message}"`,
-            },
-          } : null,
-          {
-            type: 'div',
-            props: {
-              style: {
-                fontSize: '12px',
-                color: '#999',
-                marginTop: '30px',
-                textAlign: 'center',
-              },
-              children: 'CeramicAlma • Holistic Pottery Studio',
-            },
-          },
-        ].filter(Boolean),
+// Diseño minimalista con HTML/CSS que Satori convierte a PNG
+const createGiftcardSVG = (data: GiftcardData): any => {
+  return {
+    type: 'div',
+    props: {
+      style: {
+        display: 'flex',
+        flexDirection: 'column',
+        width: '600px',
+        height: '400px',
+        background: 'linear-gradient(135deg, #f5f3ea 0%, #e8e3d6 100%)',
+        border: '3px solid #a89c94',
+        borderRadius: '20px',
+        padding: '40px',
+        fontFamily: 'Arial, sans-serif',
+        position: 'relative',
       },
-    };
+      children: [
+        // Título
+        {
+          type: 'div',
+          props: {
+            style: {
+              fontSize: '48px',
+              fontWeight: 'bold',
+              color: '#958985',
+              textAlign: 'center',
+              marginBottom: '40px',
+              letterSpacing: '2px',
+            },
+            children: 'REGALO ESPECIAL',
+          },
+        },
+        // Para y De
+        {
+          type: 'div',
+          props: {
+            style: {
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '20px',
+              marginBottom: '30px',
+            },
+            children: [
+              {
+                type: 'div',
+                props: {
+                  style: {
+                    display: 'flex',
+                    fontSize: '18px',
+                    color: '#666',
+                  },
+                  children: [
+                    {
+                      type: 'span',
+                      props: {
+                        style: { width: '80px', fontWeight: 'normal' },
+                        children: 'para:',
+                      },
+                    },
+                    {
+                      type: 'span',
+                      props: {
+                        style: { fontWeight: 'bold', color: '#333' },
+                        children: data.recipientName || '',
+                      },
+                    },
+                  ],
+                },
+              },
+              {
+                type: 'div',
+                props: {
+                  style: {
+                    display: 'flex',
+                    fontSize: '18px',
+                    color: '#666',
+                  },
+                  children: [
+                    {
+                      type: 'span',
+                      props: {
+                        style: { width: '80px', fontWeight: 'normal' },
+                        children: 'de:',
+                      },
+                    },
+                    {
+                      type: 'span',
+                      props: {
+                        style: { fontWeight: 'bold', color: '#333' },
+                        children: data.senderName || '',
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+        // Valor y Código
+        {
+          type: 'div',
+          props: {
+            style: {
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '15px',
+              marginTop: 'auto',
+            },
+            children: [
+              {
+                type: 'div',
+                props: {
+                  style: {
+                    fontSize: '22px',
+                    color: '#666',
+                  },
+                  children: `Valor: $${data.amount}`,
+                },
+              },
+              {
+                type: 'div',
+                props: {
+                  style: {
+                    fontSize: '28px',
+                    fontWeight: 'bold',
+                    color: '#9D277D',
+                    letterSpacing: '3px',
+                    marginTop: '10px',
+                  },
+                  children: data.code,
+                },
+              },
+            ],
+          },
+        },
+        // Mensaje si existe
+        data.message
+          ? {
+              type: 'div',
+              props: {
+                style: {
+                  fontSize: '14px',
+                  fontStyle: 'italic',
+                  color: '#555',
+                  textAlign: 'center',
+                  marginTop: '20px',
+                },
+                children: `"${data.message}"`,
+              },
+            }
+          : null,
+        // Logo/Marca
+        {
+          type: 'div',
+          props: {
+            style: {
+              position: 'absolute',
+              bottom: '20px',
+              right: '30px',
+              fontSize: '14px',
+              color: '#999',
+              fontWeight: 'bold',
+            },
+            children: 'CERAMICALMA',
+          },
+        },
+      ].filter(Boolean),
+    },
+  };
+};
 
-    // Convertir a SVG usando Satori
-    const svg = await satori(markup as any, {
-      width,
-      height,
-      fonts: [], // Satori usa fonts embebidas por defecto
+export const generateGiftcardImage = async (
+  data: GiftcardData,
+  version: GiftcardVersion = 'v1'
+): Promise<Buffer> => {
+  try {
+    // Crear SVG con Satori
+    const svg = await satori(createGiftcardSVG(data), {
+      width: 600,
+      height: 400,
+      fonts: [], // Satori usa fuentes embebidas
     });
 
-    // Convertir SVG a PNG usando Sharp
+    // Convertir SVG a PNG con Sharp
     const pngBuffer = await sharp(Buffer.from(svg))
       .png()
       .toBuffer();
@@ -158,29 +204,29 @@ export const generateGiftcardImage = async (data: GiftcardData, version: Giftcar
     return pngBuffer;
   } catch (error) {
     console.error('[generateGiftcardImage] Error:', error);
-    throw new Error(`Failed to generate giftcard image: ${error instanceof Error ? error.message : String(error)}`);
+    throw error;
   }
 };
 
-export const generateGiftcardImageBase64 = async (data: GiftcardData, version: GiftcardVersion = 'v1'): Promise<string> => {
-  try {
-    const buffer = await generateGiftcardImage(data, version);
-    return buffer.toString('base64');
-  } catch (error) {
-    console.error('[generateGiftcardImageBase64] Error:', error);
-    throw new Error(`Failed to generate base64 giftcard image: ${error instanceof Error ? error.message : String(error)}`);
-  }
+export const generateGiftcardImageBase64 = async (
+  data: GiftcardData,
+  version: GiftcardVersion = 'v1'
+): Promise<string> => {
+  const buffer = await generateGiftcardImage(data, version);
+  return buffer.toString('base64');
 };
 
-export const generateAllGiftcardVersions = async (data: GiftcardData): Promise<{ v1: string; v2: string }> => {
+export const generateAllGiftcardVersions = async (
+  data: GiftcardData
+): Promise<{ v1: string; v2: string }> => {
   try {
-    // Por ahora solo generar v1, v2 puede ser variante de diseño
+    // Generar solo v1 (puedes hacer v2 diferente después)
     const v1Base64 = await generateGiftcardImageBase64(data, 'v1');
-    const v2Base64 = await generateGiftcardImageBase64(data, 'v2');
     
-    return { v1: v1Base64, v2: v2Base64 };
+    return { v1: v1Base64, v2: v1Base64 }; // Ambas iguales por ahora
   } catch (error) {
     console.error('[generateAllGiftcardVersions] Error:', error);
-    throw new Error(`Failed to generate giftcard versions: ${error instanceof Error ? error.message : String(error)}`);
+    // Si falla, retornar vacíos para que el email se envíe sin attachments
+    return { v1: '', v2: '' };
   }
 };
