@@ -14,17 +14,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const amount = parseInt((req.query.amount as string) || '100');
     const message = (req.query.message as string) || '¡Feliz cumpleaños! Espero que disfrutes tu clase de cerámica.';
 
-    // Generar PNG
-    const pngBase64 = await generateGiftcardImageBase64(
-      {
-        code,
-        amount,
-        recipientName,
-        senderName,
-        message,
-      },
-      'v1'
-    );
+    // Intentar generar PNG (puede fallar en Vercel)
+    let pngBase64 = '';
+    try {
+      pngBase64 = await generateGiftcardImageBase64(
+        {
+          code,
+          amount,
+          recipientName,
+          senderName,
+          message,
+        },
+        'v1'
+      );
+    } catch (pngError) {
+      console.warn('[preview-giftcard] PNG generation failed, showing preview without image:', pngError);
+    }
 
     // Retornar HTML con preview
     const html = `
@@ -81,7 +86,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             <div class="preview-box">
               <h3>Giftcard PNG generado:</h3>
-              <img src="data:image/png;base64,${pngBase64}" alt="Giftcard">
+              ${pngBase64 
+                ? `<img src="data:image/png;base64,${pngBase64}" alt="Giftcard">` 
+                : `<div style="background: #f0f0f0; padding: 40px; border-radius: 8px; text-align: center; color: #999;">
+                    <p>⚠️ No se pudo generar PNG (Sharp requiere librería de renderizado)</p>
+                    <p>Pero los datos se guardarían correctamente en la BD</p>
+                  </div>`
+              }
             </div>
 
             <div class="info">
