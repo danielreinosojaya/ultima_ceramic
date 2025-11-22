@@ -1,4 +1,3 @@
-import satori from 'satori';
 import sharp from 'sharp';
 
 export interface GiftcardData {
@@ -11,147 +10,79 @@ export interface GiftcardData {
 
 export type GiftcardVersion = 'v1' | 'v2';
 
+// Crear SVG manualmente - sin depender de Satori/JSX
+const createGiftcardSVG = (data: GiftcardData): string => {
+  const recipientName = (data.recipientName || 'María').substring(0, 30);
+  const senderName = (data.senderName || 'Juan').substring(0, 30);
+  const code = (data.code || 'GC-ABC123').substring(0, 30);
+  const message = (data.message || '').substring(0, 80);
+
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="600" height="400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f5f3ea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e8e3d6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background with gradient -->
+  <rect width="600" height="400" fill="url(#bgGradient)"/>
+  
+  <!-- Border -->
+  <rect x="6" y="6" width="588" height="388" rx="20" ry="20" fill="none" stroke="#a89c94" stroke-width="6"/>
+  
+  <!-- Título -->
+  <text x="300" y="80" font-size="48" font-weight="bold" color="#958985" text-anchor="middle" font-family="Arial, sans-serif" fill="#958985" letter-spacing="2">
+    REGALO ESPECIAL
+  </text>
+  
+  <!-- Para: -->
+  <text x="50" y="160" font-size="18" font-family="Arial, sans-serif" fill="#666">
+    para:
+  </text>
+  <text x="120" y="160" font-size="18" font-weight="bold" font-family="Arial, sans-serif" fill="#333">
+    ${recipientName}
+  </text>
+  
+  <!-- De: -->
+  <text x="50" y="200" font-size="18" font-family="Arial, sans-serif" fill="#666">
+    de:
+  </text>
+  <text x="120" y="200" font-size="18" font-weight="bold" font-family="Arial, sans-serif" fill="#333">
+    ${senderName}
+  </text>
+  
+  <!-- Valor -->
+  <text x="300" y="280" font-size="22" text-anchor="middle" font-family="Arial, sans-serif" fill="#666">
+    Valor: $${data.amount}
+  </text>
+  
+  <!-- Código -->
+  <text x="300" y="330" font-size="28" font-weight="bold" text-anchor="middle" font-family="Arial, sans-serif" fill="#9D277D" letter-spacing="3">
+    ${code}
+  </text>
+  
+  <!-- Mensaje -->
+  ${message ? `<text x="300" y="355" font-size="14" font-style="italic" text-anchor="middle" font-family="Arial, sans-serif" fill="#555">"${message}"</text>` : ''}
+  
+  <!-- Logo -->
+  <text x="550" y="380" font-size="14" text-anchor="end" font-weight="bold" font-family="Arial, sans-serif" fill="#999">
+    CERAMICALMA
+  </text>
+</svg>`;
+
+  return svg;
+};
+
 export const generateGiftcardImage = async (
   data: GiftcardData,
   version: GiftcardVersion = 'v1'
 ): Promise<Buffer> => {
   try {
-    // JSX element para convertir a SVG
-    const jsx = (
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          width: '600px',
-          height: '400px',
-          background: 'linear-gradient(135deg, #f5f3ea 0%, #e8e3d6 100%)',
-          border: '6px solid #a89c94',
-          borderRadius: '20px',
-          padding: '40px',
-          fontFamily: 'system-ui, sans-serif',
-          position: 'relative',
-          boxSizing: 'border-box',
-        }}
-      >
-        {/* Título */}
-        <div
-          style={{
-            fontSize: '48px',
-            fontWeight: 'bold',
-            color: '#958985',
-            textAlign: 'center',
-            marginBottom: '40px',
-            letterSpacing: '2px',
-          }}
-        >
-          REGALO ESPECIAL
-        </div>
+    const svg = createGiftcardSVG(data);
 
-        {/* Para y De */}
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '20px',
-            marginBottom: '30px',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              fontSize: '18px',
-              color: '#666',
-            }}
-          >
-            <span style={{ width: '80px', fontWeight: '400' }}>para:</span>
-            <span style={{ fontWeight: 'bold', color: '#333', flex: 1 }}>
-              {data.recipientName || 'María'}
-            </span>
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              fontSize: '18px',
-              color: '#666',
-            }}
-          >
-            <span style={{ width: '80px', fontWeight: '400' }}>de:</span>
-            <span style={{ fontWeight: 'bold', color: '#333', flex: 1 }}>
-              {data.senderName || 'Juan'}
-            </span>
-          </div>
-        </div>
-
-        {/* Valor y Código */}
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '15px',
-            marginTop: 'auto',
-          }}
-        >
-          <div
-            style={{
-              fontSize: '22px',
-              color: '#666',
-            }}
-          >
-            Valor: ${data.amount}
-          </div>
-          <div
-            style={{
-              fontSize: '28px',
-              fontWeight: 'bold',
-              color: '#9D277D',
-              letterSpacing: '3px',
-              marginTop: '10px',
-            }}
-          >
-            {data.code}
-          </div>
-        </div>
-
-        {/* Mensaje si existe */}
-        {data.message && (
-          <div
-            style={{
-              fontSize: '14px',
-              fontStyle: 'italic',
-              color: '#555',
-              textAlign: 'center',
-              marginTop: '20px',
-            }}
-          >
-            "{data.message}"
-          </div>
-        )}
-
-        {/* Logo */}
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '20px',
-            right: '30px',
-            fontSize: '14px',
-            color: '#999',
-            fontWeight: 'bold',
-          }}
-        >
-          CERAMICALMA
-        </div>
-      </div>
-    );
-
-    // Convertir JSX a SVG sin necesitar fonts especificados
-    const svg = await satori(jsx as any, {
-      width: 600,
-      height: 400,
-      fonts: [],
-    });
-
-    // Convertir SVG a PNG
+    // Convertir SVG a PNG con Sharp
     const pngBuffer = await sharp(Buffer.from(svg))
       .png()
       .toBuffer();
