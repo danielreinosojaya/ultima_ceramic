@@ -49,17 +49,24 @@ export const GiftcardPayment: React.FC<{
           <span className="flex items-center gap-2 font-bold text-brand-secondary text-lg">
             {deliveryIcons[deliveryMethod?.type]}
             {deliveryMethod?.type}
-            {deliveryMethod?.data?.whatsapp && (
-              <span className="ml-2 text-xs text-brand-primary">({deliveryMethod.data.whatsapp})</span>
+            {deliveryMethod?.data?.phone && (
+              <span className="ml-2 text-xs text-brand-primary">({deliveryMethod.data.phone})</span>
             )}
             {deliveryMethod?.data?.email && (
               <span className="ml-2 text-xs text-brand-primary">({deliveryMethod.data.email})</span>
             )}
-            {deliveryMethod?.data?.date && (
-              <span className="ml-2 text-xs text-brand-primary">({deliveryMethod.data.date})</span>
-            )}
           </span>
         </div>
+        {deliveryMethod?.data?.scheduled && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-brand-secondary font-semibold">Envío programado:</span>
+              <span className="text-sm font-bold text-blue-700">
+                {deliveryMethod.data.sendDate} a las {deliveryMethod.data.sendTime}
+              </span>
+            </div>
+          </div>
+        )}
         <div className="mb-4">
           <label className="block text-brand-secondary mb-2 text-sm font-semibold" htmlFor="buyerEmail">Correo electrónico del comprador <span className="text-red-500">*</span></label>
           <input

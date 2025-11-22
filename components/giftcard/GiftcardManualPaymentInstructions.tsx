@@ -1,14 +1,81 @@
 import React from 'react';
 import * as dataService from '../../services/dataService';
 
+// Función para convertir hora local (Quito UTC-5) a UTC
+const localToUTC = (dateStr: string, timeStr: string): string => {
+  // dateStr: "2025-11-21", timeStr: "21:41" (hora local de Quito)
+  // Necesitamos convertir esta hora a UTC (UTC-5 significa UTC = Quito + 5 horas)
+  // Ejemplo: 21:41 Quito (UTC-5) = 02:41 UTC (día siguiente)
+  
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  
+  // Crear fecha UTC explícitamente usando el string "2025-11-21" como UTC
+  // dateStr es en formato YYYY-MM-DD
+  const [year, month, day] = dateStr.split('-').map(Number);
+  
+  // Crear fecha en UTC (no en hora local del navegador)
+  const utcDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+  
+  // Ahora sumar 5 horas para convertir de "Quito" a UTC
+  utcDate.setUTCHours(hours + 5, minutes, 0, 0);
+  
+  console.log('🌍 Conversión localToUTC:', {
+    input: `${dateStr}T${timeStr}`,
+    quitoTime: `${dateStr}T${timeStr}:00 (Quito, UTC-5)`,
+    utcResult: utcDate.toISOString(),
+    explanation: `${hours}:${minutes.toString().padStart(2, '0')} Quito = ${utcDate.getUTCHours()}:${utcDate.getUTCMinutes().toString().padStart(2, '0')} UTC`
+  });
+  
+  return utcDate.toISOString();
+};
+
 export const GiftcardManualPaymentInstructions: React.FC<{ onFinish: () => void; amount: number; personalization: any; deliveryMethod: { type: string; data?: any }; buyerEmail: string }> = ({ onFinish, amount, personalization, deliveryMethod, buyerEmail }) => {
   // Generar código único (ejemplo: GIF-XXXXXX)
   const [copied, setCopied] = React.useState(false);
+  const [isRegistering, setIsRegistering] = React.useState(false);
+  
   const code = React.useMemo(() => {
     // Si ya existe en personalization, úsalo, si no genera uno
     if (personalization?.code) return personalization.code;
     return 'GIF-' + Math.random().toString(36).substring(2, 8).toUpperCase();
   }, [personalization]);
+
+  // Auto-registrar giftcard apenas se carga la pantalla (no esperar a click)
+  React.useEffect(() => {
+    const registerGiftcard = async () => {
+      if (isRegistering) return; // Evitar duplicados
+      setIsRegistering(true);
+      try {
+        const payload = {
+          buyerName: personalization?.sender || '',
+          buyerEmail: buyerEmail,
+          recipientName: personalization?.recipient || '',
+          recipientEmail: deliveryMethod?.type === 'email' ? deliveryMethod?.data?.email || '' : '',
+          recipientWhatsapp: deliveryMethod?.type === 'whatsapp' ? deliveryMethod?.data?.phone || '' : '',
+          amount,
+          code,
+          message: personalization?.message || '',
+          sendMethod: (deliveryMethod?.type as 'email' | 'whatsapp') || undefined,
+          scheduledSendAt: deliveryMethod?.data?.scheduled ? localToUTC(deliveryMethod.data.sendDate, deliveryMethod.data.sendTime) : null
+        };
+        
+        console.log('📤 Enviando giftcard:', {
+          sendMethod: payload.sendMethod,
+          scheduled: deliveryMethod?.data?.scheduled,
+          sendDate: deliveryMethod?.data?.sendDate,
+          sendTime: deliveryMethod?.data?.sendTime,
+          scheduledSendAt: payload.scheduledSendAt
+        });
+        
+        await dataService.addGiftcardRequest(payload);
+        console.log('✅ Giftcard auto-registrada exitosamente');
+      } catch (err) {
+        console.error('❌ Error auto-registrando giftcard:', err);
+      }
+    };
+    
+    registerGiftcard();
+  }, [code, amount, personalization?.sender, personalization?.recipient, personalization?.message, buyerEmail, deliveryMethod, isRegistering]);
 
   const whatsappNumber = '+593985813327';
   let destinatarioLabel = '';
@@ -90,19 +157,7 @@ export const GiftcardManualPaymentInstructions: React.FC<{ onFinish: () => void;
       <div className="w-full px-8 pb-8">
         <button
           className="w-full py-3 rounded-full bg-brand-primary text-white font-bold text-lg shadow-md hover:scale-[1.03] hover:bg-brand-primary/90 transition-all duration-150"
-          onClick={async () => {
-            await dataService.addGiftcardRequest({
-              buyerName: personalization?.sender || '',
-              buyerEmail: buyerEmail,
-              recipientName: personalization?.recipient || '',
-              recipientEmail: deliveryMethod?.type === 'email' || deliveryMethod?.type === 'schedule' ? deliveryMethod?.data?.email || '' : '',
-              recipientWhatsapp: deliveryMethod?.type === 'whatsapp' ? deliveryMethod?.data?.whatsapp || '' : '',
-              amount,
-              code,
-              message: personalization?.message || ''
-            });
-            onFinish();
-          }}
+          onClick={onFinish}
         >
           Finalizar
         </button>

@@ -1,6 +1,4 @@
 import sharp from 'sharp';
-import fs from 'fs';
-import path from 'path';
 
 export interface GiftcardData {
   code: string;
@@ -12,144 +10,109 @@ export interface GiftcardData {
 
 export type GiftcardVersion = 'v1' | 'v2';
 
-// Map versions to SVG files - Using v1-alt for v1
-const SVG_TEMPLATES: Record<GiftcardVersion, string> = {
-  v1: path.join(process.cwd(), 'design-reference', 'giftcard-v1-alt.svg'),
-  v2: path.join(process.cwd(), 'design-reference', 'giftcard-v2.svg'),
-};
+// Crear SVG manualmente - sin depender de Satori/JSX
+const createGiftcardSVG = (data: GiftcardData): string => {
+  const recipientName = (data.recipientName || 'María').substring(0, 30);
+  const senderName = (data.senderName || 'Juan').substring(0, 30);
+  const code = (data.code || 'GC-ABC123').substring(0, 30);
+  const message = (data.message || '').substring(0, 80);
 
-// Color palettes extracted from design files
-const COLOR_PALETTES = {
-  v1: {
-    accentPrimary: '#9D277D',    // Magenta/Rosa
-    accentSecondary: '#6F5EE0',  // Púrpura
-    text: '#1F3A55',              // Azul oscuro
-    textSecondary: '#583E7E',     // Púrpura oscuro
-  },
-  v2: {
-    accentPrimary: '#9C140D',    // Rojo
-    accentSecondary: '#AE4A02',  // Naranja
-    text: '#2D3A50',              // Gris oscuro
-    textSecondary: '#AA4A6C',     // Rojo oscuro
-  },
-};
-
-/**
- * Creates an SVG overlay with dynamic text positioned on the dotted lines
- * Text uses proper color palettes for each version
- * v1: includes names and code | v2: only code (no names)
- */
-const createTextOverlaySVG = (data: GiftcardData, version: GiftcardVersion): string => {
-  const colors = COLOR_PALETTES[version];
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="600" height="400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f5f3ea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e8e3d6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
   
-  // v1 includes names, v2 does not
-  if (version === 'v1') {
-    return `
-      <svg width="559" height="397" viewBox="0 0 559 397" xmlns="http://www.w3.org/2000/svg">
-        <!-- Recipient name right after "para:" -->
-        <text x="130" y="162" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#958985">
-          ${data.recipientName || ''}
-        </text>
-        
-        <!-- Sender name right after "de:" -->
-        <text x="130" y="202" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#958985">
-          ${data.senderName || ''}
-        </text>
-        
-        <!-- Amount on left side -->
-        <text x="100" y="235" font-family="Arial, sans-serif" font-size="11" font-weight="400" fill="#958985">
-          Valor : $ ${data.amount}
-        </text>
-        
-        <!-- Code GC-XXXXX centered -->
-        <text x="280" y="330" font-family="Courier New, monospace" font-size="13" font-weight="bold" fill="${colors.accentPrimary}" letter-spacing="1.5" text-anchor="middle">
-          ${data.code}
-        </text>
-        
-        <!-- Message (if present) -->
-        ${
-          data.message
-            ? `
-          <text x="280" y="370" font-family="Arial, sans-serif" font-size="11" fill="${colors.text}" text-anchor="middle" font-style="italic">
-            "${data.message}"
-          </text>
-            `
-            : ''
-        }
-      </svg>
-    `;
-  } else {
-    // v2: only code, no names
-    return `
-      <svg width="559" height="397" viewBox="0 0 559 397" xmlns="http://www.w3.org/2000/svg">
-        <!-- Code GC-XXXXX centered below all, above logo -->
-        <text x="280" y="360" font-family="Courier New, monospace" font-size="18" font-weight="bold" fill="${colors.accentPrimary}" letter-spacing="2" text-anchor="middle">
-          ${data.code}
-        </text>
-      </svg>
-    `;
-  }
+  <!-- Background with gradient -->
+  <rect width="600" height="400" fill="url(#bgGradient)"/>
+  
+  <!-- Border -->
+  <rect x="6" y="6" width="588" height="388" rx="20" ry="20" fill="none" stroke="#a89c94" stroke-width="6"/>
+  
+  <!-- Título -->
+  <text x="300" y="80" font-size="48" font-weight="bold" color="#958985" text-anchor="middle" font-family="Arial, sans-serif" fill="#958985" letter-spacing="2">
+    REGALO ESPECIAL
+  </text>
+  
+  <!-- Para: -->
+  <text x="50" y="160" font-size="18" font-family="Arial, sans-serif" fill="#666">
+    para:
+  </text>
+  <text x="120" y="160" font-size="18" font-weight="bold" font-family="Arial, sans-serif" fill="#333">
+    ${recipientName}
+  </text>
+  
+  <!-- De: -->
+  <text x="50" y="200" font-size="18" font-family="Arial, sans-serif" fill="#666">
+    de:
+  </text>
+  <text x="120" y="200" font-size="18" font-weight="bold" font-family="Arial, sans-serif" fill="#333">
+    ${senderName}
+  </text>
+  
+  <!-- Valor -->
+  <text x="300" y="280" font-size="22" text-anchor="middle" font-family="Arial, sans-serif" fill="#666">
+    Valor: $${data.amount}
+  </text>
+  
+  <!-- Código -->
+  <text x="300" y="330" font-size="28" font-weight="bold" text-anchor="middle" font-family="Arial, sans-serif" fill="#9D277D" letter-spacing="3">
+    ${code}
+  </text>
+  
+  <!-- Mensaje -->
+  ${message ? `<text x="300" y="355" font-size="14" font-style="italic" text-anchor="middle" font-family="Arial, sans-serif" fill="#555">"${message}"</text>` : ''}
+  
+  <!-- Logo -->
+  <text x="550" y="380" font-size="14" text-anchor="end" font-weight="bold" font-family="Arial, sans-serif" fill="#999">
+    CERAMICALMA
+  </text>
+</svg>`;
+
+  return svg;
 };
 
-/**
- * Generates a PNG image by converting SVG template to PNG using Sharp
- * Uses original SVG templates with text overlay positioned on dotted lines
- */
-export const generateGiftcardImage = async (data: GiftcardData, version: GiftcardVersion = 'v1'): Promise<Buffer> => {
+export const generateGiftcardImage = async (
+  data: GiftcardData,
+  version: GiftcardVersion = 'v1'
+): Promise<Buffer> => {
   try {
-    const svgFile = SVG_TEMPLATES[version];
+    const svg = createGiftcardSVG(data);
 
-    if (!fs.existsSync(svgFile)) {
-      throw new Error(`SVG template not found: ${svgFile}`);
-    }
-
-    // Read the original SVG template
-    const templateSVG = fs.readFileSync(svgFile, 'utf-8');
-    
-    // Create text overlay SVG
-    const textOverlay = createTextOverlaySVG(data, version);
-    
-    // Combine template SVG with text overlay
-    const combinedSVG = templateSVG.replace('</svg>', `${textOverlay}</svg>`);
-
-    // Convert combined SVG to PNG using Sharp
-    const buffer = await sharp(Buffer.from(combinedSVG))
-      .png({ quality: 95, progressive: true })
+    // Convertir SVG a PNG con Sharp
+    const pngBuffer = await sharp(Buffer.from(svg))
+      .png()
       .toBuffer();
 
-    return buffer;
+    return pngBuffer;
   } catch (error) {
-    console.error('[generateGiftcardImage] Error generating giftcard image:', error);
-    throw new Error(`Failed to generate giftcard image: ${error instanceof Error ? error.message : String(error)}`);
+    console.error('[generateGiftcardImage] Error:', error);
+    throw error;
   }
 };
 
-/**
- * Generates a PNG image and returns it as a base64-encoded string
- */
-export const generateGiftcardImageBase64 = async (data: GiftcardData, version: GiftcardVersion = 'v1'): Promise<string> => {
-  try {
-    const buffer = await generateGiftcardImage(data, version);
-    return buffer.toString('base64');
-  } catch (error) {
-    console.error('[generateGiftcardImageBase64] Error generating base64 giftcard image:', error);
-    throw new Error(`Failed to generate base64 giftcard image: ${error instanceof Error ? error.message : String(error)}`);
-  }
+export const generateGiftcardImageBase64 = async (
+  data: GiftcardData,
+  version: GiftcardVersion = 'v1'
+): Promise<string> => {
+  const buffer = await generateGiftcardImage(data, version);
+  return buffer.toString('base64');
 };
 
-/**
- * Generates both v1 and v2 giftcard images as base64 strings using original SVG templates
- */
-export const generateAllGiftcardVersions = async (data: GiftcardData): Promise<{ v1: string; v2: string }> => {
+export const generateAllGiftcardVersions = async (
+  data: GiftcardData
+): Promise<{ v1: string; v2: string }> => {
   try {
-    const [v1Base64, v2Base64] = await Promise.all([
-      generateGiftcardImageBase64(data, 'v1'),
-      generateGiftcardImageBase64(data, 'v2'),
-    ]);
-
-    return { v1: v1Base64, v2: v2Base64 };
+    // Generar solo v1 (puedes hacer v2 diferente después)
+    const v1Base64 = await generateGiftcardImageBase64(data, 'v1');
+    
+    return { v1: v1Base64, v2: v1Base64 }; // Ambas iguales por ahora
   } catch (error) {
-    console.error('[generateAllGiftcardVersions] Error generating giftcard versions:', error);
-    throw new Error(`Failed to generate giftcard versions: ${error instanceof Error ? error.message : String(error)}`);
+    console.error('[generateAllGiftcardVersions] Error:', error);
+    // Si falla, retornar vacíos para que el email se envíe sin attachments
+    return { v1: '', v2: '' };
   }
 };
