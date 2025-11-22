@@ -19,21 +19,31 @@ export const GiftcardConfirmation: React.FC<{ personalization: any; amount: numb
         {personalization?.message && <span className="text-brand-secondary text-lg">Mensaje: <span className="font-bold text-brand-primary">{personalization.message}</span></span>}
         <span className="text-brand-secondary text-lg">Monto: <span className="font-bold text-brand-primary">${amount}</span></span>
         <span className="text-brand-secondary text-lg">Método de entrega: <span className="font-bold text-brand-primary">
-          {deliveryMethod?.type}
-          {deliveryMethod?.data?.whatsapp && (
-            <span className="ml-2 text-xs text-brand-primary">({deliveryMethod.data.whatsapp})</span>
+          {deliveryMethod?.type === 'email' ? 'Email' : 'WhatsApp'}
+          {deliveryMethod?.data?.phone && (
+            <span className="ml-2 text-xs text-brand-primary">({deliveryMethod.data.phone})</span>
           )}
           {deliveryMethod?.data?.email && (
             <span className="ml-2 text-xs text-brand-primary">({deliveryMethod.data.email})</span>
           )}
-          {deliveryMethod?.data?.date && (
-            <span className="ml-2 text-xs text-brand-primary">({deliveryMethod.data.date})</span>
-          )}
         </span></span>
+        {deliveryMethod?.data?.scheduled && (
+          <span className="text-blue-700 font-semibold text-lg bg-blue-50 px-4 py-2 rounded-lg">
+            📅 Programado para: {deliveryMethod.data.sendDate} a las {deliveryMethod.data.sendTime}
+          </span>
+        )}
       </div>
       <div className="w-full flex flex-col items-center gap-2 mb-4">
-        <span className="text-brand-primary font-semibold">Tu giftcard ha sido enviada correctamente.</span>
-        <span className="text-brand-secondary text-sm">El destinatario recibirá las instrucciones para redimirla.</span>
+        <span className="text-brand-primary font-semibold">
+          {deliveryMethod?.data?.scheduled 
+            ? '✅ Tu giftcard ha sido programada correctamente.' 
+            : '✅ Tu giftcard ha sido enviada correctamente.'}
+        </span>
+        <span className="text-brand-secondary text-sm">
+          {deliveryMethod?.data?.scheduled 
+            ? `Se enviará el ${deliveryMethod.data.sendDate} a las ${deliveryMethod.data.sendTime}`
+            : 'El destinatario recibirá las instrucciones para redimirla.'}
+        </span>
       </div>
       <button
         className="w-full py-3 rounded-full bg-brand-primary text-white font-bold text-lg shadow-md hover:bg-brand-primary/90 transition-colors"

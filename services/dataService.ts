@@ -1,13 +1,17 @@
 export const addGiftcardRequest = async (request: Omit<GiftcardRequest, 'id' | 'status' | 'createdAt'>): Promise<{ success: boolean; id?: string; error?: string }> => {
     try {
+        console.log('[dataService] 📮 Enviando addGiftcardRequest:', request);
         const response = await fetch('/api/data?action=addGiftcardRequest', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(request),
         });
+        console.log('[dataService] Response status:', response.status, 'ok:', response.ok);
         const result = await response.json();
+        console.log('[dataService] 📬 Respuesta recibida:', result);
         return result;
     } catch (error) {
+        console.error('[dataService] ❌ Error en addGiftcardRequest:', error);
         return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
 };
@@ -24,6 +28,8 @@ export type GiftcardRequest = {
     message?: string;
     status: 'pending' | 'approved' | 'rejected' | 'delivered' | 'deleted';
     createdAt: string;
+    sendMethod?: 'email' | 'whatsapp';
+    scheduledSendAt?: string | null;
     metadata?: {
         issuedCode?: string;
         issued_code?: string;
@@ -52,6 +58,8 @@ export const getGiftcardRequests = async (): Promise<GiftcardRequest[]> => {
             code: req.code || '',
             status: req.status || 'pending',
             createdAt: req.createdAt || '',
+            sendMethod: req.sendMethod || null,
+            scheduledSendAt: req.scheduledSendAt || null,
             // Preserve metadata from the server so admin UI can display issuedCode, voucherUrl, etc.
             metadata: req.metadata || null
         }));
@@ -1723,5 +1731,37 @@ export const checkGiftcardBalance = async (code: string): Promise<{
             success: false, 
             message: error instanceof Error ? error.message : 'Error checking balance' 
         };
+    }
+};
+
+// Send giftcard immediately (override scheduling)
+export const sendGiftcardNow = async (requestId: string | number): Promise<{ success: boolean; error?: string }> => {
+    try {
+        const response = await fetch('/api/data?action=sendGiftcardNow', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requestId })
+        });
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : 'Error sending giftcard' };
+    }
+};
+
+export const updateGiftcardSchedule = async (
+    requestId: string | number, 
+    scheduledSendAt: string
+): Promise<{ success: boolean; data?: any; error?: string }> => {
+    try {
+        const response = await fetch('/api/data?action=updateGiftcardSchedule', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requestId, scheduledSendAt })
+        });
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : 'Error updating schedule' };
     }
 };
