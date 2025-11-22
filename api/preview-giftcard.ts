@@ -1,5 +1,90 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { generateGiftcardImageBase64 } from './utils/giftcardImageGenerator';
+
+// Crear SVG manualmente - sin depender de imports
+const createGiftcardSVG = (data: {
+  code: string;
+  amount: number;
+  recipientName?: string;
+  senderName?: string;
+  message?: string;
+}): string => {
+  const recipientName = (data.recipientName || 'María').substring(0, 30);
+  const senderName = (data.senderName || 'Juan').substring(0, 30);
+  const code = (data.code || 'GC-ABC123').substring(0, 30);
+  const message = (data.message || '').substring(0, 80);
+
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="600" height="400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f5f3ea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e8e3d6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background with gradient -->
+  <rect width="600" height="400" fill="url(#bgGradient)"/>
+  
+  <!-- Border -->
+  <rect x="6" y="6" width="588" height="388" rx="20" ry="20" fill="none" stroke="#a89c94" stroke-width="6"/>
+  
+  <!-- Título -->
+  <text x="300" y="80" font-size="48" font-weight="bold" text-anchor="middle" font-family="Arial, sans-serif" fill="#958985" letter-spacing="2">
+    REGALO ESPECIAL
+  </text>
+  
+  <!-- Para: -->
+  <text x="50" y="160" font-size="18" font-family="Arial, sans-serif" fill="#666">
+    para:
+  </text>
+  <text x="120" y="160" font-size="18" font-weight="bold" font-family="Arial, sans-serif" fill="#333">
+    ${recipientName}
+  </text>
+  
+  <!-- De: -->
+  <text x="50" y="200" font-size="18" font-family="Arial, sans-serif" fill="#666">
+    de:
+  </text>
+  <text x="120" y="200" font-size="18" font-weight="bold" font-family="Arial, sans-serif" fill="#333">
+    ${senderName}
+  </text>
+  
+  <!-- Valor -->
+  <text x="300" y="280" font-size="22" text-anchor="middle" font-family="Arial, sans-serif" fill="#666">
+    Valor: $${data.amount}
+  </text>
+  
+  <!-- Código -->
+  <text x="300" y="330" font-size="28" font-weight="bold" text-anchor="middle" font-family="Arial, sans-serif" fill="#9D277D" letter-spacing="3">
+    ${code}
+  </text>
+  
+  <!-- Mensaje -->
+  ${message ? `<text x="300" y="355" font-size="14" font-style="italic" text-anchor="middle" font-family="Arial, sans-serif" fill="#555">"${message}"</text>` : ''}
+  
+  <!-- Logo -->
+  <text x="550" y="380" font-size="14" text-anchor="end" font-weight="bold" font-family="Arial, sans-serif" fill="#999">
+    CERAMICALMA
+  </text>
+</svg>`;
+
+  return svg;
+};
+
+async function generateGiftcardImageBase64(data: any): Promise<string> {
+  try {
+    // Importar sharp dinámicamente para evitar problemas de module resolution
+    const sharp = (await import('sharp')).default;
+    const svg = createGiftcardSVG(data);
+    const pngBuffer = await sharp(Buffer.from(svg))
+      .png()
+      .toBuffer();
+    return pngBuffer.toString('base64');
+  } catch (error) {
+    console.warn('[generateGiftcardImageBase64] Error:', error);
+    return '';
+  }
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
@@ -14,22 +99,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const amount = parseInt((req.query.amount as string) || '100');
     const message = (req.query.message as string) || '¡Feliz cumpleaños! Espero que disfrutes tu clase de cerámica.';
 
-    // Intentar generar PNG (puede fallar en Vercel)
-    let pngBase64 = '';
-    try {
-      pngBase64 = await generateGiftcardImageBase64(
-        {
-          code,
-          amount,
-          recipientName,
-          senderName,
-          message,
-        },
-        'v1'
-      );
-    } catch (pngError) {
-      console.warn('[preview-giftcard] PNG generation failed, showing preview without image:', pngError);
-    }
+    // Intentar generar PNG
+    const pngBase64 = await generateGiftcardImageBase64(
+      {
+        code,
+        amount,
+        recipientName,
+        senderName,
+        message,
+      }
+    );
 
     // Retornar HTML con preview
     const html = `
