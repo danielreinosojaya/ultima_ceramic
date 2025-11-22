@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-// Crear SVG manualmente - sin depender de imports
+// Crear SVG manualmente - diseño idéntico al screenshot
 const createGiftcardSVG = (data: {
   code: string;
   amount: number;
@@ -8,64 +8,131 @@ const createGiftcardSVG = (data: {
   senderName?: string;
   message?: string;
 }): string => {
-  const recipientName = (data.recipientName || 'María').substring(0, 30);
-  const senderName = (data.senderName || 'Juan').substring(0, 30);
-  const code = (data.code || 'GC-ABC123').substring(0, 30);
-  const message = (data.message || '').substring(0, 80);
-
+  const recipientName = data.recipientName || '';
+  const senderName = data.senderName || '';
+  
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="600" height="400" xmlns="http://www.w3.org/2000/svg">
+<svg width="1080" height="763" xmlns="http://www.w3.org/2000/svg">
   <defs>
+    <!-- Gradiente sutil para el fondo -->
     <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#f5f3ea;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#e8e3d6;stop-opacity:1" />
+      <stop offset="0%" style="stop-color:#D4CEC0;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#C4BDB0;stop-opacity:1" />
     </linearGradient>
+    
+    <!-- Gradiente para el texto del título -->
+    <linearGradient id="titleGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#A39A8F;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8B7E74;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Filtro para sombra elegante del texto -->
+    <filter id="textShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="5" dy="6" stdDeviation="4" flood-color="#6B6158" flood-opacity="0.5"/>
+      <feDropShadow dx="2" dy="3" stdDeviation="2" flood-color="#4A3F36" flood-opacity="0.3"/>
+    </filter>
+    
+    <!-- Filtro para glow sutil -->
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
   </defs>
   
-  <!-- Background with gradient -->
-  <rect width="600" height="400" fill="url(#bgGradient)"/>
+  <!-- Fondo con gradiente -->
+  <rect width="1080" height="763" fill="url(#bgGradient)"/>
   
-  <!-- Border -->
-  <rect x="6" y="6" width="588" height="388" rx="20" ry="20" fill="none" stroke="#a89c94" stroke-width="6"/>
+  <!-- Textura sutil (puntos decorativos) -->
+  <circle cx="150" cy="150" r="3" fill="#B8B0A3" opacity="0.3"/>
+  <circle cx="920" cy="180" r="2" fill="#B8B0A3" opacity="0.3"/>
+  <circle cx="200" cy="600" r="2.5" fill="#B8B0A3" opacity="0.3"/>
+  <circle cx="880" cy="620" r="3" fill="#B8B0A3" opacity="0.3"/>
   
-  <!-- Título -->
-  <text x="300" y="80" font-size="48" font-weight="bold" text-anchor="middle" font-family="Arial, sans-serif" fill="#958985" letter-spacing="2">
-    REGALO ESPECIAL
+  <!-- Borde ondulado orgánico refinado -->
+  <path d="M 80 75 Q 100 60, 150 65 T 250 70 T 350 65 T 450 70 T 550 65 T 650 70 T 750 65 T 850 70 T 950 65 T 1000 75 
+           L 1005 680 Q 990 695, 950 690 T 850 685 T 750 690 T 650 685 T 550 690 T 450 685 T 350 690 T 250 685 T 150 690 T 80 680 Z" 
+        fill="#EAE6DC" stroke="#8B9199" stroke-width="3" opacity="0.95"/>
+  
+  <!-- Línea decorativa superior -->
+  <line x1="280" y1="385" x2="800" y2="385" stroke="#A39A8F" stroke-width="0.8" opacity="0.3"/>
+  
+  <!-- Título "REGALO" - efecto sombra simple y clean -->
+  <!-- Sombra profunda -->
+  <text x="547" y="222" font-size="145" font-weight="900" text-anchor="middle" 
+        font-family="Impact, 'Arial Black', sans-serif" 
+        fill="#6B5F56" letter-spacing="6" opacity="0.4"
+        style="font-style: italic;">
+    REGALO
+  </text>
+  <!-- Capa principal sólida -->
+  <text x="540" y="215" font-size="145" font-weight="900" text-anchor="middle" 
+        font-family="Impact, 'Arial Black', sans-serif" 
+        fill="#988F87" letter-spacing="6"
+        style="font-style: italic;">
+    REGALO
   </text>
   
-  <!-- Para: -->
-  <text x="50" y="160" font-size="18" font-family="Arial, sans-serif" fill="#666">
+  <!-- Título "ESPECIAL" - efecto sombra simple y clean -->
+  <!-- Sombra profunda -->
+  <text x="547" y="332" font-size="145" font-weight="900" text-anchor="middle" 
+        font-family="Impact, 'Arial Black', sans-serif" 
+        fill="#6B5F56" letter-spacing="6" opacity="0.4"
+        style="font-style: italic;">
+    ESPECIAL
+  </text>
+  <!-- Capa principal sólida -->
+  <text x="540" y="325" font-size="145" font-weight="900" text-anchor="middle" 
+        font-family="Impact, 'Arial Black', sans-serif" 
+        fill="#988F87" letter-spacing="6"
+        style="font-style: italic;">
+    ESPECIAL
+  </text>
+  
+  <!-- Línea decorativa inferior -->
+  <line x1="280" y1="365" x2="800" y2="365" stroke="#A39A8F" stroke-width="0.8" opacity="0.3"/>
+  
+  <!-- "para:" con línea refinada -->
+  <text x="240" y="445" font-size="22" font-family="'Playfair Display', Georgia, serif" fill="#7B7268" font-weight="400" letter-spacing="2" style="font-style: italic;">
     para:
   </text>
-  <text x="120" y="160" font-size="18" font-weight="bold" font-family="Arial, sans-serif" fill="#333">
-    ${recipientName}
-  </text>
+  <line x1="240" y1="460" x2="840" y2="460" stroke="#A39A8F" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.6"/>
+  <!-- Nombre del destinatario -->
+  ${recipientName ? `<text x="540" y="453" font-size="28" text-anchor="middle" font-family="'Playfair Display', 'Cormorant', Georgia, serif" fill="#3D3932" font-weight="500" letter-spacing="1">${recipientName}</text>` : ''}
   
-  <!-- De: -->
-  <text x="50" y="200" font-size="18" font-family="Arial, sans-serif" fill="#666">
+  <!-- "de:" con línea refinada -->
+  <text x="240" y="530" font-size="22" font-family="'Playfair Display', Georgia, serif" fill="#7B7268" font-weight="400" letter-spacing="2" style="font-style: italic;">
     de:
   </text>
-  <text x="120" y="200" font-size="18" font-weight="bold" font-family="Arial, sans-serif" fill="#333">
-    ${senderName}
+  <line x1="240" y1="545" x2="840" y2="545" stroke="#A39A8F" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.6"/>
+  <!-- Nombre del remitente -->
+  ${senderName ? `<text x="540" y="538" font-size="28" text-anchor="middle" font-family="'Playfair Display', 'Cormorant', Georgia, serif" fill="#3D3932" font-weight="500" letter-spacing="1">${senderName}</text>` : ''}
+  
+  <!-- Separador vertical elegante -->
+  <line x1="540" y1="605" x2="540" y2="655" stroke="#A39A8F" stroke-width="1.5" opacity="0.5"/>
+  
+  <!-- Valor a la izquierda - serif elegante -->
+  <text x="240" y="635" font-size="42" font-weight="400" font-family="'Playfair Display', 'Bodoni', Georgia, serif" fill="#5D5449" letter-spacing="2">
+    $${data.amount}
   </text>
   
-  <!-- Valor -->
-  <text x="300" y="280" font-size="22" text-anchor="middle" font-family="Arial, sans-serif" fill="#666">
-    Valor: $${data.amount}
-  </text>
+  <!-- Logo circular refinado -->
+  <circle cx="625" cy="630" r="28" fill="none" stroke="#8B7E74" stroke-width="2" opacity="0.8"/>
+  <circle cx="625" cy="630" r="22" fill="none" stroke="#8B7E74" stroke-width="1.5" opacity="0.6"/>
+  <path d="M 614 630 Q 625 618, 636 630 T 625 642" fill="none" stroke="#8B7E74" stroke-width="2" opacity="0.7"/>
   
-  <!-- Código -->
-  <text x="300" y="330" font-size="28" font-weight="bold" text-anchor="middle" font-family="Arial, sans-serif" fill="#9D277D" letter-spacing="3">
-    ${code}
-  </text>
-  
-  <!-- Mensaje -->
-  ${message ? `<text x="300" y="355" font-size="14" font-style="italic" text-anchor="middle" font-family="Arial, sans-serif" fill="#555">"${message}"</text>` : ''}
-  
-  <!-- Logo -->
-  <text x="550" y="380" font-size="14" text-anchor="end" font-weight="bold" font-family="Arial, sans-serif" fill="#999">
+  <!-- Texto "CERAMICALMA" - más sofisticado -->
+  <text x="690" y="625" font-size="20" font-weight="600" font-family="'Futura', 'Century Gothic', sans-serif" fill="#5D5449" letter-spacing="2">
     CERAMICALMA
   </text>
+  
+  <!-- Subtítulo "Holistic Pottery Studio" - refinado -->
+  <text x="690" y="643" font-size="11" font-family="'Futura', Arial, sans-serif" fill="#8B7E74" letter-spacing="1" font-weight="300">
+    Holistic Pottery Studio
+  </text>
+  
 </svg>`;
 
   return svg;
