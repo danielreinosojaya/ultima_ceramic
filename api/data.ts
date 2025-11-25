@@ -2554,18 +2554,118 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             break;
         case 'rescheduleBookingSlot': {
             const rescheduleBody = req.body;
-            const { bookingId: rescheduleId, oldSlot, newSlot } = rescheduleBody;
-            const { rows: [bookingToReschedule] } = await sql`SELECT * FROM bookings WHERE id = ${rescheduleId}`;
-            if (bookingToReschedule) {
-                const otherSlots = bookingToReschedule.slots.filter((s: any) => s.date !== oldSlot.date || s.time !== oldSlot.time);
-                const updatedSlots = [...otherSlots, newSlot];
-                await sql`UPDATE bookings SET slots = ${JSON.stringify(updatedSlots)} WHERE id = ${rescheduleId}`;
+            const { bookingId: rescheduleId, oldSlot, newSlot, reason } = rescheduleBody;
+            
+            try {
+                const { rows: [bookingToReschedule] } = await sql`SELECT * FROM bookings WHERE id = ${rescheduleId}`;
                 
-                // Obtener el booking actualizado completo
+                if (!bookingToReschedule) {
+                    return res.status(404).json({ success: false, error: 'Booking not found' });
+                }
+
+                const booking = toCamelCase(bookingToReschedule);
+                
+                // ============ VALIDACIONES DE RESCHEDULE ============
+                
+                // 1. Validar 72 horas de anticipación
+                const now = new Date();
+                const oldSlotDate = new Date(oldSlot.date + 'T00:00:00');
+                const hoursDifference = (oldSlotDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+                
+                if (hoursDifference < 72) {
+                    console.log(`[RESCHEDULE] Clase en ${Math.floor(hoursDifference)}h < 72h. RECHAZADO. Clase se PIERDE.`);
+                    return res.status(400).json({ 
+                        success: false, 
+                        error: 'Requiere 72 horas de anticipación. La clase se ha PERDIDO.'
+                    });
+                }
+                
+                // 2. Validar si tiene política acceptedNoRefund
+                if (booking.acceptedNoRefund === true) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Esta clase no es reagendable (política de no reembolso)'
+                    });
+                }
+                
+                // 3. Validar límite de reagendamientos
+                const product = booking.product as any;
+                const classCount = product?.classes || 1;
+                
+                // Calcular allowance según paquete
+                let allowance = 1; // default
+                if (classCount === 4) allowance = 1;
+                else if (classCount === 8) allowance = 2;
+                else if (classCount === 12) allowance = 3;
+                else if (classCount > 12) allowance = Math.ceil(classCount / 4);
+                
+                const rescheduleUsed = booking.rescheduleUsed || 0;
+                
+                if (rescheduleUsed >= allowance) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Agotaste tus ${allowance} reagendamientos disponibles para este paquete`
+                    });
+                }
+                
+                // ============ PROCEDER CON REAGENDAMIENTO ============
+                
+                // Actualizar slots: remover oldSlot y agregar newSlot
+                const otherSlots = bookingToReschedule.slots.filter((s: any) => 
+                    s.date !== oldSlot.date || s.time !== oldSlot.time
+                );
+                const updatedSlots = [...otherSlots, newSlot];
+                
+                // Crear entrada de historia
+                const rescheduleHistoryEntry = {
+                    id: `reschedule_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+                    bookingId: rescheduleId,
+                    fromSlot: oldSlot,
+                    toSlot: newSlot,
+                    reason: reason || null,
+                    rescheduleCount: rescheduleUsed + 1,
+                    timestamp: new Date().toISOString(),
+                    createdByAdmin: false // Por defecto desde cliente
+                };
+                
+                // Obtener historia actual
+                const currentHistory = bookingToReschedule.reschedule_history 
+                    ? JSON.parse(bookingToReschedule.reschedule_history)
+                    : [];
+                
+                const updatedHistory = [...currentHistory, rescheduleHistoryEntry];
+                
+                // Actualizar booking
+                await sql`
+                    UPDATE bookings SET 
+                        slots = ${JSON.stringify(updatedSlots)},
+                        reschedule_used = ${rescheduleUsed + 1},
+                        reschedule_history = ${JSON.stringify(updatedHistory)},
+                        last_reschedule_at = NOW()
+                    WHERE id = ${rescheduleId}
+                `;
+                
+                // Obtener booking actualizado
                 const { rows: [updatedBooking] } = await sql`SELECT * FROM bookings WHERE id = ${rescheduleId}`;
-                result = { success: true, booking: toCamelCase(updatedBooking) };
-            } else {
-                result = { success: false, error: 'Booking not found' };
+                
+                console.log(`[RESCHEDULE] Exitoso: ${rescheduleId}, usado ${rescheduleUsed + 1}/${allowance}`);
+                
+                result = { 
+                    success: true, 
+                    booking: toCamelCase(updatedBooking),
+                    rescheduleInfo: {
+                        used: rescheduleUsed + 1,
+                        allowance: allowance,
+                        remaining: allowance - (rescheduleUsed + 1)
+                    }
+                };
+                
+            } catch (error) {
+                console.error('[RESCHEDULE] Error:', error);
+                return res.status(500).json({ 
+                    success: false, 
+                    error: 'Error al reagendar: ' + (error instanceof Error ? error.message : String(error))
+                });
             }
             break;
         }
@@ -3277,6 +3377,10 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITH TIME ZONE`;
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active'`;
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS technique VARCHAR(50)`;
+      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reschedule_allowance INT DEFAULT 0`;
+      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reschedule_used INT DEFAULT 0`;
+      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reschedule_history JSONB DEFAULT '[]'::jsonb`;
+      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS last_reschedule_at TIMESTAMP WITH TIME ZONE`;
     } catch (e) {
       console.warn('[ADD BOOKING] Could not add columns (may already exist):', e);
     }
@@ -3341,11 +3445,24 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
       }
     }
     
+    // Calcular reschedule allowance basado en tipo de paquete
+    let rescheduleAllowance = 0;
+    if (body.productType === 'CLASS_PACKAGE' || body.productType === 'SINGLE_CLASS') {
+      const classCount = (body.product as any)?.classes || 1;
+      if (classCount === 4) rescheduleAllowance = 1;
+      else if (classCount === 8) rescheduleAllowance = 2;
+      else if (classCount === 12) rescheduleAllowance = 3;
+      else if (classCount > 12) rescheduleAllowance = Math.ceil(classCount / 4);
+      else rescheduleAllowance = 1;
+    } else if (body.productType === 'INTRODUCTORY_CLASS') {
+      rescheduleAllowance = 1; // Intro classes: 1 reagendamiento
+    }
+
     const { rows: created } = await sql`
       INSERT INTO bookings (
-        booking_code, product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_date, accepted_no_refund, expires_at, status, technique
+        booking_code, product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_date, accepted_no_refund, expires_at, status, technique, reschedule_allowance, reschedule_used, reschedule_history
       ) VALUES (
-        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(body.product)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}, NOW() + INTERVAL '2 hours', 'active', ${technique || null}
+        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(body.product)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}, NOW() + INTERVAL '2 hours', 'active', ${technique || null}, ${rescheduleAllowance}, 0, '[]'::jsonb
       ) RETURNING *;
     `;
 

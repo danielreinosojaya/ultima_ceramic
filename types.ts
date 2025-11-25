@@ -242,10 +242,35 @@ export interface Booking {
     
     // COUPLES_EXPERIENCE specific
     technique?: Technique; // Técnica seleccionada para parejas
+    
+    // RESCHEDULE POLICY for class packages
+    rescheduleAllowance?: number; // Max veces que puede reagendar (basado en tipo paquete)
+    rescheduleUsed?: number; // Cuántas veces ya reagendó
+    rescheduleHistory?: RescheduleHistoryEntry[]; // Historial detallado de reagendamientos
+    lastRescheduleAt?: string; // ISO timestamp del último reagendamiento
 
     // Propiedades derivadas
     date?: string; // Derivada de bookingDate
     time?: string; // Derivada de slots
+}
+
+// RESCHEDULE POLICY types
+export interface RescheduleHistoryEntry {
+    id: string;
+    bookingId: string;
+    fromSlot: TimeSlot;
+    toSlot: TimeSlot;
+    reason?: string; // Opcional: por qué se reagendó
+    rescheduleCount: number; // Número de este reagendamiento (1, 2, 3...)
+    timestamp: string; // ISO timestamp
+    createdByAdmin?: boolean; // true si admin lo hizo, false si cliente
+}
+
+export interface ReschedulePolicy {
+    packageClasses: number; // 4, 8, 12, etc.
+    maxReschedules: number; // Allowance basado en clases
+    hoursRequiredInAdvance: number; // 72 horas
+    description: string; // "Paquete de 4 clases: 1 reagendamiento"
 }
 
 export interface BookingDetails {

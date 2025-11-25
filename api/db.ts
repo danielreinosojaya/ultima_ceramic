@@ -215,7 +215,11 @@ export async function ensureTablesExist() {
                 attendance JSONB,
                 booking_date TEXT,
                 participants INT DEFAULT 1,
-                client_note TEXT
+                client_note TEXT,
+                reschedule_allowance INT DEFAULT 0,
+                reschedule_used INT DEFAULT 0,
+                reschedule_history JSONB DEFAULT '[]'::jsonb,
+                last_reschedule_at TIMESTAMPTZ
             );`,
             
             `CREATE TABLE IF NOT EXISTS giftcard_audit (
