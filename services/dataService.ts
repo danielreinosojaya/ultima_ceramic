@@ -303,7 +303,7 @@ import type {
     BackgroundSettings, AppData, BankDetails, InvoiceRequest, Technique, GroupClass, SingleClass,
     Delivery, DeliveryStatus, UILabels
 } from '../types';
-import { DAY_NAMES } from '../constants';
+import { DAY_NAMES, DEFAULT_PRODUCTS } from '../constants';
 
 // --- API Helpers ---
 
@@ -1168,6 +1168,20 @@ export const getEssentialAppData = async () => {
                 data[key] = getDefaultData(key);
             }
         });
+
+        // Asegurar que COUPLES_EXPERIENCE existe en los productos (una sola vez)
+        if (Array.isArray(data.products)) {
+            const hasCouplesExperience = data.products.some((p: any) => p.type === 'COUPLES_EXPERIENCE');
+            if (!hasCouplesExperience) {
+                const couplexProduct = DEFAULT_PRODUCTS.find((p: any) => p.type === 'COUPLES_EXPERIENCE');
+                if (couplexProduct) {
+                    // Crear una copia profunda para evitar mutaciones
+                    const productCopy = JSON.parse(JSON.stringify(couplexProduct));
+                    data.products = [...data.products, productCopy];
+                    console.log('✅ COUPLES_EXPERIENCE added successfully. New length:', data.products.length);
+                }
+            }
+        }
 
         return data;
     } catch (error) {

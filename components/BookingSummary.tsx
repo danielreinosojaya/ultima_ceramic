@@ -86,10 +86,50 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
       </div>
 
       <div className="bg-brand-background rounded-lg p-6 mb-6">
-          <h3 className="text-xl font-bold text-brand-text border-b border-brand-border pb-2 mb-4">Torno Alfarero</h3>
-          <div className="flex justify-between items-center text-lg">
-            <span className="text-brand-secondary">{slots.length} Clases</span>
-            <span className="font-bold text-brand-text">${formatPrice(product.price)}</span>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xl font-bold text-brand-text">{product.name}</h3>
+            {product.type === 'COUPLES_EXPERIENCE' && bookingDetails.technique && (
+              <span className="inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full bg-rose-50 text-rose-700">
+                {bookingDetails.technique === 'potters_wheel' ? '🎯 Torno' : '✋ Moldeo'}
+              </span>
+            )}
+          </div>
+          <div className="border-b border-brand-border pb-3 mb-4"></div>
+          
+          {product.type === 'COUPLES_EXPERIENCE' ? (
+            <>
+              <div className="space-y-2 mb-4">
+                <div className="flex justify-between text-sm">
+                  <span className="text-brand-secondary">Cantidad:</span>
+                  <span className="font-semibold text-brand-text">1 Pareja</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-brand-secondary">Duración:</span>
+                  <span className="font-semibold text-brand-text">2 horas</span>
+                </div>
+              </div>
+              <div className="bg-brand-surface rounded p-3 mb-4">
+                <p className="text-xs font-semibold text-brand-secondary mb-2">✨ Incluye:</p>
+                <ul className="text-xs text-brand-text space-y-1">
+                  <li>• Clase guiada con instructor experto</li>
+                  <li>• Técnica a elegir ({bookingDetails.technique === 'potters_wheel' ? 'Torno alfarero clásico' : 'Moldeo a mano libre'})</li>
+                  <li>• Materiales y herramientas profesionales</li>
+                  <li>• Horneado en horno cerámico profesional</li>
+                  <li>• 🍷 Vino y 🥂 Piqueos</li>
+                  <li>• Piezas aptas para alimentos</li>
+                </ul>
+              </div>
+            </>
+          ) : (
+            <div className="flex justify-between items-center text-lg">
+              <span className="text-brand-secondary">{slots.length} Clases</span>
+              <span className="font-bold text-brand-text">${formatPrice(product.price)}</span>
+            </div>
+          )}
+          
+          <div className="flex justify-between items-center text-lg mt-4 pt-4 border-t border-brand-border">
+            <span className="font-semibold text-brand-text">Total:</span>
+            <span className="font-bold text-2xl text-brand-primary">${formatPrice(product.price)}</span>
           </div>
       </div>
 
@@ -106,7 +146,9 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
 
       {slots && slots.length > 0 && (
         <div className="bg-brand-background rounded-lg p-6">
-          <h3 className="text-xl font-bold text-brand-text border-b border-brand-border pb-2 mb-4">Horario Seleccionado</h3>
+          <h3 className="text-xl font-bold text-brand-text border-b border-brand-border pb-2 mb-4">
+            {product.type === 'COUPLES_EXPERIENCE' ? '📅 Tu Fecha y Hora' : 'Horario Seleccionado'}
+          </h3>
           <ul className="space-y-2">
             {sortedSlots.map((slot, index) => (
               <li key={index} className="flex items-center text-brand-text py-2">

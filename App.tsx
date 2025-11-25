@@ -9,6 +9,9 @@ import { IntroClassSelector } from './components/IntroClassSelector';
 import { ScheduleSelector } from './components/ScheduleSelector';
 import { BookingSummary } from './components/BookingSummary';
 import { GroupInquiryForm } from './components/GroupInquiryForm';
+import { CouplesTourModal } from './components/CouplesTourModal';
+import { CouplesTechniqueSelector } from './components/CouplesTechniqueSelector';
+import { CouplesExperienceScheduler } from './components/CouplesExperienceScheduler';
 import { UserInfoModal } from './components/UserInfoModal';
 import { PolicyModal } from './components/PolicyModal';
 import { BookingTypeModal } from './components/BookingTypeModal';
@@ -83,6 +86,11 @@ const App: React.FC = () => {
     const [isBookingTypeModalOpen, setIsBookingTypeModalOpen] = useState(false);
     const [isClassInfoModalOpen, setIsClassInfoModalOpen] = useState(false);
     const [isPrerequisiteModalOpen, setIsPrerequisiteModalOpen] = useState(false);
+    
+    // COUPLES_EXPERIENCE states
+    const [isCouplesExperience, setIsCouplesExperience] = useState(false);
+    const [isCouplesTourModalOpen, setIsCouplesTourModalOpen] = useState(false);
+    const [couplesTechnique, setCouplesTechnique] = useState<'potters_wheel' | 'molding' | null>(null);
     
     const [appData, setAppData] = useState<AppData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -163,7 +171,11 @@ const App: React.FC = () => {
         } else if (userType === 'group_experience') {
             setView('group_experience');
         } else if (userType === 'couples_experience') {
-            setView('couples_experience');
+            const product = appData?.products.find(p => p.type === 'COUPLES_EXPERIENCE') || null;
+            setBookingDetails(prev => ({ ...prev, product }));
+            setIsCouplesExperience(true);
+            setCouplesTechnique(null);
+            setIsCouplesTourModalOpen(true);
         } else if (userType === 'team_building') {
             setView('team_building');
         } else if (userType === 'open_studio') {
@@ -218,8 +230,14 @@ const App: React.FC = () => {
         }
     };
     
-    const handleIntroClassConfirm = (product: Product, session: IntroClassSession) => {
-        setBookingDetails({ product, slots: [session], userInfo: null });
+    const handleIntroClassConfirm = (product: Product, session: IntroClassSession & { technique?: any }) => {
+        if (session.technique) {
+            // Es couples experience
+            setBookingDetails({ product, slots: [session], userInfo: null, technique: session.technique });
+        } else {
+            // Es intro class
+            setBookingDetails({ product, slots: [session], userInfo: null });
+        }
         setView('summary');
     };
 
@@ -247,7 +265,7 @@ const App: React.FC = () => {
         // Determine if selected slots require acceptance of no-refund policy
         const requiresImmediateAcceptance = slotsRequireNoRefund(finalDetails.slots || [], 48);
         
-        const bookingData = {
+        const bookingData: any = {
             product: finalDetails.product!,
             productId: finalDetails.product!.id,
             productType: finalDetails.product!.type,
@@ -260,6 +278,11 @@ const App: React.FC = () => {
             invoiceData: data.needsInvoice ? data.invoiceData : undefined,
             acceptedNoRefund: requiresImmediateAcceptance ? !!data.acceptedNoRefund : false
         };
+
+        // Add technique for COUPLES_EXPERIENCE
+        if (finalDetails.product!.type === 'COUPLES_EXPERIENCE' && finalDetails.technique) {
+            bookingData.technique = finalDetails.technique;
+        }
 
         try {
             // Attach giftcard info if the user applied a giftcard (supports holdId or immediate consume)
@@ -481,16 +504,6 @@ const App: React.FC = () => {
                 // Si la técnica es open_studio, nunca mostrar PackageSelector
                 if (technique === 'open_studio') return null;
                 return <PackageSelector onSelect={handlePackageSelect} technique={technique} products={appData.products} />;
-    // Renderizar el modal informativo de Open Studio
-    const handleOpenStudioModalClose = () => {
-        setIsOpenStudioModalOpen(false);
-        setTechnique(null);
-    };
-    const handleOpenStudioModalContinue = () => {
-        setIsOpenStudioModalOpen(false);
-        setTechnique('open_studio');
-        setView('packages');
-    };
             case 'intro_classes':
                 return <IntroClassSelector onConfirm={handleIntroClassConfirm} appData={appData} onBack={() => setView('welcome')} onAppDataUpdate={(updates) => setAppData(prev => prev ? { ...prev, ...updates } : null)} />;
             case 'schedule':
@@ -542,13 +555,79 @@ const App: React.FC = () => {
                     } : null}
                 />;
             case 'group_experience':
-            case 'couples_experience':
             case 'team_building':
                 return <GroupInquiryForm 
                             onBack={() => setView('welcome')} 
-                            inquiryType={view === 'group_experience' ? 'group' : view === 'couples_experience' ? 'couple' : 'team_building'}
+                            inquiryType={view === 'group_experience' ? 'group' : 'team_building'}
                             footerInfo={appData.footerInfo}
                         />;
+            case 'couples_experience': {
+                // PASO 1: Técnica selector (si no elegida)
+                if (couplesTechnique === null) {
+                    const handleCouplesTechniqueSelect = (technique: Technique) => {
+                        setCouplesTechnique(technique);
+                    };
+
+                    const handleCouplesTechniqueBack = () => {
+                        setCouplesTechnique(null);
+                        setIsCouplesExperience(false);
+                        setBookingDetails({ product: null, slots: [], userInfo: null });
+                        setView('welcome');
+                    };
+
+                    return (
+                        <CouplesTechniqueSelector
+                            onSelect={handleCouplesTechniqueSelect}
+                            onBack={handleCouplesTechniqueBack}
+                        />
+                    );
+                }
+                
+                // PASO 2: Scheduler (si técnica elegida, slot NO elegido aún)
+                if (!bookingDetails.slots || bookingDetails.slots.length === 0) {
+                    // El producto debería estar en bookingDetails
+                    let product = bookingDetails.product;
+                    
+                    if (!product && appData?.products) {
+                        product = appData.products.find(p => p.type === 'COUPLES_EXPERIENCE') || null;
+                    }
+                    
+                    if (!product) {
+                        return <WelcomeSelector onSelect={handleWelcomeSelect} />;
+                    }
+                    
+                    // Asegurar que bookingDetails tenga el producto
+                    if (!bookingDetails.product) {
+                        setBookingDetails(prev => ({...prev, product}));
+                    }
+                    
+                    return (
+                        <CouplesExperienceScheduler
+                            product={product as any}
+                            technique={couplesTechnique}
+                            onConfirm={(session) => {
+                                setBookingDetails(prev => ({
+                                    ...prev,
+                                    product,
+                                    slots: [session],
+                                    technique: couplesTechnique
+                                }));
+                                setView('summary');
+                            }}
+                            onBack={() => {
+                                setCouplesTechnique(null);
+                            }}
+                            appData={appData}
+                            onAppDataUpdate={(updates) => {
+                                setAppData(prev => prev ? { ...prev, ...updates } : null);
+                            }}
+                        />
+                    );
+                }
+                
+                // Should not reach here - go to summary
+                return <WelcomeSelector onSelect={handleWelcomeSelect} />;
+            }
             default:
                 return <WelcomeSelector onSelect={handleWelcomeSelect} />;
         }
@@ -684,6 +763,19 @@ const App: React.FC = () => {
                     onClose={() => setIsPrerequisiteModalOpen(false)}
                     onConfirm={handlePrerequisiteConfirm}
                     onGoToIntro={() => { setIsPrerequisiteModalOpen(false); setView('intro_classes'); }}
+                />
+            )}
+            {isCouplesTourModalOpen && (
+                <CouplesTourModal
+                    onContinue={() => {
+                        setIsCouplesTourModalOpen(false);
+                        setView('couples_experience');
+                    }}
+                    onBack={() => {
+                        setIsCouplesTourModalOpen(false);
+                        setView('welcome');
+                        setIsCouplesExperience(false);
+                    }}
                 />
             )}
         </div>

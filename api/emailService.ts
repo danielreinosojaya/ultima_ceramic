@@ -881,3 +881,113 @@ export const sendDeliveryCompletedEmail = async (customerEmail: string, customer
     
     await sendEmail(customerEmail, subject, html);
 };
+
+// Special email for couples experience bookings with technique details
+export const sendCouplesTourConfirmationEmail = async (booking: Booking, bankDetails: BankDetails) => {
+    const { userInfo, bookingCode, product, slots, technique } = booking;
+    const technique_name = technique === 'potters_wheel' ? '🎯 Torno Alfarero' : '✋ Moldeo a Mano';
+    
+    const slot = slots && slots[0];
+    const slotDate = slot ? new Date(slot.date).toLocaleDateString('es-ES', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    }) : '';
+    const slotTime = slot?.time || '';
+
+    const subject = `¡Tu Experiencia en Pareja está Confirmada! (Código: ${bookingCode})`;
+    
+    const accounts = Array.isArray(bankDetails) ? bankDetails : [bankDetails];
+    const accountsHtml = `
+        <table style="width:100%; font-size:15px; color:#333; border-collapse:collapse; background:#f9f9f9; border-radius:12px; margin-top:20px;">
+            <thead>
+                <tr style="background:#eaeaea;">
+                    <th style="padding:10px; text-align:left; font-size:16px; color:#7c868e;">Banco</th>
+                    <th style="padding:10px; text-align:left;">Titular</th>
+                    <th style="padding:10px; text-align:left;">Número</th>
+                    <th style="padding:10px; text-align:left;">Tipo</th>
+                    <th style="padding:10px; text-align:left;">Cédula</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${accounts.map(acc => `
+                    <tr>
+                        <td style="padding:8px; font-weight:bold; color:#7c868e;">${acc.bankName}</td>
+                        <td style="padding:8px;">${acc.accountHolder}</td>
+                        <td style="padding:8px;">${acc.accountNumber}</td>
+                        <td style="padding:8px;">${acc.accountType}</td>
+                        <td style="padding:8px;">${acc.taxId}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+        <div style="margin-top: 10px; font-style: italic; color:#555;"><strong>Importante:</strong> Usa tu código de reserva <strong>${bookingCode}</strong> como referencia en la transferencia.</div>
+    `;
+
+    const html = `
+        <div style="font-family: Arial, sans-serif; color: #333;">
+            <h2 style="color: #D95F43;">♥️ ¡Hola, ${userInfo.firstName}!</h2>
+            <p>¡Qué emoción! Tu experiencia en pareja ha sido confirmada en CeramicAlma. Código de reserva:</p>
+            <p style="font-size: 24px; font-weight: bold; color: #D95F43; margin: 20px 0;">${bookingCode}</p>
+
+            <div style="background: linear-gradient(135deg, #FFE5D9 0%, #FFE5D9 100%); border-left: 4px solid #D95F43; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3 style="margin-top: 0; color: #D95F43;">📅 Detalles de tu Experiencia</h3>
+                <p style="margin: 10px 0;"><strong>Técnica seleccionada:</strong> ${technique_name}</p>
+                <p style="margin: 10px 0;"><strong>Fecha:</strong> ${slotDate}</p>
+                <p style="margin: 10px 0;"><strong>Hora:</strong> ${slotTime}</p>
+                <p style="margin: 10px 0;"><strong>Duración:</strong> 2 horas</p>
+                <p style="margin: 10px 0;"><strong>Precio:</strong> <span style="font-size: 18px; font-weight: bold; color: #D95F43;">$190</span></p>
+            </div>
+
+            <div style="background-color: #F0F9FF; border-left: 4px solid #0EA5E9; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3 style="margin-top: 0; color: #0369A1;">🎨 ¿Qué incluye tu experiencia?</h3>
+                <ul style="margin: 10px 0; padding-left: 20px;">
+                    <li style="margin: 8px 0;"><strong>Clase guiada 2h</strong> - Un instructor experto los guiará en cada paso</li>
+                    <li style="margin: 8px 0;"><strong>Técnica a elegir</strong> - ${technique === 'potters_wheel' ? '🎯 Domina el torno alfarero clásico' : '✋ Crea libremente con moldeo a mano'}</li>
+                    <li style="margin: 8px 0;"><strong>Materiales</strong> - Todo incluido: arcilla, agua, herramientas</li>
+                    <li style="margin: 8px 0;"><strong>Horneado profesional</strong> - Tus creaciones se hornean en nuestro horno</li>
+                    <li style="margin: 8px 0;"><strong>🍷 Vino y 🥂 Piqueos</strong> - Disfruta mientras crean juntos</li>
+                    <li style="margin: 8px 0;"><strong>Piezas aptas para alimentos</strong> - Perfectas para uso diario</li>
+                </ul>
+            </div>
+
+            <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #92400E; font-weight: bold;">⏰ Pre-Reserva Válida por 2 Horas</p>
+                <p style="margin: 8px 0 0 0; color: #78350F; font-size: 14px;">
+                    Esta pre-reserva estará disponible solo durante las próximas <strong>2 horas</strong>. Para confirmar, realiza el pago a través de transferencia bancaria.
+                </p>
+            </div>
+
+            <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #92400E; font-weight: bold;">💳 Pago Anticipado Requerido</p>
+                <p style="margin: 8px 0 0 0; color: #78350F; font-size: 14px;">
+                    Esta experiencia requiere pago completo y anticipado: <strong>$190</strong>
+                </p>
+            </div>
+
+            <p>Para confirmar, realiza una transferencia bancaria con los siguientes datos:</p>
+            ${accountsHtml}
+
+            <div style="background-color: #EFF6FF; border-left: 4px solid #3B82F6; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #1E40AF; font-weight: bold;">📋 Información Importante</p>
+                <p style="margin: 8px 0 0 0; color: #1E3A8A; font-size: 14px;">
+                    • <strong>Llega 15 minutos antes</strong> - Para aclimatarse y conocer el espacio<br/>
+                    • <strong>Política de cancelación:</strong> No reembolsable ni reagendable (pago anticipado)<br/>
+                    • <strong>Contacto:</strong> Si tienes dudas, responde a este email o envíanos un WhatsApp
+                </p>
+            </div>
+
+            <p style="margin-top: 20px; font-size: 16px;">¡Prepárense para una experiencia única y llena de magia! ♥️</p>
+            <p>Saludos,<br/>El equipo de CeramicAlma</p>
+        </div>
+    `;
+
+    const result = await sendEmail(userInfo.email, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(userInfo.email, 'couples-confirmation', 'email', status, bookingCode);
+
+    console.info('[emailService] Couples tour confirmation email result for', userInfo.email, bookingCode, result);
+    return result;
+};
+

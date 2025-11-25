@@ -3276,15 +3276,76 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
     try {
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITH TIME ZONE`;
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active'`;
+      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS technique VARCHAR(50)`;
     } catch (e) {
       console.warn('[ADD BOOKING] Could not add columns (may already exist):', e);
+    }
+
+    // COUPLES_EXPERIENCE VALIDATION
+    const isCouplesExperience = body.productType === 'COUPLES_EXPERIENCE';
+    const technique = (body as any).technique;
+
+    if (isCouplesExperience) {
+      // Must have exactly 1 slot
+      if (!body.slots || body.slots.length !== 1) {
+        throw new Error('COUPLES_EXPERIENCE must have exactly 1 slot');
+      }
+
+      // Must have technique specified
+      if (!technique || !['potters_wheel', 'molding'].includes(technique)) {
+        throw new Error('COUPLES_EXPERIENCE must specify a valid technique (potters_wheel or molding)');
+      }
+
+      const slot = body.slots[0];
+      const slotDate = new Date(slot.date);
+      const dayOfWeek = slotDate.getDay();
+
+      console.log(`[ADD BOOKING] Validating COUPLES_EXPERIENCE: technique=${technique}, date=${slot.date}, time=${slot.time}, dayOfWeek=${dayOfWeek}`);
+
+      // Fetch the product to get SchedulingRules
+      if (body.product && (body.product as any).schedulingRules) {
+        const rules = (body.product as any).schedulingRules as any[];
+        
+        // Find matching rule for this day/time/technique
+        const matchingRule = rules.find(r => 
+          r.dayOfWeek === dayOfWeek && 
+          r.time === slot.time && 
+          r.technique === technique
+        );
+
+        if (!matchingRule) {
+          throw new Error(`No scheduling rule found for ${technique} on this day/time`);
+        }
+
+        // Calculate couple capacity (capacity / 2 for pairs)
+        const totalCapacity = matchingRule.capacity || 6;
+        const coupleCapacity = Math.floor(totalCapacity / 2);
+
+        console.log(`[ADD BOOKING] Rule found: capacity=${totalCapacity}, couple capacity=${coupleCapacity}`);
+
+        // Count existing COUPLES_EXPERIENCE bookings for same date/time/technique
+        const { rows: existingCouples } = await sql`
+          SELECT COUNT(*) as count FROM bookings 
+          WHERE product_type = 'COUPLES_EXPERIENCE' 
+            AND technique = ${technique}
+            AND slots::text LIKE ${'%' + slot.date + '%'}
+            AND status = 'active'
+        `;
+
+        const existingCount = parseInt(existingCouples[0]?.count || 0);
+        console.log(`[ADD BOOKING] Existing COUPLES bookings for this slot: ${existingCount}/${coupleCapacity}`);
+
+        if (existingCount >= coupleCapacity) {
+          throw new Error(`No available capacity for ${technique} at this time (${existingCount}/${coupleCapacity} couples booked)`);
+        }
+      }
     }
     
     const { rows: created } = await sql`
       INSERT INTO bookings (
-        booking_code, product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_date, accepted_no_refund, expires_at, status
+        booking_code, product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_date, accepted_no_refund, expires_at, status, technique
       ) VALUES (
-        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(body.product)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}, NOW() + INTERVAL '2 hours', 'active'
+        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(body.product)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}, NOW() + INTERVAL '2 hours', 'active', ${technique || null}
       ) RETURNING *;
     `;
 
@@ -3303,6 +3364,7 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
       bookingDate: created[0].booking_date,
       expiresAt: created[0].expires_at ? new Date(created[0].expires_at) : undefined,
       status: created[0].status || 'active',
+      technique: created[0].technique,
     };
 
     // Process giftcard hold if provided
@@ -3503,10 +3565,15 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
         taxId: '0921343935'
       };
       
-      await emailService.sendPreBookingConfirmationEmail(bookingForEmail, bankDetails);
-      console.log('[ADD BOOKING] Pre-booking confirmation email sent successfully');
+      // Use couples-specific email for COUPLES_EXPERIENCE
+      if (isCouplesExperience) {
+        await emailService.sendCouplesTourConfirmationEmail(bookingForEmail, bankDetails);
+      } else {
+        await emailService.sendPreBookingConfirmationEmail(bookingForEmail, bankDetails);
+      }
+      console.log('[ADD BOOKING] Confirmation email sent successfully');
     } catch (emailError) {
-      console.error('[ADD BOOKING] Error sending pre-booking confirmation email:', emailError);
+      console.error('[ADD BOOKING] Error sending confirmation email:', emailError);
       // Don't fail the booking creation if email fails
       // The booking is already created, just log the error
     }

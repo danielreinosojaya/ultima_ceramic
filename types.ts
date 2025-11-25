@@ -94,6 +94,7 @@ export interface SchedulingRule {
   time: string; // "HH:mm"
   instructorId: number;
   capacity: number;
+  technique?: Technique; // Para COUPLES_EXPERIENCE: 'potters_wheel' | 'molding'
 }
 
 export interface SessionOverride {
@@ -147,6 +148,10 @@ export interface GroupExperience extends BaseProduct {
 
 export interface CouplesExperience extends BaseProduct {
     type: 'COUPLES_EXPERIENCE';
+    price: number;
+    details: ClassPackageDetails;
+    schedulingRules: SchedulingRule[];
+    overrides: SessionOverride[];
 }
 
 export interface GroupClass extends BaseProduct {
@@ -164,6 +169,7 @@ export interface TimeSlot {
   date: string; // YYYY-MM-DD
   time: string;
   instructorId: number;
+  technique?: Technique; // Para COUPLES_EXPERIENCE: 'potters_wheel' | 'molding'
 }
 
 export interface AvailableSlot {
@@ -218,7 +224,7 @@ export interface Booking {
     isPaid: boolean;
     price: number;
     bookingCode: string;
-    bookingMode: BookingMode;
+    bookingMode: BookingMode | null;
     customer?: Customer; // Adding customer to Booking
     // Si la reserva fue aceptada con la condición de "sin reembolsos ni reagendamientos" (para reservas <48h)
     acceptedNoRefund?: boolean;
@@ -233,6 +239,9 @@ export interface Booking {
     pendingBalance?: number;
     expiresAt?: Date; // Pre-reserva válida hasta esta fecha (NOW + 2 hours)
     status?: 'active' | 'expired' | 'paid'; // Estado de la reserva
+    
+    // COUPLES_EXPERIENCE specific
+    technique?: Technique; // Técnica seleccionada para parejas
 
     // Propiedades derivadas
     date?: string; // Derivada de bookingDate
@@ -240,9 +249,10 @@ export interface Booking {
 }
 
 export interface BookingDetails {
-  product: Product;
+  product: Product | null;
   slots: TimeSlot[];
   userInfo: UserInfo | null;
+  technique?: Technique; // Para COUPLES_EXPERIENCE
 }
 
 export interface AddBookingResult {
