@@ -1027,6 +1027,119 @@ export const markBookingAsUnpaid = async (bookingId: string): Promise<{ success:
     }
     return result;
 };
+
+// ============== RESCHEDULE POLICY MANAGER ==============
+
+/**
+ * RESCHEDULE POLICY RULES:
+ * - Paquete 4 clases: 1 reagendamiento permitido
+ * - Paquete 8 clases: 2 reagendamientos permitidos
+ * - Paquete 12 clases: 3 reagendamientos permitidos
+ * - Requirement: 72 horas de anticipación MÍNIMA
+ * - Si no cumple 72h: clase se PIERDE (no se reagenda)
+ */
+
+const RESCHEDULE_POLICIES: Record<number, number> = {
+    4: 1,   // 4 clases = 1 reagendamiento
+    8: 2,   // 8 clases = 2 reagendamientos
+    12: 3,  // 12 clases = 3 reagendamientos
+};
+
+/**
+ * Calcula el allowance de reagendamientos basado en el tipo de paquete
+ */
+export const calculateRescheduleAllowance = (classesInPackage: number): number => {
+    // Si el paquete no está en la tabla, permitir 1 reagendamiento por cada 4 clases (redondeado hacia arriba)
+    if (RESCHEDULE_POLICIES[classesInPackage]) {
+        return RESCHEDULE_POLICIES[classesInPackage];
+    }
+    return Math.ceil(classesInPackage / 4);
+};
+
+/**
+ * Valida elegibilidad para reagendar
+ * Retorna: { eligible: boolean, reason?: string }
+ */
+export const validateRescheduleEligibility = (
+    booking: Booking,
+    oldSlot: TimeSlot,
+    newSlotDate: string // YYYY-MM-DD
+): { eligible: boolean; reason?: string } => {
+    // 1. Validar que sea un paquete reagendable
+    if (!booking.product || typeof booking.product !== 'object') {
+        return { eligible: false, reason: 'Producto no encontrado' };
+    }
+
+    const product = booking.product as any;
+    const productType = booking.productType;
+
+    // Solo permitir en CLASS_PACKAGE, SINGLE_CLASS
+    const reagendableTypes = ['CLASS_PACKAGE', 'SINGLE_CLASS', 'INTRODUCTORY_CLASS'];
+    if (!reagendableTypes.includes(productType)) {
+        return { eligible: false, reason: `No se puede reagendar ${productType}` };
+    }
+
+    // 2. Validar política de no-reembolso (acceptedNoRefund)
+    if (booking.acceptedNoRefund === true) {
+        return { 
+            eligible: false, 
+            reason: 'Esta clase fue reservada con política de "No reembolsable ni reagendable"' 
+        };
+    }
+
+    // 3. Validar 72 horas de anticipación
+    const now = new Date();
+    const oldSlotDate = new Date(oldSlot.date + 'T00:00:00');
+    const hoursDifference = (oldSlotDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+    if (hoursDifference < 72) {
+        return { 
+            eligible: false, 
+            reason: `Requiere 72 horas de anticipación. Solo tienes ${Math.floor(hoursDifference)} horas. La clase se PERDERÁ.` 
+        };
+    }
+
+    // 4. Validar que no haya excedido allowance
+    const allowance = calculateRescheduleAllowance(product.classes || 1);
+    const used = (booking.rescheduleUsed || 0);
+
+    if (used >= allowance) {
+        return { 
+            eligible: false, 
+            reason: `Agotaste tus ${allowance} reagendamientos disponibles para este paquete` 
+        };
+    }
+
+    // 5. Validar que clase no haya pasado
+    if (oldSlotDate < now) {
+        return { 
+            eligible: false, 
+            reason: 'Esta clase ya pasó' 
+        };
+    }
+
+    // ✅ ELEGIBLE
+    return { eligible: true };
+};
+
+/**
+ * Obtiene información sobre reagendamientos disponibles
+ */
+export const getRescheduleInfo = (booking: Booking): { 
+    allowance: number; 
+    used: number; 
+    remaining: number;
+    history: any[];
+} => {
+    const product = booking.product as any;
+    const allowance = calculateRescheduleAllowance(product?.classes || 1);
+    const used = booking.rescheduleUsed || 0;
+    const remaining = Math.max(0, allowance - used);
+    const history = booking.rescheduleHistory || [];
+
+    return { allowance, used, remaining, history };
+};
+
 export const rescheduleBookingSlot = async (bookingId: string, oldSlot: any, newSlot: any): Promise<AddBookingResult> => {
     console.log('[rescheduleBookingSlot] Starting reschedule:', { bookingId, oldSlot, newSlot });
     const result = await postAction('rescheduleBookingSlot', { bookingId, oldSlot, newSlot });
@@ -1778,4 +1891,62 @@ export const updateGiftcardSchedule = async (
     } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : 'Error updating schedule' };
     }
+};
+
+// ============== PACKAGE RENEWAL CHECK ==============
+
+/**
+ * Verifica si un paquete está por terminarse (<=2 clases restantes)
+ * Retorna: { shouldSendReminder: boolean, remainingClasses: number, totalClasses: number }
+ */
+export const checkPackageCompletionStatus = (booking: Booking): {
+    shouldSendReminder: boolean;
+    remainingClasses: number;
+    totalClasses: number;
+} => {
+    if (!booking.product || typeof booking.product !== 'object') {
+        return { shouldSendReminder: false, remainingClasses: 0, totalClasses: 0 };
+    }
+
+    const product = booking.product as any;
+    
+    // Solo aplica a paquetes
+    if (!['CLASS_PACKAGE'].includes(booking.productType)) {
+        return { shouldSendReminder: false, remainingClasses: 0, totalClasses: 0 };
+    }
+
+    const totalClasses = product.classes || 0;
+    const usedSlots = booking.slots?.length || 0;
+    const remainingClasses = Math.max(0, totalClasses - usedSlots);
+
+    // Enviar recordatorio si quedan <=2 clases
+    const shouldSendReminder = remainingClasses > 0 && remainingClasses <= 2;
+
+    return {
+        shouldSendReminder,
+        remainingClasses,
+        totalClasses
+    };
+};
+
+/**
+ * Obtiene información completa para envío de email de renovación
+ */
+export const getPackageRenewalInfo = (booking: Booking) => {
+    const product = booking.product as any;
+    const check = checkPackageCompletionStatus(booking);
+
+    const packageTypeLabel = `${product.classes} clases`;
+    
+    return {
+        firstName: booking.userInfo?.firstName || 'Cliente',
+        lastName: booking.userInfo?.lastName || '',
+        email: booking.userInfo?.email || '',
+        remainingClasses: check.remainingClasses,
+        totalClasses: check.totalClasses,
+        packageType: packageTypeLabel,
+        packagePrice: product.price || 0,
+        lastBookingDate: booking.slots?.[booking.slots.length - 1]?.date,
+        shouldNotify: check.shouldSendReminder
+    };
 };

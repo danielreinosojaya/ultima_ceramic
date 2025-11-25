@@ -991,3 +991,83 @@ export const sendCouplesTourConfirmationEmail = async (booking: Booking, bankDet
     return result;
 };
 
+// Email reminder: package is almost complete, encourage renewal
+export const sendPackageRenewalReminderEmail = async (
+    customerEmail: string,
+    payload: {
+        firstName: string;
+        lastName: string;
+        remainingClasses: number;
+        totalClasses: number;
+        packageType: string; // "4 clases", "8 clases", "12 clases"
+        packagePrice: number;
+        lastBookingDate?: string;
+    }
+) => {
+    const subject = `¡Tus clases de cerámica están por acabarse! Renueva tu paquete`;
+
+    const html = `
+        <div style="font-family: Arial, sans-serif; color: #333;">
+            <h2 style="color: #D95F43;">Hola ${payload.firstName},</h2>
+            
+            <p style="font-size: 16px; line-height: 1.6;">
+                Nos da mucha alegría verte en nuestro estudio. Queremos recordarte que tu paquete de clases está por terminarse.
+            </p>
+
+            <div style="background: linear-gradient(135deg, #FFE5D9 0%, #FFE5D9 100%); border-left: 4px solid #D95F43; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3 style="margin-top: 0; color: #D95F43;">📊 Estado de tu Paquete</h3>
+                <p style="font-size: 18px; margin: 10px 0;">
+                    <strong>${payload.remainingClasses}</strong> de <strong>${payload.totalClasses}</strong> clases restantes
+                </p>
+                <div style="background: white; border-radius: 6px; padding: 12px; margin: 10px 0;">
+                    <div style="background: #e0e0e0; height: 10px; border-radius: 5px; overflow: hidden;">
+                        <div style="background: #D95F43; height: 100%; width: ${((payload.totalClasses - payload.remainingClasses) / payload.totalClasses * 100)}%;"></div>
+                    </div>
+                    <p style="font-size: 12px; color: #666; margin: 8px 0 0 0;">
+                        ${Math.round((payload.totalClasses - payload.remainingClasses) / payload.totalClasses * 100)}% completado
+                    </p>
+                </div>
+            </div>
+
+            ${payload.remainingClasses <= 2 ? `
+            <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #92400E; font-weight: bold;">⚠️ Últimas clases disponibles</p>
+                <p style="margin: 8px 0 0 0; color: #78350F; font-size: 14px;">
+                    Una vez agotes tus clases, tu paquete expirará. No podrás reactivarlo después.
+                </p>
+            </div>
+            ` : ''}
+
+            <div style="background-color: #EFF6FF; border-left: 4px solid #3B82F6; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3 style="margin-top: 0; color: #1E40AF;">✨ Renovar tu Paquete</h3>
+                <p style="color: #1E3A8A; font-size: 14px; margin: 10px 0;">
+                    Continúa tu viaje creativo con un nuevo paquete. Mismas clases, mismo precio, más diversión.
+                </p>
+                <p style="color: #1E3A8A; font-size: 16px; font-weight: bold; margin: 15px 0;">
+                    Paquete ${payload.packageType}: <span style="color: #D95F43;">$${payload.packagePrice}</span>
+                </p>
+                <a href="https://www.ceramicalma.com" style="display: inline-block; background-color: #D95F43; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 10px 0;">
+                    🎨 Renovar Paquete
+                </a>
+            </div>
+
+            <div style="background-color: #F0FDF4; border-left: 4px solid #22C55E; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #166534; font-size: 14px;">
+                    <strong>💡 Tip:</strong> Los paquetes no son reembolsables, así que asegúrate de usar todas tus clases antes de que expire tu suscripción.
+                </p>
+            </div>
+
+            <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
+                ¡Sigue creando!<br/>
+                <strong>El equipo de CeramicAlma</strong>
+            </p>
+        </div>
+    `;
+
+    const result = await sendEmail(customerEmail, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(customerEmail, 'package-renewal-reminder', 'email', status);
+
+    console.info('[emailService] Package renewal reminder sent to', customerEmail);
+    return result;
+};
