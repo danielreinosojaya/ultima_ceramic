@@ -744,23 +744,48 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
                           <tbody>
                             {employeeHistory.map(record => (
                               <tr key={record.id} className="border-b border-brand-border/30 hover:bg-brand-surface/50">
-                                <td className="px-6 py-4">{new Date(record.date).toLocaleDateString('es-ES')}</td>
+                                <td className="px-6 py-4">
+                                  {/* ✅ FIX: Validar que record.date sea válido antes de parsear */}
+                                  {(() => {
+                                    if (!record.date) return '-';
+                                    
+                                    // Si es string YYYY-MM-DD, parsearlo de forma segura
+                                    if (typeof record.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(record.date)) {
+                                      const [year, month, day] = record.date.split('-');
+                                      const date = new Date(Number(year), Number(month) - 1, Number(day));
+                                      return date.toLocaleDateString('es-ES');
+                                    }
+                                    
+                                    // Si es otro formato, intentar parseo directo
+                                    const date = new Date(record.date);
+                                    if (isNaN(date.getTime())) return '-';
+                                    return date.toLocaleDateString('es-ES');
+                                  })()}
+                                </td>
                                 <td className="px-6 py-4">
                                   {record.time_in
-                                    ? new Date(record.time_in).toLocaleTimeString('es-EC', {
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                        timeZone: 'America/Guayaquil'
-                                      })
+                                    ? (() => {
+                                        const date = new Date(record.time_in);
+                                        if (isNaN(date.getTime())) return '-';
+                                        return date.toLocaleTimeString('es-EC', {
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                          timeZone: 'America/Guayaquil'
+                                        });
+                                      })()
                                     : '-'}
                                 </td>
                                 <td className="px-6 py-4">
                                   {record.time_out
-                                    ? new Date(record.time_out).toLocaleTimeString('es-EC', {
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                        timeZone: 'America/Guayaquil'
-                                      })
+                                    ? (() => {
+                                        const date = new Date(record.time_out);
+                                        if (isNaN(date.getTime())) return '-';
+                                        return date.toLocaleTimeString('es-EC', {
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                          timeZone: 'America/Guayaquil'
+                                        });
+                                      })()
                                     : '-'}
                                 </td>
                                 <td className="px-6 py-4 font-mono font-bold">
