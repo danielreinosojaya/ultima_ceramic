@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { GiftIcon } from '../icons/GiftIcon';
 import * as dataService from '../../services/dataService';
+import { formatDate } from '../../utils/formatters';
 
 interface GiftcardBalanceCheckerProps {
   onBack: () => void;

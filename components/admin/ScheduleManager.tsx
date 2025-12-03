@@ -634,16 +634,19 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                         {/* Panel lateral eliminado para restaurar el layout clásico */}
         {isDetailsModalOpen && modalData && (
             <BookingDetailsModal
+                isOpen={isDetailsModalOpen}
                 date={modalData.date}
                 time={modalData.time}
                 attendees={modalData.attendees}
                 instructorId={modalData.instructorId}
+                product={{ id: 'unknown', name: 'Unknown', type: 'class', price: 0 } as any}
+                allBookings={[]}
                 onClose={closeAllModals}
                 onRemoveAttendee={handleRemoveAttendee}
                 onAcceptPayment={handleAcceptPayment}
-                    onMarkAsUnpaid={handleMarkAsUnpaid}
-                    onEditAttendee={handleEditAttendee}
-                    onRescheduleAttendee={handleRescheduleAttendee}
+                onMarkAsUnpaid={handleMarkAsUnpaid}
+                onEditAttendee={handleEditAttendee}
+                onRescheduleAttendee={handleRescheduleAttendee}
             />
         )}
         {isAcceptPaymentModalOpen && bookingToManage && (
