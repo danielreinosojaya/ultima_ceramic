@@ -128,10 +128,12 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
   const loadEmployeeHistory = async (employeeId: number) => {
     setHistoryLoading(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const startOfMonth = new Date();
-      startOfMonth.setDate(1);
-      const startDate = startOfMonth.toISOString().split('T')[0];
+      // ✅ Obtener fecha de Ecuador usando timezone específico
+      const ecuadorDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' }); // YYYY-MM-DD
+      const ecuadorDateObj = new Date(ecuadorDate + 'T00:00:00');
+      ecuadorDateObj.setDate(1); // Primer día del mes
+      const startDate = ecuadorDateObj.toISOString().split('T')[0];
+      const today = ecuadorDate;
 
       const response = await fetch(
         `/api/timecards?action=get_timecard_history&adminCode=${adminCode}&employeeId=${employeeId}&startDate=${startDate}&endDate=${today}`
@@ -148,10 +150,12 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
   };
 
   const downloadReport = async (format: 'csv' | 'pdf') => {
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    const startDate = startOfMonth.toISOString().split('T')[0];
-    const endDate = new Date().toISOString().split('T')[0];
+    // ✅ Obtener fecha de Ecuador usando timezone específico
+    const ecuadorDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' }); // YYYY-MM-DD
+    const ecuadorDateObj = new Date(ecuadorDate + 'T00:00:00');
+    ecuadorDateObj.setDate(1); // Primer día del mes
+    const startDate = ecuadorDateObj.toISOString().split('T')[0];
+    const endDate = ecuadorDate;
 
     try {
       const response = await fetch(
@@ -163,7 +167,7 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `asistencia_${new Date().toISOString().split('T')[0]}.${format}`;
+        a.download = `asistencia_${ecuadorDate}.${format}`;
         a.click();
         window.URL.revokeObjectURL(url);
       }
