@@ -1236,24 +1236,29 @@ async function handleGetEmployeeReport(req: any, res: any, code: string, month: 
       console.log('[handleGetEmployeeReport] Querying for today:', {
         employeeId: employee.id,
         employeeCode: employee.code,
-        todayStr
+        todayStr,
+        nowUtc: new Date().toISOString()
       });
       
-      // Obtener TODOS los registros de hoy (puede haber múltiples turnos)
+      // ✅ CRUCIAL: Asegurar que solo traemos registros de HOY
+      // Comparar el campo date (DATE) con la fecha calculada de Ecuador
       const todayResult = await sql`
         SELECT * FROM timecards
         WHERE employee_id = ${employee.id}
         AND date = ${todayStr}::DATE
         ORDER BY created_at DESC
+        LIMIT 1
       `;
 
       console.log('[handleGetEmployeeReport] Query result:', {
         rowsFound: todayResult.rows.length,
         todayStr,
+        queryDate: `${todayStr}::DATE`,
         rows: todayResult.rows.map(r => ({
           id: r.id,
           employee_id: r.employee_id,
           date: r.date,
+          date_type: typeof r.date,
           time_in: r.time_in,
           time_out: r.time_out
         }))
@@ -1262,20 +1267,22 @@ async function handleGetEmployeeReport(req: any, res: any, code: string, month: 
       // Convertir snake_case a camelCase
       const todayRecords = todayResult.rows.map(row => toCamelCase(row));
       
-      // El último registro (más reciente) es el todayStatus
+      // El único registro (si existe) es el todayStatus
       const todayStatus = todayRecords.length > 0 ? todayRecords[0] : null;
 
       console.log('[handleGetEmployeeReport] Returning:', {
         totalRecordsToday: todayRecords.length,
         hasStatus: todayStatus !== null,
-        statusHasTimeIn: todayStatus?.timeIn ? 'YES' : 'NO'
+        statusHasTimeIn: todayStatus?.timeIn ? 'YES' : 'NO',
+        statusDate: todayStatus?.date,
+        expectedDate: todayStr
       });
 
       return res.status(200).json({
         success: true,
         employee,
         todayStatus,
-        todayRecords // Todos los registros del día
+        todayRecords: todayRecords // Todos los registros del día (solo 1 máximo)
       });
     }
 
