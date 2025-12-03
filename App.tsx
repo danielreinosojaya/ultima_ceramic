@@ -9,6 +9,9 @@ import { IntroClassSelector } from './components/IntroClassSelector';
 import { ScheduleSelector } from './components/ScheduleSelector';
 import { BookingSummary } from './components/BookingSummary';
 import { GroupInquiryForm } from './components/GroupInquiryForm';
+import { CouplesTourModal } from './components/CouplesTourModal';
+import { CouplesTechniqueSelector } from './components/CouplesTechniqueSelector';
+import { CouplesExperienceScheduler } from './components/CouplesExperienceScheduler';
 import { UserInfoModal } from './components/UserInfoModal';
 import { PolicyModal } from './components/PolicyModal';
 import { BookingTypeModal } from './components/BookingTypeModal';
@@ -19,14 +22,21 @@ import { ClientDeliveryForm } from './components/ClientDeliveryForm';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ModuloMarcacion } from './components/ModuloMarcacion';
 import { AdminTimecardPanel } from './components/admin/AdminTimecardPanel';
+// New Experience Components
+import { ExperienceTypeSelector } from './components/experiences/ExperienceTypeSelector';
+import { GroupClassWizard } from './components/experiences/GroupClassWizard';
+import { PieceExperienceWizard } from './components/experiences/PieceExperienceWizard';
+import { SingleClassWizard } from './components/experiences/SingleClassWizard';
 // Lazy load AdminConsole to reduce initial bundle size
 const AdminConsole = lazy(() => import('./components/admin/AdminConsole').then(module => ({ default: module.AdminConsole })));
 import { NotificationProvider } from './context/NotificationContext';
 import { AdminDataProvider } from './context/AdminDataContext';
 import { ConfirmationPage } from './components/ConfirmationPage';
 import { OpenStudioModal } from './components/admin/OpenStudioModal';
+import { ClientDashboard } from './components/ClientDashboard';
+import { MyClassesPrompt } from './components/MyClassesPrompt';
 
-import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession, DeliveryMethod, GiftcardHold } from './types';
+import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession, DeliveryMethod, GiftcardHold, Piece, ExperiencePricing, ExperienceUIState } from './types';
 import * as dataService from './services/dataService';
 import { slotsRequireNoRefund } from './utils/bookingPolicy';
 import { InstagramIcon } from './components/icons/InstagramIcon';
@@ -83,6 +93,33 @@ const App: React.FC = () => {
     const [isBookingTypeModalOpen, setIsBookingTypeModalOpen] = useState(false);
     const [isClassInfoModalOpen, setIsClassInfoModalOpen] = useState(false);
     const [isPrerequisiteModalOpen, setIsPrerequisiteModalOpen] = useState(false);
+    const [showMyClassesPrompt, setShowMyClassesPrompt] = useState(false);
+    const [hasCheckedMyClasses, setHasCheckedMyClasses] = useState(false);
+    const [clientEmail, setClientEmail] = useState<string | null>(null);
+    
+    // COUPLES_EXPERIENCE states
+    const [isCouplesExperience, setIsCouplesExperience] = useState(false);
+    const [isCouplesTourModalOpen, setIsCouplesTourModalOpen] = useState(false);
+    const [couplesTechnique, setCouplesTechnique] = useState<'potters_wheel' | 'molding' | null>(null);
+    
+    // NEW EXPERIENCE SYSTEM states
+    const [experienceType, setExperienceType] = useState<'individual' | 'group' | 'experience' | null>(null);
+    const [pieces, setPieces] = useState<Piece[]>([]);
+    const [experienceUIState, setExperienceUIState] = useState<ExperienceUIState>({
+        step: 1,
+        piecesSelected: [],
+        durationMinutes: undefined,
+        guidedOption: undefined,
+        pricing: undefined,
+        isLoading: false,
+        error: undefined
+    });
+    const [groupClassConfig] = useState({
+        minParticipants: 2,
+        maxParticipants: 30,
+        pricePerPerson: 15,
+        estimatedDuration: 120
+    });
     
     const [appData, setAppData] = useState<AppData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -155,7 +192,73 @@ const App: React.FC = () => {
         setTimeout(fetchAppData, 0);
     }, []);
 
-    const handleWelcomeSelect = (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio') => {
+    // Load pieces for experience wizard
+    useEffect(() => {
+        const loadPieces = async () => {
+            try {
+                const response = await fetch('/api/data?action=listPieces');
+                if (response.ok) {
+                    const data = await response.json();
+                    setPieces(data.data || []);
+                }
+            } catch (error) {
+                console.error('Error loading pieces:', error);
+            }
+        };
+        loadPieces();
+    }, []);
+
+    // Check if there are saved bookings and show prompt
+    // Solo mostrar si:
+    // 1. El usuario está autenticado (tiene email + código de reserva)
+    // 2. Tiene clases FUTURAS (no completadas)
+    // 3. Es la primera carga (no fue descartado)
+    // 4. No está en una vista diferente ya
+    useEffect(() => {
+        if (!hasCheckedMyClasses && !loading && view === 'welcome') {
+            const savedClientEmail = localStorage.getItem('clientEmail');
+            const clientBookingCode = localStorage.getItem('clientBookingCode');
+            const lastBookingId = localStorage.getItem('lastBookingId');
+            const promptDismissed = sessionStorage.getItem('myClassesPromptDismissed');
+            
+            // Guardar email en state para mostrar en header
+            if (savedClientEmail) {
+                setClientEmail(savedClientEmail);
+            }
+            
+            // Validar que tiene clases futuras
+            const checkFutureClasses = async () => {
+                try {
+                    if (savedClientEmail && clientBookingCode && lastBookingId && !promptDismissed) {
+                        const booking = await dataService.getBookingById(lastBookingId);
+                        
+                        // Verificar si hay clases futuras
+                        let hasUpcomingClasses = false;
+                        if (booking?.slots && booking.slots.length > 0) {
+                            const now = new Date();
+                            hasUpcomingClasses = booking.slots.some((slot: any) => {
+                                if (!slot || !slot.date) return false;
+                                const slotDate = new Date(slot.date);
+                                return slotDate > now;
+                            });
+                        }
+                        
+                        // Solo mostrar pop-up si tiene clases futuras
+                        if (hasUpcomingClasses) {
+                            setShowMyClassesPrompt(true);
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error checking future classes:', err);
+                }
+            };
+            
+            checkFutureClasses();
+            setHasCheckedMyClasses(true);
+        }
+    }, [loading, hasCheckedMyClasses, view]);
+
+    const handleWelcomeSelect = (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio' | 'group_class_wizard' | 'single_class_wizard') => {
         if (userType === 'new') {
             setView('intro_classes');
         } else if (userType === 'returning') {
@@ -163,19 +266,48 @@ const App: React.FC = () => {
         } else if (userType === 'group_experience') {
             setView('group_experience');
         } else if (userType === 'couples_experience') {
-            setView('couples_experience');
+            const product = appData?.products.find(p => p.type === 'COUPLES_EXPERIENCE') || null;
+            setBookingDetails(prev => ({ ...prev, product }));
+            setIsCouplesExperience(true);
+            setCouplesTechnique(null);
+            setIsCouplesTourModalOpen(true);
         } else if (userType === 'team_building') {
             setView('team_building');
         } else if (userType === 'open_studio') {
             const product = appData?.products.find(p => p.type === 'OPEN_STUDIO_SUBSCRIPTION') || null;
             setOpenStudioProduct(product);
             setIsOpenStudioModalOpen(true);
+        } else if (userType === 'group_class_wizard') {
+            // Direct to group class wizard - skip experience type selector
+            setView('group_class_wizard');
+        } else if (userType === 'single_class_wizard') {
+            // Direct to single class wizard
+            setView('single_class_wizard');
         }
     };
     
     const handlePrerequisiteConfirm = () => {
         setIsPrerequisiteModalOpen(false);
         setView('techniques');
+    };
+
+    // Login function for client portal
+    const handleClientLogin = () => {
+        setView('my-classes');
+    };
+
+    // Logout function for client portal
+    const handleClientLogout = () => {
+        // Clear client authentication
+        localStorage.removeItem('clientEmail');
+        localStorage.removeItem('clientBookingCode');
+        localStorage.removeItem('lastBookingId');
+        sessionStorage.removeItem('myClassesPromptDismissed');
+        
+        // Reset state
+        setClientEmail(null);
+        setView('welcome');
+        setShowMyClassesPrompt(false);
     };
 
     const handleTechniqueSelect = (selectedTechnique: Technique | 'open_studio') => {
@@ -218,8 +350,14 @@ const App: React.FC = () => {
         }
     };
     
-    const handleIntroClassConfirm = (product: Product, session: IntroClassSession) => {
-        setBookingDetails({ product, slots: [session], userInfo: null });
+    const handleIntroClassConfirm = (product: Product, session: IntroClassSession & { technique?: any }) => {
+        if (session.technique) {
+            // Es couples experience
+            setBookingDetails({ product, slots: [session], userInfo: null, technique: session.technique });
+        } else {
+            // Es intro class
+            setBookingDetails({ product, slots: [session], userInfo: null });
+        }
         setView('summary');
     };
 
@@ -247,7 +385,7 @@ const App: React.FC = () => {
         // Determine if selected slots require acceptance of no-refund policy
         const requiresImmediateAcceptance = slotsRequireNoRefund(finalDetails.slots || [], 48);
         
-        const bookingData = {
+        const bookingData: any = {
             product: finalDetails.product!,
             productId: finalDetails.product!.id,
             productType: finalDetails.product!.type,
@@ -260,6 +398,11 @@ const App: React.FC = () => {
             invoiceData: data.needsInvoice ? data.invoiceData : undefined,
             acceptedNoRefund: requiresImmediateAcceptance ? !!data.acceptedNoRefund : false
         };
+
+        // Add technique for COUPLES_EXPERIENCE
+        if (finalDetails.product!.type === 'COUPLES_EXPERIENCE' && finalDetails.technique) {
+            bookingData.technique = finalDetails.technique;
+        }
 
         try {
             // Attach giftcard info if the user applied a giftcard (supports holdId or immediate consume)
@@ -359,10 +502,10 @@ const App: React.FC = () => {
 
     // Load scheduling data when needed for schedule view
     useEffect(() => {
-        if (view === 'schedule' && appData && appData.instructors.length === 0) {
+        if ((view === 'schedule' || view === 'group_class_wizard' || view === 'single_class_wizard') && appData && appData.instructors.length === 0) {
             loadAdditionalData('scheduling', appData);
         }
-        if (view === 'schedule' && appData && appData.bookings.length === 0) {
+        if ((view === 'schedule' || view === 'group_class_wizard' || view === 'single_class_wizard') && appData && appData.bookings.length === 0) {
             loadAdditionalData('bookings', appData);
         }
     }, [view, appData, loadAdditionalData]);
@@ -481,16 +624,6 @@ const App: React.FC = () => {
                 // Si la técnica es open_studio, nunca mostrar PackageSelector
                 if (technique === 'open_studio') return null;
                 return <PackageSelector onSelect={handlePackageSelect} technique={technique} products={appData.products} />;
-    // Renderizar el modal informativo de Open Studio
-    const handleOpenStudioModalClose = () => {
-        setIsOpenStudioModalOpen(false);
-        setTechnique(null);
-    };
-    const handleOpenStudioModalContinue = () => {
-        setIsOpenStudioModalOpen(false);
-        setTechnique('open_studio');
-        setView('packages');
-    };
             case 'intro_classes':
                 return <IntroClassSelector onConfirm={handleIntroClassConfirm} appData={appData} onBack={() => setView('welcome')} onAppDataUpdate={(updates) => setAppData(prev => prev ? { ...prev, ...updates } : null)} />;
             case 'schedule':
@@ -535,20 +668,206 @@ const App: React.FC = () => {
                     footerInfo={appData.footerInfo}
                     policies={appData.policies}
                     onFinish={resetFlow}
+                    onNavigateToMyClasses={() => setView('my-classes')}
                     appliedGiftcardHold={appliedGiftcardHold && appliedGiftcardHold.amount > 0 ? {
                         holdId: appliedGiftcardHold.holdId || '',
                         expiresAt: appliedGiftcardHold.expiresAt,
                         amount: appliedGiftcardHold.amount
                     } : null}
                 />;
+            case 'my-classes':
+                return <ClientDashboard onClose={() => setView('welcome')} />;
             case 'group_experience':
-            case 'couples_experience':
             case 'team_building':
                 return <GroupInquiryForm 
                             onBack={() => setView('welcome')} 
-                            inquiryType={view === 'group_experience' ? 'group' : view === 'couples_experience' ? 'couple' : 'team_building'}
+                            inquiryType={view === 'group_experience' ? 'group' : 'team_building'}
                             footerInfo={appData.footerInfo}
                         />;
+            case 'couples_experience': {
+                // PASO 1: Técnica selector (si no elegida)
+                if (couplesTechnique === null) {
+                    const handleCouplesTechniqueSelect = (technique: Technique) => {
+                        setCouplesTechnique(technique);
+                    };
+
+                    const handleCouplesTechniqueBack = () => {
+                        setCouplesTechnique(null);
+                        setIsCouplesExperience(false);
+                        setBookingDetails({ product: null, slots: [], userInfo: null });
+                        setView('welcome');
+                    };
+
+                    return (
+                        <CouplesTechniqueSelector
+                            onSelect={handleCouplesTechniqueSelect}
+                            onBack={handleCouplesTechniqueBack}
+                        />
+                    );
+                }
+                
+                // PASO 2: Scheduler (si técnica elegida, slot NO elegido aún)
+                if (!bookingDetails.slots || bookingDetails.slots.length === 0) {
+                    // El producto debería estar en bookingDetails
+                    let product = bookingDetails.product;
+                    
+                    if (!product && appData?.products) {
+                        product = appData.products.find(p => p.type === 'COUPLES_EXPERIENCE') || null;
+                    }
+                    
+                    if (!product) {
+                        return <WelcomeSelector onSelect={handleWelcomeSelect} />;
+                    }
+                    
+                    // Asegurar que bookingDetails tenga el producto
+                    if (!bookingDetails.product) {
+                        setBookingDetails(prev => ({...prev, product}));
+                    }
+                    
+                    return (
+                        <CouplesExperienceScheduler
+                            product={product as any}
+                            technique={couplesTechnique}
+                            onConfirm={(session) => {
+                                setBookingDetails(prev => ({
+                                    ...prev,
+                                    product,
+                                    slots: [session],
+                                    technique: couplesTechnique
+                                }));
+                                setView('summary');
+                            }}
+                            onBack={() => {
+                                setCouplesTechnique(null);
+                            }}
+                            appData={appData}
+                            onAppDataUpdate={(updates) => {
+                                setAppData(prev => prev ? { ...prev, ...updates } : null);
+                            }}
+                        />
+                    );
+                }
+                
+                // Should not reach here - go to summary
+                return <WelcomeSelector onSelect={handleWelcomeSelect} />;
+            }
+
+            // ==================== NEW EXPERIENCE VIEWS ====================
+            case 'experience_type_selector':
+                return (
+                    <ExperienceTypeSelector 
+                        onSelectType={(type) => {
+                            setExperienceType(type);
+                            if (type === 'group') {
+                                setView('group_class_wizard');
+                            } else if (type === 'experience') {
+                                setView('piece_experience_wizard');
+                            } else {
+                                // Individual - normal flow
+                                setView('techniques');
+                            }
+                        }}
+                        isLoading={experienceUIState.isLoading}
+                    />
+                );
+
+            case 'group_class_wizard':
+                return (
+                    <GroupClassWizard
+                        config={groupClassConfig}
+                        availableSlots={appData?.availability ? 
+                            dataService.generateTimeSlots(new Date(), 180).map(slot => ({
+                              date: slot.date,
+                              time: slot.startTime,
+                              instructorId: 0
+                            }))
+                            : []
+                        }
+                        pieces={pieces}
+                        appData={appData}
+                        onConfirm={(totalParticipants, assignments, selectedSlot) => {
+                            setBookingDetails(prev => ({
+                                ...prev,
+                                slots: [selectedSlot],
+                                userInfo: null // Will be filled by user info modal
+                            }));
+                            setExperienceType('group');
+                            // Store assignments in a way that can be accessed later
+                            (window as any).__groupClassAssignments = assignments;
+                            setIsUserInfoModalOpen(true);
+                        }}
+                        onBack={() => setView('welcome')}
+                        isLoading={experienceUIState.isLoading}
+                    />
+                );
+
+            case 'piece_experience_wizard':
+                return (
+                    <PieceExperienceWizard
+                        pieces={pieces}
+                        onConfirm={(pricing: ExperiencePricing) => {
+                            setExperienceUIState(prev => ({
+                                ...prev,
+                                pricing,
+                                piecesSelected: pricing.pieces
+                            }));
+                            setBookingDetails(prev => ({
+                                ...prev,
+                                userInfo: null // Will be filled by user info modal
+                            }));
+                            setExperienceType('experience');
+                            setIsUserInfoModalOpen(true);
+                        }}
+                        onBack={() => setView('experience_type_selector')}
+                        isLoading={experienceUIState.isLoading}
+                    />
+                );
+
+            case 'single_class_wizard':
+                return (
+                    <SingleClassWizard
+                        pieces={pieces}
+                        availableSlots={appData?.availability ? 
+                            dataService.generateTimeSlots(new Date(), 180).map(slot => ({
+                              date: slot.date,
+                              time: slot.startTime,
+                              instructorId: 0
+                            }))
+                            : []
+                        }
+                        appData={appData}
+                        onConfirm={(pricing: ExperiencePricing, selectedSlot: TimeSlot | null) => {
+                            setExperienceUIState(prev => ({
+                                ...prev,
+                                pricing,
+                                piecesSelected: pricing.pieces
+                            }));
+                            setBookingDetails(prev => ({
+                                ...prev,
+                                slots: selectedSlot ? [selectedSlot] : [],
+                                userInfo: null // Will be filled by user info modal
+                            }));
+                            setExperienceType('experience');
+                            setIsUserInfoModalOpen(true);
+                        }}
+                        onBack={() => setView('welcome')}
+                        isLoading={experienceUIState.isLoading}
+                    />
+                );
+
+            case 'experience_confirmation':
+                if (!confirmedBooking) return <WelcomeSelector onSelect={handleWelcomeSelect} />;
+                return (
+                    <ConfirmationPage 
+                        booking={confirmedBooking} 
+                        bankDetails={Array.isArray(appData.bankDetails) ? appData.bankDetails : appData.bankDetails ? [appData.bankDetails] : []}
+                        footerInfo={appData.footerInfo}
+                        policies={appData.policies}
+                        onFinish={resetFlow}
+                        onNavigateToMyClasses={() => setView('my-classes')}
+                    />
+                );
+
             default:
                 return <WelcomeSelector onSelect={handleWelcomeSelect} />;
         }
@@ -610,7 +929,13 @@ const App: React.FC = () => {
     console.log("App - rendering main app, view:", view, "loading:", loading);
     return (
         <div className="bg-brand-background min-h-screen text-brand-text font-sans flex flex-col">
-            <Header onGiftcardClick={() => setView('giftcard_landing')} />
+            <Header 
+                onGiftcardClick={() => setView('giftcard_landing')}
+                onMyClassesClick={() => setView('my-classes')}
+                onClientLogin={handleClientLogin}
+                clientEmail={clientEmail}
+                onClientLogout={handleClientLogout}
+            />
             <main className="flex-grow w-full">
                 <div className="container mx-auto px-4 py-6 sm:py-8">
                     {appData && <AnnouncementsBoard announcements={appData.announcements} />}
@@ -684,6 +1009,30 @@ const App: React.FC = () => {
                     onClose={() => setIsPrerequisiteModalOpen(false)}
                     onConfirm={handlePrerequisiteConfirm}
                     onGoToIntro={() => { setIsPrerequisiteModalOpen(false); setView('intro_classes'); }}
+                />
+            )}
+            {isCouplesTourModalOpen && (
+                <CouplesTourModal
+                    onContinue={() => {
+                        setIsCouplesTourModalOpen(false);
+                        setView('couples_experience');
+                    }}
+                    onBack={() => {
+                        setIsCouplesTourModalOpen(false);
+                        setView('welcome');
+                        setIsCouplesExperience(false);
+                    }}
+                />
+            )}
+            
+            {/* My Classes Prompt Modal */}
+            {showMyClassesPrompt && (
+                <MyClassesPrompt
+                    onViewClasses={() => {
+                        setShowMyClassesPrompt(false);
+                        setView('my-classes');
+                    }}
+                    onDismiss={() => setShowMyClassesPrompt(false)}
                 />
             )}
         </div>

@@ -52,5 +52,13 @@ export default defineConfig({
     exclude: ['html2canvas'] // Exclude heavy libs from pre-bundling
   },
   
-  // ✅ Sin proxy - Vercel Dev maneja todo
+  // Proxy para API durante desarrollo
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      }
+    }
+  }
 });

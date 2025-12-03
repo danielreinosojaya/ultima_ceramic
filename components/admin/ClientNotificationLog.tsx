@@ -6,6 +6,7 @@ import * as dataService from '../../services/dataService';
 // ...existing code...
 import { PaperAirplaneIcon } from '../icons/PaperAirplaneIcon';
 import { TrashIcon } from '../icons/TrashIcon';
+import { formatDate } from '../../utils/formatters';
 
 const NOTIFICATION_TYPE_OPTIONS: ClientNotificationType[] = ['PRE_BOOKING_CONFIRMATION', 'PAYMENT_RECEIPT', 'CLASS_REMINDER'];
 const ITEMS_PER_PAGE = 15;

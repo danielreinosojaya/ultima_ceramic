@@ -19,10 +19,11 @@ interface ConfirmationPageProps {
     footerInfo: FooterInfo;
     policies: string;
     onFinish: () => void;
+    onNavigateToMyClasses?: () => void;
     appliedGiftcardHold?: { holdId: string; expiresAt?: string; amount: number } | null;
 }
 
-export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, bankDetails, footerInfo, policies, onFinish, appliedGiftcardHold }) => {
+export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, bankDetails, footerInfo, policies, onFinish, onNavigateToMyClasses, appliedGiftcardHold }) => {
     // Eliminado useLanguage, la app ahora es monolingüe en español
     const language = 'es-ES';
     const [copied, setCopied] = useState(false);
@@ -254,12 +255,22 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                         Descargar Ticket de Reserva
                     </button>
                 </div>
-                <button
-                    onClick={onFinish}
-                    className="w-full sm:w-auto bg-transparent border border-brand-secondary text-brand-secondary font-bold py-2 px-8 rounded-lg hover:bg-brand-secondary hover:text-white transition-colors duration-300"
-                >
-                    Volver al Inicio
-                </button>
+                <div className="w-full flex flex-col sm:flex-row items-center justify-center gap-4 mt-4">
+                    <button
+                        onClick={onFinish}
+                        className="w-full sm:w-auto bg-transparent border border-brand-secondary text-brand-secondary font-bold py-2 px-8 rounded-lg hover:bg-brand-secondary hover:text-white transition-colors duration-300"
+                    >
+                        Volver al Inicio
+                    </button>
+                    {onNavigateToMyClasses && (
+                        <button
+                            onClick={onNavigateToMyClasses}
+                            className="w-full sm:w-auto bg-brand-accent text-white font-bold py-2 px-8 rounded-lg hover:opacity-90 transition-opacity duration-300"
+                        >
+                            Ver mis Clases
+                        </button>
+                    )}
+                </div>
             </div>
         </div>
     );

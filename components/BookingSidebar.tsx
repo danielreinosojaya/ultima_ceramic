@@ -4,6 +4,7 @@ import type { ClassPackage, TimeSlot, Product, BookingMode } from '../types';
 import { CalendarIcon } from './icons/CalendarIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { SINGLE_CLASS_PRICE, VAT_RATE } from '../constants';
+import { formatDate } from '../utils/formatters';
 
 interface BookingSidebarProps {
   product: Product;

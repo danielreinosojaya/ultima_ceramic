@@ -301,9 +301,9 @@ import type {
     PaymentDetails, AttendanceStatus, ClientNotification, AutomationSettings, ClassPackage, 
     IntroductoryClass, OpenStudioSubscription, UserInfo, Customer, EnrichedIntroClassSession, 
     BackgroundSettings, AppData, BankDetails, InvoiceRequest, Technique, GroupClass, SingleClass,
-    Delivery, DeliveryStatus, UILabels
+    Delivery, DeliveryStatus, UILabels, RecurringClassSlot, DynamicTimeSlot, SlotDisplayInfo, GroupTechnique, TimeSlot
 } from '../types';
-import { DAY_NAMES } from '../constants';
+import { DAY_NAMES, DEFAULT_PRODUCTS } from '../constants';
 
 // --- API Helpers ---
 
@@ -884,7 +884,11 @@ export const addBooking = async (bookingData: any): Promise<AddBookingResult> =>
 // Obtener un booking por su ID
 export const getBookingById = async (bookingId: string): Promise<Booking> => {
     try {
-        const response = await fetch(`/api/data?action=getBookingById&bookingId=${encodeURIComponent(bookingId)}`);
+        const response = await fetch(`/api/data?action=getBookingById`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bookingId })
+        });
         if (!response.ok) throw new Error('Error fetching booking by ID');
         return response.json();
     } catch (error) {
@@ -1027,6 +1031,119 @@ export const markBookingAsUnpaid = async (bookingId: string): Promise<{ success:
     }
     return result;
 };
+
+// ============== RESCHEDULE POLICY MANAGER ==============
+
+/**
+ * RESCHEDULE POLICY RULES:
+ * - Paquete 4 clases: 1 reagendamiento permitido
+ * - Paquete 8 clases: 2 reagendamientos permitidos
+ * - Paquete 12 clases: 3 reagendamientos permitidos
+ * - Requirement: 72 horas de anticipación MÍNIMA
+ * - Si no cumple 72h: clase se PIERDE (no se reagenda)
+ */
+
+const RESCHEDULE_POLICIES: Record<number, number> = {
+    4: 1,   // 4 clases = 1 reagendamiento
+    8: 2,   // 8 clases = 2 reagendamientos
+    12: 3,  // 12 clases = 3 reagendamientos
+};
+
+/**
+ * Calcula el allowance de reagendamientos basado en el tipo de paquete
+ */
+export const calculateRescheduleAllowance = (classesInPackage: number): number => {
+    // Si el paquete no está en la tabla, permitir 1 reagendamiento por cada 4 clases (redondeado hacia arriba)
+    if (RESCHEDULE_POLICIES[classesInPackage]) {
+        return RESCHEDULE_POLICIES[classesInPackage];
+    }
+    return Math.ceil(classesInPackage / 4);
+};
+
+/**
+ * Valida elegibilidad para reagendar
+ * Retorna: { eligible: boolean, reason?: string }
+ */
+export const validateRescheduleEligibility = (
+    booking: Booking,
+    oldSlot: TimeSlot,
+    newSlotDate: string // YYYY-MM-DD
+): { eligible: boolean; reason?: string } => {
+    // 1. Validar que sea un paquete reagendable
+    if (!booking.product || typeof booking.product !== 'object') {
+        return { eligible: false, reason: 'Producto no encontrado' };
+    }
+
+    const product = booking.product as any;
+    const productType = booking.productType;
+
+    // Solo permitir en CLASS_PACKAGE, SINGLE_CLASS
+    const reagendableTypes = ['CLASS_PACKAGE', 'SINGLE_CLASS', 'INTRODUCTORY_CLASS'];
+    if (!reagendableTypes.includes(productType)) {
+        return { eligible: false, reason: `No se puede reagendar ${productType}` };
+    }
+
+    // 2. Validar política de no-reembolso (acceptedNoRefund)
+    if (booking.acceptedNoRefund === true) {
+        return { 
+            eligible: false, 
+            reason: 'Esta clase fue reservada con política de "No reembolsable ni reagendable"' 
+        };
+    }
+
+    // 3. Validar 72 horas de anticipación
+    const now = new Date();
+    const oldSlotDate = new Date(oldSlot.date + 'T00:00:00');
+    const hoursDifference = (oldSlotDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+    if (hoursDifference < 72) {
+        return { 
+            eligible: false, 
+            reason: `Requiere 72 horas de anticipación. Solo tienes ${Math.floor(hoursDifference)} horas. La clase se PERDERÁ.` 
+        };
+    }
+
+    // 4. Validar que no haya excedido allowance
+    const allowance = calculateRescheduleAllowance(product.classes || 1);
+    const used = (booking.rescheduleUsed || 0);
+
+    if (used >= allowance) {
+        return { 
+            eligible: false, 
+            reason: `Agotaste tus ${allowance} reagendamientos disponibles para este paquete` 
+        };
+    }
+
+    // 5. Validar que clase no haya pasado
+    if (oldSlotDate < now) {
+        return { 
+            eligible: false, 
+            reason: 'Esta clase ya pasó' 
+        };
+    }
+
+    // ✅ ELEGIBLE
+    return { eligible: true };
+};
+
+/**
+ * Obtiene información sobre reagendamientos disponibles
+ */
+export const getRescheduleInfo = (booking: Booking): { 
+    allowance: number; 
+    used: number; 
+    remaining: number;
+    history: any[];
+} => {
+    const product = booking.product as any;
+    const allowance = calculateRescheduleAllowance(product?.classes || 1);
+    const used = booking.rescheduleUsed || 0;
+    const remaining = Math.max(0, allowance - used);
+    const history = booking.rescheduleHistory || [];
+
+    return { allowance, used, remaining, history };
+};
+
 export const rescheduleBookingSlot = async (bookingId: string, oldSlot: any, newSlot: any): Promise<AddBookingResult> => {
     console.log('[rescheduleBookingSlot] Starting reschedule:', { bookingId, oldSlot, newSlot });
     const result = await postAction('rescheduleBookingSlot', { bookingId, oldSlot, newSlot });
@@ -1168,6 +1285,20 @@ export const getEssentialAppData = async () => {
                 data[key] = getDefaultData(key);
             }
         });
+
+        // Asegurar que COUPLES_EXPERIENCE existe en los productos (una sola vez)
+        if (Array.isArray(data.products)) {
+            const hasCouplesExperience = data.products.some((p: any) => p.type === 'COUPLES_EXPERIENCE');
+            if (!hasCouplesExperience) {
+                const couplexProduct = DEFAULT_PRODUCTS.find((p: any) => p.type === 'COUPLES_EXPERIENCE');
+                if (couplexProduct) {
+                    // Crear una copia profunda para evitar mutaciones
+                    const productCopy = JSON.parse(JSON.stringify(couplexProduct));
+                    data.products = [...data.products, productCopy];
+                    console.log('✅ COUPLES_EXPERIENCE added successfully. New length:', data.products.length);
+                }
+            }
+        }
 
         return data;
     } catch (error) {
@@ -1508,7 +1639,7 @@ export const getFutureCapacityMetrics = async (days: number): Promise<{ totalCap
         });
     }
 
-    // FIX: Refactor bookedSlots calculation to be more accurate for all booking types
+    // FIX: Refactor bookedSlots calculation to account for booking.participants
     const futureBookedSlots = bookings.reduce((count, booking) => {
         const bookingSlotsCount = booking.slots.filter(slot => {
             const slotDate = new Date(slot.date);
@@ -1516,12 +1647,16 @@ export const getFutureCapacityMetrics = async (days: number): Promise<{ totalCap
             return slotDate >= today;
         }).length;
         
+        // CRÍTICO: Usar booking.participants si está disponible (admin manual booking)
+        // Esto es especialmente importante para reservas con múltiples asistentes
+        const participantCount = booking.participants ?? 1;
+        
         if (booking.productType === 'GROUP_CLASS') {
-             // For a Group Class, the booked slots is the number of participants.
-             return count + (booking.product as GroupClass).minParticipants;
+             // For a Group Class, multiply participants by number of slots
+             return count + (participantCount * bookingSlotsCount);
         } else if (booking.productType === 'SINGLE_CLASS' || booking.productType === 'CLASS_PACKAGE' || booking.productType === 'INTRODUCTORY_CLASS') {
-            // For other classes, the booked slots are simply the number of slots selected.
-            return count + bookingSlotsCount;
+            // For other classes, multiply participants by number of slots
+            return count + (participantCount * bookingSlotsCount);
         }
 
         return count;
@@ -1764,4 +1899,411 @@ export const updateGiftcardSchedule = async (
     } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : 'Error updating schedule' };
     }
+};
+
+// ============== PACKAGE RENEWAL CHECK ==============
+
+/**
+ * Verifica si un paquete está por terminarse (<=2 clases restantes)
+ * Retorna: { shouldSendReminder: boolean, remainingClasses: number, totalClasses: number }
+ */
+export const checkPackageCompletionStatus = (booking: Booking): {
+    shouldSendReminder: boolean;
+    remainingClasses: number;
+    totalClasses: number;
+} => {
+    if (!booking.product || typeof booking.product !== 'object') {
+        return { shouldSendReminder: false, remainingClasses: 0, totalClasses: 0 };
+    }
+
+    const product = booking.product as any;
+    
+    // Solo aplica a paquetes
+    if (!['CLASS_PACKAGE'].includes(booking.productType)) {
+        return { shouldSendReminder: false, remainingClasses: 0, totalClasses: 0 };
+    }
+
+    const totalClasses = product.classes || 0;
+    const usedSlots = booking.slots?.length || 0;
+    const remainingClasses = Math.max(0, totalClasses - usedSlots);
+
+    // Enviar recordatorio si quedan <=2 clases
+    const shouldSendReminder = remainingClasses > 0 && remainingClasses <= 2;
+
+    return {
+        shouldSendReminder,
+        remainingClasses,
+        totalClasses
+    };
+};
+
+/**
+ * Obtiene información completa para envío de email de renovación
+ */
+export const getPackageRenewalInfo = (booking: Booking) => {
+    const product = booking.product as any;
+    const check = checkPackageCompletionStatus(booking);
+
+    const packageTypeLabel = `${product.classes} clases`;
+    
+    return {
+        firstName: booking.userInfo?.firstName || 'Cliente',
+        lastName: booking.userInfo?.lastName || '',
+        email: booking.userInfo?.email || '',
+        remainingClasses: check.remainingClasses,
+        totalClasses: check.totalClasses,
+        packageType: packageTypeLabel,
+        packagePrice: product.price || 0,
+        lastBookingDate: booking.slots?.[booking.slots.length - 1]?.date,
+        shouldNotify: check.shouldSendReminder
+    };
+};
+
+/**
+ * Get client booking by email and booking code
+ * Used for client login/identification
+ */
+export const getClientBooking = async (email: string, bookingCode: string): Promise<any> => {
+    try {
+        const response = await fetch(`/api/data?action=getClientBooking`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, bookingCode })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            return {
+                success: false,
+                message: error.message || 'Invalid email or booking code'
+            };
+        }
+
+        const data = await response.json();
+        return {
+            success: true,
+            booking: data
+        };
+    } catch (error) {
+        console.error('getClientBooking error:', error);
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : 'Error fetching booking'
+        };
+    }
+};
+
+// ==================== NEW EXPERIENCE FUNCTIONS ====================
+
+/**
+ * List all active pieces for experience selection
+ */
+export const listPieces = async () => {
+    try {
+        const response = await fetch('/api/data?action=listPieces');
+        if (!response.ok) throw new Error('Error listing pieces');
+        const data = await response.json();
+        return data.data || [];
+    } catch (error) {
+        console.error('[dataService] Error listing pieces:', error);
+        throw error;
+    }
+};
+
+/**
+ * Create a new piece (admin only)
+ */
+export const createPiece = async (pieceData: {
+    name: string;
+    description?: string;
+    category?: string;
+    basePrice: number;
+    estimatedHours?: number;
+    imageUrl?: string;
+    sortOrder?: number;
+}) => {
+    try {
+        const response = await fetch('/api/data?action=createPiece', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(pieceData),
+        });
+        if (!response.ok) throw new Error('Error creating piece');
+        const data = await response.json();
+        return data.data;
+    } catch (error) {
+        console.error('[dataService] Error creating piece:', error);
+        throw error;
+    }
+};
+
+/**
+ * Update a piece (admin only)
+ */
+export const updatePiece = async (pieceId: string, updates: any) => {
+    try {
+        const response = await fetch('/api/data?action=updatePiece', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: pieceId, ...updates }),
+        });
+        if (!response.ok) throw new Error('Error updating piece');
+        const data = await response.json();
+        return data.data;
+    } catch (error) {
+        console.error('[dataService] Error updating piece:', error);
+        throw error;
+    }
+};
+
+/**
+ * Calculate experience pricing based on selected pieces and options
+ */
+export const calculateExperiencePricing = async (piecesSelected: any[], guidedOption: string) => {
+    try {
+        const response = await fetch('/api/data?action=calculateExperiencePricing', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ piecesSelected, guidedOption }),
+        });
+        if (!response.ok) throw new Error('Error calculating pricing');
+        const data = await response.json();
+        return data.data;
+    } catch (error) {
+        console.error('[dataService] Error calculating pricing:', error);
+        throw error;
+    }
+};
+
+/**
+ * List all experience confirmations (admin only)
+ */
+export const listExperienceConfirmations = async () => {
+    try {
+        const response = await fetch('/api/data?action=listExperienceConfirmations');
+        if (!response.ok) throw new Error('Error listing confirmations');
+        const data = await response.json();
+        return data.data || [];
+    } catch (error) {
+        console.error('[dataService] Error listing confirmations:', error);
+        throw error;
+    }
+};
+
+/**
+ * Confirm an experience (admin only)
+ */
+export const confirmExperience = async (experienceConfirmationId: string, reason?: string) => {
+    try {
+        const response = await fetch(`/api/data?action=confirmExperience`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ experienceConfirmationId, reason }),
+        });
+        if (!response.ok) throw new Error('Error confirming experience');
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('[dataService] Error confirming experience:', error);
+        throw error;
+    }
+};
+
+/**
+ * Reject an experience (admin only)
+ */
+export const rejectExperience = async (experienceConfirmationId: string, reason: string) => {
+    try {
+        const response = await fetch(`/api/data?action=rejectExperience`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ experienceConfirmationId, reason }),
+        });
+        if (!response.ok) throw new Error('Error rejecting experience');
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('[dataService] Error rejecting experience:', error);
+        throw error;
+    }
+};
+
+// ========== HORARIOS DINÁMICOS CON CAPACIDAD ==========
+
+/**
+ * Calcula la disponibilidad de un slot considerando solapamiento
+ * Ventana: startTime ±30 min
+ */
+export const calculateSlotAvailability = (
+  date: string, // "2025-12-05"
+  startTime: string, // "11:00"
+  appData: AppData
+): SlotDisplayInfo => {
+  const slotStart = new Date(`${date}T${startTime}`);
+  const slotEnd = new Date(slotStart.getTime() + 2 * 60 * 60 * 1000); // +2 horas
+  
+  // Ventana de solapamiento: ±30 minutos
+  const windowStart = new Date(slotStart.getTime() - 30 * 60 * 1000);
+  const windowEnd = new Date(slotEnd.getTime() + 30 * 60 * 1000);
+  
+  const capacity = {
+    potters_wheel: { max: 8, bookedInWindow: 0 },
+    hand_modeling: { max: 14, bookedInWindow: 0 },
+    painting: { max: Infinity, bookedInWindow: 0 }
+  };
+
+  const overlappingDetails: string[] = [];
+
+  // 1. Contar bookings que se solapan con esta ventana
+  const bookingsForSlot = appData.bookings.filter(booking => {
+    return booking.slots.some(slot => {
+      const bookingStart = new Date(`${slot.date}T${slot.time}`);
+      const bookingEnd = new Date(bookingStart.getTime() + 2 * 60 * 60 * 1000);
+      
+      // ¿Se solapan las ventanas?
+      return !(bookingEnd <= windowStart || bookingStart >= windowEnd);
+    });
+  });
+
+  bookingsForSlot.forEach(booking => {
+    // CRÍTICO: Usar booking.participants si está disponible (admin manual booking)
+    const participantCount = booking.participants ?? 1;
+    
+    // Determinar técnica del booking
+    let bookingTechnique: 'potters_wheel' | 'hand_modeling' | 'painting' | undefined;
+    
+    if (booking.technique) {
+      // Si el booking tiene técnica explícita (ej: COUPLES_EXPERIENCE)
+      bookingTechnique = booking.technique as any;
+    } else if (booking.product && 'details' in booking.product) {
+      // Si el producto tiene técnica en details
+      const details = (booking.product as any).details;
+      if (details && typeof details === 'object' && 'technique' in details) {
+        bookingTechnique = details.technique;
+      }
+    }
+    
+    // Default fallback para experiencias
+    if (!bookingTechnique) {
+      bookingTechnique = 'hand_modeling';
+    }
+    
+    // Sumar participantes a la técnica correcta
+    if (capacity[bookingTechnique]) {
+      capacity[bookingTechnique].bookedInWindow += participantCount;
+      overlappingDetails.push(`${booking.productType}: ${participantCount} personas (${bookingTechnique})`);
+    }
+  });
+
+  // 2. Buscar clases recurrentes en solapamiento
+  const dayOfWeek = new Date(date).getDay();
+  const recurringInWindow = appData.recurringClasses?.filter((rc: RecurringClassSlot) => {
+    if (rc.dayOfWeek !== dayOfWeek || !rc.isActive) return false;
+    
+    const rcStart = new Date(`${date}T${rc.startTime}`);
+    const rcEnd = new Date(`${date}T${rc.endTime}`);
+    
+    return !(rcEnd <= windowStart || rcStart >= windowEnd);
+  }) || [];
+
+  recurringInWindow.forEach((rc: RecurringClassSlot) => {
+    if (capacity[rc.technique]) {
+      capacity[rc.technique].bookedInWindow += rc.occupiedCapacity;
+    }
+    overlappingDetails.push(`Clase Paquete ${rc.technique}: +${rc.occupiedCapacity}`);
+  });
+
+  const endTimeFormatted = new Date(slotEnd).toLocaleTimeString('es-ES', {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+
+  // 3. Calcular disponibilidad
+  return {
+    date,
+    startTime,
+    endTime: endTimeFormatted,
+    techniques: {
+      potters_wheel: {
+        available: Math.max(0, capacity.potters_wheel.max - capacity.potters_wheel.bookedInWindow),
+        total: capacity.potters_wheel.max,
+        bookedInWindow: capacity.potters_wheel.bookedInWindow,
+        isAvailable: capacity.potters_wheel.bookedInWindow < capacity.potters_wheel.max,
+        overlappingClasses: overlappingDetails.length > 0 ? overlappingDetails : undefined
+      },
+      hand_modeling: {
+        available: Math.max(0, capacity.hand_modeling.max - capacity.hand_modeling.bookedInWindow),
+        total: capacity.hand_modeling.max,
+        bookedInWindow: capacity.hand_modeling.bookedInWindow,
+        isAvailable: capacity.hand_modeling.bookedInWindow < capacity.hand_modeling.max,
+        overlappingClasses: overlappingDetails.length > 0 ? overlappingDetails : undefined
+      },
+      painting: {
+        available: Infinity,
+        total: Infinity,
+        bookedInWindow: capacity.painting.bookedInWindow,
+        isAvailable: true
+      }
+    }
+  };
+};
+
+/**
+ * Genera slots cada 30 minutos para los próximos N días
+ */
+export const generateTimeSlots = (
+  startDate: Date,
+  daysCount: number = 180
+): DynamicTimeSlot[] => {
+  const slots: DynamicTimeSlot[] = [];
+  
+  // Configuración: qué horas abren cada día
+  const hoursPerDay = [
+    { start: 9, end: 19, days: [1, 2, 3, 4, 5] }, // Lunes-Viernes: 9 AM a 7 PM
+    { start: 9, end: 17, days: [6] } // Sábado: 9 AM a 5 PM
+    // Domingo (0) no aparece, así que cerrado
+  ];
+
+  for (let d = 0; d < daysCount; d++) {
+    const date = new Date(startDate);
+    date.setDate(date.getDate() + d);
+    const dayOfWeek = date.getDay();
+    const dateStr = date.toISOString().split('T')[0];
+
+    const dayConfig = hoursPerDay.find(h => h.days.includes(dayOfWeek));
+    if (!dayConfig) continue; // Día cerrado (domingo)
+
+    // Generar slots cada 30 minutos
+    for (let hour = dayConfig.start; hour < dayConfig.end; hour++) {
+      for (let minute of [0, 30]) {
+        const startTime = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+        
+        // End time: siempre +2 horas
+        let endHour = hour;
+        let endMin = minute;
+        endHour += 2;
+        
+        // Si superamos el límite del día, no crear slot
+        if (endHour > dayConfig.end) continue;
+        
+        const endTime = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
+
+        slots.push({
+          id: `${dateStr}-${startTime}`,
+          date: dateStr,
+          startTime,
+          endTime,
+          dayOfWeek: dayOfWeek as 0 | 1 | 2 | 3 | 4 | 5 | 6,
+          professorId: null,
+          capacity: {
+            potters_wheel: { max: 8, bookedInWindow: 0, available: 8, isAvailable: true },
+            hand_modeling: { max: 14, bookedInWindow: 0, available: 14, isAvailable: true },
+            painting: { max: Infinity, bookedInWindow: 0, available: Infinity, isAvailable: true }
+          }
+        });
+      }
+    }
+  }
+
+  return slots;
 };

@@ -9,7 +9,7 @@ import { MailIcon } from './icons/MailIcon.js';
 import { PhoneIcon } from './icons/PhoneIcon.js';
 import { InfoCircleIcon } from './icons/InfoCircleIcon.js';
 import { CheckCircleIcon } from './icons/CheckCircleIcon.js';
-import { formatPrice } from '../utils/formatters';
+import { formatPrice, formatDate } from '../utils/formatters';
 
 interface BookingSummaryProps {
   bookingDetails: BookingDetails;
@@ -76,119 +76,190 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
   });
 
   return (
-    <div className="p-8 bg-brand-surface rounded-xl shadow-subtle animate-fade-in-up max-w-2xl mx-auto">
-      <button onClick={onBack} className="text-brand-secondary hover:text-brand-text mb-4 transition-colors font-semibold">
-        &larr; Editar Selección
-      </button>
-      <div className="text-center">
-        <h2 className="text-3xl font-semibold text-brand-text mb-2">Resumen de la Reserva</h2>
-        <p className="text-brand-secondary mb-8">Por favor, revisa tu selección antes de confirmar.</p>
-      </div>
-
-      <div className="bg-brand-background rounded-lg p-6 mb-6">
-          <h3 className="text-xl font-bold text-brand-text border-b border-brand-border pb-2 mb-4">Torno Alfarero</h3>
-          <div className="flex justify-between items-center text-lg">
-            <span className="text-brand-secondary">{slots.length} Clases</span>
-            <span className="font-bold text-brand-text">${formatPrice(product.price)}</span>
-          </div>
-      </div>
-
-      {userInfo && (
-        <div className="bg-brand-background rounded-lg p-6 mb-6 animate-fade-in">
-          <h3 className="text-xl font-bold text-brand-text border-b border-brand-border pb-2 mb-4">Datos del cliente</h3>
-          <div className="space-y-2 text-sm">
-            <div className="flex items-center"><UserIcon className="w-4 h-4 mr-3 text-brand-secondary" /> {userInfo.firstName} {userInfo.lastName}</div>
-            <div className="flex items-center"><MailIcon className="w-4 h-4 mr-3 text-brand-secondary" /> {userInfo.email}</div>
-            <div className="flex items-center"><PhoneIcon className="w-4 h-4 mr-3 text-brand-secondary" /> {userInfo.countryCode} {userInfo.phone}</div>
-          </div>
-        </div>
-      )}
-
-      {slots && slots.length > 0 && (
-        <div className="bg-brand-background rounded-lg p-6">
-          <h3 className="text-xl font-bold text-brand-text border-b border-brand-border pb-2 mb-4">Horario Seleccionado</h3>
-          <ul className="space-y-2">
-            {sortedSlots.map((slot, index) => (
-              <li key={index} className="flex items-center text-brand-text py-2">
-                <CalendarIcon className="w-5 h-5 mr-4 text-brand-secondary flex-shrink-0" />
-                <div className="flex-grow flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold">{formatDate(slot.date)}</p>
-                    <p className="text-sm text-brand-secondary">{slot.time}</p>
-                  </div>
-                  <InstructorTag instructorId={slot.instructorId} instructors={appData.instructors} />
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div className="mt-8 flex flex-col items-center gap-4 justify-center">
-        {/* Giftcard redeem UI */}
-        <GiftcardRedeemSection product={product} onUseGiftcard={onUseGiftcard} activeGiftcardHold={activeGiftcardHold} />
-          {/* Visualización robusta de giftcard */}
-          {activeGiftcardHold && renderGiftcardBadge(activeGiftcardHold)}
-        {activeGiftcardHold && (
-          <button onClick={handleOpenAudit} className="inline-flex items-center gap-2 px-3 py-1 text-xs font-semibold rounded bg-indigo-100 hover:bg-indigo-200 text-indigo-700 ml-2 shadow transition" title="Ver auditoría de giftcard">
-            Auditoría Giftcard
+    <div className="w-full bg-brand-background min-h-screen flex items-center justify-center p-3 sm:p-4 md:p-6">
+      <div className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden">
+        {/* Header with gradient */}
+        <div className="bg-gradient-to-r from-brand-primary to-brand-secondary p-5 sm:p-7 md:p-8 text-white space-y-3">
+          <button 
+            onClick={onBack} 
+            className="flex items-center gap-2 text-white/80 hover:text-white transition-colors font-semibold text-sm sm:text-base"
+          >
+            <span>←</span> Editar
           </button>
-        )}
-        {/* Modal auditoría giftcard */}
-        {showGiftcardAudit && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-fade-in">
-            <div className="bg-white rounded-xl shadow-lg p-8 max-w-lg w-full relative">
-              <button onClick={handleCloseAudit} className="absolute top-4 right-4 text-gray-500 hover:text-brand-primary text-xl">×</button>
-              <h3 className="text-2xl font-bold mb-4 text-brand-text">Auditoría de Giftcard</h3>
-              {giftcardAuditData.length > 0 ? (
-                <table className="w-full text-sm mb-4">
-                  <thead>
-                    <tr>
-                      <th className="text-left py-2 px-2">Fecha</th>
-                      <th className="text-left py-2 px-2">Acción</th>
-                      <th className="text-left py-2 px-2">Monto</th>
-                      <th className="text-left py-2 px-2">ID</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {giftcardAuditData.map((row, idx) => (
-                      <tr key={idx} className="border-b">
-                        <td className="py-2 px-2">{row.fecha}</td>
-                        <td className="py-2 px-2">{row.accion}</td>
-                        <td className="py-2 px-2">${row.monto}</td>
-                        <td className="py-2 px-2">{row.id}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <div className="text-brand-secondary">No hay movimientos registrados.</div>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold leading-tight">Resumen</h1>
+            <p className="text-white/90 text-sm">Revisa antes de confirmar</p>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-5 sm:p-7 md:p-8 space-y-6 max-h-[calc(100vh-200px)] overflow-y-auto">
+        
+          {/* Product Card */}
+          <div className="bg-gradient-to-br from-brand-background/50 to-white rounded-lg p-5 sm:p-6 border border-brand-border shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+              <h2 className="text-lg sm:text-xl font-bold text-brand-text">{product.name}</h2>
+              {product.type === 'COUPLES_EXPERIENCE' && bookingDetails.technique && (
+                <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-rose-100 text-rose-700 whitespace-nowrap">
+                  {bookingDetails.technique === 'potters_wheel' ? '🎯 Torno' : '✋ Moldeo'}
+                </span>
               )}
-              <button onClick={handleCloseAudit} className="mt-4 px-4 py-2 bg-brand-primary text-white rounded hover:bg-brand-secondary">Cerrar</button>
+            </div>
+            <div className="border-b border-brand-border pb-4 mb-4"></div>
+            
+            {product.type === 'COUPLES_EXPERIENCE' ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm mb-4">
+                  <div className="flex justify-between sm:flex-col sm:gap-1">
+                    <span className="text-brand-secondary">Cantidad:</span>
+                    <span className="font-semibold text-brand-text">1 Pareja</span>
+                  </div>
+                  <div className="flex justify-between sm:flex-col sm:gap-1">
+                    <span className="text-brand-secondary">Duración:</span>
+                    <span className="font-semibold text-brand-text">2 horas</span>
+                  </div>
+                </div>
+                <div className="bg-brand-surface rounded p-3 text-xs space-y-1">
+                  <p className="font-semibold text-brand-secondary mb-2">✨ Incluye:</p>
+                  <ul className="text-brand-text space-y-0.5">
+                    <li>• Clase con instructor experto</li>
+                    <li>• Técnica elegida ({bookingDetails.technique === 'potters_wheel' ? 'Torno' : 'Moldeo'})</li>
+                    <li>• Materiales y horneado</li>
+                    <li>• Vino y piqueos</li>
+                  </ul>
+                </div>
+              </div>
+            ) : (
+              <div className="flex justify-between text-base sm:text-lg font-semibold">
+                <span className="text-brand-secondary">{slots.length} Clases</span>
+                <span className="text-brand-text">${formatPrice(product.price)}</span>
+              </div>
+            )}
+            
+            <div className="flex justify-between items-center text-lg mt-4 pt-4 border-t border-brand-border font-semibold">
+              <span className="text-brand-text">Total:</span>
+              <span className="text-2xl sm:text-3xl text-brand-primary">${formatPrice(product.price)}</span>
             </div>
           </div>
-        )}
-        {activeGiftcardHold && (Number(activeGiftcardHold.amount || 0) >= Number(product.price || 0)) ? (
-          <div className="w-full md:w-auto flex flex-col items-center gap-3">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-full font-bold">
-              <CheckCircleIcon className="w-5 h-5" />
-              <span>Reserva pagada con Giftcard</span>
+
+          {/* Client Info Card */}
+          {userInfo && (
+            <div className="bg-brand-background rounded-lg p-5 sm:p-6 border border-brand-border">
+              <h3 className="font-bold text-brand-text mb-4 text-sm sm:text-base">Datos del Cliente</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-3"><UserIcon className="w-4 h-4 text-brand-secondary flex-shrink-0" /> <span className="text-brand-text">{userInfo.firstName} {userInfo.lastName}</span></div>
+                <div className="flex items-center gap-3"><MailIcon className="w-4 h-4 text-brand-secondary flex-shrink-0" /> <span className="text-brand-text break-all">{userInfo.email}</span></div>
+                <div className="flex items-center gap-3"><PhoneIcon className="w-4 h-4 text-brand-secondary flex-shrink-0" /> <span className="text-brand-text">{userInfo.countryCode} {userInfo.phone}</span></div>
+              </div>
             </div>
+          )}
+
+          {/* Schedule Card */}
+          {slots && slots.length > 0 && (
+            <div className="bg-brand-background rounded-lg p-5 sm:p-6 border border-brand-border">
+              <h3 className="font-bold text-brand-text mb-4 text-sm sm:text-base">
+                {product.type === 'COUPLES_EXPERIENCE' ? '📅 Fecha y Hora' : 'Horario Seleccionado'}
+              </h3>
+              <ul className="space-y-3">
+                {sortedSlots.map((slot, index) => (
+                  <li key={index} className="flex gap-3 pb-3 last:pb-0 border-b border-brand-border/50 last:border-0">
+                    <CalendarIcon className="w-5 h-5 text-brand-secondary flex-shrink-0 mt-0.5" />
+                    <div className="flex-grow min-w-0">
+                      <p className="font-semibold text-brand-text text-sm">{formatDate(slot.date)}</p>
+                      <p className="text-xs text-brand-secondary">{slot.time}</p>
+                    </div>
+                    <div className="flex-shrink-0"><InstructorTag instructorId={slot.instructorId} instructors={appData.instructors} /></div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Giftcard Section */}
+          <GiftcardRedeemSection product={product} onUseGiftcard={onUseGiftcard} activeGiftcardHold={activeGiftcardHold} />
+          
+          {activeGiftcardHold && renderGiftcardBadge(activeGiftcardHold)}
+          
+          {activeGiftcardHold && (
+            <button 
+              onClick={handleOpenAudit} 
+              className="text-xs sm:text-sm font-semibold px-3 py-1.5 rounded bg-indigo-100 hover:bg-indigo-200 text-indigo-700 transition"
+              title="Ver detalles de giftcard"
+            >
+              📋 Auditoría
+            </button>
+          )}
+
+          {/* Giftcard Audit Modal */}
+          {showGiftcardAudit && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div className="bg-white rounded-xl shadow-lg p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto relative">
+                <button 
+                  onClick={handleCloseAudit} 
+                  className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl leading-none"
+                >
+                  ×
+                </button>
+                <h3 className="text-lg sm:text-xl font-bold mb-4 text-brand-text">Auditoría de Giftcard</h3>
+                {giftcardAuditData.length > 0 ? (
+                  <div className="overflow-x-auto mb-4">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left py-2 px-1">Fecha</th>
+                          <th className="text-left py-2 px-1">Acción</th>
+                          <th className="text-left py-2 px-1">Monto</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {giftcardAuditData.map((row, idx) => (
+                          <tr key={idx} className="border-b">
+                            <td className="py-2 px-1 text-brand-text">{row.fecha}</td>
+                            <td className="py-2 px-1 text-brand-secondary">{row.accion}</td>
+                            <td className="py-2 px-1 font-semibold text-brand-text">${row.monto}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-sm text-brand-secondary mb-4">No hay movimientos registrados.</p>
+                )}
+                <button 
+                  onClick={handleCloseAudit} 
+                  className="w-full px-4 py-2 bg-brand-primary text-white rounded font-semibold hover:bg-brand-secondary transition"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer with Action Buttons */}
+        <div className="bg-white border-t border-brand-border p-5 sm:p-6 md:p-8 space-y-3 sm:space-y-4">
+          {activeGiftcardHold && (Number(activeGiftcardHold.amount || 0) >= Number(product.price || 0)) ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-center gap-2 px-4 py-3 bg-green-100 text-green-800 rounded-lg font-bold text-sm sm:text-base">
+                <CheckCircleIcon className="w-5 h-5" />
+                <span>Pagado con Giftcard ✓</span>
+              </div>
+              <button
+                onClick={onProceedToConfirmation}
+                className="w-full bg-gradient-to-r from-brand-primary to-brand-secondary text-white font-bold py-3 sm:py-4 px-4 rounded-lg hover:opacity-90 transition-opacity text-base sm:text-lg"
+              >
+                Completar Reserva
+              </button>
+            </div>
+          ) : (
             <button
               onClick={onProceedToConfirmation}
-              className="w-full md:w-auto bg-brand-primary text-white font-bold py-3 px-8 rounded-lg hover:opacity-90 transition-opacity duration-300"
+              className="w-full bg-gradient-to-r from-brand-primary to-brand-secondary text-white font-bold py-3 sm:py-4 px-4 rounded-lg hover:opacity-90 transition-opacity text-base sm:text-lg"
             >
-              Completar Reserva
+              Continuar a Confirmación
             </button>
-          </div>
-        ) : (
-          <button
-            onClick={onProceedToConfirmation}
-            className="w-full md:w-auto bg-brand-primary text-white font-bold py-3 px-8 rounded-lg hover:opacity-90 transition-opacity duration-300"
-          >
-            Continuar a Confirmación
-          </button>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
@@ -585,36 +656,50 @@ const GiftcardRedeemSection: React.FC<{ product: Product; onUseGiftcard?: (holdI
   
 
   return (
-  <div className="w-full max-w-xl bg-white/60 border border-dashed border-brand-border p-4 rounded-lg mb-4">
-      <h4 className="font-semibold mb-2">Pagar con Giftcard</h4>
-      <div className="flex gap-2 items-center">
-        <input type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="Ingresa código de giftcard" className="flex-grow px-3 py-2 border rounded" />
-        <button onClick={handleValidate} disabled={!code || checking} className="bg-brand-primary text-white px-4 py-2 rounded">{checking ? 'Verificando…' : 'Validar'}</button>
+    <div className="w-full max-w-full bg-white/70 border border-dashed border-brand-border rounded-lg p-4 sm:p-5 md:p-6 space-y-4">
+      <h3 className="font-semibold text-base sm:text-lg text-brand-text">💳 Pagar con Giftcard</h3>
+      
+      <div className="flex flex-col sm:flex-row gap-2">
+        <input 
+          type="text" 
+          value={code} 
+          onChange={(e) => setCode(e.target.value)} 
+          placeholder="Ingresa código de giftcard" 
+          className="flex-grow px-3 py-2 border border-gray-300 rounded text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-brand-primary" 
+        />
+        <button 
+          onClick={handleValidate} 
+          disabled={!code || checking} 
+          className="bg-brand-primary text-white px-4 py-2 rounded font-semibold text-sm sm:text-base hover:bg-brand-secondary disabled:opacity-50 disabled:cursor-not-allowed transition whitespace-nowrap"
+        >
+          {checking ? '⏳...' : 'Validar'}
+        </button>
       </div>
+      
       {error && (
-        <div className="mt-2">
-          <div className="flex items-center gap-2 bg-red-50 border border-red-300 rounded px-3 py-2 animate-fade-in-fast">
-            <InfoCircleIcon className="w-5 h-5 text-red-600" />
-            <span className="text-red-700 font-semibold">{error}</span>
-            {error.includes('bloqueados') && (
-              <button
-                onClick={handleValidate}
-                disabled={checking}
-                className="ml-4 bg-brand-primary text-white px-3 py-1 rounded shadow hover:bg-brand-secondary transition"
-              >
-                Reintentar
-              </button>
-            )}
-          </div>
-          {checking && (
-            <div className="mt-2 flex items-center gap-2 text-brand-secondary text-sm">
-              <svg className="animate-spin h-4 w-4 text-brand-primary" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /></svg>
-              Verificando disponibilidad…
-            </div>
+        <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center bg-red-50 border border-red-300 rounded px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm animate-fade-in-fast">
+          <InfoCircleIcon className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+          <span className="text-red-700 font-semibold flex-grow">{error}</span>
+          {error.includes('bloqueados') && (
+            <button
+              onClick={handleValidate}
+              disabled={checking}
+              className="px-3 py-1 bg-brand-primary text-white rounded text-xs sm:text-sm font-semibold hover:bg-brand-secondary disabled:opacity-50 transition whitespace-nowrap"
+            >
+              Reintentar
+            </button>
           )}
         </div>
       )}
-  {renderGiftcardContent()}
+      
+      {checking && (
+        <div className="flex items-center gap-2 text-brand-secondary text-xs sm:text-sm">
+          <svg className="animate-spin h-4 w-4 text-brand-primary" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /></svg>
+          Verificando disponibilidad…
+        </div>
+      )}
+      
+      {renderGiftcardContent()}
     </div>
   );
 };

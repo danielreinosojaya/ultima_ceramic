@@ -95,7 +95,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     const language = 'es-ES';
     const [currentDate, setCurrentDate] = useState(getWeekStartDate(initialDate));
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
-    const [modalData, setModalData] = useState<{ date: string, time: string, attendees: any[], instructorId: number } | null>(null);
+    const [modalData, setModalData] = useState<{ date: string; time: string; attendees: any[]; instructorId: number; onClose?: () => void } | null>(null);
     const [showUnpaidOnly, setShowUnpaidOnly] = useState(false);
     const [now, setNow] = useState(new Date());
     const [bookingToHighlight, setBookingToHighlight] = useState<Booking | null>(null);
@@ -387,11 +387,14 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     const calculateTotalParticipants = (bookings: Booking[]): number => {
         let count = 0;
         for (const b of bookings) {
-            if (b.product.type === 'GROUP_CLASS' && 'minParticipants' in b.product) {
-                count += b.product.minParticipants;
-            } else if (b.product.type === 'INTRODUCTORY_CLASS' || b.product.type === 'SINGLE_CLASS' || b.product.type === 'CLASS_PACKAGE') {
-                count += 1;
-            }
+            // CRÍTICO: Usar booking.participants si está disponible (reserva manual con N asistentes)
+            // Fallback a minParticipants del producto solo si booking.participants no existe
+            const participantCount = b.participants ?? (
+                b.product.type === 'GROUP_CLASS' && 'minParticipants' in b.product 
+                    ? b.product.minParticipants 
+                    : 1
+            );
+            count += participantCount;
         }
         return count;
     };
@@ -631,16 +634,19 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                         {/* Panel lateral eliminado para restaurar el layout clásico */}
         {isDetailsModalOpen && modalData && (
             <BookingDetailsModal
+                isOpen={isDetailsModalOpen}
                 date={modalData.date}
                 time={modalData.time}
                 attendees={modalData.attendees}
                 instructorId={modalData.instructorId}
+                product={{ id: 'unknown', name: 'Unknown', type: 'class', price: 0 } as any}
+                allBookings={[]}
                 onClose={closeAllModals}
                 onRemoveAttendee={handleRemoveAttendee}
                 onAcceptPayment={handleAcceptPayment}
-                    onMarkAsUnpaid={handleMarkAsUnpaid}
-                    onEditAttendee={handleEditAttendee}
-                    onRescheduleAttendee={handleRescheduleAttendee}
+                onMarkAsUnpaid={handleMarkAsUnpaid}
+                onEditAttendee={handleEditAttendee}
+                onRescheduleAttendee={handleRescheduleAttendee}
             />
         )}
         {isAcceptPaymentModalOpen && bookingToManage && (
