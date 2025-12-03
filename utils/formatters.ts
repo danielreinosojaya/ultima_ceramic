@@ -1,9 +1,20 @@
 // Formatea hora local de Ecuador desde timestamp UTC (ISO string)
 // El backend ahora guarda en UTC puro, convertir a America/Guayaquil al mostrar
-export function formatLocalTimeFromUTC(isoString: string): string {
+export function formatLocalTimeFromUTC(isoString: string | undefined | null): string {
     if (!isoString) return '-';
     
     try {
+        // ✅ FIX: Validar que sea ISO string antes de crear Date
+        // Rechazar strings como "2025-12-03" que son solo fechas sin hora
+        if (typeof isoString !== 'string') return '-';
+        
+        // ✅ Requerir que sea ISO completo con T y timezone (o al menos con T)
+        if (!isoString.includes('T')) {
+          // Si es solo fecha YYYY-MM-DD sin hora, no es válido para formatLocalTimeFromUTC
+          // Esta función es para timestamps ISO, no para fechas solas
+          return '-';
+        }
+        
         const date = new Date(isoString);
         
         if (isNaN(date.getTime())) {
