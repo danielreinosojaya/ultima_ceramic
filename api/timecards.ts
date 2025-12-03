@@ -5,6 +5,49 @@ import type { Employee, Timecard, ClockInResponse, ClockOutResponse, AdminDashbo
 const ADMIN_CODE_PREFIX = 'ADMIN';
 const EMPLOYEE_CODE_PREFIX = 'EMP';
 
+// ✅ HELPER: Convertir timestamp UTC a hora Ecuador y formatear
+// Recibe un ISO string UTC (ej: "2025-12-03T17:51:35.000Z")
+// Retorna string formateado (ej: "5:51 p. m.")
+function formatTimeInEcuadorTimezone(isoString: string | Date): string {
+  if (!isoString) return '-';
+  
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return 'Invalid Date';
+  
+  // Usar Intl para convertir a Ecuador timezone
+  const formatter = new Intl.DateTimeFormat('es-EC', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'America/Guayaquil',
+    hour12: true
+  });
+  
+  return formatter.format(date);
+}
+
+// ✅ HELPER: Obtener solo la fecha en Ecuador timezone
+// Retorna string "YYYY-MM-DD"
+function getEcuadorDateOnly(isoString: string | Date): string {
+  if (!isoString) return '-';
+  
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return 'Invalid Date';
+  
+  const formatter = new Intl.DateTimeFormat('es-EC', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'America/Guayaquil'
+  });
+  
+  const parts = formatter.formatToParts(date);
+  const year = parts.find(p => p.type === 'year')?.value;
+  const month = parts.find(p => p.type === 'month')?.value;
+  const day = parts.find(p => p.type === 'day')?.value;
+  
+  return `${year}-${month}-${day}`;
+}
+
 // Convertir snake_case a camelCase y DECIMALS a números
 function toCamelCase(obj: any): any {
   if (Array.isArray(obj)) {
@@ -785,22 +828,31 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
       } as any);
     }
     
-    // ✅ SOLUCIÓN ROBUSTA: Obtener timestamp de Ecuador y DERIVAR la fecha de ese timestamp
-    // Esto garantiza consistencia perfecta entre date y time_in
-    const ecuadorNowResult = await sql`
-      SELECT (NOW() AT TIME ZONE 'America/Guayaquil') as ecuador_now
+    // ✅ SOLUCIÓN CORRECTA: 
+    // 1. Obtener NOW() en UTC (esto es lo que PostgreSQL almacena internamente)
+    // 2. Calcular la FECHA derivando del timestamp en Ecuador timezone
+    // 3. Esto garantiza que time_in se guarda en UTC pero la fecha es Ecuador
+    const nowResult = await sql`
+      SELECT 
+        NOW() as utc_now,
+        (NOW() AT TIME ZONE 'America/Guayaquil')::DATE as ecuador_date
     `;
-    const ecuadorNow = ecuadorNowResult.rows[0].ecuador_now;
+    const utcNow = nowResult.rows[0].utc_now; // TIMESTAMP en UTC
+    const ecuadorDate = nowResult.rows[0].ecuador_date; // DATE en Ecuador
     
-    console.log('[handleClockIn] Ecuador NOW:', {
-      ecuadorNow,
-      ecuadorNowType: typeof ecuadorNow,
-      nowUtc: new Date().toISOString()
+    console.log('[handleClockIn] Time calculation:', {
+      utcNow,
+      ecuadorDate,
+      utcNowType: typeof utcNow,
+      ecuadorDateType: typeof ecuadorDate,
+      nowUtcJs: new Date().toISOString()
     });
     
     // Intentar insertar con todas las columnas de geolocalización
-    // ✅ CRÍTICO: date se deriva AUTOMÁTICAMENTE del time_in en Ecuador timezone
-    // Esto asegura que date y time_in SIEMPRE estén sincronizados
+    // ✅ CRÍTICO: 
+    // - time_in se guarda en UTC (como debe ser)
+    // - date se guarda como la fecha en Ecuador (derivada del timezone)
+    // - Esto asegura sincronización perfecta
     let insertResult;
     try {
       insertResult = await sql`
@@ -815,8 +867,8 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
         )
         VALUES (
           ${employee.id}, 
-          (${ecuadorNow}::TIMESTAMP AT TIME ZONE 'America/Guayaquil')::DATE,
-          ${ecuadorNow}::TIMESTAMP,
+          ${ecuadorDate},
+          ${utcNow},
           ${geolocation?.latitude || null}, 
           ${geolocation?.longitude || null}, 
           ${geolocation?.accuracy || null}, 
@@ -832,8 +884,8 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
           INSERT INTO timecards (employee_id, date, time_in)
           VALUES (
             ${employee.id}, 
-            (${ecuadorNow}::TIMESTAMP AT TIME ZONE 'America/Guayaquil')::DATE,
-            ${ecuadorNow}::TIMESTAMP
+            ${ecuadorDate},
+            ${utcNow}
           )
           RETURNING id, time_in, date
         `;
@@ -1053,20 +1105,22 @@ async function handleClockOut(req: any, res: any, code: string): Promise<any> {
     // Capturar IP
     const deviceIP = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
     
-    // ✅ FECHA ROBUSTA TAMBIÉN PARA SALIDA
-    // Obtener momento actual en Ecuador (para consistency)
-    const ecuadorNowResult = await sql`
-      SELECT (NOW() AT TIME ZONE 'America/Guayaquil') as ecuador_now
+    // ✅ MISMA ESTRATEGIA QUE CLOCK IN:
+    // 1. Obtener NOW() en UTC
+    // 2. Guardar time_out en UTC
+    // 3. Calcular hours_worked en UTC también
+    const nowResult = await sql`
+      SELECT NOW() as utc_now
     `;
-    const ecuadorNow = ecuadorNowResult.rows[0].ecuador_now;
+    const utcNow = nowResult.rows[0].utc_now;
     
     // Actualizar en BD - intentar con geolocation columns, fallback si no existen
     let updateResult;
     try {
       updateResult = await sql`
         UPDATE timecards
-        SET time_out = ${ecuadorNow}::TIMESTAMP,
-            hours_worked = EXTRACT(EPOCH FROM (${ecuadorNow}::TIMESTAMP - time_in)) / 3600,
+        SET time_out = ${utcNow},
+            hours_worked = EXTRACT(EPOCH FROM (${utcNow} - time_in)) / 3600,
             location_out_lat = ${geolocation.latitude},
             location_out_lng = ${geolocation.longitude},
             location_out_accuracy = ${geolocation.accuracy},
@@ -1081,8 +1135,8 @@ async function handleClockOut(req: any, res: any, code: string): Promise<any> {
         console.warn('[handleClockOut] Geolocation columns not found, attempting basic update:', updateError.message);
         updateResult = await sql`
           UPDATE timecards
-          SET time_out = ${ecuadorNow}::TIMESTAMP,
-              hours_worked = EXTRACT(EPOCH FROM (${ecuadorNow}::TIMESTAMP - time_in)) / 3600,
+          SET time_out = ${utcNow},
+              hours_worked = EXTRACT(EPOCH FROM (${utcNow} - time_in)) / 3600,
               updated_at = NOW()
           WHERE id = ${timecard.id}
           RETURNING *
@@ -1238,13 +1292,20 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
         }
       }
       
+      // ✅ FORMATEAR HORAS CON TIMEZONE ECUADOR
+      const timeInFormatted = hasTimecardToday && row.time_in ? formatTimeInEcuadorTimezone(row.time_in) : null;
+      const timeOutFormatted = hasTimecardToday && row.time_out ? formatTimeInEcuadorTimezone(row.time_out) : null;
+      
       console.log('[handleGetAdminDashboard] Processing employee:', {
         code: row.code,
         name: row.name,
         timecard_date_raw: row.timecard_date,
         timecard_date_final: dateStr,
         time_in: row.time_in,
+        time_in_formatted: timeInFormatted,
         time_out: row.time_out,
+        time_out_formatted: timeOutFormatted,
+        hours_worked: hoursWorked,
         hasTimecardToday
       });
       
@@ -1257,8 +1318,8 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
           status: 'active'
         },
         date: dateStr,
-        time_in: hasTimecardToday ? row.time_in : null,
-        time_out: hasTimecardToday ? row.time_out : null,
+        time_in: timeInFormatted,
+        time_out: timeOutFormatted,
         hours_worked: hasTimecardToday ? hoursWorked : null,
         status: !hasTimecardToday ? 'absent' : row.time_out ? 'present' : 'in_progress',
         is_current_day: true
@@ -1498,8 +1559,8 @@ async function handleDownloadReport(req: any, res: any, adminCode: string, forma
     if (format === 'csv') {
       let csv = 'Código,Nombre,Puesto,Fecha,Entrada,Salida,Horas\n';
       result.rows.forEach((row: any) => {
-        const timeIn = row.time_in ? new Date(row.time_in).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '';
-        const timeOut = row.time_out ? new Date(row.time_out).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '';
+        const timeIn = row.time_in ? formatTimeInEcuadorTimezone(row.time_in) : '';
+        const timeOut = row.time_out ? formatTimeInEcuadorTimezone(row.time_out) : '';
         const hours = row.hours_worked ? Number(row.hours_worked).toFixed(2) : '';
         csv += `${row.code},"${row.name}",${row.position || ''},${row.date},${timeIn},${timeOut},${hours}\n`;
       });
