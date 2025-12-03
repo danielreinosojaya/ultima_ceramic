@@ -344,18 +344,18 @@ async function getTodayTimecard(employeeId: number): Promise<Timecard | null> {
       return null;
     }
 
-    // ✅ SOLUCIÓN DEFINITIVA: Usar CURRENT_DATE de PostgreSQL (ya configurado a America/Guayaquil)
-    // PostgreSQL retornará la fecha ACTUAL de Ecuador automáticamente
+    // ✅ SOLUCIÓN DEFINITIVA: Usar la fecha ACTUAL de Ecuador
+    // CURRENT_TIMESTAMP AT TIME ZONE convierte UTC a hora de Ecuador
     const result = await sql`
       SELECT * FROM timecards
       WHERE employee_id = ${employeeId} 
-        AND date = CURRENT_DATE
+        AND date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Guayaquil')::DATE
       LIMIT 1
     `;
 
     console.log('[getTodayTimecard] Query result:', { 
       employeeId, 
-      currentDate: 'CURRENT_DATE (Ecuador timezone)', 
+      currentDate: 'CURRENT_TIMESTAMP AT TIME ZONE America/Guayaquil', 
       rowsFound: result.rows.length 
     });
     
@@ -791,7 +791,15 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
     try {
       insertResult = await sql`
         INSERT INTO timecards (employee_id, date, time_in, location_in_lat, location_in_lng, location_in_accuracy, device_ip_in)
-        VALUES (${employee.id}, CURRENT_DATE, CURRENT_TIMESTAMP, ${geolocation?.latitude || null}, ${geolocation?.longitude || null}, ${geolocation?.accuracy || null}, ${deviceIP})
+        VALUES (
+          ${employee.id}, 
+          (CURRENT_TIMESTAMP AT TIME ZONE 'America/Guayaquil')::DATE,
+          CURRENT_TIMESTAMP AT TIME ZONE 'America/Guayaquil',
+          ${geolocation?.latitude || null}, 
+          ${geolocation?.longitude || null}, 
+          ${geolocation?.accuracy || null}, 
+          ${deviceIP}
+        )
         RETURNING id, time_in
       `;
     } catch (insertError: any) {
@@ -800,7 +808,11 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
         console.warn('[handleClockIn] Geolocation columns not found, attempting basic insert:', insertError.message);
         insertResult = await sql`
           INSERT INTO timecards (employee_id, date, time_in)
-          VALUES (${employee.id}, CURRENT_DATE, CURRENT_TIMESTAMP)
+          VALUES (
+            ${employee.id}, 
+            (CURRENT_TIMESTAMP AT TIME ZONE 'America/Guayaquil')::DATE,
+            CURRENT_TIMESTAMP AT TIME ZONE 'America/Guayaquil'
+          )
           RETURNING id, time_in
         `;
       } else {
@@ -1008,12 +1020,12 @@ async function handleClockOut(req: any, res: any, code: string): Promise<any> {
     try {
       updateResult = await sql`
         UPDATE timecards
-        SET time_out = CURRENT_TIMESTAMP,
+        SET time_out = CURRENT_TIMESTAMP AT TIME ZONE 'America/Guayaquil',
             location_out_lat = ${geolocation.latitude},
             location_out_lng = ${geolocation.longitude},
             location_out_accuracy = ${geolocation.accuracy},
             device_ip_out = ${deviceIP},
-            updated_at = CURRENT_TIMESTAMP
+            updated_at = CURRENT_TIMESTAMP AT TIME ZONE 'America/Guayaquil'
         WHERE id = ${timecard.id}
         RETURNING *
       `;
@@ -1023,8 +1035,8 @@ async function handleClockOut(req: any, res: any, code: string): Promise<any> {
         console.warn('[handleClockOut] Geolocation columns not found, attempting basic update:', updateError.message);
         updateResult = await sql`
           UPDATE timecards
-          SET time_out = CURRENT_TIMESTAMP,
-              updated_at = CURRENT_TIMESTAMP
+          SET time_out = CURRENT_TIMESTAMP AT TIME ZONE 'America/Guayaquil',
+              updated_at = CURRENT_TIMESTAMP AT TIME ZONE 'America/Guayaquil'
           WHERE id = ${timecard.id}
           RETURNING *
         `;
