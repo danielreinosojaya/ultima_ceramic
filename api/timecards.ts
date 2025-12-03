@@ -1198,7 +1198,7 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
       SELECT 
         e.id, e.code, e.name, e.position,
         t.id as timecard_id,
-        t.date as timecard_date,
+        t.date::text as timecard_date,
         t.time_in, 
         t.time_out, 
         t.hours_worked
@@ -1223,10 +1223,26 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
       // Si timecard_date es NULL, significa que NO marcaron hoy
       const hasTimecardToday = row.timecard_id !== null && row.timecard_date !== null;
       
+      // ✅ ASEGURAR que date es SIEMPRE un string YYYY-MM-DD, nunca un timestamp ISO
+      let dateStr = null;
+      if (hasTimecardToday && row.timecard_date) {
+        if (typeof row.timecard_date === 'string') {
+          // Ya es string, asegurarse que tenga formato YYYY-MM-DD
+          dateStr = row.timecard_date.substring(0, 10);
+        } else if (row.timecard_date instanceof Date) {
+          // Es Date object, convertir a YYYY-MM-DD
+          const year = row.timecard_date.getUTCFullYear();
+          const month = String(row.timecard_date.getUTCMonth() + 1).padStart(2, '0');
+          const day = String(row.timecard_date.getUTCDate()).padStart(2, '0');
+          dateStr = `${year}-${month}-${day}`;
+        }
+      }
+      
       console.log('[handleGetAdminDashboard] Processing employee:', {
         code: row.code,
         name: row.name,
-        timecard_date: row.timecard_date,
+        timecard_date_raw: row.timecard_date,
+        timecard_date_final: dateStr,
         time_in: row.time_in,
         time_out: row.time_out,
         hasTimecardToday
@@ -1240,7 +1256,7 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
           position: row.position,
           status: 'active'
         },
-        date: hasTimecardToday ? row.timecard_date : null,
+        date: dateStr,
         time_in: hasTimecardToday ? row.time_in : null,
         time_out: hasTimecardToday ? row.time_out : null,
         hours_worked: hasTimecardToday ? hoursWorked : null,
