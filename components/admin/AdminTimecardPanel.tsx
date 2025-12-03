@@ -35,6 +35,33 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
   const [showScheduleManager, setShowScheduleManager] = useState(false);
   const [selectedEmployeeForSchedule, setSelectedEmployeeForSchedule] = useState<Employee | null>(null);
 
+  // ✅ Reloj en tiempo real con hora de Ecuador
+  const [currentTime, setCurrentTime] = useState<string>('');
+
+  // Actualizar reloj cada segundo
+  useEffect(() => {
+    const updateClock = () => {
+      const now = new Date();
+      const ecuadorTime = now.toLocaleString('es-EC', {
+        timeZone: 'America/Guayaquil',
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      });
+      setCurrentTime(ecuadorTime);
+    };
+
+    updateClock(); // Ejecutar inmediatamente
+    const interval = setInterval(updateClock, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   // Cargar dashboard
   useEffect(() => {
     if (!adminCode) return;
@@ -128,10 +155,15 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
   const loadEmployeeHistory = async (employeeId: number) => {
     setHistoryLoading(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const startOfMonth = new Date();
-      startOfMonth.setDate(1);
-      const startDate = startOfMonth.toISOString().split('T')[0];
+      // ✅ Obtener fecha de Ecuador usando timezone específico
+      const ecuadorDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' }); // YYYY-MM-DD
+      
+      // Extraer año y mes de ecuadorDate
+      const [year, month] = ecuadorDate.split('-');
+      
+      // Primer día del mes en formato YYYY-MM-DD
+      const startDate = `${year}-${month}-01`;
+      const today = ecuadorDate;
 
       const response = await fetch(
         `/api/timecards?action=get_timecard_history&adminCode=${adminCode}&employeeId=${employeeId}&startDate=${startDate}&endDate=${today}`
@@ -148,10 +180,15 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
   };
 
   const downloadReport = async (format: 'csv' | 'pdf') => {
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    const startDate = startOfMonth.toISOString().split('T')[0];
-    const endDate = new Date().toISOString().split('T')[0];
+    // ✅ Obtener fecha de Ecuador usando timezone específico
+    const ecuadorDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' }); // YYYY-MM-DD
+    
+    // Extraer año y mes de ecuadorDate
+    const [year, month] = ecuadorDate.split('-');
+    
+    // Primer día del mes en formato YYYY-MM-DD
+    const startDate = `${year}-${month}-01`;
+    const endDate = ecuadorDate;
 
     try {
       const response = await fetch(
@@ -163,7 +200,7 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `asistencia_${new Date().toISOString().split('T')[0]}.${format}`;
+        a.download = `asistencia_${ecuadorDate}.${format}`;
         a.click();
         window.URL.revokeObjectURL(url);
       }
@@ -334,6 +371,17 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
         <div className="mb-8">
           <h1 className="text-4xl font-serif font-bold text-brand-primary mb-2">📊 Control de Asistencia</h1>
           <p className="text-brand-secondary">Panel de administración de marcaciones</p>
+          
+          {/* ✅ RELOJ EN TIEMPO REAL - HORA DE ECUADOR */}
+          <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border-2 border-blue-200">
+            <div className="flex items-center gap-3">
+              <div className="text-3xl">🕐</div>
+              <div>
+                <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide">Hora Local Ecuador (GMT-5)</p>
+                <p className="text-lg font-bold text-gray-800 font-mono">{currentTime || 'Cargando...'}</p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -677,19 +725,19 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
                                 <td className="px-6 py-4">{new Date(record.date).toLocaleDateString('es-ES')}</td>
                                 <td className="px-6 py-4">
                                   {record.time_in
-                                    ? new Date(record.time_in).toLocaleTimeString('es-CO', {
+                                    ? new Date(record.time_in).toLocaleTimeString('es-EC', {
                                         hour: '2-digit',
                                         minute: '2-digit',
-                                        timeZone: 'America/Bogota'
+                                        timeZone: 'America/Guayaquil'
                                       })
                                     : '-'}
                                 </td>
                                 <td className="px-6 py-4">
                                   {record.time_out
-                                    ? new Date(record.time_out).toLocaleTimeString('es-CO', {
+                                    ? new Date(record.time_out).toLocaleTimeString('es-EC', {
                                         hour: '2-digit',
                                         minute: '2-digit',
-                                        timeZone: 'America/Bogota'
+                                        timeZone: 'America/Guayaquil'
                                       })
                                     : '-'}
                                 </td>

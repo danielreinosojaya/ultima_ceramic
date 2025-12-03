@@ -41,6 +41,7 @@ const isCritical = (delivery: Delivery): boolean => {
 // Helper function to detect deliveries ending in 5 days or less
 const isDueWithin5Days = (delivery: Delivery): boolean => {
     if (delivery.status === 'completed') return false;
+    if (delivery.readyAt) return false; // Exclude ready deliveries
     
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -63,7 +64,7 @@ interface DeliveryListWithFiltersProps {
     formatDate: (date: string) => string;
 }
 
-type FilterStatus = 'all' | 'pending' | 'completed' | 'overdue' | 'critical' | 'due5days';
+type FilterStatus = 'all' | 'pending' | 'ready' | 'completed' | 'overdue' | 'critical' | 'due5days';
 
 export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = ({
     deliveries,
@@ -96,13 +97,17 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
             // Status filter
             let matchesStatus = true;
             if (filterStatus === 'pending') {
-                matchesStatus = delivery.status === 'pending';
+                // Pending: status is pending AND NOT ready yet (readyAt is not set)
+                matchesStatus = delivery.status === 'pending' && !delivery.readyAt;
+            } else if (filterStatus === 'ready') {
+                matchesStatus = delivery.readyAt && delivery.status !== 'completed';
             } else if (filterStatus === 'completed') {
                 matchesStatus = delivery.status === 'completed';
             } else if (filterStatus === 'overdue') {
                 const scheduledDate = new Date(delivery.scheduledDate);
                 scheduledDate.setHours(0, 0, 0, 0);
-                matchesStatus = delivery.status === 'pending' && scheduledDate < today;
+                // Overdue: pending (not ready) and scheduled date is past
+                matchesStatus = delivery.status === 'pending' && !delivery.readyAt && scheduledDate < today;
             } else if (filterStatus === 'critical') {
                 matchesStatus = isCritical(delivery);
             } else if (filterStatus === 'due5days') {
@@ -145,12 +150,13 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
 
         return {
             all: deliveries.length,
-            pending: deliveries.filter(d => d.status === 'pending').length,
+            pending: deliveries.filter(d => d.status === 'pending' && !d.readyAt).length,
+            ready: deliveries.filter(d => d.readyAt && d.status !== 'completed').length,
             completed: deliveries.filter(d => d.status === 'completed').length,
             overdue: deliveries.filter(d => {
                 const scheduledDate = new Date(d.scheduledDate);
                 scheduledDate.setHours(0, 0, 0, 0);
-                return d.status === 'pending' && scheduledDate < today;
+                return d.status === 'pending' && !d.readyAt && scheduledDate < today;
             }).length,
             critical: deliveries.filter(d => isCritical(d)).length,
             due5days: deliveries.filter(d => isDueWithin5Days(d)).length
@@ -409,6 +415,16 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                         }`}
                     >
                         Pendientes ({statusCounts.pending})
+                    </button>
+                    <button
+                        onClick={() => setFilterStatus('ready')}
+                        className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
+                            filterStatus === 'ready'
+                                ? 'bg-blue-500 text-white'
+                                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+                        }`}
+                    >
+                        Listos para retirar ({statusCounts.ready})
                     </button>
                     <button
                         onClick={() => setFilterStatus('completed')}

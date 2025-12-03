@@ -264,7 +264,7 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterByClassesRemaining, setFilterByClassesRemaining] = useState<FilterType>('all');
-    const [deliveryFilter, setDeliveryFilter] = useState<'all' | 'with-pending' | 'with-overdue' | 'with-completed' | 'none'>('all');
+    const [deliveryFilter, setDeliveryFilter] = useState<'all' | 'with-pending' | 'with-ready' | 'with-overdue' | 'with-completed' | 'none'>('all');
     const [activeTab, setActiveTab] = useState<'all' | 'openStudio' | 'entregas'>('all');
     // Customer creation modal state
     const [isNewCustomerModalOpen, setIsNewCustomerModalOpen] = useState(false);
@@ -392,14 +392,20 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
                 }
                 
                 if (deliveryFilter === 'with-pending') {
-                    return deliveries.some(d => d?.status === 'pending');
+                    // Pending: status is pending AND NOT ready yet
+                    return deliveries.some(d => d?.status === 'pending' && !d?.readyAt);
+                }
+                
+                if (deliveryFilter === 'with-ready') {
+                    return deliveries.some(d => d?.readyAt && d?.status !== 'completed');
                 }
                 
                 if (deliveryFilter === 'with-overdue') {
                     return deliveries.some(d => {
                         if (!d || !d.scheduledDate) return false;
                         const scheduledDate = new Date(d.scheduledDate);
-                        return d.status === 'pending' && scheduledDate < today;
+                        // Overdue: pending (not ready) and scheduled date is past
+                        return d.status === 'pending' && !d?.readyAt && scheduledDate < today;
                     });
                 }
                 
@@ -591,6 +597,12 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
                                             className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${deliveryFilter === 'with-pending' ? 'bg-yellow-500 text-white' : 'bg-yellow-100 hover:bg-yellow-200 text-yellow-800'}`}
                                         >
                                             Con pendientes
+                                        </button>
+                                        <button
+                                            onClick={() => setDeliveryFilter('with-ready')}
+                                            className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${deliveryFilter === 'with-ready' ? 'bg-blue-500 text-white' : 'bg-blue-100 hover:bg-blue-200 text-blue-800'}`}
+                                        >
+                                            Listos para recoger
                                         </button>
                                         <button
                                             onClick={() => setDeliveryFilter('with-overdue')}

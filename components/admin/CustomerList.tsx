@@ -74,11 +74,14 @@ const DeliveryBadges: React.FC<{ deliveries?: Delivery[] }> = ({ deliveries }) =
         return false;
     };
 
-    const pendingCount = deliveries.filter(d => d.status === 'pending').length;
+    // Pending: only if status is pending AND NOT ready (readyAt is null/undefined)
+    const pendingCount = deliveries.filter(d => d.status === 'pending' && !d.readyAt).length;
+    const readyCount = deliveries.filter(d => d.readyAt && d.status !== 'completed').length;
     const overdueCount = deliveries.filter(d => {
         const today = new Date();
         const scheduledDate = new Date(d.scheduledDate);
-        return d.status === 'pending' && scheduledDate < today;
+        // Overdue: pending, NOT ready, and date has passed
+        return d.status === 'pending' && !d.readyAt && scheduledDate < today;
     }).length;
     const completedCount = deliveries.filter(d => d.status === 'completed').length;
     const criticalCount = deliveries.filter(d => isCritical(d)).length;
@@ -93,6 +96,11 @@ const DeliveryBadges: React.FC<{ deliveries?: Delivery[] }> = ({ deliveries }) =
             {overdueCount > 0 && (
                 <span className="px-1.5 py-0.5 text-xs font-bold rounded-full bg-red-100 text-red-800">
                     {overdueCount} vencida{overdueCount > 1 ? 's' : ''}
+                </span>
+            )}
+            {readyCount > 0 && (
+                <span className="px-1.5 py-0.5 text-xs font-bold rounded-full bg-blue-100 text-blue-800" title="Piezas listas para recoger">
+                    {readyCount} lista{readyCount > 1 ? 's' : ''}
                 </span>
             )}
             {pendingCount > 0 && (
@@ -110,9 +118,18 @@ const DeliveryBadges: React.FC<{ deliveries?: Delivery[] }> = ({ deliveries }) =
 };
 
 export const CustomerList: React.FC<CustomerListProps> = ({ customers, onSelectCustomer }) => {
+    const [currentPage, setCurrentPage] = React.useState(1);
+    const itemsPerPage = 10;
+    
     console.log('CustomerList - Received customers prop:', customers);
     console.log('CustomerList - Customers count:', customers.length);
     console.log('CustomerList - Customers array:', customers);
+    
+    // Calcular paginación
+    const totalPages = Math.ceil(customers.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedCustomers = customers.slice(startIndex, endIndex);
     
     // Look for Daniel Reinoso specifically
     const danielCustomer = customers.find(c => 
@@ -169,7 +186,7 @@ export const CustomerList: React.FC<CustomerListProps> = ({ customers, onSelectC
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                        {customers.length > 0 ? customers.map((customer, index) => {
+                        {paginatedCustomers.length > 0 ? paginatedCustomers.map((customer, index) => {
                             console.log(`CustomerList - Rendering row ${index} for customer:`, customer);
                             console.log(`CustomerList - Customer ${index} name: ${customer?.userInfo?.firstName} ${customer?.userInfo?.lastName}`);
                             console.log(`CustomerList - Customer ${index} email: ${customer?.userInfo?.email || customer.email}`);
@@ -220,6 +237,61 @@ export const CustomerList: React.FC<CustomerListProps> = ({ customers, onSelectC
                     </tbody>
                 </table>
             </div>
+
+            {/* Pagination Controls */}
+            {customers.length > itemsPerPage && (
+                <div className="flex items-center justify-between mt-4 px-6 py-3 bg-brand-background rounded-lg">
+                    <div className="text-sm text-brand-secondary">
+                        Mostrando {startIndex + 1}-{Math.min(endIndex, customers.length)} de {customers.length} clientes
+                    </div>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => setCurrentPage(1)}
+                            disabled={currentPage === 1}
+                            className="px-3 py-1 text-sm font-semibold rounded bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            ← Primera
+                        </button>
+                        <button
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            className="px-3 py-1 text-sm font-semibold rounded bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Anterior
+                        </button>
+                        <div className="flex items-center gap-1">
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                                <button
+                                    key={page}
+                                    onClick={() => setCurrentPage(page)}
+                                    className={`px-2 py-1 text-sm font-semibold rounded ${
+                                        currentPage === page
+                                            ? 'bg-brand-primary text-white'
+                                            : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    {page}
+                                </button>
+                            ))}
+                        </div>
+                        <button
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                            className="px-3 py-1 text-sm font-semibold rounded bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Siguiente
+                        </button>
+                        <button
+                            onClick={() => setCurrentPage(totalPages)}
+                            disabled={currentPage === totalPages}
+                            className="px-3 py-1 text-sm font-semibold rounded bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Última →
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Modal auditoría giftcard: fuera del overflow-x-auto, dentro del div principal */}
             {showGiftcardAudit && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-fade-in">
