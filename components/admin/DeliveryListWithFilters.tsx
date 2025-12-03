@@ -480,8 +480,8 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                 )}
             </div>
 
-            {/* Deliveries List */}
-            <div className="bg-white shadow overflow-hidden sm:rounded-md">
+            {/* Deliveries List - Mobile-first responsive cards */}
+            <div className="space-y-3 sm:space-y-4">
                 {filteredDeliveries.length > 0 ? paginatedDeliveries.map((delivery) => {
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
@@ -493,46 +493,59 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                     return (
                         <div 
                             key={delivery.id} 
-                            className={`p-4 border-b last:border-b-0 flex gap-3 items-start ${
-                                isOverdue ? 'bg-red-50' : isSelected ? 'bg-blue-50' : ''
+                            className={`bg-white rounded-lg shadow-md border-2 transition-all duration-200 overflow-hidden ${
+                                isOverdue ? 'border-red-300 bg-red-50' : isSelected ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
                             }`}
                         >
-                            {/* Checkbox for bulk actions */}
-                            <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={(e) => {
-                                    if (e.target.checked) {
-                                        setSelectedDeliveries(prev => new Set([...prev, delivery.id]));
-                                    } else {
-                                        setSelectedDeliveries(prev => {
-                                            const next = new Set(prev);
-                                            next.delete(delivery.id);
-                                            return next;
-                                        });
-                                    }
-                                }}
-                                className="mt-1 cursor-pointer"
-                            />
+                            {/* Card Header - Cliente + Checkbox */}
+                            <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-200 flex items-center gap-2 sm:gap-3">
+                                <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={(e) => {
+                                        if (e.target.checked) {
+                                            setSelectedDeliveries(prev => new Set([...prev, delivery.id]));
+                                        } else {
+                                            setSelectedDeliveries(prev => {
+                                                const next = new Set(prev);
+                                                next.delete(delivery.id);
+                                                return next;
+                                            });
+                                        }
+                                    }}
+                                    className="w-4 h-4 sm:w-5 sm:h-5 cursor-pointer flex-shrink-0"
+                                />
+                                <div className="flex-grow min-w-0">
+                                    <p className="font-bold text-sm sm:text-base text-gray-900 truncate">
+                                        {delivery.customerName || 'Cliente desconocido'}
+                                    </p>
+                                    <p className="text-xs sm:text-sm text-gray-600 truncate">{delivery.customerEmail}</p>
+                                </div>
+                            </div>
 
-                            <div className="flex-1 min-w-0">
-                                {/* Cliente + Descripción */}
-                                <p className="font-bold text-sm text-brand-text mb-1">
-                                    {delivery.customerName || 'Cliente desconocido'} <span className="text-gray-500 font-normal">({delivery.customerEmail})</span>
-                                </p>
-                                <p className="font-semibold text-sm text-gray-700 mb-1">
-                                    {delivery.description || <span className="text-gray-400 italic">Piezas de cerámica</span>}
-                                    {' '} {getStatusBadge(delivery)}
+                            {/* Card Body */}
+                            <div className="p-3 sm:p-4 space-y-2 sm:space-y-3">
+                                
+                                {/* Descripción + Badge */}
+                                <div className="flex flex-wrap items-start gap-2">
+                                    <p className="font-semibold text-sm sm:text-base text-gray-900 flex-grow">
+                                        {delivery.description || <span className="text-gray-400 italic">Piezas de cerámica</span>}
+                                    </p>
+                                    {getStatusBadge(delivery)}
                                     {isCritical(delivery) && (
-                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-600 text-white font-bold text-xs animate-pulse ml-1">
-                                            🚨
+                                        <span className="inline-flex items-center px-2 py-1 rounded-full bg-red-600 text-white font-bold text-xs animate-pulse">
+                                            🚨 CRÍTICO
                                         </span>
                                     )}
-                                </p>
-                                <p className="text-xs text-brand-secondary mb-1">
-                                    📅 Fecha programada: <strong>{formatDate(delivery.scheduledDate)}</strong>
-                                </p>
-                                {/* TIPO 1: Vencimiento de Finalización (scheduledDate) - Visible en lista */}
+                                </div>
+
+                                {/* Fecha programada */}
+                                <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-700">
+                                    <span className="flex-shrink-0">📅</span>
+                                    <span>Fecha programada: <strong className="text-gray-900">{formatDate(delivery.scheduledDate)}</strong></span>
+                                </div>
+
+                                {/* TIPO 1: Countdown de finalización */}
                                 {(() => {
                                     const msPerDay = 1000 * 60 * 60 * 24;
                                     const scheduled = new Date(delivery.scheduledDate);
@@ -541,154 +554,161 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                     todayBase.setHours(0, 0, 0, 0);
                                     const diffDays = Math.ceil((scheduled.getTime() - todayBase.getTime()) / msPerDay);
 
-                                    // Only show this countdown if delivery is NOT ready yet
                                     if (delivery.status === 'pending') {
                                         if (diffDays > 1) {
                                             return (
-                                                <div className="text-sm mb-2">
-                                                    <span className="inline-flex items-center px-2 py-1 rounded-full bg-blue-50 text-blue-700 font-semibold text-xs">
-                                                        ⏳ Finalizar en {diffDays} días
-                                                    </span>
+                                                <div className="inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-blue-50 text-blue-700 font-semibold text-xs sm:text-sm border border-blue-200">
+                                                    ⏳ Finalizar en {diffDays} días
                                                 </div>
                                             );
                                         }
-
                                         if (diffDays === 1) {
                                             return (
-                                                <div className="text-sm mb-2">
-                                                    <span className="inline-flex items-center px-2 py-1 rounded-full bg-amber-100 text-amber-800 font-semibold text-xs">
-                                                        ⚠️ Finalizar MAÑANA
-                                                    </span>
+                                                <div className="inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-amber-100 text-amber-800 font-semibold text-xs sm:text-sm border border-amber-300">
+                                                    ⚠️ Finalizar MAÑANA
                                                 </div>
                                             );
                                         }
-
                                         if (diffDays === 0) {
                                             return (
-                                                <div className="text-sm mb-2">
-                                                    <span className="inline-flex items-center px-2 py-1 rounded-full bg-amber-100 text-amber-800 font-semibold text-xs">
-                                                        ⚠️ Finalizar HOY
-                                                    </span>
+                                                <div className="inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-amber-100 text-amber-800 font-semibold text-xs sm:text-sm border border-amber-300">
+                                                    ⚠️ Finalizar HOY
                                                 </div>
                                             );
                                         }
-
-                                        // Past scheduled date (vencimiento de finalización)
                                         const overdueDays = Math.abs(diffDays);
                                         return (
-                                            <div className="text-sm mb-2">
-                                                <span className="inline-flex items-center px-2 py-1 rounded-full bg-red-100 text-red-800 font-semibold text-xs">
-                                                    🔴 VENCIDA: Hace {overdueDays} día{overdueDays > 1 ? 's' : ''} (no finalizada)
-                                                </span>
+                                            <div className="inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-red-100 text-red-800 font-semibold text-xs sm:text-sm border border-red-300">
+                                                🔴 VENCIDA: Hace {overdueDays} día{overdueDays > 1 ? 's' : ''}
                                             </div>
                                         );
                                     }
-
                                     return null;
                                 })()}
+
+                                {/* TIPO 2: Ready date + retiro countdown */}
                                 {delivery.readyAt && (
                                     (() => {
                                         const readyDate = new Date(delivery.readyAt);
                                         const expirationDate = new Date(readyDate);
-                                        expirationDate.setDate(expirationDate.getDate() + 60); // 60 días exactos
+                                        expirationDate.setDate(expirationDate.getDate() + 60);
                                         const nowTime = new Date().getTime();
                                         const daysUntilExpiration = Math.ceil((expirationDate.getTime() - nowTime) / (1000 * 60 * 60 * 24));
                                         const isExpiringSoon = daysUntilExpiration <= 30 && daysUntilExpiration > 0;
                                         const isExpired = daysUntilExpiration <= 0;
                                         
                                         return (
-                                            <div className="text-sm mb-2 flex items-center gap-2 flex-wrap">
-                                                <span className="inline-flex items-center px-2 py-1 rounded-full bg-purple-100 text-purple-800 font-semibold text-xs">
+                                            <div className="space-y-1 sm:space-y-2">
+                                                <div className="inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-purple-100 text-purple-800 font-semibold text-xs sm:text-sm border border-purple-200">
                                                     ✨ Lista desde {formatDate(delivery.readyAt)}
-                                                </span>
+                                                </div>
                                                 {isExpired ? (
-                                                    <span className="inline-flex items-center px-2 py-1 rounded-full bg-red-100 text-red-800 font-semibold text-xs border border-red-300">
-                                                        🟠 EXPIRADA: Política de 60 días vencida (no retirada)
-                                                    </span>
+                                                    <div className="inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-red-100 text-red-800 font-semibold text-xs sm:text-sm border border-red-300 ml-2">
+                                                        🟠 EXPIRADA (60 días vencidos)
+                                                    </div>
                                                 ) : isExpiringSoon ? (
-                                                    <span className="inline-flex items-center px-2 py-1 rounded-full bg-orange-100 text-orange-800 font-semibold text-xs">
-                                                        ⏰ Retira en {daysUntilExpiration} días (límite 60 días)
-                                                    </span>
+                                                    <div className="inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-orange-100 text-orange-800 font-semibold text-xs sm:text-sm border border-orange-300 ml-2">
+                                                        ⏰ Retira en {daysUntilExpiration} días
+                                                    </div>
                                                 ) : (
-                                                    <span className="inline-flex items-center px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs">
-                                                        ✅ Falta {daysUntilExpiration} días (límite 60 días)
-                                                    </span>
+                                                    <div className="inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-green-100 text-green-700 text-xs sm:text-sm border border-green-200 ml-2">
+                                                        ✅ Falta {daysUntilExpiration} días
+                                                    </div>
                                                 )}
                                             </div>
                                         );
                                     })()
                                 )}
+
+                                {/* Entregada */}
                                 {delivery.deliveredAt && (
-                                    <p className="text-sm text-green-600 mb-1">
-                                        ✅ Entregada: {formatDate(delivery.deliveredAt)}
-                                    </p>
+                                    <div className="flex items-center gap-2 text-xs sm:text-sm text-green-700 bg-green-50 px-2 py-1 rounded-lg border border-green-200">
+                                        <span>✅ Entregada: <strong>{formatDate(delivery.deliveredAt)}</strong></span>
+                                    </div>
                                 )}
+
+                                {/* Notas */}
                                 {delivery.notes && (
-                                    <p className="text-sm text-brand-secondary mb-1">📝 {delivery.notes}</p>
+                                    <div className="bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
+                                        <p className="text-xs sm:text-sm text-gray-700">📝 {delivery.notes}</p>
+                                    </div>
                                 )}
+
+                                {/* Fotos - Responsive grid */}
                                 {delivery.photos && delivery.photos.length > 0 && (
-                                    <div className="flex gap-2 mt-2">
-                                        {delivery.photos.slice(0, 3).map((photo, i) => (
-                                            <img 
-                                                key={i} 
-                                                src={photo} 
-                                                alt={`Foto ${i + 1}`}
-                                                className="h-16 w-16 object-cover rounded-lg border cursor-pointer hover:scale-105 transition-transform"
+                                    <div className="grid grid-cols-3 xs:grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2">
+                                        {delivery.photos.slice(0, 5).map((photo, i) => (
+                                            <div
+                                                key={i}
+                                                className="aspect-square rounded-lg overflow-hidden border-2 border-gray-200 cursor-pointer hover:border-brand-primary transition-all hover:scale-105 shadow-sm"
                                                 onClick={() => handleOpenPhotos(delivery.photos, i)}
                                                 title="Click para ver en grande"
-                                            />
+                                            >
+                                                <img 
+                                                    src={photo} 
+                                                    alt={`Foto ${i + 1}`}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            </div>
                                         ))}
-                                        {delivery.photos.length > 3 && (
+                                        {delivery.photos.length > 5 && (
                                             <div 
-                                                className="h-16 w-16 flex items-center justify-center bg-gray-100 rounded-lg border text-gray-600 text-xs font-semibold cursor-pointer hover:bg-gray-200 transition-colors"
-                                                onClick={() => handleOpenPhotos(delivery.photos, 3)}
+                                                className="aspect-square flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg border-2 border-gray-300 text-gray-700 text-xs sm:text-sm font-bold cursor-pointer hover:from-gray-200 hover:to-gray-300 transition-all shadow-sm"
+                                                onClick={() => handleOpenPhotos(delivery.photos, 5)}
                                                 title="Ver todas las fotos"
                                             >
-                                                +{delivery.photos.length - 3}
+                                                +{delivery.photos.length - 5}
                                             </div>
                                         )}
                                     </div>
                                 )}
                             </div>
-                            <div className="flex gap-2">
+
+                            {/* Card Footer - Action Buttons */}
+                            <div className="bg-gray-50 px-3 sm:px-4 py-2 sm:py-3 border-t border-gray-200 flex flex-wrap gap-2">
                                 <button
-                                    className="p-2 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-600 shadow transition-colors"
+                                    className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 shadow-sm transition-all text-xs sm:text-sm font-semibold"
                                     title="Editar entrega"
                                     onClick={() => onEdit(delivery)}
                                 >
-                                    ✏️
+                                    <span className="text-base sm:text-lg">✏️</span>
+                                    <span className="hidden xs:inline">Editar</span>
                                 </button>
                                 <button
-                                    className="p-2 rounded-full bg-red-50 hover:bg-red-100 text-red-600 shadow transition-colors"
+                                    className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 shadow-sm transition-all text-xs sm:text-sm font-semibold"
                                     title="Eliminar entrega"
                                     onClick={() => onDelete(delivery)}
                                 >
-                                    🗑️
+                                    <span className="text-base sm:text-lg">🗑️</span>
+                                    <span className="hidden xs:inline">Eliminar</span>
                                 </button>
                                 {delivery.status !== 'completed' && !delivery.readyAt && (
                                     <button
-                                        className="px-3 py-2 rounded-full bg-purple-50 hover:bg-purple-100 text-purple-600 shadow flex items-center gap-1 font-semibold text-sm transition-colors"
+                                        className="w-full xs:w-auto xs:flex-grow inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white shadow-md transition-all text-xs sm:text-sm font-bold"
                                         title="Notificar al cliente que su pieza está lista"
                                         onClick={() => onMarkReady(delivery.id)}
                                     >
-                                        ✨ Marcar como Lista
+                                        <span>✨</span>
+                                        <span>Marcar como Lista</span>
                                     </button>
                                 )}
                                 {delivery.status !== 'completed' && delivery.readyAt && (
                                     <>
                                         <button
-                                            className="px-3 py-2 rounded-full bg-amber-50 hover:bg-amber-100 text-amber-600 shadow flex items-center gap-1 font-semibold text-sm transition-colors"
+                                            className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 shadow-sm transition-all text-xs sm:text-sm font-semibold"
                                             title="Reenviar email de notificación al cliente"
                                             onClick={() => onMarkReady(delivery.id)}
                                         >
-                                            📧 Reenviar
+                                            <span>📧</span>
+                                            <span className="hidden xs:inline">Reenviar</span>
                                         </button>
                                         <button
-                                            className="px-3 py-2 rounded-full bg-green-50 hover:bg-green-100 text-green-600 shadow flex items-center gap-1 font-semibold text-sm transition-colors"
+                                            className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white shadow-md transition-all text-xs sm:text-sm font-bold"
                                             title="Completar entrega"
                                             onClick={() => onComplete(delivery.id)}
                                         >
-                                            ✓ Completar
+                                            <span>✓</span>
+                                            <span>Completar</span>
                                         </button>
                                     </>
                                 )}
@@ -696,10 +716,10 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                         </div>
                     );
                 }) : (
-                    <div className="p-8 text-center">
-                        <div className="text-gray-400 text-5xl mb-4">📦</div>
-                        <p className="text-gray-600 font-semibold">No se encontraron entregas</p>
-                        <p className="text-gray-500 text-sm mt-2">
+                    <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6 sm:p-8 text-center">
+                        <div className="text-gray-300 text-5xl sm:text-6xl md:text-7xl mb-3 sm:mb-4">📦</div>
+                        <p className="text-gray-800 font-bold text-base sm:text-lg mb-2">No se encontraron entregas</p>
+                        <p className="text-gray-500 text-xs sm:text-sm">
                             {searchQuery || filterStatus !== 'all' 
                                 ? 'Intenta ajustar los filtros de búsqueda'
                                 : 'No hay recogidas registradas'}

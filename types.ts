@@ -11,6 +11,7 @@ export type AppView =
   | 'couples_experience'
   | 'team_building'
   | 'confirmation'
+  | 'my-classes'
   | 'giftcard_landing'
   | 'giftcard_amount'
   | 'giftcard_personalization'
@@ -19,7 +20,12 @@ export type AppView =
   | 'giftcard_manual_payment'
   | 'giftcard_pending_review'
   | 'giftcard_confirmation'
-  | 'giftcard_check_balance';
+  | 'giftcard_check_balance'
+  | 'experience_type_selector'
+  | 'group_class_wizard'
+  | 'piece_experience_wizard'
+  | 'single_class_wizard'
+  | 'experience_confirmation';
 export type BookingMode = 'flexible' | 'monthly';
 export type Technique = 'potters_wheel' | 'molding';
 
@@ -94,6 +100,7 @@ export interface SchedulingRule {
   time: string; // "HH:mm"
   instructorId: number;
   capacity: number;
+  technique?: Technique; // Para COUPLES_EXPERIENCE: 'potters_wheel' | 'molding'
 }
 
 export interface SessionOverride {
@@ -147,6 +154,10 @@ export interface GroupExperience extends BaseProduct {
 
 export interface CouplesExperience extends BaseProduct {
     type: 'COUPLES_EXPERIENCE';
+    price: number;
+    details: ClassPackageDetails;
+    schedulingRules: SchedulingRule[];
+    overrides: SessionOverride[];
 }
 
 export interface GroupClass extends BaseProduct {
@@ -164,6 +175,7 @@ export interface TimeSlot {
   date: string; // YYYY-MM-DD
   time: string;
   instructorId: number;
+  technique?: Technique; // Para COUPLES_EXPERIENCE: 'potters_wheel' | 'molding'
 }
 
 export interface AvailableSlot {
@@ -195,6 +207,81 @@ export interface EnrichedIntroClassSession {
     isOverride: boolean;
 }
 
+// Horarios recurrentes (clases paquete)
+export interface RecurringClassSlot {
+  id: string;
+  dayOfWeek: 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0=Domingo, 1=Lunes, etc.
+  startTime: string; // "17:00"
+  endTime: string; // "19:00"
+  technique: GroupTechnique;
+  professorId: number;
+  occupiedCapacity: number; // Cupos que ocupa en la clase
+  isActive: boolean;
+}
+
+// Capacidad dinámica por técnica
+export interface TechniqueCapacity {
+  max: number;
+  bookedInWindow: number;
+  available: number;
+  isAvailable: boolean;
+}
+
+// Información de solapamiento
+export interface OverlappingClassInfo {
+  id: string;
+  time: string;
+  technique: GroupTechnique;
+  count: number;
+  professeurName?: string;
+}
+
+// Slot dinámico cada 30 minutos con capacidad
+export interface DynamicTimeSlot {
+  id: string;
+  date: string; // "2025-12-05"
+  startTime: string; // "11:00"
+  endTime: string; // "13:00"
+  dayOfWeek: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  professorId?: number | null;
+  capacity: {
+    potters_wheel: TechniqueCapacity;
+    hand_modeling: TechniqueCapacity;
+    painting: TechniqueCapacity;
+  };
+  overlappingSlots?: OverlappingClassInfo[];
+}
+
+// Lo que se muestra al cliente
+export interface SlotDisplayInfo {
+  date: string;
+  startTime: string;
+  endTime: string;
+  professorName?: string;
+  techniques: {
+    potters_wheel: {
+      available: number;
+      total: number;
+      bookedInWindow: number;
+      isAvailable: boolean;
+      overlappingClasses?: string[];
+    };
+    hand_modeling: {
+      available: number;
+      total: number;
+      bookedInWindow: number;
+      isAvailable: boolean;
+      overlappingClasses?: string[];
+    };
+    painting: {
+      available: number;
+      total: number;
+      bookedInWindow: number;
+      isAvailable: boolean;
+    };
+  };
+}
+
 export type AttendanceStatus = 'attended' | 'no-show';
 
 export interface PaymentDetails {
@@ -218,7 +305,7 @@ export interface Booking {
     isPaid: boolean;
     price: number;
     bookingCode: string;
-    bookingMode: BookingMode;
+    bookingMode: BookingMode | null;
     customer?: Customer; // Adding customer to Booking
     // Si la reserva fue aceptada con la condición de "sin reembolsos ni reagendamientos" (para reservas <48h)
     acceptedNoRefund?: boolean;
@@ -233,16 +320,45 @@ export interface Booking {
     pendingBalance?: number;
     expiresAt?: Date; // Pre-reserva válida hasta esta fecha (NOW + 2 hours)
     status?: 'active' | 'expired' | 'paid'; // Estado de la reserva
+    
+    // COUPLES_EXPERIENCE specific
+    technique?: Technique; // Técnica seleccionada para parejas
+    
+    // RESCHEDULE POLICY for class packages
+    rescheduleAllowance?: number; // Max veces que puede reagendar (basado en tipo paquete)
+    rescheduleUsed?: number; // Cuántas veces ya reagendó
+    rescheduleHistory?: RescheduleHistoryEntry[]; // Historial detallado de reagendamientos
+    lastRescheduleAt?: string; // ISO timestamp del último reagendamiento
 
     // Propiedades derivadas
     date?: string; // Derivada de bookingDate
     time?: string; // Derivada de slots
 }
 
+// RESCHEDULE POLICY types
+export interface RescheduleHistoryEntry {
+    id: string;
+    bookingId: string;
+    fromSlot: TimeSlot;
+    toSlot: TimeSlot;
+    reason?: string; // Opcional: por qué se reagendó
+    rescheduleCount: number; // Número de este reagendamiento (1, 2, 3...)
+    timestamp: string; // ISO timestamp
+    createdByAdmin?: boolean; // true si admin lo hizo, false si cliente
+}
+
+export interface ReschedulePolicy {
+    packageClasses: number; // 4, 8, 12, etc.
+    maxReschedules: number; // Allowance basado en clases
+    hoursRequiredInAdvance: number; // 72 horas
+    description: string; // "Paquete de 4 clases: 1 reagendamiento"
+}
+
 export interface BookingDetails {
-  product: Product;
+  product: Product | null;
   slots: TimeSlot[];
   userInfo: UserInfo | null;
+  technique?: Technique; // Para COUPLES_EXPERIENCE
 }
 
 export interface AddBookingResult {
@@ -393,8 +509,9 @@ export interface AppData {
   policies: string;
   confirmationMessage: ConfirmationMessage;
   footerInfo: FooterInfo;
-    bankDetails: BankDetails[];
+  bankDetails: BankDetails[];
   uiLabels?: UILabels;
+  recurringClasses?: RecurringClassSlot[]; // Clases paquete recurrentes
 }
 
 // Admin & Notifications
@@ -442,4 +559,151 @@ export interface GiftcardHold {
   amount?: number;
   giftcardId?: string;
   code?: string;
+}
+
+// ==================== EXPERIENCE TYPES (NEW) ====================
+
+// 1. Piece Type - for custom pottery pieces
+export interface Piece {
+  id: string;
+  name: string;
+  description?: string;
+  category: string;
+  basePrice: number;
+  estimatedHours?: number;
+  imageUrl?: string;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// 2. Group Booking Metadata
+export interface GroupBookingMetadata {
+  id: string;
+  bookingId: string;
+  groupSize: number;
+  groupType?: string;
+  isAutoConfirmed: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// 3. Experience Booking Metadata
+export interface SelectedPiece {
+  pieceId: string;
+  pieceName: string;
+  basePrice: number;
+  quantity?: number;
+}
+
+export interface ExperienceBookingMetadata {
+  id: string;
+  bookingId: string;
+  piecesSelected: SelectedPiece[];
+  durationMinutes?: number;
+  guidedOption?: 'none' | '60min' | '120min';
+  totalPriceCalculated: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// 4. Experience Confirmation
+export interface ExperienceConfirmation {
+  id: string;
+  bookingId: string;
+  status: 'pending' | 'confirmed' | 'rejected';
+  confirmedByEmail?: string;
+  confirmationReason?: string;
+  rejectionReason?: string;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt?: string;
+}
+
+// 5. Booking Type Union
+export type BookingType = 'individual' | 'group' | 'experience';
+
+// 6. Extended Booking Interface
+export interface BookingWithMetadata extends Booking {
+  bookingType: BookingType;
+  groupMetadata?: GroupBookingMetadata;
+  experienceMetadata?: ExperienceBookingMetadata;
+  experienceConfirmation?: ExperienceConfirmation;
+  experienceConfirmationId?: string;
+}
+
+// 7. Group Class Configuration
+export interface GroupClassConfig {
+  minParticipants: number;
+  maxParticipants: number;
+  pricePerPerson: number;
+  estimatedDuration: number; // in minutes
+  instructorId?: number;
+}
+
+// 7a. Group Class Technique Types
+export type GroupTechnique = 'hand_modeling' | 'potters_wheel' | 'painting';
+
+export interface ParticipantTechniqueAssignment {
+  participantNumber: number; // 1, 2, 3, ...
+  technique: GroupTechnique;
+  selectedPieceId?: string; // Only if technique is 'painting'
+}
+
+export interface GroupClassState {
+  totalParticipants: number;
+  participantAssignments: ParticipantTechniqueAssignment[];
+  selectedSlot?: TimeSlot;
+}
+
+// Group Class Capacity Limits
+export const GROUP_CLASS_CAPACITY = {
+  potters_wheel: 8,      // Máximo 8 para torno
+  hand_modeling: 14,     // Máximo 14 para modelado
+  painting: Infinity     // Sin límite para pintura
+} as const;
+
+// 8. Experience Pricing
+export interface ExperiencePricing {
+  pieces: SelectedPiece[];
+  guidedOption: 'none' | '60min' | '120min';
+  guidedPricePerMinute?: number;
+  subtotalPieces: number;
+  guidedCost?: number;
+  total: number;
+}
+
+// 9. Experience UI State
+export interface ExperienceUIState {
+  step: 1 | 2 | 3 | 4; // wizard step
+  piecesSelected: SelectedPiece[];
+  durationMinutes?: number;
+  guidedOption?: 'none' | '60min' | '120min';
+  pricing?: ExperiencePricing;
+  isLoading: boolean;
+  error?: string;
+}
+
+// 10. Confirmation Status Response
+export interface ConfirmationStatusResponse {
+  status: 'pending' | 'confirmed' | 'rejected';
+  expiresIn?: number; // minutes
+  reason?: string;
+}
+
+// 11. Update AppView type to include new views
+export const EXPERIENCE_VIEWS = [
+  'experience_type_selector',
+  'group_class_wizard',
+  'piece_experience_wizard',
+  'single_class_wizard',
+  'experience_confirmation'
+] as const;
+
+// 12. Admin Panel Types for Experiences
+export interface ExperienceAdminPanel {
+  tab: 'pieces' | 'confirmations';
+  selectedPieceId?: string;
+  selectedConfirmationId?: string;
 }

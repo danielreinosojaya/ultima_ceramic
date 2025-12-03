@@ -186,6 +186,17 @@ export const DEFAULT_PRODUCTS: Product[] = [
     name: "Experiencia en Pareja",
     description: "Una cita creativa y diferente. Moldeen una pieza juntos en el torno o creen piezas individuales, con la guía de un instructor.",
     imageUrl: "https://images.unsplash.com/photo-1620531579344-59e514a331a3?q=80&w=1964&auto=format&fit=crop",
+    price: 190,
+    details: {
+      duration: "2 horas",
+      durationHours: 2,
+      activities: [],
+      generalRecommendations: "Llega 15 minutos antes",
+      materials: "Incluidos: arcilla, agua, herramientas, vino y piqueos",
+      technique: 'potters_wheel'
+    },
+    schedulingRules: [],
+    overrides: [],
     isActive: true
   }
 ];

@@ -119,7 +119,9 @@ const parseBookingFromDB = (dbRow: any): Booking => {
         
         // Incluir client_note y participants explícitamente
         camelCased.clientNote = dbRow.client_note || null;
-        camelCased.participants = dbRow.participants !== undefined ? dbRow.participants : null;
+        camelCased.participants = dbRow.participants !== undefined && dbRow.participants !== null 
+            ? parseInt(dbRow.participants, 10) 
+            : 1;
         
         if (camelCased.price && typeof camelCased.price === 'string') {
             camelCased.price = parseFloat(camelCased.price);
@@ -649,6 +651,18 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     });
                     data = Array.from(customerMap.values());
                     console.log(`[API] Generated ${data.length} customers from ${parsedBookings.length} bookings`);
+                    break;
+                }
+                case 'listPieces': {
+                    try {
+                        const { rows } = await sql`
+                            SELECT * FROM pieces WHERE is_active = true ORDER BY sort_order, name ASC
+                        `;
+                        data = toCamelCase(rows);
+                    } catch (error) {
+                        console.error('[listPieces GET] Error:', error);
+                        return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+                    }
                     break;
                 }
             default:
@@ -2554,18 +2568,118 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             break;
         case 'rescheduleBookingSlot': {
             const rescheduleBody = req.body;
-            const { bookingId: rescheduleId, oldSlot, newSlot } = rescheduleBody;
-            const { rows: [bookingToReschedule] } = await sql`SELECT * FROM bookings WHERE id = ${rescheduleId}`;
-            if (bookingToReschedule) {
-                const otherSlots = bookingToReschedule.slots.filter((s: any) => s.date !== oldSlot.date || s.time !== oldSlot.time);
-                const updatedSlots = [...otherSlots, newSlot];
-                await sql`UPDATE bookings SET slots = ${JSON.stringify(updatedSlots)} WHERE id = ${rescheduleId}`;
+            const { bookingId: rescheduleId, oldSlot, newSlot, reason } = rescheduleBody;
+            
+            try {
+                const { rows: [bookingToReschedule] } = await sql`SELECT * FROM bookings WHERE id = ${rescheduleId}`;
                 
-                // Obtener el booking actualizado completo
+                if (!bookingToReschedule) {
+                    return res.status(404).json({ success: false, error: 'Booking not found' });
+                }
+
+                const booking = toCamelCase(bookingToReschedule);
+                
+                // ============ VALIDACIONES DE RESCHEDULE ============
+                
+                // 1. Validar 72 horas de anticipación
+                const now = new Date();
+                const oldSlotDate = new Date(oldSlot.date + 'T00:00:00');
+                const hoursDifference = (oldSlotDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+                
+                if (hoursDifference < 72) {
+                    console.log(`[RESCHEDULE] Clase en ${Math.floor(hoursDifference)}h < 72h. RECHAZADO. Clase se PIERDE.`);
+                    return res.status(400).json({ 
+                        success: false, 
+                        error: 'Requiere 72 horas de anticipación. La clase se ha PERDIDO.'
+                    });
+                }
+                
+                // 2. Validar si tiene política acceptedNoRefund
+                if (booking.acceptedNoRefund === true) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Esta clase no es reagendable (política de no reembolso)'
+                    });
+                }
+                
+                // 3. Validar límite de reagendamientos
+                const product = booking.product as any;
+                const classCount = product?.classes || 1;
+                
+                // Calcular allowance según paquete
+                let allowance = 1; // default
+                if (classCount === 4) allowance = 1;
+                else if (classCount === 8) allowance = 2;
+                else if (classCount === 12) allowance = 3;
+                else if (classCount > 12) allowance = Math.ceil(classCount / 4);
+                
+                const rescheduleUsed = booking.rescheduleUsed || 0;
+                
+                if (rescheduleUsed >= allowance) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Agotaste tus ${allowance} reagendamientos disponibles para este paquete`
+                    });
+                }
+                
+                // ============ PROCEDER CON REAGENDAMIENTO ============
+                
+                // Actualizar slots: remover oldSlot y agregar newSlot
+                const otherSlots = bookingToReschedule.slots.filter((s: any) => 
+                    s.date !== oldSlot.date || s.time !== oldSlot.time
+                );
+                const updatedSlots = [...otherSlots, newSlot];
+                
+                // Crear entrada de historia
+                const rescheduleHistoryEntry = {
+                    id: `reschedule_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+                    bookingId: rescheduleId,
+                    fromSlot: oldSlot,
+                    toSlot: newSlot,
+                    reason: reason || null,
+                    rescheduleCount: rescheduleUsed + 1,
+                    timestamp: new Date().toISOString(),
+                    createdByAdmin: false // Por defecto desde cliente
+                };
+                
+                // Obtener historia actual
+                const currentHistory = bookingToReschedule.reschedule_history 
+                    ? JSON.parse(bookingToReschedule.reschedule_history)
+                    : [];
+                
+                const updatedHistory = [...currentHistory, rescheduleHistoryEntry];
+                
+                // Actualizar booking
+                await sql`
+                    UPDATE bookings SET 
+                        slots = ${JSON.stringify(updatedSlots)},
+                        reschedule_used = ${rescheduleUsed + 1},
+                        reschedule_history = ${JSON.stringify(updatedHistory)},
+                        last_reschedule_at = NOW()
+                    WHERE id = ${rescheduleId}
+                `;
+                
+                // Obtener booking actualizado
                 const { rows: [updatedBooking] } = await sql`SELECT * FROM bookings WHERE id = ${rescheduleId}`;
-                result = { success: true, booking: toCamelCase(updatedBooking) };
-            } else {
-                result = { success: false, error: 'Booking not found' };
+                
+                console.log(`[RESCHEDULE] Exitoso: ${rescheduleId}, usado ${rescheduleUsed + 1}/${allowance}`);
+                
+                result = { 
+                    success: true, 
+                    booking: toCamelCase(updatedBooking),
+                    rescheduleInfo: {
+                        used: rescheduleUsed + 1,
+                        allowance: allowance,
+                        remaining: allowance - (rescheduleUsed + 1)
+                    }
+                };
+                
+            } catch (error) {
+                console.error('[RESCHEDULE] Error:', error);
+                return res.status(500).json({ 
+                    success: false, 
+                    error: 'Error al reagendar: ' + (error instanceof Error ? error.message : String(error))
+                });
             }
             break;
         }
@@ -3251,6 +3365,331 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 });
             }
         }
+        case 'getClientBooking': {
+            try {
+                const { email, bookingCode } = req.body;
+                
+                if (!email || !bookingCode) {
+                    return res.status(400).json({ 
+                        success: false, 
+                        error: 'Email and booking code required' 
+                    });
+                }
+
+                // Query for booking by email and code
+                const { rows } = await sql`
+                    SELECT * FROM bookings 
+                    WHERE user_info->>'email' = ${email} 
+                    AND booking_code = ${bookingCode.toUpperCase()}
+                    LIMIT 1
+                `;
+
+                if (rows.length === 0) {
+                    return res.status(404).json({ 
+                        success: false, 
+                        error: 'Invalid email or booking code' 
+                    });
+                }
+
+                const booking = parseBookingFromDB(rows[0]);
+                return res.status(200).json(booking);
+            } catch (error) {
+                console.error('[getClientBooking] Error:', error);
+                return res.status(500).json({ 
+                    success: false, 
+                    error: error instanceof Error ? error.message : String(error) 
+                });
+            }
+        }
+        case 'getBookingById': {
+            try {
+                const { bookingId } = req.body;
+                
+                if (!bookingId) {
+                    return res.status(400).json({ 
+                        success: false, 
+                        error: 'Booking ID required' 
+                    });
+                }
+
+                // Query for booking by ID
+                const { rows } = await sql`
+                    SELECT * FROM bookings 
+                    WHERE id = ${String(bookingId)}
+                    LIMIT 1
+                `;
+
+                if (rows.length === 0) {
+                    return res.status(404).json({ 
+                        success: false, 
+                        error: 'Booking not found' 
+                    });
+                }
+
+                const booking = parseBookingFromDB(rows[0]);
+                return res.status(200).json(booking);
+            } catch (error) {
+                console.error('[getBookingById] Error:', error);
+                return res.status(500).json({ 
+                    success: false, 
+                    error: error instanceof Error ? error.message : String(error) 
+                });
+            }
+        }
+        case 'getBookingById': {
+            try {
+                const { bookingId } = req.query;
+                
+                if (!bookingId) {
+                    return res.status(400).json({ 
+                        success: false, 
+                        error: 'Booking ID required' 
+                    });
+                }
+
+                // Query for booking by ID
+                const { rows } = await sql`
+                    SELECT * FROM bookings 
+                    WHERE id = ${String(bookingId)}
+                    LIMIT 1
+                `;
+
+                if (rows.length === 0) {
+                    return res.status(404).json({ 
+                        success: false, 
+                        error: 'Booking not found' 
+                    });
+                }
+
+                const booking = parseBookingFromDB(rows[0]);
+                return res.status(200).json(booking);
+            } catch (error) {
+                console.error('[getBookingById] Error:', error);
+                return res.status(500).json({ 
+                    success: false, 
+                    error: error instanceof Error ? error.message : String(error) 
+                });
+            }
+        }
+
+        // ==================== NEW EXPERIENCE ENDPOINTS ====================
+
+        case 'listPieces': {
+            try {
+                const { rows } = await sql`
+                    SELECT * FROM pieces WHERE is_active = true ORDER BY sort_order, name ASC
+                `;
+                return res.status(200).json({ success: true, data: toCamelCase(rows) });
+            } catch (error) {
+                console.error('[listPieces] Error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+
+        case 'createPiece': {
+            const body = req.body;
+            if (!body.name || !body.basePrice) {
+                return res.status(400).json({ error: 'name and basePrice are required' });
+            }
+            try {
+                const { rows } = await sql`
+                    INSERT INTO pieces (name, description, category, base_price, estimated_hours, image_url, is_active, sort_order)
+                    VALUES (${body.name}, ${body.description || null}, ${body.category || null}, ${body.basePrice}, ${body.estimatedHours || null}, ${body.imageUrl || null}, true, ${body.sortOrder || 0})
+                    RETURNING *
+                `;
+                return res.status(200).json({ success: true, data: toCamelCase(rows[0]) });
+            } catch (error) {
+                console.error('[createPiece] Error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+
+        case 'updatePiece': {
+            const body = req.body;
+            if (!body.id) {
+                return res.status(400).json({ error: 'id is required' });
+            }
+            try {
+                const { rows } = await sql`
+                    UPDATE pieces 
+                    SET name = ${body.name || sql`name`}, 
+                        description = ${body.description || null},
+                        category = ${body.category || null},
+                        base_price = ${body.basePrice || sql`base_price`},
+                        estimated_hours = ${body.estimatedHours || null},
+                        image_url = ${body.imageUrl || null},
+                        is_active = ${body.isActive !== undefined ? body.isActive : sql`is_active`},
+                        sort_order = ${body.sortOrder !== undefined ? body.sortOrder : sql`sort_order`},
+                        updated_at = NOW()
+                    WHERE id = ${body.id}
+                    RETURNING *
+                `;
+                return res.status(200).json({ success: true, data: toCamelCase(rows[0]) });
+            } catch (error) {
+                console.error('[updatePiece] Error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+
+        case 'calculateExperiencePricing': {
+            const body = req.body;
+            if (!body.piecesSelected || !Array.isArray(body.piecesSelected)) {
+                return res.status(400).json({ error: 'piecesSelected array is required' });
+            }
+            try {
+                // Get piece details
+                const pieceIds = body.piecesSelected.map((p: any) => p.pieceId);
+                const { rows: pieces } = await sql`
+                    SELECT id, name, base_price FROM pieces WHERE id = ANY(${pieceIds}::uuid[])
+                `;
+                
+                let subtotalPieces = 0;
+                const piecesWithPrice = body.piecesSelected.map((p: any) => {
+                    const piece = pieces.find((pc: any) => pc.id === p.pieceId);
+                    const pricePerPiece = piece?.base_price || p.basePrice || 0;
+                    const quantity = p.quantity || 1;
+                    subtotalPieces += pricePerPiece * quantity;
+                    return { ...p, basePrice: pricePerPiece };
+                });
+
+                // Calculate guided cost
+                let guidedCost = 0;
+                const guidedOption = body.guidedOption || 'none';
+                const guidedPricePerMinute = 0.5; // Configurable
+                if (guidedOption === '60min') {
+                    guidedCost = 60 * guidedPricePerMinute;
+                } else if (guidedOption === '120min') {
+                    guidedCost = 120 * guidedPricePerMinute;
+                }
+
+                const total = subtotalPieces + guidedCost;
+
+                return res.status(200).json({
+                    success: true,
+                    data: {
+                        pieces: piecesWithPrice,
+                        guidedOption,
+                        guidedPricePerMinute,
+                        subtotalPieces,
+                        guidedCost,
+                        total
+                    }
+                });
+            } catch (error) {
+                console.error('[calculateExperiencePricing] Error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+
+        case 'listExperienceConfirmations': {
+            try {
+                const { rows } = await sql`
+                    SELECT ec.*, b.user_info, b.booking_code, b.price, ebm.pieces_selected
+                    FROM experience_confirmations ec
+                    LEFT JOIN bookings b ON b.id = ec.booking_id
+                    LEFT JOIN experience_bookings_metadata ebm ON ebm.booking_id = ec.booking_id
+                    ORDER BY ec.created_at DESC
+                `;
+                
+                return res.status(200).json({ 
+                    success: true, 
+                    data: toCamelCase(rows) 
+                });
+            } catch (error) {
+                console.error('[listExperienceConfirmations] Error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+
+        case 'confirmExperience': {
+            const body = req.body;
+            if (!body.experienceConfirmationId) {
+                return res.status(400).json({ error: 'experienceConfirmationId is required' });
+            }
+            try {
+                const { rows } = await sql`
+                    UPDATE experience_confirmations 
+                    SET status = 'confirmed', 
+                        confirmed_by_email = ${body.confirmedByEmail || null},
+                        confirmation_reason = ${body.reason || null},
+                        updated_at = NOW()
+                    WHERE id = ${body.experienceConfirmationId}
+                    RETURNING *
+                `;
+                
+                if (rows.length === 0) {
+                    return res.status(404).json({ success: false, error: 'Experience confirmation not found' });
+                }
+
+                // Get booking details to send email
+                const { rows: bookingRows } = await sql`
+                    SELECT * FROM bookings WHERE id = ${rows[0].booking_id}
+                `;
+
+                if (bookingRows.length > 0 && bookingRows[0].user_info) {
+                    const userInfo = bookingRows[0].user_info;
+                    await emailService.sendExperienceConfirmedEmail(userInfo.email, {
+                        firstName: userInfo.firstName,
+                        bookingCode: bookingRows[0].booking_code,
+                        piecesCount: 1,
+                        totalPrice: bookingRows[0].price,
+                        confirmationReason: body.reason
+                    });
+                }
+
+                return res.status(200).json({ success: true, data: toCamelCase(rows[0]) });
+            } catch (error) {
+                console.error('[confirmExperience] Error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+
+        case 'rejectExperience': {
+            const body = req.body;
+            if (!body.experienceConfirmationId || !body.reason) {
+                return res.status(400).json({ error: 'experienceConfirmationId and reason are required' });
+            }
+            try {
+                const { rows } = await sql`
+                    UPDATE experience_confirmations 
+                    SET status = 'rejected', 
+                        rejection_reason = ${body.reason},
+                        updated_at = NOW()
+                    WHERE id = ${body.experienceConfirmationId}
+                    RETURNING *
+                `;
+                
+                if (rows.length === 0) {
+                    return res.status(404).json({ success: false, error: 'Experience confirmation not found' });
+                }
+
+                // Get booking details to send email and process refund
+                const { rows: bookingRows } = await sql`
+                    SELECT * FROM bookings WHERE id = ${rows[0].booking_id}
+                `;
+
+                if (bookingRows.length > 0) {
+                    const booking = bookingRows[0];
+                    const userInfo = booking.user_info;
+                    
+                    // Send rejection email
+                    await emailService.sendExperienceRejectedEmail(userInfo.email, {
+                        firstName: userInfo.firstName,
+                        bookingCode: booking.booking_code,
+                        rejectionReason: body.reason
+                    });
+
+                    // TODO: Process refund if payment was made
+                    console.log('[rejectExperience] Refund needed for booking:', booking.id, 'Amount:', booking.price);
+                }
+
+                return res.status(200).json({ success: true, data: toCamelCase(rows[0]) });
+            } catch (error) {
+                console.error('[rejectExperience] Error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+
         default:
             return res.status(400).json({ error: `Unknown action: ${action}` });
     }
@@ -3276,15 +3715,94 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
     try {
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITH TIME ZONE`;
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active'`;
+      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS technique VARCHAR(50)`;
+      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reschedule_allowance INT DEFAULT 0`;
+      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reschedule_used INT DEFAULT 0`;
+      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reschedule_history JSONB DEFAULT '[]'::jsonb`;
+      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS last_reschedule_at TIMESTAMP WITH TIME ZONE`;
+      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS participants INT DEFAULT 1`;
     } catch (e) {
       console.warn('[ADD BOOKING] Could not add columns (may already exist):', e);
     }
+
+    // COUPLES_EXPERIENCE VALIDATION
+    const isCouplesExperience = body.productType === 'COUPLES_EXPERIENCE';
+    const technique = (body as any).technique;
+
+    if (isCouplesExperience) {
+      // Must have exactly 1 slot
+      if (!body.slots || body.slots.length !== 1) {
+        throw new Error('COUPLES_EXPERIENCE must have exactly 1 slot');
+      }
+
+      // Must have technique specified
+      if (!technique || !['potters_wheel', 'molding'].includes(technique)) {
+        throw new Error('COUPLES_EXPERIENCE must specify a valid technique (potters_wheel or molding)');
+      }
+
+      const slot = body.slots[0];
+      const slotDate = new Date(slot.date);
+      const dayOfWeek = slotDate.getDay();
+
+      console.log(`[ADD BOOKING] Validating COUPLES_EXPERIENCE: technique=${technique}, date=${slot.date}, time=${slot.time}, dayOfWeek=${dayOfWeek}`);
+
+      // Fetch the product to get SchedulingRules
+      if (body.product && (body.product as any).schedulingRules) {
+        const rules = (body.product as any).schedulingRules as any[];
+        
+        // Find matching rule for this day/time/technique
+        const matchingRule = rules.find(r => 
+          r.dayOfWeek === dayOfWeek && 
+          r.time === slot.time && 
+          r.technique === technique
+        );
+
+        if (!matchingRule) {
+          throw new Error(`No scheduling rule found for ${technique} on this day/time`);
+        }
+
+        // Calculate couple capacity (capacity / 2 for pairs)
+        const totalCapacity = matchingRule.capacity || 6;
+        const coupleCapacity = Math.floor(totalCapacity / 2);
+
+        console.log(`[ADD BOOKING] Rule found: capacity=${totalCapacity}, couple capacity=${coupleCapacity}`);
+
+        // Count existing COUPLES_EXPERIENCE bookings for same date/time/technique
+        const { rows: existingCouples } = await sql`
+          SELECT COUNT(*) as count FROM bookings 
+          WHERE product_type = 'COUPLES_EXPERIENCE' 
+            AND technique = ${technique}
+            AND slots::text LIKE ${'%' + slot.date + '%'}
+            AND status = 'active'
+        `;
+
+        const existingCount = parseInt(existingCouples[0]?.count || 0);
+        console.log(`[ADD BOOKING] Existing COUPLES bookings for this slot: ${existingCount}/${coupleCapacity}`);
+
+        if (existingCount >= coupleCapacity) {
+          throw new Error(`No available capacity for ${technique} at this time (${existingCount}/${coupleCapacity} couples booked)`);
+        }
+      }
+    }
     
+    // Calcular reschedule allowance basado en tipo de paquete
+    let rescheduleAllowance = 0;
+    if (body.productType === 'CLASS_PACKAGE' || body.productType === 'SINGLE_CLASS') {
+      const classCount = (body.product as any)?.classes || 1;
+      if (classCount === 4) rescheduleAllowance = 1;
+      else if (classCount === 8) rescheduleAllowance = 2;
+      else if (classCount === 12) rescheduleAllowance = 3;
+      else if (classCount > 12) rescheduleAllowance = Math.ceil(classCount / 4);
+      else rescheduleAllowance = 1;
+    } else if (body.productType === 'INTRODUCTORY_CLASS') {
+      rescheduleAllowance = 1; // Intro classes: 1 reagendamiento
+    }
+
     const { rows: created } = await sql`
       INSERT INTO bookings (
-        booking_code, product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_date, accepted_no_refund, expires_at, status
+        booking_code, product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_date, accepted_no_refund, expires_at, status, technique, reschedule_allowance, reschedule_used, reschedule_history, participants
       ) VALUES (
-        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(body.product)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}, NOW() + INTERVAL '2 hours', 'active'
+        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(body.product)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}, NOW() + INTERVAL '2 hours', 'active', ${technique || null}, ${rescheduleAllowance}, 0, '[]'::jsonb, ${(body as any).participants || 1}
       ) RETURNING *;
     `;
 
@@ -3303,6 +3821,8 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
       bookingDate: created[0].booking_date,
       expiresAt: created[0].expires_at ? new Date(created[0].expires_at) : undefined,
       status: created[0].status || 'active',
+      technique: created[0].technique,
+      participants: created[0].participants ? parseInt(created[0].participants, 10) : 1,
     };
 
     // Process giftcard hold if provided
@@ -3503,10 +4023,15 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
         taxId: '0921343935'
       };
       
-      await emailService.sendPreBookingConfirmationEmail(bookingForEmail, bankDetails);
-      console.log('[ADD BOOKING] Pre-booking confirmation email sent successfully');
+      // Use couples-specific email for COUPLES_EXPERIENCE
+      if (isCouplesExperience) {
+        await emailService.sendCouplesTourConfirmationEmail(bookingForEmail, bankDetails);
+      } else {
+        await emailService.sendPreBookingConfirmationEmail(bookingForEmail, bankDetails);
+      }
+      console.log('[ADD BOOKING] Confirmation email sent successfully');
     } catch (emailError) {
-      console.error('[ADD BOOKING] Error sending pre-booking confirmation email:', emailError);
+      console.error('[ADD BOOKING] Error sending confirmation email:', emailError);
       // Don't fail the booking creation if email fails
       // The booking is already created, just log the error
     }

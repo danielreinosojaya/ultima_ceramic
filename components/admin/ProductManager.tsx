@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { Product, ClassPackage, IntroductoryClass, OpenStudioSubscription, SingleClass } from '../../types';
+import type { Product, ClassPackage, IntroductoryClass, OpenStudioSubscription, SingleClass, CouplesExperience } from '../../types';
 import * as dataService from '../../services/dataService';
 // Eliminado useLanguage, la app ahora es monolingüe en español
 import { ToggleLeftIcon } from '../icons/ToggleLeftIcon';
@@ -12,6 +12,7 @@ import { ClassPackageModal } from './ClassPackageModal';
 import { IntroClassModal } from './IntroClassModal';
 import { OpenStudioModal } from './OpenStudioModal';
 import { SingleClassModal } from './SingleClassModal';
+import { CouplesExperienceModal } from './CouplesExperienceModal';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 import { DuplicateIcon } from '../icons/DuplicateIcon';
 import { ChevronUpIcon } from '../icons/ChevronUpIcon';
@@ -35,6 +36,9 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
   
   const [isOpenStudioModalOpen, setIsOpenStudioModalOpen] = useState(false);
   const [openStudioToEdit, setOpenStudioToEdit] = useState<OpenStudioSubscription | null>(null);
+
+  const [isCouplesExperienceModalOpen, setIsCouplesExperienceModalOpen] = useState(false);
+  const [couplesExperienceToEdit, setCouplesExperienceToEdit] = useState<CouplesExperience | null>(null);
 
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
@@ -64,6 +68,9 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
     } else if (product.type === 'SINGLE_CLASS') {
       setSingleClassToEdit(product);
       setIsSingleClassModalOpen(true);
+    } else if (product.type === 'COUPLES_EXPERIENCE') {
+      setCouplesExperienceToEdit(product as CouplesExperience);
+      setIsCouplesExperienceModalOpen(true);
     }
   };
 
@@ -112,6 +119,20 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
     await dataService.updateProducts(updatedProducts);
     onDataChange();
     setIsOpenStudioModalOpen(false);
+  };
+
+  const handleSaveCouplesExperience = async (expData: Omit<CouplesExperience, 'id' | 'isActive' | 'type'>, id?: string) => {
+  // Usar productos actuales en lugar de hacer nueva request
+  let updatedProducts;
+  if (id) {
+    updatedProducts = products.map(p => (p.id === id && p.type === 'COUPLES_EXPERIENCE' ? { ...p, ...expData } : p));
+  } else {
+    const newProduct: Product = { ...expData, id: `ce_${Date.now()}_${Math.random().toString(36).slice(2,8)}`, isActive: true, type: 'COUPLES_EXPERIENCE' };
+    updatedProducts = [...products, newProduct];
+  }
+    await dataService.updateProducts(updatedProducts);
+    onDataChange();
+    setIsCouplesExperienceModalOpen(false);
   };
 
   const handleDuplicateProduct = async (productToDuplicate: Product) => {
@@ -263,6 +284,9 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
   } else if (type === 'SINGLE_CLASS') {
     setSingleClassToEdit(null);
     setIsSingleClassModalOpen(true);
+  } else if (type === 'COUPLES_EXPERIENCE') {
+    setCouplesExperienceToEdit(null);
+    setIsCouplesExperienceModalOpen(true);
   }
 };
 
@@ -363,6 +387,14 @@ return (
             classToEdit={singleClassToEdit}
           />
       )}
+      {isCouplesExperienceModalOpen && (
+          <CouplesExperienceModal
+            isOpen={isCouplesExperienceModalOpen}
+            onClose={() => setIsCouplesExperienceModalOpen(false)}
+            onSave={handleSaveCouplesExperience}
+            experienceToEdit={couplesExperienceToEdit}
+          />
+      )}
       {isDeleteModalOpen && productToDelete && (
     <DeleteConfirmationModal
       isOpen={isDeleteModalOpen}
@@ -408,6 +440,12 @@ return (
                   className="block w-full text-left px-4 py-3 text-sm text-brand-text hover:bg-gray-100"
                 >
                   Clase Suelta (Individual)
+                </button>
+                <button 
+                  onClick={() => handleCreateNew('COUPLES_EXPERIENCE')} 
+                  className="block w-full text-left px-4 py-3 text-sm text-brand-text hover:bg-gray-100"
+                >
+                  Experiencia en Pareja
                 </button>
             </div>
         </div>

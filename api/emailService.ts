@@ -881,3 +881,395 @@ export const sendDeliveryCompletedEmail = async (customerEmail: string, customer
     
     await sendEmail(customerEmail, subject, html);
 };
+
+// Special email for couples experience bookings with technique details
+export const sendCouplesTourConfirmationEmail = async (booking: Booking, bankDetails: BankDetails) => {
+    const { userInfo, bookingCode, product, slots, technique } = booking;
+    const technique_name = technique === 'potters_wheel' ? '🎯 Torno Alfarero' : '✋ Moldeo a Mano';
+    
+    const slot = slots && slots[0];
+    const slotDate = slot ? new Date(slot.date).toLocaleDateString('es-ES', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    }) : '';
+    const slotTime = slot?.time || '';
+
+    const subject = `¡Tu Experiencia en Pareja está Confirmada! (Código: ${bookingCode})`;
+    
+    const accounts = Array.isArray(bankDetails) ? bankDetails : [bankDetails];
+    const accountsHtml = `
+        <table style="width:100%; font-size:15px; color:#333; border-collapse:collapse; background:#f9f9f9; border-radius:12px; margin-top:20px;">
+            <thead>
+                <tr style="background:#eaeaea;">
+                    <th style="padding:10px; text-align:left; font-size:16px; color:#7c868e;">Banco</th>
+                    <th style="padding:10px; text-align:left;">Titular</th>
+                    <th style="padding:10px; text-align:left;">Número</th>
+                    <th style="padding:10px; text-align:left;">Tipo</th>
+                    <th style="padding:10px; text-align:left;">Cédula</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${accounts.map(acc => `
+                    <tr>
+                        <td style="padding:8px; font-weight:bold; color:#7c868e;">${acc.bankName}</td>
+                        <td style="padding:8px;">${acc.accountHolder}</td>
+                        <td style="padding:8px;">${acc.accountNumber}</td>
+                        <td style="padding:8px;">${acc.accountType}</td>
+                        <td style="padding:8px;">${acc.taxId}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+        <div style="margin-top: 10px; font-style: italic; color:#555;"><strong>Importante:</strong> Usa tu código de reserva <strong>${bookingCode}</strong> como referencia en la transferencia.</div>
+    `;
+
+    const html = `
+        <div style="font-family: Arial, sans-serif; color: #333;">
+            <h2 style="color: #D95F43;">♥️ ¡Hola, ${userInfo.firstName}!</h2>
+            <p>¡Qué emoción! Tu experiencia en pareja ha sido confirmada en CeramicAlma. Código de reserva:</p>
+            <p style="font-size: 24px; font-weight: bold; color: #D95F43; margin: 20px 0;">${bookingCode}</p>
+
+            <div style="background: linear-gradient(135deg, #FFE5D9 0%, #FFE5D9 100%); border-left: 4px solid #D95F43; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3 style="margin-top: 0; color: #D95F43;">📅 Detalles de tu Experiencia</h3>
+                <p style="margin: 10px 0;"><strong>Técnica seleccionada:</strong> ${technique_name}</p>
+                <p style="margin: 10px 0;"><strong>Fecha:</strong> ${slotDate}</p>
+                <p style="margin: 10px 0;"><strong>Hora:</strong> ${slotTime}</p>
+                <p style="margin: 10px 0;"><strong>Duración:</strong> 2 horas</p>
+                <p style="margin: 10px 0;"><strong>Precio:</strong> <span style="font-size: 18px; font-weight: bold; color: #D95F43;">$190</span></p>
+            </div>
+
+            <div style="background-color: #F0F9FF; border-left: 4px solid #0EA5E9; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3 style="margin-top: 0; color: #0369A1;">🎨 ¿Qué incluye tu experiencia?</h3>
+                <ul style="margin: 10px 0; padding-left: 20px;">
+                    <li style="margin: 8px 0;"><strong>Clase guiada 2h</strong> - Un instructor experto los guiará en cada paso</li>
+                    <li style="margin: 8px 0;"><strong>Técnica a elegir</strong> - ${technique === 'potters_wheel' ? '🎯 Domina el torno alfarero clásico' : '✋ Crea libremente con moldeo a mano'}</li>
+                    <li style="margin: 8px 0;"><strong>Materiales</strong> - Todo incluido: arcilla, agua, herramientas</li>
+                    <li style="margin: 8px 0;"><strong>Horneado profesional</strong> - Tus creaciones se hornean en nuestro horno</li>
+                    <li style="margin: 8px 0;"><strong>🍷 Vino y 🥂 Piqueos</strong> - Disfruta mientras crean juntos</li>
+                    <li style="margin: 8px 0;"><strong>Piezas aptas para alimentos</strong> - Perfectas para uso diario</li>
+                </ul>
+            </div>
+
+            <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #92400E; font-weight: bold;">⏰ Pre-Reserva Válida por 2 Horas</p>
+                <p style="margin: 8px 0 0 0; color: #78350F; font-size: 14px;">
+                    Esta pre-reserva estará disponible solo durante las próximas <strong>2 horas</strong>. Para confirmar, realiza el pago a través de transferencia bancaria.
+                </p>
+            </div>
+
+            <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #92400E; font-weight: bold;">💳 Pago Anticipado Requerido</p>
+                <p style="margin: 8px 0 0 0; color: #78350F; font-size: 14px;">
+                    Esta experiencia requiere pago completo y anticipado: <strong>$190</strong>
+                </p>
+            </div>
+
+            <p>Para confirmar, realiza una transferencia bancaria con los siguientes datos:</p>
+            ${accountsHtml}
+
+            <div style="background-color: #EFF6FF; border-left: 4px solid #3B82F6; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #1E40AF; font-weight: bold;">📋 Información Importante</p>
+                <p style="margin: 8px 0 0 0; color: #1E3A8A; font-size: 14px;">
+                    • <strong>Llega 15 minutos antes</strong> - Para aclimatarse y conocer el espacio<br/>
+                    • <strong>Política de cancelación:</strong> No reembolsable ni reagendable (pago anticipado)<br/>
+                    • <strong>Contacto:</strong> Si tienes dudas, responde a este email o envíanos un WhatsApp
+                </p>
+            </div>
+
+            <p style="margin-top: 20px; font-size: 16px;">¡Prepárense para una experiencia única y llena de magia! ♥️</p>
+            <p>Saludos,<br/>El equipo de CeramicAlma</p>
+        </div>
+    `;
+
+    const result = await sendEmail(userInfo.email, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(userInfo.email, 'couples-confirmation', 'email', status, bookingCode);
+
+    console.info('[emailService] Couples tour confirmation email result for', userInfo.email, bookingCode, result);
+    return result;
+};
+
+// Email reminder: package is almost complete, encourage renewal
+export const sendPackageRenewalReminderEmail = async (
+    customerEmail: string,
+    payload: {
+        firstName: string;
+        lastName: string;
+        remainingClasses: number;
+        totalClasses: number;
+        packageType: string; // "4 clases", "8 clases", "12 clases"
+        packagePrice: number;
+        lastBookingDate?: string;
+    }
+) => {
+    const subject = `¡Tus clases de cerámica están por acabarse! Renueva tu paquete`;
+
+    const html = `
+        <div style="font-family: Arial, sans-serif; color: #333;">
+            <h2 style="color: #D95F43;">Hola ${payload.firstName},</h2>
+            
+            <p style="font-size: 16px; line-height: 1.6;">
+                Nos da mucha alegría verte en nuestro estudio. Queremos recordarte que tu paquete de clases está por terminarse.
+            </p>
+
+            <div style="background: linear-gradient(135deg, #FFE5D9 0%, #FFE5D9 100%); border-left: 4px solid #D95F43; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3 style="margin-top: 0; color: #D95F43;">📊 Estado de tu Paquete</h3>
+                <p style="font-size: 18px; margin: 10px 0;">
+                    <strong>${payload.remainingClasses}</strong> de <strong>${payload.totalClasses}</strong> clases restantes
+                </p>
+                <div style="background: white; border-radius: 6px; padding: 12px; margin: 10px 0;">
+                    <div style="background: #e0e0e0; height: 10px; border-radius: 5px; overflow: hidden;">
+                        <div style="background: #D95F43; height: 100%; width: ${((payload.totalClasses - payload.remainingClasses) / payload.totalClasses * 100)}%;"></div>
+                    </div>
+                    <p style="font-size: 12px; color: #666; margin: 8px 0 0 0;">
+                        ${Math.round((payload.totalClasses - payload.remainingClasses) / payload.totalClasses * 100)}% completado
+                    </p>
+                </div>
+            </div>
+
+            ${payload.remainingClasses <= 2 ? `
+            <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #92400E; font-weight: bold;">⚠️ Últimas clases disponibles</p>
+                <p style="margin: 8px 0 0 0; color: #78350F; font-size: 14px;">
+                    Una vez agotes tus clases, tu paquete expirará. No podrás reactivarlo después.
+                </p>
+            </div>
+            ` : ''}
+
+            <div style="background-color: #EFF6FF; border-left: 4px solid #3B82F6; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3 style="margin-top: 0; color: #1E40AF;">✨ Renovar tu Paquete</h3>
+                <p style="color: #1E3A8A; font-size: 14px; margin: 10px 0;">
+                    Continúa tu viaje creativo con un nuevo paquete. Mismas clases, mismo precio, más diversión.
+                </p>
+                <p style="color: #1E3A8A; font-size: 16px; font-weight: bold; margin: 15px 0;">
+                    Paquete ${payload.packageType}: <span style="color: #D95F43;">$${payload.packagePrice}</span>
+                </p>
+                <a href="https://www.ceramicalma.com" style="display: inline-block; background-color: #D95F43; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 10px 0;">
+                    🎨 Renovar Paquete
+                </a>
+            </div>
+
+            <div style="background-color: #F0FDF4; border-left: 4px solid #22C55E; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #166534; font-size: 14px;">
+                    <strong>💡 Tip:</strong> Los paquetes no son reembolsables, así que asegúrate de usar todas tus clases antes de que expire tu suscripción.
+                </p>
+            </div>
+
+            <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
+                ¡Sigue creando!<br/>
+                <strong>El equipo de CeramicAlma</strong>
+            </p>
+        </div>
+    `;
+
+    const result = await sendEmail(customerEmail, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(customerEmail, 'package-renewal-reminder', 'email', status);
+
+    console.info('[emailService] Package renewal reminder sent to', customerEmail);
+    return result;
+};
+
+// ==================== NEW EXPERIENCE EMAILS ====================
+
+export const sendGroupClassConfirmationEmail = async (
+    customerEmail: string,
+    bookingDetails: {
+        firstName: string;
+        groupSize: number;
+        date: string;
+        time: string;
+        price: number;
+        bookingCode: string;
+    }
+) => {
+    const subject = `✓ Tu Clase Grupal Está Confirmada - ${bookingDetails.bookingCode}`;
+    
+    const html = `
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: #FFFFFF; padding: 20px;">
+            <h1 style="color: #1F2937; font-size: 24px; margin-bottom: 20px;">✓ ¡Tu Clase Grupal Está Confirmada!</h1>
+            
+            <div style="background: #EFF6FF; border-left: 4px solid #3B82F6; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3 style="color: #1E40AF; margin-top: 0;">Detalles de tu Reserva</h3>
+                <p style="margin: 10px 0;"><strong>Código de Reserva:</strong> ${bookingDetails.bookingCode}</p>
+                <p style="margin: 10px 0;"><strong>Cantidad de Personas:</strong> ${bookingDetails.groupSize}</p>
+                <p style="margin: 10px 0;"><strong>Fecha:</strong> ${bookingDetails.date}</p>
+                <p style="margin: 10px 0;"><strong>Hora:</strong> ${bookingDetails.time}</p>
+                <p style="margin: 10px 0; font-size: 18px;"><strong style="color: #3B82F6;">Total: $${bookingDetails.price}</strong></p>
+            </div>
+
+            <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #92400E; font-size: 14px;">
+                    <strong>📝 Importante:</strong> Por favor lleva a tu grupo 15 minutos antes. Confirma con tu equipo la fecha y hora exacta.
+                </p>
+            </div>
+
+            <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
+                ¡Que disfruten su experiencia!<br/>
+                <strong>El equipo de Última Ceramic</strong>
+            </p>
+        </div>
+    `;
+
+    const result = await sendEmail(customerEmail, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(customerEmail, 'group-class-confirmation', 'email', status);
+
+    console.info('[emailService] Group class confirmation sent to', customerEmail);
+    return result;
+};
+
+export const sendExperiencePendingReviewEmail = async (
+    customerEmail: string,
+    bookingDetails: {
+        firstName: string;
+        piecesCount: number;
+        totalPrice: number;
+        bookingCode: string;
+        guidedOption: string;
+    }
+) => {
+    const subject = `⏳ Tu Experiencia Personalizada Está en Revisión - ${bookingDetails.bookingCode}`;
+    
+    const html = `
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: #FFFFFF; padding: 20px;">
+            <h1 style="color: #1F2937; font-size: 24px; margin-bottom: 20px;">⏳ Tu Experiencia Está en Revisión</h1>
+            
+            <p style="color: #4B5563; font-size: 16px;">Hola ${bookingDetails.firstName},</p>
+            
+            <p style="color: #6B7280; font-size: 14px; margin: 20px 0;">
+                Hemos recibido tu solicitud para una experiencia personalizada. Nuestro equipo está revisando la disponibilidad y te confirmaremos en las próximas 24 horas.
+            </p>
+
+            <div style="background: #F3E8FF; border-left: 4px solid #A855F7; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3 style="color: #6B21A8; margin-top: 0;">Detalles de tu Solicitud</h3>
+                <p style="margin: 10px 0;"><strong>Código:</strong> ${bookingDetails.bookingCode}</p>
+                <p style="margin: 10px 0;"><strong>Piezas Seleccionadas:</strong> ${bookingDetails.piecesCount}</p>
+                <p style="margin: 10px 0;"><strong>Opción de Guía:</strong> ${bookingDetails.guidedOption}</p>
+                <p style="margin: 10px 0; font-size: 18px;"><strong style="color: #A855F7;">Total: $${bookingDetails.totalPrice}</strong></p>
+            </div>
+
+            <div style="background: #DBEAFE; border-left: 4px solid #0EA5E9; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #075985; font-size: 14px;">
+                    <strong>✓ Pago Confirmado:</strong> Tu pago ha sido procesado correctamente. Recibirás la confirmación de la experiencia por email.
+                </p>
+            </div>
+
+            <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
+                Cualquier duda, no dudes en contactarnos.<br/>
+                <strong>El equipo de Última Ceramic</strong>
+            </p>
+        </div>
+    `;
+
+    const result = await sendEmail(customerEmail, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(customerEmail, 'experience-pending-review', 'email', status);
+
+    console.info('[emailService] Experience pending review sent to', customerEmail);
+    return result;
+};
+
+export const sendExperienceConfirmedEmail = async (
+    customerEmail: string,
+    bookingDetails: {
+        firstName: string;
+        piecesCount: number;
+        totalPrice: number;
+        bookingCode: string;
+        confirmationReason?: string;
+    }
+) => {
+    const subject = `✓ ¡Tu Experiencia Personalizada Confirmada! - ${bookingDetails.bookingCode}`;
+    
+    const html = `
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: #FFFFFF; padding: 20px;">
+            <h1 style="color: #1F2937; font-size: 24px; margin-bottom: 20px;">✓ ¡Tu Experiencia Personalizada Está Confirmada!</h1>
+            
+            <p style="color: #4B5563; font-size: 16px;">Hola ${bookingDetails.firstName},</p>
+            
+            <p style="color: #6B7280; font-size: 14px; margin: 20px 0;">
+                ¡Excelente noticia! Tu experiencia personalizada ha sido confirmada por nuestro equipo. Estamos listos para que disfrutes creando tus propias piezas.
+            </p>
+
+            <div style="background: #F0FDF4; border-left: 4px solid #22C55E; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3 style="color: #166534; margin-top: 0;">Experiencia Confirmada</h3>
+                <p style="margin: 10px 0;"><strong>Código:</strong> ${bookingDetails.bookingCode}</p>
+                <p style="margin: 10px 0;"><strong>Piezas a Trabajar:</strong> ${bookingDetails.piecesCount}</p>
+                <p style="margin: 10px 0; font-size: 18px;"><strong style="color: #22C55E;">Total: $${bookingDetails.totalPrice}</strong></p>
+                ${bookingDetails.confirmationReason ? `<p style="margin: 10px 0; font-size: 14px; color: #166534;"><em>${bookingDetails.confirmationReason}</em></p>` : ''}
+            </div>
+
+            <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #92400E; font-size: 14px;">
+                    <strong>📞 Próximo Paso:</strong> Nuestro equipo se pondrá en contacto contigo por WhatsApp para coordinar la fecha y hora exacta.
+                </p>
+            </div>
+
+            <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
+                ¡A crear se ha dicho!<br/>
+                <strong>El equipo de Última Ceramic</strong>
+            </p>
+        </div>
+    `;
+
+    const result = await sendEmail(customerEmail, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(customerEmail, 'experience-confirmed', 'email', status);
+
+    console.info('[emailService] Experience confirmed sent to', customerEmail);
+    return result;
+};
+
+export const sendExperienceRejectedEmail = async (
+    customerEmail: string,
+    bookingDetails: {
+        firstName: string;
+        bookingCode: string;
+        rejectionReason: string;
+    }
+) => {
+    const subject = `ℹ️ Actualización sobre tu Experiencia Personalizada - ${bookingDetails.bookingCode}`;
+    
+    const html = `
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: #FFFFFF; padding: 20px;">
+            <h1 style="color: #1F2937; font-size: 24px; margin-bottom: 20px;">ℹ️ Actualización sobre tu Solicitud</h1>
+            
+            <p style="color: #4B5563; font-size: 16px;">Hola ${bookingDetails.firstName},</p>
+            
+            <p style="color: #6B7280; font-size: 14px; margin: 20px 0;">
+                Lamentablemente, no pudimos confirmar tu experiencia personalizada en esta ocasión.
+            </p>
+
+            <div style="background: #FEE2E2; border-left: 4px solid #EF4444; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3 style="color: #991B1B; margin-top: 0;">Razón</h3>
+                <p style="margin: 10px 0; color: #7F1D1D;">${bookingDetails.rejectionReason}</p>
+                <p style="margin: 10px 0;"><strong>Código:</strong> ${bookingDetails.bookingCode}</p>
+            </div>
+
+            <div style="background: #DBEAFE; border-left: 4px solid #0EA5E9; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #075985; font-size: 14px;">
+                    <strong>💰 Reembolso:</strong> Tu pago ha sido reembolsado. Por favor verifica tu cuenta en 3-5 días hábiles.
+                </p>
+            </div>
+
+            <p style="color: #6B7280; font-size: 14px; margin-top: 20px;">
+                ¿Tienes preguntas? No dudes en contactarnos por WhatsApp.
+            </p>
+
+            <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
+                Esperamos verte pronto con otra experiencia.<br/>
+                <strong>El equipo de Última Ceramic</strong>
+            </p>
+        </div>
+    `;
+
+    const result = await sendEmail(customerEmail, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(customerEmail, 'experience-rejected', 'email', status);
+
+    console.info('[emailService] Experience rejected sent to', customerEmail);
+    return result;
+};

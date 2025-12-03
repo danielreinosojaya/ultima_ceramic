@@ -370,20 +370,20 @@ async function getTodayTimecard(employeeId: number): Promise<Timecard | null> {
     }
 
     const row = result.rows[0];
-    // IMPORTANTE: Los timestamps están guardados como UTC real, no los reconvertir
-    // Solo retornarlos como están EN FORMATO ISO
+    // ✅ CORRECCIÓN: Retornar timestamps como strings planos (sin conversión a ISO)
+    // Están guardados como "YYYY-MM-DD HH:MM:SS" en Ecuador, retornarlos como están
     const timecard: Timecard = {
       id: Number(row.id),
       employee_id: Number(row.employee_id),
       date: String(row.date),
-      time_in: row.time_in ? (row.time_in instanceof Date ? row.time_in.toISOString() : new Date(row.time_in).toISOString()) : undefined,
-      time_out: row.time_out ? (row.time_out instanceof Date ? row.time_out.toISOString() : new Date(row.time_out).toISOString()) : undefined,
+      time_in: row.time_in ? String(row.time_in) : undefined,
+      time_out: row.time_out ? String(row.time_out) : undefined,
       hours_worked: row.hours_worked ? Number(row.hours_worked) : undefined,
       notes: row.notes ? String(row.notes) : undefined,
       edited_by: row.edited_by ? Number(row.edited_by) : undefined,
-      edited_at: row.edited_at ? (row.edited_at instanceof Date ? row.edited_at.toISOString() : new Date(row.edited_at).toISOString()) : undefined,
-      created_at: row.created_at ? (row.created_at instanceof Date ? row.created_at.toISOString() : new Date(row.created_at).toISOString()) : new Date().toISOString(),
-      updated_at: row.updated_at ? (row.updated_at instanceof Date ? row.updated_at.toISOString() : new Date(row.updated_at).toISOString()) : new Date().toISOString()
+      edited_at: row.edited_at ? (row.edited_at instanceof Date ? row.edited_at.toISOString() : String(row.edited_at)) : undefined,
+      created_at: row.created_at ? (row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at)) : new Date().toISOString(),
+      updated_at: row.updated_at ? (row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at)) : new Date().toISOString()
     };
 
     console.log('[getTodayTimecard] Found timecard:', { id: timecard.id, employee_id: timecard.employee_id, time_in: timecard.time_in });
@@ -395,36 +395,51 @@ async function getTodayTimecard(employeeId: number): Promise<Timecard | null> {
 }
 
 async function calculateHours(timeIn: string, timeOut: string): Promise<number> {
-  // Recibe ISO strings UTC
-  const timeInDate = new Date(timeIn);
-  const timeOutDate = new Date(timeOut);
+  // timeIn y timeOut ahora vienen como TIMESTAMP literals: "2025-11-27 16:51:23"
+  // Estos NO son ISO strings, representan hora LOCAL
+  // Para calcular diferencia, parseamos ambos de la misma forma (como hora local)
   
-  const timeInMs = timeInDate.getTime();
-  const timeOutMs = timeOutDate.getTime();
-  const diffMs = timeOutMs - timeInMs;
-  
-  // Convertir a horas
-  const hours = diffMs / (1000 * 60 * 60);
-  
-  console.log('[calculateHours] Detalles del cálculo:', {
-    timeIn,
-    timeOut,
-    timeInMs,
-    timeOutMs,
-    diffMs,
-    diffSeconds: diffMs / 1000,
-    diffMinutes: diffMs / (1000 * 60),
-    hoursBeforeRounding: hours,
-    hoursAfterRounding: Math.round(hours * 100) / 100
-  });
-  
-  // Si el resultado es negativo, significa que timeOut < timeIn
-  if (hours < 0) {
-    console.warn('[calculateHours] Negative hours detected:', { timeIn, timeOut, hours, diffMs });
+  try {
+    // Convertir de formato "YYYY-MM-DD HH:mm:ss" a Date
+    // Agregamos T para que sea ISO-like, pero sin especificar timezone
+    const timeInISO = timeIn.replace(' ', 'T');
+    const timeOutISO = timeOut.replace(' ', 'T');
+    
+    const timeInDate = new Date(timeInISO);
+    const timeOutDate = new Date(timeOutISO);
+    
+    const timeInMs = timeInDate.getTime();
+    const timeOutMs = timeOutDate.getTime();
+    const diffMs = timeOutMs - timeInMs;
+    
+    // Convertir a horas
+    const hours = diffMs / (1000 * 60 * 60);
+    
+    console.log('[calculateHours] Detalles del cálculo (TIMESTAMP local):', {
+      timeIn,
+      timeOut,
+      timeInISO,
+      timeOutISO,
+      timeInMs,
+      timeOutMs,
+      diffMs,
+      diffSeconds: diffMs / 1000,
+      diffMinutes: diffMs / (1000 * 60),
+      hoursBeforeRounding: hours,
+      hoursAfterRounding: Math.round(hours * 100) / 100
+    });
+    
+    // Si el resultado es negativo, significa que timeOut < timeIn
+    if (hours < 0) {
+      console.warn('[calculateHours] Negative hours detected:', { timeIn, timeOut, hours, diffMs });
+      return 0;
+    }
+    
+    return Math.round(hours * 100) / 100; // Redondear a 2 decimales
+  } catch (error) {
+    console.error('[calculateHours] Error parsing timestamps:', { timeIn, timeOut, error });
     return 0;
   }
-  
-  return Math.round(hours * 100) / 100; // Redondear a 2 decimales
 }
 
 // ============ VALIDACIONES DE GEOLOCALIZACIÓN ============
@@ -742,73 +757,33 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
     const geolocation = req.body?.geolocation; // { latitude, longitude, accuracy }
     const deviceIP = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
     
-    // ✅ Validar geofence si hay ubicación
+    // ✅ OBLIGATORIO: Validar geofence
     let geofenceCheck: GeofenceCheckResult | null = null;
-    if (geolocation?.latitude && geolocation?.longitude) {
-      geofenceCheck = await validateGeofence(geolocation.latitude, geolocation.longitude);
-      console.log('[handleClockIn] Geofence check:', geofenceCheck);
-      
-      if (!geofenceCheck.isWithinGeofence) {
-        return res.status(403).json({
-          success: false,
-          message: `❌ ${geofenceCheck.warning}`,
-          geofenceCheck,
-          instruction: 'Debes estar en la ubicación de trabajo para marcar entrada'
-        } as any);
-      }
+    
+    if (!geolocation?.latitude || !geolocation?.longitude) {
+      // ❌ SIN UBICACIÓN = RECHAZAR
+      return res.status(403).json({
+        success: false,
+        message: '❌ Se requiere ubicación GPS para marcar entrada',
+        geofenceCheck: null,
+        instruction: 'Activa el GPS de tu dispositivo'
+      } as any);
     }
     
-    let nowUTC: Date;
+    geofenceCheck = await validateGeofence(geolocation.latitude, geolocation.longitude);
+    console.log('[handleClockIn] Geofence check:', geofenceCheck);
     
-    if (localTime && localTime.year && localTime.month && localTime.day && 
-        typeof localTime.hour === 'number' && typeof localTime.minute === 'number' && typeof localTime.second === 'number') {
-      
-      console.log('[handleClockIn] Usando localTime del cliente:', localTime);
-      
-      // Detectar timezone del servidor
-      const serverDate = new Date();
-      const serverOffsetMinutes = serverDate.getTimezoneOffset(); // Negativo si está adelantado a UTC
-      const serverOffsetHours = -serverOffsetMinutes / 60; // Convertir a horas (positivo = adelantado)
-      
-      console.log('[handleClockIn] Server timezone info:', {
-        offsetMinutes: serverOffsetMinutes,
-        offsetHours: serverOffsetHours,
-        example: serverOffsetMinutes === 300 ? 'UTC-5 (Guayaquil)' : serverOffsetMinutes === 0 ? 'UTC (Vercel cloud)' : 'Other'
-      });
-      
-      // NUEVA ESTRATEGIA: Guardar hora LOCAL directamente sin conversión
-      // PostgreSQL TIMESTAMP (sin TZ) guarda el valor literal
-      console.log('[handleClockIn] Guardando hora local sin conversión');
-      
-      // Crear timestamp con los valores locales DIRECTOS (sin Date.UTC)
-      nowUTC = new Date(
-        localTime.year,
-        localTime.month - 1,
-        localTime.day,
-        localTime.hour,
-        localTime.minute,
-        localTime.second
-      );
-      
-      console.log('[handleClockIn] Timestamp final:', {
-        localInput: `${localTime.year}-${String(localTime.month).padStart(2, '0')}-${String(localTime.day).padStart(2, '0')} ${String(localTime.hour).padStart(2, '0')}:${String(localTime.minute).padStart(2, '0')}:${String(localTime.second).padStart(2, '0')}`,
-        isoOutput: nowUTC.toISOString(),
-        timeDisplay: nowUTC.toString()
-      });
-      
-    } else {
-      console.warn('[handleClockIn] NO se recibió localTime válido, usando hora del servidor');
-      nowUTC = new Date();
+    if (!geofenceCheck.isWithinGeofence) {
+      return res.status(403).json({
+        success: false,
+        message: `❌ ${geofenceCheck.warning}`,
+        geofenceCheck,
+        instruction: 'Debes estar en la ubicación de trabajo para marcar entrada'
+      } as any);
     }
     
-    console.log('[handleClockIn] CRITICAL DEBUG:', {
-      nowUTC_toString: nowUTC.toString(),
-      nowUTC_toISOString: nowUTC.toISOString(),
-      nowUTC_getTime: nowUTC.getTime(),
-      nowUTC_getHours_LOCAL: nowUTC.getHours(),
-      nowUTC_getUTCHours: nowUTC.getUTCHours(),
-      timezone_offset_minutes: nowUTC.getTimezoneOffset()
-    });
+    
+    let nowUTC = new Date();
     
     // Calcular fecha de hoy en Bogotá para la columna DATE
     const bogotaMs = nowUTC.getTime() - (5 * 60 * 60 * 1000);
@@ -818,23 +793,13 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
     const day = String(bogotaTime.getUTCDate()).padStart(2, '0');
     const today = `${year}-${month}-${day}`;
     
-    console.log('[handleClockIn] Registro:', {
-      localHour: localTime.hour,
-      localMinute: localTime.minute,
-      dateObjCreated: nowUTC.toString(),
-      willStore: `${localTime.year}-${String(localTime.month).padStart(2, '0')}-${String(localTime.day).padStart(2, '0')} ${String(localTime.hour).padStart(2, '0')}:${String(localTime.minute).padStart(2, '0')}:${String(localTime.second).padStart(2, '0')}`
-    });
-
-    // Formatear como string TIMESTAMP literal (sin timezone)
-    const timestampString = `${localTime.year}-${String(localTime.month).padStart(2, '0')}-${String(localTime.day).padStart(2, '0')} ${String(localTime.hour).padStart(2, '0')}:${String(localTime.minute).padStart(2, '0')}:${String(localTime.second).padStart(2, '0')}`;
-    
     // Intentar insertar con todas las columnas de geolocalización
     // Si falla por columnas faltantes, reintentar sin ellas
     let insertResult;
     try {
       insertResult = await sql`
         INSERT INTO timecards (employee_id, date, time_in, location_in_lat, location_in_lng, location_in_accuracy, device_ip_in)
-        VALUES (${employee.id}, ${today}::DATE, ${timestampString}::TIMESTAMP, ${geolocation?.latitude || null}, ${geolocation?.longitude || null}, ${geolocation?.accuracy || null}, ${deviceIP})
+        VALUES (${employee.id}, ${today}::DATE, NOW(), ${geolocation?.latitude || null}, ${geolocation?.longitude || null}, ${geolocation?.accuracy || null}, ${deviceIP})
         RETURNING id, time_in
       `;
     } catch (insertError: any) {
@@ -843,7 +808,7 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
         console.warn('[handleClockIn] Geolocation columns not found, attempting basic insert:', insertError.message);
         insertResult = await sql`
           INSERT INTO timecards (employee_id, date, time_in)
-          VALUES (${employee.id}, ${today}::DATE, ${timestampString}::TIMESTAMP)
+          VALUES (${employee.id}, ${today}::DATE, NOW())
           RETURNING id, time_in
         `;
       } else {
@@ -945,7 +910,7 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
       success: true,
       message: `Entrada registrada correctamente a las ${timeStr}`,
       employee,
-      timestamp: timestampString,
+      timestamp: insertResult.rows[0].time_in,
       displayTime: timeStr
     } as ClockInResponse);
   } catch (error) {
@@ -1020,61 +985,41 @@ async function handleClockOut(req: any, res: any, code: string): Promise<any> {
 
   try {
     // ESTRATEGIA CORRECTA: Usar localTime del cliente, convertir considerando timezone del servidor
-    const localTime = req.body?.localTime;
+    const geolocation = req.body?.geolocation; // { latitude, longitude, accuracy }
     
-    let nowUTC: Date;
-    
-    if (localTime && localTime.year && localTime.month && localTime.day && 
-        typeof localTime.hour === 'number' && typeof localTime.minute === 'number' && typeof localTime.second === 'number') {
-      
-      console.log('[handleClockOut] Usando localTime del cliente:', localTime);
-      
-      // Guardar hora LOCAL directamente (igual que clockIn)
-      nowUTC = new Date(
-        localTime.year,
-        localTime.month - 1,
-        localTime.day,
-        localTime.hour,
-        localTime.minute,
-        localTime.second
-      );
-      
-      console.log('[handleClockOut] Timestamp local creado:', nowUTC.toString());
-      
-    } else {
-      console.warn('[handleClockOut] NO se recibió localTime válido, usando hora del servidor');
-      nowUTC = new Date();
+    // ✅ OBLIGATORIO: Validar geofence
+    if (!geolocation?.latitude || !geolocation?.longitude) {
+      // ❌ SIN UBICACIÓN = RECHAZAR
+      return res.status(403).json({
+        success: false,
+        message: '❌ Se requiere ubicación GPS para marcar salida',
+        instruction: 'Activa el GPS de tu dispositivo'
+      } as any);
     }
     
-    // Formatear como string TIMESTAMP literal
-    const timestampString = `${localTime.year}-${String(localTime.month).padStart(2, '0')}-${String(localTime.day).padStart(2, '0')} ${String(localTime.hour).padStart(2, '0')}:${String(localTime.minute).padStart(2, '0')}:${String(localTime.second).padStart(2, '0')}`;
+    const geofenceCheck = await validateGeofence(geolocation.latitude, geolocation.longitude);
+    console.log('[handleClockOut] Geofence check:', geofenceCheck);
     
-    // Capturar geolocalización y IP
-    const geolocation = req.body?.geolocation; // { latitude, longitude, accuracy }
+    if (!geofenceCheck.isWithinGeofence) {
+      return res.status(403).json({
+        success: false,
+        message: `❌ ${geofenceCheck.warning}`,
+        instruction: 'Debes estar en la ubicación de trabajo para marcar salida'
+      } as any);
+    }
+    
+    // Capturar IP
     const deviceIP = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
     
-    // Calcular horas usando los timestamps guardados en DB
-    const hoursWorked = await calculateHours(timecard.time_in, timestampString);
-
-    console.log('[handleClockOut] Cálculo de horas:', {
-      timeIn: timecard.time_in,
-      timeOut: timestampString,
-      hoursCalculated: hoursWorked
-    });
-
-    // Validar que no sea negativo
-    const finalHours = Math.max(0, hoursWorked);
-
     // Actualizar en BD - intentar con geolocation columns, fallback si no existen
     let updateResult;
     try {
       updateResult = await sql`
         UPDATE timecards
-        SET time_out = ${timestampString}::TIMESTAMP,
-            hours_worked = ${finalHours}::DECIMAL(5,2),
-            location_out_lat = ${geolocation?.latitude || null},
-            location_out_lng = ${geolocation?.longitude || null},
-            location_out_accuracy = ${geolocation?.accuracy || null},
+        SET time_out = NOW(),
+            location_out_lat = ${geolocation.latitude},
+            location_out_lng = ${geolocation.longitude},
+            location_out_accuracy = ${geolocation.accuracy},
             device_ip_out = ${deviceIP},
             updated_at = NOW()
         WHERE id = ${timecard.id}
@@ -1086,8 +1031,7 @@ async function handleClockOut(req: any, res: any, code: string): Promise<any> {
         console.warn('[handleClockOut] Geolocation columns not found, attempting basic update:', updateError.message);
         updateResult = await sql`
           UPDATE timecards
-          SET time_out = ${timestampString}::TIMESTAMP,
-              hours_worked = ${finalHours}::DECIMAL(5,2),
+          SET time_out = NOW(),
               updated_at = NOW()
           WHERE id = ${timecard.id}
           RETURNING *
@@ -1103,26 +1047,30 @@ async function handleClockOut(req: any, res: any, code: string): Promise<any> {
     }
     
     const updatedRecord = updateResult.rows[0];
-    const hoursFromDB = updatedRecord.hours_worked ? Number(updatedRecord.hours_worked) : 0;
 
     console.log('[handleClockOut] Registro actualizado:', {
       id: updatedRecord.id,
       time_in: updatedRecord.time_in,
       time_out: updatedRecord.time_out,
-      hours_worked_from_db: hoursFromDB
+      hours_worked_from_db: updatedRecord.hours_worked
     });
 
-    // Display: ya está en hora local
-    const ampm = localTime.hour >= 12 ? 'p. m.' : 'a. m.';
-    const hour12 = localTime.hour === 0 ? 12 : localTime.hour > 12 ? localTime.hour - 12 : localTime.hour;
+    // Calcular horas trabajadas
+    const hoursFromDB = updatedRecord.hours_worked ? parseFloat(updatedRecord.hours_worked) : 0;
     
-    const timeStr = `${String(hour12).padStart(2, '0')}:${String(localTime.minute).padStart(2, '0')}:${String(localTime.second).padStart(2, '0')} ${ampm}`;
+    // Display hora
+    const timeOut = new Date(updateResult.rows[0].time_out);
+    const hours = timeOut.getUTCHours();
+    const minutes = timeOut.getUTCMinutes();
+    const ampm = hours >= 12 ? 'p.m.' : 'a.m.';
+    const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+    const timeStr = `${String(hour12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${ampm}`;
 
     return res.status(200).json({
       success: true,
       message: `Salida registrada correctamente a las ${timeStr}. Horas trabajadas: ${hoursFromDB.toFixed(2)}h`,
       hours_worked: hoursFromDB,
-      timestamp: timestampString,
+      timestamp: updateResult.rows[0].time_out,
       displayTime: timeStr
     } as ClockOutResponse);
   } catch (error) {
@@ -1218,13 +1166,8 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
         code: row.code,
         name: row.name,
         time_in: row.time_in,
-        time_out: row.time_out,
-        hours_worked_raw: row.hours_worked,
-        hours_worked_converted: hoursWorked
+        time_out: row.time_out
       });
-      
-      // NO calcular horas en progreso en backend (timezone issues)
-      // El frontend lo calculará con hora local del usuario
       
       return {
         employee: {
@@ -1237,7 +1180,7 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
         date: row.date || today,
         time_in: row.time_in,
         time_out: row.time_out,
-        hours_worked: hoursWorked, // null si está en progreso
+        hours_worked: hoursWorked,
         status: !row.time_in ? 'absent' : row.time_out ? 'present' : 'in_progress',
         is_current_day: true
       };
@@ -1470,12 +1413,13 @@ async function handleDownloadReport(req: any, res: any, adminCode: string, forma
     if (format === 'csv') {
       let csv = 'Código,Nombre,Puesto,Fecha,Entrada,Salida,Horas\n';
       result.rows.forEach((row: any) => {
-        const timeIn = row.time_in ? new Date(row.time_in).toLocaleTimeString() : '';
-        const timeOut = row.time_out ? new Date(row.time_out).toLocaleTimeString() : '';
-        csv += `${row.code},"${row.name}",${row.position || ''},${row.date},${timeIn},${timeOut},${row.hours_worked || ''}\n`;
+        const timeIn = row.time_in ? new Date(row.time_in).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '';
+        const timeOut = row.time_out ? new Date(row.time_out).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '';
+        const hours = row.hours_worked ? Number(row.hours_worked).toFixed(2) : '';
+        csv += `${row.code},"${row.name}",${row.position || ''},${row.date},${timeIn},${timeOut},${hours}\n`;
       });
 
-      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="asistencia_${new Date().toISOString().split('T')[0]}.csv"`);
       return res.send(csv);
     }
@@ -1515,7 +1459,7 @@ async function handleGetMonthlyReport(req: any, res: any, adminCode: string, yea
   }
 
   try {
-    // Obtener todos los registros del mes con tardanzas
+    // Obtener todos los registros del mes
     const timecardResult = await sql`
       SELECT 
         e.id,
@@ -1527,16 +1471,12 @@ async function handleGetMonthlyReport(req: any, res: any, adminCode: string, yea
         t.time_in,
         t.time_out,
         t.hours_worked,
-        t.notes,
-        COUNT(ta.id) as tardanzas_count,
-        MAX(CASE WHEN ta.id IS NOT NULL THEN ta.retraso_minutos ELSE 0 END) as max_retraso
+        t.notes
       FROM employees e
       LEFT JOIN timecards t ON e.id = t.employee_id
         AND EXTRACT(YEAR FROM t.date) = ${yearNum}
         AND EXTRACT(MONTH FROM t.date) = ${monthNum}
-      LEFT JOIN tardanzas ta ON t.id = ta.timecard_id
       WHERE e.status = 'active'
-      GROUP BY e.id, e.code, e.name, e.position, t.id, t.date, t.time_in, t.time_out, t.hours_worked, t.notes
       ORDER BY e.name, t.date DESC
     `;
 
@@ -1590,15 +1530,27 @@ async function handleGetMonthlyReport(req: any, res: any, adminCode: string, yea
 
     // Si pide CSV, generar
     if (format === 'csv') {
+      // Función auxiliar para formatear hora local desde timestamp guardado como UTC
+      const formatTimeForCSV = (isoString: string) => {
+        if (!isoString) return '';
+        const date = new Date(isoString);
+        const hours = date.getUTCHours();
+        const minutes = date.getUTCMinutes();
+        const ampm = hours >= 12 ? 'p.m.' : 'a.m.';
+        const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+        return `${String(hour12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${ampm}`;
+      };
+
       let csv = 'Código,Nombre,Puesto,Fecha,Entrada,Salida,Horas,Tardanzas,Retraso(min),Notas\n';
       
       Object.values(reportData).forEach((employee: any) => {
         employee.records.forEach((record: any) => {
-          const timeIn = record.time_in ? new Date(record.time_in).toLocaleString('es-CO', { timeZone: 'America/Bogota' }) : '';
-          const timeOut = record.time_out ? new Date(record.time_out).toLocaleString('es-CO', { timeZone: 'America/Bogota' }) : '';
+          const timeIn = formatTimeForCSV(record.time_in);
+          const timeOut = formatTimeForCSV(record.time_out);
+          const hours = record.hours_worked ? Number(record.hours_worked).toFixed(2) : '';
           
           csv += `${employee.employee_code},"${employee.employee_name}",${employee.employee_position || ''},`;
-          csv += `${record.date},${timeIn},${timeOut},${record.hours_worked || ''},`;
+          csv += `${record.date},${timeIn},${timeOut},${hours},`;
           csv += `${record.tardanzas},${record.max_retraso || ''},"${record.notes || ''}\n`;
         });
       });

@@ -4,8 +4,20 @@ import type { Booking, ClassPackage, IntroductoryClass, OpenStudioSubscription }
 // Eliminado useLanguage, la app ahora es monolingüe en español
 import { CalendarIcon } from '../icons/CalendarIcon.js';
 import { ClockIcon } from '../icons/ClockIcon.js';
+import { formatDate } from '../../utils/formatters';
 
-export interface AugmentedPackage extends Booking {
+export interface AugmentedPackage {
+    id: string;
+    productId: string;
+    productType: string;
+    product: ClassPackage | IntroductoryClass | OpenStudioSubscription;
+    slots: any[];
+    userInfo: any;
+    createdAt: Date;
+    isPaid: boolean;
+    price: number;
+    bookingCode: string;
+    bookingDate: string;
     status: 'Active' | 'Expired' | 'Pending Payment' | 'Completed';
     progressPercent: number;
     completedCount: number;

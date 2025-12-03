@@ -1,4 +1,35 @@
 import React, { useState } from 'react';
+import { formatLocalTimeFromUTC } from '../../utils/formatters';
+
+// Componente para mostrar indicador de productividad
+const ProductivityIndicator: React.FC<{ hours: number; daysWorked: number }> = ({ hours, daysWorked }) => {
+  const avgHoursPerDay = daysWorked > 0 ? hours / daysWorked : 0;
+  const expectedHoursPerDay = 8;
+  const percentage = Math.min(100, (avgHoursPerDay / expectedHoursPerDay) * 100);
+  
+  let color = 'bg-red-500';
+  let label = 'Bajo';
+  
+  if (percentage >= 90) {
+    color = 'bg-green-500';
+    label = 'Excelente';
+  } else if (percentage >= 75) {
+    color = 'bg-blue-500';
+    label = 'Bueno';
+  } else if (percentage >= 60) {
+    color = 'bg-yellow-500';
+    label = 'Regular';
+  }
+  
+  return (
+    <div className="flex items-center gap-2">
+      <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+        <div className={`h-full ${color} transition-all`} style={{ width: `${percentage}%` }}></div>
+      </div>
+      <span className="text-xs font-semibold text-gray-700">{label}</span>
+    </div>
+  );
+};
 
 interface ReportEmployee {
   employee_code: string;
@@ -88,11 +119,7 @@ export const MonthlyReportViewer: React.FC<MonthlyReportViewerProps> = ({ adminC
     }
   };
 
-  const formatTime = (dateString: string) => {
-    if (!dateString) return '-';
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true });
-  };
+  const formatTime = (dateString: string) => formatLocalTimeFromUTC(dateString);
 
   const formatDate = (dateString: string) => {
     if (!dateString) return '-';
@@ -264,7 +291,7 @@ export const MonthlyReportViewer: React.FC<MonthlyReportViewerProps> = ({ adminC
                                 <td className="px-3 py-2">{formatTime(record.time_in)}</td>
                                 <td className="px-3 py-2">{formatTime(record.time_out)}</td>
                                 <td className="px-3 py-2 text-center font-semibold text-blue-600">
-                                  {record.hours_worked ? record.hours_worked.toFixed(2) : '-'}h
+                                  {record.hours_worked !== null && record.hours_worked !== undefined ? Number(record.hours_worked).toFixed(2) : '-'}h
                                 </td>
                                 <td className="px-3 py-2 text-center">
                                   {record.tardanzas > 0 ? (
@@ -287,7 +314,7 @@ export const MonthlyReportViewer: React.FC<MonthlyReportViewerProps> = ({ adminC
                     )}
 
                     {/* Estadísticas resumen */}
-                    <div className="grid grid-cols-4 gap-2 mt-4 pt-4 border-t border-gray-300">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4 pt-4 border-t border-gray-300">
                       <div className="text-center">
                         <div className="font-semibold text-blue-600">{employee.stats.total_hours.toFixed(1)}h</div>
                         <div className="text-xs text-gray-600">Horas totales</div>
@@ -304,6 +331,18 @@ export const MonthlyReportViewer: React.FC<MonthlyReportViewerProps> = ({ adminC
                         <div className="font-semibold text-red-600">{employee.stats.tardanzas_count}</div>
                         <div className="text-xs text-gray-600">Tardanzas</div>
                       </div>
+                      <div className="text-center">
+                        <div className="font-semibold text-purple-600">
+                          {employee.stats.days_worked > 0 ? (employee.stats.total_hours / employee.stats.days_worked).toFixed(1) : '0'}h
+                        </div>
+                        <div className="text-xs text-gray-600">Promedio/día</div>
+                      </div>
+                    </div>
+
+                    {/* Indicador de productividad */}
+                    <div className="mt-4 pt-4 border-t border-gray-300">
+                      <div className="text-xs font-semibold text-gray-700 mb-2">Productividad</div>
+                      <ProductivityIndicator hours={employee.stats.total_hours} daysWorked={employee.stats.days_worked} />
                     </div>
                   </div>
                 )}

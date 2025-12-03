@@ -15,7 +15,8 @@ export const EditDeliveryModal: React.FC<EditDeliveryModalProps> = ({
     isOpen, 
     onClose, 
     onSave, 
-    delivery 
+    delivery,
+    formatDate
 }) => {
     const [description, setDescription] = useState(delivery.description);
     const [scheduledDate, setScheduledDate] = useState(delivery.scheduledDate.split('T')[0]);

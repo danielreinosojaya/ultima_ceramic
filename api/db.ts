@@ -215,7 +215,11 @@ export async function ensureTablesExist() {
                 attendance JSONB,
                 booking_date TEXT,
                 participants INT DEFAULT 1,
-                client_note TEXT
+                client_note TEXT,
+                reschedule_allowance INT DEFAULT 0,
+                reschedule_used INT DEFAULT 0,
+                reschedule_history JSONB DEFAULT '[]'::jsonb,
+                last_reschedule_at TIMESTAMPTZ
             );`,
             
             `CREATE TABLE IF NOT EXISTS giftcard_audit (
@@ -228,6 +232,54 @@ export async function ensureTablesExist() {
                 error TEXT,
                 timestamp TIMESTAMPTZ DEFAULT NOW(),
                 metadata JSONB
+            );`,
+
+            // NEW TABLES FOR EXPERIENCES
+            `CREATE TABLE IF NOT EXISTS pieces (
+                id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                name VARCHAR(255) NOT NULL,
+                description TEXT,
+                category VARCHAR(100),
+                base_price NUMERIC(10, 2) NOT NULL,
+                estimated_hours NUMERIC(5, 2),
+                image_url TEXT,
+                is_active BOOLEAN DEFAULT true,
+                sort_order INT DEFAULT 0,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            );`,
+
+            `CREATE TABLE IF NOT EXISTS group_bookings_metadata (
+                id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                booking_id UUID NOT NULL UNIQUE REFERENCES bookings(id) ON DELETE CASCADE,
+                group_size INT NOT NULL,
+                group_type VARCHAR(50),
+                is_auto_confirmed BOOLEAN DEFAULT true,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            );`,
+
+            `CREATE TABLE IF NOT EXISTS experience_bookings_metadata (
+                id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                booking_id UUID NOT NULL UNIQUE REFERENCES bookings(id) ON DELETE CASCADE,
+                pieces_selected JSONB NOT NULL,
+                duration_minutes INT,
+                guided_option VARCHAR(50),
+                total_price_calculated NUMERIC(10, 2),
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            );`,
+
+            `CREATE TABLE IF NOT EXISTS experience_confirmations (
+                id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                booking_id UUID NOT NULL UNIQUE REFERENCES bookings(id) ON DELETE CASCADE,
+                status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'rejected')),
+                confirmed_by_email VARCHAR(255),
+                confirmation_reason TEXT,
+                rejection_reason TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW(),
+                expires_at TIMESTAMPTZ
             );`
         ];
 
@@ -258,7 +310,20 @@ export async function ensureTablesExist() {
         
         // Migration: Add created_by_client column to deliveries table
         await sql`ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS created_by_client BOOLEAN DEFAULT false;`;
-        console.log("Essential columns ensured.");
+        
+        // New columns for Experiences
+        await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS booking_type VARCHAR(50) DEFAULT 'individual';`;
+        await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS experience_confirmation_id UUID;`;
+        
+        // Create indexes for performance
+        await sql`CREATE INDEX IF NOT EXISTS idx_pieces_active_sort ON pieces(is_active, sort_order);`;
+        await sql`CREATE INDEX IF NOT EXISTS idx_group_bookings_metadata_booking_id ON group_bookings_metadata(booking_id);`;
+        await sql`CREATE INDEX IF NOT EXISTS idx_experience_bookings_metadata_booking_id ON experience_bookings_metadata(booking_id);`;
+        await sql`CREATE INDEX IF NOT EXISTS idx_experience_confirmations_status ON experience_confirmations(status);`;
+        await sql`CREATE INDEX IF NOT EXISTS idx_experience_confirmations_expires_at ON experience_confirmations(expires_at);`;
+        await sql`CREATE INDEX IF NOT EXISTS idx_bookings_booking_type ON bookings(booking_type);`;
+        
+        console.log("Essential columns and indexes ensured.");
     } catch (error) {
         console.error("Error during column checks:", error);
         // Don't throw - continue even if migrations fail
