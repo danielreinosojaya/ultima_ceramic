@@ -792,6 +792,12 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
     `;
     const ecuadorDate = ecuadorDateResult.rows[0].ecuador_date;
     
+    console.log('[handleClockIn] Fecha Ecuador calculada:', {
+      ecuadorDate,
+      type: typeof ecuadorDate,
+      nowUtc: new Date().toISOString()
+    });
+    
     // Intentar insertar con todas las columnas de geolocalización
     // Si falla por columnas faltantes, reintentar sin ellas
     let insertResult;
@@ -800,14 +806,14 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
         INSERT INTO timecards (employee_id, date, time_in, location_in_lat, location_in_lng, location_in_accuracy, device_ip_in)
         VALUES (
           ${employee.id}, 
-          ${ecuadorDate},
+          ${ecuadorDate}::DATE,
           NOW(),
           ${geolocation?.latitude || null}, 
           ${geolocation?.longitude || null}, 
           ${geolocation?.accuracy || null}, 
           ${deviceIP}
         )
-        RETURNING id, time_in
+        RETURNING id, time_in, date
       `;
     } catch (insertError: any) {
       // Si las columnas de geolocalización no existen, intentar sin ellas
@@ -817,10 +823,10 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
           INSERT INTO timecards (employee_id, date, time_in)
           VALUES (
             ${employee.id}, 
-            ${ecuadorDate},
+            ${ecuadorDate}::DATE,
             NOW()
           )
-          RETURNING id, time_in
+          RETURNING id, time_in, date
         `;
       } else {
         throw insertError;
@@ -832,7 +838,12 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
       return res.status(500).json({ success: false, message: 'Error al guardar entrada' } as ClockInResponse);
     }
 
-    console.log('[handleClockIn] Timecard inserted successfully:', insertResult.rows[0]);
+    console.log('[handleClockIn] Timecard inserted successfully:', {
+      id: insertResult.rows[0].id,
+      date: insertResult.rows[0].date,
+      time_in: insertResult.rows[0].time_in,
+      dateType: typeof insertResult.rows[0].date
+    });
 
     // VALIDAR RETRASOS
     try {
@@ -841,8 +852,8 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
       
       // Obtener día de semana usando el timestamp guardado (convertido a Ecuador)
       const timeInDate = new Date(timeInTimestamp);
-      const ecuadorDate = new Date(timeInDate.toLocaleString('en-US', { timeZone: 'America/Guayaquil' }));
-      const dayOfWeek = ecuadorDate.getDay();
+      const ecuadorDateForSchedule = new Date(timeInDate.toLocaleString('en-US', { timeZone: 'America/Guayaquil' }));
+      const dayOfWeek = ecuadorDateForSchedule.getDay();
       
       const scheduleResult = await sql`
         SELECT check_in_time, grace_period_minutes
@@ -863,8 +874,8 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
         const expectedTimeInMinutes = expectedHour * 60 + expectedMin;
         
         // Obtener hora real de entrada en Ecuador
-        const actualHour = ecuadorDate.getHours();
-        const actualMinute = ecuadorDate.getMinutes();
+        const actualHour = ecuadorDateForSchedule.getHours();
+        const actualMinute = ecuadorDateForSchedule.getMinutes();
         const actualTimeInMinutes = actualHour * 60 + actualMinute;
 
         // Calcular retraso
@@ -1250,17 +1261,20 @@ async function handleGetEmployeeReport(req: any, res: any, code: string, month: 
         LIMIT 1
       `;
 
-      console.log('[handleGetEmployeeReport] Query result:', {
+      console.log('[handleGetEmployeeReport] Query details:', {
+        employeeId: employee.id,
+        employeeCode: employee.code,
+        queryDate: todayStr,
+        queryDateType: typeof todayStr,
         rowsFound: todayResult.rows.length,
-        todayStr,
-        queryDate: `${todayStr}::DATE`,
         rows: todayResult.rows.map(r => ({
           id: r.id,
           employee_id: r.employee_id,
           date: r.date,
           date_type: typeof r.date,
           time_in: r.time_in,
-          time_out: r.time_out
+          time_out: r.time_out,
+          hours_worked: r.hours_worked
         }))
       });
 
