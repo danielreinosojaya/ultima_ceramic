@@ -1,3 +1,105 @@
+// Formatea hora local desde timestamp ISO (retornado por PostgreSQL)
+// El timestamp está en UTC, necesitamos restar 5 horas para Ecuador
+// Ejemplo: "2025-11-27T21:51:10.000Z" → "04:51 p.m." (UTC-5)
+export function formatLocalTimeFromUTC(isoString: string): string {
+    if (!isoString) return '-';
+    
+    try {
+        // Si es ISO con "Z", convertir a Date y hacer cálculo de timezone
+        if (isoString.includes('T') && isoString.includes('Z')) {
+            const date = new Date(isoString);
+            // Restar 5 horas (Ecuador UTC-5)
+            const ecuadorMs = date.getTime() - (5 * 60 * 60 * 1000);
+            const ecuadorDate = new Date(ecuadorMs);
+            
+            const hours = ecuadorDate.getUTCHours();
+            const minutes = ecuadorDate.getUTCMinutes();
+            
+            const ampm = hours >= 12 ? 'p.m.' : 'a.m.';
+            const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+            
+            return `${String(hour12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${ampm}`;
+        }
+        
+        // Si es string plano "YYYY-MM-DD HH:MM:SS", extraer hora directamente
+        const timeMatch = isoString.match(/(\d{2}):(\d{2})(?::(\d{2}))?/);
+        if (!timeMatch) return '-';
+        
+        const hours = parseInt(timeMatch[1], 10);
+        const minutes = parseInt(timeMatch[2], 10);
+        
+        const ampm = hours >= 12 ? 'p.m.' : 'a.m.';
+        const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+        
+        return `${String(hour12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${ampm}`;
+    } catch {
+        return '-';
+    }
+}
+
+// Calcula horas trabajadas en progreso (entrada sin salida)
+export function calculateHoursInProgress(timeInIso: string): string {
+    if (!timeInIso) return '-';
+    try {
+        const timeIn = new Date(timeInIso);
+        const now = new Date();
+        // Usar UTC para ambos (hora local guardada como UTC)
+        const diffMs = now.getTime() - timeIn.getTime();
+        const hours = Math.max(0, diffMs / 3600000);
+        return hours.toFixed(2);
+    } catch {
+        return '-';
+    }
+}
+
+// Calcula horas en progreso con formato legible (ej: "2h 30m")
+export function calculateHoursInProgressReadable(timeInIso: string): string {
+    if (!timeInIso) return '-';
+    try {
+        const timeIn = new Date(timeInIso);
+        const now = new Date();
+        const diffMs = now.getTime() - timeIn.getTime();
+        
+        if (diffMs < 0) return '-';
+        
+        const totalMinutes = Math.floor(diffMs / 60000);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        
+        if (hours === 0) {
+            return `${minutes}m`;
+        } else if (minutes === 0) {
+            return `${hours}h`;
+        } else {
+            return `${hours}h ${minutes}m`;
+        }
+    } catch {
+        return '-';
+    }
+}
+
+// Calcula horas en progreso con formato decimal y estado
+export function calculateHoursInProgressWithStatus(timeInIso: string): { hours: number; formatted: string; status: string } {
+    if (!timeInIso) return { hours: 0, formatted: '-', status: 'error' };
+    try {
+        const timeIn = new Date(timeInIso);
+        const now = new Date();
+        const diffMs = now.getTime() - timeIn.getTime();
+        
+        if (diffMs < 0) return { hours: 0, formatted: '-', status: 'error' };
+        
+        const hours = diffMs / 3600000;
+        const formatted = hours.toFixed(2);
+        
+        return {
+            hours: Math.max(0, hours),
+            formatted,
+            status: 'in_progress'
+        };
+    } catch {
+        return { hours: 0, formatted: '-', status: 'error' };
+    }
+}
 export function formatDate(date: string | Date): string {
     if (!date) return '';
     // Si es string tipo YYYY-MM-DD, formatear manualmente sin crear Date (evita desfase)

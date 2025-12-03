@@ -119,7 +119,9 @@ const parseBookingFromDB = (dbRow: any): Booking => {
         
         // Incluir client_note y participants explícitamente
         camelCased.clientNote = dbRow.client_note || null;
-        camelCased.participants = dbRow.participants !== undefined ? dbRow.participants : null;
+        camelCased.participants = dbRow.participants !== undefined && dbRow.participants !== null 
+            ? parseInt(dbRow.participants, 10) 
+            : 1;
         
         if (camelCased.price && typeof camelCased.price === 'string') {
             camelCased.price = parseFloat(camelCased.price);
@@ -649,6 +651,18 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     });
                     data = Array.from(customerMap.values());
                     console.log(`[API] Generated ${data.length} customers from ${parsedBookings.length} bookings`);
+                    break;
+                }
+                case 'listPieces': {
+                    try {
+                        const { rows } = await sql`
+                            SELECT * FROM pieces WHERE is_active = true ORDER BY sort_order, name ASC
+                        `;
+                        data = toCamelCase(rows);
+                    } catch (error) {
+                        console.error('[listPieces GET] Error:', error);
+                        return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+                    }
                     break;
                 }
             default:
@@ -3351,6 +3365,331 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 });
             }
         }
+        case 'getClientBooking': {
+            try {
+                const { email, bookingCode } = req.body;
+                
+                if (!email || !bookingCode) {
+                    return res.status(400).json({ 
+                        success: false, 
+                        error: 'Email and booking code required' 
+                    });
+                }
+
+                // Query for booking by email and code
+                const { rows } = await sql`
+                    SELECT * FROM bookings 
+                    WHERE user_info->>'email' = ${email} 
+                    AND booking_code = ${bookingCode.toUpperCase()}
+                    LIMIT 1
+                `;
+
+                if (rows.length === 0) {
+                    return res.status(404).json({ 
+                        success: false, 
+                        error: 'Invalid email or booking code' 
+                    });
+                }
+
+                const booking = parseBookingFromDB(rows[0]);
+                return res.status(200).json(booking);
+            } catch (error) {
+                console.error('[getClientBooking] Error:', error);
+                return res.status(500).json({ 
+                    success: false, 
+                    error: error instanceof Error ? error.message : String(error) 
+                });
+            }
+        }
+        case 'getBookingById': {
+            try {
+                const { bookingId } = req.body;
+                
+                if (!bookingId) {
+                    return res.status(400).json({ 
+                        success: false, 
+                        error: 'Booking ID required' 
+                    });
+                }
+
+                // Query for booking by ID
+                const { rows } = await sql`
+                    SELECT * FROM bookings 
+                    WHERE id = ${String(bookingId)}
+                    LIMIT 1
+                `;
+
+                if (rows.length === 0) {
+                    return res.status(404).json({ 
+                        success: false, 
+                        error: 'Booking not found' 
+                    });
+                }
+
+                const booking = parseBookingFromDB(rows[0]);
+                return res.status(200).json(booking);
+            } catch (error) {
+                console.error('[getBookingById] Error:', error);
+                return res.status(500).json({ 
+                    success: false, 
+                    error: error instanceof Error ? error.message : String(error) 
+                });
+            }
+        }
+        case 'getBookingById': {
+            try {
+                const { bookingId } = req.query;
+                
+                if (!bookingId) {
+                    return res.status(400).json({ 
+                        success: false, 
+                        error: 'Booking ID required' 
+                    });
+                }
+
+                // Query for booking by ID
+                const { rows } = await sql`
+                    SELECT * FROM bookings 
+                    WHERE id = ${String(bookingId)}
+                    LIMIT 1
+                `;
+
+                if (rows.length === 0) {
+                    return res.status(404).json({ 
+                        success: false, 
+                        error: 'Booking not found' 
+                    });
+                }
+
+                const booking = parseBookingFromDB(rows[0]);
+                return res.status(200).json(booking);
+            } catch (error) {
+                console.error('[getBookingById] Error:', error);
+                return res.status(500).json({ 
+                    success: false, 
+                    error: error instanceof Error ? error.message : String(error) 
+                });
+            }
+        }
+
+        // ==================== NEW EXPERIENCE ENDPOINTS ====================
+
+        case 'listPieces': {
+            try {
+                const { rows } = await sql`
+                    SELECT * FROM pieces WHERE is_active = true ORDER BY sort_order, name ASC
+                `;
+                return res.status(200).json({ success: true, data: toCamelCase(rows) });
+            } catch (error) {
+                console.error('[listPieces] Error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+
+        case 'createPiece': {
+            const body = req.body;
+            if (!body.name || !body.basePrice) {
+                return res.status(400).json({ error: 'name and basePrice are required' });
+            }
+            try {
+                const { rows } = await sql`
+                    INSERT INTO pieces (name, description, category, base_price, estimated_hours, image_url, is_active, sort_order)
+                    VALUES (${body.name}, ${body.description || null}, ${body.category || null}, ${body.basePrice}, ${body.estimatedHours || null}, ${body.imageUrl || null}, true, ${body.sortOrder || 0})
+                    RETURNING *
+                `;
+                return res.status(200).json({ success: true, data: toCamelCase(rows[0]) });
+            } catch (error) {
+                console.error('[createPiece] Error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+
+        case 'updatePiece': {
+            const body = req.body;
+            if (!body.id) {
+                return res.status(400).json({ error: 'id is required' });
+            }
+            try {
+                const { rows } = await sql`
+                    UPDATE pieces 
+                    SET name = ${body.name || sql`name`}, 
+                        description = ${body.description || null},
+                        category = ${body.category || null},
+                        base_price = ${body.basePrice || sql`base_price`},
+                        estimated_hours = ${body.estimatedHours || null},
+                        image_url = ${body.imageUrl || null},
+                        is_active = ${body.isActive !== undefined ? body.isActive : sql`is_active`},
+                        sort_order = ${body.sortOrder !== undefined ? body.sortOrder : sql`sort_order`},
+                        updated_at = NOW()
+                    WHERE id = ${body.id}
+                    RETURNING *
+                `;
+                return res.status(200).json({ success: true, data: toCamelCase(rows[0]) });
+            } catch (error) {
+                console.error('[updatePiece] Error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+
+        case 'calculateExperiencePricing': {
+            const body = req.body;
+            if (!body.piecesSelected || !Array.isArray(body.piecesSelected)) {
+                return res.status(400).json({ error: 'piecesSelected array is required' });
+            }
+            try {
+                // Get piece details
+                const pieceIds = body.piecesSelected.map((p: any) => p.pieceId);
+                const { rows: pieces } = await sql`
+                    SELECT id, name, base_price FROM pieces WHERE id = ANY(${pieceIds}::uuid[])
+                `;
+                
+                let subtotalPieces = 0;
+                const piecesWithPrice = body.piecesSelected.map((p: any) => {
+                    const piece = pieces.find((pc: any) => pc.id === p.pieceId);
+                    const pricePerPiece = piece?.base_price || p.basePrice || 0;
+                    const quantity = p.quantity || 1;
+                    subtotalPieces += pricePerPiece * quantity;
+                    return { ...p, basePrice: pricePerPiece };
+                });
+
+                // Calculate guided cost
+                let guidedCost = 0;
+                const guidedOption = body.guidedOption || 'none';
+                const guidedPricePerMinute = 0.5; // Configurable
+                if (guidedOption === '60min') {
+                    guidedCost = 60 * guidedPricePerMinute;
+                } else if (guidedOption === '120min') {
+                    guidedCost = 120 * guidedPricePerMinute;
+                }
+
+                const total = subtotalPieces + guidedCost;
+
+                return res.status(200).json({
+                    success: true,
+                    data: {
+                        pieces: piecesWithPrice,
+                        guidedOption,
+                        guidedPricePerMinute,
+                        subtotalPieces,
+                        guidedCost,
+                        total
+                    }
+                });
+            } catch (error) {
+                console.error('[calculateExperiencePricing] Error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+
+        case 'listExperienceConfirmations': {
+            try {
+                const { rows } = await sql`
+                    SELECT ec.*, b.user_info, b.booking_code, b.price, ebm.pieces_selected
+                    FROM experience_confirmations ec
+                    LEFT JOIN bookings b ON b.id = ec.booking_id
+                    LEFT JOIN experience_bookings_metadata ebm ON ebm.booking_id = ec.booking_id
+                    ORDER BY ec.created_at DESC
+                `;
+                
+                return res.status(200).json({ 
+                    success: true, 
+                    data: toCamelCase(rows) 
+                });
+            } catch (error) {
+                console.error('[listExperienceConfirmations] Error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+
+        case 'confirmExperience': {
+            const body = req.body;
+            if (!body.experienceConfirmationId) {
+                return res.status(400).json({ error: 'experienceConfirmationId is required' });
+            }
+            try {
+                const { rows } = await sql`
+                    UPDATE experience_confirmations 
+                    SET status = 'confirmed', 
+                        confirmed_by_email = ${body.confirmedByEmail || null},
+                        confirmation_reason = ${body.reason || null},
+                        updated_at = NOW()
+                    WHERE id = ${body.experienceConfirmationId}
+                    RETURNING *
+                `;
+                
+                if (rows.length === 0) {
+                    return res.status(404).json({ success: false, error: 'Experience confirmation not found' });
+                }
+
+                // Get booking details to send email
+                const { rows: bookingRows } = await sql`
+                    SELECT * FROM bookings WHERE id = ${rows[0].booking_id}
+                `;
+
+                if (bookingRows.length > 0 && bookingRows[0].user_info) {
+                    const userInfo = bookingRows[0].user_info;
+                    await emailService.sendExperienceConfirmedEmail(userInfo.email, {
+                        firstName: userInfo.firstName,
+                        bookingCode: bookingRows[0].booking_code,
+                        piecesCount: 1,
+                        totalPrice: bookingRows[0].price,
+                        confirmationReason: body.reason
+                    });
+                }
+
+                return res.status(200).json({ success: true, data: toCamelCase(rows[0]) });
+            } catch (error) {
+                console.error('[confirmExperience] Error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+
+        case 'rejectExperience': {
+            const body = req.body;
+            if (!body.experienceConfirmationId || !body.reason) {
+                return res.status(400).json({ error: 'experienceConfirmationId and reason are required' });
+            }
+            try {
+                const { rows } = await sql`
+                    UPDATE experience_confirmations 
+                    SET status = 'rejected', 
+                        rejection_reason = ${body.reason},
+                        updated_at = NOW()
+                    WHERE id = ${body.experienceConfirmationId}
+                    RETURNING *
+                `;
+                
+                if (rows.length === 0) {
+                    return res.status(404).json({ success: false, error: 'Experience confirmation not found' });
+                }
+
+                // Get booking details to send email and process refund
+                const { rows: bookingRows } = await sql`
+                    SELECT * FROM bookings WHERE id = ${rows[0].booking_id}
+                `;
+
+                if (bookingRows.length > 0) {
+                    const booking = bookingRows[0];
+                    const userInfo = booking.user_info;
+                    
+                    // Send rejection email
+                    await emailService.sendExperienceRejectedEmail(userInfo.email, {
+                        firstName: userInfo.firstName,
+                        bookingCode: booking.booking_code,
+                        rejectionReason: body.reason
+                    });
+
+                    // TODO: Process refund if payment was made
+                    console.log('[rejectExperience] Refund needed for booking:', booking.id, 'Amount:', booking.price);
+                }
+
+                return res.status(200).json({ success: true, data: toCamelCase(rows[0]) });
+            } catch (error) {
+                console.error('[rejectExperience] Error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+
         default:
             return res.status(400).json({ error: `Unknown action: ${action}` });
     }
@@ -3381,6 +3720,7 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reschedule_used INT DEFAULT 0`;
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reschedule_history JSONB DEFAULT '[]'::jsonb`;
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS last_reschedule_at TIMESTAMP WITH TIME ZONE`;
+      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS participants INT DEFAULT 1`;
     } catch (e) {
       console.warn('[ADD BOOKING] Could not add columns (may already exist):', e);
     }
@@ -3460,9 +3800,9 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
 
     const { rows: created } = await sql`
       INSERT INTO bookings (
-        booking_code, product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_date, accepted_no_refund, expires_at, status, technique, reschedule_allowance, reschedule_used, reschedule_history
+        booking_code, product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_date, accepted_no_refund, expires_at, status, technique, reschedule_allowance, reschedule_used, reschedule_history, participants
       ) VALUES (
-        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(body.product)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}, NOW() + INTERVAL '2 hours', 'active', ${technique || null}, ${rescheduleAllowance}, 0, '[]'::jsonb
+        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(body.product)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}, NOW() + INTERVAL '2 hours', 'active', ${technique || null}, ${rescheduleAllowance}, 0, '[]'::jsonb, ${(body as any).participants || 1}
       ) RETURNING *;
     `;
 
@@ -3482,6 +3822,7 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
       expiresAt: created[0].expires_at ? new Date(created[0].expires_at) : undefined,
       status: created[0].status || 'active',
       technique: created[0].technique,
+      participants: created[0].participants ? parseInt(created[0].participants, 10) : 1,
     };
 
     // Process giftcard hold if provided

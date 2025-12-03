@@ -1071,3 +1071,205 @@ export const sendPackageRenewalReminderEmail = async (
     console.info('[emailService] Package renewal reminder sent to', customerEmail);
     return result;
 };
+
+// ==================== NEW EXPERIENCE EMAILS ====================
+
+export const sendGroupClassConfirmationEmail = async (
+    customerEmail: string,
+    bookingDetails: {
+        firstName: string;
+        groupSize: number;
+        date: string;
+        time: string;
+        price: number;
+        bookingCode: string;
+    }
+) => {
+    const subject = `✓ Tu Clase Grupal Está Confirmada - ${bookingDetails.bookingCode}`;
+    
+    const html = `
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: #FFFFFF; padding: 20px;">
+            <h1 style="color: #1F2937; font-size: 24px; margin-bottom: 20px;">✓ ¡Tu Clase Grupal Está Confirmada!</h1>
+            
+            <div style="background: #EFF6FF; border-left: 4px solid #3B82F6; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3 style="color: #1E40AF; margin-top: 0;">Detalles de tu Reserva</h3>
+                <p style="margin: 10px 0;"><strong>Código de Reserva:</strong> ${bookingDetails.bookingCode}</p>
+                <p style="margin: 10px 0;"><strong>Cantidad de Personas:</strong> ${bookingDetails.groupSize}</p>
+                <p style="margin: 10px 0;"><strong>Fecha:</strong> ${bookingDetails.date}</p>
+                <p style="margin: 10px 0;"><strong>Hora:</strong> ${bookingDetails.time}</p>
+                <p style="margin: 10px 0; font-size: 18px;"><strong style="color: #3B82F6;">Total: $${bookingDetails.price}</strong></p>
+            </div>
+
+            <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #92400E; font-size: 14px;">
+                    <strong>📝 Importante:</strong> Por favor lleva a tu grupo 15 minutos antes. Confirma con tu equipo la fecha y hora exacta.
+                </p>
+            </div>
+
+            <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
+                ¡Que disfruten su experiencia!<br/>
+                <strong>El equipo de Última Ceramic</strong>
+            </p>
+        </div>
+    `;
+
+    const result = await sendEmail(customerEmail, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(customerEmail, 'group-class-confirmation', 'email', status);
+
+    console.info('[emailService] Group class confirmation sent to', customerEmail);
+    return result;
+};
+
+export const sendExperiencePendingReviewEmail = async (
+    customerEmail: string,
+    bookingDetails: {
+        firstName: string;
+        piecesCount: number;
+        totalPrice: number;
+        bookingCode: string;
+        guidedOption: string;
+    }
+) => {
+    const subject = `⏳ Tu Experiencia Personalizada Está en Revisión - ${bookingDetails.bookingCode}`;
+    
+    const html = `
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: #FFFFFF; padding: 20px;">
+            <h1 style="color: #1F2937; font-size: 24px; margin-bottom: 20px;">⏳ Tu Experiencia Está en Revisión</h1>
+            
+            <p style="color: #4B5563; font-size: 16px;">Hola ${bookingDetails.firstName},</p>
+            
+            <p style="color: #6B7280; font-size: 14px; margin: 20px 0;">
+                Hemos recibido tu solicitud para una experiencia personalizada. Nuestro equipo está revisando la disponibilidad y te confirmaremos en las próximas 24 horas.
+            </p>
+
+            <div style="background: #F3E8FF; border-left: 4px solid #A855F7; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3 style="color: #6B21A8; margin-top: 0;">Detalles de tu Solicitud</h3>
+                <p style="margin: 10px 0;"><strong>Código:</strong> ${bookingDetails.bookingCode}</p>
+                <p style="margin: 10px 0;"><strong>Piezas Seleccionadas:</strong> ${bookingDetails.piecesCount}</p>
+                <p style="margin: 10px 0;"><strong>Opción de Guía:</strong> ${bookingDetails.guidedOption}</p>
+                <p style="margin: 10px 0; font-size: 18px;"><strong style="color: #A855F7;">Total: $${bookingDetails.totalPrice}</strong></p>
+            </div>
+
+            <div style="background: #DBEAFE; border-left: 4px solid #0EA5E9; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #075985; font-size: 14px;">
+                    <strong>✓ Pago Confirmado:</strong> Tu pago ha sido procesado correctamente. Recibirás la confirmación de la experiencia por email.
+                </p>
+            </div>
+
+            <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
+                Cualquier duda, no dudes en contactarnos.<br/>
+                <strong>El equipo de Última Ceramic</strong>
+            </p>
+        </div>
+    `;
+
+    const result = await sendEmail(customerEmail, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(customerEmail, 'experience-pending-review', 'email', status);
+
+    console.info('[emailService] Experience pending review sent to', customerEmail);
+    return result;
+};
+
+export const sendExperienceConfirmedEmail = async (
+    customerEmail: string,
+    bookingDetails: {
+        firstName: string;
+        piecesCount: number;
+        totalPrice: number;
+        bookingCode: string;
+        confirmationReason?: string;
+    }
+) => {
+    const subject = `✓ ¡Tu Experiencia Personalizada Confirmada! - ${bookingDetails.bookingCode}`;
+    
+    const html = `
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: #FFFFFF; padding: 20px;">
+            <h1 style="color: #1F2937; font-size: 24px; margin-bottom: 20px;">✓ ¡Tu Experiencia Personalizada Está Confirmada!</h1>
+            
+            <p style="color: #4B5563; font-size: 16px;">Hola ${bookingDetails.firstName},</p>
+            
+            <p style="color: #6B7280; font-size: 14px; margin: 20px 0;">
+                ¡Excelente noticia! Tu experiencia personalizada ha sido confirmada por nuestro equipo. Estamos listos para que disfrutes creando tus propias piezas.
+            </p>
+
+            <div style="background: #F0FDF4; border-left: 4px solid #22C55E; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3 style="color: #166534; margin-top: 0;">Experiencia Confirmada</h3>
+                <p style="margin: 10px 0;"><strong>Código:</strong> ${bookingDetails.bookingCode}</p>
+                <p style="margin: 10px 0;"><strong>Piezas a Trabajar:</strong> ${bookingDetails.piecesCount}</p>
+                <p style="margin: 10px 0; font-size: 18px;"><strong style="color: #22C55E;">Total: $${bookingDetails.totalPrice}</strong></p>
+                ${bookingDetails.confirmationReason ? `<p style="margin: 10px 0; font-size: 14px; color: #166534;"><em>${bookingDetails.confirmationReason}</em></p>` : ''}
+            </div>
+
+            <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #92400E; font-size: 14px;">
+                    <strong>📞 Próximo Paso:</strong> Nuestro equipo se pondrá en contacto contigo por WhatsApp para coordinar la fecha y hora exacta.
+                </p>
+            </div>
+
+            <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
+                ¡A crear se ha dicho!<br/>
+                <strong>El equipo de Última Ceramic</strong>
+            </p>
+        </div>
+    `;
+
+    const result = await sendEmail(customerEmail, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(customerEmail, 'experience-confirmed', 'email', status);
+
+    console.info('[emailService] Experience confirmed sent to', customerEmail);
+    return result;
+};
+
+export const sendExperienceRejectedEmail = async (
+    customerEmail: string,
+    bookingDetails: {
+        firstName: string;
+        bookingCode: string;
+        rejectionReason: string;
+    }
+) => {
+    const subject = `ℹ️ Actualización sobre tu Experiencia Personalizada - ${bookingDetails.bookingCode}`;
+    
+    const html = `
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: #FFFFFF; padding: 20px;">
+            <h1 style="color: #1F2937; font-size: 24px; margin-bottom: 20px;">ℹ️ Actualización sobre tu Solicitud</h1>
+            
+            <p style="color: #4B5563; font-size: 16px;">Hola ${bookingDetails.firstName},</p>
+            
+            <p style="color: #6B7280; font-size: 14px; margin: 20px 0;">
+                Lamentablemente, no pudimos confirmar tu experiencia personalizada en esta ocasión.
+            </p>
+
+            <div style="background: #FEE2E2; border-left: 4px solid #EF4444; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3 style="color: #991B1B; margin-top: 0;">Razón</h3>
+                <p style="margin: 10px 0; color: #7F1D1D;">${bookingDetails.rejectionReason}</p>
+                <p style="margin: 10px 0;"><strong>Código:</strong> ${bookingDetails.bookingCode}</p>
+            </div>
+
+            <div style="background: #DBEAFE; border-left: 4px solid #0EA5E9; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #075985; font-size: 14px;">
+                    <strong>💰 Reembolso:</strong> Tu pago ha sido reembolsado. Por favor verifica tu cuenta en 3-5 días hábiles.
+                </p>
+            </div>
+
+            <p style="color: #6B7280; font-size: 14px; margin-top: 20px;">
+                ¿Tienes preguntas? No dudes en contactarnos por WhatsApp.
+            </p>
+
+            <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
+                Esperamos verte pronto con otra experiencia.<br/>
+                <strong>El equipo de Última Ceramic</strong>
+            </p>
+        </div>
+    `;
+
+    const result = await sendEmail(customerEmail, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(customerEmail, 'experience-rejected', 'email', status);
+
+    console.info('[emailService] Experience rejected sent to', customerEmail);
+    return result;
+};

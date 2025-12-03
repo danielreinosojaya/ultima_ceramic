@@ -5,6 +5,7 @@ import { EmployeeScheduleManager } from './EmployeeScheduleManager';
 import { MonthlyReportViewer } from './MonthlyReportViewer';
 import { GeofenceManager } from './GeofenceManager';
 import { fetchWithAbort } from '../../utils/fetchWithAbort';
+import { formatLocalTimeFromUTC, calculateHoursInProgress, calculateHoursInProgressReadable, calculateHoursInProgressWithStatus } from '../../utils/formatters';
 
 interface AdminTimecardPanelProps {
   adminCode: string;
@@ -402,80 +403,16 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
                       <tr key={idx} className="border-b border-brand-border/30 hover:bg-brand-surface/50">
                         <td className="px-6 py-4">{emp.employee.name}</td>
                         <td className="px-6 py-4 font-mono text-sm">{emp.employee.code}</td>
-                        <td className="px-6 py-4">
-                          {emp.time_in
-                            ? (() => {
-                                const date = new Date(emp.time_in);
-                                // Backend guarda HORA LOCAL como ISO: 2025-11-11T17:59:07.000Z representa 12:59 PM
-                                // getUTCHours() es la hora local guardada, getHours() es hora del navegador
-                                const localHours = date.getUTCHours();
-                                const localMinutes = date.getUTCMinutes();
-                                
-                                const ampm = localHours >= 12 ? 'p.m.' : 'a.m.';
-                                const hour12 = localHours === 0 ? 12 : localHours > 12 ? localHours - 12 : localHours;
-                                
-                                return `${String(hour12).padStart(2, '0')}:${String(localMinutes).padStart(2, '0')} ${ampm}`;
-                              })()
-                            : '-'}
-                        </td>
-                        <td className="px-6 py-4">
-                          {emp.time_out
-                            ? (() => {
-                                const date = new Date(emp.time_out);
-                                // Backend guarda HORA LOCAL como ISO
-                                const localHoursOut = date.getUTCHours();
-                                const localMinutesOut = date.getUTCMinutes();
-                                
-                                const ampm = localHoursOut >= 12 ? 'p.m.' : 'a.m.';
-                                const hour12 = localHoursOut === 0 ? 12 : localHoursOut > 12 ? localHoursOut - 12 : localHoursOut;
-                                
-                                return `${String(hour12).padStart(2, '0')}:${String(localMinutesOut).padStart(2, '0')} ${ampm}`;
-                              })()
-                            : '-'}
-                        </td>
+                        <td className="px-6 py-4">{formatLocalTimeFromUTC(emp.time_in)}</td>
+                        <td className="px-6 py-4">{formatLocalTimeFromUTC(emp.time_out)}</td>
                         <td className="px-6 py-4 font-mono">
-                          {(() => {
-                            console.log('[AdminPanel DEBUG] hours_worked:', emp.hours_worked, 'type:', typeof emp.hours_worked);
-                            
-                            // Si hay hours_worked de BD, mostrarlo
-                            if (emp.hours_worked && typeof emp.hours_worked === 'number') {
-                              return emp.hours_worked.toFixed(2);
-                            } else if (emp.hours_worked) {
-                              return Number(emp.hours_worked).toFixed(2);
-                            }
-                            
-                            // Si está en progreso (time_in pero no time_out), calcular con hora local
-                            if (emp.time_in && !emp.time_out && emp.status === 'in_progress') {
-                              try {
-                                const timeInDate = new Date(emp.time_in);
-                                const now = new Date();
-                                
-                                // Extraer hora local del timestamp ISO usando getUTCHours
-                                const timeInHours = timeInDate.getUTCHours();
-                                const timeInMinutes = timeInDate.getUTCMinutes();
-                                const timeInSeconds = timeInDate.getUTCSeconds();
-                                
-                                // Hora actual local
-                                const nowHours = now.getHours();
-                                const nowMinutes = now.getMinutes();
-                                const nowSeconds = now.getSeconds();
-                                
-                                // Calcular diferencia en segundos
-                                const timeInTotalSeconds = timeInHours * 3600 + timeInMinutes * 60 + timeInSeconds;
-                                const nowTotalSeconds = nowHours * 3600 + nowMinutes * 60 + nowSeconds;
-                                
-                                const diffSeconds = nowTotalSeconds - timeInTotalSeconds;
-                                const hours = Math.max(0, diffSeconds / 3600);
-                                
-                                return hours.toFixed(2);
-                              } catch (e) {
-                                console.error('[AdminPanel] Error calculando horas en progreso:', e);
-                                return '-';
-                              }
-                            }
-                            
-                            return '-';
-                          })()}h
+                          {emp.hours_worked !== null && emp.hours_worked !== undefined && typeof emp.hours_worked === 'number'
+                            ? `${emp.hours_worked.toFixed(2)}h`
+                            : emp.hours_worked !== null && emp.hours_worked !== undefined
+                            ? `${Number(emp.hours_worked).toFixed(2)}h`
+                            : emp.time_in && !emp.time_out && emp.status === 'in_progress'
+                            ? `⏳ ${calculateHoursInProgress(emp.time_in)}h (${calculateHoursInProgressReadable(emp.time_in)})`
+                            : '-'}
                         </td>
                         <td className="px-6 py-4 text-center">
                           <span
@@ -757,9 +694,9 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
                                     : '-'}
                                 </td>
                                 <td className="px-6 py-4 font-mono font-bold">
-                                  {record.hours_worked && typeof record.hours_worked === 'number' 
-                                    ? record.hours_worked.toFixed(2)
-                                    : record.hours_worked ? Number(record.hours_worked).toFixed(2) : '-'}h
+                                  {record.hours_worked !== null && record.hours_worked !== undefined && typeof record.hours_worked === 'number' 
+                                    ? `${record.hours_worked.toFixed(2)}h`
+                                    : record.hours_worked !== null && record.hours_worked !== undefined ? `${Number(record.hours_worked).toFixed(2)}h` : '-'}
                                 </td>
                                 <td className="px-6 py-4">
                                   <div className="flex gap-2 justify-center">
