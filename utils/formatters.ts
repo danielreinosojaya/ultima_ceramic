@@ -29,10 +29,14 @@ export function formatLocalTimeFromUTC(isoString: string): string {
 export function calculateHoursInProgress(timeInIso: string): string {
     if (!timeInIso) return '-';
     try {
-        const timeIn = new Date(timeInIso);
-        const now = new Date();
-        // Usar UTC para ambos (hora local guardada como UTC)
-        const diffMs = now.getTime() - timeIn.getTime();
+        // ✅ CRÍTICO: Convertir AMBOS a UTC para comparación correcta
+        const timeIn = new Date(timeInIso);  // Ya está en UTC (backend guarda ISO)
+        const nowUtc = new Date();           // getTime() siempre retorna UTC
+        
+        // ✅ Ambas son timestamps UTC en milisegundos
+        const diffMs = nowUtc.getTime() - timeIn.getTime();
+        
+        // ✅ Si diffMs es negativo, significa bug de sync (no debería ocurrir)
         const hours = Math.max(0, diffMs / 3600000);
         return hours.toFixed(2);
     } catch {
@@ -44,9 +48,12 @@ export function calculateHoursInProgress(timeInIso: string): string {
 export function calculateHoursInProgressReadable(timeInIso: string): string {
     if (!timeInIso) return '-';
     try {
-        const timeIn = new Date(timeInIso);
-        const now = new Date();
-        const diffMs = now.getTime() - timeIn.getTime();
+        // ✅ CRÍTICO: Convertir AMBOS a UTC para comparación correcta
+        const timeIn = new Date(timeInIso);  // Ya está en UTC
+        const nowUtc = new Date();           // getTime() siempre retorna UTC
+        
+        // ✅ Ambas son timestamps UTC en milisegundos
+        const diffMs = nowUtc.getTime() - timeIn.getTime();
         
         if (diffMs < 0) return '-';
         
@@ -70,9 +77,12 @@ export function calculateHoursInProgressReadable(timeInIso: string): string {
 export function calculateHoursInProgressWithStatus(timeInIso: string): { hours: number; formatted: string; status: string } {
     if (!timeInIso) return { hours: 0, formatted: '-', status: 'error' };
     try {
-        const timeIn = new Date(timeInIso);
-        const now = new Date();
-        const diffMs = now.getTime() - timeIn.getTime();
+        // ✅ CRÍTICO: Convertir AMBOS a UTC para comparación correcta
+        const timeIn = new Date(timeInIso);  // Ya está en UTC
+        const nowUtc = new Date();           // getTime() siempre retorna UTC
+        
+        // ✅ Ambas son timestamps UTC en milisegundos
+        const diffMs = nowUtc.getTime() - timeIn.getTime();
         
         if (diffMs < 0) return { hours: 0, formatted: '-', status: 'error' };
         
