@@ -461,7 +461,7 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
                         <td className="px-6 py-4">{formatLocalTimeFromUTC(emp.time_in)}</td>
                         <td className="px-6 py-4">{formatLocalTimeFromUTC(emp.time_out)}</td>
                         <td className="px-6 py-4 font-mono">
-                          {/* ✅ FIX: Validar hoursWorked antes de .toFixed() */}
+                          {/* ✅ FIX: Validar hoursWorked y time_in antes de cualquier cálculo */}
                           {emp.hours_worked !== null && emp.hours_worked !== undefined && typeof emp.hours_worked === 'number' && !isNaN(emp.hours_worked)
                             ? `${emp.hours_worked.toFixed(2)}h`
                             : emp.hours_worked !== null && emp.hours_worked !== undefined
@@ -470,7 +470,18 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
                                 return !isNaN(parsedHours) ? `${parsedHours.toFixed(2)}h` : '-';
                               })()
                             : emp.time_in && !emp.time_out && emp.status === 'in_progress'
-                            ? `⏳ ${calculateHoursInProgress(emp.time_in)}h (${calculateHoursInProgressReadable(emp.time_in)})`
+                            ? (() => {
+                                // ✅ Doble validación: time_in debe ser ISO string válido (con T)
+                                if (typeof emp.time_in === 'string' && emp.time_in.includes('T')) {
+                                  const inProgressHours = calculateHoursInProgress(emp.time_in);
+                                  const inProgressReadable = calculateHoursInProgressReadable(emp.time_in);
+                                  // Validar que no sea NaN
+                                  if (inProgressHours && inProgressHours !== '-' && !inProgressHours.includes('NaN')) {
+                                    return `⏳ ${inProgressHours}h (${inProgressReadable})`;
+                                  }
+                                }
+                                return '-';
+                              })()
                             : '-'}
                         </td>
                         <td className="px-6 py-4 text-center">

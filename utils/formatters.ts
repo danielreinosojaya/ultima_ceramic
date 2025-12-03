@@ -8,6 +8,9 @@ export function formatLocalTimeFromUTC(isoString: string | undefined | null): st
         // Rechazar strings como "2025-12-03" que son solo fechas sin hora
         if (typeof isoString !== 'string') return '-';
         
+        // ✅ Si es null o viene del backend como null, devolver '-'
+        if (isoString === 'null' || isoString === '') return '-';
+        
         // ✅ Requerir que sea ISO completo con T y timezone (o al menos con T)
         if (!isoString.includes('T')) {
           // Si es solo fecha YYYY-MM-DD sin hora, no es válido para formatLocalTimeFromUTC
@@ -37,18 +40,34 @@ export function formatLocalTimeFromUTC(isoString: string | undefined | null): st
 }
 
 // Calcula horas trabajadas en progreso (entrada sin salida)
-export function calculateHoursInProgress(timeInIso: string): string {
+export function calculateHoursInProgress(timeInIso: string | null | undefined): string {
     if (!timeInIso) return '-';
+    
     try {
+        // ✅ Validar que sea ISO string válido
+        if (typeof timeInIso !== 'string' || !timeInIso.includes('T')) {
+            return '-';
+        }
+        
         // ✅ CRÍTICO: Convertir AMBOS a UTC para comparación correcta
         const timeIn = new Date(timeInIso);  // Ya está en UTC (backend guarda ISO)
-        const nowUtc = new Date();           // getTime() siempre retorna UTC
+        
+        // Si la fecha es inválida, retornar '-'
+        if (isNaN(timeIn.getTime())) {
+            return '-';
+        }
+        
+        const nowUtc = new Date();           // getTime() siempre retorna ms desde epoch UTC
         
         // ✅ Ambas son timestamps UTC en milisegundos
         const diffMs = nowUtc.getTime() - timeIn.getTime();
         
         // ✅ Si diffMs es negativo, significa bug de sync (no debería ocurrir)
-        const hours = Math.max(0, diffMs / 3600000);
+        if (diffMs < 0) {
+            return '-';
+        }
+        
+        const hours = diffMs / 3600000;
         return hours.toFixed(2);
     } catch {
         return '-';
@@ -56,11 +75,22 @@ export function calculateHoursInProgress(timeInIso: string): string {
 }
 
 // Calcula horas en progreso con formato legible (ej: "2h 30m")
-export function calculateHoursInProgressReadable(timeInIso: string): string {
+export function calculateHoursInProgressReadable(timeInIso: string | null | undefined): string {
     if (!timeInIso) return '-';
     try {
+        // ✅ Validar que sea ISO string válido
+        if (typeof timeInIso !== 'string' || !timeInIso.includes('T')) {
+            return '-';
+        }
+        
         // ✅ CRÍTICO: Convertir AMBOS a UTC para comparación correcta
         const timeIn = new Date(timeInIso);  // Ya está en UTC
+        
+        // Si la fecha es inválida, retornar '-'
+        if (isNaN(timeIn.getTime())) {
+            return '-';
+        }
+        
         const nowUtc = new Date();           // getTime() siempre retorna UTC
         
         // ✅ Ambas son timestamps UTC en milisegundos
@@ -85,11 +115,22 @@ export function calculateHoursInProgressReadable(timeInIso: string): string {
 }
 
 // Calcula horas en progreso con formato decimal y estado
-export function calculateHoursInProgressWithStatus(timeInIso: string): { hours: number; formatted: string; status: string } {
+export function calculateHoursInProgressWithStatus(timeInIso: string | null | undefined): { hours: number; formatted: string; status: string } {
     if (!timeInIso) return { hours: 0, formatted: '-', status: 'error' };
     try {
+        // ✅ Validar que sea ISO string válido
+        if (typeof timeInIso !== 'string' || !timeInIso.includes('T')) {
+            return { hours: 0, formatted: '-', status: 'error' };
+        }
+        
         // ✅ CRÍTICO: Convertir AMBOS a UTC para comparación correcta
         const timeIn = new Date(timeInIso);  // Ya está en UTC
+        
+        // Si la fecha es inválida, retornar error
+        if (isNaN(timeIn.getTime())) {
+            return { hours: 0, formatted: '-', status: 'error' };
+        }
+        
         const nowUtc = new Date();           // getTime() siempre retorna UTC
         
         // ✅ Ambas son timestamps UTC en milisegundos
