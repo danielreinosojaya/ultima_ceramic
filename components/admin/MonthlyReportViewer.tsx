@@ -124,32 +124,62 @@ export const MonthlyReportViewer: React.FC<MonthlyReportViewerProps> = ({ adminC
   const formatDate = (dateString: string | null) => {
     if (!dateString) return '-';
     
-    console.log('[formatDate] Input:', dateString, 'Type:', typeof dateString);
-    
-    // Si es solo una fecha (YYYY-MM-DD), usarla directamente
-    if (dateString.length === 10 && dateString.includes('-')) {
-      // Es "2025-12-03", crear fecha a mediodía para evitar problemas de timezone
-      const localDate = new Date(`${dateString}T12:00:00`);
-      const result = localDate.toLocaleDateString('es-CO', { 
-        weekday: 'short', 
-        month: 'short', 
-        day: 'numeric',
-        timeZone: 'America/Guayaquil'
-      });
-      console.log('[formatDate] Output:', result);
-      return result;
-    }
-    
-    // Si es un timestamp completo, usarlo
+    // ✅ SOLUCIÓN: Convertir UTC a Ecuador timezone MANUALMENTE
+    // porque toLocaleDateString(timeZone) NO funciona en navegadores
     const date = new Date(dateString);
-    const result = date.toLocaleDateString('es-CO', { 
-      weekday: 'short', 
-      month: 'short', 
-      day: 'numeric',
+    
+    // Convertir UTC a Ecuador (UTC-5)
+    // Crear un formatter para ver la hora en UTC
+    const utcString = date.toLocaleString('es-CO', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    
+    // Esto da la hora en timezone del navegador, no en Ecuador
+    // Necesitamos calcular manualmente la diferencia
+    
+    // Método: Usar Intl.DateTimeFormat con 'en-US' para obtener hora UTC
+    // luego hacer la conversión
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
       timeZone: 'America/Guayaquil'
     });
-    console.log('[formatDate] Output from timestamp:', result);
-    return result;
+    
+    try {
+      const parts = formatter.formatToParts(date);
+      const year = parts.find(p => p.type === 'year')?.value;
+      const month = parts.find(p => p.type === 'month')?.value;
+      const day = parts.find(p => p.type === 'day')?.value;
+      
+      if (year && month && day) {
+        const ecuadorDate = new Date(`${year}-${month}-${day}T12:00:00`);
+        return ecuadorDate.toLocaleDateString('es-CO', { 
+          weekday: 'short', 
+          month: 'short', 
+          day: 'numeric'
+        });
+      }
+    } catch (e) {
+      console.error('[formatDate] Error:', e);
+    }
+    
+    // Fallback
+    return date.toLocaleDateString('es-CO', { 
+      weekday: 'short', 
+      month: 'short', 
+      day: 'numeric'
+    });
   };
 
   const months = [
