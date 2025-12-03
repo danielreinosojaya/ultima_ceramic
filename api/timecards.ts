@@ -1151,7 +1151,11 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
     `;
     const today = ecuadorDateResult.rows[0].ecuador_date;
     
+    console.log('[handleGetAdminDashboard] ===== DEBUG FECHA =====');
     console.log('[handleGetAdminDashboard] Today date (Ecuador):', today);
+    console.log('[handleGetAdminDashboard] Today type:', typeof today);
+    console.log('[handleGetAdminDashboard] Today string:', String(today));
+    console.log('[handleGetAdminDashboard] ========================');
 
     // Total empleados activos
     const employeesResult = await sql`SELECT COUNT(*) as count FROM employees WHERE status = 'active'`;
@@ -1194,6 +1198,14 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
       WHERE e.status = 'active'
       ORDER BY e.name
     `;
+    
+    console.log('[handleGetAdminDashboard] Query returned', statusResult.rows.length, 'employees');
+    console.log('[handleGetAdminDashboard] Sample data:', statusResult.rows.slice(0, 2).map(r => ({
+      name: r.name,
+      date: r.date,
+      time_in: r.time_in,
+      has_timecard: !!r.time_in
+    })));
 
     const employeesStatus = statusResult.rows.map((row: any) => {
       let hoursWorked = row.hours_worked ? Number(row.hours_worked) : null;
