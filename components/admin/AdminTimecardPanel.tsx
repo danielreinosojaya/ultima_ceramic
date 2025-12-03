@@ -120,11 +120,18 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
   const loadDashboard = async () => {
     setLoading(true);
     try {
+      // ✅ Agregar timestamp para evitar caché
+      const timestamp = Date.now();
       const result = await fetchWithAbort(
         'admin-dashboard-stats',
-        `/api/timecards?action=get_admin_dashboard&adminCode=${adminCode}`
+        `/api/timecards?action=get_admin_dashboard&adminCode=${adminCode}&_t=${timestamp}`
       );
       if (result.success) {
+        console.log('[AdminTimecardPanel] Dashboard data received:', {
+          total: result.data.total_employees,
+          activeToday: result.data.active_today,
+          employeesWithData: result.data.employees_status.filter((e: any) => e.time_in).length
+        });
         setDashboard(result.data);
       }
     } catch (error) {
