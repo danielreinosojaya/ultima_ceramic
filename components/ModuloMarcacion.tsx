@@ -103,8 +103,26 @@ export const ModuloMarcacion: React.FC = () => {
         
         if (result.success && result.employee) {
           setCurrentEmployee(result.employee);
+          
+          // ✅ VALIDAR QUE todayStatus SEA REALMENTE DE HOY
           if (result.todayStatus) {
-            setTodayStatus(result.todayStatus);
+            // Obtener fecha de hoy en Ecuador
+            const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' }); // YYYY-MM-DD
+            const statusDate = result.todayStatus.date; // YYYY-MM-DD
+            
+            console.log('[checkEmployeeStatus] Validando fecha:', {
+              todayEcuador: today,
+              statusDate: statusDate,
+              isToday: today === statusDate
+            });
+            
+            // Solo mostrar si es de hoy
+            if (today === statusDate) {
+              setTodayStatus(result.todayStatus);
+            } else {
+              console.warn('[checkEmployeeStatus] Status no es de hoy, descartando:', { statusDate, today });
+              setTodayStatus(null);
+            }
           } else {
             setTodayStatus(null);
           }
