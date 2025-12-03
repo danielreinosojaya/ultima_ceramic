@@ -785,21 +785,24 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
       } as any);
     }
     
-    // ✅ ESTRATEGIA: Backend usa NOW() directamente (PostgreSQL ya está en timezone Ecuador)
-    // El campo date se calcula automáticamente con la fecha actual de Ecuador
+    // ✅ FECHA ROBUSTA: Obtener fecha de Ecuador en el servidor
+    // Esto asegura que TODOS los registros del mismo día (en Ecuador) tengan el MISMO valor de date
     const ecuadorDateResult = await sql`
-      SELECT (NOW() AT TIME ZONE 'America/Guayaquil')::DATE as ecuador_date
+      SELECT (NOW() AT TIME ZONE 'America/Guayaquil')::DATE as ecuador_date,
+             (NOW() AT TIME ZONE 'America/Guayaquil') as ecuador_now
     `;
     const ecuadorDate = ecuadorDateResult.rows[0].ecuador_date;
+    const ecuadorNow = ecuadorDateResult.rows[0].ecuador_now;
     
     console.log('[handleClockIn] Fecha Ecuador calculada:', {
       ecuadorDate,
-      type: typeof ecuadorDate,
+      ecuadorNow,
       nowUtc: new Date().toISOString()
     });
     
     // Intentar insertar con todas las columnas de geolocalización
-    // Si falla por columnas faltantes, reintentar sin ellas
+    // ✅ CRUCIAL: Usar la MISMA fecha de Ecuador que calculamos arriba para date
+    // y usar NOW() para time_in (que será UTC en BD, pero la fecha ya está garantizada)
     let insertResult;
     try {
       insertResult = await sql`
@@ -807,7 +810,7 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
         VALUES (
           ${employee.id}, 
           ${ecuadorDate}::DATE,
-          NOW(),
+          ${ecuadorNow}::TIMESTAMP,
           ${geolocation?.latitude || null}, 
           ${geolocation?.longitude || null}, 
           ${geolocation?.accuracy || null}, 
@@ -824,7 +827,7 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
           VALUES (
             ${employee.id}, 
             ${ecuadorDate}::DATE,
-            NOW()
+            ${ecuadorNow}::TIMESTAMP
           )
           RETURNING id, time_in, date
         `;
@@ -1044,13 +1047,20 @@ async function handleClockOut(req: any, res: any, code: string): Promise<any> {
     // Capturar IP
     const deviceIP = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
     
+    // ✅ FECHA ROBUSTA TAMBIÉN PARA SALIDA
+    // Obtener momento actual en Ecuador (para consistency)
+    const ecuadorNowResult = await sql`
+      SELECT (NOW() AT TIME ZONE 'America/Guayaquil') as ecuador_now
+    `;
+    const ecuadorNow = ecuadorNowResult.rows[0].ecuador_now;
+    
     // Actualizar en BD - intentar con geolocation columns, fallback si no existen
     let updateResult;
     try {
       updateResult = await sql`
         UPDATE timecards
-        SET time_out = NOW(),
-            hours_worked = EXTRACT(EPOCH FROM (NOW() - time_in)) / 3600,
+        SET time_out = ${ecuadorNow}::TIMESTAMP,
+            hours_worked = EXTRACT(EPOCH FROM (${ecuadorNow}::TIMESTAMP - time_in)) / 3600,
             location_out_lat = ${geolocation.latitude},
             location_out_lng = ${geolocation.longitude},
             location_out_accuracy = ${geolocation.accuracy},
@@ -1065,8 +1075,8 @@ async function handleClockOut(req: any, res: any, code: string): Promise<any> {
         console.warn('[handleClockOut] Geolocation columns not found, attempting basic update:', updateError.message);
         updateResult = await sql`
           UPDATE timecards
-          SET time_out = NOW(),
-              hours_worked = EXTRACT(EPOCH FROM (NOW() - time_in)) / 3600,
+          SET time_out = ${ecuadorNow}::TIMESTAMP,
+              hours_worked = EXTRACT(EPOCH FROM (${ecuadorNow}::TIMESTAMP - time_in)) / 3600,
               updated_at = NOW()
           WHERE id = ${timecard.id}
           RETURNING *
