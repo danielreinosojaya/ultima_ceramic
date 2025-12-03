@@ -123,8 +123,23 @@ export const MonthlyReportViewer: React.FC<MonthlyReportViewerProps> = ({ adminC
 
   const formatDate = (dateString: string) => {
     if (!dateString) return '-';
+    // ✅ Usar formatLocalTimeFromUTC que ya maneja correctamente el timezone
+    // y extraer solo la fecha (primeros 10 caracteres)
+    const timeStr = formatLocalTimeFromUTC(dateString);
+    // Si viene en formato "HH:MM a.m/p.m", necesitamos la fecha
+    // Mejor: usar el timestamp directamente y convertir a fecha local
     const date = new Date(dateString);
-    return date.toLocaleDateString('es-CO', { weekday: 'short', month: 'short', day: 'numeric' });
+    // Convertir a string en timezone Ecuador y extraer fecha
+    const ecuadorDateStr = date.toLocaleString('es-CO', { 
+      timeZone: 'America/Guayaquil',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    // ecuadorDateStr es "DD/MM/YYYY", convertir a Date para formato
+    const [day, month, year] = ecuadorDateStr.split('/');
+    const localDate = new Date(`${year}-${month}-${day}T12:00:00`);
+    return localDate.toLocaleDateString('es-CO', { weekday: 'short', month: 'short', day: 'numeric' });
   };
 
   const months = [
