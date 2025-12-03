@@ -1172,12 +1172,15 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
     const averageHours = avgResult.rows[0].avg_hours ? Math.round(parseFloat(avgResult.rows[0].avg_hours) * 100) / 100 : 0;
 
     // Estado de empleados hoy
+    // ✅ IMPORTANTE: Usar subconsulta para garantizar que solo traemos registros de HOY
     const statusResult = await sql`
       SELECT 
         e.id, e.code, e.name, e.position,
         t.date, t.time_in, t.time_out, t.hours_worked
       FROM employees e
-      LEFT JOIN timecards t ON e.id = t.employee_id AND t.date = ${today}
+      LEFT JOIN (
+        SELECT * FROM timecards WHERE date = ${today}
+      ) t ON e.id = t.employee_id
       WHERE e.status = 'active'
       ORDER BY e.name
     `;
