@@ -1186,15 +1186,18 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
     const averageHours = avgResult.rows[0].avg_hours ? Math.round(parseFloat(avgResult.rows[0].avg_hours) * 100) / 100 : 0;
 
     // Estado de empleados hoy
-    // ✅ IMPORTANTE: Usar subconsulta para garantizar que solo traemos registros de HOY
+    // ✅ FIX DEFINITIVO: La subconsulta DEBE retornar NULL para date si no hay match
+    // NO usar t.date porque el LEFT JOIN puede traer NULL, usar ${today} solo si hay time_in
     const statusResult = await sql`
       SELECT 
         e.id, e.code, e.name, e.position,
-        t.date, t.time_in, t.time_out, t.hours_worked
+        t.id as timecard_id,
+        t.date as timecard_date,
+        t.time_in, 
+        t.time_out, 
+        t.hours_worked
       FROM employees e
-      LEFT JOIN (
-        SELECT * FROM timecards WHERE date = ${today}
-      ) t ON e.id = t.employee_id
+      LEFT JOIN timecards t ON e.id = t.employee_id AND t.date = ${today}
       WHERE e.status = 'active'
       ORDER BY e.name
     `;
@@ -1202,7 +1205,7 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
     console.log('[handleGetAdminDashboard] Query returned', statusResult.rows.length, 'employees');
     console.log('[handleGetAdminDashboard] Sample data:', statusResult.rows.slice(0, 2).map(r => ({
       name: r.name,
-      date: r.date,
+      timecard_date: r.timecard_date,
       time_in: r.time_in,
       has_timecard: !!r.time_in
     })));
@@ -1210,11 +1213,17 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
     const employeesStatus = statusResult.rows.map((row: any) => {
       let hoursWorked = row.hours_worked ? Number(row.hours_worked) : null;
       
+      // ✅ CRUCIAL: Solo incluir empleados que REALMENTE tienen timecard de HOY
+      // Si timecard_date es NULL, significa que NO marcaron hoy
+      const hasTimecardToday = row.timecard_id !== null && row.timecard_date !== null;
+      
       console.log('[handleGetAdminDashboard] Processing employee:', {
         code: row.code,
         name: row.name,
+        timecard_date: row.timecard_date,
         time_in: row.time_in,
-        time_out: row.time_out
+        time_out: row.time_out,
+        hasTimecardToday
       });
       
       return {
@@ -1225,11 +1234,11 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
           position: row.position,
           status: 'active'
         },
-        date: row.date || today,
-        time_in: row.time_in,
-        time_out: row.time_out,
-        hours_worked: hoursWorked,
-        status: !row.time_in ? 'absent' : row.time_out ? 'present' : 'in_progress',
+        date: hasTimecardToday ? row.timecard_date : null,
+        time_in: hasTimecardToday ? row.time_in : null,
+        time_out: hasTimecardToday ? row.time_out : null,
+        hours_worked: hasTimecardToday ? hoursWorked : null,
+        status: !hasTimecardToday ? 'absent' : row.time_out ? 'present' : 'in_progress',
         is_current_day: true
       };
     });
