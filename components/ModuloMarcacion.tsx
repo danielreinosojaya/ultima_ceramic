@@ -134,31 +134,14 @@ export const ModuloMarcacion: React.FC = () => {
     setMessage({ text: '', type: 'success' });
 
     try {
-      // ✅ CORRECCIÓN: Enviar UTC puro, dejar conversión a Ecuador en backend
-      const now = new Date();
-      
-      const utcTime = {
-        year: now.getUTCFullYear(),
-        month: now.getUTCMonth() + 1,
-        day: now.getUTCDate(),
-        hour: now.getUTCHours(),
-        minute: now.getUTCMinutes(),
-        second: now.getUTCSeconds()
-      };
-      
-      console.log('[handleClockIn] Hora UTC enviada:', {
-        navegadorHora: now.getHours() + ':' + now.getMinutes(),
-        utcHora: utcTime.hour + ':' + utcTime.minute
-      });
-      
-      console.log('[handleClockIn] Payload enviado:', { code, localTime: utcTime });
+      // ✅ NO ENVIAR localTime - el backend usa NOW() directamente con timezone de Ecuador
+      console.log('[handleClockIn] Enviando solicitud de clock in');
       
       const response = await fetch(`/api/timecards?action=clock_in&code=${code}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           code,
-          localTime: utcTime,
           geolocation: coords ? {
             latitude: coords.latitude,
             longitude: coords.longitude,
@@ -243,24 +226,12 @@ export const ModuloMarcacion: React.FC = () => {
     setMessage({ text: '', type: 'success' });
 
     try {
-      // ✅ CORRECCIÓN: Enviar UTC puro, dejar conversión a Ecuador en backend
-      const now = new Date();
-      
-      const utcTime = {
-        year: now.getUTCFullYear(),
-        month: now.getUTCMonth() + 1,
-        day: now.getUTCDate(),
-        hour: now.getUTCHours(),
-        minute: now.getUTCMinutes(),
-        second: now.getUTCSeconds()
-      };
-      
+      // ✅ NO ENVIAR localTime - el backend usa NOW() directamente con timezone de Ecuador
       const response = await fetch(`/api/timecards?action=clock_out&code=${code}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           code,
-          localTime: utcTime,
           geolocation: coords ? {
             latitude: coords.latitude,
             longitude: coords.longitude,
