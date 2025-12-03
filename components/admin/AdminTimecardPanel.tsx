@@ -35,6 +35,33 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
   const [showScheduleManager, setShowScheduleManager] = useState(false);
   const [selectedEmployeeForSchedule, setSelectedEmployeeForSchedule] = useState<Employee | null>(null);
 
+  // ✅ Reloj en tiempo real con hora de Ecuador
+  const [currentTime, setCurrentTime] = useState<string>('');
+
+  // Actualizar reloj cada segundo
+  useEffect(() => {
+    const updateClock = () => {
+      const now = new Date();
+      const ecuadorTime = now.toLocaleString('es-EC', {
+        timeZone: 'America/Guayaquil',
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      });
+      setCurrentTime(ecuadorTime);
+    };
+
+    updateClock(); // Ejecutar inmediatamente
+    const interval = setInterval(updateClock, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   // Cargar dashboard
   useEffect(() => {
     if (!adminCode) return;
@@ -344,6 +371,17 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
         <div className="mb-8">
           <h1 className="text-4xl font-serif font-bold text-brand-primary mb-2">📊 Control de Asistencia</h1>
           <p className="text-brand-secondary">Panel de administración de marcaciones</p>
+          
+          {/* ✅ RELOJ EN TIEMPO REAL - HORA DE ECUADOR */}
+          <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border-2 border-blue-200">
+            <div className="flex items-center gap-3">
+              <div className="text-3xl">🕐</div>
+              <div>
+                <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide">Hora Local Ecuador (GMT-5)</p>
+                <p className="text-lg font-bold text-gray-800 font-mono">{currentTime || 'Cargando...'}</p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Tabs */}
