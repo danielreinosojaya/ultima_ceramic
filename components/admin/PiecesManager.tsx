@@ -4,7 +4,7 @@ import { PlusIcon } from '../icons/PlusIcon';
 import { EditIcon } from '../icons/EditIcon';
 import { TrashIcon } from '../icons/TrashIcon';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
-import { PieceModal } from './PieceModal';
+import { PieceModal } from './PieceModal.js';
 
 interface Piece {
   id: string;

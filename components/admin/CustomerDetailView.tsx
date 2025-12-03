@@ -633,28 +633,35 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
     const renderDeliveryTab = () => {
         const deliveries = state.deliveries || [];
         return (
-            <div className="space-y-6">
-                <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-bold flex items-center gap-2">
-                        <TruckIcon className="h-6 w-6 text-brand-primary" />
-                        Recogida de Piezas
+            <div className="space-y-3 sm:space-y-6 w-full">
+                {/* Header - Mobile-first responsive */}
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-4">
+                    <h3 className="text-base sm:text-lg font-bold flex items-center gap-2 text-gray-900">
+                        <TruckIcon className="h-5 w-5 sm:h-6 sm:w-6 text-brand-primary flex-shrink-0" />
+                        <span>Recogida de Piezas</span>
                     </h3>
                     <button
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg shadow hover:bg-green-700 transition font-semibold"
+                        className="flex-1 sm:flex-none inline-flex items-center justify-center sm:justify-start gap-2 px-3 sm:px-4 py-2 sm:py-2 bg-green-600 text-white rounded-lg shadow hover:bg-green-700 transition font-semibold text-xs sm:text-sm"
                         onClick={() => setState(prev => ({ ...prev, isNewDeliveryModalOpen: true }))}
                     >
-                        <PlusIcon className="h-5 w-5" /> Nueva Recogida
+                        <PlusIcon className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                        <span>Nueva Recogida</span>
                     </button>
                 </div>
                 
-                <DeliveryListWithFilters
-                    deliveries={deliveries}
-                    onEdit={(delivery) => setState(prev => ({ ...prev, deliveryToEdit: delivery }))}
-                    onDelete={(delivery) => setState(prev => ({ ...prev, deliveryToDelete: delivery }))}
-                    onComplete={(deliveryId) => setCompleteModal({ open: true, deliveryId })}
-                    onMarkReady={handleMarkDeliveryAsReady}
-                    formatDate={formatDate}
-                />
+                {/* Delivery List - Responsive container */}
+                <div className="bg-gray-50 rounded-lg p-3 sm:p-4 md:p-6 overflow-x-auto">
+                    <DeliveryListWithFilters
+                        deliveries={deliveries}
+                        onEdit={(delivery) => setState(prev => ({ ...prev, deliveryToEdit: delivery }))}
+                        onDelete={(delivery) => setState(prev => ({ ...prev, deliveryToDelete: delivery }))}
+                        onComplete={(deliveryId) => setCompleteModal({ open: true, deliveryId })}
+                        onMarkReady={handleMarkDeliveryAsReady}
+                        formatDate={formatDate}
+                    />
+                </div>
+
+                {/* New Delivery Modal */}
                 <NewDeliveryModal
                     isOpen={state.isNewDeliveryModalOpen}
                     onClose={() => setState(prev => ({ ...prev, isNewDeliveryModalOpen: false }))}
@@ -682,6 +689,8 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                     customerEmail={customer.userInfo.email}
                     customerName={customer.userInfo.firstName}
                 />
+
+                {/* Edit Delivery Modal */}
                 {state.deliveryToEdit && (
                     <EditDeliveryModal
                         isOpen={true}
@@ -710,18 +719,22 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                         }}
                     />
                 )}
+
+                {/* Complete Delivery Modal - Mobile-first responsive */}
                 {completeModal.open && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
-                        <div className="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full">
-                            <h4 className="text-lg font-bold mb-4 flex items-center gap-2 text-green-600">
-                                <CheckCircleIcon className="h-6 w-6" />
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 sm:p-0">
+                        <div className="bg-white rounded-lg shadow-2xl p-4 sm:p-6 md:p-8 max-w-sm w-full">
+                            <h4 className="text-base sm:text-lg font-bold mb-3 sm:mb-4 flex items-center gap-2 text-green-600">
+                                <CheckCircleIcon className="h-5 w-5 sm:h-6 sm:w-6 flex-shrink-0" />
                                 Completar entrega
                             </h4>
-                            <label className="block mb-2 font-semibold">Fecha de entrega real</label>
-                            <div className="flex gap-2 mb-4">
+                            <label className="block mb-2 sm:mb-3 font-semibold text-sm sm:text-base text-gray-900">Fecha de entrega real</label>
+                            
+                            {/* Date input and Today button - responsive layout */}
+                            <div className="flex flex-col sm:flex-row gap-2 mb-4 sm:mb-6">
                                 <input
                                     type="date"
-                                    className="w-full border rounded px-3 py-2"
+                                    className="flex-grow px-3 py-2 border border-gray-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                                     value={completeDate}
                                     onChange={e => setCompleteDate(e.target.value)}
                                     min={new Date().toISOString().split('T')[0]}
@@ -729,42 +742,52 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                 />
                                 <button
                                     type="button"
-                                    className="px-3 py-2 rounded bg-green-50 hover:bg-green-100 text-green-700 font-semibold border border-green-200 transition"
+                                    className="px-3 sm:px-4 py-2 rounded bg-green-50 hover:bg-green-100 text-green-700 font-semibold border border-green-200 transition text-xs sm:text-sm whitespace-nowrap"
                                     title="Seleccionar hoy"
                                     onClick={() => setCompleteDate(new Date().toISOString().split('T')[0])}
                                     disabled={completeLoading}
-                                >Hoy</button>
+                                >
+                                    Hoy
+                                </button>
                             </div>
-                            <div className="flex gap-4 justify-end">
+
+                            {/* Action buttons - responsive stacking */}
+                            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-4 justify-end">
                                 <button
-                                    className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold"
+                                    className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs sm:text-sm transition"
                                     onClick={() => { setCompleteModal({ open: false, deliveryId: null }); setCompleteDate(""); }}
                                     disabled={completeLoading}
-                                >Cancelar</button>
+                                >
+                                    Cancelar
+                                </button>
                                 <button
-                                    className="px-4 py-2 rounded bg-green-600 hover:bg-green-700 text-white font-semibold"
+                                    className="px-4 py-2 rounded bg-green-600 hover:bg-green-700 text-white font-semibold text-xs sm:text-sm transition disabled:opacity-50"
                                     onClick={handleCompleteDelivery}
                                     disabled={completeLoading || !completeDate}
-                                >{completeLoading ? 'Guardando...' : 'Completar'}</button>
+                                >
+                                    {completeLoading ? 'Guardando...' : 'Completar'}
+                                </button>
                             </div>
                         </div>
                     </div>
                 )}
+
+                {/* Delete Delivery Confirmation Modal - Mobile-first responsive */}
                 {state.deliveryToDelete && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
-                        <div className="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full">
-                            <h4 className="text-lg font-bold mb-4 flex items-center gap-2 text-red-600">
-                                <ExclamationTriangleIcon className="h-6 w-6" />
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 sm:p-0">
+                        <div className="bg-white rounded-lg shadow-2xl p-4 sm:p-6 md:p-8 max-w-sm w-full">
+                            <h4 className="text-base sm:text-lg font-bold mb-3 sm:mb-4 flex items-center gap-2 text-red-600">
+                                <ExclamationTriangleIcon className="h-5 w-5 sm:h-6 sm:w-6 flex-shrink-0" />
                                 Eliminar entrega
                             </h4>
-                            <p className="mb-6">¿Seguro que deseas eliminar la entrega <span className="font-semibold">{state.deliveryToDelete.description}</span>?</p>
-                            <div className="flex gap-4 justify-end">
+                            <p className="mb-4 sm:mb-6 text-sm sm:text-base text-gray-700">¿Seguro que deseas eliminar la entrega <span className="font-semibold">{state.deliveryToDelete.description}</span>?</p>
+                            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-4 justify-end">
                                 <button
-                                    className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold"
+                                    className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs sm:text-sm transition"
                                     onClick={() => setState(prev => ({ ...prev, deliveryToDelete: null }))}
                                 >Cancelar</button>
                                 <button
-                                    className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white font-semibold"
+                                    className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white font-semibold text-xs sm:text-sm transition"
                                     onClick={async () => {
                                         await handleDeleteDelivery(state.deliveryToDelete.id);
                                         setState(prev => ({ ...prev, deliveryToDelete: null }));
@@ -781,33 +804,34 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
 
     // Información del cliente
     const renderInfoTab = () => (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <h3 className="text-lg font-medium">Información del Cliente</h3>
-                <div className="flex gap-2">
+        <div className="space-y-4 sm:space-y-6">
+            {/* Header con botones - responsive layout */}
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-4">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900">Información del Cliente</h3>
+                <div className="flex flex-col xs:flex-row gap-2 w-full sm:w-auto">
                     <button
                         onClick={() => setState(prev => ({ ...prev, editMode: !prev.editMode }))}
-                        className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                        style={{ aspectRatio: '2.8/1' }}
+                        className="flex-1 xs:flex-auto inline-flex items-center justify-center xs:justify-start gap-2 px-3 py-2 border border-gray-300 shadow-sm text-xs xs:text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 transition"
                     >
-                        <PencilIcon className="h-4 w-4 mr-2" />
-                        {state.editMode ? 'Cancelar' : 'Editar'}
+                        <PencilIcon className="h-4 w-4 flex-shrink-0" />
+                        <span>{state.editMode ? 'Cancelar' : 'Editar'}</span>
                     </button>
                     <button
                         onClick={() => setDeleteCustomerModal(true)}
-                        className="inline-flex items-center px-3 py-2 border border-red-300 shadow-sm text-sm leading-4 font-medium rounded-md text-red-600 bg-white hover:bg-red-50"
-                        style={{ aspectRatio: '2.8/1' }}
+                        className="flex-1 xs:flex-auto inline-flex items-center justify-center xs:justify-start gap-2 px-3 py-2 border border-red-300 shadow-sm text-xs xs:text-sm font-medium rounded-md text-red-600 bg-white hover:bg-red-50 transition"
                         title="Eliminar cliente"
                     >
-                        <TrashIcon className="h-4 w-4 mr-2" />
-                        Eliminar
+                        <TrashIcon className="h-4 w-4 flex-shrink-0" />
+                        <span className="hidden xs:inline">Eliminar</span>
                     </button>
                 </div>
             </div>
-            <div className="bg-white shadow overflow-hidden sm:rounded-md p-6">
+
+            {/* Content - edit mode or view mode */}
+            <div className="bg-gray-50 rounded-lg p-4 sm:p-6 space-y-4">
                 {state.editMode ? (
                     <form
-                        className="space-y-4"
+                        className="space-y-3 sm:space-y-4"
                         onSubmit={async e => {
                             e.preventDefault();
                             await dataService.updateCustomerInfo(
@@ -831,88 +855,113 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                             onDataChange();
                         }}
                     >
-                        <div className="grid grid-cols-2 gap-4">
+                        {/* Nombre y Apellido - responsive grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                             <div>
-                                <label className="block text-sm font-bold mb-1">Nombre</label>
+                                <label className="block text-xs sm:text-sm font-semibold mb-1 text-gray-700">Nombre</label>
                                 <input
                                     type="text"
-                                    className="w-full px-3 py-2 border rounded-lg"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                                     value={state.editInfo.firstName}
                                     onChange={e => setState(prev => ({ ...prev, editInfo: { ...prev.editInfo, firstName: e.target.value } }))}
                                     required
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-bold mb-1">Apellido</label>
+                                <label className="block text-xs sm:text-sm font-semibold mb-1 text-gray-700">Apellido</label>
                                 <input
                                     type="text"
-                                    className="w-full px-3 py-2 border rounded-lg"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                                     value={state.editInfo.lastName}
                                     onChange={e => setState(prev => ({ ...prev, editInfo: { ...prev.editInfo, lastName: e.target.value } }))}
                                     required
                                 />
                             </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+
+                        {/* Email y Teléfono - responsive grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                             <div>
-                                <label className="block text-sm font-bold mb-1">Email</label>
+                                <label className="block text-xs sm:text-sm font-semibold mb-1 text-gray-700">Email</label>
                                 <input
                                     type="email"
-                                    className="w-full px-3 py-2 border rounded-lg"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                                     value={state.editInfo.email}
                                     onChange={e => setState(prev => ({ ...prev, editInfo: { ...prev.editInfo, email: e.target.value } }))}
                                     required
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-bold mb-1">Teléfono</label>
+                                <label className="block text-xs sm:text-sm font-semibold mb-1 text-gray-700">Teléfono</label>
                                 <input
                                     type="text"
-                                    className="w-full px-3 py-2 border rounded-lg"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                                     value={state.editInfo.phone}
                                     onChange={e => setState(prev => ({ ...prev, editInfo: { ...prev.editInfo, phone: e.target.value } }))}
                                 />
                             </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+
+                        {/* Fecha de nacimiento y País - responsive grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                             <div>
-                                <label className="block text-sm font-bold mb-1">Fecha de nacimiento</label>
+                                <label className="block text-xs sm:text-sm font-semibold mb-1 text-gray-700">Fecha de nacimiento</label>
                                 <input
                                     type="date"
-                                    className="w-full px-3 py-2 border rounded-lg"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                                     value={state.editInfo.birthday || ''}
                                     onChange={e => setState(prev => ({ ...prev, editInfo: { ...prev.editInfo, birthday: e.target.value } }))}
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-bold mb-1">País</label>
+                                <label className="block text-xs sm:text-sm font-semibold mb-1 text-gray-700">País</label>
                                 <input
                                     type="text"
-                                    className="w-full px-3 py-2 border rounded-lg"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                                     value={state.editInfo.countryCode}
                                     onChange={e => setState(prev => ({ ...prev, editInfo: { ...prev.editInfo, countryCode: e.target.value } }))}
                                 />
                             </div>
                         </div>
-                        <div className="flex justify-end gap-3 mt-6">
+
+                        {/* Botones - responsive layout */}
+                        <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 justify-end pt-4 border-t border-gray-200">
                             <button
                                 type="button"
-                                className="bg-white border text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100"
+                                className="px-4 py-2 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-100 transition text-xs sm:text-sm"
                                 onClick={() => setState(prev => ({ ...prev, editMode: false }))}
                             >Cancelar</button>
                             <button
                                 type="submit"
-                                className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent"
+                                className="px-4 py-2 bg-brand-primary text-white font-semibold rounded-lg hover:bg-brand-accent transition text-xs sm:text-sm"
                             >Guardar</button>
                         </div>
                     </form>
                 ) : (
                     <>
-                        <p><strong>Nombre:</strong> {customer.userInfo.firstName} {customer.userInfo.lastName}</p>
-                        <p><strong>Email:</strong> {customer.userInfo.email}</p>
-                        <p><strong>Teléfono:</strong> {customer.userInfo.phone}</p>
-                        <p><strong>Fecha de nacimiento:</strong> {customer.userInfo.birthday || 'No especificada'}</p>
-                        <p><strong>País:</strong> {customer.userInfo.countryCode || 'No especificado'}</p>
+                        {/* View mode - cards responsive layout */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                            <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200">
+                                <p className="text-xs text-gray-600 mb-1">Nombre</p>
+                                <p className="font-semibold text-sm sm:text-base text-gray-900">{customer.userInfo.firstName} {customer.userInfo.lastName}</p>
+                            </div>
+                            <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200">
+                                <p className="text-xs text-gray-600 mb-1">Email</p>
+                                <p className="font-semibold text-sm sm:text-base text-gray-900 break-all">{customer.userInfo.email}</p>
+                            </div>
+                            <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200">
+                                <p className="text-xs text-gray-600 mb-1">Teléfono</p>
+                                <p className="font-semibold text-sm sm:text-base text-gray-900">{customer.userInfo.phone || 'No especificado'}</p>
+                            </div>
+                            <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200">
+                                <p className="text-xs text-gray-600 mb-1">Fecha de nacimiento</p>
+                                <p className="font-semibold text-sm sm:text-base text-gray-900">{customer.userInfo.birthday || 'No especificada'}</p>
+                            </div>
+                            <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200 sm:col-span-2">
+                                <p className="text-xs text-gray-600 mb-1">País</p>
+                                <p className="font-semibold text-sm sm:text-base text-gray-900">{customer.userInfo.countryCode || 'No especificado'}</p>
+                            </div>
+                        </div>
                     </>
                 )}
             </div>
@@ -932,87 +981,84 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
     };
 
     return (
-        <div className="w-full max-w-4xl px-4 py-8">
-            {/* Header mejorado */}
-            <div className="grid grid-cols-12 gap-0 items-center bg-brand-surface rounded-xl shadow border border-brand-border mb-4 py-4 px-6">
-                <div className="col-span-3 flex items-center">
-                    <button onClick={onBack} className="text-brand-primary hover:text-brand-accent font-bold text-lg transition-colors duration-150 flex items-center gap-2">
-                        <UserIcon className="h-6 w-6 text-brand-accent" />
+        <div className="w-full min-h-screen bg-brand-background p-2 sm:p-4 md:p-6">
+            {/* Header - Mobile-first responsive */}
+            <div className="bg-white rounded-lg sm:rounded-xl shadow-lg border border-brand-border mb-3 sm:mb-4 md:mb-6 overflow-hidden">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 p-3 sm:p-4 md:p-6">
+                    
+                    {/* Back button */}
+                    <button 
+                        onClick={onBack} 
+                        className="text-brand-primary hover:text-brand-accent font-bold text-sm sm:text-base md:text-lg transition-colors flex items-center gap-2 w-fit"
+                    >
+                        <UserIcon className="h-5 w-5 sm:h-6 sm:w-6 text-brand-accent flex-shrink-0" />
                         <span>← Volver</span>
                     </button>
+
+                    {/* Customer name - centered on mobile, left on sm+ */}
+                    <div className="text-center sm:text-left flex-grow">
+                        <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-brand-primary">
+                            {customer.userInfo.firstName} {customer.userInfo.lastName}
+                        </h2>
+                    </div>
                 </div>
-                <div className="col-span-6 flex justify-center">
-                    <h2 className="text-3xl font-extrabold text-brand-primary flex items-center gap-3">
-                        <UserIcon className="h-8 w-8 text-brand-accent" />
-                        {customer.userInfo.firstName} {customer.userInfo.lastName}
-                    </h2>
-                </div>
-                <div className="col-span-3"></div>
             </div>
 
-            {/* Tabs */}
-            <div className="bg-brand-surface rounded-xl shadow border border-brand-border mb-6">
-                <nav className="grid grid-cols-5 gap-0 px-2 py-2">
-                    <button
-                        onClick={() => setState(prev => ({ ...prev, activeTab: 'info' }))}
-                        className={`flex flex-col items-center justify-center py-3 font-semibold border-2 transition-all duration-200 rounded-lg mx-1 ${state.activeTab === 'info' ? 'border-gray-400 bg-gray-50 text-gray-700 shadow' : 'border-transparent text-brand-secondary hover:text-gray-600 hover:bg-gray-50'}`}
-                    >
-                        <UserIcon className="h-6 w-6 mb-1 text-gray-400" />
-                        <span className="text-sm">Información</span>
-                    </button>
-                    <button
-                        onClick={() => setState(prev => ({ ...prev, activeTab: 'past' }))}
-                        className={`flex flex-col items-center justify-center py-3 font-semibold border-2 transition-all duration-200 rounded-lg mx-1 ${state.activeTab === 'past' ? 'border-blue-400 bg-blue-50 text-blue-700 shadow' : 'border-transparent text-brand-secondary hover:text-blue-600 hover:bg-blue-50'}`}
-                    >
-                        <ClockIcon className="h-6 w-6 mb-1 text-blue-400" />
-                        <span className="text-sm">Clases Pasadas</span>
-                    </button>
-                    <button
-                        onClick={() => setState(prev => ({ ...prev, activeTab: 'schedule' }))}
-                        className={`flex flex-col items-center justify-center py-3 font-semibold border-2 transition-all duration-200 rounded-lg mx-1 ${state.activeTab === 'schedule' ? 'border-indigo-400 bg-indigo-50 text-indigo-700 shadow' : 'border-transparent text-brand-secondary hover:text-indigo-600 hover:bg-indigo-50'}`}
-                    >
-                        <CalendarIcon className="h-6 w-6 mb-1 text-indigo-400" />
-                        <span className="text-sm">Clases Programadas</span>
-                    </button>
-                    <button
-                        onClick={() => setState(prev => ({ ...prev, activeTab: 'payments' }))}
-                        className={`flex flex-col items-center justify-center py-3 font-semibold border-2 transition-all duration-200 rounded-lg mx-1 ${state.activeTab === 'payments' ? 'border-yellow-400 bg-yellow-50 text-yellow-700 shadow' : 'border-transparent text-brand-secondary hover:text-yellow-600 hover:bg-yellow-50'}`}
-                    >
-                        <CurrencyDollarIcon className="h-6 w-6 mb-1 text-yellow-400" />
-                        <span className="text-sm">Pagos Realizados</span>
-                    </button>
-                    <button
-                        onClick={() => setState(prev => ({ ...prev, activeTab: 'delivery' }))}
-                        className={`flex flex-col items-center justify-center py-3 font-semibold border-2 transition-all duration-200 rounded-lg mx-1 ${state.activeTab === 'delivery' ? 'border-green-400 bg-green-50 text-green-700 shadow' : 'border-transparent text-brand-secondary hover:text-green-600 hover:bg-green-50'}`}
-                    >
-                        <TruckIcon className="h-6 w-6 mb-1 text-green-400" />
-                        <span className="text-sm">Recogida de Piezas</span>
-                    </button>
+            {/* Tabs - Mobile-first horizontal scroll / desktop grid */}
+            <div className="bg-white rounded-lg sm:rounded-xl shadow-md border border-brand-border mb-3 sm:mb-4 md:mb-6 overflow-x-auto">
+                <nav className="flex sm:grid sm:grid-cols-5 gap-1 sm:gap-0 p-2 sm:p-0 min-w-min sm:min-w-full">
+                    {[
+                        { id: 'info', icon: UserIcon, label: 'Información', color: 'gray' },
+                        { id: 'past', icon: ClockIcon, label: 'Pasadas', color: 'blue' },
+                        { id: 'schedule', icon: CalendarIcon, label: 'Programadas', color: 'indigo' },
+                        { id: 'payments', icon: CurrencyDollarIcon, label: 'Pagos', color: 'yellow' },
+                        { id: 'delivery', icon: TruckIcon, label: 'Recogida', color: 'green' }
+                    ].map(({ id, icon: Icon, label, color }) => {
+                        const isActive = state.activeTab === id;
+                        const colorClasses = {
+                            gray: isActive ? 'border-gray-400 bg-gray-50 text-gray-700' : 'border-transparent text-brand-secondary hover:text-gray-600 hover:bg-gray-50',
+                            blue: isActive ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-transparent text-brand-secondary hover:text-blue-600 hover:bg-blue-50',
+                            indigo: isActive ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-transparent text-brand-secondary hover:text-indigo-600 hover:bg-indigo-50',
+                            yellow: isActive ? 'border-yellow-400 bg-yellow-50 text-yellow-700' : 'border-transparent text-brand-secondary hover:text-yellow-600 hover:bg-yellow-50',
+                            green: isActive ? 'border-green-400 bg-green-50 text-green-700' : 'border-transparent text-brand-secondary hover:text-green-600 hover:bg-green-50'
+                        };
+                        
+                        return (
+                            <button
+                                key={id}
+                                onClick={() => setState(prev => ({ ...prev, activeTab: id }))}
+                                className={`flex flex-col items-center justify-center py-2 sm:py-3 px-2 sm:px-1 font-semibold border-2 transition-all duration-200 rounded-lg whitespace-nowrap flex-shrink-0 sm:flex-shrink mx-0.5 sm:mx-1 ${colorClasses[color as keyof typeof colorClasses]} ${isActive ? 'shadow' : ''}`}
+                            >
+                                <Icon className="h-5 w-5 sm:h-6 sm:w-6 mb-0.5 sm:mb-1 flex-shrink-0" />
+                                <span className="text-xs sm:text-sm">{label}</span>
+                            </button>
+                        );
+                    })}
                 </nav>
             </div>
 
-            {/* Tab Content */}
-            <div className="mt-6">
+            {/* Tab Content - Scrollable container */}
+            <div className="bg-white rounded-lg sm:rounded-xl shadow-md border border-brand-border p-3 sm:p-4 md:p-6 overflow-y-auto max-h-[calc(100vh-200px)]">
                 {renderTabContent()}
             </div>
 
             {/* Modal de confirmación para eliminar clase programada */}
             {deleteModal.open && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
-                    <div className="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full">
-                        <h4 className="text-lg font-bold mb-4 flex items-center gap-2 text-red-600">
-                            <span className="material-icons">delete</span>
-                            Eliminar clase programada
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 sm:p-0">
+                    <div className="bg-white rounded-lg shadow-2xl p-4 sm:p-6 md:p-8 max-w-sm w-full">
+                        <h4 className="text-base sm:text-lg font-bold mb-3 sm:mb-4 flex items-center gap-2 text-red-600">
+                            <TrashIcon className="h-5 w-5 sm:h-6 sm:w-6 flex-shrink-0" />
+                            Eliminar clase
                         </h4>
-                        <p className="mb-6">¿Seguro que deseas eliminar la clase <span className="font-semibold">{deleteModal.slot?.date} {deleteModal.slot?.time}</span>?</p>
-                        <div className="flex gap-4 justify-end">
+                        <p className="mb-4 sm:mb-6 text-sm sm:text-base text-gray-700">¿Eliminar la clase <span className="font-semibold">{deleteModal.slot?.date} {deleteModal.slot?.time}</span>?</p>
+                        <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-4 justify-end">
                             <button
-                                className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold"
+                                className="px-3 sm:px-4 py-2 sm:py-2 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-sm sm:text-base transition"
                                 onClick={() => setDeleteModal({ open: false, bookingId: null, slot: null })}
                                 disabled={deleteLoading}
                             >Cancelar</button>
                             <button
-                                className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white font-semibold"
+                                className="px-3 sm:px-4 py-2 sm:py-2 rounded bg-red-600 hover:bg-red-700 text-white font-semibold text-sm sm:text-base transition disabled:opacity-50"
                                 onClick={handleDeleteSlot}
                                 disabled={deleteLoading}
                             >{deleteLoading ? 'Eliminando...' : 'Eliminar'}</button>
@@ -1023,21 +1069,21 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
 
             {/* Modal de confirmación para eliminar cliente */}
             {deleteCustomerModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
-                    <div className="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full">
-                        <h4 className="text-lg font-bold mb-4 flex items-center gap-2 text-red-600">
-                            <TrashIcon className="h-6 w-6" />
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 sm:p-0">
+                    <div className="bg-white rounded-lg shadow-2xl p-4 sm:p-6 md:p-8 max-w-sm w-full">
+                        <h4 className="text-base sm:text-lg font-bold mb-3 sm:mb-4 flex items-center gap-2 text-red-600">
+                            <TrashIcon className="h-5 w-5 sm:h-6 sm:w-6 flex-shrink-0" />
                             Eliminar cliente
                         </h4>
-                        <p className="mb-6">¿Seguro que deseas eliminar al cliente <span className="font-semibold">{customer.userInfo.firstName} {customer.userInfo.lastName}</span>?<br />Esta acción eliminará todos sus datos y no se puede deshacer.</p>
-                        <div className="flex gap-4 justify-end">
+                        <p className="mb-4 sm:mb-6 text-sm sm:text-base text-gray-700">¿Eliminar a <span className="font-semibold">{customer.userInfo.firstName} {customer.userInfo.lastName}</span>? Esta acción no se puede deshacer.</p>
+                        <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-4 justify-end">
                             <button
-                                className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold"
+                                className="px-3 sm:px-4 py-2 sm:py-2 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-sm sm:text-base transition"
                                 onClick={() => setDeleteCustomerModal(false)}
                                 disabled={deleteCustomerLoading}
                             >Cancelar</button>
                             <button
-                                className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white font-semibold"
+                                className="px-3 sm:px-4 py-2 sm:py-2 rounded bg-red-600 hover:bg-red-700 text-white font-semibold text-sm sm:text-base transition disabled:opacity-50"
                                 onClick={handleDeleteCustomer}
                                 disabled={deleteCustomerLoading}
                             >{deleteCustomerLoading ? 'Eliminando...' : 'Eliminar'}</button>
