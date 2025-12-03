@@ -1,37 +1,25 @@
-// Formatea hora local desde timestamp ISO (retornado por PostgreSQL)
-// El timestamp está en UTC, necesitamos restar 5 horas para Ecuador
-// Ejemplo: "2025-11-27T21:51:10.000Z" → "04:51 p.m." (UTC-5)
+// Formatea hora local de Ecuador desde timestamp UTC (ISO string)
+// El backend ahora guarda en UTC puro, convertir a America/Guayaquil al mostrar
 export function formatLocalTimeFromUTC(isoString: string): string {
     if (!isoString) return '-';
     
     try {
-        // Si es ISO con "Z", convertir a Date y hacer cálculo de timezone
-        if (isoString.includes('T') && isoString.includes('Z')) {
-            const date = new Date(isoString);
-            // Restar 5 horas (Ecuador UTC-5)
-            const ecuadorMs = date.getTime() - (5 * 60 * 60 * 1000);
-            const ecuadorDate = new Date(ecuadorMs);
-            
-            const hours = ecuadorDate.getUTCHours();
-            const minutes = ecuadorDate.getUTCMinutes();
-            
-            const ampm = hours >= 12 ? 'p.m.' : 'a.m.';
-            const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-            
-            return `${String(hour12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${ampm}`;
+        const date = new Date(isoString);
+        
+        if (isNaN(date.getTime())) {
+            return '-';
         }
         
-        // Si es string plano "YYYY-MM-DD HH:MM:SS", extraer hora directamente
-        const timeMatch = isoString.match(/(\d{2}):(\d{2})(?::(\d{2}))?/);
-        if (!timeMatch) return '-';
+        // ✅ DEFINITIVO: Usar toLocaleTimeString con timezone de Ecuador
+        // Esto convierte automáticamente UTC → America/Guayaquil
+        const options: Intl.DateTimeFormatOptions = {
+            timeZone: 'America/Guayaquil',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+        };
         
-        const hours = parseInt(timeMatch[1], 10);
-        const minutes = parseInt(timeMatch[2], 10);
-        
-        const ampm = hours >= 12 ? 'p.m.' : 'a.m.';
-        const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-        
-        return `${String(hour12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${ampm}`;
+        return date.toLocaleTimeString('es-EC', options);
     } catch {
         return '-';
     }

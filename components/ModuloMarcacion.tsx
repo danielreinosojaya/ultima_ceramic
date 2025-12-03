@@ -3,18 +3,27 @@ import type { Employee, ClockInResponse, ClockOutResponse, Timecard } from '../t
 import { fetchWithAbort } from '../utils/fetchWithAbort';
 import { useGeolocation } from '../hooks/useGeolocation';
 
-// Helper para formatear timestamps ISO a hora local
+// Helper para formatear timestamps ISO a hora local de Ecuador (America/Guayaquil)
+// El backend ahora guarda timestamps UTC puros, convertir a hora local de Ecuador
 const formatTimestamp = (isoString: string): string => {
-  const date = new Date(isoString);
-  // Usar getUTCHours/Minutes/Seconds porque el backend guarda hora local como ISO UTC
-  const hours = date.getUTCHours();
-  const minutes = date.getUTCMinutes();
-  const seconds = date.getUTCSeconds();
-  
-  const ampm = hours >= 12 ? 'p. m.' : 'a. m.';
-  const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-  
-  return `${String(hour12).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')} ${ampm}`;
+  try {
+    const date = new Date(isoString);
+    
+    // ✅ SOLUCIÓN CORRECTA: Usar toLocaleTimeString con timezone de Ecuador
+    // Esto convierte automáticamente UTC → America/Guayaquil
+    const options: Intl.DateTimeFormatOptions = {
+      timeZone: 'America/Guayaquil',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    };
+    
+    return date.toLocaleTimeString('es-EC', options);
+  } catch (error) {
+    console.error('[formatTimestamp] Error:', error);
+    return 'Error en hora';
+  }
 };
 
 // Helper para validar y formatear horas
@@ -37,6 +46,33 @@ export const ModuloMarcacion: React.FC = () => {
   
   // ✅ Hook para geolocalización
   const { coords, loading: geoLoading, error: geoError, requestLocation } = useGeolocation();
+
+  // ✅ Reloj en tiempo real con hora de Ecuador
+  const [currentTime, setCurrentTime] = useState<string>('');
+
+  // Actualizar reloj cada segundo
+  useEffect(() => {
+    const updateClock = () => {
+      const now = new Date();
+      const ecuadorTime = now.toLocaleString('es-EC', {
+        timeZone: 'America/Guayaquil',
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      });
+      setCurrentTime(ecuadorTime);
+    };
+
+    updateClock(); // Ejecutar inmediatamente
+    const interval = setInterval(updateClock, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Al cambiar el código, verificar si empleado ya tiene marcación hoy
   useEffect(() => {
@@ -125,31 +161,14 @@ export const ModuloMarcacion: React.FC = () => {
     setMessage({ text: '', type: 'success' });
 
     try {
-      // ✅ CORRECCIÓN: Enviar UTC puro, dejar conversión a Ecuador en backend
-      const now = new Date();
-      
-      const utcTime = {
-        year: now.getUTCFullYear(),
-        month: now.getUTCMonth() + 1,
-        day: now.getUTCDate(),
-        hour: now.getUTCHours(),
-        minute: now.getUTCMinutes(),
-        second: now.getUTCSeconds()
-      };
-      
-      console.log('[handleClockIn] Hora UTC enviada:', {
-        navegadorHora: now.getHours() + ':' + now.getMinutes(),
-        utcHora: utcTime.hour + ':' + utcTime.minute
-      });
-      
-      console.log('[handleClockIn] Payload enviado:', { code, localTime: utcTime });
+      // ✅ NO ENVIAR localTime - el backend usa NOW() directamente con timezone de Ecuador
+      console.log('[handleClockIn] Enviando solicitud de clock in');
       
       const response = await fetch(`/api/timecards?action=clock_in&code=${code}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           code,
-          localTime: utcTime,
           geolocation: coords ? {
             latitude: coords.latitude,
             longitude: coords.longitude,
@@ -234,24 +253,12 @@ export const ModuloMarcacion: React.FC = () => {
     setMessage({ text: '', type: 'success' });
 
     try {
-      // ✅ CORRECCIÓN: Enviar UTC puro, dejar conversión a Ecuador en backend
-      const now = new Date();
-      
-      const utcTime = {
-        year: now.getUTCFullYear(),
-        month: now.getUTCMonth() + 1,
-        day: now.getUTCDate(),
-        hour: now.getUTCHours(),
-        minute: now.getUTCMinutes(),
-        second: now.getUTCSeconds()
-      };
-      
+      // ✅ NO ENVIAR localTime - el backend usa NOW() directamente con timezone de Ecuador
       const response = await fetch(`/api/timecards?action=clock_out&code=${code}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           code,
-          localTime: utcTime,
           geolocation: coords ? {
             latitude: coords.latitude,
             longitude: coords.longitude,
@@ -303,6 +310,12 @@ export const ModuloMarcacion: React.FC = () => {
         <div className="text-center mb-8">
           <h1 className="text-3xl font-serif font-bold text-brand-primary mb-2">🕐 Control de Asistencia</h1>
           <p className="text-brand-secondary text-sm">Marca tu entrada y salida</p>
+          
+          {/* ✅ RELOJ EN TIEMPO REAL - HORA DE ECUADOR */}
+          <div className="mt-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border-2 border-blue-200">
+            <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-1">Hora Local Ecuador</p>
+            <p className="text-base font-bold text-gray-800 font-mono">{currentTime || 'Cargando...'}</p>
+          </div>
         </div>
 
         {/* Input de código */}

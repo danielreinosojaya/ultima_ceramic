@@ -344,25 +344,25 @@ async function getTodayTimecard(employeeId: number): Promise<Timecard | null> {
       return null;
     }
 
-    // Obtener la fecha de hoy en zona horaria de Bogotá (UTC-5)
-    const now = new Date();
-    const bogotaTime = new Date(now.getTime() - (5 * 60 * 60 * 1000)); // Restar 5 horas al UTC
-    
-    // Construir fecha en formato YYYY-MM-DD manualmente
-    const year = bogotaTime.getUTCFullYear();
-    const month = String(bogotaTime.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(bogotaTime.getUTCDate()).padStart(2, '0');
-    const today = `${year}-${month}-${day}`;
-    
-    console.log('[getTodayTimecard] Calculated date (Bogota UTC-5):', { today, year, month, day, nowUTC: now.toISOString() });
+    // ✅ ESTRATEGIA DEFINITIVA: Comparar con fecha de Ecuador pero usar UTC en DB
+    // Obtener fecha actual de Ecuador para comparación
+    const ecuadorDateResult = await sql`
+      SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'America/Guayaquil')::DATE as ecuador_date
+    `;
+    const ecuadorDate = ecuadorDateResult.rows[0].ecuador_date;
     
     const result = await sql`
       SELECT * FROM timecards
-      WHERE employee_id = ${employeeId} AND CAST(date AS DATE) = ${today}::DATE
+      WHERE employee_id = ${employeeId} 
+        AND date = ${ecuadorDate}
       LIMIT 1
     `;
 
-    console.log('[getTodayTimecard] Query result for today:', { dateQueried: today, rowsFound: result.rows.length });
+    console.log('[getTodayTimecard] Query result:', { 
+      employeeId, 
+      currentDate: 'CURRENT_TIMESTAMP AT TIME ZONE America/Guayaquil', 
+      rowsFound: result.rows.length 
+    });
     
     if (result.rows.length === 0) {
       console.log('[getTodayTimecard] NO MATCH');
@@ -370,20 +370,20 @@ async function getTodayTimecard(employeeId: number): Promise<Timecard | null> {
     }
 
     const row = result.rows[0];
-    // ✅ CORRECCIÓN: Retornar timestamps como strings planos (sin conversión a ISO)
-    // Están guardados como "YYYY-MM-DD HH:MM:SS" en Ecuador, retornarlos como están
+    // ✅ DEFINITIVO: Retornar timestamps como ISO strings UTC
+    // PostgreSQL guarda en UTC, JavaScript los interpreta como UTC, frontend convierte a Ecuador
     const timecard: Timecard = {
       id: Number(row.id),
       employee_id: Number(row.employee_id),
       date: String(row.date),
-      time_in: row.time_in ? String(row.time_in) : undefined,
-      time_out: row.time_out ? String(row.time_out) : undefined,
+      time_in: row.time_in ? (row.time_in instanceof Date ? row.time_in.toISOString() : new Date(row.time_in).toISOString()) : undefined,
+      time_out: row.time_out ? (row.time_out instanceof Date ? row.time_out.toISOString() : new Date(row.time_out).toISOString()) : undefined,
       hours_worked: row.hours_worked ? Number(row.hours_worked) : undefined,
       notes: row.notes ? String(row.notes) : undefined,
       edited_by: row.edited_by ? Number(row.edited_by) : undefined,
-      edited_at: row.edited_at ? (row.edited_at instanceof Date ? row.edited_at.toISOString() : String(row.edited_at)) : undefined,
-      created_at: row.created_at ? (row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at)) : new Date().toISOString(),
-      updated_at: row.updated_at ? (row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at)) : new Date().toISOString()
+      edited_at: row.edited_at ? (row.edited_at instanceof Date ? row.edited_at.toISOString() : new Date(row.edited_at).toISOString()) : undefined,
+      created_at: row.created_at ? (row.created_at instanceof Date ? row.created_at.toISOString() : new Date(row.created_at).toISOString()) : new Date().toISOString(),
+      updated_at: row.updated_at ? (row.updated_at instanceof Date ? row.updated_at.toISOString() : new Date(row.updated_at).toISOString()) : new Date().toISOString()
     };
 
     console.log('[getTodayTimecard] Found timecard:', { id: timecard.id, employee_id: timecard.employee_id, time_in: timecard.time_in });
@@ -654,6 +654,11 @@ export default async function handler(req: any, res: any) {
   });
 
   try {
+    // ✅ SOLUCIÓN DEFINITIVA: Configurar timezone de PostgreSQL a Ecuador
+    // Esto hace que todas las funciones NOW(), CURRENT_TIMESTAMP, etc. usen hora de Ecuador
+    await sql`SET TIME ZONE 'America/Guayaquil'`;
+    console.log('[timecards handler] PostgreSQL timezone set to America/Guayaquil');
+    
     switch (action) {
       case 'clock_in':
         return await handleClockIn(req, res, code);
@@ -752,8 +757,6 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
     // Asegurar que las tablas existen antes de insertar
     await ensureTablesExist();
 
-    // ESTRATEGIA CORRECTA: Usar localTime del cliente, convertir considerando timezone del servidor
-    const localTime = req.body?.localTime;
     const geolocation = req.body?.geolocation; // { latitude, longitude, accuracy }
     const deviceIP = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
     
@@ -782,16 +785,12 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
       } as any);
     }
     
-    
-    let nowUTC = new Date();
-    
-    // Calcular fecha de hoy en Bogotá para la columna DATE
-    const bogotaMs = nowUTC.getTime() - (5 * 60 * 60 * 1000);
-    const bogotaTime = new Date(bogotaMs);
-    const year = bogotaTime.getUTCFullYear();
-    const month = String(bogotaTime.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(bogotaTime.getUTCDate()).padStart(2, '0');
-    const today = `${year}-${month}-${day}`;
+    // ✅ ESTRATEGIA: Backend usa NOW() directamente (PostgreSQL ya está en timezone Ecuador)
+    // El campo date se calcula automáticamente con la fecha actual de Ecuador
+    const ecuadorDateResult = await sql`
+      SELECT (NOW() AT TIME ZONE 'America/Guayaquil')::DATE as ecuador_date
+    `;
+    const ecuadorDate = ecuadorDateResult.rows[0].ecuador_date;
     
     // Intentar insertar con todas las columnas de geolocalización
     // Si falla por columnas faltantes, reintentar sin ellas
@@ -799,7 +798,15 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
     try {
       insertResult = await sql`
         INSERT INTO timecards (employee_id, date, time_in, location_in_lat, location_in_lng, location_in_accuracy, device_ip_in)
-        VALUES (${employee.id}, ${today}::DATE, NOW(), ${geolocation?.latitude || null}, ${geolocation?.longitude || null}, ${geolocation?.accuracy || null}, ${deviceIP})
+        VALUES (
+          ${employee.id}, 
+          ${ecuadorDate},
+          NOW(),
+          ${geolocation?.latitude || null}, 
+          ${geolocation?.longitude || null}, 
+          ${geolocation?.accuracy || null}, 
+          ${deviceIP}
+        )
         RETURNING id, time_in
       `;
     } catch (insertError: any) {
@@ -808,7 +815,11 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
         console.warn('[handleClockIn] Geolocation columns not found, attempting basic insert:', insertError.message);
         insertResult = await sql`
           INSERT INTO timecards (employee_id, date, time_in)
-          VALUES (${employee.id}, ${today}::DATE, NOW())
+          VALUES (
+            ${employee.id}, 
+            ${ecuadorDate},
+            NOW()
+          )
           RETURNING id, time_in
         `;
       } else {
@@ -826,9 +837,12 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
     // VALIDAR RETRASOS
     try {
       const timecardId = insertResult.rows[0].id;
+      const timeInTimestamp = insertResult.rows[0].time_in;
       
-      // Obtener horario esperado del empleado para hoy (día de semana)
-      const dayOfWeek = new Date(localTime.year, localTime.month - 1, localTime.day).getDay();
+      // Obtener día de semana usando el timestamp guardado (convertido a Ecuador)
+      const timeInDate = new Date(timeInTimestamp);
+      const ecuadorDate = new Date(timeInDate.toLocaleString('en-US', { timeZone: 'America/Guayaquil' }));
+      const dayOfWeek = ecuadorDate.getDay();
       
       const scheduleResult = await sql`
         SELECT check_in_time, grace_period_minutes
@@ -847,14 +861,18 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
         // Parsear hora esperada
         const [expectedHour, expectedMin] = expectedCheckInStr.split(':').map(Number);
         const expectedTimeInMinutes = expectedHour * 60 + expectedMin;
-        const actualTimeInMinutes = localTime.hour * 60 + localTime.minute;
+        
+        // Obtener hora real de entrada en Ecuador
+        const actualHour = ecuadorDate.getHours();
+        const actualMinute = ecuadorDate.getMinutes();
+        const actualTimeInMinutes = actualHour * 60 + actualMinute;
 
         // Calcular retraso
         const retrasominutos = Math.max(0, actualTimeInMinutes - expectedTimeInMinutes);
 
         console.log('[handleClockIn] Retraso detectado:', {
           expectedTime: `${String(expectedHour).padStart(2, '0')}:${String(expectedMin).padStart(2, '0')}`,
-          actualTime: `${String(localTime.hour).padStart(2, '0')}:${String(localTime.minute).padStart(2, '0')}`,
+          actualTime: `${String(actualHour).padStart(2, '0')}:${String(actualMinute).padStart(2, '0')}`,
           retrasominutos,
           gracePeriod: gracePeriodMinutes,
           esRetrasoReal: retrasominutos > gracePeriodMinutes
@@ -882,8 +900,8 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
               ${retrasominutos},
               ${tipoRetraso}::VARCHAR,
               ${expectedCheckInStr}::TIME,
-              ${`${String(localTime.hour).padStart(2, '0')}:${String(localTime.minute).padStart(2, '0')}:${String(localTime.second).padStart(2, '0')}`}::TIME,
-              ${today}::DATE
+              ${`${String(actualHour).padStart(2, '0')}:${String(actualMinute).padStart(2, '0')}:00`}::TIME,
+              CURRENT_DATE
             )
           `;
 
@@ -891,7 +909,7 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
             empleado: employee.code,
             retrasominutos,
             tipo: tipoRetraso,
-            fecha: today
+            fecha: 'CURRENT_DATE (Ecuador)'
           });
         }
       }
@@ -900,17 +918,21 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
       // No bloquear el clock in si falla la detección de tardanza
     }
 
-    // Display: ya está en hora local, solo formatear AM/PM
-    const ampm_in = localTime.hour >= 12 ? 'p. m.' : 'a. m.';
-    const hour12_in = localTime.hour === 0 ? 12 : localTime.hour > 12 ? localTime.hour - 12 : localTime.hour;
-    
-    const timeStr = `${String(hour12_in).padStart(2, '0')}:${String(localTime.minute).padStart(2, '0')}:${String(localTime.second).padStart(2, '0')} ${ampm_in}`;
+    // ✅ Formatear hora de respuesta desde timestamp guardado (convertir a Ecuador)
+    const timeInTimestamp = insertResult.rows[0].time_in;
+    const timeStr = new Date(timeInTimestamp).toLocaleTimeString('es-EC', {
+      timeZone: 'America/Guayaquil',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
 
     return res.status(200).json({
       success: true,
       message: `Entrada registrada correctamente a las ${timeStr}`,
       employee,
-      timestamp: insertResult.rows[0].time_in,
+      timestamp: timeInTimestamp,
       displayTime: timeStr
     } as ClockInResponse);
   } catch (error) {
@@ -1017,6 +1039,7 @@ async function handleClockOut(req: any, res: any, code: string): Promise<any> {
       updateResult = await sql`
         UPDATE timecards
         SET time_out = NOW(),
+            hours_worked = EXTRACT(EPOCH FROM (NOW() - time_in)) / 3600,
             location_out_lat = ${geolocation.latitude},
             location_out_lng = ${geolocation.longitude},
             location_out_accuracy = ${geolocation.accuracy},
@@ -1032,6 +1055,7 @@ async function handleClockOut(req: any, res: any, code: string): Promise<any> {
         updateResult = await sql`
           UPDATE timecards
           SET time_out = NOW(),
+              hours_worked = EXTRACT(EPOCH FROM (NOW() - time_in)) / 3600,
               updated_at = NOW()
           WHERE id = ${timecard.id}
           RETURNING *
@@ -1058,13 +1082,14 @@ async function handleClockOut(req: any, res: any, code: string): Promise<any> {
     // Calcular horas trabajadas
     const hoursFromDB = updatedRecord.hours_worked ? parseFloat(updatedRecord.hours_worked) : 0;
     
-    // Display hora
+    // ✅ Formatear hora para Ecuador usando toLocaleTimeString
     const timeOut = new Date(updateResult.rows[0].time_out);
-    const hours = timeOut.getUTCHours();
-    const minutes = timeOut.getUTCMinutes();
-    const ampm = hours >= 12 ? 'p.m.' : 'a.m.';
-    const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-    const timeStr = `${String(hour12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${ampm}`;
+    const timeStr = timeOut.toLocaleTimeString('es-EC', {
+      timeZone: 'America/Guayaquil',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
 
     return res.status(200).json({
       success: true,
@@ -1099,22 +1124,13 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
     // Asegurar que las tablas existen
     await ensureTablesExist();
 
-    // Obtener la fecha de hoy CORRECTAMENTE en zona horaria de Bogotá
-    const nowUTC = new Date(); // UTC actual
+    // ✅ Obtener fecha de hoy en Ecuador usando PostgreSQL
+    const ecuadorDateResult = await sql`
+      SELECT (NOW() AT TIME ZONE 'America/Guayaquil')::DATE as ecuador_date
+    `;
+    const today = ecuadorDateResult.rows[0].ecuador_date;
     
-    // Convertir UTC a Bogotá (UTC-5)
-    const bogotaTime = new Date(nowUTC.getTime() - (5 * 60 * 60 * 1000));
-    
-    const year = bogotaTime.getUTCFullYear();
-    const month = String(bogotaTime.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(bogotaTime.getUTCDate()).padStart(2, '0');
-    const today = `${year}-${month}-${day}`;
-    
-    console.log('[handleGetAdminDashboard] Today date:', {
-      serverUTC: nowUTC.toISOString(),
-      bogotaTime: bogotaTime.toISOString(),
-      calculatedDate: today
-    });
+    console.log('[handleGetAdminDashboard] Today date (Ecuador):', today);
 
     // Total empleados activos
     const employeesResult = await sql`SELECT COUNT(*) as count FROM employees WHERE status = 'active'`;
@@ -1123,28 +1139,24 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
     // Presentes hoy
     const presentResult = await sql`
       SELECT COUNT(DISTINCT employee_id) as count FROM timecards
-      WHERE date = ${today}::DATE AND time_in IS NOT NULL
+      WHERE date = ${today} AND time_in IS NOT NULL
     `;
     const activeToday = parseInt(presentResult.rows[0].count);
 
     // Ausentes hoy
     const absentToday = totalEmployees - activeToday;
 
-    // Tardanzas (entrada después de las 09:00)
-    // Los timestamps están guardados como "hora local disfrazada de UTC"
-    // Entonces EXTRACT(HOUR FROM time_in) da directamente la hora local
+    // Tardanzas del sistema de schedules
     const lateResult = await sql`
-      SELECT COUNT(*) as count FROM timecards
-      WHERE date = ${today}::DATE
-      AND time_in IS NOT NULL
-      AND (EXTRACT(HOUR FROM time_in) > 9 OR (EXTRACT(HOUR FROM time_in) = 9 AND EXTRACT(MINUTE FROM time_in) > 0))
+      SELECT COUNT(*) as count FROM tardanzas
+      WHERE fecha = ${today}
     `;
     const lateToday = parseInt(lateResult.rows[0].count);
 
     // Promedio de horas
     const avgResult = await sql`
       SELECT AVG(hours_worked) as avg_hours FROM timecards
-      WHERE date = ${today}::DATE AND hours_worked IS NOT NULL
+      WHERE date = ${today} AND hours_worked IS NOT NULL
     `;
     const averageHours = avgResult.rows[0].avg_hours ? Math.round(parseFloat(avgResult.rows[0].avg_hours) * 100) / 100 : 0;
 
@@ -1154,7 +1166,7 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
         e.id, e.code, e.name, e.position,
         t.date, t.time_in, t.time_out, t.hours_worked
       FROM employees e
-      LEFT JOIN timecards t ON e.id = t.employee_id AND t.date::DATE = ${today}::DATE
+      LEFT JOIN timecards t ON e.id = t.employee_id AND t.date = ${today}
       WHERE e.status = 'active'
       ORDER BY e.name
     `;
@@ -1215,20 +1227,16 @@ async function handleGetEmployeeReport(req: any, res: any, code: string, month: 
   try {
     // Si no hay mes/año, retornar solo el estado de hoy (para UI de marcación)
     if (!month || !year) {
-      // Obtener la fecha de hoy en zona horaria de Bogotá
-      const now = new Date();
-      const bogotaTime = new Date(now.getTime() - (5 * 60 * 60 * 1000)); // Restar 5 horas al UTC
-      
-      const year = bogotaTime.getUTCFullYear();
-      const month = String(bogotaTime.getUTCMonth() + 1).padStart(2, '0');
-      const day = String(bogotaTime.getUTCDate()).padStart(2, '0');
-      const todayStr = `${year}-${month}-${day}`;
+      // ✅ Obtener la fecha de hoy en zona horaria de Ecuador
+      const ecuadorDateResult = await sql`
+        SELECT (NOW() AT TIME ZONE 'America/Guayaquil')::DATE as ecuador_date
+      `;
+      const todayStr = ecuadorDateResult.rows[0].ecuador_date;
       
       console.log('[handleGetEmployeeReport] Querying for today:', {
         employeeId: employee.id,
         employeeCode: employee.code,
-        todayStr,
-        nowUTC: now.toISOString()
+        todayStr
       });
       
       // Obtener TODOS los registros de hoy (puede haber múltiples turnos)
@@ -1687,13 +1695,65 @@ async function handleGetTimecardHistory(req: any, res: any, adminCode: string): 
   const { employeeId, startDate, endDate } = req.query;
 
   try {
-    const result = await sql`
-      SELECT * FROM timecards
-      WHERE employee_id = ${employeeId}
-      AND (${startDate}::DATE IS NULL OR date >= ${startDate}::DATE)
-      AND (${endDate}::DATE IS NULL OR date <= ${endDate}::DATE)
-      ORDER BY date DESC
-    `;
+    // ✅ Convertir employeeId a número
+    const empId = parseInt(employeeId);
+    
+    if (!Number.isInteger(empId) || empId <= 0) {
+      return res.status(400).json({ success: false, error: 'ID de empleado inválido' });
+    }
+
+    let result;
+    
+    // ✅ Validar y convertir fechas si vienen en formato YYYY-MM-DD (string local del cliente)
+    // Las fechas del cliente pueden estar en cualquier timezone, pero PostgreSQL necesita comparar correctamente
+    const normalizeDate = (dateStr: string) => {
+      // Si es "YYYY-MM-DD", lo pasamos tal cual - PostgreSQL lo interpreta como DATE
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        return dateStr;
+      }
+      return null;
+    };
+    
+    const normStartDate = startDate ? normalizeDate(startDate) : null;
+    const normEndDate = endDate ? normalizeDate(endDate) : null;
+    
+    // Construir query según los filtros disponibles
+    if (normStartDate && normEndDate) {
+      result = await sql`
+        SELECT * FROM timecards 
+        WHERE employee_id = ${empId}
+        AND date >= ${normStartDate}::DATE
+        AND date <= ${normEndDate}::DATE
+        ORDER BY date DESC
+      `;
+    } else if (normStartDate) {
+      result = await sql`
+        SELECT * FROM timecards 
+        WHERE employee_id = ${empId}
+        AND date >= ${normStartDate}::DATE
+        ORDER BY date DESC
+      `;
+    } else if (normEndDate) {
+      result = await sql`
+        SELECT * FROM timecards 
+        WHERE employee_id = ${empId}
+        AND date <= ${normEndDate}::DATE
+        ORDER BY date DESC
+      `;
+    } else {
+      result = await sql`
+        SELECT * FROM timecards 
+        WHERE employee_id = ${empId}
+        ORDER BY date DESC
+      `;
+    }
+
+    console.log('[handleGetTimecardHistory] Query result:', {
+      employeeId: empId,
+      startDate: normStartDate,
+      endDate: normEndDate,
+      rowsFound: result.rows.length
+    });
 
     return res.status(200).json({
       success: true,
