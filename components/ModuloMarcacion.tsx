@@ -3,18 +3,27 @@ import type { Employee, ClockInResponse, ClockOutResponse, Timecard } from '../t
 import { fetchWithAbort } from '../utils/fetchWithAbort';
 import { useGeolocation } from '../hooks/useGeolocation';
 
-// Helper para formatear timestamps ISO a hora local
+// Helper para formatear timestamps ISO a hora local de Ecuador (America/Guayaquil)
+// El backend ahora guarda timestamps UTC puros, convertir a hora local de Ecuador
 const formatTimestamp = (isoString: string): string => {
-  const date = new Date(isoString);
-  // Usar getUTCHours/Minutes/Seconds porque el backend guarda hora local como ISO UTC
-  const hours = date.getUTCHours();
-  const minutes = date.getUTCMinutes();
-  const seconds = date.getUTCSeconds();
-  
-  const ampm = hours >= 12 ? 'p. m.' : 'a. m.';
-  const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-  
-  return `${String(hour12).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')} ${ampm}`;
+  try {
+    const date = new Date(isoString);
+    
+    // ✅ SOLUCIÓN CORRECTA: Usar toLocaleTimeString con timezone de Ecuador
+    // Esto convierte automáticamente UTC → America/Guayaquil
+    const options: Intl.DateTimeFormatOptions = {
+      timeZone: 'America/Guayaquil',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    };
+    
+    return date.toLocaleTimeString('es-EC', options);
+  } catch (error) {
+    console.error('[formatTimestamp] Error:', error);
+    return 'Error en hora';
+  }
 };
 
 // Helper para validar y formatear horas

@@ -677,19 +677,19 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
                                 <td className="px-6 py-4">{new Date(record.date).toLocaleDateString('es-ES')}</td>
                                 <td className="px-6 py-4">
                                   {record.time_in
-                                    ? new Date(record.time_in).toLocaleTimeString('es-CO', {
+                                    ? new Date(record.time_in).toLocaleTimeString('es-EC', {
                                         hour: '2-digit',
                                         minute: '2-digit',
-                                        timeZone: 'America/Bogota'
+                                        timeZone: 'America/Guayaquil'
                                       })
                                     : '-'}
                                 </td>
                                 <td className="px-6 py-4">
                                   {record.time_out
-                                    ? new Date(record.time_out).toLocaleTimeString('es-CO', {
+                                    ? new Date(record.time_out).toLocaleTimeString('es-EC', {
                                         hour: '2-digit',
                                         minute: '2-digit',
-                                        timeZone: 'America/Bogota'
+                                        timeZone: 'America/Guayaquil'
                                       })
                                     : '-'}
                                 </td>
