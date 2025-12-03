@@ -110,11 +110,17 @@ export const ModuloMarcacion: React.FC = () => {
             const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' }); // YYYY-MM-DD
             const statusDate = result.todayStatus.date; // YYYY-MM-DD
             
+            console.log('[checkEmployeeStatus] ===== DEBUG COMPLETO =====');
+            console.log('[checkEmployeeStatus] todayStatus recibido:', JSON.stringify(result.todayStatus, null, 2));
             console.log('[checkEmployeeStatus] Validando fecha:', {
               todayEcuador: today,
               statusDate: statusDate,
-              isToday: today === statusDate
+              statusDateType: typeof statusDate,
+              isToday: today === statusDate,
+              hasTimeIn: !!result.todayStatus.timeIn || !!result.todayStatus.time_in,
+              hasTimeOut: !!result.todayStatus.timeOut || !!result.todayStatus.time_out
             });
+            console.log('[checkEmployeeStatus] ================');
             
             // Solo mostrar si es de hoy
             if (today === statusDate) {
@@ -124,6 +130,7 @@ export const ModuloMarcacion: React.FC = () => {
               setTodayStatus(null);
             }
           } else {
+            console.log('[checkEmployeeStatus] No hay todayStatus en la respuesta');
             setTodayStatus(null);
           }
         } else {
