@@ -757,8 +757,6 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
     // Asegurar que las tablas existen antes de insertar
     await ensureTablesExist();
 
-    // ESTRATEGIA CORRECTA: Usar localTime del cliente, convertir considerando timezone del servidor
-    const localTime = req.body?.localTime;
     const geolocation = req.body?.geolocation; // { latitude, longitude, accuracy }
     const deviceIP = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
     
@@ -787,8 +785,8 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
       } as any);
     }
     
-    // ✅ ESTRATEGIA DEFINITIVA: Guardar en UTC, calcular fecha de Ecuador para el campo date
-    // Obtener fecha de Ecuador para el campo date
+    // ✅ ESTRATEGIA: Backend usa NOW() directamente (PostgreSQL ya está en timezone Ecuador)
+    // El campo date se calcula automáticamente con la fecha actual de Ecuador
     const ecuadorDateResult = await sql`
       SELECT (NOW() AT TIME ZONE 'America/Guayaquil')::DATE as ecuador_date
     `;
@@ -839,9 +837,12 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
     // VALIDAR RETRASOS
     try {
       const timecardId = insertResult.rows[0].id;
+      const timeInTimestamp = insertResult.rows[0].time_in;
       
-      // Obtener horario esperado del empleado para hoy (día de semana)
-      const dayOfWeek = new Date(localTime.year, localTime.month - 1, localTime.day).getDay();
+      // Obtener día de semana usando el timestamp guardado (convertido a Ecuador)
+      const timeInDate = new Date(timeInTimestamp);
+      const ecuadorDate = new Date(timeInDate.toLocaleString('en-US', { timeZone: 'America/Guayaquil' }));
+      const dayOfWeek = ecuadorDate.getDay();
       
       const scheduleResult = await sql`
         SELECT check_in_time, grace_period_minutes
@@ -860,14 +861,18 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
         // Parsear hora esperada
         const [expectedHour, expectedMin] = expectedCheckInStr.split(':').map(Number);
         const expectedTimeInMinutes = expectedHour * 60 + expectedMin;
-        const actualTimeInMinutes = localTime.hour * 60 + localTime.minute;
+        
+        // Obtener hora real de entrada en Ecuador
+        const actualHour = ecuadorDate.getHours();
+        const actualMinute = ecuadorDate.getMinutes();
+        const actualTimeInMinutes = actualHour * 60 + actualMinute;
 
         // Calcular retraso
         const retrasominutos = Math.max(0, actualTimeInMinutes - expectedTimeInMinutes);
 
         console.log('[handleClockIn] Retraso detectado:', {
           expectedTime: `${String(expectedHour).padStart(2, '0')}:${String(expectedMin).padStart(2, '0')}`,
-          actualTime: `${String(localTime.hour).padStart(2, '0')}:${String(localTime.minute).padStart(2, '0')}`,
+          actualTime: `${String(actualHour).padStart(2, '0')}:${String(actualMinute).padStart(2, '0')}`,
           retrasominutos,
           gracePeriod: gracePeriodMinutes,
           esRetrasoReal: retrasominutos > gracePeriodMinutes
@@ -895,7 +900,7 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
               ${retrasominutos},
               ${tipoRetraso}::VARCHAR,
               ${expectedCheckInStr}::TIME,
-              ${`${String(localTime.hour).padStart(2, '0')}:${String(localTime.minute).padStart(2, '0')}:${String(localTime.second).padStart(2, '0')}`}::TIME,
+              ${`${String(actualHour).padStart(2, '0')}:${String(actualMinute).padStart(2, '0')}:00`}::TIME,
               CURRENT_DATE
             )
           `;
@@ -913,17 +918,21 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
       // No bloquear el clock in si falla la detección de tardanza
     }
 
-    // Display: ya está en hora local, solo formatear AM/PM
-    const ampm_in = localTime.hour >= 12 ? 'p. m.' : 'a. m.';
-    const hour12_in = localTime.hour === 0 ? 12 : localTime.hour > 12 ? localTime.hour - 12 : localTime.hour;
-    
-    const timeStr = `${String(hour12_in).padStart(2, '0')}:${String(localTime.minute).padStart(2, '0')}:${String(localTime.second).padStart(2, '0')} ${ampm_in}`;
+    // ✅ Formatear hora de respuesta desde timestamp guardado (convertir a Ecuador)
+    const timeInTimestamp = insertResult.rows[0].time_in;
+    const timeStr = new Date(timeInTimestamp).toLocaleTimeString('es-EC', {
+      timeZone: 'America/Guayaquil',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
 
     return res.status(200).json({
       success: true,
       message: `Entrada registrada correctamente a las ${timeStr}`,
       employee,
-      timestamp: insertResult.rows[0].time_in,
+      timestamp: timeInTimestamp,
       displayTime: timeStr
     } as ClockInResponse);
   } catch (error) {
@@ -1218,20 +1227,16 @@ async function handleGetEmployeeReport(req: any, res: any, code: string, month: 
   try {
     // Si no hay mes/año, retornar solo el estado de hoy (para UI de marcación)
     if (!month || !year) {
-      // Obtener la fecha de hoy en zona horaria de Bogotá
-      const now = new Date();
-      const bogotaTime = new Date(now.getTime() - (5 * 60 * 60 * 1000)); // Restar 5 horas al UTC
-      
-      const year = bogotaTime.getUTCFullYear();
-      const month = String(bogotaTime.getUTCMonth() + 1).padStart(2, '0');
-      const day = String(bogotaTime.getUTCDate()).padStart(2, '0');
-      const todayStr = `${year}-${month}-${day}`;
+      // ✅ Obtener la fecha de hoy en zona horaria de Ecuador
+      const ecuadorDateResult = await sql`
+        SELECT (NOW() AT TIME ZONE 'America/Guayaquil')::DATE as ecuador_date
+      `;
+      const todayStr = ecuadorDateResult.rows[0].ecuador_date;
       
       console.log('[handleGetEmployeeReport] Querying for today:', {
         employeeId: employee.id,
         employeeCode: employee.code,
-        todayStr,
-        nowUTC: now.toISOString()
+        todayStr
       });
       
       // Obtener TODOS los registros de hoy (puede haber múltiples turnos)
