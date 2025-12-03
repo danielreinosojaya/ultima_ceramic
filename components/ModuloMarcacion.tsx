@@ -227,13 +227,16 @@ export const ModuloMarcacion: React.FC = () => {
         // Usar la respuesta directa sin refresh innecesario
         // La respuesta de clock_in ya incluye el estado actualizado
         if (result.timestamp) {
-          // Convertir timestamp "YYYY-MM-DD HH:MM:SS" a ISO "YYYY-MM-DDTHH:MM:SS.000Z"
-          const isoTimestamp = result.timestamp.replace(' ', 'T') + '.000Z';
+          // ✅ FIX: Convertir timestamp a ISO completo, no solo fecha
+          // Backend retorna ISO string, usarlo directamente
+          const isoTimestamp = typeof result.timestamp === 'string' && result.timestamp.includes('T')
+            ? result.timestamp
+            : new Date(result.timestamp).toISOString();
           
           const updatedTimecard: Timecard = {
             id: todayStatus?.id || 0,
             employee_id: result.employee?.id || 0,
-            date: new Date().toISOString().split('T')[0],
+            date: isoTimestamp.split('T')[0],  // ✅ Derivar fecha de ISO string, no de now()
             time_in: isoTimestamp,
             time_out: undefined,
             hours_worked: undefined,
