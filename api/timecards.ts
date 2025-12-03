@@ -785,31 +785,37 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
       } as any);
     }
     
-    // ✅ FECHA ROBUSTA: Obtener fecha de Ecuador en el servidor
-    // Esto asegura que TODOS los registros del mismo día (en Ecuador) tengan el MISMO valor de date
-    const ecuadorDateResult = await sql`
-      SELECT (NOW() AT TIME ZONE 'America/Guayaquil')::DATE as ecuador_date,
-             (NOW() AT TIME ZONE 'America/Guayaquil') as ecuador_now
+    // ✅ SOLUCIÓN ROBUSTA: Obtener timestamp de Ecuador y DERIVAR la fecha de ese timestamp
+    // Esto garantiza consistencia perfecta entre date y time_in
+    const ecuadorNowResult = await sql`
+      SELECT (NOW() AT TIME ZONE 'America/Guayaquil') as ecuador_now
     `;
-    const ecuadorDate = ecuadorDateResult.rows[0].ecuador_date;
-    const ecuadorNow = ecuadorDateResult.rows[0].ecuador_now;
+    const ecuadorNow = ecuadorNowResult.rows[0].ecuador_now;
     
-    console.log('[handleClockIn] Fecha Ecuador calculada:', {
-      ecuadorDate,
+    console.log('[handleClockIn] Ecuador NOW:', {
       ecuadorNow,
+      ecuadorNowType: typeof ecuadorNow,
       nowUtc: new Date().toISOString()
     });
     
     // Intentar insertar con todas las columnas de geolocalización
-    // ✅ CRUCIAL: Usar la MISMA fecha de Ecuador que calculamos arriba para date
-    // y usar NOW() para time_in (que será UTC en BD, pero la fecha ya está garantizada)
+    // ✅ CRÍTICO: date se deriva AUTOMÁTICAMENTE del time_in en Ecuador timezone
+    // Esto asegura que date y time_in SIEMPRE estén sincronizados
     let insertResult;
     try {
       insertResult = await sql`
-        INSERT INTO timecards (employee_id, date, time_in, location_in_lat, location_in_lng, location_in_accuracy, device_ip_in)
+        INSERT INTO timecards (
+          employee_id, 
+          date, 
+          time_in, 
+          location_in_lat, 
+          location_in_lng, 
+          location_in_accuracy, 
+          device_ip_in
+        )
         VALUES (
           ${employee.id}, 
-          ${ecuadorDate}::DATE,
+          (${ecuadorNow}::TIMESTAMP AT TIME ZONE 'America/Guayaquil')::DATE,
           ${ecuadorNow}::TIMESTAMP,
           ${geolocation?.latitude || null}, 
           ${geolocation?.longitude || null}, 
@@ -826,7 +832,7 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
           INSERT INTO timecards (employee_id, date, time_in)
           VALUES (
             ${employee.id}, 
-            ${ecuadorDate}::DATE,
+            (${ecuadorNow}::TIMESTAMP AT TIME ZONE 'America/Guayaquil')::DATE,
             ${ecuadorNow}::TIMESTAMP
           )
           RETURNING id, time_in, date
