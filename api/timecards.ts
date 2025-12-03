@@ -1690,9 +1690,6 @@ async function handleGetTimecardHistory(req: any, res: any, adminCode: string): 
   const { employeeId, startDate, endDate } = req.query;
 
   try {
-    // ✅ Configurar timezone a Ecuador
-    await sql`SET TIME ZONE 'America/Guayaquil'`;
-    
     // ✅ Convertir employeeId a número
     const empId = parseInt(employeeId);
     
@@ -1702,27 +1699,40 @@ async function handleGetTimecardHistory(req: any, res: any, adminCode: string): 
 
     let result;
     
+    // ✅ Validar y convertir fechas si vienen en formato YYYY-MM-DD (string local del cliente)
+    // Las fechas del cliente pueden estar en cualquier timezone, pero PostgreSQL necesita comparar correctamente
+    const normalizeDate = (dateStr: string) => {
+      // Si es "YYYY-MM-DD", lo pasamos tal cual - PostgreSQL lo interpreta como DATE
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        return dateStr;
+      }
+      return null;
+    };
+    
+    const normStartDate = startDate ? normalizeDate(startDate) : null;
+    const normEndDate = endDate ? normalizeDate(endDate) : null;
+    
     // Construir query según los filtros disponibles
-    if (startDate && endDate) {
+    if (normStartDate && normEndDate) {
       result = await sql`
         SELECT * FROM timecards 
         WHERE employee_id = ${empId}
-        AND date >= ${startDate}::DATE
-        AND date <= ${endDate}::DATE
+        AND date >= ${normStartDate}::DATE
+        AND date <= ${normEndDate}::DATE
         ORDER BY date DESC
       `;
-    } else if (startDate) {
+    } else if (normStartDate) {
       result = await sql`
         SELECT * FROM timecards 
         WHERE employee_id = ${empId}
-        AND date >= ${startDate}::DATE
+        AND date >= ${normStartDate}::DATE
         ORDER BY date DESC
       `;
-    } else if (endDate) {
+    } else if (normEndDate) {
       result = await sql`
         SELECT * FROM timecards 
         WHERE employee_id = ${empId}
-        AND date <= ${endDate}::DATE
+        AND date <= ${normEndDate}::DATE
         ORDER BY date DESC
       `;
     } else {
@@ -1735,8 +1745,8 @@ async function handleGetTimecardHistory(req: any, res: any, adminCode: string): 
 
     console.log('[handleGetTimecardHistory] Query result:', {
       employeeId: empId,
-      startDate,
-      endDate,
+      startDate: normStartDate,
+      endDate: normEndDate,
       rowsFound: result.rows.length
     });
 
