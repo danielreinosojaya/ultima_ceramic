@@ -14,9 +14,10 @@ import { CalendarIcon } from '../icons/CalendarIcon';
 import { CubeIcon } from '../icons/CubeIcon';
 import { CogIcon } from '../icons/CogIcon';
 import { SettingsManager } from './SettingsManager';
+import { PiecesManager } from './PiecesManager';
 import type { AdminTab, Notification, Product, Booking, Customer, GroupInquiry, Instructor, ScheduleOverrides, DayKey, AvailableSlot, ClassCapacity, CapacityMessageSettings, Announcement, AppData, BankDetails, InvoiceRequest, NavigationState } from '../../types';
 
-type ExtendedAdminTab = AdminTab | 'giftcards' | 'expired-bookings';
+type ExtendedAdminTab = AdminTab | 'giftcards' | 'expired-bookings' | 'pieces';
 import { ScheduleSettingsManager } from './ScheduleSettingsManager';
 import { CalendarEditIcon } from '../icons/CalendarEditIcon';
 import { InquiryManager } from './InquiryManager';
@@ -212,6 +213,8 @@ export const AdminConsole: React.FC = () => {
         return <ClientNotificationLog />;
       case 'expired-bookings':
         return <ExpiredBookingsManager />;
+      case 'pieces':
+        return <PiecesManager onDataChange={handleSync} />;
       case 'settings':
         return <SettingsManager />; 
       default:
@@ -265,6 +268,14 @@ export const AdminConsole: React.FC = () => {
               <TabButton tab="financials" icon={<ChartBarIcon className="w-4 h-4" />}>Finanzas</TabButton>
               <TabButton tab="customers" icon={<UserGroupIcon className="w-4 h-4" />}>Clientes</TabButton>
               <TabButton tab="invoicing" icon={<DocumentTextIcon className="w-4 h-4" />}>Facturación</TabButton>
+              <button
+                disabled
+                title="Módulo en desarrollo"
+                className="px-4 py-2 rounded-lg text-brand-secondary bg-gray-100 cursor-not-allowed opacity-50 flex items-center gap-2 text-sm"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none"><circle cx="8" cy="8" r="2" stroke="#A89C94" strokeWidth="2" fill="none"/><circle cx="16" cy="8" r="2" stroke="#A89C94" strokeWidth="2" fill="none"/><circle cx="12" cy="16" r="2" stroke="#A89C94" strokeWidth="2" fill="none"/><path d="M8 10v4M16 10v4M12 14v2" stroke="#A89C94" strokeWidth="1"/></svg>
+                Piecitas <span className="text-xs bg-gray-300 px-2 py-1 rounded">Próximamente</span>
+              </button>
               <TabButton tab="giftcards" icon={<svg className="w-4 h-4" viewBox="0 0 24 24" fill="none"><rect x="3" y="7" width="18" height="10" rx="2" stroke="#A89C94" strokeWidth="2" fill="#F5F3EA"/><path d="M3 7l9 7 9-7" stroke="#A89C94" strokeWidth="2" fill="none"/></svg>}>Giftcards</TabButton>
               <TabButton tab="expired-bookings" icon={<svg className="w-4 h-4" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#E11D48" strokeWidth="2"/><path d="M12 7v5" stroke="#E11D48" strokeWidth="2"/><circle cx="12" cy="19" r="1" fill="#E11D48"/></svg>}>Pre-Reservas</TabButton>
               <TabButton tab="settings" icon={<CogIcon className="w-4 h-4" />}>Ajustes</TabButton>
