@@ -7,12 +7,12 @@ const EMPLOYEE_CODE_PREFIX = 'EMP';
 
 // ✅ HELPER: Convertir timestamp UTC a hora Ecuador y formatear
 // Recibe un ISO string UTC (ej: "2025-12-03T17:51:35.000Z")
-// Retorna string formateado (ej: "5:51 p. m.")
-function formatTimeInEcuadorTimezone(isoString: string | Date): string {
-  if (!isoString) return '-';
+// Retorna string formateado (ej: "5:51 p. m.") o null si inválido
+function formatTimeInEcuadorTimezone(isoString: string | Date | null | undefined): string | null {
+  if (!isoString) return null;
   
   const date = new Date(isoString);
-  if (isNaN(date.getTime())) return 'Invalid Date';
+  if (isNaN(date.getTime())) return null;  // ✅ Retornar null, no "Invalid Date"
   
   // Usar Intl para convertir a Ecuador timezone
   const formatter = new Intl.DateTimeFormat('es-EC', {
@@ -26,12 +26,12 @@ function formatTimeInEcuadorTimezone(isoString: string | Date): string {
 }
 
 // ✅ HELPER: Obtener solo la fecha en Ecuador timezone
-// Retorna string "YYYY-MM-DD"
-function getEcuadorDateOnly(isoString: string | Date): string {
-  if (!isoString) return '-';
+// Retorna string "YYYY-MM-DD" o null si inválido
+function getEcuadorDateOnly(isoString: string | Date | null | undefined): string | null {
+  if (!isoString) return null;
   
   const date = new Date(isoString);
-  if (isNaN(date.getTime())) return 'Invalid Date';
+  if (isNaN(date.getTime())) return null;  // ✅ Retornar null, no "Invalid Date"
   
   const formatter = new Intl.DateTimeFormat('es-EC', {
     year: 'numeric',
