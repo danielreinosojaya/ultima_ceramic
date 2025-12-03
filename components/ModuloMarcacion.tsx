@@ -158,40 +158,61 @@ export const ModuloMarcacion: React.FC = () => {
     setMessage({ text: 'Obteniendo ubicación...', type: 'success' });
     setLoading(true);
 
-    // Solicitar ubicación
-    await new Promise(resolve => {
+    // Solicitar ubicación - ESPERAR explícitamente
+    setMessage({ text: '📍 Obteniendo tu ubicación GPS...', type: 'success' });
+    
+    let locationObtained = false;
+    await new Promise<void>(resolve => {
       requestLocation();
-      // Esperar a que se obtenga la ubicación (máx 10s)
-      const maxWait = 10000;
-      const interval = setInterval(() => {
-        if (coords) {
-          clearInterval(interval);
-          resolve(true);
+      
+      // Crear listener para cambios en coords
+      const checkInterval = setInterval(() => {
+        if (coords && coords.latitude && coords.longitude) {
+          locationObtained = true;
+          clearInterval(checkInterval);
+          clearTimeout(timeoutId);
+          resolve();
         }
-      }, 100);
-      setTimeout(() => {
-        clearInterval(interval);
-        resolve(false);
-      }, maxWait);
+      }, 200);
+      
+      // Timeout después de 15 segundos
+      const timeoutId = setTimeout(() => {
+        clearInterval(checkInterval);
+        resolve();
+      }, 15000);
     });
+
+    // Si no se obtuvo ubicación, mostrar error claro
+    if (!coords?.latitude || !coords?.longitude) {
+      setLoading(false);
+      setMessage({ 
+        text: '❌ No se pudo obtener tu ubicación GPS.\n\n✅ Soluciones:\n1. Abre Configuración → Privacidad → Ubicación\n2. Asegúrate de que el navegador tenga permiso\n3. Intenta en una zona abierta (sin techumbre)\n4. Recarga la página e intenta de nuevo',
+        type: 'error' 
+      });
+      return;
+    }
 
     setLoading(true);
     setMessage({ text: '', type: 'success' });
 
     try {
       // ✅ NO ENVIAR localTime - el backend usa NOW() directamente con timezone de Ecuador
-      console.log('[handleClockIn] Enviando solicitud de clock in');
+      console.log('[handleClockIn] Enviando solicitud de clock in con ubicación:', {
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        accuracy: coords.accuracy
+      });
       
       const response = await fetch(`/api/timecards?action=clock_in&code=${code}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           code,
-          geolocation: coords ? {
+          geolocation: {
             latitude: coords.latitude,
             longitude: coords.longitude,
             accuracy: coords.accuracy
-          } : undefined
+          }
         })
       });
 
@@ -247,41 +268,60 @@ export const ModuloMarcacion: React.FC = () => {
     }
 
     // ✅ Solicitar geolocalización antes de marcar salida
-    setMessage({ text: 'Obteniendo ubicación...', type: 'success' });
+    setMessage({ text: '📍 Obteniendo tu ubicación GPS...', type: 'success' });
     setLoading(true);
 
-    // Solicitar ubicación
-    await new Promise(resolve => {
+    // Solicitar ubicación - ESPERAR explícitamente
+    await new Promise<void>(resolve => {
       requestLocation();
-      // Esperar a que se obtenga la ubicación (máx 10s)
-      const maxWait = 10000;
-      const interval = setInterval(() => {
-        if (coords) {
-          clearInterval(interval);
-          resolve(true);
+      
+      // Crear listener para cambios en coords
+      const checkInterval = setInterval(() => {
+        if (coords && coords.latitude && coords.longitude) {
+          clearInterval(checkInterval);
+          clearTimeout(timeoutId);
+          resolve();
         }
-      }, 100);
-      setTimeout(() => {
-        clearInterval(interval);
-        resolve(false);
-      }, maxWait);
+      }, 200);
+      
+      // Timeout después de 15 segundos
+      const timeoutId = setTimeout(() => {
+        clearInterval(checkInterval);
+        resolve();
+      }, 15000);
     });
+
+    // Si no se obtuvo ubicación, mostrar error claro
+    if (!coords?.latitude || !coords?.longitude) {
+      setLoading(false);
+      setMessage({ 
+        text: '❌ No se pudo obtener tu ubicación GPS.\n\n✅ Soluciones:\n1. Abre Configuración → Privacidad → Ubicación\n2. Asegúrate de que el navegador tenga permiso\n3. Intenta en una zona abierta (sin techumbre)\n4. Recarga la página e intenta de nuevo',
+        type: 'error' 
+      });
+      return;
+    }
 
     setLoading(true);
     setMessage({ text: '', type: 'success' });
 
     try {
       // ✅ NO ENVIAR localTime - el backend usa NOW() directamente con timezone de Ecuador
+      console.log('[handleClockOut] Enviando solicitud de clock out con ubicación:', {
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        accuracy: coords.accuracy
+      });
+      
       const response = await fetch(`/api/timecards?action=clock_out&code=${code}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           code,
-          geolocation: coords ? {
+          geolocation: {
             latitude: coords.latitude,
             longitude: coords.longitude,
             accuracy: coords.accuracy
-          } : undefined
+          }
         })
       });
 
