@@ -47,6 +47,33 @@ export const ModuloMarcacion: React.FC = () => {
   // ✅ Hook para geolocalización
   const { coords, loading: geoLoading, error: geoError, requestLocation } = useGeolocation();
 
+  // ✅ Reloj en tiempo real con hora de Ecuador
+  const [currentTime, setCurrentTime] = useState<string>('');
+
+  // Actualizar reloj cada segundo
+  useEffect(() => {
+    const updateClock = () => {
+      const now = new Date();
+      const ecuadorTime = now.toLocaleString('es-EC', {
+        timeZone: 'America/Guayaquil',
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      });
+      setCurrentTime(ecuadorTime);
+    };
+
+    updateClock(); // Ejecutar inmediatamente
+    const interval = setInterval(updateClock, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   // Al cambiar el código, verificar si empleado ya tiene marcación hoy
   useEffect(() => {
     if (!code.trim()) {
@@ -283,6 +310,12 @@ export const ModuloMarcacion: React.FC = () => {
         <div className="text-center mb-8">
           <h1 className="text-3xl font-serif font-bold text-brand-primary mb-2">🕐 Control de Asistencia</h1>
           <p className="text-brand-secondary text-sm">Marca tu entrada y salida</p>
+          
+          {/* ✅ RELOJ EN TIEMPO REAL - HORA DE ECUADOR */}
+          <div className="mt-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border-2 border-blue-200">
+            <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-1">Hora Local Ecuador</p>
+            <p className="text-base font-bold text-gray-800 font-mono">{currentTime || 'Cargando...'}</p>
+          </div>
         </div>
 
         {/* Input de código */}
