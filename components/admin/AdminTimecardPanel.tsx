@@ -130,9 +130,12 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
     try {
       // ✅ Obtener fecha de Ecuador usando timezone específico
       const ecuadorDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' }); // YYYY-MM-DD
-      const ecuadorDateObj = new Date(ecuadorDate + 'T00:00:00');
-      ecuadorDateObj.setDate(1); // Primer día del mes
-      const startDate = ecuadorDateObj.toISOString().split('T')[0];
+      
+      // Extraer año y mes de ecuadorDate
+      const [year, month] = ecuadorDate.split('-');
+      
+      // Primer día del mes en formato YYYY-MM-DD
+      const startDate = `${year}-${month}-01`;
       const today = ecuadorDate;
 
       const response = await fetch(
@@ -152,9 +155,12 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
   const downloadReport = async (format: 'csv' | 'pdf') => {
     // ✅ Obtener fecha de Ecuador usando timezone específico
     const ecuadorDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' }); // YYYY-MM-DD
-    const ecuadorDateObj = new Date(ecuadorDate + 'T00:00:00');
-    ecuadorDateObj.setDate(1); // Primer día del mes
-    const startDate = ecuadorDateObj.toISOString().split('T')[0];
+    
+    // Extraer año y mes de ecuadorDate
+    const [year, month] = ecuadorDate.split('-');
+    
+    // Primer día del mes en formato YYYY-MM-DD
+    const startDate = `${year}-${month}-01`;
     const endDate = ecuadorDate;
 
     try {
