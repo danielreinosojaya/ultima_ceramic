@@ -121,25 +121,35 @@ export const MonthlyReportViewer: React.FC<MonthlyReportViewerProps> = ({ adminC
 
   const formatTime = (dateString: string) => formatLocalTimeFromUTC(dateString);
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null) => {
     if (!dateString) return '-';
-    // ✅ Usar formatLocalTimeFromUTC que ya maneja correctamente el timezone
-    // y extraer solo la fecha (primeros 10 caracteres)
-    const timeStr = formatLocalTimeFromUTC(dateString);
-    // Si viene en formato "HH:MM a.m/p.m", necesitamos la fecha
-    // Mejor: usar el timestamp directamente y convertir a fecha local
+    
+    console.log('[formatDate] Input:', dateString, 'Type:', typeof dateString);
+    
+    // Si es solo una fecha (YYYY-MM-DD), usarla directamente
+    if (dateString.length === 10 && dateString.includes('-')) {
+      // Es "2025-12-03", crear fecha a mediodía para evitar problemas de timezone
+      const localDate = new Date(`${dateString}T12:00:00`);
+      const result = localDate.toLocaleDateString('es-CO', { 
+        weekday: 'short', 
+        month: 'short', 
+        day: 'numeric',
+        timeZone: 'America/Guayaquil'
+      });
+      console.log('[formatDate] Output:', result);
+      return result;
+    }
+    
+    // Si es un timestamp completo, usarlo
     const date = new Date(dateString);
-    // Convertir a string en timezone Ecuador y extraer fecha
-    const ecuadorDateStr = date.toLocaleString('es-CO', { 
-      timeZone: 'America/Guayaquil',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
+    const result = date.toLocaleDateString('es-CO', { 
+      weekday: 'short', 
+      month: 'short', 
+      day: 'numeric',
+      timeZone: 'America/Guayaquil'
     });
-    // ecuadorDateStr es "DD/MM/YYYY", convertir a Date para formato
-    const [day, month, year] = ecuadorDateStr.split('/');
-    const localDate = new Date(`${year}-${month}-${day}T12:00:00`);
-    return localDate.toLocaleDateString('es-CO', { weekday: 'short', month: 'short', day: 'numeric' });
+    console.log('[formatDate] Output from timestamp:', result);
+    return result;
   };
 
   const months = [
