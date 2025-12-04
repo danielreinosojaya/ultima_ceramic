@@ -118,6 +118,23 @@ function calculateHoursInProgress(timeInUtc: string): string {
   }
 }
 
+/**
+ * Convierte hoursWorked a número válido
+ */
+function formatHours(hours: any): string {
+  if (hours === null || hours === undefined) return '-';
+  
+  try {
+    const num = typeof hours === 'string' ? parseFloat(hours) : hours;
+    
+    if (isNaN(num)) return '-';
+    
+    return typeof num === 'number' ? num.toFixed(2) : '-';
+  } catch {
+    return '-';
+  }
+}
+
 // ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
@@ -522,7 +539,7 @@ export const AdminTimecardPanelSimple: React.FC<AdminTimecardPanelSimpleProps> =
                               </span>
                             ) : tc?.hoursWorked !== null && tc?.hoursWorked !== undefined ? (
                               <span className="font-mono font-bold text-blue-600">
-                                {tc.hoursWorked.toFixed(2)}h
+                                {formatHours(tc.hoursWorked)}h
                               </span>
                             ) : (
                               <span className="text-gray-400">-</span>
@@ -726,7 +743,7 @@ export const AdminTimecardPanelSimple: React.FC<AdminTimecardPanelSimpleProps> =
                         </td>
                         <td className="px-4 py-3 text-sm font-mono font-bold text-blue-600">
                           {record.hoursWorked !== null && record.hoursWorked !== undefined
-                            ? `${record.hoursWorked.toFixed(2)}h`
+                            ? `${formatHours(record.hoursWorked)}h`
                             : '-'}
                         </td>
                       </tr>
