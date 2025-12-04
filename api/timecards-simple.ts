@@ -325,6 +325,115 @@ async function handleGetEmployeeHistory(req: any, res: any) {
   }
 }
 
+/**
+ * Obtener TODOS los empleados
+ */
+async function handleGetAllEmployees(req: any, res: any) {
+  try {
+    const result = await sql`
+      SELECT id, code, name, position, status 
+      FROM employees 
+      ORDER BY name ASC
+    `;
+
+    const employees = result.rows.map(row => toCamelCase(row));
+
+    return res.status(200).json({
+      success: true,
+      employees
+    });
+  } catch (error) {
+    console.error('[GetAllEmployees Error]', error);
+    return res.status(500).json({ success: false, error: 'Error al obtener empleados' });
+  }
+}
+
+/**
+ * Crear nuevo empleado
+ */
+async function handleCreateEmployee(req: any, res: any) {
+  const { code, name, position } = req.body;
+
+  if (!code || !name) {
+    return res.status(400).json({ success: false, error: 'Código y nombre requeridos' });
+  }
+
+  try {
+    // Verificar si el código ya existe
+    const existingResult = await sql`
+      SELECT id FROM employees WHERE code = ${code.toUpperCase()} LIMIT 1
+    `;
+
+    if (existingResult.rows.length > 0) {
+      return res.status(400).json({ success: false, error: 'El código ya existe' });
+    }
+
+    // Insertar nuevo empleado
+    const insertResult = await sql`
+      INSERT INTO employees (code, name, position, status, created_at, updated_at)
+      VALUES (
+        ${code.toUpperCase()},
+        ${name},
+        ${position || null},
+        'active',
+        NOW(),
+        NOW()
+      )
+      RETURNING *
+    `;
+
+    const employee = toCamelCase(insertResult.rows[0]);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Empleado creado correctamente',
+      employee
+    });
+  } catch (error) {
+    console.error('[CreateEmployee Error]', error);
+    return res.status(500).json({ success: false, error: 'Error al crear empleado' });
+  }
+}
+
+/**
+ * Actualizar estado de empleado (activar/desactivar)
+ */
+async function handleUpdateEmployeeStatus(req: any, res: any) {
+  const { employeeId, status } = req.body;
+
+  if (!employeeId || !status) {
+    return res.status(400).json({ success: false, error: 'ID y estado requeridos' });
+  }
+
+  if (status !== 'active' && status !== 'inactive') {
+    return res.status(400).json({ success: false, error: 'Estado inválido' });
+  }
+
+  try {
+    const updateResult = await sql`
+      UPDATE employees 
+      SET status = ${status}, updated_at = NOW()
+      WHERE id = ${employeeId}
+      RETURNING *
+    `;
+
+    if (updateResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Empleado no encontrado' });
+    }
+
+    const employee = toCamelCase(updateResult.rows[0]);
+
+    return res.status(200).json({
+      success: true,
+      message: `Empleado ${status === 'active' ? 'activado' : 'desactivado'}`,
+      employee
+    });
+  } catch (error) {
+    console.error('[UpdateEmployeeStatus Error]', error);
+    return res.status(500).json({ success: false, error: 'Error al actualizar empleado' });
+  }
+}
+
 // ============================================
 // HANDLER PRINCIPAL
 // ============================================
@@ -354,6 +463,15 @@ export default async function handler(req: any, res: any) {
       
       case 'get_history':
         return await handleGetEmployeeHistory(req, res);
+      
+      case 'get_all_employees':
+        return await handleGetAllEmployees(req, res);
+      
+      case 'create_employee':
+        return await handleCreateEmployee(req, res);
+      
+      case 'update_employee_status':
+        return await handleUpdateEmployeeStatus(req, res);
       
       default:
         return res.status(400).json({ success: false, error: 'Acción no válida' });

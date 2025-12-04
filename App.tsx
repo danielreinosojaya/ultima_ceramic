@@ -21,7 +21,7 @@ import { AnnouncementsBoard } from './components/AnnouncementsBoard';
 import { ClientDeliveryForm } from './components/ClientDeliveryForm';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ModuloMarcacionSimple } from './components/ModuloMarcacionSimple';
-import { AdminTimecardPanel } from './components/admin/AdminTimecardPanel';
+import { AdminTimecardPanelSimple } from './components/admin/AdminTimecardPanelSimple';
 // New Experience Components
 import { ExperienceTypeSelector } from './components/experiences/ExperienceTypeSelector';
 import { GroupClassWizard } from './components/experiences/GroupClassWizard';
@@ -891,7 +891,7 @@ const App: React.FC = () => {
                 }>
                     <AdminDataProvider isAdmin={isAdmin}>
                         {adminModule === 'timecards' ? (
-                            <AdminTimecardPanel adminCode={adminCode} />
+                            <AdminTimecardPanelSimple adminCode={adminCode} />
                         ) : (
                             <AdminConsole />
                         )}
