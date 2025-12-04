@@ -120,11 +120,18 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
   const loadDashboard = async () => {
     setLoading(true);
     try {
+      // ✅ Agregar timestamp para evitar caché
+      const timestamp = Date.now();
       const result = await fetchWithAbort(
         'admin-dashboard-stats',
-        `/api/timecards?action=get_admin_dashboard&adminCode=${adminCode}`
+        `/api/timecards?action=get_admin_dashboard&adminCode=${adminCode}&_t=${timestamp}`
       );
       if (result.success) {
+        console.log('[AdminTimecardPanel] Dashboard data received:', {
+          total: result.data.total_employees,
+          activeToday: result.data.active_today,
+          employeesWithData: result.data.employees_status.filter((e: any) => e.time_in).length
+        });
         setDashboard(result.data);
       }
     } catch (error) {
@@ -454,12 +461,27 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
                         <td className="px-6 py-4">{formatLocalTimeFromUTC(emp.time_in)}</td>
                         <td className="px-6 py-4">{formatLocalTimeFromUTC(emp.time_out)}</td>
                         <td className="px-6 py-4 font-mono">
-                          {emp.hours_worked !== null && emp.hours_worked !== undefined && typeof emp.hours_worked === 'number'
+                          {/* ✅ FIX: Validar hoursWorked y time_in antes de cualquier cálculo */}
+                          {emp.hours_worked !== null && emp.hours_worked !== undefined && typeof emp.hours_worked === 'number' && !isNaN(emp.hours_worked)
                             ? `${emp.hours_worked.toFixed(2)}h`
                             : emp.hours_worked !== null && emp.hours_worked !== undefined
-                            ? `${Number(emp.hours_worked).toFixed(2)}h`
+                            ? (() => {
+                                const parsedHours = Number(emp.hours_worked);
+                                return !isNaN(parsedHours) ? `${parsedHours.toFixed(2)}h` : '-';
+                              })()
                             : emp.time_in && !emp.time_out && emp.status === 'in_progress'
-                            ? `⏳ ${calculateHoursInProgress(emp.time_in)}h (${calculateHoursInProgressReadable(emp.time_in)})`
+                            ? (() => {
+                                // ✅ Doble validación: time_in debe ser ISO string válido (con T)
+                                if (typeof emp.time_in === 'string' && emp.time_in.includes('T')) {
+                                  const inProgressHours = calculateHoursInProgress(emp.time_in);
+                                  const inProgressReadable = calculateHoursInProgressReadable(emp.time_in);
+                                  // Validar que no sea NaN
+                                  if (inProgressHours && inProgressHours !== '-' && !inProgressHours.includes('NaN')) {
+                                    return `⏳ ${inProgressHours}h (${inProgressReadable})`;
+                                  }
+                                }
+                                return '-';
+                              })()
                             : '-'}
                         </td>
                         <td className="px-6 py-4 text-center">
@@ -722,23 +744,48 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
                           <tbody>
                             {employeeHistory.map(record => (
                               <tr key={record.id} className="border-b border-brand-border/30 hover:bg-brand-surface/50">
-                                <td className="px-6 py-4">{new Date(record.date).toLocaleDateString('es-ES')}</td>
+                                <td className="px-6 py-4">
+                                  {/* ✅ FIX: Validar que record.date sea válido antes de parsear */}
+                                  {(() => {
+                                    if (!record.date) return '-';
+                                    
+                                    // Si es string YYYY-MM-DD, parsearlo de forma segura
+                                    if (typeof record.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(record.date)) {
+                                      const [year, month, day] = record.date.split('-');
+                                      const date = new Date(Number(year), Number(month) - 1, Number(day));
+                                      return date.toLocaleDateString('es-ES');
+                                    }
+                                    
+                                    // Si es otro formato, intentar parseo directo
+                                    const date = new Date(record.date);
+                                    if (isNaN(date.getTime())) return '-';
+                                    return date.toLocaleDateString('es-ES');
+                                  })()}
+                                </td>
                                 <td className="px-6 py-4">
                                   {record.time_in
-                                    ? new Date(record.time_in).toLocaleTimeString('es-EC', {
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                        timeZone: 'America/Guayaquil'
-                                      })
+                                    ? (() => {
+                                        const date = new Date(record.time_in);
+                                        if (isNaN(date.getTime())) return '-';
+                                        return date.toLocaleTimeString('es-EC', {
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                          timeZone: 'America/Guayaquil'
+                                        });
+                                      })()
                                     : '-'}
                                 </td>
                                 <td className="px-6 py-4">
                                   {record.time_out
-                                    ? new Date(record.time_out).toLocaleTimeString('es-EC', {
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                        timeZone: 'America/Guayaquil'
-                                      })
+                                    ? (() => {
+                                        const date = new Date(record.time_out);
+                                        if (isNaN(date.getTime())) return '-';
+                                        return date.toLocaleTimeString('es-EC', {
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                          timeZone: 'America/Guayaquil'
+                                        });
+                                      })()
                                     : '-'}
                                 </td>
                                 <td className="px-6 py-4 font-mono font-bold">
