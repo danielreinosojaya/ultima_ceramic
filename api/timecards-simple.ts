@@ -243,9 +243,10 @@ async function handleGetEmployeeStatus(req: any, res: any) {
 
   try {
     // 1. Buscar empleado
+    // No filtrar por status aquí: el panel admin necesita ver inactivos también
     const empResult = await sql`
-      SELECT id, code, name, position FROM employees 
-      WHERE code = ${code} AND status = 'active'
+      SELECT id, code, name, position, status FROM employees 
+      WHERE code = ${code}
       LIMIT 1
     `;
 
@@ -450,6 +451,78 @@ async function handleUpdateEmployeeStatus(req: any, res: any) {
   }
 }
 
+/**
+ * Actualizar timecard (editar entrada/salida)
+ */
+async function handleUpdateTimecard(req: any, res: any) {
+  const { timecardId, date, timeIn, timeOut } = req.body;
+
+  if (!timecardId || !date || !timeIn) {
+    return res.status(400).json({ success: false, error: 'ID, fecha y entrada requeridos' });
+  }
+
+  try {
+    // Validar que timeIn sea formato HH:MM
+    if (!/^\d{2}:\d{2}$/.test(timeIn)) {
+      return res.status(400).json({ success: false, error: 'Formato de entrada inválido (HH:MM)' });
+    }
+
+    if (timeOut && !/^\d{2}:\d{2}$/.test(timeOut)) {
+      return res.status(400).json({ success: false, error: 'Formato de salida inválido (HH:MM)' });
+    }
+
+    // Convertir HH:MM a timestamp UTC
+    // date viene como YYYY-MM-DD en Ecuador
+    const [year, month, day] = date.split('-').map(Number);
+    const [hourIn, minuteIn] = timeIn.split(':').map(Number);
+    
+    // Crear fecha en Ecuador y convertir a UTC
+    const ecuadorDate = new Date(year, month - 1, day, hourIn, minuteIn, 0);
+    const ecuadorOffset = -5 * 60; // Ecuador UTC-5
+    const timeInUtc = new Date(ecuadorDate.getTime() - (ecuadorDate.getTimezoneOffset() + ecuadorOffset) * 60000);
+
+    // Convertir timeOut si existe
+    let timeOutUtc: Date | null = null;
+    if (timeOut) {
+      const [hourOut, minuteOut] = timeOut.split(':').map(Number);
+      const ecuadorDateOut = new Date(year, month - 1, day, hourOut, minuteOut, 0);
+      timeOutUtc = new Date(ecuadorDateOut.getTime() - (ecuadorDateOut.getTimezoneOffset() + ecuadorOffset) * 60000);
+    }
+
+    // Actualizar timecard
+    let hoursWorked = null;
+    if (timeOutUtc) {
+      hoursWorked = (timeOutUtc.getTime() - timeInUtc.getTime()) / (1000 * 60 * 60);
+    }
+
+    const updateResult = await sql`
+      UPDATE timecards
+      SET
+        time_in = ${timeInUtc.toISOString()},
+        time_out = ${timeOutUtc ? timeOutUtc.toISOString() : null},
+        hours_worked = ${hoursWorked},
+        updated_at = NOW()
+      WHERE id = ${timecardId}
+      RETURNING *
+    `;
+
+    if (updateResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Registro no encontrado' });
+    }
+
+    const timecard = toCamelCase(updateResult.rows[0]);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Horario actualizado correctamente',
+      timecard
+    });
+  } catch (error) {
+    console.error('[UpdateTimecard Error]', error);
+    return res.status(500).json({ success: false, error: 'Error al actualizar horario' });
+  }
+}
+
 // ============================================
 // HANDLER PRINCIPAL
 // ============================================
@@ -488,6 +561,9 @@ export default async function handler(req: any, res: any) {
       
       case 'update_employee_status':
         return await handleUpdateEmployeeStatus(req, res);
+      
+      case 'update_timecard':
+        return await handleUpdateTimecard(req, res);
       
       default:
         return res.status(400).json({ success: false, error: 'Acción no válida' });
