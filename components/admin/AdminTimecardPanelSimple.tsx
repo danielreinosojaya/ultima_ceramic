@@ -144,7 +144,7 @@ interface AdminTimecardPanelSimpleProps {
 }
 
 export const AdminTimecardPanelSimple: React.FC<AdminTimecardPanelSimpleProps> = ({ adminCode }) => {
-  const [tab, setTab] = useState<'dashboard' | 'employees'>('dashboard');
+  const [tab, setTab] = useState<'dashboard' | 'employees' | 'reports'>('dashboard');
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<EmployeeStatus[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
@@ -156,6 +156,17 @@ export const AdminTimecardPanelSimple: React.FC<AdminTimecardPanelSimpleProps> =
   const [createForm, setCreateForm] = useState({ code: '', name: '', position: '' });
   const [createLoading, setCreateLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' }>({ text: '', type: 'success' });
+
+  // Estados para editar timecard
+  const [editingTimecard, setEditingTimecard] = useState<Timecard | null>(null);
+  const [editForm, setEditForm] = useState({ timeIn: '', timeOut: '' });
+  const [editLoading, setEditLoading] = useState(false);
+
+  // Estados para reportes
+  const [reportEmployee, setReportEmployee] = useState<Employee | null>(null);
+  const [reportMonth, setReportMonth] = useState<string>(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const [reportData, setReportData] = useState<Timecard[]>([]);
+  const [reportLoading, setReportLoading] = useState(false);
 
   // Reloj en tiempo real
   const [currentTime, setCurrentTime] = useState('');
@@ -326,6 +337,152 @@ export const AdminTimecardPanelSimple: React.FC<AdminTimecardPanelSimpleProps> =
     }
   };
 
+  // Editar timecard
+  const handleEditTimecard = async () => {
+    if (!editingTimecard) return;
+
+    setEditLoading(true);
+    setMessage({ text: '', type: 'success' });
+
+    try {
+      // Validar formato HH:MM
+      const timeInRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+      if (!timeInRegex.test(editForm.timeIn)) {
+        setMessage({ text: 'Formato de entrada inválido (HH:MM)', type: 'error' });
+        setEditLoading(false);
+        return;
+      }
+
+      if (editForm.timeOut && !timeInRegex.test(editForm.timeOut)) {
+        setMessage({ text: 'Formato de salida inválido (HH:MM)', type: 'error' });
+        setEditLoading(false);
+        return;
+      }
+
+      const res = await fetch('/api/timecards-simple?action=update_timecard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          timecardId: editingTimecard.id,
+          date: editingTimecard.date,
+          timeIn: editForm.timeIn,
+          timeOut: editForm.timeOut || null
+        })
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setMessage({ text: 'Horario actualizado correctamente', type: 'success' });
+        setEditingTimecard(null);
+        setEditForm({ timeIn: '', timeOut: '' });
+        // Recargar historial
+        if (selectedEmployee) {
+          loadHistory(selectedEmployee);
+        }
+      } else {
+        setMessage({ text: data.error, type: 'error' });
+      }
+    } catch (error) {
+      setMessage({ text: 'Error al actualizar horario', type: 'error' });
+      console.error(error);
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  // Cargar reporte mensual
+  const loadReport = async (employee: Employee) => {
+    setReportEmployee(employee);
+    setReportLoading(true);
+    setMessage({ text: '', type: 'success' });
+
+    try {
+      const [year, month] = reportMonth.split('-');
+      const res = await fetch(
+        `/api/timecards-simple?action=get_history&code=${employee.code}&month=${month}&year=${year}&limit=1000`
+      );
+      const data = await res.json();
+
+      if (data.success) {
+        setReportData(data.history);
+      } else {
+        setMessage({ text: data.error, type: 'error' });
+      }
+    } catch (error) {
+      console.error('Error loading report:', error);
+      setMessage({ text: 'Error al cargar reporte', type: 'error' });
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  // Generar PDF del reporte
+  const generateReportPDF = () => {
+    if (!reportEmployee || reportData.length === 0) return;
+
+    const totalHours = reportData.reduce((sum, record) => {
+      const hours = formatHours(record.hoursWorked);
+      return sum + (hours !== '-' ? parseFloat(hours) : 0);
+    }, 0);
+
+    const [year, month] = reportMonth.split('-');
+    const monthName = new Date(Number(year), Number(month) - 1).toLocaleString('es-EC', { month: 'long', year: 'numeric' });
+
+    let content = `
+================================================================================
+REPORTE DE ASISTENCIA - ÚLTIMA CERAMIC
+================================================================================
+
+Empleado: ${reportEmployee.name}
+Código: ${reportEmployee.code}
+Cargo: ${reportEmployee.position || '-'}
+Período: ${monthName}
+
+================================================================================
+DETALLE DE JORNADAS
+================================================================================
+`;
+
+    reportData.forEach(record => {
+      const fecha = formatEcuadorDate(record.date);
+      const entrada = formatEcuadorTime(record.timeIn);
+      const salida = record.timeOut ? formatEcuadorTime(record.timeOut) : '-';
+      const horas = formatHours(record.hoursWorked);
+      
+      content += `
+${fecha}
+  Entrada:        ${entrada}
+  Salida:         ${salida}
+  Horas:          ${horas}h
+`;
+    });
+
+    content += `
+================================================================================
+RESUMEN
+================================================================================
+Total de días trabajados: ${reportData.length}
+Total de horas: ${totalHours.toFixed(2)}h
+Promedio por día: ${(totalHours / reportData.length).toFixed(2)}h
+
+================================================================================
+Generado: ${new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}
+================================================================================
+`;
+
+    // Descargar como texto
+    const element = document.createElement('a');
+    element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(content));
+    element.setAttribute('download', `reporte_${reportEmployee.code}_${reportMonth}.txt`);
+    element.style.display = 'none';
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+
+    setMessage({ text: 'Reporte descargado correctamente', type: 'success' });
+  };
+
   // Cargar al iniciar
   useEffect(() => {
     loadEmployees();
@@ -437,6 +594,17 @@ export const AdminTimecardPanelSimple: React.FC<AdminTimecardPanelSimpleProps> =
             }`}
           >
             👥 Todos los Empleados
+          </button>
+
+          <button
+            onClick={() => setTab('reports')}
+            className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
+              tab === 'reports'
+                ? 'bg-white text-blue-600 shadow'
+                : 'text-gray-600 hover:text-gray-800'
+            }`}
+          >
+            📊 Reportes
           </button>
         </div>
       </div>
@@ -622,6 +790,138 @@ export const AdminTimecardPanelSimple: React.FC<AdminTimecardPanelSimpleProps> =
             </table>
           </div>
         )}
+
+        {/* TAB: Reportes */}
+        {tab === 'reports' && (
+          <div className="space-y-4">
+            {/* Selector de empleado y mes */}
+            <div className="bg-white rounded-lg shadow-sm border p-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Empleado</label>
+                  <select
+                    value={reportEmployee?.id || ''}
+                    onChange={(e) => {
+                      const emp = employees.find(x => x.id === Number(e.target.value));
+                      if (emp) setReportEmployee(emp);
+                    }}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  >
+                    <option value="">Seleccionar empleado...</option>
+                    {employees.filter(e => e.status === 'active').map(emp => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name} ({emp.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold mb-2">Período</label>
+                  <input
+                    type="month"
+                    value={reportMonth}
+                    onChange={(e) => setReportMonth(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
+                </div>
+
+                <div className="flex items-end">
+                  <button
+                    onClick={() => reportEmployee && loadReport(reportEmployee)}
+                    disabled={!reportEmployee || reportLoading}
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {reportLoading ? 'Cargando...' : 'Generar Reporte'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Reporte */}
+            {reportData.length > 0 && (
+              <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+                <div className="p-4 border-b bg-gray-50 flex justify-between items-start">
+                  <div>
+                    <h3 className="font-bold text-lg">{reportEmployee?.name}</h3>
+                    <p className="text-sm text-gray-600">
+                      {reportData.length} días | Total:{' '}
+                      <span className="font-bold">
+                        {reportData
+                          .reduce((sum, r) => sum + (formatHours(r.hoursWorked) !== '-' ? parseFloat(formatHours(r.hoursWorked)) : 0), 0)
+                          .toFixed(2)}
+                        h
+                      </span>
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={generateReportPDF}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  >
+                    📥 Descargar Reporte
+                  </button>
+                </div>
+
+                <div className="overflow-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Fecha</th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Entrada</th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Salida</th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Horas</th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {reportData.map(record => (
+                        <tr key={record.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm">{formatEcuadorDate(record.date)}</td>
+                          <td className="px-4 py-3 text-sm font-mono text-green-700">{formatEcuadorTime(record.timeIn)}</td>
+                          <td className="px-4 py-3 text-sm font-mono text-red-700">{formatEcuadorTime(record.timeOut)}</td>
+                          <td className="px-4 py-3 text-sm font-mono font-bold text-blue-600">
+                            {formatHours(record.hoursWorked)}h
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <button
+                              onClick={() => {
+                                setEditingTimecard(record);
+                                setEditForm({
+                                  timeIn: record.timeIn ? new Date(record.timeIn).toLocaleTimeString('es-EC', {
+                                    timeZone: 'America/Guayaquil',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    hour12: false
+                                  }) : '',
+                                  timeOut: record.timeOut ? new Date(record.timeOut).toLocaleTimeString('es-EC', {
+                                    timeZone: 'America/Guayaquil',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    hour12: false
+                                  }) : ''
+                                });
+                              }}
+                              className="text-blue-600 hover:text-blue-800 font-medium"
+                            >
+                              Editar
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {reportData.length === 0 && reportEmployee && (
+              <div className="bg-white rounded-lg shadow-sm border p-8 text-center text-gray-500">
+                No hay registros para este período
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* MODAL: Crear Empleado */}
@@ -688,69 +988,63 @@ export const AdminTimecardPanelSimple: React.FC<AdminTimecardPanelSimpleProps> =
         </div>
       )}
 
-      {/* MODAL: Historial de Empleado */}
-      {selectedEmployee && (
+      {/* MODAL: Editar Timecard */}
+      {editingTimecard && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="p-6 border-b">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="text-xl font-bold">{selectedEmployee.name}</h3>
-                  <p className="text-sm text-gray-500">
-                    Código: <code className="bg-gray-100 px-2 py-1 rounded">{selectedEmployee.code}</code>
-                  </p>
-                </div>
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h3 className="text-xl font-bold mb-4">Editar Horario</h3>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-600">
+                <strong>{editingTimecard.date}</strong>
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold mb-1">Entrada (HH:MM) *</label>
+                <input
+                  type="text"
+                  value={editForm.timeIn}
+                  onChange={(e) => setEditForm({ ...editForm, timeIn: e.target.value })}
+                  placeholder="06:30"
+                  className="w-full px-3 py-2 border rounded-lg"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-1">Salida (HH:MM)</label>
+                <input
+                  type="text"
+                  value={editForm.timeOut}
+                  onChange={(e) => setEditForm({ ...editForm, timeOut: e.target.value })}
+                  placeholder="15:00 (opcional)"
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
+              </div>
+
+              <div className="flex space-x-3 pt-4">
                 <button
-                  onClick={() => setSelectedEmployee(null)}
-                  className="text-gray-400 hover:text-gray-600"
+                  type="button"
+                  onClick={() => {
+                    setEditingTimecard(null);
+                    setEditForm({ timeIn: '', timeOut: '' });
+                  }}
+                  className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
+                  disabled={editLoading}
                 >
-                  ✕
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleEditTimecard}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  disabled={editLoading}
+                >
+                  {editLoading ? 'Guardando...' : 'Guardar'}
                 </button>
               </div>
-            </div>
-            
-            <div className="flex-1 overflow-auto p-6">
-              {historyLoading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-                  <p className="text-gray-600">Cargando historial...</p>
-                </div>
-              ) : history.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  No hay registros
-                </div>
-              ) : (
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Fecha</th>
-                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Entrada</th>
-                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Salida</th>
-                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Horas</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {history.map(record => (
-                      <tr key={record.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm">
-                          {formatEcuadorDate(record.date)}
-                        </td>
-                        <td className="px-4 py-3 text-sm font-mono text-green-700">
-                          {formatEcuadorTime(record.timeIn)}
-                        </td>
-                        <td className="px-4 py-3 text-sm font-mono text-red-700">
-                          {formatEcuadorTime(record.timeOut)}
-                        </td>
-                        <td className="px-4 py-3 text-sm font-mono font-bold text-blue-600">
-                          {record.hoursWorked !== null && record.hoursWorked !== undefined
-                            ? `${formatHours(record.hoursWorked)}h`
-                            : '-'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
             </div>
           </div>
         </div>
