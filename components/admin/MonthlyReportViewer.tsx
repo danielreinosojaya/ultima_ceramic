@@ -121,10 +121,21 @@ export const MonthlyReportViewer: React.FC<MonthlyReportViewerProps> = ({ adminC
 
   const formatTime = (dateString: string) => formatLocalTimeFromUTC(dateString);
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null) => {
     if (!dateString) return '-';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('es-CO', { weekday: 'short', month: 'short', day: 'numeric' });
+    
+    // ✅ Asumir que siempre es YYYY-MM-DD del backend
+    // Crear Date a las 12:00 para evitar problemas de timezone
+    try {
+      const date = new Date(`${dateString}T12:00:00Z`);
+      return date.toLocaleDateString('es-CO', { 
+        weekday: 'short', 
+        month: 'short', 
+        day: 'numeric'
+      });
+    } catch (e) {
+      return dateString;
+    }
   };
 
   const months = [

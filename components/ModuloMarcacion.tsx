@@ -103,9 +103,34 @@ export const ModuloMarcacion: React.FC = () => {
         
         if (result.success && result.employee) {
           setCurrentEmployee(result.employee);
+          
+          // ✅ VALIDAR QUE todayStatus SEA REALMENTE DE HOY
           if (result.todayStatus) {
-            setTodayStatus(result.todayStatus);
+            // Obtener fecha de hoy en Ecuador
+            const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' }); // YYYY-MM-DD
+            const statusDate = result.todayStatus.date; // YYYY-MM-DD
+            
+            console.log('[checkEmployeeStatus] ===== DEBUG COMPLETO =====');
+            console.log('[checkEmployeeStatus] todayStatus recibido:', JSON.stringify(result.todayStatus, null, 2));
+            console.log('[checkEmployeeStatus] Validando fecha:', {
+              todayEcuador: today,
+              statusDate: statusDate,
+              statusDateType: typeof statusDate,
+              isToday: today === statusDate,
+              hasTimeIn: !!result.todayStatus.timeIn || !!result.todayStatus.time_in,
+              hasTimeOut: !!result.todayStatus.timeOut || !!result.todayStatus.time_out
+            });
+            console.log('[checkEmployeeStatus] ================');
+            
+            // Solo mostrar si es de hoy
+            if (today === statusDate) {
+              setTodayStatus(result.todayStatus);
+            } else {
+              console.warn('[checkEmployeeStatus] Status no es de hoy, descartando:', { statusDate, today });
+              setTodayStatus(null);
+            }
           } else {
+            console.log('[checkEmployeeStatus] No hay todayStatus en la respuesta');
             setTodayStatus(null);
           }
         } else {
@@ -140,40 +165,61 @@ export const ModuloMarcacion: React.FC = () => {
     setMessage({ text: 'Obteniendo ubicación...', type: 'success' });
     setLoading(true);
 
-    // Solicitar ubicación
-    await new Promise(resolve => {
+    // Solicitar ubicación - ESPERAR explícitamente
+    setMessage({ text: '📍 Obteniendo tu ubicación GPS...', type: 'success' });
+    
+    let locationObtained = false;
+    await new Promise<void>(resolve => {
       requestLocation();
-      // Esperar a que se obtenga la ubicación (máx 10s)
-      const maxWait = 10000;
-      const interval = setInterval(() => {
-        if (coords) {
-          clearInterval(interval);
-          resolve(true);
+      
+      // Crear listener para cambios en coords
+      const checkInterval = setInterval(() => {
+        if (coords && coords.latitude && coords.longitude) {
+          locationObtained = true;
+          clearInterval(checkInterval);
+          clearTimeout(timeoutId);
+          resolve();
         }
-      }, 100);
-      setTimeout(() => {
-        clearInterval(interval);
-        resolve(false);
-      }, maxWait);
+      }, 200);
+      
+      // Timeout después de 15 segundos
+      const timeoutId = setTimeout(() => {
+        clearInterval(checkInterval);
+        resolve();
+      }, 15000);
     });
+
+    // Si no se obtuvo ubicación, mostrar error claro
+    if (!coords?.latitude || !coords?.longitude) {
+      setLoading(false);
+      setMessage({ 
+        text: '❌ No se pudo obtener tu ubicación GPS.\n\n✅ Soluciones:\n1. Abre Configuración → Privacidad → Ubicación\n2. Asegúrate de que el navegador tenga permiso\n3. Intenta en una zona abierta (sin techumbre)\n4. Recarga la página e intenta de nuevo',
+        type: 'error' 
+      });
+      return;
+    }
 
     setLoading(true);
     setMessage({ text: '', type: 'success' });
 
     try {
       // ✅ NO ENVIAR localTime - el backend usa NOW() directamente con timezone de Ecuador
-      console.log('[handleClockIn] Enviando solicitud de clock in');
+      console.log('[handleClockIn] Enviando solicitud de clock in con ubicación:', {
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        accuracy: coords.accuracy
+      });
       
       const response = await fetch(`/api/timecards?action=clock_in&code=${code}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           code,
-          geolocation: coords ? {
+          geolocation: {
             latitude: coords.latitude,
             longitude: coords.longitude,
             accuracy: coords.accuracy
-          } : undefined
+          }
         })
       });
 
@@ -188,13 +234,16 @@ export const ModuloMarcacion: React.FC = () => {
         // Usar la respuesta directa sin refresh innecesario
         // La respuesta de clock_in ya incluye el estado actualizado
         if (result.timestamp) {
-          // Convertir timestamp "YYYY-MM-DD HH:MM:SS" a ISO "YYYY-MM-DDTHH:MM:SS.000Z"
-          const isoTimestamp = result.timestamp.replace(' ', 'T') + '.000Z';
+          // ✅ FIX: Convertir timestamp a ISO completo, no solo fecha
+          // Backend retorna ISO string, usarlo directamente
+          const isoTimestamp = typeof result.timestamp === 'string' && result.timestamp.includes('T')
+            ? result.timestamp
+            : new Date(result.timestamp).toISOString();
           
           const updatedTimecard: Timecard = {
             id: todayStatus?.id || 0,
             employee_id: result.employee?.id || 0,
-            date: new Date().toISOString().split('T')[0],
+            date: isoTimestamp.split('T')[0],  // ✅ Derivar fecha de ISO string, no de now()
             time_in: isoTimestamp,
             time_out: undefined,
             hours_worked: undefined,
@@ -229,41 +278,60 @@ export const ModuloMarcacion: React.FC = () => {
     }
 
     // ✅ Solicitar geolocalización antes de marcar salida
-    setMessage({ text: 'Obteniendo ubicación...', type: 'success' });
+    setMessage({ text: '📍 Obteniendo tu ubicación GPS...', type: 'success' });
     setLoading(true);
 
-    // Solicitar ubicación
-    await new Promise(resolve => {
+    // Solicitar ubicación - ESPERAR explícitamente
+    await new Promise<void>(resolve => {
       requestLocation();
-      // Esperar a que se obtenga la ubicación (máx 10s)
-      const maxWait = 10000;
-      const interval = setInterval(() => {
-        if (coords) {
-          clearInterval(interval);
-          resolve(true);
+      
+      // Crear listener para cambios en coords
+      const checkInterval = setInterval(() => {
+        if (coords && coords.latitude && coords.longitude) {
+          clearInterval(checkInterval);
+          clearTimeout(timeoutId);
+          resolve();
         }
-      }, 100);
-      setTimeout(() => {
-        clearInterval(interval);
-        resolve(false);
-      }, maxWait);
+      }, 200);
+      
+      // Timeout después de 15 segundos
+      const timeoutId = setTimeout(() => {
+        clearInterval(checkInterval);
+        resolve();
+      }, 15000);
     });
+
+    // Si no se obtuvo ubicación, mostrar error claro
+    if (!coords?.latitude || !coords?.longitude) {
+      setLoading(false);
+      setMessage({ 
+        text: '❌ No se pudo obtener tu ubicación GPS.\n\n✅ Soluciones:\n1. Abre Configuración → Privacidad → Ubicación\n2. Asegúrate de que el navegador tenga permiso\n3. Intenta en una zona abierta (sin techumbre)\n4. Recarga la página e intenta de nuevo',
+        type: 'error' 
+      });
+      return;
+    }
 
     setLoading(true);
     setMessage({ text: '', type: 'success' });
 
     try {
       // ✅ NO ENVIAR localTime - el backend usa NOW() directamente con timezone de Ecuador
+      console.log('[handleClockOut] Enviando solicitud de clock out con ubicación:', {
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        accuracy: coords.accuracy
+      });
+      
       const response = await fetch(`/api/timecards?action=clock_out&code=${code}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           code,
-          geolocation: coords ? {
+          geolocation: {
             latitude: coords.latitude,
             longitude: coords.longitude,
             accuracy: coords.accuracy
-          } : undefined
+          }
         })
       });
 

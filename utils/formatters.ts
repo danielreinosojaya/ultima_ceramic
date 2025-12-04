@@ -1,9 +1,23 @@
 // Formatea hora local de Ecuador desde timestamp UTC (ISO string)
 // El backend ahora guarda en UTC puro, convertir a America/Guayaquil al mostrar
-export function formatLocalTimeFromUTC(isoString: string): string {
+export function formatLocalTimeFromUTC(isoString: string | undefined | null): string {
     if (!isoString) return '-';
     
     try {
+        // ✅ FIX: Validar que sea ISO string antes de crear Date
+        // Rechazar strings como "2025-12-03" que son solo fechas sin hora
+        if (typeof isoString !== 'string') return '-';
+        
+        // ✅ Si es null o viene del backend como null, devolver '-'
+        if (isoString === 'null' || isoString === '') return '-';
+        
+        // ✅ Requerir que sea ISO completo con T y timezone (o al menos con T)
+        if (!isoString.includes('T')) {
+          // Si es solo fecha YYYY-MM-DD sin hora, no es válido para formatLocalTimeFromUTC
+          // Esta función es para timestamps ISO, no para fechas solas
+          return '-';
+        }
+        
         const date = new Date(isoString);
         
         if (isNaN(date.getTime())) {
@@ -26,14 +40,34 @@ export function formatLocalTimeFromUTC(isoString: string): string {
 }
 
 // Calcula horas trabajadas en progreso (entrada sin salida)
-export function calculateHoursInProgress(timeInIso: string): string {
+export function calculateHoursInProgress(timeInIso: string | null | undefined): string {
     if (!timeInIso) return '-';
+    
     try {
-        const timeIn = new Date(timeInIso);
-        const now = new Date();
-        // Usar UTC para ambos (hora local guardada como UTC)
-        const diffMs = now.getTime() - timeIn.getTime();
-        const hours = Math.max(0, diffMs / 3600000);
+        // ✅ Validar que sea ISO string válido
+        if (typeof timeInIso !== 'string' || !timeInIso.includes('T')) {
+            return '-';
+        }
+        
+        // ✅ CRÍTICO: Convertir AMBOS a UTC para comparación correcta
+        const timeIn = new Date(timeInIso);  // Ya está en UTC (backend guarda ISO)
+        
+        // Si la fecha es inválida, retornar '-'
+        if (isNaN(timeIn.getTime())) {
+            return '-';
+        }
+        
+        const nowUtc = new Date();           // getTime() siempre retorna ms desde epoch UTC
+        
+        // ✅ Ambas son timestamps UTC en milisegundos
+        const diffMs = nowUtc.getTime() - timeIn.getTime();
+        
+        // ✅ Si diffMs es negativo, significa bug de sync (no debería ocurrir)
+        if (diffMs < 0) {
+            return '-';
+        }
+        
+        const hours = diffMs / 3600000;
         return hours.toFixed(2);
     } catch {
         return '-';
@@ -41,12 +75,26 @@ export function calculateHoursInProgress(timeInIso: string): string {
 }
 
 // Calcula horas en progreso con formato legible (ej: "2h 30m")
-export function calculateHoursInProgressReadable(timeInIso: string): string {
+export function calculateHoursInProgressReadable(timeInIso: string | null | undefined): string {
     if (!timeInIso) return '-';
     try {
-        const timeIn = new Date(timeInIso);
-        const now = new Date();
-        const diffMs = now.getTime() - timeIn.getTime();
+        // ✅ Validar que sea ISO string válido
+        if (typeof timeInIso !== 'string' || !timeInIso.includes('T')) {
+            return '-';
+        }
+        
+        // ✅ CRÍTICO: Convertir AMBOS a UTC para comparación correcta
+        const timeIn = new Date(timeInIso);  // Ya está en UTC
+        
+        // Si la fecha es inválida, retornar '-'
+        if (isNaN(timeIn.getTime())) {
+            return '-';
+        }
+        
+        const nowUtc = new Date();           // getTime() siempre retorna UTC
+        
+        // ✅ Ambas son timestamps UTC en milisegundos
+        const diffMs = nowUtc.getTime() - timeIn.getTime();
         
         if (diffMs < 0) return '-';
         
@@ -67,12 +115,26 @@ export function calculateHoursInProgressReadable(timeInIso: string): string {
 }
 
 // Calcula horas en progreso con formato decimal y estado
-export function calculateHoursInProgressWithStatus(timeInIso: string): { hours: number; formatted: string; status: string } {
+export function calculateHoursInProgressWithStatus(timeInIso: string | null | undefined): { hours: number; formatted: string; status: string } {
     if (!timeInIso) return { hours: 0, formatted: '-', status: 'error' };
     try {
-        const timeIn = new Date(timeInIso);
-        const now = new Date();
-        const diffMs = now.getTime() - timeIn.getTime();
+        // ✅ Validar que sea ISO string válido
+        if (typeof timeInIso !== 'string' || !timeInIso.includes('T')) {
+            return { hours: 0, formatted: '-', status: 'error' };
+        }
+        
+        // ✅ CRÍTICO: Convertir AMBOS a UTC para comparación correcta
+        const timeIn = new Date(timeInIso);  // Ya está en UTC
+        
+        // Si la fecha es inválida, retornar error
+        if (isNaN(timeIn.getTime())) {
+            return { hours: 0, formatted: '-', status: 'error' };
+        }
+        
+        const nowUtc = new Date();           // getTime() siempre retorna UTC
+        
+        // ✅ Ambas son timestamps UTC en milisegundos
+        const diffMs = nowUtc.getTime() - timeIn.getTime();
         
         if (diffMs < 0) return { hours: 0, formatted: '-', status: 'error' };
         

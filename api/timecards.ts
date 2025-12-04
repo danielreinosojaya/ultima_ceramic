@@ -5,6 +5,49 @@ import type { Employee, Timecard, ClockInResponse, ClockOutResponse, AdminDashbo
 const ADMIN_CODE_PREFIX = 'ADMIN';
 const EMPLOYEE_CODE_PREFIX = 'EMP';
 
+// ✅ HELPER: Convertir timestamp UTC a hora Ecuador y formatear
+// Recibe un ISO string UTC (ej: "2025-12-03T17:51:35.000Z")
+// Retorna string formateado (ej: "5:51 p. m.") o null si inválido
+function formatTimeInEcuadorTimezone(isoString: string | Date | null | undefined): string | null {
+  if (!isoString) return null;
+  
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return null;  // ✅ Retornar null, no "Invalid Date"
+  
+  // Usar Intl para convertir a Ecuador timezone
+  const formatter = new Intl.DateTimeFormat('es-EC', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'America/Guayaquil',
+    hour12: true
+  });
+  
+  return formatter.format(date);
+}
+
+// ✅ HELPER: Obtener solo la fecha en Ecuador timezone
+// Retorna string "YYYY-MM-DD" o null si inválido
+function getEcuadorDateOnly(isoString: string | Date | null | undefined): string | null {
+  if (!isoString) return null;
+  
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return null;  // ✅ Retornar null, no "Invalid Date"
+  
+  const formatter = new Intl.DateTimeFormat('es-EC', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'America/Guayaquil'
+  });
+  
+  const parts = formatter.formatToParts(date);
+  const year = parts.find(p => p.type === 'year')?.value;
+  const month = parts.find(p => p.type === 'month')?.value;
+  const day = parts.find(p => p.type === 'day')?.value;
+  
+  return `${year}-${month}-${day}`;
+}
+
 // Convertir snake_case a camelCase y DECIMALS a números
 function toCamelCase(obj: any): any {
   if (Array.isArray(obj)) {
@@ -785,29 +828,53 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
       } as any);
     }
     
-    // ✅ ESTRATEGIA: Backend usa NOW() directamente (PostgreSQL ya está en timezone Ecuador)
-    // El campo date se calcula automáticamente con la fecha actual de Ecuador
-    const ecuadorDateResult = await sql`
-      SELECT (NOW() AT TIME ZONE 'America/Guayaquil')::DATE as ecuador_date
+    // ✅ SOLUCIÓN CORRECTA: 
+    // 1. Obtener NOW() en UTC (esto es lo que PostgreSQL almacena internamente)
+    // 2. Calcular la FECHA derivando del timestamp en Ecuador timezone
+    // 3. Esto garantiza que time_in se guarda en UTC pero la fecha es Ecuador
+    const nowResult = await sql`
+      SELECT 
+        NOW() as utc_now,
+        (NOW() AT TIME ZONE 'America/Guayaquil')::DATE as ecuador_date
     `;
-    const ecuadorDate = ecuadorDateResult.rows[0].ecuador_date;
+    const utcNow = nowResult.rows[0].utc_now; // TIMESTAMP en UTC
+    const ecuadorDate = nowResult.rows[0].ecuador_date; // DATE en Ecuador
+    
+    console.log('[handleClockIn] Time calculation:', {
+      utcNow,
+      ecuadorDate,
+      utcNowType: typeof utcNow,
+      ecuadorDateType: typeof ecuadorDate,
+      nowUtcJs: new Date().toISOString()
+    });
     
     // Intentar insertar con todas las columnas de geolocalización
-    // Si falla por columnas faltantes, reintentar sin ellas
+    // ✅ CRÍTICO: 
+    // - time_in se guarda en UTC (como debe ser)
+    // - date se guarda como la fecha en Ecuador (derivada del timezone)
+    // - Esto asegura sincronización perfecta
     let insertResult;
     try {
       insertResult = await sql`
-        INSERT INTO timecards (employee_id, date, time_in, location_in_lat, location_in_lng, location_in_accuracy, device_ip_in)
+        INSERT INTO timecards (
+          employee_id, 
+          date, 
+          time_in, 
+          location_in_lat, 
+          location_in_lng, 
+          location_in_accuracy, 
+          device_ip_in
+        )
         VALUES (
           ${employee.id}, 
           ${ecuadorDate},
-          NOW(),
+          ${utcNow},
           ${geolocation?.latitude || null}, 
           ${geolocation?.longitude || null}, 
           ${geolocation?.accuracy || null}, 
           ${deviceIP}
         )
-        RETURNING id, time_in
+        RETURNING id, time_in, date
       `;
     } catch (insertError: any) {
       // Si las columnas de geolocalización no existen, intentar sin ellas
@@ -818,9 +885,9 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
           VALUES (
             ${employee.id}, 
             ${ecuadorDate},
-            NOW()
+            ${utcNow}
           )
-          RETURNING id, time_in
+          RETURNING id, time_in, date
         `;
       } else {
         throw insertError;
@@ -832,7 +899,12 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
       return res.status(500).json({ success: false, message: 'Error al guardar entrada' } as ClockInResponse);
     }
 
-    console.log('[handleClockIn] Timecard inserted successfully:', insertResult.rows[0]);
+    console.log('[handleClockIn] Timecard inserted successfully:', {
+      id: insertResult.rows[0].id,
+      date: insertResult.rows[0].date,
+      time_in: insertResult.rows[0].time_in,
+      dateType: typeof insertResult.rows[0].date
+    });
 
     // VALIDAR RETRASOS
     try {
@@ -841,8 +913,8 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
       
       // Obtener día de semana usando el timestamp guardado (convertido a Ecuador)
       const timeInDate = new Date(timeInTimestamp);
-      const ecuadorDate = new Date(timeInDate.toLocaleString('en-US', { timeZone: 'America/Guayaquil' }));
-      const dayOfWeek = ecuadorDate.getDay();
+      const ecuadorDateForSchedule = new Date(timeInDate.toLocaleString('en-US', { timeZone: 'America/Guayaquil' }));
+      const dayOfWeek = ecuadorDateForSchedule.getDay();
       
       const scheduleResult = await sql`
         SELECT check_in_time, grace_period_minutes
@@ -863,8 +935,8 @@ async function handleClockIn(req: any, res: any, code: string): Promise<any> {
         const expectedTimeInMinutes = expectedHour * 60 + expectedMin;
         
         // Obtener hora real de entrada en Ecuador
-        const actualHour = ecuadorDate.getHours();
-        const actualMinute = ecuadorDate.getMinutes();
+        const actualHour = ecuadorDateForSchedule.getHours();
+        const actualMinute = ecuadorDateForSchedule.getMinutes();
         const actualTimeInMinutes = actualHour * 60 + actualMinute;
 
         // Calcular retraso
@@ -1033,13 +1105,22 @@ async function handleClockOut(req: any, res: any, code: string): Promise<any> {
     // Capturar IP
     const deviceIP = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
     
+    // ✅ MISMA ESTRATEGIA QUE CLOCK IN:
+    // 1. Obtener NOW() en UTC
+    // 2. Guardar time_out en UTC
+    // 3. Calcular hours_worked en UTC también
+    const nowResult = await sql`
+      SELECT NOW() as utc_now
+    `;
+    const utcNow = nowResult.rows[0].utc_now;
+    
     // Actualizar en BD - intentar con geolocation columns, fallback si no existen
     let updateResult;
     try {
       updateResult = await sql`
         UPDATE timecards
-        SET time_out = NOW(),
-            hours_worked = EXTRACT(EPOCH FROM (NOW() - time_in)) / 3600,
+        SET time_out = ${utcNow},
+            hours_worked = EXTRACT(EPOCH FROM (${utcNow} - time_in)) / 3600,
             location_out_lat = ${geolocation.latitude},
             location_out_lng = ${geolocation.longitude},
             location_out_accuracy = ${geolocation.accuracy},
@@ -1054,8 +1135,8 @@ async function handleClockOut(req: any, res: any, code: string): Promise<any> {
         console.warn('[handleClockOut] Geolocation columns not found, attempting basic update:', updateError.message);
         updateResult = await sql`
           UPDATE timecards
-          SET time_out = NOW(),
-              hours_worked = EXTRACT(EPOCH FROM (NOW() - time_in)) / 3600,
+          SET time_out = ${utcNow},
+              hours_worked = EXTRACT(EPOCH FROM (${utcNow} - time_in)) / 3600,
               updated_at = NOW()
           WHERE id = ${timecard.id}
           RETURNING *
@@ -1130,7 +1211,11 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
     `;
     const today = ecuadorDateResult.rows[0].ecuador_date;
     
+    console.log('[handleGetAdminDashboard] ===== DEBUG FECHA =====');
     console.log('[handleGetAdminDashboard] Today date (Ecuador):', today);
+    console.log('[handleGetAdminDashboard] Today type:', typeof today);
+    console.log('[handleGetAdminDashboard] Today string:', String(today));
+    console.log('[handleGetAdminDashboard] ========================');
 
     // Total empleados activos
     const employeesResult = await sql`SELECT COUNT(*) as count FROM employees WHERE status = 'active'`;
@@ -1161,24 +1246,67 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
     const averageHours = avgResult.rows[0].avg_hours ? Math.round(parseFloat(avgResult.rows[0].avg_hours) * 100) / 100 : 0;
 
     // Estado de empleados hoy
+    // ✅ FIX DEFINITIVO: La subconsulta DEBE retornar NULL para date si no hay match
+    // NO usar t.date porque el LEFT JOIN puede traer NULL, usar ${today} solo si hay time_in
     const statusResult = await sql`
       SELECT 
         e.id, e.code, e.name, e.position,
-        t.date, t.time_in, t.time_out, t.hours_worked
+        t.id as timecard_id,
+        t.date::text as timecard_date,
+        t.time_in, 
+        t.time_out, 
+        t.hours_worked
       FROM employees e
       LEFT JOIN timecards t ON e.id = t.employee_id AND t.date = ${today}
       WHERE e.status = 'active'
       ORDER BY e.name
     `;
+    
+    console.log('[handleGetAdminDashboard] Query returned', statusResult.rows.length, 'employees');
+    console.log('[handleGetAdminDashboard] Sample data:', statusResult.rows.slice(0, 2).map(r => ({
+      name: r.name,
+      timecard_date: r.timecard_date,
+      time_in: r.time_in,
+      has_timecard: !!r.time_in
+    })));
 
     const employeesStatus = statusResult.rows.map((row: any) => {
       let hoursWorked = row.hours_worked ? Number(row.hours_worked) : null;
       
+      // ✅ CRUCIAL: Solo incluir empleados que REALMENTE tienen timecard de HOY
+      // Si timecard_date es NULL, significa que NO marcaron hoy
+      const hasTimecardToday = row.timecard_id !== null && row.timecard_date !== null;
+      
+      // ✅ ASEGURAR que date es SIEMPRE un string YYYY-MM-DD, nunca un timestamp ISO
+      let dateStr = null;
+      if (hasTimecardToday && row.timecard_date) {
+        if (typeof row.timecard_date === 'string') {
+          // Ya es string, asegurarse que tenga formato YYYY-MM-DD
+          dateStr = row.timecard_date.substring(0, 10);
+        } else if (row.timecard_date instanceof Date) {
+          // Es Date object, convertir a YYYY-MM-DD
+          const year = row.timecard_date.getUTCFullYear();
+          const month = String(row.timecard_date.getUTCMonth() + 1).padStart(2, '0');
+          const day = String(row.timecard_date.getUTCDate()).padStart(2, '0');
+          dateStr = `${year}-${month}-${day}`;
+        }
+      }
+      
+      // ✅ FORMATEAR HORAS CON TIMEZONE ECUADOR
+      const timeInFormatted = hasTimecardToday && row.time_in ? formatTimeInEcuadorTimezone(row.time_in) : null;
+      const timeOutFormatted = hasTimecardToday && row.time_out ? formatTimeInEcuadorTimezone(row.time_out) : null;
+      
       console.log('[handleGetAdminDashboard] Processing employee:', {
         code: row.code,
         name: row.name,
+        timecard_date_raw: row.timecard_date,
+        timecard_date_final: dateStr,
         time_in: row.time_in,
-        time_out: row.time_out
+        time_in_formatted: timeInFormatted,
+        time_out: row.time_out,
+        time_out_formatted: timeOutFormatted,
+        hours_worked: hoursWorked,
+        hasTimecardToday
       });
       
       return {
@@ -1189,11 +1317,11 @@ async function handleGetAdminDashboard(req: any, res: any, adminCode: string): P
           position: row.position,
           status: 'active'
         },
-        date: row.date || today,
-        time_in: row.time_in,
-        time_out: row.time_out,
-        hours_worked: hoursWorked,
-        status: !row.time_in ? 'absent' : row.time_out ? 'present' : 'in_progress',
+        date: dateStr,
+        time_in: timeInFormatted,
+        time_out: timeOutFormatted,
+        hours_worked: hasTimecardToday ? hoursWorked : null,
+        status: !hasTimecardToday ? 'absent' : row.time_out ? 'present' : 'in_progress',
         is_current_day: true
       };
     });
@@ -1236,46 +1364,56 @@ async function handleGetEmployeeReport(req: any, res: any, code: string, month: 
       console.log('[handleGetEmployeeReport] Querying for today:', {
         employeeId: employee.id,
         employeeCode: employee.code,
-        todayStr
+        todayStr,
+        nowUtc: new Date().toISOString()
       });
       
-      // Obtener TODOS los registros de hoy (puede haber múltiples turnos)
+      // ✅ CRUCIAL: Asegurar que solo traemos registros de HOY
+      // Comparar el campo date (DATE) con la fecha calculada de Ecuador
       const todayResult = await sql`
         SELECT * FROM timecards
         WHERE employee_id = ${employee.id}
         AND date = ${todayStr}::DATE
         ORDER BY created_at DESC
+        LIMIT 1
       `;
 
-      console.log('[handleGetEmployeeReport] Query result:', {
+      console.log('[handleGetEmployeeReport] Query details:', {
+        employeeId: employee.id,
+        employeeCode: employee.code,
+        queryDate: todayStr,
+        queryDateType: typeof todayStr,
         rowsFound: todayResult.rows.length,
-        todayStr,
         rows: todayResult.rows.map(r => ({
           id: r.id,
           employee_id: r.employee_id,
           date: r.date,
+          date_type: typeof r.date,
           time_in: r.time_in,
-          time_out: r.time_out
+          time_out: r.time_out,
+          hours_worked: r.hours_worked
         }))
       });
 
       // Convertir snake_case a camelCase
       const todayRecords = todayResult.rows.map(row => toCamelCase(row));
       
-      // El último registro (más reciente) es el todayStatus
+      // El único registro (si existe) es el todayStatus
       const todayStatus = todayRecords.length > 0 ? todayRecords[0] : null;
 
       console.log('[handleGetEmployeeReport] Returning:', {
         totalRecordsToday: todayRecords.length,
         hasStatus: todayStatus !== null,
-        statusHasTimeIn: todayStatus?.timeIn ? 'YES' : 'NO'
+        statusHasTimeIn: todayStatus?.timeIn ? 'YES' : 'NO',
+        statusDate: todayStatus?.date,
+        expectedDate: todayStr
       });
 
       return res.status(200).json({
         success: true,
         employee,
         todayStatus,
-        todayRecords // Todos los registros del día
+        todayRecords: todayRecords // Todos los registros del día (solo 1 máximo)
       });
     }
 
@@ -1421,8 +1559,8 @@ async function handleDownloadReport(req: any, res: any, adminCode: string, forma
     if (format === 'csv') {
       let csv = 'Código,Nombre,Puesto,Fecha,Entrada,Salida,Horas\n';
       result.rows.forEach((row: any) => {
-        const timeIn = row.time_in ? new Date(row.time_in).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '';
-        const timeOut = row.time_out ? new Date(row.time_out).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '';
+        const timeIn = row.time_in ? formatTimeInEcuadorTimezone(row.time_in) : '';
+        const timeOut = row.time_out ? formatTimeInEcuadorTimezone(row.time_out) : '';
         const hours = row.hours_worked ? Number(row.hours_worked).toFixed(2) : '';
         csv += `${row.code},"${row.name}",${row.position || ''},${row.date},${timeIn},${timeOut},${hours}\n`;
       });

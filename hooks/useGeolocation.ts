@@ -32,35 +32,38 @@ export function useGeolocation(): UseGeolocationResult {
     setLoading(true);
     setError(null);
 
+    // Usar getCurrentPosition con timeout más agresivo
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude, accuracy, altitude, altitudeAccuracy, heading, speed } = position.coords;
+        console.log('[useGeolocation] Ubicación obtenida:', { latitude, longitude, accuracy });
         setCoords({ latitude, longitude, accuracy, altitude, altitudeAccuracy, heading, speed });
         setLoading(false);
       },
       (err) => {
-        console.error('[useGeolocation] Error:', err);
+        console.error('[useGeolocation] Error:', err.code, err.message);
         let errorMsg = 'Error al obtener ubicación';
         
         switch (err.code) {
           case 1: // PERMISSION_DENIED
-            errorMsg = 'Permiso de ubicación denegado. Habilita GPS en configuración.';
+            errorMsg = 'Permiso de ubicación denegado. Habilita GPS en configuración del navegador.';
             break;
           case 2: // POSITION_UNAVAILABLE
-            errorMsg = 'Ubicación no disponible. Intenta en otro lugar.';
+            errorMsg = 'Ubicación no disponible. Intenta en otro lugar o acerca-te a una ventana.';
             break;
           case 3: // TIMEOUT
             errorMsg = 'Tiempo de espera excedido. Intenta de nuevo.';
             break;
         }
         
+        console.error('[useGeolocation] Error message:', errorMsg);
         setError(errorMsg);
         setLoading(false);
       },
       {
         enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
+        timeout: 12000,  // Aumentado a 12 segundos
+        maximumAge: 5000  // Permite usar ubicación en caché si es reciente (5s)
       }
     );
   };

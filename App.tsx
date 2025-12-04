@@ -20,8 +20,8 @@ import { PrerequisiteModal } from './components/PrerequisiteModal';
 import { AnnouncementsBoard } from './components/AnnouncementsBoard';
 import { ClientDeliveryForm } from './components/ClientDeliveryForm';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { ModuloMarcacion } from './components/ModuloMarcacion';
-import { AdminTimecardPanel } from './components/admin/AdminTimecardPanel';
+import { ModuloMarcacionSimple } from './components/ModuloMarcacionSimple';
+import { AdminTimecardPanelSimple } from './components/admin/AdminTimecardPanelSimple';
 // New Experience Components
 import { ExperienceTypeSelector } from './components/experiences/ExperienceTypeSelector';
 import { GroupClassWizard } from './components/experiences/GroupClassWizard';
@@ -891,7 +891,7 @@ const App: React.FC = () => {
                 }>
                     <AdminDataProvider isAdmin={isAdmin}>
                         {adminModule === 'timecards' ? (
-                            <AdminTimecardPanel adminCode={adminCode} />
+                            <AdminTimecardPanelSimple adminCode={adminCode} />
                         ) : (
                             <AdminConsole />
                         )}
@@ -903,7 +903,7 @@ const App: React.FC = () => {
 
     // Módulo de marcación para empleados
     if (adminModule === 'timecards' && !isAdmin) {
-        return <ModuloMarcacion />;
+        return <ModuloMarcacionSimple />;
     }
 
     // Modo formulario de cliente (QR)
