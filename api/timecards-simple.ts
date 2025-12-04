@@ -41,6 +41,7 @@ interface Timecard {
 
 /**
  * Convierte snake_case a camelCase
+ * También normaliza campos de fecha
  */
 function toCamelCase(obj: any): any {
   if (Array.isArray(obj)) return obj.map(toCamelCase);
@@ -48,7 +49,22 @@ function toCamelCase(obj: any): any {
   if (obj && typeof obj === 'object' && obj.constructor === Object) {
     return Object.keys(obj).reduce((result, key) => {
       const camelKey = key.replace(/_([a-z])/g, (_, char) => char.toUpperCase());
-      result[camelKey] = toCamelCase(obj[key]);
+      let value = obj[key];
+      
+      // Normalizar campo 'date' a formato YYYY-MM-DD
+      if (key === 'date' && value) {
+        if (value instanceof Date) {
+          const year = value.getFullYear();
+          const month = String(value.getMonth() + 1).padStart(2, '0');
+          const day = String(value.getDate()).padStart(2, '0');
+          value = `${year}-${month}-${day}`;
+        } else if (typeof value === 'string' && value.includes('T')) {
+          // Si viene como ISO string, extraer solo la fecha
+          value = value.split('T')[0];
+        }
+      }
+      
+      result[camelKey] = toCamelCase(value);
       return result;
     }, {} as any);
   }

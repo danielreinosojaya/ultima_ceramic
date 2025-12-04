@@ -62,26 +62,30 @@ function formatEcuadorDate(dateString: string): string {
   if (!dateString) return '-';
   
   try {
-    // Validar formato YYYY-MM-DD
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-      console.warn('Invalid date format:', dateString);
-      return dateString; // Retornar tal cual si no es formato esperado
+    let dateOnly = dateString;
+    
+    // Si viene como ISO timestamp, extraer solo la fecha
+    if (dateString.includes('T')) {
+      dateOnly = dateString.split('T')[0];
     }
     
-    const [year, month, day] = dateString.split('-').map(Number);
+    // Validar formato YYYY-MM-DD
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
+      return dateOnly; // Retornar tal cual
+    }
     
-    // Validar que sean números válidos
+    const [year, month, day] = dateOnly.split('-').map(Number);
+    
+    // Validar números
     if (isNaN(year) || isNaN(month) || isNaN(day)) {
-      console.warn('Invalid date numbers:', dateString);
-      return dateString;
+      return dateOnly;
     }
     
     const date = new Date(year, month - 1, day);
     
-    // Verificar que la fecha sea válida
+    // Verificar fecha válida
     if (isNaN(date.getTime())) {
-      console.warn('Invalid date object:', dateString);
-      return dateString;
+      return dateOnly;
     }
     
     return date.toLocaleDateString('es-EC', {
@@ -91,7 +95,6 @@ function formatEcuadorDate(dateString: string): string {
       year: 'numeric'
     });
   } catch (error) {
-    console.error('Error formatting date:', dateString, error);
     return dateString;
   }
 }
@@ -221,10 +224,7 @@ export const AdminTimecardPanelSimple: React.FC<AdminTimecardPanelSimpleProps> =
       const res = await fetch(`/api/timecards-simple?action=get_history&code=${employee.code}&limit=60`);
       const data = await res.json();
 
-      console.log('[AdminPanel] History response:', data);
-
       if (data.success) {
-        console.log('[AdminPanel] History records:', data.history);
         setHistory(data.history);
       } else {
         setMessage({ text: data.error, type: 'error' });
@@ -713,34 +713,24 @@ export const AdminTimecardPanelSimple: React.FC<AdminTimecardPanelSimpleProps> =
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {history.map(record => {
-                      console.log('[Render History] Record:', {
-                        id: record.id,
-                        date: record.date,
-                        dateType: typeof record.date,
-                        timeIn: record.timeIn,
-                        timeOut: record.timeOut
-                      });
-                      
-                      return (
-                        <tr key={record.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-sm">
-                            {formatEcuadorDate(record.date)}
-                          </td>
-                          <td className="px-4 py-3 text-sm font-mono text-green-700">
-                            {formatEcuadorTime(record.timeIn)}
-                          </td>
-                          <td className="px-4 py-3 text-sm font-mono text-red-700">
-                            {formatEcuadorTime(record.timeOut)}
-                          </td>
-                          <td className="px-4 py-3 text-sm font-mono font-bold text-blue-600">
-                            {record.hoursWorked !== null && record.hoursWorked !== undefined
-                              ? `${record.hoursWorked.toFixed(2)}h`
-                              : '-'}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {history.map(record => (
+                      <tr key={record.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm">
+                          {formatEcuadorDate(record.date)}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-mono text-green-700">
+                          {formatEcuadorTime(record.timeIn)}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-mono text-red-700">
+                          {formatEcuadorTime(record.timeOut)}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-mono font-bold text-blue-600">
+                          {record.hoursWorked !== null && record.hoursWorked !== undefined
+                            ? `${record.hoursWorked.toFixed(2)}h`
+                            : '-'}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               )}
