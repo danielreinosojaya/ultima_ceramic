@@ -132,7 +132,7 @@ const App: React.FC = () => {
         const href = window.location.href;
 
         // Check for cashier mode - supports both /cuadre and ?cuadre=true
-        if (pathname.includes('/cuadre') || href.includes('/cuadre')) {
+        if (pathname.includes('/cuadre') || href.includes('/cuadre') || urlParams.get('cuadre') === 'true') {
             setIsCashierMode(true);
             return;
         }
