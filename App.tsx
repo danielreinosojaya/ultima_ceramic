@@ -22,6 +22,7 @@ import { ClientDeliveryForm } from './components/ClientDeliveryForm';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ModuloMarcacionSimple } from './components/ModuloMarcacionSimple';
 import { AdminTimecardPanelSimple } from './components/admin/AdminTimecardPanelSimple';
+import { CashierDashboard } from './components/CashierDashboard';
 // New Experience Components
 import { ExperienceTypeSelector } from './components/experiences/ExperienceTypeSelector';
 import { GroupClassWizard } from './components/experiences/GroupClassWizard';
@@ -76,6 +77,7 @@ const App: React.FC = () => {
     const [openStudioProduct, setOpenStudioProduct] = useState<Product | null>(null);
     // Traducciones eliminadas, usar texto en español directamente
     const [isAdmin, setIsAdmin] = useState(false);
+    const [isCashierMode, setIsCashierMode] = useState(false);
     const [isClientDeliveryMode, setIsClientDeliveryMode] = useState(false);
     const [adminModule, setAdminModule] = useState<'main' | 'timecards' | null>(null);
     const [adminCode, setAdminCode] = useState<string>('');
@@ -126,6 +128,15 @@ const App: React.FC = () => {
 
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
+        const pathname = window.location.pathname;
+        const href = window.location.href;
+
+        // Check for cashier mode - supports both /cuadre and ?cuadre=true
+        if (pathname.includes('/cuadre') || href.includes('/cuadre')) {
+            setIsCashierMode(true);
+            return;
+        }
+
         if (urlParams.get('admin') === 'true') {
             setIsAdmin(true);
             const code = urlParams.get('code');
@@ -898,6 +909,15 @@ const App: React.FC = () => {
                     </AdminDataProvider>
                 </Suspense>
             </NotificationProvider>
+        );
+    }
+
+    // Cashier Box Reconciliation Mode
+    if (isCashierMode) {
+        return (
+            <ErrorBoundary componentName="CashierDashboard">
+                <CashierDashboard />
+            </ErrorBoundary>
         );
     }
 

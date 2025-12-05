@@ -309,7 +309,7 @@ export const ModuloMarcacionSimple: React.FC = () => {
                 <div className="flex justify-between pt-2 border-t border-gray-300">
                   <span className="text-gray-600">Horas trabajadas:</span>
                   <span className="font-mono font-bold text-blue-600">
-                    {todayTimecard.hoursWorked.toFixed(2)}h
+                    {(typeof todayTimecard.hoursWorked === 'number' ? todayTimecard.hoursWorked : parseFloat(todayTimecard.hoursWorked) || 0).toFixed(2)}h
                   </span>
                 </div>
               )}

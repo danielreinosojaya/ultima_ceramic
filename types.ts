@@ -707,3 +707,46 @@ export interface ExperienceAdminPanel {
   selectedPieceId?: string;
   selectedConfirmationId?: string;
 }
+
+// 13. Cashier Box Reconciliation Types
+export type CashDenomination = '50_BILL' | '20_BILL' | '10_BILL' | '5_BILL' | '1_BILL' | 
+                               '0_50_COIN' | '0_25_COIN' | '0_10_COIN' | '0_05_COIN' | '0_01_COIN';
+
+export interface CashierEntry {
+  id: string;
+  date: string;
+  initialBalance: number;
+  previousSystemBalance: number;
+  
+  // Counted cash by denomination
+  cashDenominations: Record<CashDenomination, number>;
+  totalCash: number;
+  
+  // Manual entries by cashier
+  salesTC: number;
+  transfers: number;
+  
+  // Reconciliation
+  expectedTotal: number;
+  manualValueFromSystem: number;
+  difference: number;
+  discrepancy: boolean;
+  
+  // Metadata
+  createdAt: string;
+  updatedAt: string;
+  notes?: string;
+}
+
+export const CASH_DENOMINATIONS: { key: CashDenomination; label: string; value: number }[] = [
+  { key: '50_BILL', label: 'Billete $50', value: 50 },
+  { key: '20_BILL', label: 'Billete $20', value: 20 },
+  { key: '10_BILL', label: 'Billete $10', value: 10 },
+  { key: '5_BILL', label: 'Billete $5', value: 5 },
+  { key: '1_BILL', label: 'Billete $1', value: 1 },
+  { key: '0_50_COIN', label: 'Moneda $0.50', value: 0.5 },
+  { key: '0_25_COIN', label: 'Moneda $0.25', value: 0.25 },
+  { key: '0_10_COIN', label: 'Moneda $0.10', value: 0.1 },
+  { key: '0_05_COIN', label: 'Moneda $0.05', value: 0.05 },
+  { key: '0_01_COIN', label: 'Moneda $0.01', value: 0.01 },
+];
