@@ -634,9 +634,10 @@ async function validateTimecardUpdate(
       const hoursWorked = diffMs / (1000 * 60 * 60);
       
       if (hoursWorked > 12) {
+        const hoursWorkedRounded = Math.round(hoursWorked * 100) / 100;
         errors.push({
           field: 'hours_worked',
-          message: `Horas trabajadas (${hoursWorked.toFixed(2)}h) exceden lo razonable (máx 12h)`,
+          message: `Horas trabajadas (${hoursWorkedRounded.toFixed(2)}h) exceden lo razonable (máx 12h)`,
           severity: 'warning'
         });
       }
