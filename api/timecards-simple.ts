@@ -85,6 +85,25 @@ function getEcuadorDate(): string {
 }
 
 // ============================================
+// HELPERS
+// ============================================
+
+/**
+ * Parsea el body - maneja tanto object como string
+ */
+function parseBody(body: any): any {
+  if (typeof body === 'string') {
+    try {
+      return JSON.parse(body);
+    } catch (e) {
+      console.error('[Parse Error]', e);
+      return {};
+    }
+  }
+  return body || {};
+}
+
+// ============================================
 // HANDLERS
 // ============================================
 
@@ -92,7 +111,8 @@ function getEcuadorDate(): string {
  * Marcar ENTRADA
  */
 async function handleClockIn(req: any, res: any) {
-  const { code } = req.body;
+  const bodyData = parseBody(req.body);
+  const { code } = bodyData;
   
   if (!code) {
     return res.status(400).json({ success: false, error: 'Código requerido' });
@@ -161,7 +181,8 @@ async function handleClockIn(req: any, res: any) {
  * Marcar SALIDA
  */
 async function handleClockOut(req: any, res: any) {
-  const { code } = req.body;
+  const bodyData = parseBody(req.body);
+  const { code } = bodyData;
   
   if (!code) {
     return res.status(400).json({ success: false, error: 'Código requerido' });
@@ -369,7 +390,8 @@ async function handleGetAllEmployees(req: any, res: any) {
  * Crear nuevo empleado
  */
 async function handleCreateEmployee(req: any, res: any) {
-  const { code, name, position } = req.body;
+  const bodyData = parseBody(req.body);
+  const { code, name, position } = bodyData;
 
   if (!code || !name) {
     return res.status(400).json({ success: false, error: 'Código y nombre requeridos' });
@@ -416,7 +438,8 @@ async function handleCreateEmployee(req: any, res: any) {
  * Actualizar estado de empleado (activar/desactivar)
  */
 async function handleUpdateEmployeeStatus(req: any, res: any) {
-  const { employeeId, status } = req.body;
+  const bodyData = parseBody(req.body);
+  const { employeeId, status } = bodyData;
 
   if (!employeeId || !status) {
     return res.status(400).json({ success: false, error: 'ID y estado requeridos' });
@@ -455,7 +478,8 @@ async function handleUpdateEmployeeStatus(req: any, res: any) {
  * Actualizar timecard (editar entrada/salida)
  */
 async function handleUpdateTimecard(req: any, res: any) {
-  const { timecardId, date, timeIn, timeOut } = req.body;
+  const bodyData = parseBody(req.body);
+  const { timecardId, date, timeIn, timeOut } = bodyData;
 
   if (!timecardId || !date || !timeIn) {
     return res.status(400).json({ success: false, error: 'ID, fecha y entrada requeridos' });
