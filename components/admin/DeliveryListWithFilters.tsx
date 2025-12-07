@@ -89,10 +89,11 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
         today.setHours(0, 0, 0, 0);
 
         return deliveries.filter(delivery => {
-            // Search filter
+            // Search filter - busca por descripción, notas y nombre del cliente
             const matchesSearch = searchQuery.trim() === '' || 
                 (delivery.description?.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                (delivery.notes?.toLowerCase().includes(searchQuery.toLowerCase()));
+                (delivery.notes?.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                (delivery.customerName?.toLowerCase().includes(searchQuery.toLowerCase()));
 
             // Status filter
             let matchesStatus = true;
