@@ -91,8 +91,8 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
         return deliveries.filter(delivery => {
             // Search filter
             const matchesSearch = searchQuery.trim() === '' || 
-                delivery.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                delivery.notes?.toLowerCase().includes(searchQuery.toLowerCase());
+                (delivery.description?.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                (delivery.notes?.toLowerCase().includes(searchQuery.toLowerCase()));
 
             // Status filter
             let matchesStatus = true;
