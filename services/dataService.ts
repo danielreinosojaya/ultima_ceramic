@@ -397,8 +397,8 @@ const fetchData = async (url: string, options?: RequestInit, retries: number = 3
 
 // Cache más agresivo para evitar requests innecesarias
 const cache = new Map<string, { data: any; timestamp: number }>();
-const CACHE_DURATION = 30 * 60 * 1000; // 30 minutos para datos generales
-const CRITICAL_CACHE_DURATION = 60 * 60 * 1000; // 1 hora para datos críticos
+const CACHE_DURATION = 2 * 60 * 60 * 1000; // 2 horas para datos generales (optimizado)
+const CRITICAL_CACHE_DURATION = 3 * 60 * 60 * 1000; // 3 horas para datos críticos (optimizado)
 const BOOKINGS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutos para bookings (más dinámicos)
 
 // Debounce para evitar requests duplicados
@@ -1275,40 +1275,56 @@ export const getBatchedData = async (keys: string[]): Promise<Record<string, any
 // Función específica para datos esenciales de la app
 export const getEssentialAppData = async () => {
     try {
-        const data = await getBatchedData(['products', 'announcements', 'policies', 'footerInfo', 'uiLabels']);
+        // Cargar datos críticos para primera renderización
+        // Estos datos deben estar disponibles inmediatamente
+        const criticalData = await getBatchedData(['products', 'announcements', 'footerInfo']);
+        
+        // Cargar datos menos críticos en background (no bloquean inicial render)
+        // Se cargarán mientras el usuario interactúa
+        const nonCriticalPromises = {
+            policies: getData('policies'),
+            uiLabels: getData('uiLabels')
+        };
 
-        // Validar que las claves requeridas estén presentes
-        const requiredKeys = ['products', 'announcements', 'policies', 'footerInfo', 'uiLabels'];
-        requiredKeys.forEach((key) => {
-            if (!data[key]) {
+        // Validar que las claves críticas requeridas estén presentes
+        const requiredCriticalKeys = ['products', 'announcements', 'footerInfo'];
+        requiredCriticalKeys.forEach((key) => {
+            if (!criticalData[key]) {
                 console.warn(`Missing key: ${key} in essential app data. Using default value.`);
-                data[key] = getDefaultData(key);
+                criticalData[key] = getDefaultData(key);
             }
         });
 
         // Asegurar que COUPLES_EXPERIENCE existe en los productos (una sola vez)
-        if (Array.isArray(data.products)) {
-            const hasCouplesExperience = data.products.some((p: any) => p.type === 'COUPLES_EXPERIENCE');
+        if (Array.isArray(criticalData.products)) {
+            const hasCouplesExperience = criticalData.products.some((p: any) => p.type === 'COUPLES_EXPERIENCE');
             if (!hasCouplesExperience) {
                 const couplexProduct = DEFAULT_PRODUCTS.find((p: any) => p.type === 'COUPLES_EXPERIENCE');
                 if (couplexProduct) {
                     // Crear una copia profunda para evitar mutaciones
                     const productCopy = JSON.parse(JSON.stringify(couplexProduct));
-                    data.products = [...data.products, productCopy];
-                    console.log('✅ COUPLES_EXPERIENCE added successfully. New length:', data.products.length);
+                    criticalData.products = [...criticalData.products, productCopy];
+                    console.log('✅ COUPLES_EXPERIENCE added successfully. New length:', criticalData.products.length);
                 }
             }
         }
 
-        return data;
+        // Cargar datos no críticos en background
+        Promise.all([nonCriticalPromises.policies, nonCriticalPromises.uiLabels])
+            .then(([policies, uiLabels]) => {
+                console.log('Background: Non-critical data loaded');
+            })
+            .catch(err => console.error('Background load error:', err));
+
+        return criticalData;
     } catch (error) {
         console.error('Error fetching essential app data:', error);
         // Retornar datos por defecto en caso de error
         return {
             products: getDefaultData('products'),
             announcements: getDefaultData('announcements'),
-            policies: getDefaultData('policies'),
             footerInfo: getDefaultData('footerInfo'),
+            policies: getDefaultData('policies'),
             uiLabels: getDefaultData('uiLabels'),
         };
     }
@@ -1316,7 +1332,17 @@ export const getEssentialAppData = async () => {
 
 // Función específica para datos de scheduling
 export const getSchedulingData = async () => {
-    return getBatchedData(['instructors', 'availability', 'scheduleOverrides', 'classCapacity', 'capacityMessages']);
+    // Cargar datos críticos para disponibilidad (instructores e instructors)
+    const criticalSchedulingData = await getBatchedData(['instructors', 'availability']);
+    
+    // Cargar datos complementarios en background
+    Promise.all([
+        getData('scheduleOverrides'),
+        getData('classCapacity'),
+        getData('capacityMessages')
+    ]).catch(err => console.error('Background scheduling load error:', err));
+    
+    return criticalSchedulingData;
 };
 export const updateBankDetails = (details: BankDetails[]): Promise<{ success: boolean }> => setData('bankDetails', details);
 
