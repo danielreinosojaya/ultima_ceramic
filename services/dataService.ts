@@ -1332,17 +1332,25 @@ export const getEssentialAppData = async () => {
 
 // Función específica para datos de scheduling
 export const getSchedulingData = async () => {
-    // Cargar datos críticos para disponibilidad (instructores e instructors)
-    const criticalSchedulingData = await getBatchedData(['instructors', 'availability']);
+    // Cargar datos críticos para disponibilidad (instructores e instructores)
+    const criticalSchedulingData = await getBatchedData(['instructores', 'availability']);
     
-    // Cargar datos complementarios en background
-    Promise.all([
+    // Cargar datos complementarios (NO en background - necesarios para la UI)
+    const [scheduleOverrides, classCapacity, capacityMessages] = await Promise.all([
         getData('scheduleOverrides'),
         getData('classCapacity'),
         getData('capacityMessages')
-    ]).catch(err => console.error('Background scheduling load error:', err));
+    ]).catch(err => {
+        console.error('Background scheduling load error:', err);
+        return [{}, { potters_wheel: 0, molding: 0, introductory_class: 0 }, { thresholds: [] }];
+    });
     
-    return criticalSchedulingData;
+    return {
+        ...criticalSchedulingData,
+        scheduleOverrides: scheduleOverrides || {},
+        classCapacity: classCapacity || { potters_wheel: 0, molding: 0, introductory_class: 0 },
+        capacityMessages: capacityMessages || { thresholds: [] }
+    };
 };
 export const updateBankDetails = (details: BankDetails[]): Promise<{ success: boolean }> => setData('bankDetails', details);
 
@@ -1573,11 +1581,20 @@ const getBookingsForSlot = (date: Date, slot: AvailableSlot, appData: Pick<AppDa
         return t.trim().toLowerCase();
     };
     
-    return appData.bookings.filter(b => b.slots.some(s =>
-        s.date === dateStr &&
-        normalizeTime(s.time) === normalizeTime(slot.time) &&
-        s.instructorId === slot.instructorId
-    ));
+    // ✅ FIX: Contar cupos por TÉCNICA, no por instructorId
+    // Esto permite acumular cupos de paquetes + sueltras + introducción
+    // para la misma técnica a la misma hora
+    return appData.bookings.filter(b => {
+        // Obtener técnica del booking
+        const bookingTechnique = (b.product?.details as any)?.technique;
+        if (!bookingTechnique) return false; // Si no tiene técnica, ignorar
+        
+        return bookingTechnique === slot.technique &&
+            b.slots.some(s =>
+                s.date === dateStr &&
+                normalizeTime(s.time) === normalizeTime(slot.time)
+            );
+    });
 };
 
 export const getAvailableTimesForDate = (date: Date, appData: Pick<AppData, 'availability' | 'scheduleOverrides' | 'classCapacity' | 'bookings'>, technique?: Technique): EnrichedAvailableSlot[] => {
