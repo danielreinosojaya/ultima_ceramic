@@ -40,7 +40,7 @@ export const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess, onBack, sho
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch('/api/auth/list-bookings', {
+            const response = await fetch('/api/auth?action=list-bookings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email: email.toLowerCase() })
