@@ -76,7 +76,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onClose }) => 
                     // After login, fetch ALL bookings for this email
                     const email = booking.userInfo?.email;
                     if (email) {
-                        fetch('/api/auth/list-bookings', {
+                        fetch('/api/auth?action=list-bookings', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ email })
@@ -213,7 +213,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onClose }) => 
                     appData={null}
                     onDataRefresh={() => {
                         // Refresh bookings after reschedule
-                        fetch('/api/auth/list-bookings', {
+                        fetch('/api/auth?action=list-bookings', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ email: currentBooking.userInfo?.email })

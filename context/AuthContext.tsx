@@ -40,7 +40,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
      */
     const refreshToken = useCallback(async (): Promise<boolean> => {
         try {
-            const response = await fetch('/api/auth/refresh', {
+            const response = await fetch('/api/auth?action=refresh', {
                 method: 'POST',
                 credentials: 'include' // Include httpOnly cookies
             });
@@ -89,7 +89,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 };
             }
 
-            const response = await fetch('/api/auth/login', {
+            const response = await fetch('/api/auth?action=login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include', // Include httpOnly cookies
@@ -138,7 +138,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
      */
     const logout = useCallback(async (): Promise<void> => {
         try {
-            await fetch('/api/auth/logout', {
+            await fetch('/api/auth?action=logout', {
                 method: 'POST',
                 credentials: 'include'
             });
