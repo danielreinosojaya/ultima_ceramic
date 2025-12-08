@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { Booking, AppData } from '../types';
+import type { Booking, AppData, TimeSlot } from '../types';
 import { RescheduleClientFlow } from './RescheduleClientFlow';
 import { formatDate } from '../utils/formatters';
 import { CalendarIcon, ClockIcon } from '@heroicons/react/24/outline';
@@ -10,11 +10,17 @@ interface ClientBookingsViewProps {
     onDataRefresh?: () => void;
 }
 
+interface ClassCard {
+    booking: Booking;
+    slot: TimeSlot;
+    index: number;
+}
+
 /**
- * ClientBookingsView
+ * ClientBookingsView - Option A: Modal Detail View
  * 
- * Displays a list of client bookings with options to reschedule.
- * Shows upcoming and past classes.
+ * Displays each CLASS SLOT as an independent card with individual "Reagendar" button.
+ * Each class opens a modal when reagendar is clicked.
  */
 export const ClientBookingsView: React.FC<ClientBookingsViewProps> = ({ bookings, appData, onDataRefresh }) => {
     const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
@@ -41,40 +47,46 @@ export const ClientBookingsView: React.FC<ClientBookingsViewProps> = ({ bookings
         );
     }
 
-    // Separate upcoming and past bookings
+    // Create class cards from all slots in all bookings
+    const allClasses: ClassCard[] = [];
+    bookings.forEach(booking => {
+        if (booking.slots && booking.slots.length > 0) {
+            booking.slots.forEach((slot, idx) => {
+                allClasses.push({ booking, slot, index: idx });
+            });
+        }
+    });
+
+    // Separate upcoming and past classes
     const now = new Date();
-    const upcomingBookings = bookings.filter(b => {
-        if (!b.slots || b.slots.length === 0) return false;
-        const lastSlot = b.slots[b.slots.length - 1];
-        if (!lastSlot || !lastSlot.date) return false;
-        const slotDate = new Date(lastSlot.date);
+    const upcomingClasses = allClasses.filter(cls => {
+        if (!cls.slot || !cls.slot.date) return false;
+        const slotDate = new Date(cls.slot.date);
         return slotDate > now;
     });
 
-    const pastBookings = bookings.filter(b => {
-        if (!b.slots || b.slots.length === 0) return true;
-        const lastSlot = b.slots[b.slots.length - 1];
-        if (!lastSlot || !lastSlot.date) return true;
-        const slotDate = new Date(lastSlot.date);
+    const pastClasses = allClasses.filter(cls => {
+        if (!cls.slot || !cls.slot.date) return true;
+        const slotDate = new Date(cls.slot.date);
         return slotDate <= now;
     });
 
     return (
         <div className="space-y-8">
-            {/* Upcoming Bookings */}
-            {upcomingBookings.length > 0 && (
+            {/* Upcoming Classes */}
+            {upcomingClasses.length > 0 && (
                 <div>
                     <h2 className="text-2xl font-bold text-brand-text mb-4">Próximas Clases</h2>
                     <div className="grid gap-4">
-                        {upcomingBookings.map((booking) => (
-                            <div key={booking.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+                        {upcomingClasses.map((classCard, idx) => (
+                            <div key={`${classCard.booking.id}-${classCard.index}`} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
                                 <div className="flex items-start justify-between mb-4">
                                     <div>
                                         <h3 className="text-lg font-bold text-brand-text">
-                                            {booking.product?.name || 'Clase'}
+                                            {classCard.booking.product?.name || 'Clase'}
                                         </h3>
                                         <p className="text-sm text-brand-secondary mt-1">
-                                            Código: {booking.bookingCode}
+                                            Código: {classCard.booking.bookingCode}
                                         </p>
                                     </div>
                                     <span className="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-semibold">
@@ -82,30 +94,31 @@ export const ClientBookingsView: React.FC<ClientBookingsViewProps> = ({ bookings
                                     </span>
                                 </div>
 
-                                {/* Class Slots */}
-                                {booking.slots && booking.slots.length > 0 && (
-                                    <div className="mb-4 space-y-2">
-                                        {booking.slots.map((slot, idx) => (
-                                            <div key={idx} className="flex items-center gap-2 text-brand-secondary">
-                                                <CalendarIcon className="w-4 h-4" />
-                                                <span>{formatDate(slot.date)}</span>
-                                                {slot.time && (
-                                                    <>
-                                                        <ClockIcon className="w-4 h-4" />
-                                                        <span>{slot.time}</span>
-                                                    </>
-                                                )}
-                                            </div>
-                                        ))}
+                                {/* Individual Class Date/Time */}
+                                <div className="mb-4 space-y-2">
+                                    <div className="flex items-center gap-2 text-brand-secondary">
+                                        <CalendarIcon className="w-4 h-4" />
+                                        <span className="font-semibold">{formatDate(classCard.slot.date)}</span>
+                                        {classCard.slot.time && (
+                                            <>
+                                                <ClockIcon className="w-4 h-4" />
+                                                <span className="font-semibold">{classCard.slot.time}</span>
+                                            </>
+                                        )}
                                     </div>
-                                )}
+                                    {classCard.booking.slots && classCard.booking.slots.length > 1 && (
+                                        <p className="text-xs text-gray-500">
+                                            Clase {classCard.index + 1} de {classCard.booking.slots.length}
+                                        </p>
+                                    )}
+                                </div>
 
-                                {/* Reschedule Button */}
+                                {/* Reschedule Button - Per Class */}
                                 <button
-                                    onClick={() => handleRescheduleClick(booking)}
+                                    onClick={() => handleRescheduleClick(classCard.booking)}
                                     className="mt-4 px-4 py-2 bg-brand-accent text-white font-semibold rounded-lg hover:opacity-90 transition-opacity"
                                 >
-                                    Reagendar Clase
+                                    Reagendar esta Clase
                                 </button>
                             </div>
                         ))}
@@ -113,24 +126,31 @@ export const ClientBookingsView: React.FC<ClientBookingsViewProps> = ({ bookings
                 </div>
             )}
 
-            {/* Past Bookings */}
-            {pastBookings.length > 0 && (
+            {/* Past Classes */}
+            {pastClasses.length > 0 && (
                 <div>
                     <h2 className="text-2xl font-bold text-brand-text mb-4">Clases Pasadas</h2>
                     <div className="grid gap-4 opacity-75">
-                        {pastBookings.map((booking) => (
-                            <div key={booking.id} className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+                        {pastClasses.map((classCard) => (
+                            <div key={`${classCard.booking.id}-${classCard.index}`} className="bg-gray-50 border border-gray-200 rounded-lg p-6">
                                 <div className="flex items-start justify-between mb-2">
                                     <h3 className="text-lg font-bold text-brand-text">
-                                        {booking.product?.name || 'Clase'}
+                                        {classCard.booking.product?.name || 'Clase'}
                                     </h3>
                                     <span className="inline-block bg-gray-200 text-gray-700 px-3 py-1 rounded-full text-sm font-semibold">
                                         Completada
                                     </span>
                                 </div>
-                                <p className="text-sm text-brand-secondary">
-                                    Código: {booking.bookingCode}
-                                </p>
+                                <div className="flex items-center gap-2 text-sm text-brand-secondary mt-1">
+                                    <CalendarIcon className="w-4 h-4" />
+                                    <span>{formatDate(classCard.slot.date)}</span>
+                                    {classCard.slot.time && (
+                                        <>
+                                            <ClockIcon className="w-4 h-4" />
+                                            <span>{classCard.slot.time}</span>
+                                        </>
+                                    )}
+                                </div>
                             </div>
                         ))}
                     </div>

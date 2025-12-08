@@ -747,12 +747,14 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                 const { rows: settings } = await sql`SELECT value FROM settings WHERE key = ${key}`;
                 if (settings.length > 0) {
                     // Si es bankDetails y el valor es string, parsear JSON
-                    if (key === 'bankDetails' && typeof settings[0].value === 'string') {
+                    // Parse JSON fields that are stored as strings
+                    const jsonFields = ['bankDetails', 'classCapacity', 'availability', 'scheduleOverrides', 'capacityMessages'];
+                    if (jsonFields.includes(key) && typeof settings[0].value === 'string') {
                         try {
                             data = JSON.parse(settings[0].value);
                         } catch (e) {
-                            console.error('Error parsing bankDetails JSON:', e);
-                            data = [];
+                            console.error(`Error parsing ${key} JSON:`, e);
+                            data = key === 'classCapacity' ? { potters_wheel: 0, molding: 0, introductory_class: 0 } : [];
                         }
                     } else {
                         data = settings[0].value;
@@ -767,11 +769,13 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             break;
                         case 'availability':
                         case 'scheduleOverrides':
-                        case 'classCapacity':
                         case 'automationSettings':
                         case 'footerInfo':
                         case 'backgroundSettings':
                             data = {};
+                            break;
+                        case 'classCapacity':
+                            data = { potters_wheel: 0, molding: 0, introductory_class: 0 };
                             break;
                         case 'uiLabels':
                             data = { taxIdLabel: 'RUC' };

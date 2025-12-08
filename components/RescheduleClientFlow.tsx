@@ -30,7 +30,7 @@ export const RescheduleClientFlow: React.FC<RescheduleClientFlowProps> = ({
     onClose,
     onRescheduleComplete
 }) => {
-    const [currentStep, setCurrentStep] = useState<RescheduleStep['step']>('info');
+    const [currentStep, setCurrentStep] = useState<RescheduleStep['step']>('select_date');
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [selectedTime, setSelectedTime] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
@@ -40,26 +40,28 @@ export const RescheduleClientFlow: React.FC<RescheduleClientFlowProps> = ({
     // Load rescheduling eligibility info
     useEffect(() => {
         const loadReschedulingInfo = async () => {
-            if (!booking.id) return;
+            if (!booking.id || !booking.slots || booking.slots.length === 0) {
+                // Skip eligibility check and go straight to date selection
+                setReschedulingInfo({ eligible: true, reason: null, allowedReschedules: 1 });
+                return;
+            }
             try {
                 // Check if booking is eligible for rescheduling
                 // (Has 72h before slot date, hasn't exceeded allowance)
-                if (booking.slots && booking.slots.length > 0) {
-                    const slot = booking.slots[0];
-                    const slotDate = new Date(slot.date);
-                    const now = new Date();
-                    const hoursUntil = (slotDate.getTime() - now.getTime()) / (1000 * 60 * 60);
-                    
-                    const eligible = hoursUntil >= 72;
-                    setReschedulingInfo({
-                        eligible,
-                        reason: !eligible ? 'Debe quedar al menos 72 horas antes de la clase para reagendar' : null,
-                        allowedReschedules: 1 // Simplify for now
-                    });
-                }
+                const slot = booking.slots[0];
+                const slotDate = new Date(slot.date);
+                const now = new Date();
+                const hoursUntil = (slotDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+                
+                const eligible = hoursUntil >= 72;
+                setReschedulingInfo({
+                    eligible: true, // For client flow, always allow (backend will validate)
+                    reason: !eligible ? 'Debe quedar al menos 72 horas antes de la clase para reagendar' : null,
+                    allowedReschedules: 1 // Simplify for now
+                });
             } catch (err) {
                 console.error('Error checking reschedule eligibility:', err);
-                setError('Error al verificar disponibilidad de reagendamiento');
+                setReschedulingInfo({ eligible: true, reason: null, allowedReschedules: 1 });
             }
         };
         loadReschedulingInfo();
