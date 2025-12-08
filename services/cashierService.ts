@@ -50,12 +50,17 @@ export const cashierService = {
   async create(entry: {
     date: string;
     initialBalance: number;
-    previousSystemBalance: number;
+    cashSales: number;
     cashDenominations: Record<CashDenomination, number>;
-    salesTC: number;
-    transfers: number;
+    expenses: Array<{ id: string; description: string; amount: number }>;
     manualValueFromSystem: number;
     notes?: string;
+    systemCashSales?: number;
+    systemCardSales?: number;
+    systemTransferSales?: number;
+    myEffectiveSales?: number;
+    myVouchersAccumulated?: number;
+    myTransfersReceived?: number;
   }): Promise<CashierEntry> {
     const result = await fetchAPI<CashierEntry>(
       'create',
