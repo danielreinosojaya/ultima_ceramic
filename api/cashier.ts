@@ -5,12 +5,19 @@ export const runtime = 'nodejs';
 interface CashierEntryBody {
   date: string;
   initialBalance: number;
-  previousSystemBalance: number;
+  cashSales: number;
   cashDenominations: Record<string, number>;
-  salesTC: number;
-  transfers: number;
+  expenses: Array<{ id: string; description: string; amount: number }>;
   manualValueFromSystem: number;
   notes?: string;
+  
+  // Cuadre de Ventas Totales
+  systemCashSales?: number;
+  systemCardSales?: number;
+  systemTransferSales?: number;
+  myEffectiveSales?: number;
+  myVouchersAccumulated?: number;
+  myTransfersReceived?: number;
 }
 
 function toCamelCase(obj: any): any {
@@ -45,8 +52,8 @@ export default async function handler(req: any, res: any) {
         });
       }
 
-      // Calculate total cash
-      let totalCash = 0;
+      // Calculate total cash counted (física)
+      let totalCashCounted = 0;
       const denominationValues: Record<string, number> = {
         '50_BILL': 50,
         '20_BILL': 20,
@@ -62,36 +69,54 @@ export default async function handler(req: any, res: any) {
 
       for (const [denom, count] of Object.entries(body.cashDenominations)) {
         const countNum = typeof count === 'number' ? count : 0;
-        totalCash += (denominationValues[denom] || 0) * countNum;
+        totalCashCounted += (denominationValues[denom] || 0) * countNum;
       }
 
-      // Calculate expected total
-      const expectedTotal =
-        body.initialBalance +
-        totalCash +
-        body.salesTC +
-        body.transfers;
+      // Calculate total expenses
+      const totalExpenses = (body.expenses || []).reduce((sum: number, exp: any) => sum + (exp.amount || 0), 0);
 
-      // Calculate difference
-      const difference = expectedTotal - body.manualValueFromSystem;
+      // Calculate final cash balance: initialBalance + cashSales - totalExpenses
+      // IMPORTANT: This is a CASH ONLY reconciliation
+      const finalCashBalance =
+        body.initialBalance +
+        body.cashSales -
+        totalExpenses;
+
+      // Calculate difference for validation
+      const difference = finalCashBalance - body.manualValueFromSystem;
       const discrepancy = Math.abs(difference) > 0.01; // Allow small floating point errors
 
-      // Ensure table exists
+      // Calculate sales totals
+      const systemTotalSales = (body.systemCashSales || 0) + (body.systemCardSales || 0) + (body.systemTransferSales || 0);
+      const myTotalSales = (body.myEffectiveSales || 0) + (body.myVouchersAccumulated || 0) + (body.myTransfersReceived || 0);
+      const salesDifference = systemTotalSales - myTotalSales;
+      const salesDiscrepancy = Math.abs(salesDifference) > 0.01;
+
+      // Ensure table exists (simplified for cash only)
       await sql`
         CREATE TABLE IF NOT EXISTS cashier_entries (
           id TEXT PRIMARY KEY,
           date TEXT NOT NULL,
           initial_balance DECIMAL NOT NULL,
-          previous_system_balance DECIMAL NOT NULL,
+          cash_sales DECIMAL NOT NULL,
           cash_denominations JSONB NOT NULL,
-          total_cash DECIMAL NOT NULL,
-          sales_tc DECIMAL NOT NULL,
-          transfers DECIMAL NOT NULL,
-          expected_total DECIMAL NOT NULL,
+          final_cash_balance DECIMAL NOT NULL,
+          expenses JSONB DEFAULT '[]'::jsonb,
+          total_expenses DECIMAL NOT NULL DEFAULT 0,
           manual_value_from_system DECIMAL NOT NULL,
           difference DECIMAL NOT NULL,
           discrepancy BOOLEAN NOT NULL,
           notes TEXT,
+          system_cash_sales DECIMAL DEFAULT 0,
+          system_card_sales DECIMAL DEFAULT 0,
+          system_transfer_sales DECIMAL DEFAULT 0,
+          system_total_sales DECIMAL DEFAULT 0,
+          my_effective_sales DECIMAL DEFAULT 0,
+          my_vouchers_accumulated DECIMAL DEFAULT 0,
+          my_transfers_received DECIMAL DEFAULT 0,
+          my_total_sales DECIMAL DEFAULT 0,
+          sales_difference DECIMAL DEFAULT 0,
+          sales_discrepancy BOOLEAN DEFAULT false,
           created_at TIMESTAMP DEFAULT NOW(),
           updated_at TIMESTAMP DEFAULT NOW()
         )
@@ -101,14 +126,21 @@ export default async function handler(req: any, res: any) {
 
       const result = await sql`
         INSERT INTO cashier_entries (
-          id, date, initial_balance, previous_system_balance,
-          cash_denominations, total_cash, sales_tc, transfers,
-          expected_total, manual_value_from_system, difference, discrepancy, notes
+          id, date, initial_balance, cash_sales,
+          cash_denominations, final_cash_balance, expenses, total_expenses,
+          manual_value_from_system, difference, discrepancy, notes,
+          system_cash_sales, system_card_sales, system_transfer_sales, system_total_sales,
+          my_effective_sales, my_vouchers_accumulated, my_transfers_received, my_total_sales,
+          sales_difference, sales_discrepancy
         )
         VALUES (
-          ${id}, ${body.date}, ${body.initialBalance}, ${body.previousSystemBalance},
-          ${JSON.stringify(body.cashDenominations)}, ${totalCash}, ${body.salesTC}, ${body.transfers},
-          ${expectedTotal}, ${body.manualValueFromSystem}, ${difference}, ${discrepancy}, ${body.notes || null}
+          ${id}, ${body.date}, ${body.initialBalance}, ${body.cashSales},
+          ${JSON.stringify(body.cashDenominations)}, ${finalCashBalance},
+          ${JSON.stringify(body.expenses || [])}, ${totalExpenses},
+          ${body.manualValueFromSystem}, ${difference}, ${discrepancy}, ${body.notes || null},
+          ${body.systemCashSales || 0}, ${body.systemCardSales || 0}, ${body.systemTransferSales || 0}, ${systemTotalSales},
+          ${body.myEffectiveSales || 0}, ${body.myVouchersAccumulated || 0}, ${body.myTransfersReceived || 0}, ${myTotalSales},
+          ${salesDifference}, ${salesDiscrepancy}
         )
         RETURNING *
       `;
@@ -190,7 +222,7 @@ export default async function handler(req: any, res: any) {
       let difference = null;
       let discrepancy = null;
 
-      if (body.cashDenominations || body.initialBalance !== undefined || body.salesTC !== undefined || body.transfers !== undefined) {
+      if (body.cashDenominations || body.initialBalance !== undefined || body.expenses) {
         // Fetch current entry
         const current = await sql`SELECT * FROM cashier_entries WHERE id = ${id}`;
         if (current.rows.length === 0) {
@@ -203,8 +235,7 @@ export default async function handler(req: any, res: any) {
         const currentData = current.rows[0];
         const denominations = body.cashDenominations || JSON.parse(currentData.cash_denominations);
         const initialBalance = body.initialBalance ?? currentData.initial_balance;
-        const salesTC = body.salesTC ?? currentData.sales_tc;
-        const transfers = body.transfers ?? currentData.transfers;
+        const expenses = body.expenses || JSON.parse(currentData.expenses || '[]');
         const manualValue = body.manualValueFromSystem ?? currentData.manual_value_from_system;
 
         // Recalculate cash
@@ -226,7 +257,8 @@ export default async function handler(req: any, res: any) {
           totalCash += (denominationValues[denom] || 0) * (typeof count === 'number' ? count : 0);
         }
 
-        expectedTotal = initialBalance + totalCash + salesTC + transfers;
+        const totalExpenses = expenses.reduce((sum: number, exp: any) => sum + (exp.amount || 0), 0);
+        expectedTotal = initialBalance + totalCash - totalExpenses;
         difference = expectedTotal - manualValue;
         discrepancy = Math.abs(difference) > 0.01;
       }
@@ -246,13 +278,9 @@ export default async function handler(req: any, res: any) {
         updateParts.push(`cash_denominations = $${updateParts.length + 1}`);
         params.push(JSON.stringify(body.cashDenominations));
       }
-      if (body.salesTC !== undefined) {
-        updateParts.push(`sales_tc = $${updateParts.length + 1}`);
-        params.push(body.salesTC);
-      }
-      if (body.transfers !== undefined) {
-        updateParts.push(`transfers = $${updateParts.length + 1}`);
-        params.push(body.transfers);
+      if (body.expenses) {
+        updateParts.push(`expenses = $${updateParts.length + 1}`);
+        params.push(JSON.stringify(body.expenses));
       }
       if (body.manualValueFromSystem !== undefined) {
         updateParts.push(`manual_value_from_system = $${updateParts.length + 1}`);

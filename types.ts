@@ -715,22 +715,44 @@ export type CashDenomination = '50_BILL' | '20_BILL' | '10_BILL' | '5_BILL' | '1
 export interface CashierEntry {
   id: string;
   date: string;
-  initialBalance: number;
-  previousSystemBalance: number;
   
-  // Counted cash by denomination
+  // Input fields - Cuadre de Caja (efectivo solamente)
+  initialBalance: number; // Saldo inicial de caja
+  cashSales: number; // Ventas en efectivo
+  
+  // Counted cash by denomination (cuadre físico de efectivo para calcular saldo final)
   cashDenominations: Record<CashDenomination, number>;
-  totalCash: number;
+  finalCashBalance: number; // Saldo final de caja (initialBalance + cashSales - totalExpenses) - calculado, no editable
   
-  // Manual entries by cashier
-  salesTC: number;
-  transfers: number;
+  // Expenses/Egresos (dinámicos)
+  expenses: Array<{
+    id: string;
+    description: string;
+    amount: number;
+  }>;
+  totalExpenses: number; // Total gastos
   
-  // Reconciliation
-  expectedTotal: number;
-  manualValueFromSystem: number;
-  difference: number;
-  discrepancy: boolean;
+  // Reconciliation cuadre físico de caja (para validación con sistema)
+  manualValueFromSystem?: number; // Valor que muestra el sistema para comparación
+  difference?: number; // finalCashBalance - manualValueFromSystem
+  discrepancy?: boolean; // Hay diferencia
+  
+  // ===== NUEVO: Cuadre de Ventas Totales =====
+  // Sistema (Lo que dice Contpago/Sistema)
+  systemCashSales?: number; // Ventas en efectivo según sistema
+  systemCardSales?: number; // Ventas en tarjeta según sistema
+  systemTransferSales?: number; // Ventas en transferencia según sistema
+  systemTotalSales?: number; // Total ventas según sistema (cash + card + transfer) - calculado
+  
+  // Lo que TÚ CONTAS
+  myEffectiveSales?: number; // Mis ventas en efectivo
+  myVouchersAccumulated?: number; // Mis vouchers acumulados (ventas TC)
+  myTransfersReceived?: number; // Mis transferencias recibidas
+  myTotalSales?: number; // Mi total (efectivo + vouchers + transfers) - calculado
+  
+  // Validación de cuadre de ventas
+  salesDifference?: number; // systemTotalSales - myTotalSales
+  salesDiscrepancy?: boolean; // Hay diferencia en ventas
   
   // Metadata
   createdAt: string;
