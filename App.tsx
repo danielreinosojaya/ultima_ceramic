@@ -32,6 +32,7 @@ import { SingleClassWizard } from './components/experiences/SingleClassWizard';
 const AdminConsole = lazy(() => import('./components/admin/AdminConsole').then(module => ({ default: module.AdminConsole })));
 import { NotificationProvider } from './context/NotificationContext';
 import { AdminDataProvider } from './context/AdminDataContext';
+import { AuthProvider } from './context/AuthContext';
 import { ConfirmationPage } from './components/ConfirmationPage';
 import { OpenStudioModal } from './components/admin/OpenStudioModal';
 import { ClientDashboard } from './components/ClientDashboard';
@@ -891,24 +892,26 @@ const App: React.FC = () => {
     if (isAdmin) {
         console.log("App - rendering AdminConsole");
         return (
-            <NotificationProvider>
-                <Suspense fallback={
-                    <div className="min-h-screen bg-brand-background flex items-center justify-center">
-                        <div className="text-center">
-                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-primary mx-auto mb-4"></div>
-                            <p className="text-brand-secondary">Cargando panel de administración...</p>
+            <AuthProvider>
+                <NotificationProvider>
+                    <Suspense fallback={
+                        <div className="min-h-screen bg-brand-background flex items-center justify-center">
+                            <div className="text-center">
+                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-primary mx-auto mb-4"></div>
+                                <p className="text-brand-secondary">Cargando panel de administración...</p>
+                            </div>
                         </div>
-                    </div>
-                }>
-                    <AdminDataProvider isAdmin={isAdmin}>
-                        {adminModule === 'timecards' ? (
-                            <AdminTimecardPanelSimple adminCode={adminCode} />
-                        ) : (
-                            <AdminConsole />
-                        )}
-                    </AdminDataProvider>
-                </Suspense>
-            </NotificationProvider>
+                    }>
+                        <AdminDataProvider isAdmin={isAdmin}>
+                            {adminModule === 'timecards' ? (
+                                <AdminTimecardPanelSimple adminCode={adminCode} />
+                            ) : (
+                                <AdminConsole />
+                            )}
+                        </AdminDataProvider>
+                    </Suspense>
+                </NotificationProvider>
+            </AuthProvider>
         );
     }
 
@@ -948,14 +951,15 @@ const App: React.FC = () => {
 
     console.log("App - rendering main app, view:", view, "loading:", loading);
     return (
-        <div className="bg-brand-background min-h-screen text-brand-text font-sans flex flex-col">
-            <Header 
-                onGiftcardClick={() => setView('giftcard_landing')}
-                onMyClassesClick={() => setView('my-classes')}
-                onClientLogin={handleClientLogin}
-                clientEmail={clientEmail}
-                onClientLogout={handleClientLogout}
-            />
+        <AuthProvider>
+            <div className="bg-brand-background min-h-screen text-brand-text font-sans flex flex-col">
+                <Header 
+                    onGiftcardClick={() => setView('giftcard_landing')}
+                    onMyClassesClick={() => setView('my-classes')}
+                    onClientLogin={handleClientLogin}
+                    clientEmail={clientEmail}
+                    onClientLogout={handleClientLogout}
+                />
             <main className="flex-grow w-full">
                 <div className="container mx-auto px-4 py-6 sm:py-8">
                     {appData && <AnnouncementsBoard announcements={appData.announcements} />}
@@ -1055,7 +1059,8 @@ const App: React.FC = () => {
                     onDismiss={() => setShowMyClassesPrompt(false)}
                 />
             )}
-        </div>
+            </div>
+        </AuthProvider>
     );
 };
 
