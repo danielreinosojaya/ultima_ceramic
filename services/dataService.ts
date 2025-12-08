@@ -1332,17 +1332,25 @@ export const getEssentialAppData = async () => {
 
 // Función específica para datos de scheduling
 export const getSchedulingData = async () => {
-    // Cargar datos críticos para disponibilidad (instructores e instructors)
-    const criticalSchedulingData = await getBatchedData(['instructors', 'availability']);
+    // Cargar datos críticos para disponibilidad (instructores e instructores)
+    const criticalSchedulingData = await getBatchedData(['instructores', 'availability']);
     
-    // Cargar datos complementarios en background
-    Promise.all([
+    // Cargar datos complementarios (NO en background - necesarios para la UI)
+    const [scheduleOverrides, classCapacity, capacityMessages] = await Promise.all([
         getData('scheduleOverrides'),
         getData('classCapacity'),
         getData('capacityMessages')
-    ]).catch(err => console.error('Background scheduling load error:', err));
+    ]).catch(err => {
+        console.error('Background scheduling load error:', err);
+        return [{}, { potters_wheel: 0, molding: 0, introductory_class: 0 }, { thresholds: [] }];
+    });
     
-    return criticalSchedulingData;
+    return {
+        ...criticalSchedulingData,
+        scheduleOverrides: scheduleOverrides || {},
+        classCapacity: classCapacity || { potters_wheel: 0, molding: 0, introductory_class: 0 },
+        capacityMessages: capacityMessages || { thresholds: [] }
+    };
 };
 export const updateBankDetails = (details: BankDetails[]): Promise<{ success: boolean }> => setData('bankDetails', details);
 
@@ -1573,11 +1581,21 @@ const getBookingsForSlot = (date: Date, slot: AvailableSlot, appData: Pick<AppDa
         return t.trim().toLowerCase();
     };
     
-    return appData.bookings.filter(b => b.slots.some(s =>
-        s.date === dateStr &&
-        normalizeTime(s.time) === normalizeTime(slot.time) &&
-        s.instructorId === slot.instructorId
-    ));
+    // Contar cupos por TÉCNICA, no por instructorId
+    // Esto permite acumular cupos de paquetes + clases sueltas + introducción
+    // para la misma técnica a la misma hora
+    return appData.bookings.filter(b => {
+        // Obtener técnica del booking (puede estar en b.technique o b.product.details.technique)
+        const bookingTechnique = b.technique || (b.product?.details as any)?.technique;
+        if (!bookingTechnique) return false; // Si no tiene técnica, ignorar
+        
+        // Verificar que coincidan técnica, fecha y hora
+        return bookingTechnique === slot.technique &&
+            b.slots.some(s =>
+                s.date === dateStr &&
+                normalizeTime(s.time) === normalizeTime(slot.time)
+            );
+    });
 };
 
 export const getAvailableTimesForDate = (date: Date, appData: Pick<AppData, 'availability' | 'scheduleOverrides' | 'classCapacity' | 'bookings'>, technique?: Technique): EnrichedAvailableSlot[] => {
@@ -1595,10 +1613,20 @@ export const getAvailableTimesForDate = (date: Date, appData: Pick<AppData, 'ava
     return baseSlots.map(slot => {
         const bookingsForSlot = getBookingsForSlot(date, slot, appData);
         const maxCapacity = override?.capacity ?? (slot.technique === 'molding' ? appData.classCapacity.molding : appData.classCapacity.potters_wheel);
+        
+        // FIX CRÍTICO: Contar TODOS los participantes (pagados + pendientes)
+        // Los bookings pendientes de pago también ocupan cupos hasta que se cancelen
+        const totalParticipants = bookingsForSlot
+            .reduce((sum, b) => sum + (b.participants || 1), 0);
+        
+        const paidParticipants = bookingsForSlot
+            .filter(b => b.isPaid)
+            .reduce((sum, b) => sum + (b.participants || 1), 0);
+        
         return {
             ...slot,
-            paidBookingsCount: bookingsForSlot.filter(b => b.isPaid).length,
-            totalBookingsCount: bookingsForSlot.length,
+            paidBookingsCount: totalParticipants,  // Mostrar total, no solo pagados
+            totalBookingsCount: totalParticipants,
             maxCapacity
         };
     });
@@ -1609,16 +1637,47 @@ export const getAllConfiguredTimesForDate = (date: Date, appData: Pick<AppData, 
 };
 
 export const checkMonthlyAvailability = (startDate: Date, slot: AvailableSlot, appData: Pick<AppData, 'availability' | 'scheduleOverrides' | 'classCapacity' | 'bookings'>, technique: Technique): boolean => {
+    console.log(`[checkMonthlyAvailability] Checking ${startDate.toISOString().split('T')[0]} at ${slot.time}`);
+    
+    let consecutiveAvailable = 0;
+    let maxConsecutiveFromStart = 0;
+    
     for (let i = 0; i < 4; i++) {
         const checkDate = new Date(startDate);
         checkDate.setDate(startDate.getDate() + (i * 7));
+        const dateStr = checkDate.toISOString().split('T')[0];
+        
         const daySlots = getAvailableTimesForDate(checkDate, appData, technique);
         const matchingSlot = daySlots.find(s => s.time === slot.time && s.instructorId === slot.instructorId);
-        if (!matchingSlot || matchingSlot.paidBookingsCount >= matchingSlot.maxCapacity) {
-            return false;
+        
+        console.log(`  Week ${i}: ${dateStr} - Slot found: ${!!matchingSlot}, Capacity: ${matchingSlot?.paidBookingsCount}/${matchingSlot?.maxCapacity}`);
+        
+        if (matchingSlot) {
+            // Si el slot existe, verificar que tenga capacidad disponible
+            if (matchingSlot.paidBookingsCount >= matchingSlot.maxCapacity) {
+                console.log(`  ❌ REJECTED: Week ${i} is full`);
+                return false;
+            }
+            consecutiveAvailable++;
+            // Solo actualizar max si es consecutivo desde el inicio
+            if (i === consecutiveAvailable - 1) {
+                maxConsecutiveFromStart = consecutiveAvailable;
+            }
+        } else {
+            // Slot no existe (feriado) - resetear contador
+            consecutiveAvailable = 0;
         }
     }
-    return true;
+    
+    // Requerir al menos 2 semanas consecutivas disponibles DESDE EL INICIO
+    // Esto permite que se inicie el paquete incluso si hay feriados después
+    if (maxConsecutiveFromStart >= 2) {
+        console.log(`  ✅ APPROVED: ${maxConsecutiveFromStart} consecutive weeks from start (minimum 2 required)`);
+        return true;
+    } else {
+        console.log(`  ❌ REJECTED: Only ${maxConsecutiveFromStart} consecutive weeks from start (minimum 2 required)`);
+        return false;
+    }
 };
 
 export const getFutureCapacityMetrics = async (days: number): Promise<{ totalCapacity: number, bookedSlots: number }> => {
@@ -2168,75 +2227,62 @@ export const calculateSlotAvailability = (
   const slotStart = new Date(`${date}T${startTime}`);
   const slotEnd = new Date(slotStart.getTime() + 2 * 60 * 60 * 1000); // +2 horas
   
-  // Ventana de solapamiento: ±30 minutos
-  const windowStart = new Date(slotStart.getTime() - 30 * 60 * 1000);
-  const windowEnd = new Date(slotEnd.getTime() + 30 * 60 * 1000);
-  
+  // FIX: Usar capacidad de appData en lugar de valores hardcodeados
   const capacity = {
-    potters_wheel: { max: 8, bookedInWindow: 0 },
-    hand_modeling: { max: 14, bookedInWindow: 0 },
+    potters_wheel: { max: appData.classCapacity?.potters_wheel || 8, bookedInWindow: 0 },
+    hand_modeling: { max: appData.classCapacity?.molding || 14, bookedInWindow: 0 },
     painting: { max: Infinity, bookedInWindow: 0 }
   };
 
   const overlappingDetails: string[] = [];
 
   // 1. Contar bookings que se solapan con esta ventana
-  const bookingsForSlot = appData.bookings.filter(booking => {
-    return booking.slots.some(slot => {
-      const bookingStart = new Date(`${slot.date}T${slot.time}`);
-      const bookingEnd = new Date(bookingStart.getTime() + 2 * 60 * 60 * 1000);
-      
-      // ¿Se solapan las ventanas?
-      return !(bookingEnd <= windowStart || bookingStart >= windowEnd);
-    });
-  });
-
-  bookingsForSlot.forEach(booking => {
-    // CRÍTICO: Usar booking.participants si está disponible (admin manual booking)
-    const participantCount = booking.participants ?? 1;
-    
+  // FIX: Normalizar time para comparación consistente
+  const normalizeTime = (t: string) => {
+    if (!t) return '';
+    if (/^\d{2}:\d{2}$/.test(t)) return t;
+    const d = new Date(`1970-01-01T${t}`);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString().substr(11,5);
+    }
+    return t.trim().toLowerCase();
+  };
+  
+  // Bookings que se solapan - agrupados por técnica
+  const bookingsByTechnique: Record<string, Booking[]> = {
+    potters_wheel: [],
+    hand_modeling: [],
+    painting: []
+  };
+  
+  appData.bookings.forEach(booking => {
     // Determinar técnica del booking
     let bookingTechnique: 'potters_wheel' | 'hand_modeling' | 'painting' | undefined;
     
     if (booking.technique) {
-      // Si el booking tiene técnica explícita (ej: COUPLES_EXPERIENCE)
       bookingTechnique = booking.technique as any;
     } else if (booking.product && 'details' in booking.product) {
-      // Si el producto tiene técnica en details
       const details = (booking.product as any).details;
       if (details && typeof details === 'object' && 'technique' in details) {
         bookingTechnique = details.technique;
       }
     }
     
-    // Default fallback para experiencias
     if (!bookingTechnique) {
       bookingTechnique = 'hand_modeling';
     }
     
-    // Sumar participantes a la técnica correcta
-    if (capacity[bookingTechnique]) {
+    // Verificar si este booking coincide con la fecha/hora exacta (no ventana)
+    const hasMatchingSlot = booking.slots.some(slot => {
+      return slot.date === date && normalizeTime(slot.time) === normalizeTime(startTime);
+    });
+    
+    if (hasMatchingSlot) {
+      bookingsByTechnique[bookingTechnique].push(booking);
+      const participantCount = booking.participants ?? 1;
       capacity[bookingTechnique].bookedInWindow += participantCount;
       overlappingDetails.push(`${booking.productType}: ${participantCount} personas (${bookingTechnique})`);
     }
-  });
-
-  // 2. Buscar clases recurrentes en solapamiento
-  const dayOfWeek = new Date(date).getDay();
-  const recurringInWindow = appData.recurringClasses?.filter((rc: RecurringClassSlot) => {
-    if (rc.dayOfWeek !== dayOfWeek || !rc.isActive) return false;
-    
-    const rcStart = new Date(`${date}T${rc.startTime}`);
-    const rcEnd = new Date(`${date}T${rc.endTime}`);
-    
-    return !(rcEnd <= windowStart || rcStart >= windowEnd);
-  }) || [];
-
-  recurringInWindow.forEach((rc: RecurringClassSlot) => {
-    if (capacity[rc.technique]) {
-      capacity[rc.technique].bookedInWindow += rc.occupiedCapacity;
-    }
-    overlappingDetails.push(`Clase Paquete ${rc.technique}: +${rc.occupiedCapacity}`);
   });
 
   const endTimeFormatted = new Date(slotEnd).toLocaleTimeString('es-ES', {
@@ -2244,7 +2290,7 @@ export const calculateSlotAvailability = (
     minute: '2-digit'
   });
 
-  // 3. Calcular disponibilidad
+  // Calcular disponibilidad
   return {
     date,
     startTime,
