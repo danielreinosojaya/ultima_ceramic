@@ -83,14 +83,14 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
             subtitle="Reúne a tu grupo y diseña la clase perfecta. Cada persona elige su técnica: torno, modelado o pintura."
             buttonText="Crear Experiencia"
             onClick={() => onSelect('group_class_wizard')}
-            isComingSoon={true}
+            isComingSoon={false}
           />
           <ExperienceCard 
             title="Clases Sueltas"
             subtitle="Elige entre Clase Individual (solo para ti) o Grupal (con amigos). Técnicas: Torno (máx 8) • Modelado (máx 14) • Pintura (sin límite)."
             buttonText="Reservar Clase"
             onClick={() => onSelect('single_class_wizard')}
-            isComingSoon={true}
+            isComingSoon={false}
           />
         </div>
       </div>
@@ -101,7 +101,7 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
           subtitle="Una cita creativa y diferente. Moldeen una pieza juntos en el torno o creen piezas individuales, con la guía de un instructor."
           buttonText="Planifica tu Cita"
           onClick={() => onSelect('couples_experience')}
-          isComingSoon={true}
+          isComingSoon={false}
         />
         <ExperienceCard 
           title="Experiencias Grupales"
