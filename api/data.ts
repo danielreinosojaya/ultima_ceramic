@@ -499,6 +499,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         metadata: row.metadata || null
                     }));
                     data = formatted;
+                    // ✅ OPTIMIZACIÓN: Cache CDN 5 minutos (datos dinámicos)
+                    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
                 } catch (error) {
                     console.error('Error al listar giftcards:', error);
                     data = [];
@@ -532,6 +534,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     }));
                     console.debug('[API] listGiftcards fetched rows:', rows.length);
                     data = formattedG;
+                    // ✅ OPTIMIZACIÓN: Cache CDN 5 minutos (datos dinámicos)
+                    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
                 } catch (err) {
                     console.error('Error listing giftcards:', err);
                     data = [];
@@ -583,6 +587,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                 case 'instructors': {
                     const { rows: instructors } = await sql`SELECT * FROM instructors ORDER BY name ASC`;
                     data = instructors.map(toCamelCase);
+                    // ✅ OPTIMIZACIÓN: Cache CDN 1 hora (datos muy estables)
+                    res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
                     break;
                 }
                 case 'deliveries': {
@@ -651,6 +657,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     });
                     data = Array.from(customerMap.values());
                     console.log(`[API] Generated ${data.length} customers from ${parsedBookings.length} bookings`);
+                    // ✅ OPTIMIZACIÓN: Cache CDN 5 minutos (datos dinámicos)
+                    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
                     break;
                 }
                 case 'listPieces': {
@@ -686,6 +694,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                 try {
                     const { rows: products } = await sql`SELECT * FROM products ORDER BY name ASC`;
                     data = products.map(toCamelCase);
+                    // ✅ OPTIMIZACIÓN: Cache CDN 1 hora (datos muy estables)
+                    res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
                 } catch (error) {
                     console.error('Error fetching products:', error);
                     data = [];
@@ -706,6 +716,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     console.log(`API: Successfully processed ${processedBookings.length} bookings out of ${bookings.length} raw bookings`);
                     data = processedBookings;
                 }
+                // ✅ OPTIMIZACIÓN: Cache CDN 5 minutos (datos dinámicos)
+                res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
             } else if (key === 'customers') {
                 // Get all unique customers from bookings
                 const { rows: bookings } = await sql`SELECT * FROM bookings ORDER BY created_at DESC`;
@@ -2572,7 +2584,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             break;
         case 'rescheduleBookingSlot': {
             const rescheduleBody = req.body;
-            const { bookingId: rescheduleId, oldSlot, newSlot, reason } = rescheduleBody;
+            const { bookingId: rescheduleId, oldSlot, newSlot, reason, forceAdminReschedule } = rescheduleBody;
             
             try {
                 const { rows: [bookingToReschedule] } = await sql`SELECT * FROM bookings WHERE id = ${rescheduleId}`;
@@ -2590,12 +2602,18 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 const oldSlotDate = new Date(oldSlot.date + 'T00:00:00');
                 const hoursDifference = (oldSlotDate.getTime() - now.getTime()) / (1000 * 60 * 60);
                 
-                if (hoursDifference < 72) {
+                if (hoursDifference < 72 && !forceAdminReschedule) {
                     console.log(`[RESCHEDULE] Clase en ${Math.floor(hoursDifference)}h < 72h. RECHAZADO. Clase se PIERDE.`);
                     return res.status(400).json({ 
                         success: false, 
-                        error: 'Requiere 72 horas de anticipación. La clase se ha PERDIDO.'
+                        error: 'Requiere 72 horas de anticipación. La clase se ha PERDIDO.',
+                        hoursUntilClass: hoursDifference,
+                        requiresAdminApproval: true
                     });
+                }
+                
+                if (hoursDifference < 72 && forceAdminReschedule) {
+                    console.log(`[RESCHEDULE] Admin force reschedule. Clase en ${Math.floor(hoursDifference)}h < 72h. PERMITIDO POR ADMIN.`);
                 }
                 
                 // 2. Validar si tiene política acceptedNoRefund
@@ -2629,7 +2647,11 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 // ============ PROCEDER CON REAGENDAMIENTO ============
                 
                 // Actualizar slots: remover oldSlot y agregar newSlot
-                const otherSlots = bookingToReschedule.slots.filter((s: any) => 
+                const slotsFromDB = Array.isArray(bookingToReschedule.slots) 
+                    ? bookingToReschedule.slots 
+                    : (typeof bookingToReschedule.slots === 'string' ? JSON.parse(bookingToReschedule.slots) : []);
+                
+                const otherSlots = slotsFromDB.filter((s: any) => 
                     s.date !== oldSlot.date || s.time !== oldSlot.time
                 );
                 const updatedSlots = [...otherSlots, newSlot];
@@ -2647,9 +2669,16 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 };
                 
                 // Obtener historia actual
-                const currentHistory = bookingToReschedule.reschedule_history 
-                    ? JSON.parse(bookingToReschedule.reschedule_history)
-                    : [];
+                let currentHistory = [];
+                try {
+                    if (bookingToReschedule.reschedule_history) {
+                        const parsed = JSON.parse(bookingToReschedule.reschedule_history);
+                        currentHistory = Array.isArray(parsed) ? parsed : [];
+                    }
+                } catch (e) {
+                    console.warn('[RESCHEDULE] Could not parse reschedule_history, starting fresh:', e);
+                    currentHistory = [];
+                }
                 
                 const updatedHistory = [...currentHistory, rescheduleHistoryEntry];
                 
@@ -3725,6 +3754,7 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reschedule_history JSONB DEFAULT '[]'::jsonb`;
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS last_reschedule_at TIMESTAMP WITH TIME ZONE`;
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS participants INT DEFAULT 1`;
+      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS group_metadata JSONB`;
     } catch (e) {
       console.warn('[ADD BOOKING] Could not add columns (may already exist):', e);
     }
@@ -3802,11 +3832,13 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
       rescheduleAllowance = 1; // Intro classes: 1 reagendamiento
     }
 
+    const groupMetadata = (body as any).groupClassMetadata || null;
+
     const { rows: created } = await sql`
       INSERT INTO bookings (
-        booking_code, product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_date, accepted_no_refund, expires_at, status, technique, reschedule_allowance, reschedule_used, reschedule_history, participants
+        booking_code, product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_date, accepted_no_refund, expires_at, status, technique, reschedule_allowance, reschedule_used, reschedule_history, participants, group_metadata
       ) VALUES (
-        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(body.product)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}, NOW() + INTERVAL '2 hours', 'active', ${technique || null}, ${rescheduleAllowance}, 0, '[]'::jsonb, ${(body as any).participants || 1}
+        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(body.product)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}, NOW() + INTERVAL '2 hours', 'active', ${technique || null}, ${rescheduleAllowance}, 0, '[]'::jsonb, ${(body as any).participants || 1}, ${groupMetadata ? JSON.stringify(groupMetadata) : null}
       ) RETURNING *;
     `;
 
@@ -3827,6 +3859,7 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
       status: created[0].status || 'active',
       technique: created[0].technique,
       participants: created[0].participants ? parseInt(created[0].participants, 10) : 1,
+      groupClassMetadata: created[0].group_metadata || undefined,
     };
 
     // Process giftcard hold if provided
