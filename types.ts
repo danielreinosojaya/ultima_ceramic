@@ -324,6 +324,9 @@ export interface Booking {
     // COUPLES_EXPERIENCE specific
     technique?: Technique; // Técnica seleccionada para parejas
     
+    // GROUP_CLASS specific
+    groupClassMetadata?: GroupClassMetadata; // Metadata para experiencias personalizadas
+    
     // RESCHEDULE POLICY for class packages
     rescheduleAllowance?: number; // Max veces que puede reagendar (basado en tipo paquete)
     rescheduleUsed?: number; // Cuántas veces ya reagendó
@@ -359,6 +362,7 @@ export interface BookingDetails {
   slots: TimeSlot[];
   userInfo: UserInfo | null;
   technique?: Technique; // Para COUPLES_EXPERIENCE
+  groupMetadata?: GroupClassMetadata; // Para GROUP_CLASS
 }
 
 export interface AddBookingResult {
@@ -640,6 +644,14 @@ export interface GroupClassConfig {
   pricePerPerson: number;
   estimatedDuration: number; // in minutes
   instructorId?: number;
+}
+
+// 7a. Group Class Metadata (para guardar en bookings)
+export interface GroupClassMetadata {
+  totalParticipants: number;
+  techniqueAssignments: ParticipantTechniqueAssignment[];
+  pricePerPerson: number;
+  totalPrice: number;
 }
 
 // 7a. Group Class Technique Types

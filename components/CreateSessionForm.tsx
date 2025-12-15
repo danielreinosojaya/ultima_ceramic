@@ -52,13 +52,13 @@ export const CreateSessionForm: React.FC<CreateSessionFormProps> = ({ onSuccess,
         setError(null);
 
         try {
-            const response = await fetch('/api/auth/create-session', {
+            const response = await fetch('/api/auth?action=create-session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
                 body: JSON.stringify({ 
                     email: email.toLowerCase(), 
-                    fullName: fullName.trim() 
+                    firstName: fullName.trim() 
                 })
             });
 
