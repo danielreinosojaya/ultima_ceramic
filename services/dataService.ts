@@ -332,8 +332,8 @@ const fetchData = async (url: string, options?: RequestInit, retries: number = 3
                 
                 const response = await fetch(url, {
                     ...options,
-                    // ✅ OPTIMIZACIÓN: Timeout reducido 30s → 15s
-                    signal: AbortSignal.timeout(15000)
+                    // ✅ OPTIMIZACIÓN: Timeout reducido 30s → 20s (seguro para queries grandes)
+                    signal: AbortSignal.timeout(20000)
                 });
                 
                 if (!response.ok) {
