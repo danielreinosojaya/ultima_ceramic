@@ -1160,9 +1160,9 @@ export const getRescheduleInfo = (booking: Booking): {
     return { allowance, used, remaining, history };
 };
 
-export const rescheduleBookingSlot = async (bookingId: string, oldSlot: any, newSlot: any, forceAdminReschedule?: boolean): Promise<AddBookingResult> => {
-    console.log('[rescheduleBookingSlot] Starting reschedule:', { bookingId, oldSlot, newSlot, forceAdminReschedule });
-    const result = await postAction('rescheduleBookingSlot', { bookingId, oldSlot, newSlot, forceAdminReschedule });
+export const rescheduleBookingSlot = async (bookingId: string, oldSlot: any, newSlot: any, forceAdminReschedule?: boolean, adminUser?: string): Promise<AddBookingResult> => {
+    console.log('[rescheduleBookingSlot] Starting reschedule:', { bookingId, oldSlot, newSlot, forceAdminReschedule, adminUser });
+    const result = await postAction('rescheduleBookingSlot', { bookingId, oldSlot, newSlot, forceAdminReschedule, adminUser });
     
     // CRÍTICO: Siempre invalidar caché para forzar recarga
     invalidateBookingsCache();

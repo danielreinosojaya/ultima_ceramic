@@ -2584,7 +2584,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             break;
         case 'rescheduleBookingSlot': {
             const rescheduleBody = req.body;
-            const { bookingId: rescheduleId, oldSlot, newSlot, reason, forceAdminReschedule } = rescheduleBody;
+            const { bookingId: rescheduleId, oldSlot, newSlot, reason, forceAdminReschedule, adminUser } = rescheduleBody;
             
             try {
                 const { rows: [bookingToReschedule] } = await sql`SELECT * FROM bookings WHERE id = ${rescheduleId}`;
@@ -2597,26 +2597,42 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 
                 // ============ VALIDACIONES DE RESCHEDULE ============
                 
-                // 1. Validar 72 horas de anticipación
-                const now = new Date();
-                const oldSlotDate = new Date(oldSlot.date + 'T00:00:00');
-                const hoursDifference = (oldSlotDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+                // 1. Validar fechas retroactivas (permitir hasta 30 días en el pasado)
+                const newDateObj = new Date(newSlot.date + 'T00:00:00');
+                const todayObj = new Date();
+                todayObj.setHours(0, 0, 0, 0);
+                const isRetroactive = newDateObj < todayObj;
+                const daysDiff = Math.floor((todayObj.getTime() - newDateObj.getTime()) / (1000 * 60 * 60 * 24));
                 
-                if (hoursDifference < 72 && !forceAdminReschedule) {
-                    console.log(`[RESCHEDULE] Clase en ${Math.floor(hoursDifference)}h < 72h. RECHAZADO. Clase se PIERDE.`);
-                    return res.status(400).json({ 
-                        success: false, 
-                        error: 'Requiere 72 horas de anticipación. La clase se ha PERDIDO.',
-                        hoursUntilClass: hoursDifference,
-                        requiresAdminApproval: true
+                if (isRetroactive && daysDiff > 30) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `No se puede agendar más de 30 días en el pasado. Esta fecha es ${daysDiff} días atrás.`
                     });
                 }
                 
-                if (hoursDifference < 72 && forceAdminReschedule) {
-                    console.log(`[RESCHEDULE] Admin force reschedule. Clase en ${Math.floor(hoursDifference)}h < 72h. PERMITIDO POR ADMIN.`);
+                // 2. Validar 72 horas de anticipación (solo para futuro)
+                if (!isRetroactive) {
+                    const now = new Date();
+                    const oldSlotDate = new Date(oldSlot.date + 'T00:00:00');
+                    const hoursDifference = (oldSlotDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+                    
+                    if (hoursDifference < 72 && !forceAdminReschedule) {
+                        console.log(`[RESCHEDULE] Clase en ${Math.floor(hoursDifference)}h < 72h. RECHAZADO. Clase se PIERDE.`);
+                        return res.status(400).json({ 
+                            success: false, 
+                            error: 'Requiere 72 horas de anticipación. La clase se ha PERDIDO.',
+                            hoursUntilClass: hoursDifference,
+                            requiresAdminApproval: true
+                        });
+                    }
+                    
+                    if (hoursDifference < 72 && forceAdminReschedule) {
+                        console.log(`[RESCHEDULE] Admin force reschedule. Clase en ${Math.floor(hoursDifference)}h < 72h. PERMITIDO POR ADMIN.`);
+                    }
                 }
                 
-                // 2. Validar si tiene política acceptedNoRefund
+                // 3. Validar si tiene política acceptedNoRefund
                 if (booking.acceptedNoRefund === true) {
                     return res.status(400).json({
                         success: false,
@@ -2624,7 +2640,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     });
                 }
                 
-                // 3. Validar límite de reagendamientos
+                // 4. Validar límite de reagendamientos
                 const product = booking.product as any;
                 const classCount = product?.classes || 1;
                 
@@ -2637,11 +2653,77 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 
                 const rescheduleUsed = booking.rescheduleUsed || 0;
                 
-                if (rescheduleUsed >= allowance) {
+                if (rescheduleUsed >= allowance && !isRetroactive) {
                     return res.status(400).json({
                         success: false,
                         error: `Agotaste tus ${allowance} reagendamientos disponibles para este paquete`
                     });
+                }
+                
+                // 5. Validar capacidad del nuevo slot
+                const { rows: products } = await sql`SELECT * FROM products WHERE id = ${bookingToReschedule.product_id}`;
+                if (products.length > 0) {
+                    const classCapacityStr = process.env.CLASS_CAPACITY || '8,8,8';
+                    const capacityMap: any = {
+                        'potters_wheel': 8,
+                        'molding': 8,
+                        'introductory_class': 8
+                    };
+                    
+                    try {
+                        const capacities = classCapacityStr.split(',').map((c: string) => parseInt(c, 10));
+                        if (bookingToReschedule.product_type === 'INTRODUCTORY_CLASS') {
+                            capacityMap.introductory_class = capacities[2] || 8;
+                        } else if (bookingToReschedule.product_type === 'CLASS_PACKAGE') {
+                            const technique = bookingToReschedule.product?.details?.technique || 'potters_wheel';
+                            capacityMap[technique] = capacities[0] || 8;
+                        }
+                    } catch (e) {
+                        console.error('Error parsing CLASS_CAPACITY:', e);
+                    }
+                    
+                    const { rows: otherBookings } = await sql`
+                        SELECT COUNT(*) as count FROM bookings 
+                        WHERE product_id = ${bookingToReschedule.product_id}
+                        AND id != ${rescheduleId}
+                        AND slots @> ${JSON.stringify([{ date: newSlot.date, time: newSlot.time }])}
+                    `;
+                    
+                    const technique = bookingToReschedule.product?.details?.technique || 'potters_wheel';
+                    const maxCapacity = capacityMap[technique] || 8;
+                    const currentCount = otherBookings[0]?.count || 0;
+                    
+                    if (currentCount >= maxCapacity) {
+                        return res.status(400).json({
+                            success: false,
+                            error: `Slot completo (${currentCount}/${maxCapacity}). No se puede agregar más bookings.`
+                        });
+                    }
+                }
+                
+                // ============ AUDIT LOG PARA RETROACTIVOS ============
+                if (isRetroactive && adminUser) {
+                    try {
+                        await sql`
+                            INSERT INTO audit_logs (booking_id, admin_user, action, details, created_at)
+                            VALUES (
+                                ${rescheduleId},
+                                ${adminUser},
+                                'retrospective_booking',
+                                ${JSON.stringify({
+                                    oldSlot,
+                                    newSlot,
+                                    isRetroactive: true,
+                                    daysDifference: daysDiff,
+                                    timestamp: new Date().toISOString()
+                                })},
+                                NOW()
+                            )
+                        `;
+                        console.log(`[audit] Retrospective booking created: ${rescheduleId} by ${adminUser}`);
+                    } catch (auditError) {
+                        console.error('[audit] Error creating audit log:', auditError);
+                    }
                 }
                 
                 // ============ PROCEDER CON REAGENDAMIENTO ============
@@ -2665,7 +2747,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     reason: reason || null,
                     rescheduleCount: rescheduleUsed + 1,
                     timestamp: new Date().toISOString(),
-                    createdByAdmin: false // Por defecto desde cliente
+                    createdByAdmin: !!adminUser,
+                    isRetroactive: isRetroactive
                 };
                 
                 // Obtener historia actual
@@ -2695,7 +2778,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 // Obtener booking actualizado
                 const { rows: [updatedBooking] } = await sql`SELECT * FROM bookings WHERE id = ${rescheduleId}`;
                 
-                console.log(`[RESCHEDULE] Exitoso: ${rescheduleId}, usado ${rescheduleUsed + 1}/${allowance}`);
+                console.log(`[RESCHEDULE] Exitoso: ${rescheduleId}, usado ${rescheduleUsed + 1}/${allowance}, retroactivo: ${isRetroactive}`);
                 
                 result = { 
                     success: true, 
@@ -2704,7 +2787,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         used: rescheduleUsed + 1,
                         allowance: allowance,
                         remaining: allowance - (rescheduleUsed + 1)
-                    }
+                    },
+                    isRetroactive
                 };
                 
             } catch (error) {
