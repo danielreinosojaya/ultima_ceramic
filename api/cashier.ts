@@ -169,7 +169,7 @@ export default async function handler(req: any, res: any) {
       for (const col of allColumns) {
         if (!existingColumns.includes(col)) {
           try {
-            await sql.unsafe(`ALTER TABLE cashier_entries ADD COLUMN ${col} ${columnDefs[col]}`);
+            await sql.query(`ALTER TABLE cashier_entries ADD COLUMN ${col} ${columnDefs[col]}`);
           } catch (err: any) {
             console.warn(`Could not add column ${col}:`, err.message);
           }
@@ -228,7 +228,7 @@ export default async function handler(req: any, res: any) {
         RETURNING *
       `;
 
-      const result = await sql.unsafe(insertQuery, insertValues);
+      const result = await sql.query(insertQuery, insertValues);
 
       return res.status(201).json({
         success: true,
