@@ -30,6 +30,12 @@ export const CashierDashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  
+  // Delete modal state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [entryToDelete, setEntryToDelete] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     loadEntries();
@@ -166,6 +172,43 @@ export const CashierDashboard: React.FC = () => {
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.message || 'Error saving entry');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function openDeleteModal(entryId: string, event: React.MouseEvent) {
+    event.stopPropagation(); // Prevent expanding the entry
+    setEntryToDelete(entryId);
+    setDeletePassword('');
+    setDeleteError(null);
+    setDeleteModalOpen(true);
+  }
+
+  function closeDeleteModal() {
+    setDeleteModalOpen(false);
+    setDeletePassword('');
+    setDeleteError(null);
+    setEntryToDelete(null);
+  }
+
+  async function handleDelete() {
+    if (deletePassword !== 'Admify2025') {
+      setDeleteError('Contraseña incorrecta');
+      return;
+    }
+
+    if (!entryToDelete) return;
+
+    try {
+      setLoading(true);
+      await cashierService.deleteEntry(entryToDelete);
+      await loadEntries();
+      setSuccess('Registro eliminado exitosamente');
+      setTimeout(() => setSuccess(null), 3000);
+      closeDeleteModal();
+    } catch (err: any) {
+      setDeleteError(err.message || 'Error al eliminar');
     } finally {
       setLoading(false);
     }
@@ -603,11 +646,20 @@ export const CashierDashboard: React.FC = () => {
                   >
                     <div className="flex justify-between items-center mb-4">
                       <h3 className="text-xl font-bold text-brand-primary">{formatDate(entry.date)}</h3>
-                      <div className="text-right">
-                        <div className="text-3xl font-bold text-brand-primary">
-                          {formatCurrency(entry.finalCashBalance)}
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <div className="text-3xl font-bold text-brand-primary">
+                            {formatCurrency(entry.finalCashBalance)}
+                          </div>
+                          <p className="text-sm text-brand-secondary">Saldo final</p>
                         </div>
-                        <p className="text-sm text-brand-secondary">Saldo final</p>
+                        <button
+                          onClick={(e) => openDeleteModal(entry.id, e)}
+                          className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm font-medium"
+                          title="Eliminar registro"
+                        >
+                          🗑️ Eliminar
+                        </button>
                       </div>
                     </div>
 
@@ -686,6 +738,56 @@ export const CashierDashboard: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-xl font-bold text-brand-primary mb-4">
+              Eliminar Registro
+            </h3>
+            <p className="text-brand-text mb-4">
+              Para eliminar este registro, ingresa la contraseña de administrador:
+            </p>
+            
+            <input
+              type="password"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+              placeholder="Contraseña"
+              className="w-full border border-brand-border rounded-lg px-4 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  handleDelete();
+                }
+              }}
+            />
+
+            {deleteError && (
+              <div className="bg-red-100 text-red-700 px-4 py-2 rounded-lg mb-4 text-sm">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={closeDeleteModal}
+                className="px-4 py-2 border border-brand-border text-brand-text rounded-lg hover:bg-brand-background transition"
+                disabled={loading}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDelete}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50"
+                disabled={loading}
+              >
+                {loading ? 'Eliminando...' : 'Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
