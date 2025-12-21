@@ -122,6 +122,32 @@ export default async function handler(req: any, res: any) {
         )
       `;
 
+      // Migrate existing table by adding missing columns individually
+      const columnsToAdd = [
+        { name: 'cash_sales', type: 'DECIMAL NOT NULL DEFAULT 0' },
+        { name: 'system_cash_sales', type: 'DECIMAL DEFAULT 0' },
+        { name: 'system_card_sales', type: 'DECIMAL DEFAULT 0' },
+        { name: 'system_transfer_sales', type: 'DECIMAL DEFAULT 0' },
+        { name: 'system_total_sales', type: 'DECIMAL DEFAULT 0' },
+        { name: 'my_effective_sales', type: 'DECIMAL DEFAULT 0' },
+        { name: 'my_vouchers_accumulated', type: 'DECIMAL DEFAULT 0' },
+        { name: 'my_transfers_received', type: 'DECIMAL DEFAULT 0' },
+        { name: 'my_total_sales', type: 'DECIMAL DEFAULT 0' },
+        { name: 'sales_difference', type: 'DECIMAL DEFAULT 0' },
+        { name: 'sales_discrepancy', type: 'BOOLEAN DEFAULT false' }
+      ];
+
+      for (const col of columnsToAdd) {
+        try {
+          await sql.query(`ALTER TABLE cashier_entries ADD COLUMN ${col.name} ${col.type}`);
+        } catch (err: any) {
+          // Ignore if column already exists (error code 42701)
+          if (err.code !== '42701') {
+            console.warn(`Migration warning for ${col.name}:`, err.message);
+          }
+        }
+      }
+
       const id = `cashier_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
       const result = await sql`

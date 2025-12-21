@@ -2,7 +2,7 @@ import React from 'react';
 // ...existing code...
 
 interface WelcomeSelectorProps {
-  onSelect: (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio' | 'group_class_wizard' | 'single_class_wizard') => void;
+  onSelect: (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio' | 'group_class_wizard' | 'single_class_wizard' | 'wheel_course') => void;
 }
 
 const ChoiceCard: React.FC<{
@@ -92,6 +92,50 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
             onClick={() => onSelect('single_class_wizard')}
             isComingSoon={false}
           />
+        </div>
+      </div>
+
+      {/* CURSO DE TORNO - NUEVO */}
+      <div className="mb-8 md:mb-10">
+        <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 rounded-2xl p-8 text-white shadow-2xl transform hover:scale-105 transition-all duration-300">
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-white/20 text-white">
+              🆕 NUEVO
+            </span>
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-400 text-amber-900">
+              🎓 CURSO COMPLETO
+            </span>
+          </div>
+          <h3 className="text-3xl font-serif font-bold mb-3">Aprende Torno desde Cero</h3>
+          <p className="text-indigo-100 text-lg mb-6">
+            6 horas de instrucción personalizada • Grupos reducidos • Certificado incluido
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-4 mb-6 text-sm">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+              </svg>
+              <span>2 opciones de horario</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+              </svg>
+              <span>Máximo 6 alumnos</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+              </svg>
+              <span>$150 total</span>
+            </div>
+          </div>
+          <button
+            onClick={() => onSelect('wheel_course')}
+            className="bg-white text-indigo-700 font-bold py-4 px-8 rounded-xl hover:bg-indigo-50 transition-all duration-300 shadow-lg hover:shadow-xl w-full md:w-auto text-lg"
+          >
+            Ver Detalles del Curso →
+          </button>
         </div>
       </div>
 

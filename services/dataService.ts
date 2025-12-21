@@ -2399,3 +2399,177 @@ export const generateTimeSlots = (
 
   return slots;
 };
+
+// ========================================
+// COURSE SYSTEM API
+// ========================================
+
+export const getCourseSchedules = async (): Promise<any[]> => {
+    try {
+        const response = await fetch('/api/courses?action=getSchedules');
+        if (!response.ok) throw new Error('Error fetching course schedules');
+        const result = await response.json();
+        return result.success ? result.data : [];
+    } catch (error) {
+        console.error('Error getting course schedules:', error);
+        return [];
+    }
+};
+
+export const enrollInCourse = async (enrollmentData: {
+    studentEmail: string;
+    studentInfo: {
+        firstName: string;
+        lastName: string;
+        phoneNumber: string;
+    };
+    courseScheduleId: string;
+    experience?: 'beginner' | 'intermediate';
+    specialConsiderations?: string;
+}): Promise<{ success: boolean; data?: any; error?: string }> => {
+    try {
+        const response = await fetch('/api/courses?action=enroll', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(enrollmentData)
+        });
+        
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        console.error('Error enrolling in course:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error desconocido'
+        };
+    }
+};
+
+export const getCourseEnrollment = async (enrollmentId: string): Promise<any | null> => {
+    try {
+        const response = await fetch(`/api/courses?action=getEnrollment&enrollmentId=${enrollmentId}`);
+        if (!response.ok) return null;
+        const result = await response.json();
+        return result.success ? result.data : null;
+    } catch (error) {
+        console.error('Error getting enrollment:', error);
+        return null;
+    }
+};
+
+export const updateCoursePaymentStatus = async (
+    enrollmentId: string,
+    amountPaid: number,
+    paymentMethod?: string
+): Promise<{ success: boolean; data?: any; error?: string }> => {
+    try {
+        const response = await fetch('/api/courses?action=updatePaymentStatus', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enrollmentId, amountPaid, paymentMethod })
+        });
+        
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        console.error('Error updating payment status:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error desconocido'
+        };
+    }
+};
+
+export const markCourseAttendance = async (
+    enrollmentId: string,
+    sessionId: string,
+    attended: boolean,
+    notes?: string,
+    progressRating?: number
+): Promise<{ success: boolean; data?: any; error?: string }> => {
+    try {
+        const response = await fetch('/api/courses?action=markAttendance', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enrollmentId, sessionId, attended, notes, progressRating })
+        });
+        
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        console.error('Error marking attendance:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error desconocido'
+        };
+    }
+};
+
+export const getCourseEnrollments = async (scheduleId?: string, status?: string): Promise<any[]> => {
+    try {
+        let url = '/api/courses?action=getAllEnrollments';
+        const params = new URLSearchParams();
+        if (scheduleId) params.append('scheduleId', scheduleId);
+        if (status) params.append('status', status);
+        if (params.toString()) url += '&' + params.toString();
+        
+        const response = await fetch(url);
+        if (!response.ok) return [];
+        const result = await response.json();
+        return result.success ? result.data : [];
+    } catch (error) {
+        console.error('Error getting enrollments:', error);
+        return [];
+    }
+};
+
+export const toggleCourseScheduleActive = async (
+    scheduleId: string,
+    isActive: boolean
+): Promise<{ success: boolean; data?: any; error?: string }> => {
+    try {
+        const response = await fetch('/api/courses?action=toggleScheduleActive', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ scheduleId, isActive })
+        });
+        
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        console.error('Error toggling schedule:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error desconocido'
+        };
+    }
+};
+
+export const createCourseSchedule = async (scheduleData: {
+    format: '3x2' | '2x3';
+    name: string;
+    days: string[];
+    startTime: string;
+    endTime: string;
+    startDate: string;
+    capacity: number;
+}): Promise<{ success: boolean; data?: any; error?: string }> => {
+    try {
+        const response = await fetch('/api/courses?action=createSchedule', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(scheduleData)
+        });
+        
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        console.error('Error creating schedule:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error desconocido'
+        };
+    }
+};
+
+

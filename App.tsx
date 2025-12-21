@@ -28,6 +28,11 @@ import { ExperienceTypeSelector } from './components/experiences/ExperienceTypeS
 import { GroupClassWizard } from './components/experiences/GroupClassWizard';
 import { PieceExperienceWizard } from './components/experiences/PieceExperienceWizard';
 import { SingleClassWizard } from './components/experiences/SingleClassWizard';
+// Wheel Course Components
+import { CourseWheelLanding } from './components/courses/CourseWheelLanding';
+import { CourseScheduleSelector } from './components/courses/CourseScheduleSelector';
+import { CourseRegistrationForm } from './components/courses/CourseRegistrationForm';
+import { CourseConfirmation } from './components/courses/CourseConfirmation';
 // Lazy load AdminConsole to reduce initial bundle size
 const AdminConsole = lazy(() => import('./components/admin/AdminConsole').then(module => ({ default: module.AdminConsole })));
 import { NotificationProvider } from './context/NotificationContext';
@@ -38,7 +43,7 @@ import { OpenStudioModal } from './components/admin/OpenStudioModal';
 import { ClientDashboard } from './components/ClientDashboard';
 import { MyClassesPrompt } from './components/MyClassesPrompt';
 
-import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession, DeliveryMethod, GiftcardHold, Piece, ExperiencePricing, ExperienceUIState } from './types';
+import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession, DeliveryMethod, GiftcardHold, Piece, ExperiencePricing, ExperienceUIState, CourseSchedule, CourseEnrollment } from './types';
 import * as dataService from './services/dataService';
 import { slotsRequireNoRefund } from './utils/bookingPolicy';
 import { InstagramIcon } from './components/icons/InstagramIcon';
@@ -123,6 +128,10 @@ const App: React.FC = () => {
         pricePerPerson: 15,
         estimatedDuration: 120
     });
+    
+    // WHEEL COURSE states
+    const [selectedCourseSchedule, setSelectedCourseSchedule] = useState<CourseSchedule | null>(null);
+    const [confirmedEnrollment, setConfirmedEnrollment] = useState<CourseEnrollment | null>(null);
     
     const [appData, setAppData] = useState<AppData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -270,7 +279,7 @@ const App: React.FC = () => {
         }
     }, [loading, hasCheckedMyClasses, view]);
 
-    const handleWelcomeSelect = (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio' | 'group_class_wizard' | 'single_class_wizard') => {
+    const handleWelcomeSelect = (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio' | 'group_class_wizard' | 'single_class_wizard' | 'wheel_course') => {
         if (userType === 'new') {
             setView('intro_classes');
         } else if (userType === 'returning') {
@@ -295,12 +304,41 @@ const App: React.FC = () => {
         } else if (userType === 'single_class_wizard') {
             // Direct to single class wizard
             setView('single_class_wizard');
+        } else if (userType === 'wheel_course') {
+            setView('wheel_course_landing');
         }
     };
     
     const handlePrerequisiteConfirm = () => {
         setIsPrerequisiteModalOpen(false);
         setView('techniques');
+    };
+    
+    const handleCourseScheduleSelect = (schedule: CourseSchedule) => {
+        setSelectedCourseSchedule(schedule);
+        setView('wheel_course_registration');
+    };
+    
+    const handleCourseEnrollmentSubmit = async (enrollment: Partial<CourseEnrollment>) => {
+        try {
+            const result = await dataService.enrollInCourse({
+                studentEmail: enrollment.studentEmail!,
+                studentInfo: enrollment.studentInfo!,
+                courseScheduleId: enrollment.courseScheduleId!,
+                experience: (enrollment.studentInfo as any)?.experience || 'beginner',
+                specialConsiderations: (enrollment.studentInfo as any)?.specialConsiderations
+            });
+
+            if (result.success && result.data) {
+                setConfirmedEnrollment(result.data);
+                setView('wheel_course_confirmation');
+            } else {
+                alert('Error al procesar la inscripción: ' + (result.error || 'Error desconocido'));
+            }
+        } catch (error) {
+            console.error('Error enrolling:', error);
+            alert('Error al procesar la inscripción. Por favor intenta de nuevo.');
+        }
     };
 
     // Login function for client portal
@@ -629,6 +667,34 @@ const App: React.FC = () => {
                 );
             case 'welcome':
                 return <WelcomeSelector onSelect={handleWelcomeSelect} />;
+            case 'wheel_course_landing':
+                return <CourseWheelLanding 
+                    onContinue={() => setView('wheel_course_schedule')} 
+                    onBack={() => setView('welcome')} 
+                />;
+            case 'wheel_course_schedule':
+                return <CourseScheduleSelector 
+                    onSelectSchedule={handleCourseScheduleSelect} 
+                    onBack={() => setView('wheel_course_landing')} 
+                />;
+            case 'wheel_course_registration':
+                if (!selectedCourseSchedule) return <WelcomeSelector onSelect={handleWelcomeSelect} />;
+                return <CourseRegistrationForm 
+                    selectedSchedule={selectedCourseSchedule}
+                    onSubmit={handleCourseEnrollmentSubmit}
+                    onBack={() => setView('wheel_course_schedule')}
+                />;
+            case 'wheel_course_confirmation':
+                if (!confirmedEnrollment || !selectedCourseSchedule) return <WelcomeSelector onSelect={handleWelcomeSelect} />;
+                return <CourseConfirmation 
+                    enrollment={confirmedEnrollment}
+                    schedule={selectedCourseSchedule}
+                    onDone={() => {
+                        setView('welcome');
+                        setSelectedCourseSchedule(null);
+                        setConfirmedEnrollment(null);
+                    }}
+                />;
             case 'techniques':
                 return <TechniqueSelector onSelect={handleTechniqueSelect} onBack={() => setView('welcome')} products={appData.products} />;
             case 'packages':
