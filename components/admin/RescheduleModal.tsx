@@ -47,6 +47,13 @@ export const RescheduleModal: React.FC<RescheduleModalProps> = ({ isOpen, onClos
     }, [slotInfo, isOpen]);
 
     const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
+    
+    // Permitir fechas hasta 30 días atrás para reagendamiento retroactivo
+    const minAllowedDate = useMemo(() => {
+        const d = new Date(today);
+        d.setDate(d.getDate() - 30);
+        return d;
+    }, [today]);
 
     const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
     const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
@@ -59,7 +66,8 @@ export const RescheduleModal: React.FC<RescheduleModalProps> = ({ isOpen, onClos
     const handleDayClick = (day: number) => {
         const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
         date.setHours(0, 0, 0, 0);
-        if (date < today) return;
+        // Permitir hasta 30 días atrás
+        if (date < minAllowedDate) return;
         setSelectedDate(date);
         setSelectedHour(null);
         setSelectedInstructor(null);
@@ -175,6 +183,12 @@ export const RescheduleModal: React.FC<RescheduleModalProps> = ({ isOpen, onClos
                     <p className="text-md font-semibold text-brand-text">{formattedCurrentSlotDate} @ {slotInfo.slot.time}</p>
                 </div>
 
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 mb-4">
+                    <p className="text-xs text-blue-700">
+                        💡 Puedes reagendar hasta <strong>30 días atrás</strong> (fechas en ámbar) para registrar clases retroactivas.
+                    </p>
+                </div>
+
                 {adminApproved && (
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
                         <p className="text-sm text-blue-800">
@@ -199,12 +213,13 @@ export const RescheduleModal: React.FC<RescheduleModalProps> = ({ isOpen, onClos
                             {calendarDays.map((day, index) => {
                                 if (!day) return <div key={`blank-${index}`}></div>;
                                 const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day); date.setHours(0,0,0,0);
+                                const isTooOld = date < minAllowedDate;
                                 const isPast = date < today;
                                 const dateStr = formatDateToYYYYMMDD(date);
                                 const dayIsSelected = selectedDate && formatDateToYYYYMMDD(selectedDate) === dateStr;
-                                const isDisabled = isPast;
+                                const isDisabled = isTooOld;
 
-                                return <button key={day} onClick={() => handleDayClick(day)} disabled={isDisabled} className={`w-full aspect-square rounded-full text-sm font-semibold transition-all ${isDisabled ? 'text-gray-400 bg-gray-100 cursor-not-allowed' : 'hover:bg-brand-primary/20'} ${dayIsSelected ? 'bg-brand-primary text-white shadow-md ring-2 ring-brand-accent' : 'bg-white'}`}>{day}</button>
+                                return <button key={day} onClick={() => handleDayClick(day)} disabled={isDisabled} className={`w-full aspect-square rounded-full text-sm font-semibold transition-all ${isDisabled ? 'text-gray-400 bg-gray-100 cursor-not-allowed' : isPast ? 'hover:bg-amber-100 text-amber-700 border border-amber-300' : 'hover:bg-brand-primary/20'} ${dayIsSelected ? 'bg-brand-primary text-white shadow-md ring-2 ring-brand-accent' : 'bg-white'}`}>{day}</button>
                             })}
                         </div>
                     </div>
