@@ -92,84 +92,143 @@ export default async function handler(req: any, res: any) {
       const salesDifference = systemTotalSales - myTotalSales;
       const salesDiscrepancy = Math.abs(salesDifference) > 0.01;
 
-      // Ensure table exists (simplified for cash only)
-      await sql`
-        CREATE TABLE IF NOT EXISTS cashier_entries (
-          id TEXT PRIMARY KEY,
-          date TEXT NOT NULL,
-          initial_balance DECIMAL NOT NULL,
-          cash_sales DECIMAL NOT NULL,
-          cash_denominations JSONB NOT NULL,
-          final_cash_balance DECIMAL NOT NULL,
-          expenses JSONB DEFAULT '[]'::jsonb,
-          total_expenses DECIMAL NOT NULL DEFAULT 0,
-          manual_value_from_system DECIMAL NOT NULL,
-          difference DECIMAL NOT NULL,
-          discrepancy BOOLEAN NOT NULL,
-          notes TEXT,
-          system_cash_sales DECIMAL DEFAULT 0,
-          system_card_sales DECIMAL DEFAULT 0,
-          system_transfer_sales DECIMAL DEFAULT 0,
-          system_total_sales DECIMAL DEFAULT 0,
-          my_effective_sales DECIMAL DEFAULT 0,
-          my_vouchers_accumulated DECIMAL DEFAULT 0,
-          my_transfers_received DECIMAL DEFAULT 0,
-          my_total_sales DECIMAL DEFAULT 0,
-          sales_difference DECIMAL DEFAULT 0,
-          sales_discrepancy BOOLEAN DEFAULT false,
-          created_at TIMESTAMP DEFAULT NOW(),
-          updated_at TIMESTAMP DEFAULT NOW()
-        )
-      `;
+      const id = `cashier_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-      // Migrate existing table by adding missing columns individually
-      const columnsToAdd = [
-        { name: 'cash_sales', type: 'DECIMAL NOT NULL DEFAULT 0' },
-        { name: 'system_cash_sales', type: 'DECIMAL DEFAULT 0' },
-        { name: 'system_card_sales', type: 'DECIMAL DEFAULT 0' },
-        { name: 'system_transfer_sales', type: 'DECIMAL DEFAULT 0' },
-        { name: 'system_total_sales', type: 'DECIMAL DEFAULT 0' },
-        { name: 'my_effective_sales', type: 'DECIMAL DEFAULT 0' },
-        { name: 'my_vouchers_accumulated', type: 'DECIMAL DEFAULT 0' },
-        { name: 'my_transfers_received', type: 'DECIMAL DEFAULT 0' },
-        { name: 'my_total_sales', type: 'DECIMAL DEFAULT 0' },
-        { name: 'sales_difference', type: 'DECIMAL DEFAULT 0' },
-        { name: 'sales_discrepancy', type: 'BOOLEAN DEFAULT false' }
+      // Step 1: Ensure minimal table exists
+      try {
+        await sql`
+          CREATE TABLE IF NOT EXISTS cashier_entries (
+            id TEXT PRIMARY KEY,
+            date TEXT NOT NULL,
+            initial_balance DECIMAL NOT NULL,
+            cash_denominations JSONB NOT NULL,
+            manual_value_from_system DECIMAL NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `;
+      } catch (e) {
+        // Table might already exist, continue
+      }
+
+      // Step 2: Add all columns safely using individual ALTER commands
+      const allColumns = [
+        'cash_sales',
+        'final_cash_balance',
+        'expenses',
+        'total_expenses',
+        'difference',
+        'discrepancy',
+        'notes',
+        'system_cash_sales',
+        'system_card_sales',
+        'system_transfer_sales',
+        'system_total_sales',
+        'my_effective_sales',
+        'my_vouchers_accumulated',
+        'my_transfers_received',
+        'my_total_sales',
+        'sales_difference',
+        'sales_discrepancy',
       ];
 
-      for (const col of columnsToAdd) {
-        try {
-          await sql.query(`ALTER TABLE cashier_entries ADD COLUMN ${col.name} ${col.type}`);
-        } catch (err: any) {
-          // Ignore if column already exists (error code 42701)
-          if (err.code !== '42701') {
-            console.warn(`Migration warning for ${col.name}:`, err.message);
+      // Get existing columns to avoid duplicates
+      let existingColumns: string[] = [];
+      try {
+        const colResult = await sql`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_name = 'cashier_entries'
+        `;
+        existingColumns = colResult.rows.map((r: any) => r.column_name);
+      } catch (e) {
+        console.warn('Could not fetch columns, will attempt all migrations');
+      }
+
+      // Add missing columns one by one
+      const columnDefs: Record<string, string> = {
+        'cash_sales': 'DECIMAL DEFAULT 0',
+        'final_cash_balance': 'DECIMAL DEFAULT 0',
+        'expenses': "JSONB DEFAULT '[]'::jsonb",
+        'total_expenses': 'DECIMAL DEFAULT 0',
+        'difference': 'DECIMAL DEFAULT 0',
+        'discrepancy': 'BOOLEAN DEFAULT false',
+        'notes': 'TEXT',
+        'system_cash_sales': 'DECIMAL DEFAULT 0',
+        'system_card_sales': 'DECIMAL DEFAULT 0',
+        'system_transfer_sales': 'DECIMAL DEFAULT 0',
+        'system_total_sales': 'DECIMAL DEFAULT 0',
+        'my_effective_sales': 'DECIMAL DEFAULT 0',
+        'my_vouchers_accumulated': 'DECIMAL DEFAULT 0',
+        'my_transfers_received': 'DECIMAL DEFAULT 0',
+        'my_total_sales': 'DECIMAL DEFAULT 0',
+        'sales_difference': 'DECIMAL DEFAULT 0',
+        'sales_discrepancy': 'BOOLEAN DEFAULT false',
+      };
+
+      for (const col of allColumns) {
+        if (!existingColumns.includes(col)) {
+          try {
+            await sql.unsafe(`ALTER TABLE cashier_entries ADD COLUMN ${col} ${columnDefs[col]}`);
+          } catch (err: any) {
+            console.warn(`Could not add column ${col}:`, err.message);
           }
         }
       }
 
-      const id = `cashier_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // Step 3: Re-query actual columns after migration attempts
+      try {
+        const finalColResult = await sql`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_name = 'cashier_entries'
+        `;
+        existingColumns = finalColResult.rows.map((r: any) => r.column_name);
+      } catch (e) {
+        console.error('Failed to re-query columns after migration');
+      }
 
-      const result = await sql`
-        INSERT INTO cashier_entries (
-          id, date, initial_balance, cash_sales,
-          cash_denominations, final_cash_balance, expenses, total_expenses,
-          manual_value_from_system, difference, discrepancy, notes,
-          system_cash_sales, system_card_sales, system_transfer_sales, system_total_sales,
-          my_effective_sales, my_vouchers_accumulated, my_transfers_received, my_total_sales,
-          sales_difference, sales_discrepancy
-        )
-        VALUES (
-          ${id}, ${body.date}, ${body.initialBalance}, ${body.cashSales},
-          ${JSON.stringify(body.cashDenominations)}, ${finalCashBalance},
-          ${JSON.stringify(body.expenses || [])}, ${totalExpenses},
-          ${body.manualValueFromSystem}, ${difference}, ${discrepancy}, ${body.notes || null},
-          ${body.systemCashSales || 0}, ${body.systemCardSales || 0}, ${body.systemTransferSales || 0}, ${systemTotalSales},
-          ${body.myEffectiveSales || 0}, ${body.myVouchersAccumulated || 0}, ${body.myTransfersReceived || 0}, ${myTotalSales},
-          ${salesDifference}, ${salesDiscrepancy}
-        )
+      // Step 4: Build dynamic INSERT based on actual existing columns
+      const dataMap: Record<string, any> = {
+        'id': id,
+        'date': body.date,
+        'initial_balance': body.initialBalance,
+        'cash_sales': body.cashSales,
+        'cash_denominations': JSON.stringify(body.cashDenominations),
+        'final_cash_balance': finalCashBalance,
+        'expenses': JSON.stringify(body.expenses || []),
+        'total_expenses': totalExpenses,
+        'manual_value_from_system': body.manualValueFromSystem,
+        'difference': difference,
+        'discrepancy': discrepancy,
+        'notes': body.notes || null,
+        'system_cash_sales': body.systemCashSales || 0,
+        'system_card_sales': body.systemCardSales || 0,
+        'system_transfer_sales': body.systemTransferSales || 0,
+        'system_total_sales': systemTotalSales,
+        'my_effective_sales': body.myEffectiveSales || 0,
+        'my_vouchers_accumulated': body.myVouchersAccumulated || 0,
+        'my_transfers_received': body.myTransfersReceived || 0,
+        'my_total_sales': myTotalSales,
+        'sales_difference': salesDifference,
+        'sales_discrepancy': salesDiscrepancy,
+      };
+
+      // Filter to only columns that exist
+      const insertColumns = Object.keys(dataMap).filter(col => existingColumns.includes(col));
+      const insertValues = insertColumns.map(col => dataMap[col]);
+
+      // Build dynamic query
+      const colsList = insertColumns.join(', ');
+      const placeholders = insertColumns.map((_, i) => `$${i + 1}`).join(', ');
+      
+      const insertQuery = `
+        INSERT INTO cashier_entries (${colsList})
+        VALUES (${placeholders})
         RETURNING *
       `;
+
+      const result = await sql.unsafe(insertQuery, insertValues);
 
       return res.status(201).json({
         success: true,
