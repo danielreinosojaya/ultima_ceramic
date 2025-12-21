@@ -189,6 +189,7 @@ export default async function handler(req: any, res: any) {
       }
 
       // Step 4: Build dynamic INSERT based on actual existing columns
+      // Include ALL possible columns from both old and new schema
       const dataMap: Record<string, any> = {
         'id': id,
         'date': body.date,
@@ -202,6 +203,7 @@ export default async function handler(req: any, res: any) {
         'difference': difference,
         'discrepancy': discrepancy,
         'notes': body.notes || null,
+        // New sales tracking columns
         'system_cash_sales': body.systemCashSales || 0,
         'system_card_sales': body.systemCardSales || 0,
         'system_transfer_sales': body.systemTransferSales || 0,
@@ -212,6 +214,13 @@ export default async function handler(req: any, res: any) {
         'my_total_sales': myTotalSales,
         'sales_difference': salesDifference,
         'sales_discrepancy': salesDiscrepancy,
+        // Legacy columns from old schema (if they exist)
+        'previous_system_balance': body.initialBalance || 0,
+        'total_cash': totalCashCounted,
+        'expected_total': finalCashBalance,
+        'cash_physical': totalCashCounted,
+        'opening_balance': body.initialBalance,
+        'closing_balance': finalCashBalance,
       };
 
       // Filter to only columns that exist
