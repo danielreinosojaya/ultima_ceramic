@@ -221,6 +221,19 @@ export default async function handler(req: any, res: any) {
         'cash_physical': totalCashCounted,
         'opening_balance': body.initialBalance,
         'closing_balance': finalCashBalance,
+        // Additional legacy columns that might have NOT NULL constraints
+        'sales_tc': body.systemCardSales || 0,
+        'sales_tr': body.systemTransferSales || 0,
+        'sales_ef': body.systemCashSales || 0,
+        'sales_total': systemTotalSales,
+        'system_sales': systemTotalSales,
+        'counted_cash': totalCashCounted,
+        'system_cash': body.systemCashSales || 0,
+        'card_sales': body.systemCardSales || 0,
+        'transfer_sales': body.systemTransferSales || 0,
+        'effective_sales': body.myEffectiveSales || 0,
+        'vouchers': body.myVouchersAccumulated || 0,
+        'transfers': body.myTransfersReceived || 0,
       };
 
       // Filter to only columns that exist
