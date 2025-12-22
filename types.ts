@@ -793,9 +793,11 @@ export interface CashierEntry {
   id: string;
   date: string;
   
-  // Input fields - Cuadre de Caja (efectivo solamente)
+  // Input fields - Cuadre de Caja
   initialBalance: number; // Saldo inicial de caja
   cashSales: number; // Ventas en efectivo
+  cardSales?: number; // Ventas con tarjeta
+  transferSales?: number; // Ventas con transferencia
   
   // Counted cash by denomination (cuadre físico de efectivo para calcular saldo final)
   cashDenominations: Record<CashDenomination, number>;

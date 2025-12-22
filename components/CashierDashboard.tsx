@@ -13,6 +13,8 @@ export const CashierDashboard: React.FC = () => {
     date: new Date().toISOString().split('T')[0],
     initialBalance: 0,
     cashSales: 0,
+    cardSales: 0,
+    transferSales: 0,
     cashDenominations: Object.fromEntries(CASH_DENOMINATIONS.map(d => [d.key, 0])),
     expenses: [] as Array<{ id: string; description: string; amount: number }>,
     notes: '',
@@ -125,6 +127,8 @@ export const CashierDashboard: React.FC = () => {
         date: formData.date,
         initialBalance: formData.initialBalance,
         cashSales: formData.cashSales,
+        cardSales: formData.cardSales,
+        transferSales: formData.transferSales,
         cashDenominations: formData.cashDenominations as Record<any, number>,
         expenses: formData.expenses,
         manualValueFromSystem: 0,
@@ -136,6 +140,8 @@ export const CashierDashboard: React.FC = () => {
         date: new Date().toISOString().split('T')[0],
         initialBalance: 0,
         cashSales: 0,
+        cardSales: 0,
+        transferSales: 0,
         cashDenominations: Object.fromEntries(CASH_DENOMINATIONS.map(d => [d.key, 0])),
         expenses: [],
         notes: '',
@@ -293,6 +299,43 @@ export const CashierDashboard: React.FC = () => {
                     placeholder="0.00"
                     required
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-brand-text mb-2">Ventas con Tarjeta</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formatNumberValue(formData.cardSales)}
+                    onChange={e => setFormData({ ...formData, cardSales: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
+                    className="w-full px-4 py-2 border border-brand-border rounded-lg focus:outline-none focus:border-brand-primary"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-brand-text mb-2">Ventas con Transferencia</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formatNumberValue(formData.transferSales)}
+                    onChange={e => setFormData({ ...formData, transferSales: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
+                    className="w-full px-4 py-2 border border-brand-border rounded-lg focus:outline-none focus:border-brand-primary"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              {/* Ingresos Totales del Día */}
+              <div className="mt-6 bg-brand-background p-6 rounded-lg border-2 border-brand-primary">
+                <div className="text-sm text-brand-secondary mb-2">Ingresos Totales del Día</div>
+                <div className="text-4xl font-bold text-brand-primary mb-2">
+                  {formatCurrency((formData.cashSales || 0) + (formData.cardSales || 0) + (formData.transferSales || 0))}
+                </div>
+                <div className="text-xs text-brand-secondary">
+                  Efectivo: {formatCurrency(formData.cashSales)} + Tarjeta: {formatCurrency(formData.cardSales || 0)} + Transferencia: {formatCurrency(formData.transferSales || 0)}
                 </div>
               </div>
             </div>
@@ -503,6 +546,30 @@ export const CashierDashboard: React.FC = () => {
                             </div>
                           </div>
                         </div>
+
+                        {/* Ingresos Totales del Día */}
+                        {((entry.cardSales || 0) > 0 || (entry.transferSales || 0) > 0) && (
+                          <div className="bg-brand-background p-4 rounded-lg border-2 border-brand-primary">
+                            <h4 className="font-bold text-brand-primary mb-3">Ingresos Totales del Día</h4>
+                            <div className="text-3xl font-bold text-brand-primary mb-3">
+                              {formatCurrency((entry.cashSales || 0) + (entry.cardSales || 0) + (entry.transferSales || 0))}
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 text-sm">
+                              <div>
+                                <div className="text-xs text-brand-secondary">Efectivo</div>
+                                <div className="font-semibold">{formatCurrency(entry.cashSales)}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-brand-secondary">Tarjeta</div>
+                                <div className="font-semibold">{formatCurrency(entry.cardSales || 0)}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-brand-secondary">Transferencia</div>
+                                <div className="font-semibold">{formatCurrency(entry.transferSales || 0)}</div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
 
                         {entry.expenses.length > 0 && (
                           <div className="bg-brand-background p-4 rounded-lg">

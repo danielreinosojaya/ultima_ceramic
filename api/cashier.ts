@@ -6,6 +6,8 @@ interface CashierEntryBody {
   date: string;
   initialBalance: number;
   cashSales: number;
+  cardSales?: number;
+  transferSales?: number;
   cashDenominations: Record<string, number>;
   expenses: Array<{ id: string; description: string; amount: number }>;
   manualValueFromSystem: number;
@@ -100,6 +102,8 @@ export default async function handler(req: any, res: any) {
       // Step 2: Add all columns safely using individual ALTER commands
       const allColumns = [
         'cash_sales',
+        'card_sales',
+        'transfer_sales',
         'final_cash_balance',
         'expenses',
         'total_expenses',
@@ -124,6 +128,8 @@ export default async function handler(req: any, res: any) {
       // Add missing columns one by one
       const columnDefs: Record<string, string> = {
         'cash_sales': 'DECIMAL DEFAULT 0',
+        'card_sales': 'DECIMAL DEFAULT 0',
+        'transfer_sales': 'DECIMAL DEFAULT 0',
         'final_cash_balance': 'DECIMAL DEFAULT 0',
         'expenses': "JSONB DEFAULT '[]'::jsonb",
         'total_expenses': 'DECIMAL DEFAULT 0',
@@ -161,6 +167,8 @@ export default async function handler(req: any, res: any) {
         'date': body.date,
         'initial_balance': body.initialBalance,
         'cash_sales': body.cashSales,
+        'card_sales': body.cardSales || 0,
+        'transfer_sales': body.transferSales || 0,
         'cash_denominations': JSON.stringify(body.cashDenominations),
         'final_cash_balance': finalCashBalance,
         'expenses': JSON.stringify(body.expenses || []),
