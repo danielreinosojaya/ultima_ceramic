@@ -10,14 +10,6 @@ interface CashierEntryBody {
   expenses: Array<{ id: string; description: string; amount: number }>;
   manualValueFromSystem: number;
   notes?: string;
-  
-  // Cuadre de Ventas Totales
-  systemCashSales?: number;
-  systemCardSales?: number;
-  systemTransferSales?: number;
-  myEffectiveSales?: number;
-  myVouchersAccumulated?: number;
-  myTransfersReceived?: number;
 }
 
 function toCamelCase(obj: any): any {
@@ -86,12 +78,6 @@ export default async function handler(req: any, res: any) {
       const difference = finalCashBalance - body.manualValueFromSystem;
       const discrepancy = Math.abs(difference) > 0.01; // Allow small floating point errors
 
-      // Calculate sales totals
-      const systemTotalSales = (body.systemCashSales || 0) + (body.systemCardSales || 0) + (body.systemTransferSales || 0);
-      const myTotalSales = (body.myEffectiveSales || 0) + (body.myVouchersAccumulated || 0) + (body.myTransfersReceived || 0);
-      const salesDifference = systemTotalSales - myTotalSales;
-      const salesDiscrepancy = Math.abs(salesDifference) > 0.01;
-
       const id = `cashier_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
       // Step 1: Ensure minimal table exists
@@ -120,16 +106,6 @@ export default async function handler(req: any, res: any) {
         'difference',
         'discrepancy',
         'notes',
-        'system_cash_sales',
-        'system_card_sales',
-        'system_transfer_sales',
-        'system_total_sales',
-        'my_effective_sales',
-        'my_vouchers_accumulated',
-        'my_transfers_received',
-        'my_total_sales',
-        'sales_difference',
-        'sales_discrepancy',
       ];
 
       // Get existing columns to avoid duplicates
@@ -154,16 +130,6 @@ export default async function handler(req: any, res: any) {
         'difference': 'DECIMAL DEFAULT 0',
         'discrepancy': 'BOOLEAN DEFAULT false',
         'notes': 'TEXT',
-        'system_cash_sales': 'DECIMAL DEFAULT 0',
-        'system_card_sales': 'DECIMAL DEFAULT 0',
-        'system_transfer_sales': 'DECIMAL DEFAULT 0',
-        'system_total_sales': 'DECIMAL DEFAULT 0',
-        'my_effective_sales': 'DECIMAL DEFAULT 0',
-        'my_vouchers_accumulated': 'DECIMAL DEFAULT 0',
-        'my_transfers_received': 'DECIMAL DEFAULT 0',
-        'my_total_sales': 'DECIMAL DEFAULT 0',
-        'sales_difference': 'DECIMAL DEFAULT 0',
-        'sales_discrepancy': 'BOOLEAN DEFAULT false',
       };
 
       for (const col of allColumns) {
@@ -203,17 +169,6 @@ export default async function handler(req: any, res: any) {
         'difference': difference,
         'discrepancy': discrepancy,
         'notes': body.notes || null,
-        // New sales tracking columns
-        'system_cash_sales': body.systemCashSales || 0,
-        'system_card_sales': body.systemCardSales || 0,
-        'system_transfer_sales': body.systemTransferSales || 0,
-        'system_total_sales': systemTotalSales,
-        'my_effective_sales': body.myEffectiveSales || 0,
-        'my_vouchers_accumulated': body.myVouchersAccumulated || 0,
-        'my_transfers_received': body.myTransfersReceived || 0,
-        'my_total_sales': myTotalSales,
-        'sales_difference': salesDifference,
-        'sales_discrepancy': salesDiscrepancy,
         // Legacy columns from old schema (if they exist)
         'previous_system_balance': body.initialBalance || 0,
         'total_cash': totalCashCounted,
@@ -221,19 +176,7 @@ export default async function handler(req: any, res: any) {
         'cash_physical': totalCashCounted,
         'opening_balance': body.initialBalance,
         'closing_balance': finalCashBalance,
-        // Additional legacy columns that might have NOT NULL constraints
-        'sales_tc': body.systemCardSales || 0,
-        'sales_tr': body.systemTransferSales || 0,
-        'sales_ef': body.systemCashSales || 0,
-        'sales_total': systemTotalSales,
-        'system_sales': systemTotalSales,
         'counted_cash': totalCashCounted,
-        'system_cash': body.systemCashSales || 0,
-        'card_sales': body.systemCardSales || 0,
-        'transfer_sales': body.systemTransferSales || 0,
-        'effective_sales': body.myEffectiveSales || 0,
-        'vouchers': body.myVouchersAccumulated || 0,
-        'transfers': body.myTransfersReceived || 0,
       };
 
       // Filter to only columns that exist

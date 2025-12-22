@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Horarios Especiales - Ceramicalma</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #F4F2F1 0%, #E8E3D6 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+            color: #4A4540;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .header h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: 3.5rem;
+            color: #8D7B68;
+            margin-bottom: 10px;
+            letter-spacing: 2px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            color: #A47551;
+            font-weight: 300;
+            letter-spacing: 1px;
+        }
+
+        .subtitle {
+            text-align: center;
+            font-family: 'Playfair Display', serif;
+            font-size: 1.8rem;
+            color: #8D7B68;
+            margin: 50px 0 30px;
+            font-weight: 600;
+        }
+
+        .schedule-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 30px;
+            margin-bottom: 50px;
+        }
+
+        .day-card {
+            background: linear-gradient(145deg, #F9F7F5, #E8E3D6);
+            border-radius: 30px;
+            padding: 30px;
+            box-shadow: 
+                20px 20px 60px #d4d1ca,
+                -20px -20px 60px #ffffff;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .day-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 
+                25px 25px 70px #d4d1ca,
+                -25px -25px 70px #ffffff;
+        }
+
+        .day-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, #A47551, #C8A18F);
+        }
+
+        .day-card.closed {
+            opacity: 0.7;
+        }
+
+        .day-card.closed::before {
+            background: linear-gradient(90deg, #958985, #C8A18F);
+        }
+
+        .day-date {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.5rem;
+            color: #8D7B68;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .day-name {
+            font-size: 1.1rem;
+            color: #A47551;
+            margin-bottom: 20px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .hours-section {
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 
+                inset 5px 5px 10px #e8e5de,
+                inset -5px -5px 10px #ffffff;
+        }
+
+        .studio-hours {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid rgba(141, 123, 104, 0.2);
+        }
+
+        .studio-label {
+            font-size: 0.9rem;
+            color: #958985;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .time-range {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.8rem;
+            color: #8D7B68;
+            font-weight: 700;
+        }
+
+        .staff-schedule {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .staff-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: linear-gradient(135deg, rgba(255,255,255,0.8), rgba(248,246,244,0.8));
+            padding: 15px 20px;
+            border-radius: 15px;
+            box-shadow: 
+                3px 3px 8px rgba(212, 209, 202, 0.4),
+                -3px -3px 8px rgba(255, 255, 255, 0.8);
+        }
+
+        .staff-name {
+            font-weight: 600;
+            color: #4A4540;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .staff-name::before {
+            content: '';
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #A47551, #C8A18F);
+            box-shadow: 0 2px 4px rgba(164, 117, 81, 0.3);
+        }
+
+        .staff-hours {
+            font-family: 'Inter', sans-serif;
+            color: #8D7B68;
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .closed-badge {
+            text-align: center;
+            font-size: 1.5rem;
+            color: #958985;
+            font-weight: 600;
+            padding: 30px;
+            font-family: 'Playfair Display', serif;
+            letter-spacing: 2px;
+        }
+
+        .normal-schedule-note {
+            background: linear-gradient(145deg, #ffffff, #F4F2F1);
+            border-radius: 20px;
+            padding: 25px;
+            text-align: center;
+            box-shadow: 
+                15px 15px 40px #d4d1ca,
+                -15px -15px 40px #ffffff;
+            margin-top: 20px;
+        }
+
+        .normal-schedule-note p {
+            color: #8D7B68;
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+
+        .info-banner {
+            background: linear-gradient(135deg, #A47551, #C8A18F);
+            color: white;
+            padding: 30px;
+            border-radius: 25px;
+            text-align: center;
+            margin: 40px 0;
+            box-shadow: 
+                20px 20px 60px rgba(141, 123, 104, 0.3),
+                -20px -20px 60px rgba(255, 255, 255, 0.1);
+        }
+
+        .info-banner h3 {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.8rem;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+
+        .info-banner p {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            font-weight: 300;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2.5rem;
+            }
+
+            .schedule-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .time-range {
+                font-size: 1.4rem;
+            }
+        }
+
+        .legend {
+            background: linear-gradient(145deg, #ffffff, #F9F7F5);
+            border-radius: 25px;
+            padding: 30px;
+            margin: 40px 0;
+            box-shadow: 
+                15px 15px 40px #d4d1ca,
+                -15px -15px 40px #ffffff;
+        }
+
+        .legend h3 {
+            font-family: 'Playfair Display', serif;
+            color: #8D7B68;
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .legend-items {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 15px;
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #A47551, #C8A18F);
+            box-shadow: 0 2px 4px rgba(164, 117, 81, 0.3);
+        }
+
+        .legend-text {
+            color: #4A4540;
+            font-size: 0.95rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Ceramicalma</h1>
+            <p>Horarios Especiales Festividades</p>
+        </div>
+
+        <div class="info-banner">
+            <h3>🎄 Temporada de Festividades 🎄</h3>
+            <p>Horarios especiales del 22 de diciembre al 5 de enero</p>
+        </div>
+
+        <div class="legend">
+            <h3>Nuestro Equipo</h3>
+            <div class="legend-items">
+                <div class="legend-item">
+                    <div class="legend-dot"></div>
+                    <div class="legend-text">
+                        <strong>Aaron:</strong> Apertura del estudio (3 horas)
+                    </div>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot"></div>
+                    <div class="legend-text">
+                        <strong>Naty:</strong> Cierre del estudio (6 horas)
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h2 class="subtitle">Diciembre 2025</h2>
+        
+        <div class="schedule-grid">
+            <!-- Lunes 22 -->
+            <div class="day-card">
+                <div class="day-date">22 Diciembre</div>
+                <div class="day-name">Lunes</div>
+                <div class="hours-section">
+                    <div class="studio-hours">
+                        <span class="studio-label">Estudio Abierto</span>
+                        <span class="time-range">12:00 - 20:00</span>
+                    </div>
+                    <div class="staff-schedule">
+                        <div class="staff-row">
+                            <span class="staff-name">Aaron</span>
+                            <span class="staff-hours">12:00 - 15:00</span>
+                        </div>
+                        <div class="staff-row">
+                            <span class="staff-name">Naty</span>
+                            <span class="staff-hours">14:00 - 20:00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Martes 23 -->
+            <div class="day-card">
+                <div class="day-date">23 Diciembre</div>
+                <div class="day-name">Martes</div>
+                <div class="hours-section">
+                    <div class="studio-hours">
+                        <span class="studio-label">Estudio Abierto</span>
+                        <span class="time-range">10:00 - 21:00</span>
+                    </div>
+                    <div class="staff-schedule">
+                        <div class="staff-row">
+                            <span class="staff-name">Aaron</span>
+                            <span class="staff-hours">10:00 - 13:00</span>
+                        </div>
+                        <div class="staff-row">
+                            <span class="staff-name">Naty</span>
+                            <span class="staff-hours">15:00 - 21:00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Miércoles 24 -->
+            <div class="day-card closed">
+                <div class="day-date">24 Diciembre</div>
+                <div class="day-name">Miércoles</div>
+                <div class="hours-section">
+                    <div class="closed-badge">🎄 CERRADO 🎄</div>
+                </div>
+            </div>
+
+            <!-- Jueves 25 -->
+            <div class="day-card closed">
+                <div class="day-date">25 Diciembre</div>
+                <div class="day-name">Jueves</div>
+                <div class="hours-section">
+                    <div class="closed-badge">🎁 CERRADO 🎁</div>
+                </div>
+            </div>
+
+            <!-- Viernes 26 -->
+            <div class="day-card">
+                <div class="day-date">26 Diciembre</div>
+                <div class="day-name">Viernes</div>
+                <div class="hours-section">
+                    <div class="studio-hours">
+                        <span class="studio-label">Estudio Abierto</span>
+                        <span class="time-range">10:00 - 21:00</span>
+                    </div>
+                    <div class="staff-schedule">
+                        <div class="staff-row">
+                            <span class="staff-name">Aaron</span>
+                            <span class="staff-hours">10:00 - 13:00</span>
+                        </div>
+                        <div class="staff-row">
+                            <span class="staff-name">Naty</span>
+                            <span class="staff-hours">15:00 - 21:00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sábado 27 -->
+            <div class="day-card">
+                <div class="day-date">27 Diciembre</div>
+                <div class="day-name">Sábado</div>
+                <div class="hours-section">
+                    <div class="studio-hours">
+                        <span class="studio-label">Estudio Abierto</span>
+                        <span class="time-range">09:00 - 20:00</span>
+                    </div>
+                    <div class="staff-schedule">
+                        <div class="staff-row">
+                            <span class="staff-name">Naty</span>
+                            <span class="staff-hours">09:00 - 20:00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Domingo 28 -->
+            <div class="day-card">
+                <div class="day-date">28 Diciembre</div>
+                <div class="day-name">Domingo</div>
+                <div class="hours-section">
+                    <div class="studio-hours">
+                        <span class="studio-label">Estudio Abierto</span>
+                        <span class="time-range">10:00 - 18:00</span>
+                    </div>
+                    <div class="staff-schedule">
+                        <div class="staff-row">
+                            <span class="staff-name">Naty</span>
+                            <span class="staff-hours">10:00 - 17:00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lunes 29 -->
+            <div class="day-card">
+                <div class="day-date">29 Diciembre</div>
+                <div class="day-name">Lunes</div>
+                <div class="hours-section">
+                    <div class="studio-hours">
+                        <span class="studio-label">Estudio Abierto</span>
+                        <span class="time-range">12:00 - 20:00</span>
+                    </div>
+                    <div class="staff-schedule">
+                        <div class="staff-row">
+                            <span class="staff-name">Aaron</span>
+                            <span class="staff-hours">12:00 - 15:00</span>
+                        </div>
+                        <div class="staff-row">
+                            <span class="staff-name">Naty</span>
+                            <span class="staff-hours">14:00 - 20:00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Martes 30 -->
+            <div class="day-card">
+                <div class="day-date">30 Diciembre</div>
+                <div class="day-name">Martes</div>
+                <div class="hours-section">
+                    <div class="studio-hours">
+                        <span class="studio-label">Estudio Abierto</span>
+                        <span class="time-range">10:00 - 21:00</span>
+                    </div>
+                    <div class="staff-schedule">
+                        <div class="staff-row">
+                            <span class="staff-name">Aaron</span>
+                            <span class="staff-hours">10:00 - 13:00</span>
+                        </div>
+                        <div class="staff-row">
+                            <span class="staff-name">Naty</span>
+                            <span class="staff-hours">15:00 - 21:00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Miércoles 31 -->
+            <div class="day-card closed">
+                <div class="day-date">31 Diciembre</div>
+                <div class="day-name">Miércoles</div>
+                <div class="hours-section">
+                    <div class="closed-badge">🎊 CERRADO 🎊</div>
+                </div>
+            </div>
+        </div>
+
+        <h2 class="subtitle">Enero 2026</h2>
+        
+        <div class="schedule-grid">
+            <!-- Jueves 1 -->
+            <div class="day-card closed">
+                <div class="day-date">1 Enero</div>
+                <div class="day-name">Jueves</div>
+                <div class="hours-section">
+                    <div class="closed-badge">🎆 CERRADO 🎆</div>
+                </div>
+            </div>
+
+            <!-- Viernes 2 -->
+            <div class="day-card closed">
+                <div class="day-date">2 Enero</div>
+                <div class="day-name">Viernes</div>
+                <div class="hours-section">
+                    <div class="closed-badge">CERRADO</div>
+                </div>
+            </div>
+
+            <!-- Sábado 3 -->
+            <div class="day-card">
+                <div class="day-date">3 Enero</div>
+                <div class="day-name">Sábado</div>
+                <div class="hours-section">
+                    <div class="studio-hours">
+                        <span class="studio-label">Estudio Abierto</span>
+                        <span class="time-range">09:00 - 20:00</span>
+                    </div>
+                    <div class="staff-schedule">
+                        <div class="staff-row">
+                            <span class="staff-name">Naty</span>
+                            <span class="staff-hours">09:00 - 20:00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Domingo 4 -->
+            <div class="day-card">
+                <div class="day-date">4 Enero</div>
+                <div class="day-name">Domingo</div>
+                <div class="hours-section">
+                    <div class="studio-hours">
+                        <span class="studio-label">Estudio Abierto</span>
+                        <span class="time-range">10:00 - 18:00</span>
+                    </div>
+                    <div class="staff-schedule">
+                        <div class="staff-row">
+                            <span class="staff-name">Naty</span>
+                            <span class="staff-hours">10:00 - 17:00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lunes 5 (cerrado normal) -->
+            <div class="day-card closed">
+                <div class="day-date">5 Enero</div>
+                <div class="day-name">Lunes</div>
+                <div class="normal-schedule-note">
+                    <p>Cerrado - Horario Normal</p>
+                    <p style="font-size: 0.9rem; margin-top: 10px; color: #958985;">(Los lunes cerramos regularmente)</p>
+                </div>
+            </div>
+
+            <!-- Martes 6 en adelante -->
+            <div class="day-card">
+                <div class="day-date">6 Enero</div>
+                <div class="day-name">Martes</div>
+                <div class="normal-schedule-note">
+                    <p>✨ Horario Normal ✨</p>
+                    <p style="font-size: 0.9rem; margin-top: 10px; color: #958985;">A partir de esta fecha retomamos horarios regulares</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="info-banner">
+            <h3>¡Felices Fiestas! 🎉</h3>
+        </div>
+    </div>
+</body>
+</html>
