@@ -814,23 +814,6 @@ export interface CashierEntry {
   difference?: number; // finalCashBalance - manualValueFromSystem
   discrepancy?: boolean; // Hay diferencia
   
-  // ===== NUEVO: Cuadre de Ventas Totales =====
-  // Sistema (Lo que dice Contpago/Sistema)
-  systemCashSales?: number; // Ventas en efectivo según sistema
-  systemCardSales?: number; // Ventas en tarjeta según sistema
-  systemTransferSales?: number; // Ventas en transferencia según sistema
-  systemTotalSales?: number; // Total ventas según sistema (cash + card + transfer) - calculado
-  
-  // Lo que TÚ CONTAS
-  myEffectiveSales?: number; // Mis ventas en efectivo
-  myVouchersAccumulated?: number; // Mis vouchers acumulados (ventas TC)
-  myTransfersReceived?: number; // Mis transferencias recibidas
-  myTotalSales?: number; // Mi total (efectivo + vouchers + transfers) - calculado
-  
-  // Validación de cuadre de ventas
-  salesDifference?: number; // systemTotalSales - myTotalSales
-  salesDiscrepancy?: boolean; // Hay diferencia en ventas
-  
   // Metadata
   createdAt: string;
   updatedAt: string;

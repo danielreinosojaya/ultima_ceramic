@@ -16,13 +16,6 @@ export const CashierDashboard: React.FC = () => {
     cashDenominations: Object.fromEntries(CASH_DENOMINATIONS.map(d => [d.key, 0])),
     expenses: [] as Array<{ id: string; description: string; amount: number }>,
     notes: '',
-    // Cuadre de Ventas Totales
-    systemCashSales: 0,
-    systemCardSales: 0,
-    systemTransferSales: 0,
-    myEffectiveSales: 0,
-    myVouchersAccumulated: 0,
-    myTransfersReceived: 0,
   });
 
   const [entries, setEntries] = useState<CashierEntry[]>([]);
@@ -121,14 +114,6 @@ export const CashierDashboard: React.FC = () => {
     };
   }
 
-  function calculateSystemTotalSales() {
-    return (formData.systemCashSales || 0) + (formData.systemCardSales || 0) + (formData.systemTransferSales || 0);
-  }
-
-  function calculateMyTotalSales() {
-    return (formData.myEffectiveSales || 0) + (formData.myVouchersAccumulated || 0) + (formData.myTransfersReceived || 0);
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -144,12 +129,6 @@ export const CashierDashboard: React.FC = () => {
         expenses: formData.expenses,
         manualValueFromSystem: 0,
         notes: formData.notes,
-        systemCashSales: formData.systemCashSales,
-        systemCardSales: formData.systemCardSales,
-        systemTransferSales: formData.systemTransferSales,
-        myEffectiveSales: formData.myEffectiveSales,
-        myVouchersAccumulated: formData.myVouchersAccumulated,
-        myTransfersReceived: formData.myTransfersReceived,
       });
 
       setSuccess('Cuadre guardado exitosamente');
@@ -160,12 +139,6 @@ export const CashierDashboard: React.FC = () => {
         cashDenominations: Object.fromEntries(CASH_DENOMINATIONS.map(d => [d.key, 0])),
         expenses: [],
         notes: '',
-        systemCashSales: 0,
-        systemCardSales: 0,
-        systemTransferSales: 0,
-        myEffectiveSales: 0,
-        myVouchersAccumulated: 0,
-        myTransfersReceived: 0,
       });
 
       await loadEntries();
@@ -454,163 +427,6 @@ export const CashierDashboard: React.FC = () => {
             </div>
 
             <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-              <h2 className="text-2xl font-bold text-brand-primary mb-6">Cuadre de Ventas Totales</h2>
-              <p className="text-sm text-brand-secondary mb-6">Compara las ventas totales del sistema Contifico con lo que contaste: Efectivo + Vouchers (TC) + Transferencias</p>
-
-              <div className="grid grid-cols-1 gap-6 mb-6">
-                {/* Sistema (Contifico) */}
-                <div className="border-2 border-brand-border rounded-lg p-6 bg-brand-background">
-                  <h3 className="text-lg font-bold text-brand-primary mb-4">Sistema (Contifico)</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-brand-text mb-2">Ventas en Efectivo</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={formData.systemCashSales === 0 ? '' : String(formData.systemCashSales)}
-                        onChange={e => setFormData({ ...formData, systemCashSales: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
-                        className="w-full px-4 py-2 border border-brand-border rounded-lg focus:outline-none focus:border-brand-primary"
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-brand-text mb-2">Ventas en Tarjeta</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={formData.systemCardSales === 0 ? '' : String(formData.systemCardSales)}
-                        onChange={e => setFormData({ ...formData, systemCardSales: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
-                        className="w-full px-4 py-2 border border-brand-border rounded-lg focus:outline-none focus:border-brand-primary"
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-brand-text mb-2">Ventas en Transferencia</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={formData.systemTransferSales === 0 ? '' : String(formData.systemTransferSales)}
-                        onChange={e => setFormData({ ...formData, systemTransferSales: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
-                        className="w-full px-4 py-2 border border-brand-border rounded-lg focus:outline-none focus:border-brand-primary"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-4 p-4 bg-white rounded-lg border-2 border-brand-primary">
-                    <div className="text-sm text-brand-secondary mb-1">Total Ventas Sistema</div>
-                    <div className="text-3xl font-bold text-brand-primary">
-                      {formatCurrency(calculateSystemTotalSales())}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Lo que contaste */}
-                <div className="border-2 border-brand-border rounded-lg p-6 bg-brand-background">
-                  <h3 className="text-lg font-bold text-brand-primary mb-4">Lo que TÚ Contaste</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-brand-text mb-2">Mis Ventas en Efectivo</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={formData.myEffectiveSales === 0 ? '' : String(formData.myEffectiveSales)}
-                        onChange={e => setFormData({ ...formData, myEffectiveSales: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
-                        className="w-full px-4 py-2 border border-brand-border rounded-lg focus:outline-none focus:border-brand-primary"
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-brand-text mb-2">Mis Vouchers Acumulados (TC)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={formData.myVouchersAccumulated === 0 ? '' : String(formData.myVouchersAccumulated)}
-                        onChange={e => setFormData({ ...formData, myVouchersAccumulated: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
-                        className="w-full px-4 py-2 border border-brand-border rounded-lg focus:outline-none focus:border-brand-primary"
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-brand-text mb-2">Mis Transferencias Recibidas</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={formData.myTransfersReceived === 0 ? '' : String(formData.myTransfersReceived)}
-                        onChange={e => setFormData({ ...formData, myTransfersReceived: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
-                        className="w-full px-4 py-2 border border-brand-border rounded-lg focus:outline-none focus:border-brand-primary"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-4 p-4 bg-white rounded-lg border-2 border-brand-primary">
-                    <div className="text-sm text-brand-secondary mb-1">Mi Total de Ventas</div>
-                    <div className="text-3xl font-bold text-brand-primary">
-                      {formatCurrency(calculateMyTotalSales())}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Validación de cuadre */}
-                {(calculateSystemTotalSales() > 0 || calculateMyTotalSales() > 0) && (
-                  <div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      <div className="bg-brand-background p-4 rounded-lg">
-                        <div className="text-sm text-brand-secondary mb-1">Total Sistema</div>
-                        <div className="text-2xl font-bold text-brand-primary">
-                          {formatCurrency(calculateSystemTotalSales())}
-                        </div>
-                      </div>
-                      <div className="bg-brand-background p-4 rounded-lg">
-                        <div className="text-sm text-brand-secondary mb-1">Mi Total</div>
-                        <div className="text-2xl font-bold text-brand-primary">
-                          {formatCurrency(calculateMyTotalSales())}
-                        </div>
-                      </div>
-                    </div>
-                    {(() => {
-                      const salesDiff = calculateSystemTotalSales() - calculateMyTotalSales();
-                      const isCuadrado = Math.abs(salesDiff) <= 0.01;
-                      
-                      let statusColor = 'bg-green-100 text-green-700';
-                      let statusIcon = '✓';
-                      let statusText = 'Cuadre Correcto';
-
-                      if (!isCuadrado) {
-                        if (calculateMyTotalSales() < calculateSystemTotalSales()) {
-                          statusColor = 'bg-red-100 text-red-700';
-                          statusIcon = '❌';
-                          statusText = 'Faltante en Ventas';
-                        } else {
-                          statusColor = 'bg-yellow-100 text-yellow-700';
-                          statusIcon = '⚠️';
-                          statusText = 'Sobrante en Ventas';
-                        }
-                      }
-
-                      return (
-                        <div className={`${statusColor} p-6 rounded-lg border-2 transition`}>
-                          <div className="flex items-center justify-between mb-4">
-                            <div className="text-3xl">{statusIcon}</div>
-                            <div className="text-2xl font-bold">{statusText}</div>
-                          </div>
-                          <div className="text-sm font-semibold">
-                            Diferencia: {formatCurrency(Math.abs(salesDiff))}
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
               <label className="block text-sm font-semibold text-brand-text mb-2">Notas (Opcional)</label>
               <textarea
                 value={formData.notes}
@@ -709,26 +525,6 @@ export const CashierDashboard: React.FC = () => {
                           </div>
                         )}
 
-                        {/* Cuadre de Ventas en historial */}
-                        {(entry.systemTotalSales || entry.myTotalSales) && (
-                          <div className="bg-brand-background p-4 rounded-lg">
-                            <h4 className="font-bold text-brand-primary mb-3">Cuadre de Ventas</h4>
-                            <div className="grid grid-cols-2 gap-4 mb-4">
-                              <div>
-                                <div className="text-xs text-brand-secondary">Sistema</div>
-                                <div className="text-lg font-bold text-brand-primary">{formatCurrency(entry.systemTotalSales || 0)}</div>
-                              </div>
-                              <div>
-                                <div className="text-xs text-brand-secondary">Tu Total</div>
-                                <div className="text-lg font-bold text-brand-primary">{formatCurrency(entry.myTotalSales || 0)}</div>
-                              </div>
-                            </div>
-                            <div className="text-xs text-brand-secondary space-y-1">
-                              <div>Sistema: {formatCurrency(entry.systemCashSales || 0)} (E) + {formatCurrency(entry.systemCardSales || 0)} (TC) + {formatCurrency(entry.systemTransferSales || 0)} (Tf)</div>
-                              <div>Tú: {formatCurrency(entry.myEffectiveSales || 0)} (E) + {formatCurrency(entry.myVouchersAccumulated || 0)} (V) + {formatCurrency(entry.myTransfersReceived || 0)} (Tf)</div>
-                            </div>
-                          </div>
-                        )}
                       </div>
                     )}
                   </div>
