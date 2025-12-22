@@ -51,6 +51,8 @@ export const cashierService = {
     date: string;
     initialBalance: number;
     cashSales: number;
+    cardSales?: number;
+    transferSales?: number;
     cashDenominations: Record<CashDenomination, number>;
     expenses: Array<{ id: string; description: string; amount: number }>;
     manualValueFromSystem: number;
