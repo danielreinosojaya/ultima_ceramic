@@ -82,14 +82,16 @@ export const PieceModal: React.FC<PieceModalProps> = ({ piece, onSave, onClose }
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file
+    // Validate file type
     if (!file.type.startsWith('image/')) {
-      setError('Por favor selecciona un archivo de imagen');
+      setError('Por favor selecciona un archivo de imagen (JPG, PNG, WebP)');
       return;
     }
 
-    if (file.size > 500 * 1024) { // 500KB limit for file size
-      setError('La imagen no puede ser mayor a 500KB. Por favor redimensiona la imagen.');
+    // Check file size limit (5MB)
+    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+    if (file.size > MAX_FILE_SIZE) {
+      setError(`La imagen es demasiado grande (${(file.size / 1024 / 1024).toFixed(1)}MB). El máximo permitido es 5MB.`);
       return;
     }
 
@@ -97,28 +99,100 @@ export const PieceModal: React.FC<PieceModalProps> = ({ piece, onSave, onClose }
       setIsUploadingImage(true);
       setError(null);
 
-      // Create a data URL for preview
+      // Compress image if needed
+      const compressedFile = await compressImage(file);
+      
+      // Convert to base64
       const reader = new FileReader();
       reader.onload = (event) => {
         const dataUrl = event.target?.result as string;
         
-        // Check if the resulting base64 is too large (should not exceed 1MB as base64)
-        if (dataUrl.length > 1024 * 1024) {
-          setError('La imagen convertida es demasiado grande. Por favor usa una imagen más pequeña.');
+        // Final size check (base64 shouldn't exceed 2MB for DB storage)
+        const base64Size = dataUrl.length;
+        const base64MB = base64Size / 1024 / 1024;
+        
+        if (base64MB > 2) {
+          setError(`La imagen es demasiado grande después de procesar (${base64MB.toFixed(1)}MB). Intenta con una imagen más pequeña o de menor resolución.`);
           setIsUploadingImage(false);
           return;
         }
         
+        console.log(`[PieceModal] Image processed: ${(compressedFile.size / 1024).toFixed(0)}KB file -> ${base64MB.toFixed(2)}MB base64`);
         setImagePreview(dataUrl);
         setFormData(prev => ({ ...prev, imageUrl: dataUrl }));
+        setIsUploadingImage(false);
       };
-      reader.readAsDataURL(file);
+      
+      reader.onerror = () => {
+        setError('Error al leer el archivo de imagen');
+        setIsUploadingImage(false);
+      };
+      
+      reader.readAsDataURL(compressedFile);
     } catch (err) {
-      setError('Error al procesar la imagen');
-      console.error('Error handling image file:', err);
-    } finally {
+      setError(err instanceof Error ? err.message : 'Error al procesar la imagen');
+      console.error('[PieceModal] Error handling image file:', err);
       setIsUploadingImage(false);
     }
+  };
+
+  // Helper function to compress images
+  const compressImage = (file: File): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          
+          // Max dimensions 1200x1200
+          const MAX_DIMENSION = 1200;
+          if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+            if (width > height) {
+              height = (height / width) * MAX_DIMENSION;
+              width = MAX_DIMENSION;
+            } else {
+              width = (width / height) * MAX_DIMENSION;
+              height = MAX_DIMENSION;
+            }
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('No se pudo crear contexto de canvas'));
+            return;
+          }
+          
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Convert to blob with quality adjustment
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                reject(new Error('Error al comprimir imagen'));
+                return;
+              }
+              const compressedFile = new File([blob], file.name, {
+                type: file.type,
+                lastModified: Date.now(),
+              });
+              resolve(compressedFile);
+            },
+            file.type,
+            0.85 // Quality 85%
+          );
+        };
+        img.onerror = () => reject(new Error('Error al cargar imagen'));
+      };
+      reader.onerror = () => reject(new Error('Error al leer archivo'));
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -287,7 +361,7 @@ export const PieceModal: React.FC<PieceModalProps> = ({ piece, onSave, onClose }
                 onChange={handleImageFileSelect}
                 className="hidden"
               />
-              <p className="text-xs text-brand-secondary">Máximo 5MB. Soporta JPG, PNG, WebP</p>
+              <p className="text-xs text-brand-secondary">Máximo 5MB. Las imágenes se optimizan automáticamente. Soporta JPG, PNG, WebP</p>
             </div>
 
             {/* Image Preview or URL */}
