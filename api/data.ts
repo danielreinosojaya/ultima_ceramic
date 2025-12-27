@@ -2292,22 +2292,37 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         case 'deleteCustomer': {
             const { email } = req.body;
             if (!email) {
-                return res.status(400).json({ error: 'Email is required.' });
+                return res.status(400).json({ 
+                    success: false,
+                    error: 'Email is required.' 
+                });
             }
             
-            // Use the complete deletion function from lib/database
-            const { deleteCustomerByEmail } = await import('../lib/database.js');
-            const result = await deleteCustomerByEmail(email);
-            
-            if (result) {
-                return res.status(200).json({ 
-                    success: true, 
-                    message: 'Customer and related data deleted successfully' 
-                });
-            } else {
-                return res.status(404).json({ 
+            try {
+                console.log('[DELETE CUSTOMER] Attempting to delete customer with email:', email);
+                
+                // Use the complete deletion function from lib/database
+                const { deleteCustomerByEmail } = await import('../lib/database.js');
+                const result = await deleteCustomerByEmail(email);
+                
+                console.log('[DELETE CUSTOMER] Deletion result:', result);
+                
+                if (result) {
+                    return res.status(200).json({ 
+                        success: true, 
+                        message: 'Customer and related data deleted successfully' 
+                    });
+                } else {
+                    return res.status(404).json({ 
+                        success: false, 
+                        error: 'Customer not found or no data to delete' 
+                    });
+                }
+            } catch (error) {
+                console.error('[DELETE CUSTOMER] Error:', error);
+                return res.status(500).json({ 
                     success: false, 
-                    error: 'Customer not found or no data to delete' 
+                    error: error instanceof Error ? error.message : 'Unknown error deleting customer' 
                 });
             }
         }
