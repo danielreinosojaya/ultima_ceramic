@@ -499,6 +499,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         metadata: row.metadata || null
                     }));
                     data = formatted;
+                    // ✅ OPTIMIZACIÓN: Cache CDN 5 minutos (datos dinámicos)
+                    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
                 } catch (error) {
                     console.error('Error al listar giftcards:', error);
                     data = [];
@@ -532,6 +534,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     }));
                     console.debug('[API] listGiftcards fetched rows:', rows.length);
                     data = formattedG;
+                    // ✅ OPTIMIZACIÓN: Cache CDN 5 minutos (datos dinámicos)
+                    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
                 } catch (err) {
                     console.error('Error listing giftcards:', err);
                     data = [];
@@ -583,6 +587,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                 case 'instructors': {
                     const { rows: instructors } = await sql`SELECT * FROM instructors ORDER BY name ASC`;
                     data = instructors.map(toCamelCase);
+                    // ✅ OPTIMIZACIÓN: Cache CDN 1 hora (datos muy estables)
+                    res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
                     break;
                 }
                 case 'deliveries': {
@@ -620,11 +626,13 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     break;
                 }
                 case 'getCustomers': {
-                    // Get all unique customers from bookings
+                    // Get all unique customers from bookings first
                     const { rows: bookings } = await sql`SELECT * FROM bookings ORDER BY created_at DESC`;
                     const validBookings = bookings.filter(booking => booking && typeof booking === 'object');
                     const parsedBookings = validBookings.map(parseBookingFromDB).filter(Boolean);
                     const customerMap = new Map<string, Customer>();
+                    
+                    // Process booking customers
                     parsedBookings.forEach((booking: Booking) => {
                         if (!booking || !booking.userInfo || !booking.userInfo.email) return;
                         const email = booking.userInfo.email;
@@ -649,8 +657,45 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             });
                         }
                     });
+
+                    // Also get standalone customers from customers table (e.g., delivery-only customers)
+                    const { rows: standaloneCustomers } = await sql`SELECT * FROM customers`;
+                    standaloneCustomers.forEach(customerRow => {
+                        const email = customerRow.email;
+                        if (!customerMap.has(email)) {
+                            // Create customer from customers table data
+                            customerMap.set(email, {
+                                email,
+                                userInfo: {
+                                    firstName: customerRow.first_name || '',
+                                    lastName: customerRow.last_name || '',
+                                    email: customerRow.email,
+                                    phone: customerRow.phone || '',
+                                    countryCode: customerRow.country_code || '',
+                                    birthday: customerRow.birthday || null
+                                },
+                                bookings: [],
+                                totalBookings: 0,
+                                totalSpent: 0,
+                                lastBookingDate: new Date(0),
+                                deliveries: []
+                            });
+                        }
+                        // If customer exists from bookings but has additional phone data from customers table, merge it
+                        else {
+                            const existing = customerMap.get(email)!;
+                            if (customerRow.phone && !existing.userInfo.phone) {
+                                existing.userInfo.phone = customerRow.phone;
+                            }
+                            if (customerRow.country_code && !existing.userInfo.countryCode) {
+                                existing.userInfo.countryCode = customerRow.country_code;
+                            }
+                        }
+                    });
                     data = Array.from(customerMap.values());
                     console.log(`[API] Generated ${data.length} customers from ${parsedBookings.length} bookings`);
+                    // ✅ OPTIMIZACIÓN: Cache CDN 5 minutos (datos dinámicos)
+                    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
                     break;
                 }
                 case 'listPieces': {
@@ -686,6 +731,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                 try {
                     const { rows: products } = await sql`SELECT * FROM products ORDER BY name ASC`;
                     data = products.map(toCamelCase);
+                    // ✅ OPTIMIZACIÓN: Cache CDN 1 hora (datos muy estables)
+                    res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
                 } catch (error) {
                     console.error('Error fetching products:', error);
                     data = [];
@@ -706,6 +753,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     console.log(`API: Successfully processed ${processedBookings.length} bookings out of ${bookings.length} raw bookings`);
                     data = processedBookings;
                 }
+                // ✅ OPTIMIZACIÓN: Cache CDN 5 minutos (datos dinámicos)
+                res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
             } else if (key === 'customers') {
                 // Get all unique customers from bookings
                 const { rows: bookings } = await sql`SELECT * FROM bookings ORDER BY created_at DESC`;
@@ -747,12 +796,14 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                 const { rows: settings } = await sql`SELECT value FROM settings WHERE key = ${key}`;
                 if (settings.length > 0) {
                     // Si es bankDetails y el valor es string, parsear JSON
-                    if (key === 'bankDetails' && typeof settings[0].value === 'string') {
+                    // Parse JSON fields that are stored as strings
+                    const jsonFields = ['bankDetails', 'classCapacity', 'availability', 'scheduleOverrides', 'capacityMessages'];
+                    if (jsonFields.includes(key) && typeof settings[0].value === 'string') {
                         try {
                             data = JSON.parse(settings[0].value);
                         } catch (e) {
-                            console.error('Error parsing bankDetails JSON:', e);
-                            data = [];
+                            console.error(`Error parsing ${key} JSON:`, e);
+                            data = key === 'classCapacity' ? { potters_wheel: 0, molding: 0, introductory_class: 0 } : [];
                         }
                     } else {
                         data = settings[0].value;
@@ -767,11 +818,13 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             break;
                         case 'availability':
                         case 'scheduleOverrides':
-                        case 'classCapacity':
                         case 'automationSettings':
                         case 'footerInfo':
                         case 'backgroundSettings':
                             data = {};
+                            break;
+                        case 'classCapacity':
+                            data = { potters_wheel: 0, molding: 0, introductory_class: 0 };
                             break;
                         case 'uiLabels':
                             data = { taxIdLabel: 'RUC' };
@@ -2276,22 +2329,37 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         case 'deleteCustomer': {
             const { email } = req.body;
             if (!email) {
-                return res.status(400).json({ error: 'Email is required.' });
+                return res.status(400).json({ 
+                    success: false,
+                    error: 'Email is required.' 
+                });
             }
             
-            // Use the complete deletion function from lib/database
-            const { deleteCustomerByEmail } = await import('../lib/database.js');
-            const result = await deleteCustomerByEmail(email);
-            
-            if (result) {
-                return res.status(200).json({ 
-                    success: true, 
-                    message: 'Customer and related data deleted successfully' 
-                });
-            } else {
-                return res.status(404).json({ 
+            try {
+                console.log('[DELETE CUSTOMER] Attempting to delete customer with email:', email);
+                
+                // Use the complete deletion function from lib/database
+                const { deleteCustomerByEmail } = await import('../lib/database.js');
+                const result = await deleteCustomerByEmail(email);
+                
+                console.log('[DELETE CUSTOMER] Deletion result:', result);
+                
+                if (result) {
+                    return res.status(200).json({ 
+                        success: true, 
+                        message: 'Customer and related data deleted successfully' 
+                    });
+                } else {
+                    return res.status(404).json({ 
+                        success: false, 
+                        error: 'Customer not found or no data to delete' 
+                    });
+                }
+            } catch (error) {
+                console.error('[DELETE CUSTOMER] Error:', error);
+                return res.status(500).json({ 
                     success: false, 
-                    error: 'Customer not found or no data to delete' 
+                    error: error instanceof Error ? error.message : 'Unknown error deleting customer' 
                 });
             }
         }
@@ -2568,7 +2636,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             break;
         case 'rescheduleBookingSlot': {
             const rescheduleBody = req.body;
-            const { bookingId: rescheduleId, oldSlot, newSlot, reason } = rescheduleBody;
+            const { bookingId: rescheduleId, oldSlot, newSlot, reason, forceAdminReschedule, adminUser } = rescheduleBody;
             
             try {
                 const { rows: [bookingToReschedule] } = await sql`SELECT * FROM bookings WHERE id = ${rescheduleId}`;
@@ -2581,20 +2649,42 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 
                 // ============ VALIDACIONES DE RESCHEDULE ============
                 
-                // 1. Validar 72 horas de anticipación
-                const now = new Date();
-                const oldSlotDate = new Date(oldSlot.date + 'T00:00:00');
-                const hoursDifference = (oldSlotDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+                // 1. Validar fechas retroactivas (permitir hasta 30 días en el pasado)
+                const newDateObj = new Date(newSlot.date + 'T00:00:00');
+                const todayObj = new Date();
+                todayObj.setHours(0, 0, 0, 0);
+                const isRetroactive = newDateObj < todayObj;
+                const daysDiff = Math.floor((todayObj.getTime() - newDateObj.getTime()) / (1000 * 60 * 60 * 24));
                 
-                if (hoursDifference < 72) {
-                    console.log(`[RESCHEDULE] Clase en ${Math.floor(hoursDifference)}h < 72h. RECHAZADO. Clase se PIERDE.`);
-                    return res.status(400).json({ 
-                        success: false, 
-                        error: 'Requiere 72 horas de anticipación. La clase se ha PERDIDO.'
+                if (isRetroactive && daysDiff > 30) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `No se puede agendar más de 30 días en el pasado. Esta fecha es ${daysDiff} días atrás.`
                     });
                 }
                 
-                // 2. Validar si tiene política acceptedNoRefund
+                // 2. Validar 72 horas de anticipación (solo para futuro)
+                if (!isRetroactive) {
+                    const now = new Date();
+                    const oldSlotDate = new Date(oldSlot.date + 'T00:00:00');
+                    const hoursDifference = (oldSlotDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+                    
+                    if (hoursDifference < 72 && !forceAdminReschedule) {
+                        console.log(`[RESCHEDULE] Clase en ${Math.floor(hoursDifference)}h < 72h. RECHAZADO. Clase se PIERDE.`);
+                        return res.status(400).json({ 
+                            success: false, 
+                            error: 'Requiere 72 horas de anticipación. La clase se ha PERDIDO.',
+                            hoursUntilClass: hoursDifference,
+                            requiresAdminApproval: true
+                        });
+                    }
+                    
+                    if (hoursDifference < 72 && forceAdminReschedule) {
+                        console.log(`[RESCHEDULE] Admin force reschedule. Clase en ${Math.floor(hoursDifference)}h < 72h. PERMITIDO POR ADMIN.`);
+                    }
+                }
+                
+                // 3. Validar si tiene política acceptedNoRefund
                 if (booking.acceptedNoRefund === true) {
                     return res.status(400).json({
                         success: false,
@@ -2602,7 +2692,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     });
                 }
                 
-                // 3. Validar límite de reagendamientos
+                // 4. Validar límite de reagendamientos
                 const product = booking.product as any;
                 const classCount = product?.classes || 1;
                 
@@ -2615,17 +2705,87 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 
                 const rescheduleUsed = booking.rescheduleUsed || 0;
                 
-                if (rescheduleUsed >= allowance) {
+                if (rescheduleUsed >= allowance && !isRetroactive) {
                     return res.status(400).json({
                         success: false,
                         error: `Agotaste tus ${allowance} reagendamientos disponibles para este paquete`
                     });
                 }
                 
+                // 5. Validar capacidad del nuevo slot
+                const { rows: products } = await sql`SELECT * FROM products WHERE id = ${bookingToReschedule.product_id}`;
+                if (products.length > 0) {
+                    const classCapacityStr = process.env.CLASS_CAPACITY || '8,8,8';
+                    const capacityMap: any = {
+                        'potters_wheel': 8,
+                        'molding': 8,
+                        'introductory_class': 8
+                    };
+                    
+                    try {
+                        const capacities = classCapacityStr.split(',').map((c: string) => parseInt(c, 10));
+                        if (bookingToReschedule.product_type === 'INTRODUCTORY_CLASS') {
+                            capacityMap.introductory_class = capacities[2] || 8;
+                        } else if (bookingToReschedule.product_type === 'CLASS_PACKAGE') {
+                            const technique = bookingToReschedule.product?.details?.technique || 'potters_wheel';
+                            capacityMap[technique] = capacities[0] || 8;
+                        }
+                    } catch (e) {
+                        console.error('Error parsing CLASS_CAPACITY:', e);
+                    }
+                    
+                    const { rows: otherBookings } = await sql`
+                        SELECT COUNT(*) as count FROM bookings 
+                        WHERE product_id = ${bookingToReschedule.product_id}
+                        AND id != ${rescheduleId}
+                        AND slots @> ${JSON.stringify([{ date: newSlot.date, time: newSlot.time }])}
+                    `;
+                    
+                    const technique = bookingToReschedule.product?.details?.technique || 'potters_wheel';
+                    const maxCapacity = capacityMap[technique] || 8;
+                    const currentCount = otherBookings[0]?.count || 0;
+                    
+                    if (currentCount >= maxCapacity) {
+                        return res.status(400).json({
+                            success: false,
+                            error: `Slot completo (${currentCount}/${maxCapacity}). No se puede agregar más bookings.`
+                        });
+                    }
+                }
+                
+                // ============ AUDIT LOG PARA RETROACTIVOS ============
+                if (isRetroactive && adminUser) {
+                    try {
+                        await sql`
+                            INSERT INTO audit_logs (booking_id, admin_user, action, details, created_at)
+                            VALUES (
+                                ${rescheduleId},
+                                ${adminUser},
+                                'retrospective_booking',
+                                ${JSON.stringify({
+                                    oldSlot,
+                                    newSlot,
+                                    isRetroactive: true,
+                                    daysDifference: daysDiff,
+                                    timestamp: new Date().toISOString()
+                                })},
+                                NOW()
+                            )
+                        `;
+                        console.log(`[audit] Retrospective booking created: ${rescheduleId} by ${adminUser}`);
+                    } catch (auditError) {
+                        console.error('[audit] Error creating audit log:', auditError);
+                    }
+                }
+                
                 // ============ PROCEDER CON REAGENDAMIENTO ============
                 
                 // Actualizar slots: remover oldSlot y agregar newSlot
-                const otherSlots = bookingToReschedule.slots.filter((s: any) => 
+                const slotsFromDB = Array.isArray(bookingToReschedule.slots) 
+                    ? bookingToReschedule.slots 
+                    : (typeof bookingToReschedule.slots === 'string' ? JSON.parse(bookingToReschedule.slots) : []);
+                
+                const otherSlots = slotsFromDB.filter((s: any) => 
                     s.date !== oldSlot.date || s.time !== oldSlot.time
                 );
                 const updatedSlots = [...otherSlots, newSlot];
@@ -2639,13 +2799,21 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     reason: reason || null,
                     rescheduleCount: rescheduleUsed + 1,
                     timestamp: new Date().toISOString(),
-                    createdByAdmin: false // Por defecto desde cliente
+                    createdByAdmin: !!adminUser,
+                    isRetroactive: isRetroactive
                 };
                 
                 // Obtener historia actual
-                const currentHistory = bookingToReschedule.reschedule_history 
-                    ? JSON.parse(bookingToReschedule.reschedule_history)
-                    : [];
+                let currentHistory = [];
+                try {
+                    if (bookingToReschedule.reschedule_history) {
+                        const parsed = JSON.parse(bookingToReschedule.reschedule_history);
+                        currentHistory = Array.isArray(parsed) ? parsed : [];
+                    }
+                } catch (e) {
+                    console.warn('[RESCHEDULE] Could not parse reschedule_history, starting fresh:', e);
+                    currentHistory = [];
+                }
                 
                 const updatedHistory = [...currentHistory, rescheduleHistoryEntry];
                 
@@ -2662,7 +2830,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 // Obtener booking actualizado
                 const { rows: [updatedBooking] } = await sql`SELECT * FROM bookings WHERE id = ${rescheduleId}`;
                 
-                console.log(`[RESCHEDULE] Exitoso: ${rescheduleId}, usado ${rescheduleUsed + 1}/${allowance}`);
+                console.log(`[RESCHEDULE] Exitoso: ${rescheduleId}, usado ${rescheduleUsed + 1}/${allowance}, retroactivo: ${isRetroactive}`);
                 
                 result = { 
                     success: true, 
@@ -2671,7 +2839,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         used: rescheduleUsed + 1,
                         allowance: allowance,
                         remaining: allowance - (rescheduleUsed + 1)
-                    }
+                    },
+                    isRetroactive
                 };
                 
             } catch (error) {
@@ -3721,6 +3890,7 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reschedule_history JSONB DEFAULT '[]'::jsonb`;
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS last_reschedule_at TIMESTAMP WITH TIME ZONE`;
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS participants INT DEFAULT 1`;
+      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS group_metadata JSONB`;
     } catch (e) {
       console.warn('[ADD BOOKING] Could not add columns (may already exist):', e);
     }
@@ -3798,11 +3968,13 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
       rescheduleAllowance = 1; // Intro classes: 1 reagendamiento
     }
 
+    const groupMetadata = (body as any).groupClassMetadata || null;
+
     const { rows: created } = await sql`
       INSERT INTO bookings (
-        booking_code, product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_date, accepted_no_refund, expires_at, status, technique, reschedule_allowance, reschedule_used, reschedule_history, participants
+        booking_code, product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_date, accepted_no_refund, expires_at, status, technique, reschedule_allowance, reschedule_used, reschedule_history, participants, group_metadata
       ) VALUES (
-        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(body.product)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}, NOW() + INTERVAL '2 hours', 'active', ${technique || null}, ${rescheduleAllowance}, 0, '[]'::jsonb, ${(body as any).participants || 1}
+        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(body.product)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}, NOW() + INTERVAL '2 hours', 'active', ${technique || null}, ${rescheduleAllowance}, 0, '[]'::jsonb, ${(body as any).participants || 1}, ${groupMetadata ? JSON.stringify(groupMetadata) : null}
       ) RETURNING *;
     `;
 
@@ -3823,6 +3995,7 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
       status: created[0].status || 'active',
       technique: created[0].technique,
       participants: created[0].participants ? parseInt(created[0].participants, 10) : 1,
+      groupClassMetadata: created[0].group_metadata || undefined,
     };
 
     // Process giftcard hold if provided

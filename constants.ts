@@ -198,6 +198,26 @@ export const DEFAULT_PRODUCTS: Product[] = [
     schedulingRules: [],
     overrides: [],
     isActive: true
+  },
+  {
+    id: "GROUP_CLASS_PROD",
+    type: 'GROUP_CLASS',
+    name: "Experiencia Personalizada",
+    price: 0, // Precio dinámico calculado: pricePerPerson × totalParticipants
+    description: "Reúne a tu grupo y diseña la clase perfecta. Cada persona elige su técnica: torno, modelado o pintura.",
+    imageUrl: "https://images.unsplash.com/photo-1544551763-46a013bb70d5?q=80&w=2070&auto=format&fit=crop",
+    minParticipants: 2,
+    pricePerPerson: 15,
+    details: {
+      technique: 'potters_wheel', // Default, se sobreescribe con las técnicas individuales
+      duration: "2 horas",
+      durationHours: 2,
+      activities: ["Cada participante elige su técnica", "Amasado y preparación", "Creación de piezas personalizadas", "Técnicas de acabado"],
+      generalRecommendations: "Ideal para grupos de 2-30 personas. Traer ropa cómoda. Perfecto para celebraciones, eventos corporativos o reuniones creativas.",
+      materials: "Incluye arcilla, herramientas y quema de una pieza por participante. Capacidades: Torno (máx 8), Modelado (máx 14), Pintura (sin límite)."
+    },
+    isActive: true,
+    sortOrder: 5
   }
 ];
 

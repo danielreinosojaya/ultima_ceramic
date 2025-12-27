@@ -6,18 +6,12 @@ interface CashierEntryBody {
   date: string;
   initialBalance: number;
   cashSales: number;
+  cardSales?: number;
+  transferSales?: number;
   cashDenominations: Record<string, number>;
   expenses: Array<{ id: string; description: string; amount: number }>;
   manualValueFromSystem: number;
   notes?: string;
-  
-  // Cuadre de Ventas Totales
-  systemCashSales?: number;
-  systemCardSales?: number;
-  systemTransferSales?: number;
-  myEffectiveSales?: number;
-  myVouchersAccumulated?: number;
-  myTransfersReceived?: number;
 }
 
 function toCamelCase(obj: any): any {
@@ -86,64 +80,128 @@ export default async function handler(req: any, res: any) {
       const difference = finalCashBalance - body.manualValueFromSystem;
       const discrepancy = Math.abs(difference) > 0.01; // Allow small floating point errors
 
-      // Calculate sales totals
-      const systemTotalSales = (body.systemCashSales || 0) + (body.systemCardSales || 0) + (body.systemTransferSales || 0);
-      const myTotalSales = (body.myEffectiveSales || 0) + (body.myVouchersAccumulated || 0) + (body.myTransfersReceived || 0);
-      const salesDifference = systemTotalSales - myTotalSales;
-      const salesDiscrepancy = Math.abs(salesDifference) > 0.01;
-
-      // Ensure table exists (simplified for cash only)
-      await sql`
-        CREATE TABLE IF NOT EXISTS cashier_entries (
-          id TEXT PRIMARY KEY,
-          date TEXT NOT NULL,
-          initial_balance DECIMAL NOT NULL,
-          cash_sales DECIMAL NOT NULL,
-          cash_denominations JSONB NOT NULL,
-          final_cash_balance DECIMAL NOT NULL,
-          expenses JSONB DEFAULT '[]'::jsonb,
-          total_expenses DECIMAL NOT NULL DEFAULT 0,
-          manual_value_from_system DECIMAL NOT NULL,
-          difference DECIMAL NOT NULL,
-          discrepancy BOOLEAN NOT NULL,
-          notes TEXT,
-          system_cash_sales DECIMAL DEFAULT 0,
-          system_card_sales DECIMAL DEFAULT 0,
-          system_transfer_sales DECIMAL DEFAULT 0,
-          system_total_sales DECIMAL DEFAULT 0,
-          my_effective_sales DECIMAL DEFAULT 0,
-          my_vouchers_accumulated DECIMAL DEFAULT 0,
-          my_transfers_received DECIMAL DEFAULT 0,
-          my_total_sales DECIMAL DEFAULT 0,
-          sales_difference DECIMAL DEFAULT 0,
-          sales_discrepancy BOOLEAN DEFAULT false,
-          created_at TIMESTAMP DEFAULT NOW(),
-          updated_at TIMESTAMP DEFAULT NOW()
-        )
-      `;
-
       const id = `cashier_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-      const result = await sql`
-        INSERT INTO cashier_entries (
-          id, date, initial_balance, cash_sales,
-          cash_denominations, final_cash_balance, expenses, total_expenses,
-          manual_value_from_system, difference, discrepancy, notes,
-          system_cash_sales, system_card_sales, system_transfer_sales, system_total_sales,
-          my_effective_sales, my_vouchers_accumulated, my_transfers_received, my_total_sales,
-          sales_difference, sales_discrepancy
-        )
-        VALUES (
-          ${id}, ${body.date}, ${body.initialBalance}, ${body.cashSales},
-          ${JSON.stringify(body.cashDenominations)}, ${finalCashBalance},
-          ${JSON.stringify(body.expenses || [])}, ${totalExpenses},
-          ${body.manualValueFromSystem}, ${difference}, ${discrepancy}, ${body.notes || null},
-          ${body.systemCashSales || 0}, ${body.systemCardSales || 0}, ${body.systemTransferSales || 0}, ${systemTotalSales},
-          ${body.myEffectiveSales || 0}, ${body.myVouchersAccumulated || 0}, ${body.myTransfersReceived || 0}, ${myTotalSales},
-          ${salesDifference}, ${salesDiscrepancy}
-        )
+      // Step 1: Ensure minimal table exists
+      try {
+        await sql`
+          CREATE TABLE IF NOT EXISTS cashier_entries (
+            id TEXT PRIMARY KEY,
+            date TEXT NOT NULL,
+            initial_balance DECIMAL NOT NULL,
+            cash_denominations JSONB NOT NULL,
+            manual_value_from_system DECIMAL NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `;
+      } catch (e) {
+        // Table might already exist, continue
+      }
+
+      // Step 2: Add all columns safely using individual ALTER commands
+      const allColumns = [
+        'cash_sales',
+        'card_sales',
+        'transfer_sales',
+        'final_cash_balance',
+        'expenses',
+        'total_expenses',
+        'difference',
+        'discrepancy',
+        'notes',
+      ];
+
+      // Get existing columns to avoid duplicates
+      let existingColumns: string[] = [];
+      try {
+        const colResult = await sql`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_name = 'cashier_entries'
+        `;
+        existingColumns = colResult.rows.map((r: any) => r.column_name);
+      } catch (e) {
+        console.warn('Could not fetch columns, will attempt all migrations');
+      }
+
+      // Add missing columns one by one
+      const columnDefs: Record<string, string> = {
+        'cash_sales': 'DECIMAL DEFAULT 0',
+        'card_sales': 'DECIMAL DEFAULT 0',
+        'transfer_sales': 'DECIMAL DEFAULT 0',
+        'final_cash_balance': 'DECIMAL DEFAULT 0',
+        'expenses': "JSONB DEFAULT '[]'::jsonb",
+        'total_expenses': 'DECIMAL DEFAULT 0',
+        'difference': 'DECIMAL DEFAULT 0',
+        'discrepancy': 'BOOLEAN DEFAULT false',
+        'notes': 'TEXT',
+      };
+
+      for (const col of allColumns) {
+        if (!existingColumns.includes(col)) {
+          try {
+            await sql.query(`ALTER TABLE cashier_entries ADD COLUMN ${col} ${columnDefs[col]}`);
+          } catch (err: any) {
+            console.warn(`Could not add column ${col}:`, err.message);
+          }
+        }
+      }
+
+      // Step 3: Re-query actual columns after migration attempts
+      try {
+        const finalColResult = await sql`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_name = 'cashier_entries'
+        `;
+        existingColumns = finalColResult.rows.map((r: any) => r.column_name);
+      } catch (e) {
+        console.error('Failed to re-query columns after migration');
+      }
+
+      // Step 4: Build dynamic INSERT based on actual existing columns
+      // Include ALL possible columns from both old and new schema
+      const dataMap: Record<string, any> = {
+        'id': id,
+        'date': body.date,
+        'initial_balance': body.initialBalance,
+        'cash_sales': body.cashSales,
+        'card_sales': body.cardSales || 0,
+        'transfer_sales': body.transferSales || 0,
+        'cash_denominations': JSON.stringify(body.cashDenominations),
+        'final_cash_balance': finalCashBalance,
+        'expenses': JSON.stringify(body.expenses || []),
+        'total_expenses': totalExpenses,
+        'manual_value_from_system': body.manualValueFromSystem,
+        'difference': difference,
+        'discrepancy': discrepancy,
+        'notes': body.notes || null,
+        // Legacy columns from old schema (if they exist)
+        'previous_system_balance': body.initialBalance || 0,
+        'total_cash': totalCashCounted,
+        'expected_total': finalCashBalance,
+        'cash_physical': totalCashCounted,
+        'opening_balance': body.initialBalance,
+        'closing_balance': finalCashBalance,
+        'counted_cash': totalCashCounted,
+      };
+
+      // Filter to only columns that exist
+      const insertColumns = Object.keys(dataMap).filter(col => existingColumns.includes(col));
+      const insertValues = insertColumns.map(col => dataMap[col]);
+
+      // Build dynamic query
+      const colsList = insertColumns.join(', ');
+      const placeholders = insertColumns.map((_, i) => `$${i + 1}`).join(', ');
+      
+      const insertQuery = `
+        INSERT INTO cashier_entries (${colsList})
+        VALUES (${placeholders})
         RETURNING *
       `;
+
+      const result = await sql.query(insertQuery, insertValues);
 
       return res.status(201).json({
         success: true,

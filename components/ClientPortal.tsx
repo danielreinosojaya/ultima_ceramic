@@ -1,28 +1,22 @@
 import React, { useState } from 'react';
 import { UserIcon, CalendarIcon, ArchiveBoxIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { useAuth } from '../context/AuthContext';
 
 interface ClientPortalProps {
-    clientEmail: string;
     onViewClasses: () => void;
-    onLogout: () => void;
     onClose?: () => void;
 }
 
 /**
  * ClientPortal
  * 
- * Sidebar/dropdown menu que muestra al cliente autenticado sus opciones:
- * - Ver mis clases
- * - Reagendar clases
- * - Historial
- * - Logout
+ * Authenticated client menu using AuthContext
  */
 export const ClientPortal: React.FC<ClientPortalProps> = ({ 
-    clientEmail, 
     onViewClasses, 
-    onLogout,
     onClose 
 }) => {
+    const { user, logout } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
 
     const handleViewClasses = () => {
@@ -30,10 +24,12 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({
         setIsOpen(false);
     };
 
-    const handleLogout = () => {
-        onLogout();
+    const handleLogout = async () => {
+        await logout();
         setIsOpen(false);
     };
+
+    if (!user) return null;
 
     return (
         <div className="relative">
@@ -60,7 +56,7 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({
                             </div>
                             <div className="text-left">
                                 <p className="text-xs opacity-90">Sesión Activa</p>
-                                <p className="font-semibold text-sm break-all">{clientEmail}</p>
+                                <p className="font-semibold text-sm break-all">{user.email}</p>
                             </div>
                         </div>
                         <button
