@@ -13,16 +13,11 @@ export const CashierDashboard: React.FC = () => {
     date: new Date().toISOString().split('T')[0],
     initialBalance: 0,
     cashSales: 0,
+    cardSales: 0,
+    transferSales: 0,
     cashDenominations: Object.fromEntries(CASH_DENOMINATIONS.map(d => [d.key, 0])),
     expenses: [] as Array<{ id: string; description: string; amount: number }>,
     notes: '',
-    // Cuadre de Ventas Totales
-    systemCashSales: 0,
-    systemCardSales: 0,
-    systemTransferSales: 0,
-    myEffectiveSales: 0,
-    myVouchersAccumulated: 0,
-    myTransfersReceived: 0,
   });
 
   const [entries, setEntries] = useState<CashierEntry[]>([]);
@@ -30,6 +25,12 @@ export const CashierDashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  
+  // Delete modal state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [entryToDelete, setEntryToDelete] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     loadEntries();
@@ -115,14 +116,6 @@ export const CashierDashboard: React.FC = () => {
     };
   }
 
-  function calculateSystemTotalSales() {
-    return (formData.systemCashSales || 0) + (formData.systemCardSales || 0) + (formData.systemTransferSales || 0);
-  }
-
-  function calculateMyTotalSales() {
-    return (formData.myEffectiveSales || 0) + (formData.myVouchersAccumulated || 0) + (formData.myTransfersReceived || 0);
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -134,16 +127,12 @@ export const CashierDashboard: React.FC = () => {
         date: formData.date,
         initialBalance: formData.initialBalance,
         cashSales: formData.cashSales,
+        cardSales: formData.cardSales,
+        transferSales: formData.transferSales,
         cashDenominations: formData.cashDenominations as Record<any, number>,
         expenses: formData.expenses,
         manualValueFromSystem: 0,
         notes: formData.notes,
-        systemCashSales: formData.systemCashSales,
-        systemCardSales: formData.systemCardSales,
-        systemTransferSales: formData.systemTransferSales,
-        myEffectiveSales: formData.myEffectiveSales,
-        myVouchersAccumulated: formData.myVouchersAccumulated,
-        myTransfersReceived: formData.myTransfersReceived,
       });
 
       setSuccess('Cuadre guardado exitosamente');
@@ -151,21 +140,54 @@ export const CashierDashboard: React.FC = () => {
         date: new Date().toISOString().split('T')[0],
         initialBalance: 0,
         cashSales: 0,
+        cardSales: 0,
+        transferSales: 0,
         cashDenominations: Object.fromEntries(CASH_DENOMINATIONS.map(d => [d.key, 0])),
         expenses: [],
         notes: '',
-        systemCashSales: 0,
-        systemCardSales: 0,
-        systemTransferSales: 0,
-        myEffectiveSales: 0,
-        myVouchersAccumulated: 0,
-        myTransfersReceived: 0,
       });
 
       await loadEntries();
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.message || 'Error saving entry');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function openDeleteModal(entryId: string, event: React.MouseEvent) {
+    event.stopPropagation(); // Prevent expanding the entry
+    setEntryToDelete(entryId);
+    setDeletePassword('');
+    setDeleteError(null);
+    setDeleteModalOpen(true);
+  }
+
+  function closeDeleteModal() {
+    setDeleteModalOpen(false);
+    setDeletePassword('');
+    setDeleteError(null);
+    setEntryToDelete(null);
+  }
+
+  async function handleDelete() {
+    if (deletePassword !== 'Admify2025') {
+      setDeleteError('Contraseña incorrecta');
+      return;
+    }
+
+    if (!entryToDelete) return;
+
+    try {
+      setLoading(true);
+      await cashierService.deleteEntry(entryToDelete);
+      await loadEntries();
+      setSuccess('Registro eliminado exitosamente');
+      setTimeout(() => setSuccess(null), 3000);
+      closeDeleteModal();
+    } catch (err: any) {
+      setDeleteError(err.message || 'Error al eliminar');
     } finally {
       setLoading(false);
     }
@@ -277,6 +299,43 @@ export const CashierDashboard: React.FC = () => {
                     placeholder="0.00"
                     required
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-brand-text mb-2">Ventas con Tarjeta</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formatNumberValue(formData.cardSales)}
+                    onChange={e => setFormData({ ...formData, cardSales: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
+                    className="w-full px-4 py-2 border border-brand-border rounded-lg focus:outline-none focus:border-brand-primary"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-brand-text mb-2">Ventas con Transferencia</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formatNumberValue(formData.transferSales)}
+                    onChange={e => setFormData({ ...formData, transferSales: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
+                    className="w-full px-4 py-2 border border-brand-border rounded-lg focus:outline-none focus:border-brand-primary"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              {/* Ingresos Totales del Día */}
+              <div className="mt-6 bg-brand-background p-6 rounded-lg border-2 border-brand-primary">
+                <div className="text-sm text-brand-secondary mb-2">Ingresos Totales del Día</div>
+                <div className="text-4xl font-bold text-brand-primary mb-2">
+                  {formatCurrency((formData.cashSales || 0) + (formData.cardSales || 0) + (formData.transferSales || 0))}
+                </div>
+                <div className="text-xs text-brand-secondary">
+                  Efectivo: {formatCurrency(formData.cashSales)} + Tarjeta: {formatCurrency(formData.cardSales || 0)} + Transferencia: {formatCurrency(formData.transferSales || 0)}
                 </div>
               </div>
             </div>
@@ -411,163 +470,6 @@ export const CashierDashboard: React.FC = () => {
             </div>
 
             <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-              <h2 className="text-2xl font-bold text-brand-primary mb-6">Cuadre de Ventas Totales</h2>
-              <p className="text-sm text-brand-secondary mb-6">Compara las ventas totales del sistema Contifico con lo que contaste: Efectivo + Vouchers (TC) + Transferencias</p>
-
-              <div className="grid grid-cols-1 gap-6 mb-6">
-                {/* Sistema (Contifico) */}
-                <div className="border-2 border-brand-border rounded-lg p-6 bg-brand-background">
-                  <h3 className="text-lg font-bold text-brand-primary mb-4">Sistema (Contifico)</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-brand-text mb-2">Ventas en Efectivo</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={formData.systemCashSales === 0 ? '' : String(formData.systemCashSales)}
-                        onChange={e => setFormData({ ...formData, systemCashSales: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
-                        className="w-full px-4 py-2 border border-brand-border rounded-lg focus:outline-none focus:border-brand-primary"
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-brand-text mb-2">Ventas en Tarjeta</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={formData.systemCardSales === 0 ? '' : String(formData.systemCardSales)}
-                        onChange={e => setFormData({ ...formData, systemCardSales: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
-                        className="w-full px-4 py-2 border border-brand-border rounded-lg focus:outline-none focus:border-brand-primary"
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-brand-text mb-2">Ventas en Transferencia</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={formData.systemTransferSales === 0 ? '' : String(formData.systemTransferSales)}
-                        onChange={e => setFormData({ ...formData, systemTransferSales: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
-                        className="w-full px-4 py-2 border border-brand-border rounded-lg focus:outline-none focus:border-brand-primary"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-4 p-4 bg-white rounded-lg border-2 border-brand-primary">
-                    <div className="text-sm text-brand-secondary mb-1">Total Ventas Sistema</div>
-                    <div className="text-3xl font-bold text-brand-primary">
-                      {formatCurrency(calculateSystemTotalSales())}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Lo que contaste */}
-                <div className="border-2 border-brand-border rounded-lg p-6 bg-brand-background">
-                  <h3 className="text-lg font-bold text-brand-primary mb-4">Lo que TÚ Contaste</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-brand-text mb-2">Mis Ventas en Efectivo</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={formData.myEffectiveSales === 0 ? '' : String(formData.myEffectiveSales)}
-                        onChange={e => setFormData({ ...formData, myEffectiveSales: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
-                        className="w-full px-4 py-2 border border-brand-border rounded-lg focus:outline-none focus:border-brand-primary"
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-brand-text mb-2">Mis Vouchers Acumulados (TC)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={formData.myVouchersAccumulated === 0 ? '' : String(formData.myVouchersAccumulated)}
-                        onChange={e => setFormData({ ...formData, myVouchersAccumulated: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
-                        className="w-full px-4 py-2 border border-brand-border rounded-lg focus:outline-none focus:border-brand-primary"
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-brand-text mb-2">Mis Transferencias Recibidas</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={formData.myTransfersReceived === 0 ? '' : String(formData.myTransfersReceived)}
-                        onChange={e => setFormData({ ...formData, myTransfersReceived: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
-                        className="w-full px-4 py-2 border border-brand-border rounded-lg focus:outline-none focus:border-brand-primary"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-4 p-4 bg-white rounded-lg border-2 border-brand-primary">
-                    <div className="text-sm text-brand-secondary mb-1">Mi Total de Ventas</div>
-                    <div className="text-3xl font-bold text-brand-primary">
-                      {formatCurrency(calculateMyTotalSales())}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Validación de cuadre */}
-                {(calculateSystemTotalSales() > 0 || calculateMyTotalSales() > 0) && (
-                  <div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      <div className="bg-brand-background p-4 rounded-lg">
-                        <div className="text-sm text-brand-secondary mb-1">Total Sistema</div>
-                        <div className="text-2xl font-bold text-brand-primary">
-                          {formatCurrency(calculateSystemTotalSales())}
-                        </div>
-                      </div>
-                      <div className="bg-brand-background p-4 rounded-lg">
-                        <div className="text-sm text-brand-secondary mb-1">Mi Total</div>
-                        <div className="text-2xl font-bold text-brand-primary">
-                          {formatCurrency(calculateMyTotalSales())}
-                        </div>
-                      </div>
-                    </div>
-                    {(() => {
-                      const salesDiff = calculateSystemTotalSales() - calculateMyTotalSales();
-                      const isCuadrado = Math.abs(salesDiff) <= 0.01;
-                      
-                      let statusColor = 'bg-green-100 text-green-700';
-                      let statusIcon = '✓';
-                      let statusText = 'Cuadre Correcto';
-
-                      if (!isCuadrado) {
-                        if (calculateMyTotalSales() < calculateSystemTotalSales()) {
-                          statusColor = 'bg-red-100 text-red-700';
-                          statusIcon = '❌';
-                          statusText = 'Faltante en Ventas';
-                        } else {
-                          statusColor = 'bg-yellow-100 text-yellow-700';
-                          statusIcon = '⚠️';
-                          statusText = 'Sobrante en Ventas';
-                        }
-                      }
-
-                      return (
-                        <div className={`${statusColor} p-6 rounded-lg border-2 transition`}>
-                          <div className="flex items-center justify-between mb-4">
-                            <div className="text-3xl">{statusIcon}</div>
-                            <div className="text-2xl font-bold">{statusText}</div>
-                          </div>
-                          <div className="text-sm font-semibold">
-                            Diferencia: {formatCurrency(Math.abs(salesDiff))}
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
               <label className="block text-sm font-semibold text-brand-text mb-2">Notas (Opcional)</label>
               <textarea
                 value={formData.notes}
@@ -603,11 +505,20 @@ export const CashierDashboard: React.FC = () => {
                   >
                     <div className="flex justify-between items-center mb-4">
                       <h3 className="text-xl font-bold text-brand-primary">{formatDate(entry.date)}</h3>
-                      <div className="text-right">
-                        <div className="text-3xl font-bold text-brand-primary">
-                          {formatCurrency(entry.finalCashBalance)}
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <div className="text-3xl font-bold text-brand-primary">
+                            {formatCurrency(entry.finalCashBalance)}
+                          </div>
+                          <p className="text-sm text-brand-secondary">Saldo final</p>
                         </div>
-                        <p className="text-sm text-brand-secondary">Saldo final</p>
+                        <button
+                          onClick={(e) => openDeleteModal(entry.id, e)}
+                          className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm font-medium"
+                          title="Eliminar registro"
+                        >
+                          🗑️ Eliminar
+                        </button>
                       </div>
                     </div>
 
@@ -636,6 +547,30 @@ export const CashierDashboard: React.FC = () => {
                           </div>
                         </div>
 
+                        {/* Ingresos Totales del Día */}
+                        {((entry.cardSales || 0) > 0 || (entry.transferSales || 0) > 0) && (
+                          <div className="bg-brand-background p-4 rounded-lg border-2 border-brand-primary">
+                            <h4 className="font-bold text-brand-primary mb-3">Ingresos Totales del Día</h4>
+                            <div className="text-3xl font-bold text-brand-primary mb-3">
+                              {formatCurrency((entry.cashSales || 0) + (entry.cardSales || 0) + (entry.transferSales || 0))}
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 text-sm">
+                              <div>
+                                <div className="text-xs text-brand-secondary">Efectivo</div>
+                                <div className="font-semibold">{formatCurrency(entry.cashSales)}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-brand-secondary">Tarjeta</div>
+                                <div className="font-semibold">{formatCurrency(entry.cardSales || 0)}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-brand-secondary">Transferencia</div>
+                                <div className="font-semibold">{formatCurrency(entry.transferSales || 0)}</div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         {entry.expenses.length > 0 && (
                           <div className="bg-brand-background p-4 rounded-lg">
                             <h4 className="font-bold text-brand-primary mb-3">Desglose de Egresos</h4>
@@ -657,26 +592,6 @@ export const CashierDashboard: React.FC = () => {
                           </div>
                         )}
 
-                        {/* Cuadre de Ventas en historial */}
-                        {(entry.systemTotalSales || entry.myTotalSales) && (
-                          <div className="bg-brand-background p-4 rounded-lg">
-                            <h4 className="font-bold text-brand-primary mb-3">Cuadre de Ventas</h4>
-                            <div className="grid grid-cols-2 gap-4 mb-4">
-                              <div>
-                                <div className="text-xs text-brand-secondary">Sistema</div>
-                                <div className="text-lg font-bold text-brand-primary">{formatCurrency(entry.systemTotalSales || 0)}</div>
-                              </div>
-                              <div>
-                                <div className="text-xs text-brand-secondary">Tu Total</div>
-                                <div className="text-lg font-bold text-brand-primary">{formatCurrency(entry.myTotalSales || 0)}</div>
-                              </div>
-                            </div>
-                            <div className="text-xs text-brand-secondary space-y-1">
-                              <div>Sistema: {formatCurrency(entry.systemCashSales || 0)} (E) + {formatCurrency(entry.systemCardSales || 0)} (TC) + {formatCurrency(entry.systemTransferSales || 0)} (Tf)</div>
-                              <div>Tú: {formatCurrency(entry.myEffectiveSales || 0)} (E) + {formatCurrency(entry.myVouchersAccumulated || 0)} (V) + {formatCurrency(entry.myTransfersReceived || 0)} (Tf)</div>
-                            </div>
-                          </div>
-                        )}
                       </div>
                     )}
                   </div>
@@ -686,6 +601,56 @@ export const CashierDashboard: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-xl font-bold text-brand-primary mb-4">
+              Eliminar Registro
+            </h3>
+            <p className="text-brand-text mb-4">
+              Para eliminar este registro, ingresa la contraseña de administrador:
+            </p>
+            
+            <input
+              type="password"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+              placeholder="Contraseña"
+              className="w-full border border-brand-border rounded-lg px-4 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  handleDelete();
+                }
+              }}
+            />
+
+            {deleteError && (
+              <div className="bg-red-100 text-red-700 px-4 py-2 rounded-lg mb-4 text-sm">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={closeDeleteModal}
+                className="px-4 py-2 border border-brand-border text-brand-text rounded-lg hover:bg-brand-background transition"
+                disabled={loading}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDelete}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50"
+                disabled={loading}
+              >
+                {loading ? 'Eliminando...' : 'Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

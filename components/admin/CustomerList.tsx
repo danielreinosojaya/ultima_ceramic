@@ -240,11 +240,11 @@ export const CustomerList: React.FC<CustomerListProps> = ({ customers, onSelectC
 
             {/* Pagination Controls */}
             {customers.length > itemsPerPage && (
-                <div className="flex items-center justify-between mt-4 px-6 py-3 bg-brand-background rounded-lg">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 px-6 py-3 bg-brand-background rounded-lg">
                     <div className="text-sm text-brand-secondary">
                         Mostrando {startIndex + 1}-{Math.min(endIndex, customers.length)} de {customers.length} clientes
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2 flex-wrap justify-center">
                         <button
                             onClick={() => setCurrentPage(1)}
                             disabled={currentPage === 1}
@@ -259,21 +259,78 @@ export const CustomerList: React.FC<CustomerListProps> = ({ customers, onSelectC
                         >
                             Anterior
                         </button>
+                        
+                        {/* Smart pagination: show max 7 page buttons */}
                         <div className="flex items-center gap-1">
-                            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                                <button
-                                    key={page}
-                                    onClick={() => setCurrentPage(page)}
-                                    className={`px-2 py-1 text-sm font-semibold rounded ${
-                                        currentPage === page
-                                            ? 'bg-brand-primary text-white'
-                                            : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                                    }`}
-                                >
-                                    {page}
-                                </button>
-                            ))}
+                            {(() => {
+                                const maxButtons = 7;
+                                let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+                                let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+                                
+                                // Adjust if we're near the end
+                                if (endPage - startPage < maxButtons - 1) {
+                                    startPage = Math.max(1, endPage - maxButtons + 1);
+                                }
+                                
+                                const pageButtons = [];
+                                
+                                // First page + ellipsis if needed
+                                if (startPage > 1) {
+                                    pageButtons.push(
+                                        <button
+                                            key={1}
+                                            onClick={() => setCurrentPage(1)}
+                                            className="px-3 py-1 text-sm font-semibold rounded bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+                                        >
+                                            1
+                                        </button>
+                                    );
+                                    if (startPage > 2) {
+                                        pageButtons.push(
+                                            <span key="ellipsis-start" className="px-2 text-gray-400">...</span>
+                                        );
+                                    }
+                                }
+                                
+                                // Page buttons
+                                for (let i = startPage; i <= endPage; i++) {
+                                    pageButtons.push(
+                                        <button
+                                            key={i}
+                                            onClick={() => setCurrentPage(i)}
+                                            className={`px-3 py-1 text-sm font-semibold rounded ${
+                                                currentPage === i
+                                                    ? 'bg-brand-primary text-white'
+                                                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                                            }`}
+                                        >
+                                            {i}
+                                        </button>
+                                    );
+                                }
+                                
+                                // Last page + ellipsis if needed
+                                if (endPage < totalPages) {
+                                    if (endPage < totalPages - 1) {
+                                        pageButtons.push(
+                                            <span key="ellipsis-end" className="px-2 text-gray-400">...</span>
+                                        );
+                                    }
+                                    pageButtons.push(
+                                        <button
+                                            key={totalPages}
+                                            onClick={() => setCurrentPage(totalPages)}
+                                            className="px-3 py-1 text-sm font-semibold rounded bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+                                        >
+                                            {totalPages}
+                                        </button>
+                                    );
+                                }
+                                
+                                return pageButtons;
+                            })()}
                         </div>
+                        
                         <button
                             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                             disabled={currentPage === totalPages}

@@ -20,6 +20,11 @@ interface RescheduleModalProps {
     appData: AppData;
 }
 
+interface ValidationWarning {
+    requiresApproval: boolean;
+    hoursUntilClass: number;
+}
+
 export const RescheduleModal: React.FC<RescheduleModalProps> = ({ isOpen, onClose, onSave, slotInfo, appData }) => {
     const language = 'es-ES';
     
@@ -27,16 +32,28 @@ export const RescheduleModal: React.FC<RescheduleModalProps> = ({ isOpen, onClos
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
     const [selectedHour, setSelectedHour] = useState<string | null>(null);
     const [selectedInstructor, setSelectedInstructor] = useState<string | null>(null);
+    const [validationWarning, setValidationWarning] = useState<ValidationWarning | null>(null);
+    const [adminApproved, setAdminApproved] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     
     useEffect(() => {
         // Reset state when modal is reopened for a new slot
-    setCurrentDate(new Date(slotInfo.slot.date + 'T00:00:00'));
-    setSelectedDate(null);
-    setSelectedHour(null);
-    setSelectedInstructor(null);
+        setCurrentDate(new Date(slotInfo.slot.date + 'T00:00:00'));
+        setSelectedDate(null);
+        setSelectedHour(null);
+        setSelectedInstructor(null);
+        setValidationWarning(null);
+        setAdminApproved(false);
     }, [slotInfo, isOpen]);
 
     const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
+    
+    // Permitir fechas hasta 30 días atrás para reagendamiento retroactivo
+    const minAllowedDate = useMemo(() => {
+        const d = new Date(today);
+        d.setDate(d.getDate() - 30);
+        return d;
+    }, [today]);
 
     const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
     const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
@@ -47,21 +64,59 @@ export const RescheduleModal: React.FC<RescheduleModalProps> = ({ isOpen, onClos
     }, [currentDate.getFullYear(), currentDate.getMonth()]);
 
     const handleDayClick = (day: number) => {
-    const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-    date.setHours(0, 0, 0, 0);
-    if (date < today) return;
-    setSelectedDate(date);
-    setSelectedHour(null);
-    setSelectedInstructor(null);
+        const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+        date.setHours(0, 0, 0, 0);
+        // Permitir hasta 30 días atrás
+        if (date < minAllowedDate) return;
+        setSelectedDate(date);
+        setSelectedHour(null);
+        setSelectedInstructor(null);
     };
 
-    const handleSubmit = () => {
-        if (selectedDate && selectedHour && selectedInstructor) {
-            onSave({
-                date: formatDateToYYYYMMDD(selectedDate),
-                time: selectedHour,
-                instructorId: selectedInstructor,
+    const handleSubmit = async () => {
+        if (!selectedDate || !selectedHour || !selectedInstructor) return;
+
+        const newSlot: TimeSlot = {
+            date: formatDateToYYYYMMDD(selectedDate),
+            time: selectedHour,
+            instructorId: parseInt(selectedInstructor),
+        };
+
+        // Validar 72 horas ANTES de intentar guardar
+        const now = new Date();
+        const oldSlotDate = new Date(slotInfo.slot.date + 'T00:00:00');
+        const hoursDifference = (oldSlotDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+        if (hoursDifference < 72 && !adminApproved) {
+            // Mostrar warning y pedir aprobación
+            setValidationWarning({
+                requiresApproval: true,
+                hoursUntilClass: hoursDifference
             });
+            return;
+        }
+
+        // Si llegamos aquí, proceder con reagendamiento
+        setIsSubmitting(true);
+        try {
+            const result = await dataService.rescheduleBookingSlot(
+                slotInfo.bookingId,
+                slotInfo.slot,
+                newSlot,
+                adminApproved // Pasar flag si fue aprobado por admin
+            );
+
+            if (result.success) {
+                onSave(newSlot);
+                onClose();
+            } else {
+                // Si aún hay error, mostrar
+                alert((result as any).error || 'Error al reagendar');
+            }
+        } catch (error) {
+            alert('Error al reagendar: ' + (error instanceof Error ? error.message : String(error)));
+        } finally {
+            setIsSubmitting(false);
         }
     };
     
@@ -69,6 +124,55 @@ export const RescheduleModal: React.FC<RescheduleModalProps> = ({ isOpen, onClos
 
     const formattedCurrentSlotDate = new Date(slotInfo.slot.date + 'T00:00:00').toLocaleDateString(language, { weekday: 'long', month: 'long', day: 'numeric' });
     const translatedDayNames = useMemo(() => [0, 1, 2, 3, 4, 5, 6].map(dayIndex => new Date(2024, 0, dayIndex + 7).toLocaleDateString(language, { weekday: 'short' })), [language]);
+
+    // Modal de confirmación si requiere aprobación admin
+    if (validationWarning?.requiresApproval && !adminApproved) {
+        return (
+            <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
+                <div className="bg-brand-surface rounded-xl shadow-2xl p-6 w-full max-w-md animate-fade-in-up" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-center w-12 h-12 mx-auto bg-yellow-100 rounded-full mb-4">
+                        <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4v2m0 0H8m4 0h4m9 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <h2 className="text-xl font-serif text-brand-accent mb-2 text-center">Aprobación Requerida</h2>
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                        <p className="text-sm text-yellow-800">
+                            <strong>La clase está a {Math.ceil(validationWarning.hoursUntilClass)} horas.</strong> Normalmente se requieren 72 horas de anticipación para reagendar.
+                        </p>
+                        <p className="text-sm text-yellow-700 mt-2">
+                            ¿Deseas reagendar por excepción como admin?
+                        </p>
+                    </div>
+                    <div className="space-y-2 mb-4">
+                        <div className="bg-brand-background p-2 rounded-md">
+                            <p className="text-xs font-bold text-brand-secondary">Cliente: {slotInfo.attendeeName}</p>
+                            <p className="text-sm text-brand-text">{formattedCurrentSlotDate} @ {slotInfo.slot.time}</p>
+                        </div>
+                    </div>
+                    <div className="flex gap-3 pt-4 border-t border-gray-200">
+                        <button 
+                            type="button" 
+                            onClick={() => {
+                                setValidationWarning(null);
+                                setAdminApproved(false);
+                            }} 
+                            className="flex-1 bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-4 rounded-lg hover:bg-gray-100"
+                        >
+                            Cancelar
+                        </button>
+                        <button 
+                            type="button" 
+                            onClick={() => setAdminApproved(true)} 
+                            className="flex-1 bg-brand-primary text-white font-bold py-2 px-4 rounded-lg hover:bg-brand-accent"
+                        >
+                            Continuar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
@@ -78,6 +182,20 @@ export const RescheduleModal: React.FC<RescheduleModalProps> = ({ isOpen, onClos
                     <p className="text-sm font-bold text-brand-secondary">Clase actual:</p>
                     <p className="text-md font-semibold text-brand-text">{formattedCurrentSlotDate} @ {slotInfo.slot.time}</p>
                 </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 mb-4">
+                    <p className="text-xs text-blue-700">
+                        💡 Puedes reagendar hasta <strong>30 días atrás</strong> (fechas en ámbar) para registrar clases retroactivas.
+                    </p>
+                </div>
+
+                {adminApproved && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                        <p className="text-sm text-blue-800">
+                            ✓ <strong>Excepción admin aprobada</strong> - Reagendamiento permitido fuera del límite de 72 horas.
+                        </p>
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Calendario */}
@@ -95,12 +213,13 @@ export const RescheduleModal: React.FC<RescheduleModalProps> = ({ isOpen, onClos
                             {calendarDays.map((day, index) => {
                                 if (!day) return <div key={`blank-${index}`}></div>;
                                 const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day); date.setHours(0,0,0,0);
+                                const isTooOld = date < minAllowedDate;
                                 const isPast = date < today;
                                 const dateStr = formatDateToYYYYMMDD(date);
                                 const dayIsSelected = selectedDate && formatDateToYYYYMMDD(selectedDate) === dateStr;
-                                const isDisabled = isPast;
+                                const isDisabled = isTooOld;
 
-                                return <button key={day} onClick={() => handleDayClick(day)} disabled={isDisabled} className={`w-full aspect-square rounded-full text-sm font-semibold transition-all ${isDisabled ? 'text-gray-400 bg-gray-100 cursor-not-allowed' : 'hover:bg-brand-primary/20'} ${dayIsSelected ? 'bg-brand-primary text-white shadow-md ring-2 ring-brand-accent' : 'bg-white'}`}>{day}</button>
+                                return <button key={day} onClick={() => handleDayClick(day)} disabled={isDisabled} className={`w-full aspect-square rounded-full text-sm font-semibold transition-all ${isDisabled ? 'text-gray-400 bg-gray-100 cursor-not-allowed' : isPast ? 'hover:bg-amber-100 text-amber-700 border border-amber-300' : 'hover:bg-brand-primary/20'} ${dayIsSelected ? 'bg-brand-primary text-white shadow-md ring-2 ring-brand-accent' : 'bg-white'}`}>{day}</button>
                             })}
                         </div>
                     </div>
@@ -133,8 +252,8 @@ export const RescheduleModal: React.FC<RescheduleModalProps> = ({ isOpen, onClos
                     <button type="button" onClick={onClose} className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100">
                         Cancelar
                     </button>
-                    <button type="button" onClick={handleSubmit} disabled={!selectedDate || !selectedHour || !selectedInstructor} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent disabled:bg-gray-400">
-                        Guardar
+                    <button type="button" onClick={handleSubmit} disabled={!selectedDate || !selectedHour || !selectedInstructor || isSubmitting} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent disabled:bg-gray-400">
+                        {isSubmitting ? 'Guardando...' : 'Guardar'}
                     </button>
                 </div>
             </div>

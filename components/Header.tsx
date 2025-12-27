@@ -2,6 +2,8 @@ import React from 'react';
 import { Logo } from './Logo';
 import { UserIcon } from '@heroicons/react/24/outline';
 import { ClientPortal } from './ClientPortal';
+import { useAuth } from '../context/AuthContext';
+import { FEATURE_FLAGS } from '../featureFlags';
 
 interface HeaderProps {
   onGiftcardClick?: () => void;
@@ -12,6 +14,8 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onGiftcardClick, onMyClassesClick, onClientLogin, clientEmail, onClientLogout }) => {
+  const { isAuthenticated, user } = useAuth();
+
   return (
     <header className="bg-brand-surface/80 backdrop-blur-sm sticky top-0 z-40 border-b border-brand-border/80">
       <div className="w-full px-3 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 flex items-center justify-between gap-2 sm:gap-3 md:gap-4">
@@ -30,26 +34,28 @@ export const Header: React.FC<HeaderProps> = ({ onGiftcardClick, onMyClassesClic
 
         {/* Right section - responsive button area */}
         <div className="flex-shrink-0 flex justify-end items-center gap-1.5 sm:gap-2 md:gap-3">
-          {/* Client Portal - Si está autenticado */}
-          {clientEmail && onClientLogout && onMyClassesClick ? (
+          {/* Client Portal - Si está autenticado (vía AuthContext) */}
+          {isAuthenticated && user && onMyClassesClick ? (
             <ClientPortal
-              clientEmail={clientEmail}
               onViewClasses={onMyClassesClick}
-              onLogout={onClientLogout}
             />
           ) : (
             <>
               {/* Login button - Si NO está autenticado */}
               {onClientLogin && (
                 <button
-                  disabled
-                  className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-gray-300 text-gray-600 cursor-not-allowed opacity-60 font-semibold text-xs sm:text-sm md:text-base transition-opacity whitespace-nowrap"
-                  title="Mi Cuenta (próximamente disponible)"
-                  aria-label="Mi Cuenta (próximamente disponible)"
+                  onClick={() => FEATURE_FLAGS.CURSO_TORNO && onClientLogin()}
+                  disabled={!FEATURE_FLAGS.CURSO_TORNO}
+                  className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg font-semibold text-xs sm:text-sm md:text-base transition-opacity whitespace-nowrap ${
+                    FEATURE_FLAGS.CURSO_TORNO 
+                      ? 'bg-brand-primary text-white hover:opacity-90 cursor-pointer' 
+                      : 'bg-gray-300 text-gray-600 cursor-not-allowed opacity-60'
+                  }`}
+                  title={FEATURE_FLAGS.CURSO_TORNO ? "Mi Cuenta" : "Próximamente"}
+                  aria-label={FEATURE_FLAGS.CURSO_TORNO ? "Mi Cuenta" : "Próximamente"}
                 >
                   <UserIcon className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-                  <span className="hidden sm:inline">Mi Cuenta</span>
-                  <span className="text-xs bg-gray-400 text-white px-1 sm:px-1.5 py-0.5 rounded">Próx.</span>
+                  <span className="hidden sm:inline">{FEATURE_FLAGS.CURSO_TORNO ? 'Mi Cuenta' : 'Próximamente'}</span>
                 </button>
               )}
               {/* Guest buttons */}

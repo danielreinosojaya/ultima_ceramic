@@ -308,6 +308,9 @@ import { DAY_NAMES, DEFAULT_PRODUCTS } from '../constants';
 // --- API Helpers ---
 
 const fetchData = async (url: string, options?: RequestInit, retries: number = 3) => {
+    // ✅ OPTIMIZACIÓN: Reducir retries a máximo 2
+    const maxRetries = Math.min(retries, 2);
+    
     // Deduplicar requests - si la URL ya está siendo fetched, retornar la promesa existente
     const requestKey = `${url}_${JSON.stringify(options || {})}`;
     if (pendingRequests.has(requestKey)) {
@@ -315,22 +318,22 @@ const fetchData = async (url: string, options?: RequestInit, retries: number = 3
         return pendingRequests.get(requestKey);
     }
 
-    let lastError: Error | null = null; // Inicialización de la variable
+    let lastError: Error | null = null;
     
     const fetchPromise = (async () => {
-        for (let attempt = 1; attempt <= retries; attempt++) {
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
                 // Solo log en primer intento o errores
                 if (attempt === 1) {
                     console.log(`Fetching ${url}`);
                 } else {
-                    console.log(`Retry attempt ${attempt}/${retries} for ${url}`);
+                    console.log(`Retry attempt ${attempt}/${maxRetries} for ${url}`);
                 }
                 
                 const response = await fetch(url, {
                     ...options,
-                    // Timeout más largo para mejor compatibilidad
-                    signal: AbortSignal.timeout(30000) // 30 segundos timeout
+                    // ✅ OPTIMIZACIÓN: Timeout reducido 30s → 20s (seguro para queries grandes)
+                    signal: AbortSignal.timeout(20000)
                 });
                 
                 if (!response.ok) {
@@ -352,27 +355,10 @@ const fetchData = async (url: string, options?: RequestInit, retries: number = 3
                 lastError = error instanceof Error ? error : new Error(String(error));
                 console.warn(`Fetch attempt ${attempt} failed:`, lastError.message);
                 
-                // Si es timeout, intentar con timeout más largo en el último intento
-                if (attempt === retries && lastError.message.includes('timed out')) {
-                    console.log('Final attempt with longer timeout...');
-                    try {
-                        const response = await fetch(url, {
-                            ...options,
-                            signal: AbortSignal.timeout(60000) // 60 segundos para último intento
-                        });
-                        
-                        if (response.ok) {
-                            const text = await response.text();
-                            return text ? JSON.parse(text) : null;
-                        }
-                    } catch (finalError) {
-                        console.error('Even extended timeout failed:', finalError);
-                    }
-                }
-                
                 // Si no es el último intento, esperar antes de reintentar
-                if (attempt < retries) {
-                    const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Exponential backoff, max 5s
+                if (attempt < maxRetries) {
+                    // ✅ OPTIMIZACIÓN: Backoff más conservador, max 2s
+                    const delay = Math.min(500 * Math.pow(2, attempt - 1), 2000);
                     console.log(`Retrying in ${delay}ms...`);
                     await new Promise(resolve => setTimeout(resolve, delay));
                 }
@@ -381,7 +367,7 @@ const fetchData = async (url: string, options?: RequestInit, retries: number = 3
         
         // Si todos los intentos fallaron, lanzar el último error
         if (lastError) {
-            console.error(`All ${retries} fetch attempts failed for ${url}`);
+            console.error(`All ${maxRetries} fetch attempts failed for ${url}`);
             throw lastError;
         } else {
             throw new Error('Unknown error occurred during fetch attempts.');
@@ -439,9 +425,39 @@ const clearCache = (key?: string): void => {
     }
 };
 
-// Función específica para invalidar bookings cuando se modifiquen
+// ===== OPTIMIZACIÓN: Invalidación granular de cache =====
+// Reemplazar invalidación binaria con invalidación selectiva
+
 export const invalidateBookingsCache = (): void => {
+    console.log('[Cache] Invalidating bookings cache only');
     clearCache('bookings');
+    // ✅ NO invalida: customers, products, instructors, giftcards
+};
+
+export const invalidateCustomersCache = (): void => {
+    console.log('[Cache] Invalidating customers cache only');
+    clearCache('customers');
+};
+
+export const invalidatePaymentsCache = (): void => {
+    console.log('[Cache] Invalidating payments cache only');
+    clearCache('payments');
+};
+
+export const invalidateGiftcardsCache = (): void => {
+    console.log('[Cache] Invalidating giftcards cache only');
+    clearCache('giftcards');
+};
+
+export const invalidateProductsCache = (): void => {
+    console.log('[Cache] Invalidating products cache only');
+    clearCache('products');
+};
+
+// Para operaciones que afectan múltiples recursos
+export const invalidateMultiple = (keys: string[]): void => {
+    console.log('[Cache] Invalidating multiple:', keys);
+    keys.forEach(key => clearCache(key));
 };
 
 const getData = async <T>(key: string): Promise<T> => {
@@ -1144,9 +1160,9 @@ export const getRescheduleInfo = (booking: Booking): {
     return { allowance, used, remaining, history };
 };
 
-export const rescheduleBookingSlot = async (bookingId: string, oldSlot: any, newSlot: any): Promise<AddBookingResult> => {
-    console.log('[rescheduleBookingSlot] Starting reschedule:', { bookingId, oldSlot, newSlot });
-    const result = await postAction('rescheduleBookingSlot', { bookingId, oldSlot, newSlot });
+export const rescheduleBookingSlot = async (bookingId: string, oldSlot: any, newSlot: any, forceAdminReschedule?: boolean, adminUser?: string): Promise<AddBookingResult> => {
+    console.log('[rescheduleBookingSlot] Starting reschedule:', { bookingId, oldSlot, newSlot, forceAdminReschedule, adminUser });
+    const result = await postAction('rescheduleBookingSlot', { bookingId, oldSlot, newSlot, forceAdminReschedule, adminUser });
     
     // CRÍTICO: Siempre invalidar caché para forzar recarga
     invalidateBookingsCache();
@@ -1332,8 +1348,11 @@ export const getEssentialAppData = async () => {
 
 // Función específica para datos de scheduling
 export const getSchedulingData = async () => {
-    // Cargar datos críticos para disponibilidad (instructores e instructores)
-    const criticalSchedulingData = await getBatchedData(['instructores', 'availability']);
+    // Cargar datos críticos para disponibilidad (instructores y availability)
+    const [instructors, availability] = await Promise.all([
+        getData('instructors'),
+        getData('availability')
+    ]);
     
     // Cargar datos complementarios (NO en background - necesarios para la UI)
     const [scheduleOverrides, classCapacity, capacityMessages] = await Promise.all([
@@ -1346,7 +1365,8 @@ export const getSchedulingData = async () => {
     });
     
     return {
-        ...criticalSchedulingData,
+        instructors: instructors || [],
+        availability: availability || { Sunday: [], Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [] },
         scheduleOverrides: scheduleOverrides || {},
         classCapacity: classCapacity || { potters_wheel: 0, molding: 0, introductory_class: 0 },
         capacityMessages: capacityMessages || { thresholds: [] }
@@ -2379,3 +2399,177 @@ export const generateTimeSlots = (
 
   return slots;
 };
+
+// ========================================
+// COURSE SYSTEM API
+// ========================================
+
+export const getCourseSchedules = async (): Promise<any[]> => {
+    try {
+        const response = await fetch('/api/courses?action=getSchedules');
+        if (!response.ok) throw new Error('Error fetching course schedules');
+        const result = await response.json();
+        return result.success ? result.data : [];
+    } catch (error) {
+        console.error('Error getting course schedules:', error);
+        return [];
+    }
+};
+
+export const enrollInCourse = async (enrollmentData: {
+    studentEmail: string;
+    studentInfo: {
+        firstName: string;
+        lastName: string;
+        phoneNumber: string;
+    };
+    courseScheduleId: string;
+    experience?: 'beginner' | 'intermediate';
+    specialConsiderations?: string;
+}): Promise<{ success: boolean; data?: any; error?: string }> => {
+    try {
+        const response = await fetch('/api/courses?action=enroll', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(enrollmentData)
+        });
+        
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        console.error('Error enrolling in course:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error desconocido'
+        };
+    }
+};
+
+export const getCourseEnrollment = async (enrollmentId: string): Promise<any | null> => {
+    try {
+        const response = await fetch(`/api/courses?action=getEnrollment&enrollmentId=${enrollmentId}`);
+        if (!response.ok) return null;
+        const result = await response.json();
+        return result.success ? result.data : null;
+    } catch (error) {
+        console.error('Error getting enrollment:', error);
+        return null;
+    }
+};
+
+export const updateCoursePaymentStatus = async (
+    enrollmentId: string,
+    amountPaid: number,
+    paymentMethod?: string
+): Promise<{ success: boolean; data?: any; error?: string }> => {
+    try {
+        const response = await fetch('/api/courses?action=updatePaymentStatus', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enrollmentId, amountPaid, paymentMethod })
+        });
+        
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        console.error('Error updating payment status:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error desconocido'
+        };
+    }
+};
+
+export const markCourseAttendance = async (
+    enrollmentId: string,
+    sessionId: string,
+    attended: boolean,
+    notes?: string,
+    progressRating?: number
+): Promise<{ success: boolean; data?: any; error?: string }> => {
+    try {
+        const response = await fetch('/api/courses?action=markAttendance', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enrollmentId, sessionId, attended, notes, progressRating })
+        });
+        
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        console.error('Error marking attendance:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error desconocido'
+        };
+    }
+};
+
+export const getCourseEnrollments = async (scheduleId?: string, status?: string): Promise<any[]> => {
+    try {
+        let url = '/api/courses?action=getAllEnrollments';
+        const params = new URLSearchParams();
+        if (scheduleId) params.append('scheduleId', scheduleId);
+        if (status) params.append('status', status);
+        if (params.toString()) url += '&' + params.toString();
+        
+        const response = await fetch(url);
+        if (!response.ok) return [];
+        const result = await response.json();
+        return result.success ? result.data : [];
+    } catch (error) {
+        console.error('Error getting enrollments:', error);
+        return [];
+    }
+};
+
+export const toggleCourseScheduleActive = async (
+    scheduleId: string,
+    isActive: boolean
+): Promise<{ success: boolean; data?: any; error?: string }> => {
+    try {
+        const response = await fetch('/api/courses?action=toggleScheduleActive', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ scheduleId, isActive })
+        });
+        
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        console.error('Error toggling schedule:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error desconocido'
+        };
+    }
+};
+
+export const createCourseSchedule = async (scheduleData: {
+    format: '3x2' | '2x3';
+    name: string;
+    days: string[];
+    startTime: string;
+    endTime: string;
+    startDate: string;
+    capacity: number;
+}): Promise<{ success: boolean; data?: any; error?: string }> => {
+    try {
+        const response = await fetch('/api/courses?action=createSchedule', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(scheduleData)
+        });
+        
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        console.error('Error creating schedule:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error desconocido'
+        };
+    }
+};
+
+

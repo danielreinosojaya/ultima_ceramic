@@ -25,7 +25,11 @@ export type AppView =
   | 'group_class_wizard'
   | 'piece_experience_wizard'
   | 'single_class_wizard'
-  | 'experience_confirmation';
+  | 'experience_confirmation'
+  | 'wheel_course_landing'
+  | 'wheel_course_schedule'
+  | 'wheel_course_registration'
+  | 'wheel_course_confirmation';
 export type BookingMode = 'flexible' | 'monthly';
 export type Technique = 'potters_wheel' | 'molding';
 
@@ -74,7 +78,7 @@ export interface EditableBooking {
 }
 
 // Products
-export type ProductType = 'CLASS_PACKAGE' | 'OPEN_STUDIO_SUBSCRIPTION' | 'INTRODUCTORY_CLASS' | 'GROUP_EXPERIENCE' | 'COUPLES_EXPERIENCE' | 'SINGLE_CLASS' | 'GROUP_CLASS';
+export type ProductType = 'CLASS_PACKAGE' | 'OPEN_STUDIO_SUBSCRIPTION' | 'INTRODUCTORY_CLASS' | 'GROUP_EXPERIENCE' | 'COUPLES_EXPERIENCE' | 'SINGLE_CLASS' | 'GROUP_CLASS' | 'WHEEL_COURSE';
 
 export interface ClassPackageDetails {
   duration: string;
@@ -93,6 +97,67 @@ export interface OpenStudioSubscriptionDetails {
 }
 
 export interface IntroductoryClassDetails extends ClassPackageDetails {}
+
+// Wheel Course Types
+export type CourseScheduleFormat = '3x2' | '2x3'; // 3 días x 2h o 2 días x 3h
+export type SessionStatus = 'upcoming' | 'completed' | 'cancelled';
+export type EnrollmentStatus = 'active' | 'completed' | 'dropped' | 'pending_payment';
+
+export interface CourseSession {
+  id: string;
+  sessionNumber: number; // 1-6 o 1-3
+  scheduledDate: string; // ISO date
+  startTime: string; // "19:00"
+  endTime: string; // "21:00"
+  topic: string; // "Centrado y postura"
+  instructorId: number;
+  status: SessionStatus;
+}
+
+export interface CourseSchedule {
+  id: string;
+  format: CourseScheduleFormat;
+  name: string; // "Noches" o "Mañanas"
+  days: DayKey[]; // ['Tuesday', 'Wednesday', 'Thursday']
+  startTime: string;
+  endTime: string;
+  startDate: string; // Fecha inicio del próximo ciclo
+  capacity: number;
+  currentEnrollments: number;
+  sessions: CourseSession[];
+}
+
+export interface WheelCourseDetails {
+  totalHours: number; // 6
+  totalSessions: number; // 3 o 6
+  pricePerHour: number; // 25
+  availableSchedules: CourseSchedule[];
+  curriculum: {
+    sessionNumber: number;
+    title: string;
+    objectives: string[];
+    duration: number; // horas
+  }[];
+}
+
+export interface CourseEnrollment {
+  id: string;
+  studentEmail: string;
+  studentInfo: UserInfo;
+  courseScheduleId: string;
+  enrollmentDate: string;
+  status: EnrollmentStatus;
+  paymentStatus: 'full' | 'partial' | 'pending';
+  amountPaid: number;
+  sessions: {
+    sessionId: string;
+    attended: boolean;
+    notes?: string;
+    progressRating?: number; // 1-5
+  }[];
+  completedAt?: string | null;
+  certificateIssued?: boolean;
+}
 
 export interface SchedulingRule {
   id: string;
@@ -324,6 +389,9 @@ export interface Booking {
     // COUPLES_EXPERIENCE specific
     technique?: Technique; // Técnica seleccionada para parejas
     
+    // GROUP_CLASS specific
+    groupClassMetadata?: GroupClassMetadata; // Metadata para experiencias personalizadas
+    
     // RESCHEDULE POLICY for class packages
     rescheduleAllowance?: number; // Max veces que puede reagendar (basado en tipo paquete)
     rescheduleUsed?: number; // Cuántas veces ya reagendó
@@ -359,6 +427,7 @@ export interface BookingDetails {
   slots: TimeSlot[];
   userInfo: UserInfo | null;
   technique?: Technique; // Para COUPLES_EXPERIENCE
+  groupMetadata?: GroupClassMetadata; // Para GROUP_CLASS
 }
 
 export interface AddBookingResult {
@@ -642,6 +711,14 @@ export interface GroupClassConfig {
   instructorId?: number;
 }
 
+// 7a. Group Class Metadata (para guardar en bookings)
+export interface GroupClassMetadata {
+  totalParticipants: number;
+  techniqueAssignments: ParticipantTechniqueAssignment[];
+  pricePerPerson: number;
+  totalPrice: number;
+}
+
 // 7a. Group Class Technique Types
 export type GroupTechnique = 'hand_modeling' | 'potters_wheel' | 'painting';
 
@@ -716,9 +793,11 @@ export interface CashierEntry {
   id: string;
   date: string;
   
-  // Input fields - Cuadre de Caja (efectivo solamente)
+  // Input fields - Cuadre de Caja
   initialBalance: number; // Saldo inicial de caja
   cashSales: number; // Ventas en efectivo
+  cardSales?: number; // Ventas con tarjeta
+  transferSales?: number; // Ventas con transferencia
   
   // Counted cash by denomination (cuadre físico de efectivo para calcular saldo final)
   cashDenominations: Record<CashDenomination, number>;
@@ -736,23 +815,6 @@ export interface CashierEntry {
   manualValueFromSystem?: number; // Valor que muestra el sistema para comparación
   difference?: number; // finalCashBalance - manualValueFromSystem
   discrepancy?: boolean; // Hay diferencia
-  
-  // ===== NUEVO: Cuadre de Ventas Totales =====
-  // Sistema (Lo que dice Contpago/Sistema)
-  systemCashSales?: number; // Ventas en efectivo según sistema
-  systemCardSales?: number; // Ventas en tarjeta según sistema
-  systemTransferSales?: number; // Ventas en transferencia según sistema
-  systemTotalSales?: number; // Total ventas según sistema (cash + card + transfer) - calculado
-  
-  // Lo que TÚ CONTAS
-  myEffectiveSales?: number; // Mis ventas en efectivo
-  myVouchersAccumulated?: number; // Mis vouchers acumulados (ventas TC)
-  myTransfersReceived?: number; // Mis transferencias recibidas
-  myTotalSales?: number; // Mi total (efectivo + vouchers + transfers) - calculado
-  
-  // Validación de cuadre de ventas
-  salesDifference?: number; // systemTotalSales - myTotalSales
-  salesDiscrepancy?: boolean; // Hay diferencia en ventas
   
   // Metadata
   createdAt: string;
