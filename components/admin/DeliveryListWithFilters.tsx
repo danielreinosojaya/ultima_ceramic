@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import type { Delivery } from '../../types';
 import { MagnifyingGlassIcon, FunnelIcon, XMarkIcon, QuestionMarkCircleIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import { PhotoViewerModal } from './PhotoViewerModal';
@@ -172,6 +172,33 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
         setPhotoViewerOpen(true);
     };
 
+    // Cargar contactos de clientes al montar o cuando cambien las deliveries
+    useEffect(() => {
+        const loadAllCustomerContacts = async () => {
+            try {
+                const customers = await dataService.getCustomers();
+                const contactsMap: {[email: string]: {phone?: string, countryCode?: string}} = {};
+                
+                customers.forEach(customer => {
+                    if (customer.userInfo?.email) {
+                        contactsMap[customer.userInfo.email] = {
+                            phone: customer.userInfo.phone,
+                            countryCode: customer.userInfo.countryCode
+                        };
+                    }
+                });
+                
+                setCustomerContacts(contactsMap);
+            } catch (error) {
+                console.error('Error loading customer contacts:', error);
+            }
+        };
+
+        if (deliveries.length > 0) {
+            loadAllCustomerContacts();
+        }
+    }, [deliveries.length]);
+
     const getCustomerContactInfo = async (customerEmail: string) => {
         if (customerContacts[customerEmail]) return customerContacts[customerEmail];
         
@@ -204,7 +231,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
             cleanPhone;
         
         const message = encodeURIComponent(
-            `Hola! Te contacto desde CeramicAlma sobre ${deliveryDescription || 'tus piezas de cerámica'}. `
+            `¡Hola! 👋 Te escribo desde CeramicAlma. ¿Cómo estás? Quería ponerme en contacto contigo para coordinar la entrega de tus piezas 🎨✨`
         );
         
         const whatsappUrl = `https://wa.me/${fullPhone}?text=${message}`;
@@ -578,6 +605,9 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                         {delivery.customerName || 'Cliente desconocido'}
                                     </p>
                                     <p className="text-xs sm:text-sm text-gray-600 truncate">{delivery.customerEmail}</p>
+                                    {customerContacts[delivery.customerEmail]?.phone && (
+                                        <p className="text-xs sm:text-sm text-gray-500 font-mono">📱 {customerContacts[delivery.customerEmail].phone}</p>
+                                    )}
                                 </div>
                             </div>
 
