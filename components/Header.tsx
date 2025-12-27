@@ -3,6 +3,7 @@ import { Logo } from './Logo';
 import { UserIcon } from '@heroicons/react/24/outline';
 import { ClientPortal } from './ClientPortal';
 import { useAuth } from '../context/AuthContext';
+import { FEATURE_FLAGS } from '../featureFlags';
 
 interface HeaderProps {
   onGiftcardClick?: () => void;
@@ -43,13 +44,18 @@ export const Header: React.FC<HeaderProps> = ({ onGiftcardClick, onMyClassesClic
               {/* Login button - Si NO está autenticado */}
               {onClientLogin && (
                 <button
-                  onClick={onClientLogin}
-                  className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-brand-primary text-white hover:opacity-90 font-semibold text-xs sm:text-sm md:text-base transition-opacity whitespace-nowrap"
-                  title="Mi Cuenta"
-                  aria-label="Mi Cuenta"
+                  onClick={() => FEATURE_FLAGS.CURSO_TORNO && onClientLogin()}
+                  disabled={!FEATURE_FLAGS.CURSO_TORNO}
+                  className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg font-semibold text-xs sm:text-sm md:text-base transition-opacity whitespace-nowrap ${
+                    FEATURE_FLAGS.CURSO_TORNO 
+                      ? 'bg-brand-primary text-white hover:opacity-90 cursor-pointer' 
+                      : 'bg-gray-300 text-gray-600 cursor-not-allowed opacity-60'
+                  }`}
+                  title={FEATURE_FLAGS.CURSO_TORNO ? "Mi Cuenta" : "Próximamente"}
+                  aria-label={FEATURE_FLAGS.CURSO_TORNO ? "Mi Cuenta" : "Próximamente"}
                 >
                   <UserIcon className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-                  <span className="hidden sm:inline">Mi Cuenta</span>
+                  <span className="hidden sm:inline">{FEATURE_FLAGS.CURSO_TORNO ? 'Mi Cuenta' : 'Próximamente'}</span>
                 </button>
               )}
               {/* Guest buttons */}

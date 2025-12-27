@@ -31,6 +31,8 @@ export const PiecesManager: React.FC<PiecesManagerProps> = ({ onDataChange }) =>
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [pieceToDelete, setPieceToDelete] = useState<Piece | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 12;
 
   // Load pieces on mount
   useEffect(() => {
@@ -143,6 +145,17 @@ export const PiecesManager: React.FC<PiecesManagerProps> = ({ onDataChange }) =>
     );
   }
 
+  // Pagination logic
+  const totalPages = Math.ceil(pieces.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedPieces = pieces.slice(startIndex, endIndex);
+
+  // Reset to page 1 if current page is out of bounds
+  if (currentPage > totalPages && totalPages > 0) {
+    setCurrentPage(1);
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -173,8 +186,9 @@ export const PiecesManager: React.FC<PiecesManagerProps> = ({ onDataChange }) =>
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {pieces.map((piece) => (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {paginatedPieces.map((piece) => (
             <div
               key={piece.id}
               className={`border rounded-lg p-4 transition-all ${
@@ -254,6 +268,118 @@ export const PiecesManager: React.FC<PiecesManagerProps> = ({ onDataChange }) =>
             </div>
           ))}
         </div>
+
+        {/* Pagination Controls */}
+        {pieces.length > itemsPerPage && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 px-6 py-4 bg-brand-background rounded-lg">
+            <div className="text-sm text-brand-secondary">
+              Mostrando {startIndex + 1}-{Math.min(endIndex, pieces.length)} de {pieces.length} piezas
+            </div>
+            <div className="flex items-center gap-2 flex-wrap justify-center">
+              <button
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                className="px-3 py-1 text-sm font-semibold rounded bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                ← Primera
+              </button>
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1 text-sm font-semibold rounded bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Anterior
+              </button>
+              
+              {/* Smart pagination: show max 7 page buttons */}
+              <div className="flex items-center gap-1">
+                {(() => {
+                  const maxButtons = 7;
+                  let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+                  let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+                  
+                  // Adjust if we're near the end
+                  if (endPage - startPage < maxButtons - 1) {
+                    startPage = Math.max(1, endPage - maxButtons + 1);
+                  }
+                  
+                  const pageButtons = [];
+                  
+                  // First page + ellipsis if needed
+                  if (startPage > 1) {
+                    pageButtons.push(
+                      <button
+                        key={1}
+                        onClick={() => setCurrentPage(1)}
+                        className="px-3 py-1 text-sm font-semibold rounded bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 transition-colors"
+                      >
+                        1
+                      </button>
+                    );
+                    if (startPage > 2) {
+                      pageButtons.push(
+                        <span key="ellipsis-start" className="px-2 text-gray-400">...</span>
+                      );
+                    }
+                  }
+                  
+                  // Page buttons
+                  for (let i = startPage; i <= endPage; i++) {
+                    pageButtons.push(
+                      <button
+                        key={i}
+                        onClick={() => setCurrentPage(i)}
+                        className={`px-3 py-1 text-sm font-semibold rounded transition-colors ${
+                          currentPage === i
+                            ? 'bg-brand-primary text-white'
+                            : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        {i}
+                      </button>
+                    );
+                  }
+                  
+                  // Last page + ellipsis if needed
+                  if (endPage < totalPages) {
+                    if (endPage < totalPages - 1) {
+                      pageButtons.push(
+                        <span key="ellipsis-end" className="px-2 text-gray-400">...</span>
+                      );
+                    }
+                    pageButtons.push(
+                      <button
+                        key={totalPages}
+                        onClick={() => setCurrentPage(totalPages)}
+                        className="px-3 py-1 text-sm font-semibold rounded bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 transition-colors"
+                      >
+                        {totalPages}
+                      </button>
+                    );
+                  }
+                  
+                  return pageButtons;
+                })()}
+              </div>
+              
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 text-sm font-semibold rounded bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Siguiente
+              </button>
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 text-sm font-semibold rounded bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Última →
+              </button>
+            </div>
+          </div>
+        )}
+        </>
       )}
 
       {isModalOpen && (
