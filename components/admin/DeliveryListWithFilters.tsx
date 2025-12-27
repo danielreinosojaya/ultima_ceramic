@@ -204,7 +204,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
             cleanPhone;
         
         const message = encodeURIComponent(
-            `¡Hola! 👋 Te escribo desde CeramicAlma. ¿Cómo estás? Quería ponerse en contacto contigo para coordinar la entrega de tus piezas 🎨✨`
+            `¡Hola! 👋 Te escribo desde CeramicAlma. ¿Cómo estás? Quería ponerme en contacto contigo para coordinar la entrega de tus piezas 🎨✨`
         );
         
         const whatsappUrl = `https://wa.me/${fullPhone}?text=${message}`;
