@@ -626,11 +626,13 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     break;
                 }
                 case 'getCustomers': {
-                    // Get all unique customers from bookings
+                    // Get all unique customers from bookings first
                     const { rows: bookings } = await sql`SELECT * FROM bookings ORDER BY created_at DESC`;
                     const validBookings = bookings.filter(booking => booking && typeof booking === 'object');
                     const parsedBookings = validBookings.map(parseBookingFromDB).filter(Boolean);
                     const customerMap = new Map<string, Customer>();
+                    
+                    // Process booking customers
                     parsedBookings.forEach((booking: Booking) => {
                         if (!booking || !booking.userInfo || !booking.userInfo.email) return;
                         const email = booking.userInfo.email;
@@ -653,6 +655,41 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                 lastBookingDate: new Date(booking.createdAt),
                                 deliveries: []
                             });
+                        }
+                    });
+
+                    // Also get standalone customers from customers table (e.g., delivery-only customers)
+                    const { rows: standaloneCustomers } = await sql`SELECT * FROM customers`;
+                    standaloneCustomers.forEach(customerRow => {
+                        const email = customerRow.email;
+                        if (!customerMap.has(email)) {
+                            // Create customer from customers table data
+                            customerMap.set(email, {
+                                email,
+                                userInfo: {
+                                    firstName: customerRow.first_name || '',
+                                    lastName: customerRow.last_name || '',
+                                    email: customerRow.email,
+                                    phone: customerRow.phone || '',
+                                    countryCode: customerRow.country_code || '',
+                                    birthday: customerRow.birthday || null
+                                },
+                                bookings: [],
+                                totalBookings: 0,
+                                totalSpent: 0,
+                                lastBookingDate: new Date(0),
+                                deliveries: []
+                            });
+                        }
+                        // If customer exists from bookings but has additional phone data from customers table, merge it
+                        else {
+                            const existing = customerMap.get(email)!;
+                            if (customerRow.phone && !existing.userInfo.phone) {
+                                existing.userInfo.phone = customerRow.phone;
+                            }
+                            if (customerRow.country_code && !existing.userInfo.countryCode) {
+                                existing.userInfo.countryCode = customerRow.country_code;
+                            }
                         }
                     });
                     data = Array.from(customerMap.values());
