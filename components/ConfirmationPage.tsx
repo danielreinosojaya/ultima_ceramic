@@ -12,6 +12,7 @@ import { formatPrice } from '../utils/formatters';
 import { DownloadIcon } from './icons/DownloadIcon';
 import { SINGLE_CLASS_PRICE, VAT_RATE } from '../constants';
 import { useEffect } from 'react';
+import { FEATURE_FLAGS } from '../featureFlags.ts';
 
 interface ConfirmationPageProps {
     booking: Booking;
@@ -262,7 +263,7 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                     >
                         Volver al Inicio
                     </button>
-                    {onNavigateToMyClasses && (
+                    {onNavigateToMyClasses && FEATURE_FLAGS.CURSO_TORNO && (
                         <button
                             onClick={onNavigateToMyClasses}
                             className="w-full sm:w-auto bg-brand-accent text-white font-bold py-2 px-8 rounded-lg hover:opacity-90 transition-opacity duration-300"
