@@ -1,28 +1,30 @@
 import React from 'react';
-// ...existing code...
+import { FEATURE_FLAGS } from '../featureFlags';
 
 interface WelcomeSelectorProps {
   onSelect: (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio' | 'group_class_wizard' | 'single_class_wizard' | 'wheel_course') => void;
 }
 
+// Mobile-first Card optimizada para iPhone
 const ChoiceCard: React.FC<{
     title: string;
     subtitle: string;
     buttonText: string;
     onClick: () => void;
 }> = ({ title, subtitle, buttonText, onClick }) => (
-    <div className="bg-brand-surface p-8 rounded-xl shadow-subtle hover:shadow-lifted transition-shadow duration-300 flex flex-col items-center text-center h-full">
-        <h3 className="text-2xl font-semibold text-brand-text mb-4">{title}</h3>
-        <p className="text-brand-secondary mb-8 flex-grow">{subtitle}</p>
+    <div className="bg-brand-surface p-5 sm:p-6 md:p-8 rounded-2xl shadow-subtle hover:shadow-lifted transition-all duration-300 flex flex-col items-center text-center h-full active:scale-[0.98]">
+        <h3 className="text-xl sm:text-2xl font-semibold text-brand-text mb-2 sm:mb-4">{title}</h3>
+        <p className="text-sm sm:text-base text-brand-secondary mb-4 sm:mb-6 md:mb-8 flex-grow leading-relaxed">{subtitle}</p>
         <button
             onClick={onClick}
-            className="bg-brand-primary text-white font-bold py-3 px-8 rounded-lg w-full max-w-xs hover:opacity-90 transition-opacity duration-300"
+            className="bg-brand-primary text-white font-semibold py-3 sm:py-3.5 px-6 sm:px-8 rounded-xl w-full hover:opacity-90 active:opacity-80 transition-all duration-200 text-sm sm:text-base touch-manipulation"
         >
             {buttonText}
         </button>
     </div>
 );
 
+// Experience Card optimizada para mobile con mejor touch feedback
 const ExperienceCard: React.FC<{
     title: string;
     subtitle: string;
@@ -31,16 +33,24 @@ const ExperienceCard: React.FC<{
     isComingSoon?: boolean;
 }> = ({ title, subtitle, buttonText, onClick, isComingSoon }) => (
      <div 
-        className={`bg-brand-surface p-8 rounded-xl shadow-subtle flex flex-col md:flex-row items-center text-center md:text-left gap-6 ${isComingSoon ? 'cursor-not-allowed opacity-60 border border-gray-300' : 'cursor-pointer hover:shadow-lifted transition-shadow duration-300'}`}
+        className={`bg-brand-surface p-5 sm:p-6 md:p-8 rounded-2xl shadow-subtle flex flex-col gap-4 sm:gap-5 md:flex-row md:items-center md:gap-6 ${
+          isComingSoon 
+            ? 'opacity-50 border border-gray-200' 
+            : 'active:scale-[0.99] hover:shadow-lifted transition-all duration-300'
+        }`}
         onClick={() => !isComingSoon && onClick()}
       >
-        <div className="flex-grow">
-            <h3 className="text-2xl font-semibold text-brand-text mb-2">{title}</h3>
-            <p className={`${isComingSoon ? 'text-gray-500' : 'text-brand-secondary'}`}>{subtitle}</p>
+        <div className="flex-grow text-center md:text-left">
+            <h3 className="text-lg sm:text-xl md:text-2xl font-semibold text-brand-text mb-1.5 sm:mb-2">{title}</h3>
+            <p className={`text-sm sm:text-base leading-relaxed ${isComingSoon ? 'text-gray-400' : 'text-brand-secondary'}`}>{subtitle}</p>
         </div>
         <button 
             disabled={isComingSoon}
-            className={`font-bold py-3 px-8 rounded-lg w-full md:w-auto flex-shrink-0 ${isComingSoon ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-brand-accent text-white hover:opacity-90 transition-opacity duration-300'}`}
+            className={`font-semibold py-3 sm:py-3.5 px-6 sm:px-8 rounded-xl w-full md:w-auto flex-shrink-0 text-sm sm:text-base transition-all duration-200 touch-manipulation ${
+              isComingSoon 
+                ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                : 'bg-brand-accent text-white hover:opacity-90 active:opacity-80'
+            }`}
         >
             {isComingSoon ? 'Próximamente' : buttonText}
         </button>
@@ -50,106 +60,137 @@ const ExperienceCard: React.FC<{
 
 export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) => {
   return (
-    <div className="text-center p-4 sm:p-6 bg-transparent animate-fade-in-up max-w-6xl mx-auto w-full">
-      <h2 className="text-3xl sm:text-4xl font-serif font-bold text-brand-text mb-2">Bienvenido a Ceramicalma</h2>
-      <p className="text-base sm:text-lg text-brand-secondary mb-8 sm:mb-10">¿Es tu primera vez con nosotros?</p>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 mb-8 md:mb-10">
+    <div className="text-center px-4 py-6 sm:p-6 md:p-8 bg-transparent animate-fade-in-up max-w-6xl mx-auto w-full">
+      {/* Hero Section - Mobile optimized */}
+      <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif font-bold text-brand-text mb-1.5 sm:mb-2">
+        Bienvenido a Ceramicalma
+      </h2>
+      <p className="text-sm sm:text-base md:text-lg text-brand-secondary mb-6 sm:mb-8 md:mb-10">
+        ¿Es tu primera vez con nosotros?
+      </p>
+      
+      {/* Main Options - Stack on mobile, grid on desktop */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-5 md:gap-6 mb-8 sm:mb-10 md:mb-12">
         <ChoiceCard
           title="Soy Nuevo Aquí"
-          subtitle="Comienza tu aventura con nuestra Clase Introductoria, diseñada para principiantes absolutos."
+          subtitle="Comienza tu aventura con nuestra Clase Introductoria, diseñada para principiantes."
           buttonText="¡Quiero Empezar!"
           onClick={() => onSelect('new')}
         />
         <ChoiceCard
           title="Ya Soy Alumno"
-          subtitle="Continúa tu práctica seleccionando uno de nuestros paquetes de clases continuas."
+          subtitle="Continúa tu práctica seleccionando uno de nuestros paquetes de clases."
           buttonText="Ver Paquetes"
           onClick={() => onSelect('returning')}
         />
         <ChoiceCard
           title="Open Studio"
-          subtitle="Elige nuestra membresía Open Studio y accede al taller sin límites."
+          subtitle="Accede al taller sin límites con nuestra membresía Open Studio."
           buttonText="Ir a Open Studio"
           onClick={() => onSelect('open_studio')}
         />
       </div>
 
-      {/* NEW EXPERIENCES SECTION */}
-      <div className="mb-8 md:mb-10">
-        <h3 className="text-xl font-semibold text-brand-text mb-4">Nuevas Experiencias Personalizadas</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <ExperienceCard 
-            title="Experiencia Personalizada"
-            subtitle="Reúne a tu grupo y diseña la clase perfecta. Cada persona elige su técnica: torno, modelado o pintura."
-            buttonText="Crear Experiencia"
-            onClick={() => onSelect('group_class_wizard')}
-            isComingSoon={false}
-          />
-          <ExperienceCard 
-            title="Clases Sueltas"
-            subtitle="Elige entre Clase Individual (solo para ti) o Grupal (con amigos). Técnicas: Torno (máx 8) • Modelado (máx 14) • Pintura (sin límite)."
-            buttonText="Reservar Clase"
-            onClick={() => onSelect('single_class_wizard')}
-            isComingSoon={false}
-          />
+      {/* Section Divider */}
+      <div className="flex items-center gap-4 mb-6 sm:mb-8">
+        <div className="flex-1 h-px bg-brand-border/50"></div>
+        <h3 className="text-base sm:text-lg font-semibold text-brand-text px-2">Nuevas Experiencias</h3>
+        <div className="flex-1 h-px bg-brand-border/50"></div>
+      </div>
+
+      {/* New Experiences Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 mb-6 sm:mb-8">
+        <ExperienceCard 
+          title="Experiencia Personalizada"
+          subtitle="Reúne a tu grupo y diseña la clase perfecta. Cada persona elige su técnica."
+          buttonText="Crear Experiencia"
+          onClick={() => onSelect('group_class_wizard')}
+          isComingSoon={!FEATURE_FLAGS.EXPERIENCIA_PERSONALIZADA}
+        />
+        <ExperienceCard 
+          title="Clases Sueltas"
+          subtitle="Clase Individual o Grupal. Torno, Modelado o Pintura."
+          buttonText="Reservar Clase"
+          onClick={() => onSelect('single_class_wizard')}
+          isComingSoon={!FEATURE_FLAGS.CLASES_SUELTAS}
+        />
+      </div>
+
+      {/* Curso de Torno - Featured Card con badges mejorados */}
+      <div className="mb-6 sm:mb-8">
+        <div 
+          className={`bg-brand-surface p-5 sm:p-6 md:p-8 rounded-2xl shadow-subtle relative overflow-hidden ${
+            !FEATURE_FLAGS.CURSO_TORNO 
+              ? 'opacity-50 border border-gray-200' 
+              : 'active:scale-[0.99] hover:shadow-lifted transition-all duration-300'
+          }`}
+          onClick={() => FEATURE_FLAGS.CURSO_TORNO && onSelect('wheel_course')}
+        >
+          {/* Badges - Mobile optimized */}
+          <div className="flex justify-center md:justify-start gap-2 mb-4">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100">
+              <span className="text-[10px]">✨</span> Nuevo
+            </span>
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-600 border border-amber-100">
+              <span className="text-[10px]">🎓</span> Curso
+            </span>
+          </div>
+
+          <div className="flex flex-col md:flex-row md:items-center gap-4 sm:gap-5 md:gap-6">
+            <div className="flex-grow text-center md:text-left">
+              <h3 className="text-lg sm:text-xl md:text-2xl font-semibold text-brand-text mb-1.5 sm:mb-2">
+                Aprende Torno desde Cero
+              </h3>
+              <p className={`text-sm sm:text-base mb-3 sm:mb-4 leading-relaxed ${!FEATURE_FLAGS.CURSO_TORNO ? 'text-gray-400' : 'text-brand-secondary'}`}>
+                6 horas de instrucción • Grupos reducidos • Certificado incluido
+              </p>
+              
+              {/* Info chips - Mobile optimized */}
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 sm:gap-3 text-xs sm:text-sm text-brand-secondary">
+                <span className="inline-flex items-center gap-1.5 bg-brand-background/50 px-2.5 py-1 rounded-full">
+                  <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                  </svg>
+                  2 horarios
+                </span>
+                <span className="inline-flex items-center gap-1.5 bg-brand-background/50 px-2.5 py-1 rounded-full">
+                  <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                  </svg>
+                  Máx 6
+                </span>
+                <span className="inline-flex items-center gap-1.5 bg-brand-background/50 px-2.5 py-1 rounded-full font-medium">
+                  $150
+                </span>
+              </div>
+            </div>
+            
+            <button 
+              disabled={!FEATURE_FLAGS.CURSO_TORNO}
+              className={`font-semibold py-3 sm:py-3.5 px-6 sm:px-8 rounded-xl w-full md:w-auto flex-shrink-0 text-sm sm:text-base transition-all duration-200 touch-manipulation ${
+                !FEATURE_FLAGS.CURSO_TORNO 
+                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                  : 'bg-brand-accent text-white hover:opacity-90 active:opacity-80'
+              }`}
+            >
+              {FEATURE_FLAGS.CURSO_TORNO ? 'Ver Detalles →' : 'Próximamente'}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* CURSO DE TORNO - NUEVO */}
-      <div className="mb-8 md:mb-10">
-        <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 rounded-2xl p-8 text-white shadow-2xl transform hover:scale-105 transition-all duration-300">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-white/20 text-white">
-              🆕 NUEVO
-            </span>
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-400 text-amber-900">
-              🎓 CURSO COMPLETO
-            </span>
-          </div>
-          <h3 className="text-3xl font-serif font-bold mb-3">Aprende Torno desde Cero</h3>
-          <p className="text-indigo-100 text-lg mb-6">
-            6 horas de instrucción personalizada • Grupos reducidos • Certificado incluido
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-4 mb-6 text-sm">
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-              </svg>
-              <span>2 opciones de horario</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-              </svg>
-              <span>Máximo 6 alumnos</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-              </svg>
-              <span>$150 total</span>
-            </div>
-          </div>
-          <button
-            onClick={() => onSelect('wheel_course')}
-            className="bg-white text-indigo-700 font-bold py-4 px-8 rounded-xl hover:bg-indigo-50 transition-all duration-300 shadow-lg hover:shadow-xl w-full md:w-auto text-lg"
-          >
-            Ver Detalles del Curso →
-          </button>
-        </div>
-      </div>
-
-      <div className="space-y-6 md:space-y-8">
+      {/* Other Experiences */}
+      <div className="space-y-4 sm:space-y-5">
         <ExperienceCard 
           title="Experiencias para Parejas"
-          subtitle="Una cita creativa y diferente. Moldeen una pieza juntos en el torno o creen piezas individuales, con la guía de un instructor."
+          subtitle="Una cita creativa y diferente. Moldeen juntos o creen piezas individuales."
           buttonText="Planifica tu Cita"
           onClick={() => onSelect('couples_experience')}
-          isComingSoon={false}
+          isComingSoon={!FEATURE_FLAGS.EXPERIENCIAS_PAREJAS}
         />
         <ExperienceCard 
           title="Experiencias Grupales"
-          subtitle="Ideal para cumpleaños, team building o una reunión creativa entre amigos. Contáctanos para crear un evento a tu medida."
+          subtitle="Ideal para cumpleaños, team building o reuniones creativas entre amigos."
           buttonText="Planifica Tu Evento"
           onClick={() => onSelect('group_experience')}
         />
