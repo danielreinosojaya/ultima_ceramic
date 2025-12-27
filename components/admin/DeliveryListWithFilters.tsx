@@ -4,6 +4,7 @@ import { MagnifyingGlassIcon, FunnelIcon, XMarkIcon, QuestionMarkCircleIcon, Arr
 import { PhotoViewerModal } from './PhotoViewerModal';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import * as dataService from '../../services/dataService';
 
 // Helper function to detect critical deliveries
 const isCritical = (delivery: Delivery): boolean => {
@@ -83,6 +84,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
     const [selectedDeliveries, setSelectedDeliveries] = useState<Set<string>>(new Set());
+    const [customerContacts, setCustomerContacts] = useState<{[email: string]: {phone?: string, countryCode?: string}}>({});
 
     const filteredDeliveries = useMemo(() => {
         const today = new Date();
@@ -168,6 +170,45 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
         setPhotosToView(photos);
         setPhotoStartIndex(startIndex);
         setPhotoViewerOpen(true);
+    };
+
+    const getCustomerContactInfo = async (customerEmail: string) => {
+        if (customerContacts[customerEmail]) return customerContacts[customerEmail];
+        
+        try {
+            const customers = await dataService.getCustomers();
+            const customer = customers.find(c => c.userInfo.email === customerEmail);
+            const contactInfo = {
+                phone: customer?.userInfo.phone,
+                countryCode: customer?.userInfo.countryCode
+            };
+            setCustomerContacts(prev => ({...prev, [customerEmail]: contactInfo}));
+            return contactInfo;
+        } catch (error) {
+            console.error('Error fetching customer contact:', error);
+            return { phone: undefined, countryCode: undefined };
+        }
+    };
+
+    const handleWhatsAppContact = async (customerEmail: string, deliveryDescription?: string) => {
+        const contactInfo = await getCustomerContactInfo(customerEmail);
+        
+        if (!contactInfo.phone) {
+            alert('No se encontró número de teléfono para este cliente');
+            return;
+        }
+        
+        const cleanPhone = contactInfo.phone.replace(/[^\d]/g, '');
+        const fullPhone = contactInfo.countryCode ? 
+            `${contactInfo.countryCode}${cleanPhone}` : 
+            cleanPhone;
+        
+        const message = encodeURIComponent(
+            `Hola! Te contacto desde CeramicAlma sobre ${deliveryDescription || 'tus piezas de cerámica'}. `
+        );
+        
+        const whatsappUrl = `https://wa.me/${fullPhone}?text=${message}`;
+        window.open(whatsappUrl, '_blank');
     };
 
     const exportToPDF = () => {
@@ -684,12 +725,12 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                             {/* Card Footer - Action Buttons */}
                             <div className="bg-gray-50 px-3 sm:px-4 py-2 sm:py-3 border-t border-gray-200 flex flex-wrap gap-2">
                                 <button
-                                    className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 shadow-sm transition-all text-xs sm:text-sm font-semibold"
-                                    title="Editar entrega"
-                                    onClick={() => onEdit(delivery)}
+                                    className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 shadow-sm transition-all text-xs sm:text-sm font-semibold"
+                                    title="Contactar cliente por WhatsApp"
+                                    onClick={() => handleWhatsAppContact(delivery.customerEmail, delivery.description)}
                                 >
-                                    <span className="text-base sm:text-lg">✏️</span>
-                                    <span className="hidden xs:inline">Editar</span>
+                                    <span className="text-base sm:text-lg">📱</span>
+                                    <span className="hidden xs:inline">WhatsApp</span>
                                 </button>
                                 <button
                                     className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 shadow-sm transition-all text-xs sm:text-sm font-semibold"
