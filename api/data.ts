@@ -3471,6 +3471,9 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                                 console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] ✅ Updated successfully`);
                                 
                                 // Send email synchronously (wait for it)
+                                let emailSent = false as boolean;
+                                let emailError: string | undefined = undefined;
+                                let emailDryRunPath: string | undefined = undefined;
                                 try {
                                     console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Fetching customer data...`);
                                     const { rows: [customerData] } = await sql`
@@ -3492,18 +3495,26 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                                                 readyAt: readyDelivery.ready_at
                                             }
                                         );
+                                        emailSent = !!(emailResult && emailResult.sent);
+                                        emailError = (emailResult && !emailResult.sent) ? emailResult.error : undefined;
+                                        emailDryRunPath = (emailResult && !emailResult.sent) ? emailResult.dryRunPath : undefined;
                                         console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] 📧 Email sent successfully:`, emailResult);
                                     } else {
                                         console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Customer data not found for email`);
                                     }
                                 } catch (emailErr) {
                                     console.error(`[bulkUpdateDeliveryStatus] [${deliveryId}] ❌ Email failed:`, emailErr);
+                                    emailSent = false;
+                                    emailError = emailErr instanceof Error ? emailErr.message : String(emailErr);
                                 }
                                 
                                 results.push({ 
                                     id: deliveryId, 
                                     success: true, 
-                                    delivery: toCamelCase(readyDelivery) 
+                                    delivery: toCamelCase(readyDelivery),
+                                    emailSent,
+                                    emailError,
+                                    emailDryRunPath
                                 });
                                 break;
                             }
@@ -3538,6 +3549,9 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                                 console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] ✅ Updated successfully`);
                                 
                                 // Send email synchronously (wait for it)
+                                let emailSent = false as boolean;
+                                let emailError: string | undefined = undefined;
+                                let emailDryRunPath: string | undefined = undefined;
                                 try {
                                     console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Fetching customer data...`);
                                     const { rows: [customerData] } = await sql`
@@ -3559,18 +3573,26 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                                                 deliveredAt: completedDelivery.delivered_at || completedDelivery.completed_at
                                             }
                                         );
+                                        emailSent = !!(emailResult && emailResult.sent);
+                                        emailError = (emailResult && !emailResult.sent) ? emailResult.error : undefined;
+                                        emailDryRunPath = (emailResult && !emailResult.sent) ? emailResult.dryRunPath : undefined;
                                         console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] 📧 Email sent successfully:`, emailResult);
                                     } else {
                                         console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Customer data not found for email`);
                                     }
                                 } catch (emailErr) {
                                     console.error(`[bulkUpdateDeliveryStatus] [${deliveryId}] ❌ Email failed:`, emailErr);
+                                    emailSent = false;
+                                    emailError = emailErr instanceof Error ? emailErr.message : String(emailErr);
                                 }
                                 
                                 results.push({ 
                                     id: deliveryId, 
                                     success: true, 
-                                    delivery: toCamelCase(completedDelivery) 
+                                    delivery: toCamelCase(completedDelivery),
+                                    emailSent,
+                                    emailError,
+                                    emailDryRunPath
                                 });
                                 break;
                             }
