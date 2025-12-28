@@ -72,8 +72,8 @@ export const CouplesTechniqueSelector: React.FC<CouplesTechniqueSelectorProps> =
 
       {/* Header */}
       <div className="text-center mb-8">
-        <h2 className="text-4xl font-bold text-brand-text mb-3">¿Qué técnica prefieres?</h2>
-        <p className="text-lg text-brand-secondary">
+        <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-brand-text mb-3">¿Qué técnica prefieres?</h2>
+        <p className="text-sm sm:text-base md:text-lg text-brand-secondary">
           Ambas opciones incluyen todo lo anterior. La diferencia está en el proceso creativo.
         </p>
       </div>

@@ -54,8 +54,8 @@ export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, tech
       <button className="text-brand-secondary hover:text-brand-text mb-4 transition-colors font-semibold text-lg" style={{ background: 'none', border: 'none' }}>
         &larr; Editar Selección
       </button>
-      <h2 className="text-4xl font-bold text-brand-text mb-2">Elige una Técnica</h2>
-      <p className="text-brand-secondary mb-8 text-xl">¿En qué te gustaría enfocarte hoy?</p>
+      <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-brand-text mb-2">Elige una Técnica</h2>
+      <p className="text-brand-secondary mb-8 text-sm sm:text-base md:text-xl">¿En qué te gustaría enfocarte hoy?</p>
       
       <div className="bg-brand-background/70 border border-brand-border/50 rounded-lg p-6 mb-10 text-left flex items-start gap-4 animate-fade-in">
         <SparklesIcon className="w-8 h-8 text-brand-accent flex-shrink-0 mt-1" />
