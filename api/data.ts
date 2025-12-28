@@ -3477,13 +3477,10 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                                 try {
                                     console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Fetching customer data...`);
                                     const { rows: [customerData] } = await sql`
-                                        SELECT user_info FROM customers WHERE email = ${readyDelivery.customer_email} LIMIT 1
+                                        SELECT first_name, last_name FROM customers WHERE email = ${readyDelivery.customer_email} LIMIT 1
                                     `;
-                                    if (customerData?.user_info) {
-                                        const userInfo = typeof customerData.user_info === 'string' 
-                                            ? JSON.parse(customerData.user_info) 
-                                            : customerData.user_info;
-                                        const customerName = userInfo.firstName || 'Cliente';
+                                    if (customerData) {
+                                        const customerName = customerData.first_name || 'Cliente';
                                         
                                         console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Sending email to ${customerName} (${readyDelivery.customer_email})...`);
                                         const emailServiceModule = await import('./emailService.js');
@@ -3555,13 +3552,10 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                                 try {
                                     console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Fetching customer data...`);
                                     const { rows: [customerData] } = await sql`
-                                        SELECT user_info FROM customers WHERE email = ${completedDelivery.customer_email} LIMIT 1
+                                        SELECT first_name, last_name FROM customers WHERE email = ${completedDelivery.customer_email} LIMIT 1
                                     `;
-                                    if (customerData?.user_info) {
-                                        const userInfo = typeof customerData.user_info === 'string' 
-                                            ? JSON.parse(customerData.user_info) 
-                                            : customerData.user_info;
-                                        const customerName = userInfo.firstName || 'Cliente';
+                                    if (customerData) {
+                                        const customerName = customerData.first_name || 'Cliente';
                                         
                                         console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Sending email to ${customerName} (${completedDelivery.customer_email})...`);
                                         const emailServiceModule = await import('./emailService.js');
