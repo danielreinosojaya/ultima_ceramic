@@ -96,17 +96,17 @@ export const GiftcardManualPaymentInstructions: React.FC<{ onFinish: () => void;
   );
   const whatsappLink = `https://wa.me/${whatsappNumber.replace(/\D/g, '')}?text=${message}`;
   return (
-    <div className="w-full max-w-lg mx-auto flex flex-col items-center p-0 bg-brand-background rounded-3xl shadow-2xl border border-brand-border">
-      <div className="w-full rounded-t-3xl px-10 pt-10 pb-6 bg-white border-b border-brand-border">
-        <h2 className="text-3xl font-display font-extrabold mb-2 text-brand-primary text-center tracking-wide">Instrucciones de pago</h2>
-        <p className="text-brand-secondary text-center text-lg mb-2">Completa tu compra con una transferencia segura.</p>
+    <div className="w-full max-w-lg mx-auto flex flex-col items-center p-0 bg-brand-background rounded-3xl shadow-2xl border border-brand-border mx-4">
+      <div className="w-full rounded-t-3xl px-6 sm:px-8 md:px-10 pt-8 sm:pt-10 pb-6 bg-white border-b border-brand-border">
+        <h2 className="text-2xl sm:text-3xl font-display font-extrabold mb-2 text-brand-primary text-center tracking-wide">Instrucciones de pago</h2>
+        <p className="text-brand-secondary text-center text-xs sm:text-sm md:text-lg mb-2">Completa tu compra con una transferencia segura.</p>
       </div>
-      <div className="w-full px-8 py-6 flex flex-col gap-6 items-center bg-brand-background rounded-xl shadow-lg mt-6 mb-4 border border-brand-border">
+      <div className="w-full px-6 sm:px-8 py-6 flex flex-col gap-6 items-center bg-brand-background rounded-xl shadow-lg mt-6 mb-4 border border-brand-border">
         {/* Código único */}
         <div className="w-full flex flex-col items-center mb-2">
-          <span className="text-brand-secondary font-semibold text-base mb-1">Código de pago</span>
+          <span className="text-brand-secondary font-semibold text-xs sm:text-sm mb-1">Código de pago</span>
           <div className="flex items-center gap-2">
-            <span className="font-mono text-lg font-bold text-brand-primary bg-white rounded px-3 py-1 border border-brand-border select-all">{code}</span>
+            <span className="font-mono text-sm sm:text-base md:text-lg font-bold text-brand-primary bg-white rounded px-3 py-1 border border-brand-border select-all">{code}</span>
             <button
               className={`text-xs px-2 py-1 rounded-full bg-brand-primary text-white shadow hover:bg-brand-accent transition-colors ${copied ? 'opacity-70' : ''}`}
               onClick={() => {navigator.clipboard.writeText(code); setCopied(true); setTimeout(()=>setCopied(false),1200);}}

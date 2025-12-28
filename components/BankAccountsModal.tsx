@@ -42,7 +42,7 @@ export const BankAccountsModal = ({ open, onClose, accounts }) => {
     <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 animate-fade-in px-4">
       <div 
         data-modal="bank-accounts"
-        className="bg-brand-surface rounded-2xl p-6 sm:p-8 w-full max-w-lg shadow-2xl border border-brand-border relative my-8 max-h-[90vh] overflow-y-auto"
+        className="bg-brand-surface rounded-2xl p-4 sm:p-6 md:p-8 w-full max-w-lg shadow-2xl border border-brand-border relative my-4 sm:my-8 max-h-[90vh] overflow-y-auto mx-4"
       >
         <button
           onClick={onClose}

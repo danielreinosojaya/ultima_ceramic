@@ -339,10 +339,10 @@ export const ClientDeliveryForm: React.FC = () => {
             <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md">
                 {/* Logo/Header */}
             <div className="text-center mb-8">
-                <h1 className="text-3xl font-bold text-brand-text mb-2">
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-brand-text mb-2">
                     🎨 CeramicAlma
                 </h1>
-                <p className="text-brand-secondary text-sm">
+                <p className="text-brand-secondary text-xs sm:text-sm">
                     Seguimiento de Piezas
                 </p>
             </div>                {/* Progress Indicator */}

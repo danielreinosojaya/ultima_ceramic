@@ -81,19 +81,19 @@ export const EnhancedWelcomeSelector: React.FC<EnhancedWelcomeSelectorProps> = (
     };
 
     return (
-        <div className="max-w-6xl mx-auto p-6">
+        <div className="max-w-6xl mx-auto p-4 sm:p-6 md:p-8">
             {/* Header */}
-            <div className="text-center mb-12">
-                <h1 className="text-4xl sm:text-5xl font-bold text-brand-text mb-4">
+            <div className="text-center mb-8 sm:mb-12">
+                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-brand-text mb-3 sm:mb-4">
                     Bienvenido a CeramicAlma
                 </h1>
-                <p className="text-lg text-brand-secondary max-w-2xl mx-auto">
+                <p className="text-base sm:text-lg text-brand-secondary max-w-2xl mx-auto">
                     Selecciona qué tipo de experiencia cerámica buscas. Cada opción te llevará a un flujo personalizado.
                 </p>
             </div>
 
             {/* Modules Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8 sm:mb-12">
                 {modules.map((module, index) => (
                     <button
                         key={index}
@@ -113,7 +113,7 @@ export const EnhancedWelcomeSelector: React.FC<EnhancedWelcomeSelectorProps> = (
                             </div>
 
                             {/* Content */}
-                            <div className={`p-6 flex flex-col flex-grow ${module.isComingSoon ? 'bg-gray-50' : ''}`}>
+                            <div className={`p-4 sm:p-6 flex flex-col flex-grow ${module.isComingSoon ? 'bg-gray-50' : ''}`}>
                                 <h3 className="text-xl font-bold text-brand-text mb-2">
                                     {module.title}
                                 </h3>
@@ -136,9 +136,9 @@ export const EnhancedWelcomeSelector: React.FC<EnhancedWelcomeSelectorProps> = (
             </div>
 
             {/* Info Section */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-12 pt-8 border-t border-gray-200">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mt-8 sm:mt-12 pt-6 sm:pt-8 border-t border-gray-200">
                 {/* Left: Session Info */}
-                <div className="bg-blue-50 rounded-lg p-6 border border-blue-200">
+                <div className="bg-blue-50 rounded-lg p-4 sm:p-6 border border-blue-200">
                     <h3 className="font-bold text-brand-text mb-3 flex items-center gap-2">
                         <span className="text-xl">ℹ️</span> ¿Eres Cliente?
                     </h3>

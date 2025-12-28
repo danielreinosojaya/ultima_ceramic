@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 // Replace UI library imports with basic HTML elements
 import { PaymentDetails } from '../../types';
+import { useAdminData } from '../../context/AdminDataContext';
 
 interface EditPaymentModalProps {
   isOpen: boolean;
@@ -18,6 +19,7 @@ const paymentMethods = [
 ];
 
 export const EditPaymentModal: React.FC<EditPaymentModalProps> = ({ isOpen, onClose, payment, onSave, bookingId, paymentIndex }) => {
+  const adminData = useAdminData();
   const [amount, setAmount] = useState(payment?.amount || 0);
   const [method, setMethod] = useState<string>(payment?.method || 'Cash');
   const [receivedAt, setReceivedAt] = useState(payment?.receivedAt || '');
@@ -51,8 +53,8 @@ export const EditPaymentModal: React.FC<EditPaymentModalProps> = ({ isOpen, onCl
             alert('La reserva asociada a este pago ya no existe. El pago será removido de la vista automáticamente.');
             setShowConfirm(false);
             onClose();
-            // Forzar recarga de datos
-            window.location.reload();
+            // Refresh critical data without full reload
+            adminData.refreshCritical();
             return;
           }
           throw new Error(errorMsg);
@@ -68,7 +70,7 @@ export const EditPaymentModal: React.FC<EditPaymentModalProps> = ({ isOpen, onCl
           alert('La reserva ya no existe. El pago será removido de la vista automáticamente.');
           setShowConfirm(false);
           onClose();
-          window.location.reload();
+          adminData.refreshCritical();
           return;
         }
 
@@ -84,7 +86,7 @@ export const EditPaymentModal: React.FC<EditPaymentModalProps> = ({ isOpen, onCl
           alert('El pago ya no existe en los datos actualizados. La vista se actualizará automáticamente.');
           setShowConfirm(false);
           onClose();
-          window.location.reload();
+          adminData.refreshCritical();
           return;
         }
 
@@ -102,7 +104,7 @@ export const EditPaymentModal: React.FC<EditPaymentModalProps> = ({ isOpen, onCl
         alert('La reserva asociada a este pago fue eliminada. La vista se actualizará automáticamente.');
         setShowConfirm(false);
         onClose();
-        window.location.reload();
+        adminData.refreshCritical();
         return;
       }
       

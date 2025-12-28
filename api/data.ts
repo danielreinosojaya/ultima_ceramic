@@ -3409,6 +3409,234 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             
             return res.status(200).json({ success: true });
         }
+        case 'bulkUpdateDeliveryStatus': {
+            console.log('[bulkUpdateDeliveryStatus] ✅ ENDPOINT RECEIVED');
+            const { deliveryIds, action, metadata } = req.body;
+            console.log('[bulkUpdateDeliveryStatus] Parameters:', { deliveryIds, action, metadata });
+            
+            // Validations
+            if (!deliveryIds || !Array.isArray(deliveryIds) || deliveryIds.length === 0) {
+                console.warn('[bulkUpdateDeliveryStatus] ❌ Invalid deliveryIds:', deliveryIds);
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'deliveryIds array is required and must not be empty' 
+                });
+            }
+            
+            if (!['markReady', 'markCompleted', 'delete'].includes(action)) {
+                console.warn('[bulkUpdateDeliveryStatus] ❌ Invalid action:', action);
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'Invalid action. Must be: markReady, markCompleted, or delete' 
+                });
+            }
+            
+            console.log(`[bulkUpdateDeliveryStatus] 🔄 Processing ${deliveryIds.length} deliveries with action: ${action}`);
+            
+            // Process bulk operation
+            try {
+                const results = [];
+                const errors = [];
+                
+                for (const deliveryId of deliveryIds) {
+                    try {
+                        switch(action) {
+                            case 'markReady': {
+                                console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Checking if exists...`);
+                                const { rows: [existingDelivery] } = await sql`
+                                    SELECT * FROM deliveries WHERE id = ${deliveryId}
+                                `;
+                                
+                                if (!existingDelivery) {
+                                    console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Not found`);
+                                    errors.push({ id: deliveryId, error: 'Delivery not found' });
+                                    break;
+                                }
+                                
+                                if (existingDelivery.status === 'completed') {
+                                    console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Already completed`);
+                                    errors.push({ id: deliveryId, error: 'Delivery already completed' });
+                                    break;
+                                }
+                                
+                                // Mark as ready
+                                const readyAt = existingDelivery.ready_at || new Date().toISOString();
+                                console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Updating status to 'ready'...`);
+                                const { rows: [readyDelivery] } = await sql`
+                                    UPDATE deliveries 
+                                    SET status = 'ready', ready_at = ${readyAt}
+                                    WHERE id = ${deliveryId}
+                                    RETURNING *
+                                `;
+                                console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] ✅ Updated successfully`);
+                                
+                                // Send email synchronously (wait for it)
+                                let emailSent = false as boolean;
+                                let emailError: string | undefined = undefined;
+                                let emailDryRunPath: string | undefined = undefined;
+                                try {
+                                    console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Fetching customer data...`);
+                                    const { rows: [customerData] } = await sql`
+                                        SELECT first_name, last_name FROM customers WHERE email = ${readyDelivery.customer_email} LIMIT 1
+                                    `;
+                                    if (customerData) {
+                                        const customerName = customerData.first_name || 'Cliente';
+                                        
+                                        console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Sending email to ${customerName} (${readyDelivery.customer_email})...`);
+                                        const emailServiceModule = await import('./emailService.js');
+                                        const emailResult = await emailServiceModule.sendDeliveryReadyEmail(
+                                            readyDelivery.customer_email, 
+                                            customerName, 
+                                            {
+                                                description: readyDelivery.description,
+                                                readyAt: readyDelivery.ready_at
+                                            }
+                                        );
+                                        emailSent = !!(emailResult && emailResult.sent);
+                                        emailError = (emailResult && !emailResult.sent) ? emailResult.error : undefined;
+                                        emailDryRunPath = (emailResult && !emailResult.sent) ? emailResult.dryRunPath : undefined;
+                                        console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] 📧 Email sent successfully:`, emailResult);
+                                    } else {
+                                        console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Customer data not found for email`);
+                                    }
+                                } catch (emailErr) {
+                                    console.error(`[bulkUpdateDeliveryStatus] [${deliveryId}] ❌ Email failed:`, emailErr);
+                                    emailSent = false;
+                                    emailError = emailErr instanceof Error ? emailErr.message : String(emailErr);
+                                }
+                                
+                                results.push({ 
+                                    id: deliveryId, 
+                                    success: true, 
+                                    delivery: toCamelCase(readyDelivery),
+                                    emailSent,
+                                    emailError,
+                                    emailDryRunPath
+                                });
+                                break;
+                            }
+                            
+                            case 'markCompleted': {
+                                console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Checking if exists...`);
+                                const { rows: [existingDelivery] } = await sql`
+                                    SELECT * FROM deliveries WHERE id = ${deliveryId}
+                                `;
+                                
+                                if (!existingDelivery) {
+                                    console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Not found`);
+                                    errors.push({ id: deliveryId, error: 'Delivery not found' });
+                                    break;
+                                }
+                                
+                                if (existingDelivery.status === 'completed') {
+                                    console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Already completed`);
+                                    errors.push({ id: deliveryId, error: 'Delivery already completed' });
+                                    break;
+                                }
+                                
+                                console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Updating status to 'completed'...`);
+                                const { rows: [completedDelivery] } = await sql`
+                                    UPDATE deliveries 
+                                    SET status = 'completed', 
+                                        completed_at = NOW(),
+                                        delivered_at = NOW()
+                                    WHERE id = ${deliveryId}
+                                    RETURNING *
+                                `;
+                                console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] ✅ Updated successfully`);
+                                
+                                // Send email synchronously (wait for it)
+                                let emailSent = false as boolean;
+                                let emailError: string | undefined = undefined;
+                                let emailDryRunPath: string | undefined = undefined;
+                                try {
+                                    console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Fetching customer data...`);
+                                    const { rows: [customerData] } = await sql`
+                                        SELECT first_name, last_name FROM customers WHERE email = ${completedDelivery.customer_email} LIMIT 1
+                                    `;
+                                    if (customerData) {
+                                        const customerName = customerData.first_name || 'Cliente';
+                                        
+                                        console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Sending email to ${customerName} (${completedDelivery.customer_email})...`);
+                                        const emailServiceModule = await import('./emailService.js');
+                                        const emailResult = await emailServiceModule.sendDeliveryCompletedEmail(
+                                            completedDelivery.customer_email,
+                                            customerName,
+                                            {
+                                                description: completedDelivery.description,
+                                                deliveredAt: completedDelivery.delivered_at || completedDelivery.completed_at
+                                            }
+                                        );
+                                        emailSent = !!(emailResult && emailResult.sent);
+                                        emailError = (emailResult && !emailResult.sent) ? emailResult.error : undefined;
+                                        emailDryRunPath = (emailResult && !emailResult.sent) ? emailResult.dryRunPath : undefined;
+                                        console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] 📧 Email sent successfully:`, emailResult);
+                                    } else {
+                                        console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Customer data not found for email`);
+                                    }
+                                } catch (emailErr) {
+                                    console.error(`[bulkUpdateDeliveryStatus] [${deliveryId}] ❌ Email failed:`, emailErr);
+                                    emailSent = false;
+                                    emailError = emailErr instanceof Error ? emailErr.message : String(emailErr);
+                                }
+                                
+                                results.push({ 
+                                    id: deliveryId, 
+                                    success: true, 
+                                    delivery: toCamelCase(completedDelivery),
+                                    emailSent,
+                                    emailError,
+                                    emailDryRunPath
+                                });
+                                break;
+                            }
+                            
+                            case 'delete': {
+                                console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Deleting...`);
+                                const { rowCount } = await sql`
+                                    DELETE FROM deliveries WHERE id = ${deliveryId}
+                                `;
+                                
+                                if (rowCount === 0) {
+                                    console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Not found`);
+                                    errors.push({ id: deliveryId, error: 'Delivery not found' });
+                                } else {
+                                    console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] ✅ Deleted successfully`);
+                                    results.push({ id: deliveryId, success: true });
+                                }
+                                break;
+                            }
+                        }
+                    } catch (err) {
+                        console.error(`[bulkUpdateDeliveryStatus] [${deliveryId}] ❌ Error:`, err);
+                        errors.push({ 
+                            id: deliveryId, 
+                            error: err instanceof Error ? err.message : 'Unknown error' 
+                        });
+                    }
+                }
+                
+                console.log('[bulkUpdateDeliveryStatus] ✅ COMPLETED', { succeeded: results.length, failed: errors.length });
+                return res.status(200).json({
+                    success: true,
+                    results,
+                    errors,
+                    summary: {
+                        total: deliveryIds.length,
+                        succeeded: results.length,
+                        failed: errors.length
+                    }
+                });
+                
+            } catch (err) {
+                console.error('[bulkUpdateDeliveryStatus] ❌ FATAL ERROR:', err);
+                return res.status(500).json({
+                    success: false,
+                    error: 'Bulk operation failed',
+                    details: err instanceof Error ? err.message : 'Unknown error'
+                });
+            }
+        }
         case 'updateDeliveryStatuses': {
             // Update overdue deliveries
             const { rows: overdueDeliveries } = await sql`

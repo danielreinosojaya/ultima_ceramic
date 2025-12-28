@@ -229,8 +229,8 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onClose }) => 
                 />
             ) : (
                 <div className="text-center py-12 bg-gray-50 rounded-lg">
-                    <p className="text-brand-secondary text-lg">No tienes clases programadas aún</p>
-                    <p className="text-brand-secondary text-sm mt-2">
+                    <p className="text-brand-secondary text-sm sm:text-base md:text-lg">No tienes clases programadas aún</p>
+                    <p className="text-brand-secondary text-xs sm:text-sm mt-2">
                         {onClose ? (
                             <>
                                 <button

@@ -771,6 +771,11 @@ export const sendDeliveryReadyEmail = async (customerEmail: string, customerName
     
     const result = await sendEmail(customerEmail, subject, html);
     console.log('[sendDeliveryReadyEmail] Email send result:', result);
+    try {
+        await logEmailEvent(customerEmail, 'delivery_ready', 'email', (result as any)?.sent ? 'sent' : 'failed');
+    } catch (e) {
+        console.warn('[sendDeliveryReadyEmail] Failed to log email event:', e);
+    }
     return result;
 };
 
@@ -827,7 +832,12 @@ export const sendDeliveryReminderEmail = async (customerEmail: string, customerN
         </div>
     `;
     
-    await sendEmail(customerEmail, subject, html);
+    const result = await sendEmail(customerEmail, subject, html);
+    try {
+        await logEmailEvent(customerEmail, 'delivery_completed', 'email', (result as any)?.sent ? 'sent' : 'failed');
+    } catch (e) {
+        console.warn('[sendDeliveryCompletedEmail] Failed to log email event:', e);
+    }
 };
 
 export const sendDeliveryCompletedEmail = async (customerEmail: string, customerName: string, delivery: { description?: string | null; deliveredAt: string; }) => {
@@ -879,7 +889,13 @@ export const sendDeliveryCompletedEmail = async (customerEmail: string, customer
         </div>
     `;
     
-    await sendEmail(customerEmail, subject, html);
+    const result = await sendEmail(customerEmail, subject, html);
+    try {
+        await logEmailEvent(customerEmail, 'delivery_completed', 'email', (result as any)?.sent ? 'sent' : 'failed');
+    } catch (e) {
+        console.warn('[sendDeliveryCompletedEmail] Failed to log email event:', e);
+    }
+    return result;
 };
 
 // Special email for couples experience bookings with technique details

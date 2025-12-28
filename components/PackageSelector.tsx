@@ -54,8 +54,8 @@ export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, tech
       <button className="text-brand-secondary hover:text-brand-text mb-4 transition-colors font-semibold text-lg" style={{ background: 'none', border: 'none' }}>
         &larr; Editar Selección
       </button>
-      <h2 className="text-4xl font-bold text-brand-text mb-2">Elige una Técnica</h2>
-      <p className="text-brand-secondary mb-8 text-xl">¿En qué te gustaría enfocarte hoy?</p>
+      <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-brand-text mb-2">Elige una Técnica</h2>
+      <p className="text-brand-secondary mb-8 text-sm sm:text-base md:text-xl">¿En qué te gustaría enfocarte hoy?</p>
       
       <div className="bg-brand-background/70 border border-brand-border/50 rounded-lg p-6 mb-10 text-left flex items-start gap-4 animate-fade-in">
         <SparklesIcon className="w-8 h-8 text-brand-accent flex-shrink-0 mt-1" />
@@ -89,7 +89,7 @@ export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, tech
                     </div>
                   )}
                 </div>
-                <div className="p-6 flex-grow flex flex-col text-left">
+                <div className="p-4 sm:p-5 md:p-6 flex-grow flex flex-col text-left">
                   <h3 className="text-2xl font-semibold text-brand-primary">{pkg.name}</h3>
                    <div className="flex items-baseline gap-2 my-4">
                         <p className="text-4xl font-bold text-brand-text">${pkg.price}</p>
@@ -99,7 +99,7 @@ export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, tech
                         <p className="font-bold text-brand-text">${pricePerClass.toFixed(2)} <span className="font-normal text-brand-secondary">por clase</span></p>
                   </div>
                   <p className="text-brand-secondary text-sm flex-grow min-h-[3.5rem]">{pkg.description}</p>
-                  <button className="mt-6 bg-brand-primary text-white font-bold py-3 px-6 rounded-lg w-full hover:opacity-90 transition-opacity duration-300">
+                  <button className="mt-4 sm:mt-6 bg-brand-primary text-white font-bold py-3 px-6 rounded-lg w-full hover:opacity-90 transition-opacity duration-300 h-11 sm:h-12">
                     Seleccionar paquete
                   </button>
                 </div>

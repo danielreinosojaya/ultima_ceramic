@@ -5,6 +5,7 @@ import { PhotoViewerModal } from './PhotoViewerModal';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import * as dataService from '../../services/dataService';
+import { useAdminData } from '../../context/AdminDataContext';
 
 // Helper function to detect critical deliveries
 const isCritical = (delivery: Delivery): boolean => {
@@ -75,6 +76,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
     onMarkReady,
     formatDate
 }) => {
+    const adminData = useAdminData();
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
     const [showFilters, setShowFilters] = useState(false);
@@ -85,6 +87,8 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
     const [itemsPerPage, setItemsPerPage] = useState(10);
     const [selectedDeliveries, setSelectedDeliveries] = useState<Set<string>>(new Set());
     const [customerContacts, setCustomerContacts] = useState<{[email: string]: {phone?: string, countryCode?: string}}>({});
+    const [isProcessingBulk, setIsProcessingBulk] = useState(false);
+    const [bulkFeedback, setBulkFeedback] = useState<{message: string; type: 'success' | 'error' | 'warning'} | null>(null);
 
     const filteredDeliveries = useMemo(() => {
         const today = new Date();
@@ -818,53 +822,263 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
 
             {/* Bulk Actions & Pagination */}
             {selectedDeliveries.size > 0 && (
-                <div className="bg-blue-50 border border-blue-300 rounded-lg p-4 mb-4">
-                    <p className="text-sm font-semibold text-blue-900 mb-2">
-                        {selectedDeliveries.size} entrega(s) seleccionada(s)
-                    </p>
-                    <div className="flex gap-2 flex-wrap">
-                        {/* Marcar como Lista Tooltip */}
-                        <div className="group relative">
+                <div className="fixed bottom-6 left-6 right-6 z-50 max-w-2xl mx-auto animate-fade-in">
+                    {/* Glassmorphism + Neomorphism Toolbar */}
+                    <div className="backdrop-blur-xl bg-gradient-to-br from-white/85 via-white/75 to-white/65 border border-white/40 rounded-2xl p-5 shadow-2xl"
+                        style={{
+                            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.15), inset 0 1px 1px 0 rgba(255,255,255,0.5)',
+                            background: 'linear-gradient(135deg, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.7) 50%, rgba(255,255,255,0.6) 100%)'
+                        }}>
+                        
+                        {/* Header with count */}
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-blue-600 text-white font-bold text-sm shadow-lg">
+                                    {selectedDeliveries.size}
+                                </div>
+                                <p className="text-sm font-semibold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                                    {selectedDeliveries.size} entrega{selectedDeliveries.size !== 1 ? 's' : ''} seleccionada{selectedDeliveries.size !== 1 ? 's' : ''}
+                                </p>
+                            </div>
                             <button
-                                onClick={() => {
-                                    Array.from(selectedDeliveries).forEach(id => onMarkReady(id));
-                                    setSelectedDeliveries(new Set());
-                                }}
-                                className="px-3 py-2 bg-purple-600 text-white rounded text-sm font-semibold hover:bg-purple-700 flex items-center gap-1"
+                                onClick={() => setSelectedDeliveries(new Set())}
+                                disabled={isProcessingBulk}
+                                className="text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
                             >
-                                ✨ Marcar {selectedDeliveries.size} como Listas
-                                <QuestionMarkCircleIcon className="w-4 h-4" />
+                                ✕
                             </button>
-                            <div className="hidden group-hover:block absolute bottom-full left-0 mb-2 bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-50">
-                                Marca como "LISTA PARA RECOGER" para iniciar el conteo de 60 días antes del vencimiento
-                                <div className="absolute top-full left-2 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+                        </div>
+                    
+                        {/* Feedback messages */}
+                        {bulkFeedback && (
+                            <div className={`mb-4 p-3 rounded-xl text-sm font-medium transition-all duration-300 ${
+                                bulkFeedback.type === 'success' ? 'bg-gradient-to-r from-green-100/80 to-emerald-100/80 text-green-800 border border-green-200/50' :
+                                bulkFeedback.type === 'error' ? 'bg-gradient-to-r from-red-100/80 to-rose-100/80 text-red-800 border border-red-200/50' :
+                                'bg-gradient-to-r from-amber-100/80 to-yellow-100/80 text-amber-800 border border-amber-200/50'
+                            }`}
+                            style={{
+                                boxShadow: bulkFeedback.type === 'success' ? '0 4px 15px rgba(16, 185, 129, 0.1)' :
+                                           bulkFeedback.type === 'error' ? '0 4px 15px rgba(239, 68, 68, 0.1)' :
+                                           '0 4px 15px rgba(217, 119, 6, 0.1)'
+                            }}>
+                                {bulkFeedback.message}
+                            </div>
+                        )}
+                        
+                        {/* Action buttons */}
+                        <div className="flex gap-2 flex-wrap">
+                        {/* Marcar como Lista Tooltip */}
+                        <div className="group relative flex-1 sm:flex-none">
+                            <button
+                                onClick={async () => {
+                                    setBulkFeedback(null);
+                                    setIsProcessingBulk(true);
+                                    try {
+                                        console.log('[DEBUG] Starting markReady for deliveries:', Array.from(selectedDeliveries));
+                                        const result = await dataService.bulkUpdateDeliveryStatus(
+                                            Array.from(selectedDeliveries),
+                                            'markReady'
+                                        );
+                                        console.log('[DEBUG] markReady result:', result);
+                                        
+                                        if (result.success && result.summary.succeeded > 0) {
+                                            const emailFailed = (result.results || []).filter((r: any) => r.emailSent === false).length;
+                                            setBulkFeedback({
+                                                message: `✅ ${result.summary.succeeded} entrega(s) marcadas como listas${emailFailed > 0 ? ` · ⚠️ ${emailFailed} correo(s) no se enviaron` : ''}`,
+                                                type: 'success'
+                                            });
+                                            setSelectedDeliveries(new Set());
+                                            
+                                            // Refresh critical data without full reload
+                                            adminData.refreshCritical();
+                                        } else if (result.summary.failed > 0) {
+                                            setBulkFeedback({
+                                                message: `⚠️ ${result.summary.succeeded} exitosas, ${result.summary.failed} fallaron. Errores: ${result.errors.map(e => `${e.id}: ${e.error}`).join('; ')}`,
+                                                type: 'warning'
+                                            });
+                                        } else {
+                                            setBulkFeedback({
+                                                message: '❌ Error: No se pudieron marcar como listas',
+                                                type: 'error'
+                                            });
+                                        }
+                                        
+                                    } catch (err) {
+                                        console.error('[DEBUG] markReady error:', err);
+                                        setBulkFeedback({
+                                            message: `❌ Error: ${err instanceof Error ? err.message : 'Error desconocido'}`,
+                                            type: 'error'
+                                        });
+                                    } finally {
+                                        setIsProcessingBulk(false);
+                                    }
+                                }}
+                                disabled={isProcessingBulk}
+                                className="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-xl text-sm font-semibold hover:from-purple-600 hover:to-purple-700 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-purple-500/50"
+                                style={{
+                                    boxShadow: '0 4px 15px rgba(147, 51, 234, 0.3)'
+                                }}
+                            >
+                                {isProcessingBulk ? (
+                                    <>
+                                        <span className="animate-spin">⏳</span>
+                                        <span className="hidden sm:inline">Procesando...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span>✨</span>
+                                        <span className="hidden sm:inline">Marcar {selectedDeliveries.size} como Listas</span>
+                                        <span className="sm:hidden">Listas</span>
+                                        <QuestionMarkCircleIcon className="w-4 h-4" />
+                                    </>
+                                )}
+                            </button>
+                            <div className="hidden group-hover:block absolute bottom-full left-0 mb-3 bg-gray-900/95 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap z-[100] backdrop-blur-sm">
+                                Marca como "LISTA PARA RECOGER" para iniciar el conteo de 60 días
+                                <div className="absolute top-full left-3 w-2 h-2 bg-gray-900/95 transform rotate-45"></div>
                             </div>
                         </div>
 
                         {/* Retirada Tooltip */}
-                        <div className="group relative">
+                        <div className="group relative flex-1 sm:flex-none">
                             <button
-                                onClick={() => {
-                                    Array.from(selectedDeliveries).forEach(id => onComplete(id));
-                                    setSelectedDeliveries(new Set());
+                                onClick={async () => {
+                                    if (!confirm(`¿Marcar ${selectedDeliveries.size} entregas como RETIRADAS?`)) return;
+                                    
+                                    setBulkFeedback(null);
+                                    setIsProcessingBulk(true);
+                                    try {
+                                        console.log('[DEBUG] Starting markCompleted for deliveries:', Array.from(selectedDeliveries));
+                                        const result = await dataService.bulkUpdateDeliveryStatus(
+                                            Array.from(selectedDeliveries),
+                                            'markCompleted'
+                                        );
+                                        console.log('[DEBUG] markCompleted result:', result);
+                                        
+                                        if (result.success && result.summary.succeeded > 0) {
+                                            const emailFailed = (result.results || []).filter((r: any) => r.emailSent === false).length;
+                                            setBulkFeedback({
+                                                message: `✅ ${result.summary.succeeded} entrega(s) completadas${emailFailed > 0 ? ` · ⚠️ ${emailFailed} correo(s) no se enviaron` : ''}`,
+                                                type: 'success'
+                                            });
+                                            setSelectedDeliveries(new Set());
+                                            
+                                            // Refresh critical data without full reload
+                                            adminData.refreshCritical();
+                                        } else if (result.summary.failed > 0) {
+                                            setBulkFeedback({
+                                                message: `⚠️ ${result.summary.succeeded} exitosas, ${result.summary.failed} fallaron. Errores: ${result.errors.map(e => `${e.id}: ${e.error}`).join('; ')}`,
+                                                type: 'warning'
+                                            });
+                                        } else {
+                                            setBulkFeedback({
+                                                message: '❌ Error: No se pudieron completar las entregas',
+                                                type: 'error'
+                                            });
+                                        }
+                                        
+                                    } catch (err) {
+                                        console.error('[DEBUG] markCompleted error:', err);
+                                        setBulkFeedback({
+                                            message: `❌ Error: ${err instanceof Error ? err.message : 'Error desconocido'}`,
+                                            type: 'error'
+                                        });
+                                    } finally {
+                                        setIsProcessingBulk(false);
+                                    }
                                 }}
-                                className="px-3 py-2 bg-green-600 text-white rounded text-sm font-semibold hover:bg-green-700 flex items-center gap-1"
+                                disabled={isProcessingBulk}
+                                className="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl text-sm font-semibold hover:from-green-600 hover:to-emerald-700 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-green-500/50"
+                                style={{
+                                    boxShadow: '0 4px 15px rgba(16, 185, 129, 0.3)'
+                                }}
                             >
-                                ✓ Retirada {selectedDeliveries.size}
-                                <QuestionMarkCircleIcon className="w-4 h-4" />
+                                {isProcessingBulk ? (
+                                    <>
+                                        <span className="animate-spin">⏳</span>
+                                        <span className="hidden sm:inline">Procesando...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span>✓</span>
+                                        <span className="hidden sm:inline">Retirada {selectedDeliveries.size}</span>
+                                        <span className="sm:hidden">Retirada</span>
+                                        <QuestionMarkCircleIcon className="w-4 h-4" />
+                                    </>
+                                )}
                             </button>
-                            <div className="hidden group-hover:block absolute bottom-full left-0 mb-2 bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-50">
+                            <div className="hidden group-hover:block absolute bottom-full left-0 mb-3 bg-gray-900/95 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap z-[100] backdrop-blur-sm">
                                 Marca como "RETIRADA" - finaliza la entrega
-                                <div className="absolute top-full left-2 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+                                <div className="absolute top-full left-3 w-2 h-2 bg-gray-900/95 transform rotate-45"></div>
                             </div>
                         </div>
 
+                        {/* Eliminar bulk */}
                         <button
-                            onClick={() => setSelectedDeliveries(new Set())}
-                            className="px-3 py-2 bg-gray-300 text-gray-700 rounded text-sm font-semibold hover:bg-gray-400"
+                            onClick={async () => {
+                                if (!confirm(`¿ELIMINAR ${selectedDeliveries.size} entregas? Esta acción no se puede deshacer.`)) return;
+                                
+                                setBulkFeedback(null);
+                                setIsProcessingBulk(true);
+                                try {
+                                    console.log('[DEBUG] Starting delete for deliveries:', Array.from(selectedDeliveries));
+                                    const result = await dataService.bulkUpdateDeliveryStatus(
+                                        Array.from(selectedDeliveries),
+                                        'delete'
+                                    );
+                                    console.log('[DEBUG] delete result:', result);
+                                    
+                                    if (result.success && result.summary.succeeded > 0) {
+                                        setBulkFeedback({
+                                            message: `🗑️ ${result.summary.succeeded} entrega(s) eliminadas`,
+                                            type: 'success'
+                                        });
+                                        setSelectedDeliveries(new Set());
+                                        
+                                        // Refresh critical data without full reload
+                                        adminData.refreshCritical();
+                                    } else if (result.summary.failed > 0) {
+                                        setBulkFeedback({
+                                            message: `⚠️ ${result.summary.succeeded} eliminadas, ${result.summary.failed} fallaron. Errores: ${result.errors.map(e => `${e.id}: ${e.error}`).join('; ')}`,
+                                            type: 'warning'
+                                        });
+                                    } else {
+                                        setBulkFeedback({
+                                            message: '❌ Error: No se pudieron eliminar las entregas',
+                                            type: 'error'
+                                        });
+                                    }
+                                    
+                                } catch (err) {
+                                    console.error('[DEBUG] delete error:', err);
+                                    setBulkFeedback({
+                                        message: `❌ Error: ${err instanceof Error ? err.message : 'Error desconocido'}`,
+                                        type: 'error'
+                                    });
+                                } finally {
+                                    setIsProcessingBulk(false);
+                                }
+                            }}
+                            disabled={isProcessingBulk}
+                            className="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl text-sm font-semibold hover:from-red-600 hover:to-rose-700 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-red-500/50"
+                            style={{
+                                boxShadow: '0 4px 15px rgba(239, 68, 68, 0.3)'
+                            }}
                         >
-                            Limpiar selección
+                            {isProcessingBulk ? (
+                                <>
+                                    <span className="animate-spin">⏳</span>
+                                    <span className="hidden sm:inline">Procesando...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <span>🗑️</span>
+                                    <span className="hidden sm:inline">Eliminar {selectedDeliveries.size}</span>
+                                    <span className="sm:hidden">Eliminar</span>
+                                </>
+                            )}
                         </button>
+                    </div>
                     </div>
                 </div>
             )}
