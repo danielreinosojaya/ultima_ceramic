@@ -3410,10 +3410,13 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             return res.status(200).json({ success: true });
         }
         case 'bulkUpdateDeliveryStatus': {
+            console.log('[bulkUpdateDeliveryStatus] ✅ ENDPOINT RECEIVED');
             const { deliveryIds, action, metadata } = req.body;
+            console.log('[bulkUpdateDeliveryStatus] Parameters:', { deliveryIds, action, metadata });
             
             // Validations
             if (!deliveryIds || !Array.isArray(deliveryIds) || deliveryIds.length === 0) {
+                console.warn('[bulkUpdateDeliveryStatus] ❌ Invalid deliveryIds:', deliveryIds);
                 return res.status(400).json({ 
                     success: false, 
                     error: 'deliveryIds array is required and must not be empty' 
@@ -3421,11 +3424,14 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             }
             
             if (!['markReady', 'markCompleted', 'delete'].includes(action)) {
+                console.warn('[bulkUpdateDeliveryStatus] ❌ Invalid action:', action);
                 return res.status(400).json({ 
                     success: false, 
                     error: 'Invalid action. Must be: markReady, markCompleted, or delete' 
                 });
             }
+            
+            console.log(`[bulkUpdateDeliveryStatus] 🔄 Processing ${deliveryIds.length} deliveries with action: ${action}`);
             
             // Process bulk operation
             try {
@@ -3436,28 +3442,33 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     try {
                         switch(action) {
                             case 'markReady': {
+                                console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Checking if exists...`);
                                 const { rows: [existingDelivery] } = await sql`
                                     SELECT * FROM deliveries WHERE id = ${deliveryId}
                                 `;
                                 
                                 if (!existingDelivery) {
+                                    console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Not found`);
                                     errors.push({ id: deliveryId, error: 'Delivery not found' });
                                     break;
                                 }
                                 
                                 if (existingDelivery.status === 'completed') {
+                                    console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Already completed`);
                                     errors.push({ id: deliveryId, error: 'Delivery already completed' });
                                     break;
                                 }
                                 
                                 // Mark as ready
                                 const readyAt = existingDelivery.ready_at || new Date().toISOString();
+                                console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Updating status to 'ready'...`);
                                 const { rows: [readyDelivery] } = await sql`
                                     UPDATE deliveries 
                                     SET status = 'ready', ready_at = ${readyAt}
                                     WHERE id = ${deliveryId}
                                     RETURNING *
                                 `;
+                                console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] ✅ Updated successfully`);
                                 
                                 // Send email asynchronously (fire and forget)
                                 (async () => {
@@ -3480,6 +3491,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                                                     readyAt: readyDelivery.ready_at
                                                 }
                                             );
+                                            console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] 📧 Email sent`);
                                         }
                                     } catch (emailErr) {
                                         console.warn('[bulkUpdateDeliveryStatus] Email failed for delivery:', deliveryId, emailErr);
@@ -3495,20 +3507,24 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                             }
                             
                             case 'markCompleted': {
+                                console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Checking if exists...`);
                                 const { rows: [existingDelivery] } = await sql`
                                     SELECT * FROM deliveries WHERE id = ${deliveryId}
                                 `;
                                 
                                 if (!existingDelivery) {
+                                    console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Not found`);
                                     errors.push({ id: deliveryId, error: 'Delivery not found' });
                                     break;
                                 }
                                 
                                 if (existingDelivery.status === 'completed') {
+                                    console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Already completed`);
                                     errors.push({ id: deliveryId, error: 'Delivery already completed' });
                                     break;
                                 }
                                 
+                                console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Updating status to 'completed'...`);
                                 const { rows: [completedDelivery] } = await sql`
                                     UPDATE deliveries 
                                     SET status = 'completed', 
@@ -3517,6 +3533,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                                     WHERE id = ${deliveryId}
                                     RETURNING *
                                 `;
+                                console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] ✅ Updated successfully`);
                                 
                                 // Send email asynchronously
                                 (async () => {
@@ -3539,6 +3556,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                                                     deliveredAt: completedDelivery.delivered_at || completedDelivery.completed_at
                                                 }
                                             );
+                                            console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] 📧 Email sent`);
                                         }
                                     } catch (emailErr) {
                                         console.warn('[bulkUpdateDeliveryStatus] Email failed for delivery:', deliveryId, emailErr);
@@ -3554,19 +3572,23 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                             }
                             
                             case 'delete': {
+                                console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Deleting...`);
                                 const { rowCount } = await sql`
                                     DELETE FROM deliveries WHERE id = ${deliveryId}
                                 `;
                                 
                                 if (rowCount === 0) {
+                                    console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Not found`);
                                     errors.push({ id: deliveryId, error: 'Delivery not found' });
                                 } else {
+                                    console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] ✅ Deleted successfully`);
                                     results.push({ id: deliveryId, success: true });
                                 }
                                 break;
                             }
                         }
                     } catch (err) {
+                        console.error(`[bulkUpdateDeliveryStatus] [${deliveryId}] ❌ Error:`, err);
                         errors.push({ 
                             id: deliveryId, 
                             error: err instanceof Error ? err.message : 'Unknown error' 
@@ -3574,6 +3596,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     }
                 }
                 
+                console.log('[bulkUpdateDeliveryStatus] ✅ COMPLETED', { succeeded: results.length, failed: errors.length });
                 return res.status(200).json({
                     success: true,
                     results,
@@ -3586,6 +3609,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 });
                 
             } catch (err) {
+                console.error('[bulkUpdateDeliveryStatus] ❌ FATAL ERROR:', err);
                 return res.status(500).json({
                     success: false,
                     error: 'Bulk operation failed',

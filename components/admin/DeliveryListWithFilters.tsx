@@ -872,37 +872,42 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                     setBulkFeedback(null);
                                     setIsProcessingBulk(true);
                                     try {
+                                        console.log('[DEBUG] Starting markReady for deliveries:', Array.from(selectedDeliveries));
                                         const result = await dataService.bulkUpdateDeliveryStatus(
                                             Array.from(selectedDeliveries),
                                             'markReady'
                                         );
+                                        console.log('[DEBUG] markReady result:', result);
                                         
-                                        if (result.summary.succeeded > 0) {
+                                        if (result.success && result.summary.succeeded > 0) {
                                             setBulkFeedback({
                                                 message: `✅ ${result.summary.succeeded} entrega(s) marcadas como listas`,
                                                 type: 'success'
                                             });
-                                        }
-                                        if (result.summary.failed > 0) {
+                                            setSelectedDeliveries(new Set());
+                                            
+                                            // Trigger parent refresh after delay
+                                            setTimeout(() => {
+                                                window.location.reload();
+                                            }, 2000);
+                                        } else if (result.summary.failed > 0) {
                                             setBulkFeedback({
-                                                message: `⚠️ ${result.summary.succeeded} exitosas, ${result.summary.failed} fallaron`,
+                                                message: `⚠️ ${result.summary.succeeded} exitosas, ${result.summary.failed} fallaron. Errores: ${result.errors.map(e => `${e.id}: ${e.error}`).join('; ')}`,
                                                 type: 'warning'
+                                            });
+                                        } else {
+                                            setBulkFeedback({
+                                                message: '❌ Error: No se pudieron marcar como listas',
+                                                type: 'error'
                                             });
                                         }
                                         
-                                        setSelectedDeliveries(new Set());
-                                        
-                                        // Trigger parent refresh after delay
-                                        setTimeout(() => {
-                                            window.location.reload();
-                                        }, 1500);
-                                        
                                     } catch (err) {
+                                        console.error('[DEBUG] markReady error:', err);
                                         setBulkFeedback({
-                                            message: '❌ Error procesando operación bulk',
+                                            message: `❌ Error: ${err instanceof Error ? err.message : 'Error desconocido'}`,
                                             type: 'error'
                                         });
-                                        console.error('[Bulk markReady error]', err);
                                     } finally {
                                         setIsProcessingBulk(false);
                                     }
@@ -942,36 +947,41 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                     setBulkFeedback(null);
                                     setIsProcessingBulk(true);
                                     try {
+                                        console.log('[DEBUG] Starting markCompleted for deliveries:', Array.from(selectedDeliveries));
                                         const result = await dataService.bulkUpdateDeliveryStatus(
                                             Array.from(selectedDeliveries),
                                             'markCompleted'
                                         );
+                                        console.log('[DEBUG] markCompleted result:', result);
                                         
-                                        if (result.summary.succeeded > 0) {
+                                        if (result.success && result.summary.succeeded > 0) {
                                             setBulkFeedback({
                                                 message: `✅ ${result.summary.succeeded} entrega(s) completadas`,
                                                 type: 'success'
                                             });
-                                        }
-                                        if (result.summary.failed > 0) {
+                                            setSelectedDeliveries(new Set());
+                                            
+                                            setTimeout(() => {
+                                                window.location.reload();
+                                            }, 2000);
+                                        } else if (result.summary.failed > 0) {
                                             setBulkFeedback({
-                                                message: `⚠️ ${result.summary.succeeded} exitosas, ${result.summary.failed} fallaron`,
+                                                message: `⚠️ ${result.summary.succeeded} exitosas, ${result.summary.failed} fallaron. Errores: ${result.errors.map(e => `${e.id}: ${e.error}`).join('; ')}`,
                                                 type: 'warning'
+                                            });
+                                        } else {
+                                            setBulkFeedback({
+                                                message: '❌ Error: No se pudieron completar las entregas',
+                                                type: 'error'
                                             });
                                         }
                                         
-                                        setSelectedDeliveries(new Set());
-                                        
-                                        setTimeout(() => {
-                                            window.location.reload();
-                                        }, 1500);
-                                        
                                     } catch (err) {
+                                        console.error('[DEBUG] markCompleted error:', err);
                                         setBulkFeedback({
-                                            message: '❌ Error completando entregas',
+                                            message: `❌ Error: ${err instanceof Error ? err.message : 'Error desconocido'}`,
                                             type: 'error'
                                         });
-                                        console.error('[Bulk markCompleted error]', err);
                                     } finally {
                                         setIsProcessingBulk(false);
                                     }
@@ -1010,36 +1020,41 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                 setBulkFeedback(null);
                                 setIsProcessingBulk(true);
                                 try {
+                                    console.log('[DEBUG] Starting delete for deliveries:', Array.from(selectedDeliveries));
                                     const result = await dataService.bulkUpdateDeliveryStatus(
                                         Array.from(selectedDeliveries),
                                         'delete'
                                     );
+                                    console.log('[DEBUG] delete result:', result);
                                     
-                                    if (result.summary.succeeded > 0) {
+                                    if (result.success && result.summary.succeeded > 0) {
                                         setBulkFeedback({
                                             message: `🗑️ ${result.summary.succeeded} entrega(s) eliminadas`,
                                             type: 'success'
                                         });
-                                    }
-                                    if (result.summary.failed > 0) {
+                                        setSelectedDeliveries(new Set());
+                                        
+                                        setTimeout(() => {
+                                            window.location.reload();
+                                        }, 2000);
+                                    } else if (result.summary.failed > 0) {
                                         setBulkFeedback({
-                                            message: `⚠️ ${result.summary.succeeded} eliminadas, ${result.summary.failed} fallaron`,
+                                            message: `⚠️ ${result.summary.succeeded} eliminadas, ${result.summary.failed} fallaron. Errores: ${result.errors.map(e => `${e.id}: ${e.error}`).join('; ')}`,
                                             type: 'warning'
+                                        });
+                                    } else {
+                                        setBulkFeedback({
+                                            message: '❌ Error: No se pudieron eliminar las entregas',
+                                            type: 'error'
                                         });
                                     }
                                     
-                                    setSelectedDeliveries(new Set());
-                                    
-                                    setTimeout(() => {
-                                        window.location.reload();
-                                    }, 1500);
-                                    
                                 } catch (err) {
+                                    console.error('[DEBUG] delete error:', err);
                                     setBulkFeedback({
-                                        message: '❌ Error eliminando entregas',
+                                        message: `❌ Error: ${err instanceof Error ? err.message : 'Error desconocido'}`,
                                         type: 'error'
                                     });
-                                    console.error('[Bulk delete error]', err);
                                 } finally {
                                     setIsProcessingBulk(false);
                                 }
