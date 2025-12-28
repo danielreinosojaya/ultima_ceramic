@@ -3470,33 +3470,35 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                                 `;
                                 console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] ✅ Updated successfully`);
                                 
-                                // Send email asynchronously (fire and forget)
-                                (async () => {
-                                    try {
-                                        const { rows: [customerData] } = await sql`
-                                            SELECT user_info FROM customers WHERE email = ${readyDelivery.customer_email} LIMIT 1
-                                        `;
-                                        if (customerData?.user_info) {
-                                            const userInfo = typeof customerData.user_info === 'string' 
-                                                ? JSON.parse(customerData.user_info) 
-                                                : customerData.user_info;
-                                            const customerName = userInfo.firstName || 'Cliente';
-                                            
-                                            const emailServiceModule = await import('./emailService.js');
-                                            await emailServiceModule.sendDeliveryReadyEmail(
-                                                readyDelivery.customer_email, 
-                                                customerName, 
-                                                {
-                                                    description: readyDelivery.description,
-                                                    readyAt: readyDelivery.ready_at
-                                                }
-                                            );
-                                            console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] 📧 Email sent`);
-                                        }
-                                    } catch (emailErr) {
-                                        console.warn('[bulkUpdateDeliveryStatus] Email failed for delivery:', deliveryId, emailErr);
+                                // Send email synchronously (wait for it)
+                                try {
+                                    console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Fetching customer data...`);
+                                    const { rows: [customerData] } = await sql`
+                                        SELECT user_info FROM customers WHERE email = ${readyDelivery.customer_email} LIMIT 1
+                                    `;
+                                    if (customerData?.user_info) {
+                                        const userInfo = typeof customerData.user_info === 'string' 
+                                            ? JSON.parse(customerData.user_info) 
+                                            : customerData.user_info;
+                                        const customerName = userInfo.firstName || 'Cliente';
+                                        
+                                        console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Sending email to ${customerName} (${readyDelivery.customer_email})...`);
+                                        const emailServiceModule = await import('./emailService.js');
+                                        const emailResult = await emailServiceModule.sendDeliveryReadyEmail(
+                                            readyDelivery.customer_email, 
+                                            customerName, 
+                                            {
+                                                description: readyDelivery.description,
+                                                readyAt: readyDelivery.ready_at
+                                            }
+                                        );
+                                        console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] 📧 Email sent successfully:`, emailResult);
+                                    } else {
+                                        console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Customer data not found for email`);
                                     }
-                                })();
+                                } catch (emailErr) {
+                                    console.error(`[bulkUpdateDeliveryStatus] [${deliveryId}] ❌ Email failed:`, emailErr);
+                                }
                                 
                                 results.push({ 
                                     id: deliveryId, 
@@ -3535,33 +3537,35 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                                 `;
                                 console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] ✅ Updated successfully`);
                                 
-                                // Send email asynchronously
-                                (async () => {
-                                    try {
-                                        const { rows: [customerData] } = await sql`
-                                            SELECT user_info FROM customers WHERE email = ${completedDelivery.customer_email} LIMIT 1
-                                        `;
-                                        if (customerData?.user_info) {
-                                            const userInfo = typeof customerData.user_info === 'string' 
-                                                ? JSON.parse(customerData.user_info) 
-                                                : customerData.user_info;
-                                            const customerName = userInfo.firstName || 'Cliente';
-                                            
-                                            const emailServiceModule = await import('./emailService.js');
-                                            await emailServiceModule.sendDeliveryCompletedEmail(
-                                                completedDelivery.customer_email,
-                                                customerName,
-                                                {
-                                                    description: completedDelivery.description,
-                                                    deliveredAt: completedDelivery.delivered_at || completedDelivery.completed_at
-                                                }
-                                            );
-                                            console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] 📧 Email sent`);
-                                        }
-                                    } catch (emailErr) {
-                                        console.warn('[bulkUpdateDeliveryStatus] Email failed for delivery:', deliveryId, emailErr);
+                                // Send email synchronously (wait for it)
+                                try {
+                                    console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Fetching customer data...`);
+                                    const { rows: [customerData] } = await sql`
+                                        SELECT user_info FROM customers WHERE email = ${completedDelivery.customer_email} LIMIT 1
+                                    `;
+                                    if (customerData?.user_info) {
+                                        const userInfo = typeof customerData.user_info === 'string' 
+                                            ? JSON.parse(customerData.user_info) 
+                                            : customerData.user_info;
+                                        const customerName = userInfo.firstName || 'Cliente';
+                                        
+                                        console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Sending email to ${customerName} (${completedDelivery.customer_email})...`);
+                                        const emailServiceModule = await import('./emailService.js');
+                                        const emailResult = await emailServiceModule.sendDeliveryCompletedEmail(
+                                            completedDelivery.customer_email,
+                                            customerName,
+                                            {
+                                                description: completedDelivery.description,
+                                                deliveredAt: completedDelivery.delivered_at || completedDelivery.completed_at
+                                            }
+                                        );
+                                        console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] 📧 Email sent successfully:`, emailResult);
+                                    } else {
+                                        console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Customer data not found for email`);
                                     }
-                                })();
+                                } catch (emailErr) {
+                                    console.error(`[bulkUpdateDeliveryStatus] [${deliveryId}] ❌ Email failed:`, emailErr);
+                                }
                                 
                                 results.push({ 
                                     id: deliveryId, 
