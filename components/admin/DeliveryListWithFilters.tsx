@@ -882,8 +882,9 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                         console.log('[DEBUG] markReady result:', result);
                                         
                                         if (result.success && result.summary.succeeded > 0) {
+                                            const emailFailed = (result.results || []).filter((r: any) => r.emailSent === false).length;
                                             setBulkFeedback({
-                                                message: `✅ ${result.summary.succeeded} entrega(s) marcadas como listas`,
+                                                message: `✅ ${result.summary.succeeded} entrega(s) marcadas como listas${emailFailed > 0 ? ` · ⚠️ ${emailFailed} correo(s) no se enviaron` : ''}`,
                                                 type: 'success'
                                             });
                                             setSelectedDeliveries(new Set());
@@ -955,8 +956,9 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                         console.log('[DEBUG] markCompleted result:', result);
                                         
                                         if (result.success && result.summary.succeeded > 0) {
+                                            const emailFailed = (result.results || []).filter((r: any) => r.emailSent === false).length;
                                             setBulkFeedback({
-                                                message: `✅ ${result.summary.succeeded} entrega(s) completadas`,
+                                                message: `✅ ${result.summary.succeeded} entrega(s) completadas${emailFailed > 0 ? ` · ⚠️ ${emailFailed} correo(s) no se enviaron` : ''}`,
                                                 type: 'success'
                                             });
                                             setSelectedDeliveries(new Set());
