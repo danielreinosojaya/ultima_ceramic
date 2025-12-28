@@ -60,7 +60,7 @@ export const GiftcardDeliveryOptions: React.FC<{ onSelect: (id: string, data?: a
       >
         ← Atrás
       </button>
-      <h2 className="text-lg font-bold mb-6 text-brand-primary">¿Cómo quieres entregar la giftcard?</h2>
+      <h2 className="text-sm sm:text-base md:text-lg font-bold mb-6 text-brand-primary">¿Cómo quieres entregar la giftcard?</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 mb-8 w-full max-w-xl mx-auto justify-items-center">
         {deliveryOptions.map(opt => {
           return (
@@ -107,7 +107,7 @@ export const GiftcardDeliveryOptions: React.FC<{ onSelect: (id: string, data?: a
         {selected === 'email' && (
           <input
             type="email"
-            className="w-full px-4 py-2 rounded-lg border border-brand-border text-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary"
+            className="w-full px-4 py-3 rounded-lg border border-brand-border text-sm sm:text-base text-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary"
             placeholder="Correo electrónico del destinatario"
             value={inputData.email || ''}
             onChange={e => setInputData({ ...inputData, email: e.target.value })}
@@ -117,7 +117,7 @@ export const GiftcardDeliveryOptions: React.FC<{ onSelect: (id: string, data?: a
         {selected === 'whatsapp' && (
           <input
             type="tel"
-            className="w-full px-4 py-2 rounded-lg border border-brand-border text-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary"
+            className="w-full px-4 py-3 rounded-lg border border-brand-border text-sm sm:text-base text-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary"
             placeholder="+593 98 123 4567"
             value={inputData.phone || ''}
             onChange={e => setInputData({ ...inputData, phone: e.target.value })}
@@ -171,7 +171,7 @@ export const GiftcardDeliveryOptions: React.FC<{ onSelect: (id: string, data?: a
       </div>
 
       <button
-        className="w-full max-w-md py-3 rounded-full bg-brand-primary text-white font-bold text-lg shadow-md hover:bg-brand-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full max-w-md py-3 sm:py-4 rounded-full bg-brand-primary text-white font-bold text-sm sm:text-base md:text-lg shadow-md hover:bg-brand-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed h-12 sm:h-13"
         onClick={() => onSelect(selected, inputData)}
         disabled={
           // Validar que el contacto correspondiente esté completo
