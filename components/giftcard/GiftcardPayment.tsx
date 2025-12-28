@@ -38,15 +38,15 @@ export const GiftcardPayment: React.FC<{
       >
         ← Atrás
       </button>
-      <h2 className="text-3xl font-display font-bold mb-6 text-brand-primary text-center tracking-wide">Resumen y pago</h2>
+      <h2 className="text-2xl sm:text-3xl font-display font-bold mb-6 text-brand-primary text-center tracking-wide">Resumen y pago</h2>
       <div className="w-full mb-6">
         <div className="flex justify-between items-center mb-4">
-          <span className="text-lg text-brand-secondary font-semibold">Monto:</span>
-          <span className="font-bold text-2xl text-brand-primary">${amount}</span>
+          <span className="text-sm sm:text-base md:text-lg text-brand-secondary font-semibold">Monto:</span>
+          <span className="font-bold text-xl sm:text-2xl text-brand-primary">${amount}</span>
         </div>
         <div className="flex justify-between items-center mb-4">
-          <span className="text-lg text-brand-secondary font-semibold">Método de entrega:</span>
-          <span className="flex items-center gap-2 font-bold text-brand-secondary text-lg">
+          <span className="text-sm sm:text-base md:text-lg text-brand-secondary font-semibold">Método de entrega:</span>
+          <span className="flex items-center gap-2 font-bold text-brand-secondary text-sm sm:text-base md:text-lg">
             {deliveryIcons[deliveryMethod?.type]}
             {deliveryMethod?.type}
             {deliveryMethod?.data?.phone && (
