@@ -85,6 +85,8 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
     const [itemsPerPage, setItemsPerPage] = useState(10);
     const [selectedDeliveries, setSelectedDeliveries] = useState<Set<string>>(new Set());
     const [customerContacts, setCustomerContacts] = useState<{[email: string]: {phone?: string, countryCode?: string}}>({});
+    const [isProcessingBulk, setIsProcessingBulk] = useState(false);
+    const [bulkFeedback, setBulkFeedback] = useState<{message: string; type: 'success' | 'error' | 'warning'} | null>(null);
 
     const filteredDeliveries = useMemo(() => {
         const today = new Date();
@@ -822,18 +824,75 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                     <p className="text-sm font-semibold text-blue-900 mb-2">
                         {selectedDeliveries.size} entrega(s) seleccionada(s)
                     </p>
+                    
+                    {/* Feedback messages */}
+                    {bulkFeedback && (
+                        <div className={`mb-3 p-2 rounded text-sm ${
+                            bulkFeedback.type === 'success' ? 'bg-green-100 text-green-800' :
+                            bulkFeedback.type === 'error' ? 'bg-red-100 text-red-800' :
+                            'bg-yellow-100 text-yellow-800'
+                        }`}>
+                            {bulkFeedback.message}
+                        </div>
+                    )}
+                    
                     <div className="flex gap-2 flex-wrap">
                         {/* Marcar como Lista Tooltip */}
                         <div className="group relative">
                             <button
-                                onClick={() => {
-                                    Array.from(selectedDeliveries).forEach(id => onMarkReady(id));
-                                    setSelectedDeliveries(new Set());
+                                onClick={async () => {
+                                    setBulkFeedback(null);
+                                    setIsProcessingBulk(true);
+                                    try {
+                                        const result = await dataService.bulkUpdateDeliveryStatus(
+                                            Array.from(selectedDeliveries),
+                                            'markReady'
+                                        );
+                                        
+                                        if (result.summary.succeeded > 0) {
+                                            setBulkFeedback({
+                                                message: `✅ ${result.summary.succeeded} entrega(s) marcadas como listas`,
+                                                type: 'success'
+                                            });
+                                        }
+                                        if (result.summary.failed > 0) {
+                                            setBulkFeedback({
+                                                message: `⚠️ ${result.summary.succeeded} exitosas, ${result.summary.failed} fallaron`,
+                                                type: 'warning'
+                                            });
+                                        }
+                                        
+                                        setSelectedDeliveries(new Set());
+                                        
+                                        // Trigger parent refresh after delay
+                                        setTimeout(() => {
+                                            window.location.reload();
+                                        }, 1500);
+                                        
+                                    } catch (err) {
+                                        setBulkFeedback({
+                                            message: '❌ Error procesando operación bulk',
+                                            type: 'error'
+                                        });
+                                        console.error('[Bulk markReady error]', err);
+                                    } finally {
+                                        setIsProcessingBulk(false);
+                                    }
                                 }}
-                                className="px-3 py-2 bg-purple-600 text-white rounded text-sm font-semibold hover:bg-purple-700 flex items-center gap-1"
+                                disabled={isProcessingBulk}
+                                className="px-3 py-2 bg-purple-600 text-white rounded text-sm font-semibold hover:bg-purple-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
                             >
-                                ✨ Marcar {selectedDeliveries.size} como Listas
-                                <QuestionMarkCircleIcon className="w-4 h-4" />
+                                {isProcessingBulk ? (
+                                    <>
+                                        <span className="animate-spin">⏳</span>
+                                        Procesando...
+                                    </>
+                                ) : (
+                                    <>
+                                        ✨ Marcar {selectedDeliveries.size} como Listas
+                                        <QuestionMarkCircleIcon className="w-4 h-4" />
+                                    </>
+                                )}
                             </button>
                             <div className="hidden group-hover:block absolute bottom-full left-0 mb-2 bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-50">
                                 Marca como "LISTA PARA RECOGER" para iniciar el conteo de 60 días antes del vencimiento
@@ -844,14 +903,60 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                         {/* Retirada Tooltip */}
                         <div className="group relative">
                             <button
-                                onClick={() => {
-                                    Array.from(selectedDeliveries).forEach(id => onComplete(id));
-                                    setSelectedDeliveries(new Set());
+                                onClick={async () => {
+                                    if (!confirm(`¿Marcar ${selectedDeliveries.size} entregas como RETIRADAS?`)) return;
+                                    
+                                    setBulkFeedback(null);
+                                    setIsProcessingBulk(true);
+                                    try {
+                                        const result = await dataService.bulkUpdateDeliveryStatus(
+                                            Array.from(selectedDeliveries),
+                                            'markCompleted'
+                                        );
+                                        
+                                        if (result.summary.succeeded > 0) {
+                                            setBulkFeedback({
+                                                message: `✅ ${result.summary.succeeded} entrega(s) completadas`,
+                                                type: 'success'
+                                            });
+                                        }
+                                        if (result.summary.failed > 0) {
+                                            setBulkFeedback({
+                                                message: `⚠️ ${result.summary.succeeded} exitosas, ${result.summary.failed} fallaron`,
+                                                type: 'warning'
+                                            });
+                                        }
+                                        
+                                        setSelectedDeliveries(new Set());
+                                        
+                                        setTimeout(() => {
+                                            window.location.reload();
+                                        }, 1500);
+                                        
+                                    } catch (err) {
+                                        setBulkFeedback({
+                                            message: '❌ Error completando entregas',
+                                            type: 'error'
+                                        });
+                                        console.error('[Bulk markCompleted error]', err);
+                                    } finally {
+                                        setIsProcessingBulk(false);
+                                    }
                                 }}
-                                className="px-3 py-2 bg-green-600 text-white rounded text-sm font-semibold hover:bg-green-700 flex items-center gap-1"
+                                disabled={isProcessingBulk}
+                                className="px-3 py-2 bg-green-600 text-white rounded text-sm font-semibold hover:bg-green-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
                             >
-                                ✓ Retirada {selectedDeliveries.size}
-                                <QuestionMarkCircleIcon className="w-4 h-4" />
+                                {isProcessingBulk ? (
+                                    <>
+                                        <span className="animate-spin">⏳</span>
+                                        Procesando...
+                                    </>
+                                ) : (
+                                    <>
+                                        ✓ Retirada {selectedDeliveries.size}
+                                        <QuestionMarkCircleIcon className="w-4 h-4" />
+                                    </>
+                                )}
                             </button>
                             <div className="hidden group-hover:block absolute bottom-full left-0 mb-2 bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-50">
                                 Marca como "RETIRADA" - finaliza la entrega
@@ -859,9 +964,65 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                             </div>
                         </div>
 
+                        {/* Eliminar bulk */}
+                        <button
+                            onClick={async () => {
+                                if (!confirm(`¿ELIMINAR ${selectedDeliveries.size} entregas? Esta acción no se puede deshacer.`)) return;
+                                
+                                setBulkFeedback(null);
+                                setIsProcessingBulk(true);
+                                try {
+                                    const result = await dataService.bulkUpdateDeliveryStatus(
+                                        Array.from(selectedDeliveries),
+                                        'delete'
+                                    );
+                                    
+                                    if (result.summary.succeeded > 0) {
+                                        setBulkFeedback({
+                                            message: `🗑️ ${result.summary.succeeded} entrega(s) eliminadas`,
+                                            type: 'success'
+                                        });
+                                    }
+                                    if (result.summary.failed > 0) {
+                                        setBulkFeedback({
+                                            message: `⚠️ ${result.summary.succeeded} eliminadas, ${result.summary.failed} fallaron`,
+                                            type: 'warning'
+                                        });
+                                    }
+                                    
+                                    setSelectedDeliveries(new Set());
+                                    
+                                    setTimeout(() => {
+                                        window.location.reload();
+                                    }, 1500);
+                                    
+                                } catch (err) {
+                                    setBulkFeedback({
+                                        message: '❌ Error eliminando entregas',
+                                        type: 'error'
+                                    });
+                                    console.error('[Bulk delete error]', err);
+                                } finally {
+                                    setIsProcessingBulk(false);
+                                }
+                            }}
+                            disabled={isProcessingBulk}
+                            className="px-3 py-2 bg-red-600 text-white rounded text-sm font-semibold hover:bg-red-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                        >
+                            {isProcessingBulk ? (
+                                <>
+                                    <span className="animate-spin">⏳</span>
+                                    Procesando...
+                                </>
+                            ) : (
+                                <>🗑️ Eliminar {selectedDeliveries.size}</>
+                            )}
+                        </button>
+
                         <button
                             onClick={() => setSelectedDeliveries(new Set())}
-                            className="px-3 py-2 bg-gray-300 text-gray-700 rounded text-sm font-semibold hover:bg-gray-400"
+                            disabled={isProcessingBulk}
+                            className="px-3 py-2 bg-gray-300 text-gray-700 rounded text-sm font-semibold hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             Limpiar selección
                         </button>
