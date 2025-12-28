@@ -38,8 +38,8 @@ export const BookingTypeModal: React.FC<BookingTypeModalProps> = ({ onSelect, on
         onClick={(e) => e.stopPropagation()}
       >
         <div className="text-center mb-8">
-          <h2 className="text-4xl font-bold text-brand-accent mb-2">¿Cómo quieres agendar tus clases?</h2>
-          <p className="text-brand-secondary text-xl">Elige la opción que mejor se adapte a tu horario.</p>
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-brand-accent mb-2">¿Cómo quieres agendar tus clases?</h2>
+          <p className="text-brand-secondary text-sm sm:text-base md:text-xl">Elige la opción que mejor se adapte a tu horario.</p>
         </div>
 
         <div className="grid md:grid-cols-2 gap-4 sm:gap-6 md:gap-8">
