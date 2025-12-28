@@ -160,8 +160,9 @@ const SCHEMA_SQL = `
         customer_email VARCHAR(255) NOT NULL,
         description TEXT NOT NULL,
         scheduled_date DATE NOT NULL,
-        status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'overdue')),
+        status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'ready', 'completed', 'overdue')),
         created_at TIMESTAMPTZ DEFAULT NOW(),
+        ready_at TIMESTAMPTZ,
         completed_at TIMESTAMPTZ,
         delivered_at TIMESTAMPTZ,
         notes TEXT,
@@ -310,6 +311,18 @@ export async function ensureTablesExist() {
         
         // Migration: Add created_by_client column to deliveries table
         await sql`ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS created_by_client BOOLEAN DEFAULT false;`;
+        
+        // Migration: Add ready_at column to deliveries table
+        await sql`ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS ready_at TIMESTAMPTZ;`;
+        
+        // Migration: Fix deliveries status check constraint to include 'ready'
+        try {
+            await sql`ALTER TABLE deliveries DROP CONSTRAINT IF EXISTS deliveries_status_check;`;
+            await sql`ALTER TABLE deliveries ADD CONSTRAINT deliveries_status_check CHECK (status IN ('pending', 'ready', 'completed', 'overdue'));`;
+            console.log('✅ Fixed deliveries status check constraint');
+        } catch (err) {
+            console.warn('⚠️ Could not update deliveries status constraint:', err);
+        }
         
         // New columns for Experiences
         await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS booking_type VARCHAR(50) DEFAULT 'individual';`;
