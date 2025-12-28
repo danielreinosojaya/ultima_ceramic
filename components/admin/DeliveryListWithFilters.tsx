@@ -820,25 +820,53 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
 
             {/* Bulk Actions & Pagination */}
             {selectedDeliveries.size > 0 && (
-                <div className="bg-blue-50 border border-blue-300 rounded-lg p-4 mb-4">
-                    <p className="text-sm font-semibold text-blue-900 mb-2">
-                        {selectedDeliveries.size} entrega(s) seleccionada(s)
-                    </p>
-                    
-                    {/* Feedback messages */}
-                    {bulkFeedback && (
-                        <div className={`mb-3 p-2 rounded text-sm ${
-                            bulkFeedback.type === 'success' ? 'bg-green-100 text-green-800' :
-                            bulkFeedback.type === 'error' ? 'bg-red-100 text-red-800' :
-                            'bg-yellow-100 text-yellow-800'
-                        }`}>
-                            {bulkFeedback.message}
+                <div className="fixed bottom-6 left-6 right-6 z-50 max-w-2xl mx-auto animate-fade-in">
+                    {/* Glassmorphism + Neomorphism Toolbar */}
+                    <div className="backdrop-blur-xl bg-gradient-to-br from-white/85 via-white/75 to-white/65 border border-white/40 rounded-2xl p-5 shadow-2xl"
+                        style={{
+                            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.15), inset 0 1px 1px 0 rgba(255,255,255,0.5)',
+                            background: 'linear-gradient(135deg, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.7) 50%, rgba(255,255,255,0.6) 100%)'
+                        }}>
+                        
+                        {/* Header with count */}
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-blue-600 text-white font-bold text-sm shadow-lg">
+                                    {selectedDeliveries.size}
+                                </div>
+                                <p className="text-sm font-semibold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                                    {selectedDeliveries.size} entrega{selectedDeliveries.size !== 1 ? 's' : ''} seleccionada{selectedDeliveries.size !== 1 ? 's' : ''}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setSelectedDeliveries(new Set())}
+                                disabled={isProcessingBulk}
+                                className="text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+                            >
+                                ✕
+                            </button>
                         </div>
-                    )}
                     
-                    <div className="flex gap-2 flex-wrap">
+                        {/* Feedback messages */}
+                        {bulkFeedback && (
+                            <div className={`mb-4 p-3 rounded-xl text-sm font-medium transition-all duration-300 ${
+                                bulkFeedback.type === 'success' ? 'bg-gradient-to-r from-green-100/80 to-emerald-100/80 text-green-800 border border-green-200/50' :
+                                bulkFeedback.type === 'error' ? 'bg-gradient-to-r from-red-100/80 to-rose-100/80 text-red-800 border border-red-200/50' :
+                                'bg-gradient-to-r from-amber-100/80 to-yellow-100/80 text-amber-800 border border-amber-200/50'
+                            }`}
+                            style={{
+                                boxShadow: bulkFeedback.type === 'success' ? '0 4px 15px rgba(16, 185, 129, 0.1)' :
+                                           bulkFeedback.type === 'error' ? '0 4px 15px rgba(239, 68, 68, 0.1)' :
+                                           '0 4px 15px rgba(217, 119, 6, 0.1)'
+                            }}>
+                                {bulkFeedback.message}
+                            </div>
+                        )}
+                        
+                        {/* Action buttons */}
+                        <div className="flex gap-2 flex-wrap">
                         {/* Marcar como Lista Tooltip */}
-                        <div className="group relative">
+                        <div className="group relative flex-1 sm:flex-none">
                             <button
                                 onClick={async () => {
                                     setBulkFeedback(null);
@@ -880,28 +908,33 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                     }
                                 }}
                                 disabled={isProcessingBulk}
-                                className="px-3 py-2 bg-purple-600 text-white rounded text-sm font-semibold hover:bg-purple-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                                className="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-xl text-sm font-semibold hover:from-purple-600 hover:to-purple-700 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-purple-500/50"
+                                style={{
+                                    boxShadow: '0 4px 15px rgba(147, 51, 234, 0.3)'
+                                }}
                             >
                                 {isProcessingBulk ? (
                                     <>
                                         <span className="animate-spin">⏳</span>
-                                        Procesando...
+                                        <span className="hidden sm:inline">Procesando...</span>
                                     </>
                                 ) : (
                                     <>
-                                        ✨ Marcar {selectedDeliveries.size} como Listas
+                                        <span>✨</span>
+                                        <span className="hidden sm:inline">Marcar {selectedDeliveries.size} como Listas</span>
+                                        <span className="sm:hidden">Listas</span>
                                         <QuestionMarkCircleIcon className="w-4 h-4" />
                                     </>
                                 )}
                             </button>
-                            <div className="hidden group-hover:block absolute bottom-full left-0 mb-2 bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-50">
-                                Marca como "LISTA PARA RECOGER" para iniciar el conteo de 60 días antes del vencimiento
-                                <div className="absolute top-full left-2 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+                            <div className="hidden group-hover:block absolute bottom-full left-0 mb-3 bg-gray-900/95 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap z-[100] backdrop-blur-sm">
+                                Marca como "LISTA PARA RECOGER" para iniciar el conteo de 60 días
+                                <div className="absolute top-full left-3 w-2 h-2 bg-gray-900/95 transform rotate-45"></div>
                             </div>
                         </div>
 
                         {/* Retirada Tooltip */}
-                        <div className="group relative">
+                        <div className="group relative flex-1 sm:flex-none">
                             <button
                                 onClick={async () => {
                                     if (!confirm(`¿Marcar ${selectedDeliveries.size} entregas como RETIRADAS?`)) return;
@@ -944,23 +977,28 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                     }
                                 }}
                                 disabled={isProcessingBulk}
-                                className="px-3 py-2 bg-green-600 text-white rounded text-sm font-semibold hover:bg-green-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                                className="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl text-sm font-semibold hover:from-green-600 hover:to-emerald-700 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-green-500/50"
+                                style={{
+                                    boxShadow: '0 4px 15px rgba(16, 185, 129, 0.3)'
+                                }}
                             >
                                 {isProcessingBulk ? (
                                     <>
                                         <span className="animate-spin">⏳</span>
-                                        Procesando...
+                                        <span className="hidden sm:inline">Procesando...</span>
                                     </>
                                 ) : (
                                     <>
-                                        ✓ Retirada {selectedDeliveries.size}
+                                        <span>✓</span>
+                                        <span className="hidden sm:inline">Retirada {selectedDeliveries.size}</span>
+                                        <span className="sm:hidden">Retirada</span>
                                         <QuestionMarkCircleIcon className="w-4 h-4" />
                                     </>
                                 )}
                             </button>
-                            <div className="hidden group-hover:block absolute bottom-full left-0 mb-2 bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-50">
+                            <div className="hidden group-hover:block absolute bottom-full left-0 mb-3 bg-gray-900/95 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap z-[100] backdrop-blur-sm">
                                 Marca como "RETIRADA" - finaliza la entrega
-                                <div className="absolute top-full left-2 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+                                <div className="absolute top-full left-3 w-2 h-2 bg-gray-900/95 transform rotate-45"></div>
                             </div>
                         </div>
 
@@ -1007,25 +1045,25 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                 }
                             }}
                             disabled={isProcessingBulk}
-                            className="px-3 py-2 bg-red-600 text-white rounded text-sm font-semibold hover:bg-red-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                            className="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl text-sm font-semibold hover:from-red-600 hover:to-rose-700 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-red-500/50"
+                            style={{
+                                boxShadow: '0 4px 15px rgba(239, 68, 68, 0.3)'
+                            }}
                         >
                             {isProcessingBulk ? (
                                 <>
                                     <span className="animate-spin">⏳</span>
-                                    Procesando...
+                                    <span className="hidden sm:inline">Procesando...</span>
                                 </>
                             ) : (
-                                <>🗑️ Eliminar {selectedDeliveries.size}</>
+                                <>
+                                    <span>🗑️</span>
+                                    <span className="hidden sm:inline">Eliminar {selectedDeliveries.size}</span>
+                                    <span className="sm:hidden">Eliminar</span>
+                                </>
                             )}
                         </button>
-
-                        <button
-                            onClick={() => setSelectedDeliveries(new Set())}
-                            disabled={isProcessingBulk}
-                            className="px-3 py-2 bg-gray-300 text-gray-700 rounded text-sm font-semibold hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            Limpiar selección
-                        </button>
+                    </div>
                     </div>
                 </div>
             )}
