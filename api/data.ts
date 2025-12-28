@@ -3409,6 +3409,190 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             
             return res.status(200).json({ success: true });
         }
+        case 'bulkUpdateDeliveryStatus': {
+            const { deliveryIds, action, metadata } = req.body;
+            
+            // Validations
+            if (!deliveryIds || !Array.isArray(deliveryIds) || deliveryIds.length === 0) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'deliveryIds array is required and must not be empty' 
+                });
+            }
+            
+            if (!['markReady', 'markCompleted', 'delete'].includes(action)) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'Invalid action. Must be: markReady, markCompleted, or delete' 
+                });
+            }
+            
+            // Process bulk operation
+            try {
+                const results = [];
+                const errors = [];
+                
+                for (const deliveryId of deliveryIds) {
+                    try {
+                        switch(action) {
+                            case 'markReady': {
+                                const { rows: [existingDelivery] } = await sql`
+                                    SELECT * FROM deliveries WHERE id = ${deliveryId}
+                                `;
+                                
+                                if (!existingDelivery) {
+                                    errors.push({ id: deliveryId, error: 'Delivery not found' });
+                                    break;
+                                }
+                                
+                                if (existingDelivery.status === 'completed') {
+                                    errors.push({ id: deliveryId, error: 'Delivery already completed' });
+                                    break;
+                                }
+                                
+                                // Mark as ready
+                                const readyAt = existingDelivery.ready_at || new Date().toISOString();
+                                const { rows: [readyDelivery] } = await sql`
+                                    UPDATE deliveries 
+                                    SET status = 'ready', ready_at = ${readyAt}
+                                    WHERE id = ${deliveryId}
+                                    RETURNING *
+                                `;
+                                
+                                // Send email asynchronously (fire and forget)
+                                (async () => {
+                                    try {
+                                        const { rows: [customerData] } = await sql`
+                                            SELECT user_info FROM customers WHERE email = ${readyDelivery.customer_email} LIMIT 1
+                                        `;
+                                        if (customerData?.user_info) {
+                                            const userInfo = typeof customerData.user_info === 'string' 
+                                                ? JSON.parse(customerData.user_info) 
+                                                : customerData.user_info;
+                                            const customerName = userInfo.firstName || 'Cliente';
+                                            
+                                            const emailServiceModule = await import('./emailService.js');
+                                            await emailServiceModule.sendDeliveryReadyEmail(
+                                                readyDelivery.customer_email, 
+                                                customerName, 
+                                                {
+                                                    description: readyDelivery.description,
+                                                    readyAt: readyDelivery.ready_at
+                                                }
+                                            );
+                                        }
+                                    } catch (emailErr) {
+                                        console.warn('[bulkUpdateDeliveryStatus] Email failed for delivery:', deliveryId, emailErr);
+                                    }
+                                })();
+                                
+                                results.push({ 
+                                    id: deliveryId, 
+                                    success: true, 
+                                    delivery: toCamelCase(readyDelivery) 
+                                });
+                                break;
+                            }
+                            
+                            case 'markCompleted': {
+                                const { rows: [existingDelivery] } = await sql`
+                                    SELECT * FROM deliveries WHERE id = ${deliveryId}
+                                `;
+                                
+                                if (!existingDelivery) {
+                                    errors.push({ id: deliveryId, error: 'Delivery not found' });
+                                    break;
+                                }
+                                
+                                if (existingDelivery.status === 'completed') {
+                                    errors.push({ id: deliveryId, error: 'Delivery already completed' });
+                                    break;
+                                }
+                                
+                                const { rows: [completedDelivery] } = await sql`
+                                    UPDATE deliveries 
+                                    SET status = 'completed', 
+                                        completed_at = NOW(),
+                                        delivered_at = NOW()
+                                    WHERE id = ${deliveryId}
+                                    RETURNING *
+                                `;
+                                
+                                // Send email asynchronously
+                                (async () => {
+                                    try {
+                                        const { rows: [customerData] } = await sql`
+                                            SELECT user_info FROM customers WHERE email = ${completedDelivery.customer_email} LIMIT 1
+                                        `;
+                                        if (customerData?.user_info) {
+                                            const userInfo = typeof customerData.user_info === 'string' 
+                                                ? JSON.parse(customerData.user_info) 
+                                                : customerData.user_info;
+                                            const customerName = userInfo.firstName || 'Cliente';
+                                            
+                                            const emailServiceModule = await import('./emailService.js');
+                                            await emailServiceModule.sendDeliveryCompletedEmail(
+                                                completedDelivery.customer_email,
+                                                customerName,
+                                                {
+                                                    description: completedDelivery.description,
+                                                    deliveredAt: completedDelivery.delivered_at || completedDelivery.completed_at
+                                                }
+                                            );
+                                        }
+                                    } catch (emailErr) {
+                                        console.warn('[bulkUpdateDeliveryStatus] Email failed for delivery:', deliveryId, emailErr);
+                                    }
+                                })();
+                                
+                                results.push({ 
+                                    id: deliveryId, 
+                                    success: true, 
+                                    delivery: toCamelCase(completedDelivery) 
+                                });
+                                break;
+                            }
+                            
+                            case 'delete': {
+                                const { rowCount } = await sql`
+                                    DELETE FROM deliveries WHERE id = ${deliveryId}
+                                `;
+                                
+                                if (rowCount === 0) {
+                                    errors.push({ id: deliveryId, error: 'Delivery not found' });
+                                } else {
+                                    results.push({ id: deliveryId, success: true });
+                                }
+                                break;
+                            }
+                        }
+                    } catch (err) {
+                        errors.push({ 
+                            id: deliveryId, 
+                            error: err instanceof Error ? err.message : 'Unknown error' 
+                        });
+                    }
+                }
+                
+                return res.status(200).json({
+                    success: true,
+                    results,
+                    errors,
+                    summary: {
+                        total: deliveryIds.length,
+                        succeeded: results.length,
+                        failed: errors.length
+                    }
+                });
+                
+            } catch (err) {
+                return res.status(500).json({
+                    success: false,
+                    error: 'Bulk operation failed',
+                    details: err instanceof Error ? err.message : 'Unknown error'
+                });
+            }
+        }
         case 'updateDeliveryStatuses': {
             // Update overdue deliveries
             const { rows: overdueDeliveries } = await sql`

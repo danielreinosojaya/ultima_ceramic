@@ -1923,6 +1923,61 @@ export const deleteDelivery = async (deliveryId: string): Promise<{ success: boo
     return postAction('deleteDelivery', { deliveryId });
 };
 
+export const bulkUpdateDeliveryStatus = async (
+    deliveryIds: string[],
+    action: 'markReady' | 'markCompleted' | 'delete',
+    metadata?: any
+): Promise<{
+    success: boolean;
+    results: Array<{ id: string; success: boolean; delivery?: Delivery }>;
+    errors: Array<{ id: string; error: string }>;
+    summary: { total: number; succeeded: number; failed: number };
+    error?: string;
+}> => {
+    try {
+        const result = await postAction('bulkUpdateDeliveryStatus', {
+            deliveryIds,
+            action,
+            metadata
+        });
+        
+        if (!result || !result.success) {
+            return {
+                success: false,
+                results: [],
+                errors: deliveryIds.map(id => ({ id, error: result?.error || 'Unknown error' })),
+                summary: { total: deliveryIds.length, succeeded: 0, failed: deliveryIds.length },
+                error: result?.error || 'Bulk operation failed'
+            };
+        }
+        
+        // Parse deliveries in results
+        const parsedResults = (result.results || []).map((r: any) => ({
+            ...r,
+            delivery: r.delivery ? parseDelivery(r.delivery) : undefined
+        }));
+        
+        return {
+            success: true,
+            results: parsedResults,
+            errors: result.errors || [],
+            summary: result.summary || { total: deliveryIds.length, succeeded: parsedResults.length, failed: (result.errors || []).length }
+        };
+    } catch (error) {
+        console.error('[bulkUpdateDeliveryStatus] Error:', error);
+        return {
+            success: false,
+            results: [],
+            errors: deliveryIds.map(id => ({ 
+                id, 
+                error: error instanceof Error ? error.message : 'Network error' 
+            })),
+            summary: { total: deliveryIds.length, succeeded: 0, failed: deliveryIds.length },
+            error: error instanceof Error ? error.message : 'Network error'
+        };
+    }
+};
+
 export const updateDeliveryStatuses = async (): Promise<{ success: boolean; updated: number }> => {
     return postAction('updateDeliveryStatuses', {});
 };
