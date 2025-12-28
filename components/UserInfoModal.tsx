@@ -175,7 +175,7 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
             onClick={onClose}
         >
             <div
-                className="bg-brand-surface rounded-xl shadow-2xl p-8 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-fade-in-up"
+                className="bg-brand-surface rounded-xl shadow-2xl p-4 sm:p-6 md:p-8 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-fade-in-up mx-4"
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="text-center mb-6">

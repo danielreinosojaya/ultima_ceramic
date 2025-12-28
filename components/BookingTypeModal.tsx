@@ -34,7 +34,7 @@ export const BookingTypeModal: React.FC<BookingTypeModalProps> = ({ onSelect, on
       onClick={onClose}
     >
       <div
-        className="bg-brand-surface rounded-xl shadow-2xl p-8 w-full max-w-3xl animate-fade-in-up"
+        className="bg-brand-surface rounded-xl shadow-2xl p-4 sm:p-6 md:p-8 w-full max-w-3xl animate-fade-in-up mx-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="text-center mb-8">
@@ -42,7 +42,7 @@ export const BookingTypeModal: React.FC<BookingTypeModalProps> = ({ onSelect, on
           <p className="text-brand-secondary text-xl">Elige la opción que mejor se adapte a tu horario.</p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8">
+        <div className="grid md:grid-cols-2 gap-4 sm:gap-6 md:gap-8">
           <OptionCard 
             title="Horario Fijo Mensual"
             description="Asiste a clase el mismo día y a la misma hora durante 4 semanas seguidas. Perfecto para crear una rutina."

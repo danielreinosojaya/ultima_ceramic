@@ -24,7 +24,7 @@ interface TechniqueSelectorProps {
 }
 
 const TechniqueCard: React.FC<{ title: string; subtitle: string; buttonText: string; onClick: () => void; }> = ({ title, subtitle, buttonText, onClick }) => (
-    <div className="bg-brand-surface p-8 rounded-xl shadow-subtle hover:shadow-lifted transition-shadow duration-300 flex flex-col items-center text-center h-full">
+    <div className="bg-brand-surface p-4 sm:p-6 md:p-8 rounded-xl shadow-subtle hover:shadow-lifted transition-shadow duration-300 flex flex-col items-center text-center h-full">
         <h3 className="text-2xl font-semibold text-brand-text">{title}</h3>
         <p className="text-brand-secondary mt-2 flex-grow mb-6">{subtitle}</p>
         <button
@@ -50,7 +50,7 @@ export const TechniqueSelector: React.FC<TechniqueSelectorProps> = ({ onSelect, 
       </button>
       <h2 className="text-4xl font-bold text-brand-text mb-2">Elige una opción</h2>
       <p className="text-brand-secondary mb-10 text-xl">¿En qué te gustaría enfocarte hoy?</p>
-      <div className="grid md:grid-cols-2 gap-8 mb-12">
+      <div className="grid md:grid-cols-2 gap-4 sm:gap-6 md:gap-8 mb-8 sm:mb-12">
         <TechniqueCard
             title="Torno Alfarero"
             subtitle="Aprende a levantar piezas en el torno, creando tazas, cuencos y jarrones."
