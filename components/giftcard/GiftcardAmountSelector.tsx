@@ -46,7 +46,7 @@ export const GiftcardAmountSelector: React.FC<GiftcardAmountSelectorProps> = ({ 
           <button
             key={a}
             type="button"
-            className={`px-5 py-2 rounded-full font-semibold text-lg border transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-brand-primary ${selected === a ? 'bg-brand-primary text-white border-brand-primary shadow' : 'bg-white text-brand-primary border-brand-border hover:bg-brand-primary/10'}`}
+            className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-full font-semibold text-sm sm:text-base md:text-lg border transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-brand-primary ${selected === a ? 'bg-brand-primary text-white border-brand-primary shadow' : 'bg-white text-brand-primary border-brand-border hover:bg-brand-primary/10'}`}
             onClick={() => handleSelect(a)}
           >
             ${a}
@@ -54,22 +54,22 @@ export const GiftcardAmountSelector: React.FC<GiftcardAmountSelectorProps> = ({ 
         ))}
       </div>
       <div className="w-full mb-4">
-        <label htmlFor="customAmount" className="block text-brand-secondary mb-2 text-sm">Monto personalizado</label>
+        <label htmlFor="customAmount" className="block text-brand-secondary mb-2 text-xs sm:text-sm">Monto personalizado</label>
         <input
           id="customAmount"
           type="text"
           inputMode="numeric"
           pattern="[0-9]*"
-          className={`w-full px-4 py-2 rounded-lg border text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-brand-primary transition-colors ${custom ? (!error ? 'border-brand-primary' : 'border-red-400') : 'border-brand-border'}`}
+          className={`w-full px-4 py-3 rounded-lg border text-sm sm:text-base md:text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-brand-primary transition-colors ${custom ? (!error ? 'border-brand-primary' : 'border-red-400') : 'border-brand-border'}`}
           placeholder={`Mínimo $${min}, máximo $${max}`}
           value={custom}
           onChange={handleCustomChange}
         />
-        {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+        {error && <p className="text-red-500 text-xs sm:text-sm mt-2">{error}</p>}
       </div>
       <button
         type="button"
-        className={`mt-4 bg-brand-primary text-white font-semibold py-2.5 px-7 rounded-full shadow hover:bg-brand-accent transition-colors duration-200 text-lg tracking-wide w-full ${!isValid ? 'opacity-50 cursor-not-allowed' : ''}`}
+        className={`mt-4 bg-brand-primary text-white font-semibold py-3 sm:py-3.5 px-6 sm:px-7 rounded-full shadow hover:bg-brand-accent transition-colors duration-200 text-sm sm:text-base md:text-lg tracking-wide w-full h-12 sm:h-13 ${!isValid ? 'opacity-50 cursor-not-allowed' : ''}`}
         disabled={!isValid}
         onClick={() => amount && onSelect(amount)}
       >
