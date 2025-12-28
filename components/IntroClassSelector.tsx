@@ -45,18 +45,18 @@ export const IntroClassSelector: React.FC<IntroClassSelectorProps> = ({ onConfir
 
   if (introClasses.length === 0) {
     return (
-      <div className="text-center p-6 bg-brand-surface rounded-xl shadow-subtle max-w-5xl mx-auto">
-  <h2 className="text-3xl font-semibold text-brand-text mb-2">Clase Introductoria</h2>
-  <p className="text-brand-secondary">Actualmente no hay clases introductorias programadas. ¡Vuelve pronto!</p>
+      <div className="text-center p-4 sm:p-6 bg-brand-surface rounded-xl shadow-subtle max-w-5xl mx-auto">
+  <h2 className="text-2xl sm:text-3xl font-semibold text-brand-text mb-2">Clase Introductoria</h2>
+  <p className="text-xs sm:text-sm md:text-base text-brand-secondary">Actualmente no hay clases introductorias programadas. ¡Vuelve pronto!</p>
       </div>
     );
   }
 
   return (
-    <div className="p-0 sm:p-6 bg-brand-surface rounded-xl shadow-none sm:shadow-subtle animate-fade-in-up max-w-5xl mx-auto">
+    <div className="p-4 sm:p-6 bg-brand-surface rounded-xl shadow-none sm:shadow-subtle animate-fade-in-up max-w-5xl mx-auto">
       <div className="text-center mb-8">
-  <h2 className="text-3xl font-semibold text-brand-text mb-2">Clase Introductoria</h2>
-  <p className="text-brand-secondary">Elige una fecha y hora para tu clase introductoria. Aprende las bases de la cerámica y conoce nuestro taller.</p>
+  <h2 className="text-2xl sm:text-3xl font-semibold text-brand-text mb-2">Clase Introductoria</h2>
+  <p className="text-xs sm:text-sm md:text-base text-brand-secondary">Elige una fecha y hora para tu clase introductoria. Aprende las bases de la cerámica y conoce nuestro taller.</p>
       </div>
       
       <div className="space-y-12">

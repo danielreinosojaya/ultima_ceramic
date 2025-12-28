@@ -103,13 +103,13 @@ export const GroupInquiryForm: React.FC<GroupInquiryFormProps> = ({ onBack, inqu
   if (isSubmitted) {
     const whatsappLink = generateWhatsappLink();
     return (
-      <div className="text-center p-8 bg-brand-surface rounded-xl shadow-subtle animate-fade-in-up max-w-lg mx-auto">
-        <h2 className="text-4xl font-bold text-brand-text mb-4">¡Gracias!</h2>
-        <p className="text-lg text-brand-secondary mb-8">
+      <div className="text-center p-4 sm:p-6 md:p-8 bg-brand-surface rounded-xl shadow-subtle animate-fade-in-up max-w-lg mx-auto mx-4">
+        <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-brand-text mb-4">¡Gracias!</h2>
+        <p className="text-xs sm:text-sm md:text-lg text-brand-secondary mb-8">
           Hemos recibido tu consulta y nos pondremos en contacto contigo en las próximas 24 horas para ayudarte a planificar tu evento perfecto.
         </p>
         <div className="mb-6">
-          <p className="text-base text-brand-secondary">
+          <p className="text-xs sm:text-sm md:text-base text-brand-secondary">
             Para una atención más ágil y personalizada, haz click aquí y comunícate con nosotros directamente por WhatsApp.
           </p>
         </div>
