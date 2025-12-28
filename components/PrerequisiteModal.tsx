@@ -27,13 +27,13 @@ export const PrerequisiteModal: React.FC<PrerequisiteModalProps> = ({ onClose, o
                 <div className="flex flex-col sm:flex-row-reverse gap-4 justify-center">
                     <button
                         onClick={onGoToIntro}
-                        className="bg-brand-surface border border-brand-secondary text-brand-secondary font-bold py-3 px-6 rounded-lg hover:border-brand-text transition-colors"
+                        className="bg-brand-surface border border-brand-secondary text-brand-secondary font-bold py-3 px-6 rounded-lg hover:border-brand-text transition-colors h-12 flex items-center justify-center"
                     >
                         Ir a la Clase Introductoria
                     </button>
                     <button
                         onClick={onConfirm}
-                        className="bg-brand-primary text-white font-bold py-3 px-6 rounded-lg hover:opacity-90 transition-opacity"
+                        className="bg-brand-primary text-white font-bold py-3 px-6 rounded-lg hover:opacity-90 transition-opacity h-12 flex items-center justify-center"
                     >
                         Ya tomé la clase, continuar
                     </button>
