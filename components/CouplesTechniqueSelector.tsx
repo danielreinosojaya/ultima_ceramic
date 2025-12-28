@@ -61,11 +61,11 @@ export const CouplesTechniqueSelector: React.FC<CouplesTechniqueSelectorProps> =
   onBack,
 }) => {
   return (
-    <div className="p-4 sm:p-8 bg-brand-surface rounded-xl shadow-subtle animate-fade-in-up max-w-4xl mx-auto w-full">
+    <div className="p-4 sm:p-6 md:p-8 bg-brand-surface rounded-xl shadow-subtle animate-fade-in-up max-w-4xl mx-auto w-full">
       {/* Back Button */}
       <button
         onClick={onBack}
-        className="text-sm font-semibold text-brand-secondary hover:text-brand-text mb-6 transition-colors flex items-center gap-1"
+        className="text-sm font-semibold text-brand-secondary hover:text-brand-text mb-4 sm:mb-6 transition-colors flex items-center gap-1"
       >
         ← Volver
       </button>
@@ -79,11 +79,11 @@ export const CouplesTechniqueSelector: React.FC<CouplesTechniqueSelectorProps> =
       </div>
 
       {/* Technique Cards Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 md:gap-8 mb-6 sm:mb-8">
         {TECHNIQUE_OPTIONS.map((option) => (
           <div
             key={option.technique}
-            className="bg-brand-background border-2 border-brand-border rounded-xl p-6 hover:border-brand-primary transition-all duration-300 hover:shadow-lifted"
+            className="bg-brand-background border-2 border-brand-border rounded-xl p-4 sm:p-6 hover:border-brand-primary transition-all duration-300 hover:shadow-lifted"
           >
             {/* Icon & Title */}
             <div className="mb-4">

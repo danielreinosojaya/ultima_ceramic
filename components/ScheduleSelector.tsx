@@ -261,7 +261,7 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                 <div className="block lg:hidden">
                   <div
                     ref={scrollContainerRef}
-                    className="flex items-center space-x-2 overflow-x-auto pb-2 -mx-4 px-4"
+                    className="flex items-center space-x-2 overflow-x-auto pb-2 -mx-3 sm:-mx-4 px-3 sm:px-4"
                     style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
                   >
                      {weekDates.map((date, index) => {
