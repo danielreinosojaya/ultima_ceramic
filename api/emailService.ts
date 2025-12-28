@@ -889,7 +889,13 @@ export const sendDeliveryCompletedEmail = async (customerEmail: string, customer
         </div>
     `;
     
-    await sendEmail(customerEmail, subject, html);
+    const result = await sendEmail(customerEmail, subject, html);
+    try {
+        await logEmailEvent(customerEmail, 'delivery_completed', 'email', (result as any)?.sent ? 'sent' : 'failed');
+    } catch (e) {
+        console.warn('[sendDeliveryCompletedEmail] Failed to log email event:', e);
+    }
+    return result;
 };
 
 // Special email for couples experience bookings with technique details
