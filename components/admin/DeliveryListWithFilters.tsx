@@ -5,6 +5,7 @@ import { PhotoViewerModal } from './PhotoViewerModal';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import * as dataService from '../../services/dataService';
+import { useAdminData } from '../../context/AdminDataContext';
 
 // Helper function to detect critical deliveries
 const isCritical = (delivery: Delivery): boolean => {
@@ -75,6 +76,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
     onMarkReady,
     formatDate
 }) => {
+    const adminData = useAdminData();
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
     const [showFilters, setShowFilters] = useState(false);
@@ -886,10 +888,8 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                             });
                                             setSelectedDeliveries(new Set());
                                             
-                                            // Trigger parent refresh after delay
-                                            setTimeout(() => {
-                                                window.location.reload();
-                                            }, 2000);
+                                            // Refresh critical data without full reload
+                                            adminData.refreshCritical();
                                         } else if (result.summary.failed > 0) {
                                             setBulkFeedback({
                                                 message: `⚠️ ${result.summary.succeeded} exitosas, ${result.summary.failed} fallaron. Errores: ${result.errors.map(e => `${e.id}: ${e.error}`).join('; ')}`,
@@ -961,9 +961,8 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                             });
                                             setSelectedDeliveries(new Set());
                                             
-                                            setTimeout(() => {
-                                                window.location.reload();
-                                            }, 2000);
+                                            // Refresh critical data without full reload
+                                            adminData.refreshCritical();
                                         } else if (result.summary.failed > 0) {
                                             setBulkFeedback({
                                                 message: `⚠️ ${result.summary.succeeded} exitosas, ${result.summary.failed} fallaron. Errores: ${result.errors.map(e => `${e.id}: ${e.error}`).join('; ')}`,
@@ -1034,9 +1033,8 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                         });
                                         setSelectedDeliveries(new Set());
                                         
-                                        setTimeout(() => {
-                                            window.location.reload();
-                                        }, 2000);
+                                        // Refresh critical data without full reload
+                                        adminData.refreshCritical();
                                     } else if (result.summary.failed > 0) {
                                         setBulkFeedback({
                                             message: `⚠️ ${result.summary.succeeded} eliminadas, ${result.summary.failed} fallaron. Errores: ${result.errors.map(e => `${e.id}: ${e.error}`).join('; ')}`,
