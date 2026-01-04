@@ -171,73 +171,74 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
 
     return (
         <div
-            className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in overflow-y-auto"
+            className="fixed inset-0 bg-black/60 z-50 overflow-y-auto animate-fade-in"
             onClick={onClose}
         >
-            <div
-                className="bg-brand-surface rounded-2xl shadow-2xl p-6 sm:p-8 w-full max-w-2xl my-8 animate-fade-in-up"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="text-center mb-8">
-                    <h2 className="text-3xl font-bold text-brand-primary mb-2">Información del Cliente</h2>
-                    <p className="text-brand-secondary text-base">Por favor, completa tus datos para generar el ticket de reserva.</p>
-                </div>
-                {/* Mensaje de error general */}
-                {Object.keys(errors).length > 0 && (
-                  <div className="mb-6 p-4 rounded-lg bg-red-100 text-red-800 font-semibold text-center">
-                    {'Por favor completa los campos obligatorios marcados en rojo.'}
-                  </div>
-                )}
-                <form onSubmit={handleSubmit} noValidate>
-                    <div className="space-y-6">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+            <div className="min-h-screen flex items-center justify-center p-3 sm:p-6">
+                <div
+                    className="bg-brand-surface rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 w-full max-w-2xl my-4 animate-fade-in-up"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="text-center mb-4 sm:mb-6">
+                        <h2 className="text-xl sm:text-2xl font-bold text-brand-primary mb-1">Información del Cliente</h2>
+                        <p className="text-brand-secondary text-sm">Completa tus datos para continuar.</p>
+                    </div>
+                    {/* Mensaje de error general */}
+                    {Object.keys(errors).length > 0 && (
+                      <div className="mb-4 p-3 rounded-lg bg-red-100 text-red-800 font-semibold text-center text-sm">
+                        {'Por favor completa los campos obligatorios.'}
+                      </div>
+                    )}
+                    <form onSubmit={handleSubmit} noValidate>
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                                <InputField 
+                                    id="firstName" label="Nombre" value={firstName} onChange={(e) => setFirstName(e.target.value)}
+                                    placeholder="Ej: Ana" error={errors.firstName} icon={<UserIcon className="w-5 h-5"/>} required
+                                />
+                                <InputField 
+                                    id="lastName" label="Apellidos" value={lastName} onChange={(e) => setLastName(e.target.value)}
+                                    placeholder="Ej: Pérez Gómez" error={errors.lastName} required
+                                />
+                            </div>
                             <InputField 
-                                id="firstName" label="Nombre" value={firstName} onChange={(e) => setFirstName(e.target.value)}
-                                placeholder="Ej: Ana" error={errors.firstName} icon={<UserIcon className="w-5 h-5"/>} required
+                                id="email" label="Correo Electrónico" value={email} onChange={(e) => setEmail(e.target.value)}
+                                placeholder="tu@email.com" type="email" error={errors.email} icon={<MailIcon className="w-5 h-5"/>} required
                             />
-                            <InputField 
-                                id="lastName" label="Apellidos" value={lastName} onChange={(e) => setLastName(e.target.value)}
-                                placeholder="Ej: Pérez Gómez" error={errors.lastName} required
-                            />
-                        </div>
-                        <InputField 
-                            id="email" label="Correo Electrónico" value={email} onChange={(e) => setEmail(e.target.value)}
-                            placeholder="tu@email.com" type="email" error={errors.email} icon={<MailIcon className="w-5 h-5"/>} required
-                        />
                         <div>
-                            <label htmlFor="phone" className="block text-sm font-semibold text-brand-secondary mb-2">Número de Teléfono</label>
+                            <label htmlFor="phone" className="block text-sm font-semibold text-brand-secondary mb-1">Número de Teléfono</label>
                             <div className={`flex items-center border-2 rounded-lg transition-colors ${isPhoneFocused ? 'ring-2 ring-brand-primary border-brand-primary' : (errors.phone ? 'border-red-500' : 'border-brand-border')}`}> 
                                 <select 
                                     value={country.name} onChange={(e) => setCountry(COUNTRIES.find(c => c.name === e.target.value) || COUNTRIES[0])}
                                     onFocus={() => setIsPhoneFocused(true)} onBlur={() => setIsPhoneFocused(false)}
-                                    className="pl-3 py-3 border-r border-brand-border rounded-l-lg bg-gray-50 focus:outline-none font-medium"
+                                    className="pl-2 py-2 border-r border-brand-border rounded-l-lg bg-gray-50 focus:outline-none text-sm"
                                 >
                                     {COUNTRIES.map(c => <option key={c.name} value={c.name}>{c.flag} {c.code}</option>)}
                                 </select>
                                 <div className="relative flex-grow">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-brand-secondary"><PhoneIcon className="w-5 h-5"/></div>
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-brand-secondary"><PhoneIcon className="w-4 h-4"/></div>
                                     <input id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value.replace(/[^0-9\s-]/g, ''))}
                                         onFocus={() => setIsPhoneFocused(true)} onBlur={handlePhoneBlur} placeholder="99 123 4567"
-                                        className="w-full pl-10 pr-4 py-3 rounded-r-lg focus:outline-none text-base" maxLength={20} required
+                                        className="w-full pl-9 pr-3 py-2 rounded-r-lg focus:outline-none text-base" maxLength={20} required
                                     />
                                 </div>
                             </div>
-                            {errors.phone && <p className="text-red-600 text-xs mt-2">{errors.phone}</p>}
-                            {country.code === '+593' && !errors.phone && <p className="text-brand-secondary text-xs mt-2">Ingresa tus 9 dígitos, sin el 0 inicial.</p>}
+                            {errors.phone && <p className="text-red-600 text-xs mt-1">{errors.phone}</p>}
+                            {country.code === '+593' && !errors.phone && <p className="text-brand-secondary text-xs mt-1">Ingresa tus 9 dígitos, sin el 0 inicial.</p>}
                         </div>
 
-                        <div className="p-5 border-2 border-rose-200 rounded-lg bg-rose-50/70 space-y-4">
-                            <div className="flex items-start gap-3">
-                                <GiftIcon className="w-7 h-7 text-rose-500 flex-shrink-0 mt-0.5" />
+                        <div className="p-3 sm:p-4 border-2 border-rose-200 rounded-lg bg-rose-50/70 space-y-3">
+                            <div className="flex items-start gap-2">
+                                <GiftIcon className="w-6 h-6 text-rose-500 flex-shrink-0 mt-0.5" />
                                 <div>
-                                    <h4 className="font-bold text-base text-brand-text">¡Queremos celebrar contigo!</h4>
-                                    <p className="text-sm text-brand-secondary mt-1">Comparte tu fecha de nacimiento y recibe sorpresas y descuentos especiales de nuestra parte.</p>
+                                    <h4 className="font-bold text-sm text-brand-text">¡Queremos celebrar contigo!</h4>
+                                    <p className="text-xs text-brand-secondary mt-1">Comparte tu fecha de nacimiento.</p>
                                 </div>
                             </div>
                             <InputField id="birthday" label="" type="date" value={birthday} onChange={e => setBirthday(e.target.value)} disabled={optOutBirthday} error={errors.birthday} placeholder="dd/mm/yyyy" />
-                            <label className="flex items-center gap-3 cursor-pointer text-sm text-brand-secondary hover:text-brand-text transition-colors">
-                                <div className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors flex-shrink-0 ${optOutBirthday ? 'bg-brand-primary' : 'bg-gray-300'}`}>
-                                    <span className={`inline-block w-5 h-5 transform bg-white rounded-full transition-transform ${optOutBirthday ? 'translate-x-5' : 'translate-x-1'}`}/>
+                            <label className="flex items-center gap-2 cursor-pointer text-xs text-brand-secondary hover:text-brand-text transition-colors">
+                                <div className={`relative inline-flex items-center h-5 rounded-full w-9 transition-colors flex-shrink-0 ${optOutBirthday ? 'bg-brand-primary' : 'bg-gray-300'}`}>
+                                    <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${optOutBirthday ? 'translate-x-4' : 'translate-x-0.5'}`}/>
                                 </div>
                                 <input type="checkbox" checked={optOutBirthday} onChange={e => setOptOutBirthday(e.target.checked)} className="hidden" />
                                 {'Prefiero no recibir regalos de cumpleaños.'}
@@ -245,74 +246,74 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                         </div>
 
                     </div>
-                    <div className="mt-8 pt-6 border-t border-brand-border space-y-4">
-                        <div className="flex items-start gap-3 bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r-lg text-blue-800">
-                            <InfoCircleIcon className="w-6 h-6 flex-shrink-0 mt-0.5" />
+                    <div className="mt-6 pt-4 border-t border-brand-border space-y-3">
+                        <div className="flex items-start gap-2 bg-blue-50 border-l-4 border-blue-400 p-3 rounded-r-lg text-blue-800">
+                            <InfoCircleIcon className="w-5 h-5 flex-shrink-0 mt-0.5" />
                             <div>
-                                <h4 className="font-bold text-base">La Facturación es Obligatoria</h4>
-                                <p className="text-sm mt-2">De acuerdo a la legislación tributaria del SRI, todos nuestros servicios requieren la emisión de una factura. Por favor, completa los siguientes campos.</p>
+                                <h4 className="font-bold text-sm">Facturación Obligatoria</h4>
+                                <p className="text-xs mt-1">Completa los datos para emitir tu factura.</p>
                             </div>
                         </div>
-                        <div className="space-y-5 mt-5 p-5 border-2 border-brand-border rounded-lg bg-brand-background">
+                        <div className="space-y-3 p-3 sm:p-4 border-2 border-brand-border rounded-lg bg-brand-background">
                             <InputField id="companyName" name="companyName" label="Razón Social o Nombre Completo" value={invoiceData.companyName} onChange={handleInvoiceDataChange} error={errors.companyName} required />
                             <InputField id="taxId" name="taxId" label="RUC / Cédula" value={invoiceData.taxId} onChange={handleInvoiceDataChange} error={errors.taxId} required />
                             <InputField id="address" name="address" label="Dirección Fiscal" value={invoiceData.address} onChange={handleInvoiceDataChange} error={errors.address} required />
                             <InputField id="invoiceEmail" name="email" label="Email de Facturación (opcional)" value={invoiceData.email} onChange={handleInvoiceDataChange} type="email" placeholder="Dejar en blanco para usar el email principal" error={errors.invoiceEmail} />
                         </div>
                     </div>
-                    <div className="mt-8 pt-6 border-t border-brand-border space-y-5">
+                    <div className="mt-6 pt-4 border-t border-brand-border space-y-3">
                         {requiresNoRefundAcceptance && (
-                            <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-5 flex items-start gap-3">
-                                <InfoCircleIcon className="w-6 h-6 flex-shrink-0 mt-0.5 text-yellow-700" />
+                            <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-3 flex items-start gap-2">
+                                <InfoCircleIcon className="w-5 h-5 flex-shrink-0 mt-0.5 text-yellow-700" />
                                 <div className="flex-1">
-                                    <h4 className="font-bold text-base text-yellow-900">Política de No Reembolso ni Reagendamiento</h4>
-                                    <p className="text-sm mt-2 text-yellow-800">
-                                        Has seleccionado una clase que inicia en menos de 48 horas. De acuerdo con nuestras políticas, 
-                                        <strong> las reservas realizadas con menos de 48 horas de anticipación no son reembolsables ni reagendables</strong>.
+                                    <h4 className="font-bold text-sm text-yellow-900">No Reembolsable</h4>
+                                    <p className="text-xs mt-1 text-yellow-800">
+                                        Esta reserva <strong>no es reembolsable ni reagendable</strong> (menos de 48h).
                                     </p>
-                                    <div className="flex items-start mt-4">
+                                    <div className="flex items-start mt-2">
                                         <input 
                                             id="accept-no-refund" 
                                             type="checkbox" 
                                             checked={acceptedNoRefund} 
                                             onChange={(e) => setAcceptedNoRefund(e.target.checked)}
-                                            className="h-5 w-5 text-brand-primary border-yellow-400 rounded focus:ring-brand-primary mt-0.5 flex-shrink-0"
+                                            className="h-4 w-4 text-brand-primary border-yellow-400 rounded focus:ring-brand-primary mt-0.5 flex-shrink-0"
                                         />
-                                        <label htmlFor="accept-no-refund" className="ml-3 text-sm text-yellow-900 font-medium">
-                                            Entiendo y acepto que esta reserva no es reembolsable ni reagendable
+                                        <label htmlFor="accept-no-refund" className="ml-2 text-xs text-yellow-900 font-medium">
+                                            Entiendo y acepto
                                         </label>
                                     </div>
-                                    {errors.acceptedNoRefund && <p className="text-red-600 text-xs mt-2 ml-8">{errors.acceptedNoRefund}</p>}
+                                    {errors.acceptedNoRefund && <p className="text-red-600 text-xs mt-1 ml-6">{errors.acceptedNoRefund}</p>}
                                 </div>
                             </div>
                         )}
                         
-                        <div className="flex items-start gap-3">
+                        <div className="flex items-start gap-2">
                             <input id="accept-policies" type="checkbox" checked={acceptedPolicies} onChange={(e) => setAcceptedPolicies(e.target.checked)}
-                                className="h-5 w-5 text-brand-primary border-brand-border rounded focus:ring-brand-primary mt-1 flex-shrink-0"
+                                className="h-4 w-4 text-brand-primary border-brand-border rounded focus:ring-brand-primary mt-0.5 flex-shrink-0"
                             />
-                            <label htmlFor="accept-policies" className="text-sm text-brand-secondary">
-                                {'He leído y acepto las '}<span className="font-semibold text-brand-primary">Políticas Internas y Proceso de Devoluciones</span>.
+                            <label htmlFor="accept-policies" className="text-xs text-brand-secondary">
+                                {'Acepto las '}<span className="font-semibold text-brand-primary">Políticas y Devoluciones</span>.
                             </label>
                         </div>
-                        {errors.acceptedPolicies && <p className="text-red-600 text-xs mt-1 ml-8">{errors.acceptedPolicies}</p>}
+                        {errors.acceptedPolicies && <p className="text-red-600 text-xs mt-1 ml-6">{errors.acceptedPolicies}</p>}
                     </div>
-                    <div className="mt-8 flex gap-3 justify-end">
+                    <div className="mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3">
                         <button 
                             type="button"
                             onClick={onClose}
-                            className="px-6 py-3 rounded-lg border-2 border-brand-border text-brand-text font-semibold hover:bg-gray-50 transition-colors"
+                            className="order-2 sm:order-1 px-5 py-2.5 rounded-lg border-2 border-brand-border text-brand-text font-semibold hover:bg-gray-50 transition-colors text-sm"
                         >
                             Cancelar
                         </button>
                         <button type="submit"
                                 disabled={isSaveDisabled}
-                            className="px-8 py-3 bg-brand-primary text-white font-bold rounded-lg hover:opacity-90 transition-opacity duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                            className="order-1 sm:order-2 flex-1 px-6 py-2.5 bg-brand-primary text-white font-bold rounded-lg hover:opacity-90 transition-opacity duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed text-sm"
                         >
                             {'Guardar y Continuar'}
                         </button>
                     </div>
                 </form>
+                </div>
             </div>
         </div>
     );
