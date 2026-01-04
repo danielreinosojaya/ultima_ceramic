@@ -781,30 +781,8 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
       setState(prev => ({ ...prev, currentStep: 5 }));
     };
     
-    return (
-      <div className="space-y-6 animate-fade-in-up">
-        {/* Resumen de Pricing */}
-        <div className="bg-gradient-to-r from-brand-primary to-brand-accent text-white rounded-xl p-6 shadow-lg">
-          <p className="text-sm opacity-90 mb-1">Total Estimado</p>
-          <p className="text-4xl font-bold">${calculateTotalPricing()}</p>
-          {isCelebration && (
-            <p className="text-xs opacity-80 mt-2">
-              *Precio final puede variar según día de semana. Te confirmaremos el monto exacto.
-            </p>
-          )}
-        </div>
-        
-        {/* UserInfoModal Integration */}
-        <UserInfoModal
-          onClose={onBack}
-          onSubmit={handleUserInfoSubmit}
-          onShowPolicies={() => {
-            window.open('/politicas', '_blank');
-          }}
-          slots={[]}
-        />
-      </div>
-    );
+    // Retornar null porque el modal se renderiza fuera del contenedor
+    return null;
   };
 
   // ============ STEP 5: Confirmación ============
@@ -1041,22 +1019,72 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
   };
 
   // ============ RENDER ============
+  
+  // Calcular pricing total para Step 4
+  const calculateTotalPricing = () => {
+    const isCelebration = state.experienceType === 'celebration';
+    let total = 0;
+    
+    if (isCelebration && state.config) {
+      const config = state.config as CelebrationConfig;
+      total += config.hours * 100 * 1.15;
+      if (state.technique) {
+        const techPrice = state.technique === 'potters_wheel' ? TECHNIQUE_PRICES.potters_wheel :
+                         state.technique === 'hand_modeling' ? TECHNIQUE_PRICES.hand_modeling :
+                         TECHNIQUE_PRICES.painting;
+        total += config.activeParticipants * techPrice;
+      }
+      total += menuTotal;
+      if (config.childrenPieces) {
+        total += config.childrenPieces.reduce((sum, cp) => sum + cp.piecePrice, 0);
+      }
+    } else if (state.config && state.technique) {
+      const config = state.config as CeramicOnlyConfig;
+      if (state.technique === 'painting') {
+        total = config.participants * TECHNIQUE_PRICES.painting;
+      } else {
+        const techPrice = state.technique === 'potters_wheel' ? TECHNIQUE_PRICES.potters_wheel : TECHNIQUE_PRICES.hand_modeling;
+        total = config.participants * techPrice;
+      }
+    }
+    
+    return total.toFixed(2);
+  };
+  
+  const handleUserInfoSubmit = (data: { userInfo: UserInfo; needsInvoice: boolean; invoiceData?: any; acceptedNoRefund?: boolean }) => {
+    setUserInfo(data.userInfo);
+    setState(prev => ({ ...prev, currentStep: 5 }));
+  };
+  
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-6 sm:py-8">
       {/* Progress Indicator */}
       <ProgressIndicator currentStep={state.currentStep} totalSteps={5} stepTitles={STEP_TITLES} />
 
-      {/* Step Content */}
-      <div className="bg-brand-surface rounded-2xl shadow-subtle p-6 sm:p-8 mb-6">
-        {state.currentStep === 1 && renderStepActivityType()}
-        {state.currentStep === 2 && renderStepConfiguration()}
-        {state.currentStep === 3 && renderStepDateTime()}
-        {state.currentStep === 4 && renderStepUserData()}
-        {state.currentStep === 5 && renderStepConfirmation()}
-      </div>
+      {/* Step Content - Solo mostrar contenedor si NO es Step 4 */}
+      {state.currentStep !== 4 && (
+        <div className="bg-brand-surface rounded-2xl shadow-subtle p-6 sm:p-8 mb-6">
+          {state.currentStep === 1 && renderStepActivityType()}
+          {state.currentStep === 2 && renderStepConfiguration()}
+          {state.currentStep === 3 && renderStepDateTime()}
+          {state.currentStep === 5 && renderStepConfirmation()}
+        </div>
+      )}
+      
+      {/* UserInfoModal - Renderizado como overlay completo en Step 4 */}
+      {state.currentStep === 4 && (
+        <UserInfoModal
+          onClose={handlePrevious}
+          onSubmit={handleUserInfoSubmit}
+          onShowPolicies={() => {
+            window.open('/politicas', '_blank');
+          }}
+          slots={[]}
+        />
+      )}
 
-      {/* Navigation Buttons */}
-      {state.currentStep > 1 && (
+      {/* Navigation Buttons - Ocultar en Step 4 porque el modal tiene sus propios botones */}
+      {state.currentStep > 1 && state.currentStep !== 4 && (
         <div className="flex gap-4">
           <button
             onClick={handlePrevious}
