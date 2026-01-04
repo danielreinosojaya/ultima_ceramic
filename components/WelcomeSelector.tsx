@@ -2,7 +2,7 @@ import React from 'react';
 import { FEATURE_FLAGS } from '../featureFlags.ts';
 
 interface WelcomeSelectorProps {
-  onSelect: (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio' | 'group_class_wizard' | 'single_class_wizard' | 'wheel_course') => void;
+  onSelect: (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio' | 'group_class_wizard' | 'single_class_wizard' | 'wheel_course' | 'custom_experience') => void;
 }
 
 // Mobile-first Card optimizada para iPhone
@@ -104,7 +104,7 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
           title="Experiencia Personalizada"
           subtitle="Reúne a tu grupo y diseña la clase perfecta. Cada persona elige su técnica."
           buttonText="Crear Experiencia"
-          onClick={() => onSelect('group_class_wizard')}
+          onClick={() => onSelect('custom_experience')}
           isComingSoon={!FEATURE_FLAGS.EXPERIENCIA_PERSONALIZADA}
         />
         <ExperienceCard 

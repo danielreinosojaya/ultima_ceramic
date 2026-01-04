@@ -26,6 +26,7 @@ export type AppView =
   | 'piece_experience_wizard'
   | 'single_class_wizard'
   | 'experience_confirmation'
+  | 'custom_experience_wizard'
   | 'wheel_course_landing'
   | 'wheel_course_schedule'
   | 'wheel_course_registration'
@@ -834,3 +835,228 @@ export const CASH_DENOMINATIONS: { key: CashDenomination; label: string; value: 
   { key: '0_05_COIN', label: 'Moneda $0.05', value: 0.05 },
   { key: '0_01_COIN', label: 'Moneda $0.01', value: 0.01 },
 ];
+
+// ==================== CUSTOM EXPERIENCE TYPES (NEW v2.0) ====================
+
+/**
+ * Tipo de actividad personalizada
+ * - ceramic_only: Solo actividad de cerámica (técnica + personas)
+ * - celebration: Incluye invitados, decoración, torta, menú
+ */
+export type CustomExperienceType = 'ceramic_only' | 'celebration';
+
+/**
+ * Técnicas disponibles para experiencia personalizada
+ * Mismo que GroupTechnique pero con límites explícitos
+ */
+export interface CustomExperienceTechnique {
+  id: GroupTechnique;
+  name: string;
+  description: string;
+  maxCapacity: number;
+  icon: string;
+  tooltipInfo: string;
+}
+
+export const CUSTOM_EXPERIENCE_TECHNIQUES: CustomExperienceTechnique[] = [
+  {
+    id: 'potters_wheel',
+    name: 'Torno Alfarero',
+    description: 'Técnica tradicional que requiere coordinación y precisión',
+    maxCapacity: 8,
+    icon: '🎯',
+    tooltipInfo: 'El torno alfarero permite crear formas simétricas giratorias como tazas, platos y vasijas. Requiere práctica pero es muy gratificante.'
+  },
+  {
+    id: 'hand_modeling',
+    name: 'Modelado a Mano',
+    description: 'Crea formas libres usando solo tus manos',
+    maxCapacity: 22,
+    icon: '✋',
+    tooltipInfo: 'El modelado a mano es más intuitivo y permite mayor libertad creativa. Ideal para esculturas, platos decorativos y piezas únicas.'
+  },
+  {
+    id: 'painting',
+    name: 'Pintado a Mano',
+    description: 'Pinta piezas de cerámica pre-hechas con diseños personalizados',
+    maxCapacity: 22,
+    icon: '🎨',
+    tooltipInfo: 'Pinta piezas de cerámica ya moldeadas con colores vibrantes. Perfecto para niños y quienes prefieren enfocarse en el diseño visual.'
+  }
+];
+
+/**
+ * Precios de técnicas por persona (YA INCLUYEN IVA)
+ */
+export const TECHNIQUE_PRICES = {
+  potters_wheel: 55,    // $55 por persona (incluye IVA)
+  hand_modeling: 45,    // $45 por persona (incluye IVA)
+  painting: 18          // Mínimo $18 por pieza (incluye IVA)
+} as const;
+
+/**
+ * Items del menú disponibles
+ */
+export interface MenuItem {
+  id: string;
+  name: string;
+  description?: string;
+  price: number;
+  category: 'bebidas' | 'snacks' | 'comidas';
+  isAvailable: boolean;
+}
+
+/**
+ * Selección de items del menú
+ */
+export interface MenuSelection {
+  itemId: string;
+  quantity: number;
+  totalPrice: number;
+}
+
+/**
+ * Pieza seleccionada para un niño
+ */
+export interface ChildPieceSelection {
+  childNumber: number; // 1, 2, 3...
+  pieceId: string;
+  pieceName: string;
+  piecePrice: number;
+}
+
+/**
+ * Configuración de celebración
+ */
+export interface CelebrationConfig {
+  // Participantes
+  activeParticipants: number; // Personas que harán cerámica (pagan técnica)
+  guests: number; // Invitados (no hacen cerámica, solo ocupan espacio)
+  
+  // Espacio (se cobra por hora + IVA)
+  hours: number; // Horas de alquiler del espacio
+  
+  // Opciones extras
+  bringDecoration: boolean;
+  bringCake: boolean;
+  
+  // Niños (si aplica)
+  hasChildren: boolean;
+  childrenCount?: number;
+  childrenPieces?: ChildPieceSelection[];
+  
+  // Menú
+  menuSelections: MenuSelection[];
+}
+
+/**
+ * Configuración solo cerámica (sin celebración)
+ * Precio por persona según técnica (ya incluye IVA)
+ */
+export interface CeramicOnlyConfig {
+  participants: number; // Total de personas
+  pieceSelections?: ChildPieceSelection[]; // Solo si technique = 'painting'
+}
+
+/**
+ * Precios de espacio por hora
+ */
+export interface SpaceHourlyPricing {
+  weekday: number; // Mar-Jue
+  weekend: number; // Vie-Dom
+  vatRate: number; // IVA Ecuador (0.15)
+}
+
+export const SPACE_HOURLY_PRICING: SpaceHourlyPricing = {
+  weekday: 65,
+  weekend: 100,
+  vatRate: 0.15
+};
+
+/**
+ * Resumen de precios calculado
+ * 
+ * LÓGICA:
+ * - Solo Cerámica: técnica x personas (sin espacio, sin IVA adicional)
+ * - Celebración: (espacio x horas + IVA) + (técnica x activos) + menú + piezas niños
+ */
+export interface CustomExperiencePricing {
+  // Solo Cerámica
+  techniquePrice?: number; // Precio unitario de la técnica ($55, $45, o pieza)
+  techniqueTotal?: number; // techniquePrice x participants (YA incluye IVA)
+  piecesTotal?: number; // Total de piezas seleccionadas si es painting
+  
+  // Celebración (espacio)
+  spaceHours?: number; // Horas reservadas
+  spaceRate?: number; // Tarifa por hora ($65 o $100)
+  spaceSubtotal?: number; // spaceHours * spaceRate (sin IVA)
+  spaceVat?: number; // IVA solo del espacio
+  spaceTotalWithVat?: number; // spaceSubtotal + spaceVat
+  
+  // Celebración (técnicas para activos)
+  activeTechniqueTotal?: number; // Técnica x activeParticipants (YA incluye IVA)
+  
+  // Extras
+  menuTotal?: number; // Total de menú
+  childrenPiecesTotal?: number; // Total de piezas para niños
+  
+  // Total Final
+  total: number; // Gran total
+  
+  // Información adicional
+  spaceIncludes?: string[]; // ["A/C", "wifi", "mesas", "sillas", "menaje", "servicio"]
+}
+
+/**
+ * Slot de fecha/hora para experiencia personalizada
+ */
+export interface CustomExperienceTimeSlot {
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:mm
+  endTime: string; // HH:mm
+  hours: number; // Duración en horas
+  isWeekend: boolean; // Determina precio
+  hourlyRate: number; // Tarifa aplicable
+}
+
+/**
+ * Estado del wizard de experiencia personalizada
+ */
+export interface CustomExperienceWizardState {
+  // Step 1: Tipo de actividad
+  experienceType: CustomExperienceType | null;
+  
+  // Step 2: Configuración
+  technique: GroupTechnique | null;
+  config: CeramicOnlyConfig | CelebrationConfig | null;
+  
+  // Step 2.5: Menú (si es celebración)
+  menuItems?: MenuItem[];
+  
+  // Step 3: Fecha y hora
+  selectedTimeSlot: CustomExperienceTimeSlot | null;
+  
+  // Step 4: Precios calculados
+  pricing: CustomExperiencePricing | null;
+  
+  // UI State
+  currentStep: 1 | 2 | 3 | 4 | 5;
+  isLoading: boolean;
+  error: string | null;
+}
+
+/**
+ * Booking de experiencia personalizada (para enviar al backend)
+ */
+export interface CustomExperienceBooking {
+  experienceType: CustomExperienceType;
+  technique: GroupTechnique;
+  config: CeramicOnlyConfig | CelebrationConfig;
+  timeSlot: CustomExperienceTimeSlot;
+  pricing: CustomExperiencePricing;
+  userInfo: UserInfo;
+  
+  // Metadata
+  createdAt?: string;
+  bookingCode?: string;
+}

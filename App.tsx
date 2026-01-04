@@ -28,6 +28,7 @@ import { ExperienceTypeSelector } from './components/experiences/ExperienceTypeS
 import { GroupClassWizard } from './components/experiences/GroupClassWizard';
 import { PieceExperienceWizard } from './components/experiences/PieceExperienceWizard';
 import { SingleClassWizard } from './components/experiences/SingleClassWizard';
+import { CustomExperienceWizard } from './components/experiences/CustomExperienceWizard';
 // Wheel Course Components
 import { CourseWheelLanding } from './components/courses/CourseWheelLanding';
 import { CourseScheduleSelector } from './components/courses/CourseScheduleSelector';
@@ -279,7 +280,7 @@ const App: React.FC = () => {
         }
     }, [loading, hasCheckedMyClasses, view]);
 
-    const handleWelcomeSelect = (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio' | 'group_class_wizard' | 'single_class_wizard' | 'wheel_course') => {
+    const handleWelcomeSelect = (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio' | 'group_class_wizard' | 'single_class_wizard' | 'wheel_course' | 'custom_experience') => {
         if (userType === 'new') {
             setView('intro_classes');
         } else if (userType === 'returning') {
@@ -306,6 +307,9 @@ const App: React.FC = () => {
             setView('single_class_wizard');
         } else if (userType === 'wheel_course') {
             setView('wheel_course_landing');
+        } else if (userType === 'custom_experience') {
+            // New: Custom Experience Wizard
+            setView('custom_experience_wizard');
         }
     };
     
@@ -943,6 +947,22 @@ const App: React.FC = () => {
                         policies={appData.policies}
                         onFinish={resetFlow}
                         onNavigateToMyClasses={() => setView('my-classes')}
+                    />
+                );
+            
+            case 'custom_experience_wizard':
+                return (
+                    <CustomExperienceWizard
+                        pieces={pieces}
+                        onConfirm={(booking) => {
+                            // TODO: Implementar guardado de booking en backend
+                            console.log('Custom experience booking:', booking);
+                            // Por ahora, mostrar mensaje de éxito
+                            alert('¡Pre-reserva creada! (En construcción - próximamente se guardará en el sistema)');
+                            setView('welcome');
+                        }}
+                        onBack={() => setView('welcome')}
+                        isLoading={false}
                     />
                 );
 
