@@ -698,6 +698,149 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
                     break;
                 }
+                case 'getAvailableSlots': {
+                    // Endpoint inteligente para experiencias personalizadas
+                    const { technique, participants, startDate, daysAhead } = req.query;
+                    
+                    if (!technique || !participants) {
+                        return res.status(400).json({ 
+                            success: false, 
+                            error: 'Missing required parameters: technique and participants' 
+                        });
+                    }
+
+                    const requestedParticipants = parseInt(participants as string);
+                    const requestedTechnique = technique as string;
+                    const searchStartDate = startDate ? new Date(startDate as string) : new Date();
+                    const searchDays = daysAhead ? parseInt(daysAhead as string) : 60;
+
+                    console.log(`[getAvailableSlots] Searching: technique=${requestedTechnique}, participants=${requestedParticipants}, from=${searchStartDate.toISOString().split('T')[0]}, days=${searchDays}`);
+
+                    // Obtener datos necesarios
+                    const [bookingsResult, instructorsResult, settingsResult] = await Promise.all([
+                        sql`SELECT * FROM bookings WHERE status != 'expired' ORDER BY created_at DESC`,
+                        sql`SELECT * FROM instructors ORDER BY name ASC`,
+                        sql`SELECT * FROM settings WHERE key IN ('availability', 'scheduleOverrides', 'classCapacity')`
+                    ]);
+
+                    const bookings = bookingsResult.rows.map(parseBookingFromDB);
+                    const instructors = instructorsResult.rows.map(toCamelCase);
+                    
+                    // Parse settings
+                    const availability: any = settingsResult.rows.find(s => s.key === 'availability')?.value || 
+                        { Sunday: [], Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [] };
+                    const scheduleOverrides: any = settingsResult.rows.find(s => s.key === 'scheduleOverrides')?.value || {};
+                    const classCapacity: any = settingsResult.rows.find(s => s.key === 'classCapacity')?.value || 
+                        { potters_wheel: 8, molding: 22, introductory_class: 8 };
+
+                    // Capacidad máxima por técnica
+                    const maxCapacityMap: Record<string, number> = {
+                        'potters_wheel': 8,
+                        'hand_modeling': 22,
+                        'painting': 22
+                    };
+
+                    const availableSlots: any[] = [];
+                    const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+                    // Función auxiliar para normalizar time
+                    const normalizeTime = (t: string): string => {
+                        if (!t) return '';
+                        if (/^\d{2}:\d{2}$/.test(t)) return t;
+                        const d = new Date(`1970-01-01T${t}`);
+                        if (!isNaN(d.getTime())) {
+                            return d.toISOString().substr(11, 5);
+                        }
+                        return t.trim().toLowerCase();
+                    };
+
+                    // Iterar sobre cada día
+                    for (let i = 0; i < searchDays; i++) {
+                        const currentDate = new Date(searchStartDate);
+                        currentDate.setDate(currentDate.getDate() + i);
+                        const dateStr = currentDate.toISOString().split('T')[0];
+                        const dayKey = DAY_NAMES[currentDate.getDay()];
+                        
+                        // Obtener slots del día (availability o override)
+                        const override = scheduleOverrides[dateStr];
+                        const hasOverride = override !== undefined;
+                        
+                        if (hasOverride && override.slots === null) {
+                            // Día cerrado por override
+                            continue;
+                        }
+
+                        const baseSlots = hasOverride ? override.slots : availability[dayKey];
+                        if (!baseSlots || baseSlots.length === 0) continue;
+
+                        // Filtrar slots por técnica (convertir técnicas)
+                        const techniqueMap: Record<string, string> = {
+                            'hand_modeling': 'molding',
+                            'potters_wheel': 'potters_wheel',
+                            'painting': 'molding' // Painting usa capacidad de molding
+                        };
+
+                        const normalizedTechnique = techniqueMap[requestedTechnique] || requestedTechnique;
+
+                        baseSlots.forEach((slot: any) => {
+                            // Verificar si el slot es de la técnica solicitada
+                            if (slot.technique !== normalizedTechnique) return;
+
+                            const slotTime = normalizeTime(slot.time);
+                            
+                            // Contar participantes ya reservados en este slot
+                            const bookingsForSlot = bookings.filter((b: any) => {
+                                if (!b.slots || !Array.isArray(b.slots)) return false;
+                                return b.slots.some((s: any) => {
+                                    if (s.date !== dateStr) return false;
+                                    return normalizeTime(s.time) === slotTime;
+                                });
+                            });
+
+                            // Sumar participantes del slot
+                            const bookedParticipants = bookingsForSlot.reduce((sum: number, b: any) => {
+                                return sum + (b.participants || 1);
+                            }, 0);
+
+                            // Capacidad máxima del slot
+                            const maxCapacity = override?.capacity ?? maxCapacityMap[requestedTechnique] ?? 22;
+                            const availableCapacity = maxCapacity - bookedParticipants;
+
+                            // Solo incluir si hay capacidad suficiente
+                            if (availableCapacity >= requestedParticipants) {
+                                const instructor = instructors.find((inst: any) => inst.id === slot.instructorId);
+                                
+                                availableSlots.push({
+                                    date: dateStr,
+                                    time: slotTime,
+                                    available: availableCapacity,
+                                    total: maxCapacity,
+                                    canBook: true,
+                                    instructor: instructor?.name || 'Instructor',
+                                    instructorId: slot.instructorId,
+                                    technique: requestedTechnique
+                                });
+                            }
+                        });
+                    }
+
+                    console.log(`[getAvailableSlots] Found ${availableSlots.length} available slots`);
+                    
+                    data = {
+                        success: true,
+                        slots: availableSlots,
+                        searchParams: {
+                            technique: requestedTechnique,
+                            participants: requestedParticipants,
+                            startDate: searchStartDate.toISOString().split('T')[0],
+                            daysAhead: searchDays
+                        }
+                    };
+
+                    // Cache de 2 minutos (datos dinámicos que cambian con reservas)
+                    res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=300');
+                    break;
+                }
                 case 'listPieces': {
                     try {
                         const { rows } = await sql`
