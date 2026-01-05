@@ -393,7 +393,8 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
             {isCelebration ? 'Participantes Activos (harán cerámica)' : 'Número de Participantes'}
           </label>
           <input
-            type="number"
+            type="text"
+            inputMode="numeric"
             min="1"
             max={state.technique ? TECHNIQUES.find((t) => t.id === state.technique)?.maxCapacity || 22 : 22}
             value={
@@ -404,13 +405,38 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                 : 1
             }
             onChange={(e) => {
-              const val = parseInt(e.target.value) || 1;
+              const inputVal = e.target.value;
+              // Permitir campo vacío mientras el usuario edita
+              if (inputVal === '') {
+                return;
+              }
+              // Solo aceptar números
+              if (!/^\d+$/.test(inputVal)) {
+                return;
+              }
+              const val = parseInt(inputVal);
+              if (val < 1) return;
+              
+              const maxCap = state.technique ? TECHNIQUES.find((t) => t.id === state.technique)?.maxCapacity || 22 : 22;
+              if (val > maxCap) return;
+              
               setState((prev) => ({
                 ...prev,
                 config: isCelebration
                   ? { ...(prev.config as CelebrationConfig), activeParticipants: val }
                   : { participants: val },
               }));
+            }}
+            onBlur={(e) => {
+              // Si queda vacío, asignar 1
+              if (e.target.value === '') {
+                setState((prev) => ({
+                  ...prev,
+                  config: isCelebration
+                    ? { ...(prev.config as CelebrationConfig), activeParticipants: 1 }
+                    : { participants: 1 },
+                }));
+              }
             }}
             className="w-full sm:w-32 px-4 py-3 border-2 border-brand-border rounded-lg text-center text-2xl font-bold focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 transition-all"
           />

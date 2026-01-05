@@ -241,9 +241,41 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
           </div>
 
           {/* Participants Section */}
-          <div ref={participantsSection} className="bg-blue-50 p-6 rounded-lg border border-blue-200 text-center">
-            <div className="text-5xl font-bold text-blue-600 mb-2">1</div>
-            <div className="text-gray-600">persona</div>
+          <div ref={participantsSection} className="bg-blue-50 p-6 rounded-lg border border-blue-200">
+            <label className="block text-sm font-semibold text-brand-text mb-3">
+              Número de Participantes
+            </label>
+            <div className="flex items-center justify-center gap-4">
+              <input
+                type="text"
+                inputMode="numeric"
+                value={participants}
+                onChange={(e) => {
+                  const inputVal = e.target.value;
+                  // Permitir campo vacío mientras el usuario edita
+                  if (inputVal === '') {
+                    return;
+                  }
+                  // Solo aceptar números
+                  if (!/^\d+$/.test(inputVal)) {
+                    return;
+                  }
+                  const val = parseInt(inputVal);
+                  if (val < 1) return;
+                  if (val > 22) return;
+                  setParticipants(val);
+                }}
+                onBlur={(e) => {
+                  // Si queda vacío, asignar 1
+                  if (e.target.value === '') {
+                    setParticipants(1);
+                  }
+                }}
+                className="w-20 px-4 py-3 border-2 border-brand-border rounded-lg text-center text-3xl font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+              />
+              <div className="text-gray-600 font-medium">persona{participants !== 1 ? 's' : ''}</div>
+            </div>
+            <p className="text-xs text-blue-600 mt-3">Máximo 22 participantes</p>
           </div>
 
           {/* Piece Selection for Painting */}
