@@ -139,6 +139,14 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
   // Steps configuration
   const STEP_TITLES = ['Tipo', 'Configurar', 'Fecha', 'Datos', 'Confirmar'];
 
+  // ============ AUTO SCROLL EFFECT ============
+  useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  }, [state.currentStep]);
+
   // ============ STEP 1: Tipo de Actividad ============
   const renderStepActivityType = () => {
     return (
