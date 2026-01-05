@@ -84,25 +84,63 @@ const ProgressIndicator: React.FC<{ currentStep: number; totalSteps: number; ste
 };
 
 /**
- * Tooltip Component - Info contextual
+ * Tooltip Component - Info contextual con posicionamiento inteligente y responsive
  */
 const Tooltip: React.FC<{ text: string }> = ({ text }) => {
   const [show, setShow] = useState(false);
+  const [position, setPosition] = useState<'above' | 'below'>('above');
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  const handleToggle = () => {
+    if (!show) {
+      // Detectar posición disponible
+      setTimeout(() => {
+        if (tooltipRef.current && buttonRef.current) {
+          const buttonRect = buttonRef.current.getBoundingClientRect();
+          const tooltipRect = tooltipRef.current.getBoundingClientRect();
+          const spaceAbove = buttonRect.top;
+          const spaceBelow = window.innerHeight - buttonRect.bottom;
+
+          // Mobile: preferir debajo, Desktop: preferir arriba
+          const isMobile = window.innerWidth < 768;
+          if (isMobile) {
+            setPosition(spaceBelow > 150 ? 'below' : 'above');
+          } else {
+            setPosition(spaceAbove > 150 ? 'above' : 'below');
+          }
+        }
+      }, 0);
+    }
+    setShow(!show);
+  };
 
   return (
     <div className="relative inline-block ml-2">
       <button
+        ref={buttonRef}
         type="button"
         onMouseEnter={() => setShow(true)}
         onMouseLeave={() => setShow(false)}
-        onClick={() => setShow(!show)}
-        className="text-brand-primary hover:text-brand-accent transition-colors"
+        onClick={handleToggle}
+        className="text-brand-primary hover:text-brand-accent transition-colors flex-shrink-0"
       >
         <InfoCircleIcon className="w-5 h-5" />
       </button>
       {show && (
-        <div className="absolute z-50 w-64 p-3 bg-brand-text text-white text-xs rounded-lg shadow-xl -top-2 left-8 animate-fade-in-fast">
-          <div className="absolute w-2 h-2 bg-brand-text transform rotate-45 -left-1 top-3"></div>
+        <div
+          ref={tooltipRef}
+          className={`absolute z-50 max-w-[90vw] sm:max-w-sm p-3 bg-brand-text text-white text-xs rounded-lg shadow-2xl animate-fade-in-fast ${
+            position === 'above' ? '-top-2 -translate-y-full' : 'top-full mt-2'
+          } left-1/2 -translate-x-1/2`}
+          onClick={() => setShow(false)}
+        >
+          {/* Puntero dinámico */}
+          <div
+            className={`absolute w-2 h-2 bg-brand-text transform rotate-45 left-1/2 -translate-x-1/2 ${
+              position === 'above' ? '-bottom-1' : '-top-1'
+            }`}
+          ></div>
           {text}
         </div>
       )}
