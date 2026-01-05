@@ -15,10 +15,11 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
 }) => {
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
 
-  // Generar horas disponibles de 10am a 9pm cada hora
+  // Generar horas disponibles de 10am a 7pm cada 30 minutos (clases duran 2h)
   const AVAILABLE_HOURS = [
-    '10:00', '11:00', '12:00', '13:00', '14:00', 
-    '15:00', '16:00', '17:00', '18:00', '19:00', '20:00', '21:00'
+    '10:00', '10:30', '11:00', '11:30', '12:00', '12:30',
+    '13:00', '13:30', '14:00', '14:30', '15:00', '15:30',
+    '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00'
   ];
 
   // Generar días del mes
@@ -151,11 +152,14 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
         </div>
 
         {/* Leyenda */}
-        <div className="mt-4 pt-4 border-t border-brand-border flex items-center gap-4 text-xs text-gray-600">
-          <div className="flex items-center gap-1">
+        <div className="mt-4 pt-4 border-t border-brand-border">
+          <div className="flex items-center gap-1 text-xs text-gray-600 mb-2">
             <div className="w-3 h-3 bg-gray-300 rounded"></div>
             <span>Lunes (cerrado)</span>
           </div>
+          <p className="text-xs text-gray-600">
+            💡 Horarios disponibles cada 30 minutos | Duración: 2 horas | Última clase: 7:00 PM
+          </p>
         </div>
       </div>
 
@@ -170,7 +174,10 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
             })}
           </h4>
           
-          <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+          <div className="text-sm text-gray-600 mb-3">
+            Selecciona la hora de inicio (las clases duran 2 horas)
+          </div>
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
             {AVAILABLE_HOURS.map(hour => {
               const isSelected = selectedTime === hour;
               
