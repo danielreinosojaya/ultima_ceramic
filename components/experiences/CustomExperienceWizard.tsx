@@ -429,16 +429,16 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
             }}
             onBlur={(e) => {
               const inputVal = e.target.value;
+              const maxCap = state.technique ? TECHNIQUES.find((t) => t.id === state.technique)?.maxCapacity || 22 : 22;
               
-              // Si está vacío o inválido, restaurar a 1
-              if (inputVal === '' || parseInt(inputVal) < 1) {
-                setParticipantsInput('1');
-                setState((prev) => ({
-                  ...prev,
-                  config: isCelebration
-                    ? { ...(prev.config as CelebrationConfig), activeParticipants: 1 }
-                    : { participants: 1 },
-                }));
+              // Si está vacío, inválido o excede máximo, restaurar al último válido
+              if (inputVal === '' || parseInt(inputVal) < 1 || parseInt(inputVal) > maxCap) {
+                const currentVal = state.config
+                  ? isCelebration
+                    ? (state.config as CelebrationConfig).activeParticipants || 1
+                    : (state.config as CeramicOnlyConfig).participants || 1
+                  : 1;
+                setParticipantsInput(currentVal.toString());
               } else {
                 // Asegurar que el valor mostrado coincida con el estado
                 const currentVal = state.config
@@ -449,11 +449,34 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                 setParticipantsInput(currentVal.toString());
               }
             }}
-            className="w-full sm:w-32 px-4 py-3 border-2 border-brand-border rounded-lg text-center text-2xl font-bold focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 transition-all"
+            className={`w-full sm:w-32 px-4 py-3 border-2 rounded-lg text-center text-2xl font-bold transition-all ${
+              state.technique && participantsInput && parseInt(participantsInput) > (TECHNIQUES.find((t) => t.id === state.technique)?.maxCapacity || 22)
+                ? 'border-red-500 bg-red-50 text-red-600 focus:border-red-500 focus:ring-2 focus:ring-red-200'
+                : 'border-brand-border focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20'
+            }`}
           />
-          <p className="text-xs text-brand-secondary mt-2">
-            {state.technique && `Máximo ${TECHNIQUES.find((t) => t.id === state.technique)?.maxCapacity} para ${TECHNIQUES.find((t) => t.id === state.technique)?.name}`}
-          </p>
+          
+          {/* Mensaje de error si excede máximo */}
+          {state.technique && participantsInput && parseInt(participantsInput) > (TECHNIQUES.find((t) => t.id === state.technique)?.maxCapacity || 22) && (
+            <div className="mt-2 bg-red-50 border-l-4 border-red-500 rounded-r-lg p-3">
+              <div className="flex items-center gap-2">
+                <span className="text-red-600 font-bold">⚠️</span>
+                <div>
+                  <p className="text-sm font-semibold text-red-900">Capacidad Excedida</p>
+                  <p className="text-xs text-red-700">
+                    {TECHNIQUES.find((t) => t.id === state.technique)?.name} permite máximo {TECHNIQUES.find((t) => t.id === state.technique)?.maxCapacity} participantes.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Mensaje informativo normal */}
+          {(!participantsInput || parseInt(participantsInput) <= (state.technique ? TECHNIQUES.find((t) => t.id === state.technique)?.maxCapacity || 22 : 22)) && (
+            <p className="text-xs text-brand-secondary mt-2">
+              {state.technique && `Máximo ${TECHNIQUES.find((t) => t.id === state.technique)?.maxCapacity} para ${TECHNIQUES.find((t) => t.id === state.technique)?.name}`}
+            </p>
+          )}
           
           {/* Precio en tiempo real - Solo Cerámica */}
           {!isCelebration && state.technique && state.technique !== 'painting' && state.config && (
@@ -1197,8 +1220,20 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
           {state.currentStep < 5 && (
             <button
               onClick={handleNext}
-              disabled={isLoading}
-              className="flex-1 px-6 py-3 bg-brand-primary text-white rounded-xl font-semibold hover:bg-brand-accent disabled:opacity-50 transition-all shadow-md hover:shadow-lg active:scale-[0.98]"
+              disabled={isLoading || (() => {
+                // Validar participantes en Step 2
+                if (state.currentStep === 2 && state.technique) {
+                  const maxCap = TECHNIQUES.find((t) => t.id === state.technique)?.maxCapacity || 22;
+                  const currentParticipants = state.config
+                    ? state.experienceType === 'celebration'
+                      ? (state.config as CelebrationConfig).activeParticipants || 0
+                      : (state.config as CeramicOnlyConfig).participants || 0
+                    : 0;
+                  return currentParticipants > maxCap || currentParticipants < 1;
+                }
+                return false;
+              })()}
+              className="flex-1 px-6 py-3 bg-brand-primary text-white rounded-xl font-semibold hover:bg-brand-accent disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg active:scale-[0.98]"
             >
               Siguiente →
             </button>
