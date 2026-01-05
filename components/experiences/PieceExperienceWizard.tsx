@@ -22,6 +22,7 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [technique, setTechnique] = useState<GroupTechnique>('hand_modeling');
   const [participants, setParticipants] = useState<number>(1);
+  const [participantsInput, setParticipantsInput] = useState<string>('1');
   const [selectedPiece, setSelectedPiece] = useState<string | null>(null);
   const [pricing, setPricing] = useState<ExperiencePricing | null>(null);
   const [error, setError] = useState<string>('');
@@ -249,26 +250,41 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
               <input
                 type="text"
                 inputMode="numeric"
-                value={participants}
+                value={participantsInput}
                 onChange={(e) => {
                   const inputVal = e.target.value;
-                  // Permitir campo vacío mientras el usuario edita
+                  
+                  // Permitir vacío temporalmente
                   if (inputVal === '') {
+                    setParticipantsInput('');
                     return;
                   }
+                  
                   // Solo aceptar números
                   if (!/^\d+$/.test(inputVal)) {
                     return;
                   }
+                  
                   const val = parseInt(inputVal);
-                  if (val < 1) return;
-                  if (val > 22) return;
-                  setParticipants(val);
+                  
+                  // Actualizar input visualmente
+                  setParticipantsInput(inputVal);
+                  
+                  // Actualizar estado solo si es válido
+                  if (val >= 1 && val <= 22) {
+                    setParticipants(val);
+                  }
                 }}
                 onBlur={(e) => {
-                  // Si queda vacío, asignar 1
-                  if (e.target.value === '') {
+                  const inputVal = e.target.value;
+                  
+                  // Si está vacío o inválido, restaurar a 1
+                  if (inputVal === '' || parseInt(inputVal) < 1) {
+                    setParticipantsInput('1');
                     setParticipants(1);
+                  } else {
+                    // Asegurar que el valor mostrado coincida con el estado
+                    setParticipantsInput(participants.toString());
                   }
                 }}
                 className="w-20 px-4 py-3 border-2 border-brand-border rounded-lg text-center text-3xl font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
