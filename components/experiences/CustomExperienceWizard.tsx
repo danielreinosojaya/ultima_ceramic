@@ -18,8 +18,7 @@ import { SPACE_HOURLY_PRICING, CUSTOM_EXPERIENCE_TECHNIQUES as TECHNIQUES, TECHN
 import { InfoCircleIcon } from '../icons/InfoCircleIcon';
 import { CheckCircleIcon } from '../icons/CheckCircleIcon';
 import { MenuSelector } from './MenuSelector';
-import { DateTimeSelector } from './DateTimeSelector';
-import type { AvailableSlotResult } from '../../services/dataService';
+import { FreeDateTimePicker } from './FreeDateTimePicker';
 import { ChildPieceSelector } from './ChildPieceSelector';
 import { UserInfoModal } from '../UserInfoModal';
 
@@ -180,7 +179,8 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
   const [menuTotal, setMenuTotal] = useState(0);
   const [showChildPieceSelector, setShowChildPieceSelector] = useState(false);
   const [participantsInput, setParticipantsInput] = useState<string>('1');
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState<AvailableSlotResult | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
 
   // Steps configuration
   const STEP_TITLES = ['Tipo', 'Configurar', 'Fecha', 'Datos', 'Confirmar'];
@@ -777,9 +777,6 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
   // ============ STEP 3: Fecha y Hora ============
   const renderStepDateTime = () => {
     const isCelebration = state.experienceType === 'celebration';
-    const activeParticipants = isCelebration 
-      ? (state.config as CelebrationConfig)?.activeParticipants || 1
-      : (state.config as CeramicOnlyConfig)?.participants || 1;
     
     return (
       <div className="space-y-6 animate-fade-in-up">
@@ -788,19 +785,17 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
             📅 Selecciona Fecha y Hora
           </h2>
           <p className="text-brand-secondary text-sm">
-            Elige el horario perfecto para tu experiencia
+            Elige libremente tu día y horario preferido
           </p>
         </div>
 
-        {/* DateTimeSelector Component */}
-        {state.technique && (
-          <DateTimeSelector
-            technique={state.technique}
-            participants={activeParticipants}
-            selectedSlot={selectedTimeSlot ? { date: selectedTimeSlot.date, time: selectedTimeSlot.time } : null}
-            onSelectSlot={(slot) => setSelectedTimeSlot(slot)}
-          />
-        )}
+        {/* FreeDateTimePicker Component */}
+        <FreeDateTimePicker
+          selectedDate={selectedDate}
+          selectedTime={selectedTime}
+          onSelectDate={(date) => setSelectedDate(date)}
+          onSelectTime={(time) => setSelectedTime(time)}
+        />
 
         {/* Resumen visual */}
         <div className="bg-white border-2 border-brand-border rounded-xl p-6 mt-6">
@@ -847,12 +842,12 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                 </span>
               </div>
             )}
-            {selectedTimeSlot && (
+            {selectedDate && selectedTime && (
               <>
                 <div className="flex justify-between py-2 border-b border-brand-border">
                   <span className="text-brand-secondary">Fecha:</span>
                   <span className="font-semibold text-green-700">
-                    {new Date(selectedTimeSlot.date).toLocaleDateString('es-ES', {
+                    {new Date(selectedDate).toLocaleDateString('es-ES', {
                       weekday: 'long',
                       day: 'numeric',
                       month: 'long',
@@ -860,13 +855,9 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                     })}
                   </span>
                 </div>
-                <div className="flex justify-between py-2 border-b border-brand-border">
-                  <span className="text-brand-secondary">Hora:</span>
-                  <span className="font-semibold text-green-700">{selectedTimeSlot.time}</span>
-                </div>
                 <div className="flex justify-between py-2">
-                  <span className="text-brand-secondary">Instructor:</span>
-                  <span className="font-semibold text-brand-text">{selectedTimeSlot.instructor}</span>
+                  <span className="text-brand-secondary">Hora:</span>
+                  <span className="font-semibold text-green-700">{selectedTime}</span>
                 </div>
               </>
             )}
