@@ -18,6 +18,8 @@ import { SPACE_HOURLY_PRICING, CUSTOM_EXPERIENCE_TECHNIQUES as TECHNIQUES, TECHN
 import { InfoCircleIcon } from '../icons/InfoCircleIcon';
 import { CheckCircleIcon } from '../icons/CheckCircleIcon';
 import { MenuSelector } from './MenuSelector';
+import { DateTimeSelector } from './DateTimeSelector';
+import type { AvailableSlotResult } from '../../services/dataService';
 import { ChildPieceSelector } from './ChildPieceSelector';
 import { UserInfoModal } from '../UserInfoModal';
 
@@ -178,6 +180,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
   const [menuTotal, setMenuTotal] = useState(0);
   const [showChildPieceSelector, setShowChildPieceSelector] = useState(false);
   const [participantsInput, setParticipantsInput] = useState<string>('1');
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<AvailableSlotResult | null>(null);
 
   // Steps configuration
   const STEP_TITLES = ['Tipo', 'Configurar', 'Fecha', 'Datos', 'Confirmar'];
@@ -773,36 +776,34 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
 
   // ============ STEP 3: Fecha y Hora ============
   const renderStepDateTime = () => {
-    // Solo mostrar si es Solo Cerámica (Celebración ya definió todo en paso 2)
     const isCelebration = state.experienceType === 'celebration';
+    const activeParticipants = isCelebration 
+      ? (state.config as CelebrationConfig)?.activeParticipants || 1
+      : (state.config as CeramicOnlyConfig)?.participants || 1;
     
     return (
       <div className="space-y-6 animate-fade-in-up">
         <div className="text-center mb-6">
           <h2 className="text-2xl sm:text-3xl font-bold text-brand-text mb-2">
-            Coordinación de Fecha y Hora
+            📅 Selecciona Fecha y Hora
           </h2>
           <p className="text-brand-secondary text-sm">
-            Nos pondremos en contacto vía WhatsApp para confirmar la disponibilidad
+            Elige el horario perfecto para tu experiencia
           </p>
         </div>
 
-        {/* Info sobre coordinación */}
-        <div className="bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-4">
-          <div className="flex gap-3">
-            <InfoCircleIcon className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold text-blue-900 mb-1">📅 Próximo Paso</p>
-              <p className="text-sm text-blue-800">
-                Una vez completes tu pre-reserva, nuestro equipo te contactará por WhatsApp 
-                en las próximas 24 horas para coordinar la fecha y hora exacta según tu disponibilidad.
-              </p>
-            </div>
-          </div>
-        </div>
+        {/* DateTimeSelector Component */}
+        {state.technique && (
+          <DateTimeSelector
+            technique={state.technique}
+            participants={activeParticipants}
+            selectedSlot={selectedTimeSlot ? { date: selectedTimeSlot.date, time: selectedTimeSlot.time } : null}
+            onSelectSlot={(slot) => setSelectedTimeSlot(slot)}
+          />
+        )}
 
         {/* Resumen visual */}
-        <div className="bg-white border-2 border-brand-border rounded-xl p-6">
+        <div className="bg-white border-2 border-brand-border rounded-xl p-6 mt-6">
           <h3 className="font-bold text-brand-text mb-4">Resumen de tu Experiencia</h3>
           <div className="space-y-3 text-sm">
             <div className="flex justify-between py-2 border-b border-brand-border">
@@ -845,6 +846,29 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                   {(state.config as CeramicOnlyConfig)?.participants || 0}
                 </span>
               </div>
+            )}
+            {selectedTimeSlot && (
+              <>
+                <div className="flex justify-between py-2 border-b border-brand-border">
+                  <span className="text-brand-secondary">Fecha:</span>
+                  <span className="font-semibold text-green-700">
+                    {new Date(selectedTimeSlot.date).toLocaleDateString('es-ES', {
+                      weekday: 'long',
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric'
+                    })}
+                  </span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-brand-border">
+                  <span className="text-brand-secondary">Hora:</span>
+                  <span className="font-semibold text-green-700">{selectedTimeSlot.time}</span>
+                </div>
+                <div className="flex justify-between py-2">
+                  <span className="text-brand-secondary">Instructor:</span>
+                  <span className="font-semibold text-brand-text">{selectedTimeSlot.instructor}</span>
+                </div>
+              </>
             )}
           </div>
         </div>

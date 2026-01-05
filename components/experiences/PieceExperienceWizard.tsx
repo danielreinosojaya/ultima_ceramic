@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Piece, SelectedPiece, ExperiencePricing, TimeSlot, GroupTechnique } from '../../types';
+import type { AvailableSlotResult } from '../../services/dataService';
 import * as dataService from '../../services/dataService';
+import { DateTimeSelector } from './DateTimeSelector';
 
 export interface PieceExperienceWizardProps {
   pieces: Piece[];
@@ -23,6 +25,7 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
   const [technique, setTechnique] = useState<GroupTechnique>('hand_modeling');
   const [participants, setParticipants] = useState<number>(1);
   const [participantsInput, setParticipantsInput] = useState<string>('1');
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<AvailableSlotResult | null>(null);
   const [selectedPiece, setSelectedPiece] = useState<string | null>(null);
   const [pricing, setPricing] = useState<ExperiencePricing | null>(null);
   const [error, setError] = useState<string>('');
@@ -380,28 +383,16 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
       {step === 3 && (
         <div className="space-y-6">
           <div>
-            <h3 className="text-2xl font-bold mb-2">Elige tu Horario</h3>
+            <h3 className="text-2xl font-bold mb-2">📅 Elige tu Horario</h3>
             <p className="text-gray-600">Selecciona el día y hora que prefieras</p>
           </div>
 
-          <div className="space-y-3 max-h-96 overflow-y-auto">
-            {availableSlots.length > 0 ? (
-              availableSlots.map((slot, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => {
-                    setTimeout(() => setStep(4), 300);
-                  }}
-                  className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all text-left"
-                >
-                  <div className="font-bold">{slot.date}</div>
-                  <div className="text-gray-600">{slot.time}</div>
-                </button>
-              ))
-            ) : (
-              <p className="text-gray-600 text-center py-8">No hay horarios disponibles</p>
-            )}
-          </div>
+          <DateTimeSelector
+            technique={technique}
+            participants={participants}
+            selectedSlot={selectedTimeSlot ? { date: selectedTimeSlot.date, time: selectedTimeSlot.time } : null}
+            onSelectSlot={(slot) => setSelectedTimeSlot(slot)}
+          />
         </div>
       )}
 
