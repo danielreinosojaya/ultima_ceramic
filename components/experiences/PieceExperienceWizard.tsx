@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { Piece, SelectedPiece, ExperiencePricing, TimeSlot, GroupTechnique } from '../../types';
 import * as dataService from '../../services/dataService';
 
@@ -17,6 +17,7 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
   onBack,
   isLoading = false
 }) => {
+  const wizardRef = useRef<HTMLDivElement>(null);
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [technique, setTechnique] = useState<GroupTechnique>('hand_modeling');
   const [participants, setParticipants] = useState<number>(1);
@@ -42,6 +43,15 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
       price: 0  // Depende de la pieza
     }
   };
+
+  // Auto-scroll to top cuando cambia el step
+  useEffect(() => {
+    if (wizardRef.current) {
+      setTimeout(() => {
+        wizardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  }, [step]);
 
   // Calculate pricing when technique or participants change
   useEffect(() => {
@@ -123,7 +133,7 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-4 py-8">
+    <div ref={wizardRef} className="w-full max-w-2xl mx-auto px-4 py-8">
       {/* Progress Bar */}
       <div className="mb-8">
         <div className="flex justify-between text-sm text-gray-600 mb-2">
@@ -150,7 +160,10 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
             {(['hand_modeling', 'potters_wheel', 'painting'] as GroupTechnique[]).map((tech) => (
               <button
                 key={tech}
-                onClick={() => setTechnique(tech)}
+                onClick={() => {
+                  setTechnique(tech);
+                  setTimeout(() => setStep(2), 300);
+                }}
                 className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
                   technique === tech
                     ? 'border-blue-500 bg-blue-50'
@@ -199,7 +212,10 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
                 {initialPieces.filter((p) => p.isActive).map((piece) => (
                   <button
                     key={piece.id}
-                    onClick={() => setSelectedPiece(piece.id)}
+                    onClick={() => {
+                      setSelectedPiece(piece.id);
+                      setTimeout(() => setStep(3), 300);
+                    }}
                     className={`p-3 rounded-lg border-2 transition-all text-left text-sm ${
                       selectedPiece === piece.id
                         ? 'border-blue-500 bg-blue-50'
@@ -256,6 +272,9 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
               availableSlots.map((slot, idx) => (
                 <button
                   key={idx}
+                  onClick={() => {
+                    setTimeout(() => setStep(4), 300);
+                  }}
                   className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all text-left"
                 >
                   <div className="font-bold">{slot.date}</div>
