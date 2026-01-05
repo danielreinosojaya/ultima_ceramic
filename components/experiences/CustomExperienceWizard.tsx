@@ -157,6 +157,10 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
   onBack,
   isLoading = false,
 }) => {
+  // ============ REFS ============
+  const participantsRef = useRef<HTMLDivElement>(null);
+  const hoursRef = useRef<HTMLDivElement>(null);
+
   // ============ STATE ============
   const [state, setState] = useState<CustomExperienceWizardState>({
     experienceType: null,
@@ -360,12 +364,10 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                   type="button"
                   onClick={() => {
                     setState((prev) => ({ ...prev, technique: tech.id }));
+                    // Auto-scroll a participantes después de seleccionar técnica
                     setTimeout(() => {
-                      // Auto-avanzar solo si ya hay config completada
-                      if (state.config) {
-                        handleNext();
-                      }
-                    }, 200);
+                      participantsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 150);
                   }}
                   className={`p-4 rounded-xl border-2 transition-all duration-300 text-left ${
                     isSelected
@@ -386,7 +388,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
         </div>
 
         {/* Número de Participantes */}
-        <div>
+        <div ref={participantsRef}>
           <label className="block text-sm font-semibold text-brand-text mb-3">
             {isCelebration ? 'Participantes Activos (harán cerámica)' : 'Número de Participantes'}
           </label>
