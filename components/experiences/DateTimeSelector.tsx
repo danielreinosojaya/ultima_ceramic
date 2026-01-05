@@ -56,12 +56,40 @@ export const DateTimeSelector: React.FC<DateTimeSelectorProps> = ({
   // Obtener fechas únicas disponibles
   const availableDates = [...new Set(availableSlots.map(s => s.date))].sort();
   
-  // Generar horas disponibles de 10am a 7pm cada 30 minutos (clases duran 2h)
-  const AVAILABLE_HOURS = [
-    '10:00', '10:30', '11:00', '11:30', '12:00', '12:30',
-    '13:00', '13:30', '14:00', '14:30', '15:00', '15:30',
-    '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00'
-  ];
+  // Generar horas disponibles según el día de la semana
+  const getAvailableHours = (dateStr: string): string[] => {
+    const date = new Date(dateStr);
+    const dayOfWeek = date.getDay();
+    const hours: string[] = [];
+
+    if (dayOfWeek === 6) {
+      // Sábado: 9am a 7pm
+      for (let hour = 9; hour <= 19; hour++) {
+        for (let min of ['00', '30']) {
+          if (hour === 19 && min === '30') break;
+          hours.push(`${hour}:${min}`);
+        }
+      }
+    } else if (dayOfWeek === 0) {
+      // Domingo: 10am a 6pm
+      for (let hour = 10; hour <= 18; hour++) {
+        for (let min of ['00', '30']) {
+          if (hour === 18 && min === '30') break;
+          hours.push(`${hour}:${min}`);
+        }
+      }
+    } else {
+      // Otros días (excepto lunes): 10am a 7pm
+      for (let hour = 10; hour <= 19; hour++) {
+        for (let min of ['00', '30']) {
+          if (hour === 19 && min === '30') break;
+          hours.push(`${hour}:${min}`);
+        }
+      }
+    }
+    return hours;
+  };
+
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -222,8 +250,11 @@ export const DateTimeSelector: React.FC<DateTimeSelectorProps> = ({
                 month: 'long' 
               })}
             </h4>
-            <p className="text-xs text-gray-600 mt-1">
-              💡 Horarios cada 30 minutos | Duración: 2 horas | Última clase: 7:00 PM
+            <p className="text-xs text-gray-600 mt-1 space-y-1">
+              <div>💡 Cada 30 minutos | Duración: 2 horas</div>
+              <div>📅 Sábados: 9:00 AM - 7:00 PM</div>
+              <div>📅 Domingos: 10:00 AM - 6:00 PM</div>
+              <div>📅 Otros días: 10:00 AM - 7:00 PM</div>
             </p>
           </div>
           
