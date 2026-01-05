@@ -177,6 +177,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [menuTotal, setMenuTotal] = useState(0);
   const [showChildPieceSelector, setShowChildPieceSelector] = useState(false);
+  const [participantsInput, setParticipantsInput] = useState<string>('1');
 
   // Steps configuration
   const STEP_TITLES = ['Tipo', 'Configurar', 'Fecha', 'Datos', 'Confirmar'];
@@ -395,47 +396,57 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
           <input
             type="text"
             inputMode="numeric"
-            min="1"
-            max={state.technique ? TECHNIQUES.find((t) => t.id === state.technique)?.maxCapacity || 22 : 22}
-            value={
-              state.config
-                ? isCelebration
-                  ? (state.config as CelebrationConfig).activeParticipants || 1
-                  : (state.config as CeramicOnlyConfig).participants || 1
-                : 1
-            }
+            value={participantsInput}
             onChange={(e) => {
               const inputVal = e.target.value;
-              // Permitir campo vacío mientras el usuario edita
+              
+              // Permitir vacío temporalmente
               if (inputVal === '') {
+                setParticipantsInput('');
                 return;
               }
+              
               // Solo aceptar números
               if (!/^\d+$/.test(inputVal)) {
                 return;
               }
+              
               const val = parseInt(inputVal);
-              if (val < 1) return;
-              
               const maxCap = state.technique ? TECHNIQUES.find((t) => t.id === state.technique)?.maxCapacity || 22 : 22;
-              if (val > maxCap) return;
               
-              setState((prev) => ({
-                ...prev,
-                config: isCelebration
-                  ? { ...(prev.config as CelebrationConfig), activeParticipants: val }
-                  : { participants: val },
-              }));
+              // Actualizar input visualmente
+              setParticipantsInput(inputVal);
+              
+              // Actualizar estado solo si es válido
+              if (val >= 1 && val <= maxCap) {
+                setState((prev) => ({
+                  ...prev,
+                  config: isCelebration
+                    ? { ...(prev.config as CelebrationConfig), activeParticipants: val }
+                    : { participants: val },
+                }));
+              }
             }}
             onBlur={(e) => {
-              // Si queda vacío, asignar 1
-              if (e.target.value === '') {
+              const inputVal = e.target.value;
+              
+              // Si está vacío o inválido, restaurar a 1
+              if (inputVal === '' || parseInt(inputVal) < 1) {
+                setParticipantsInput('1');
                 setState((prev) => ({
                   ...prev,
                   config: isCelebration
                     ? { ...(prev.config as CelebrationConfig), activeParticipants: 1 }
                     : { participants: 1 },
                 }));
+              } else {
+                // Asegurar que el valor mostrado coincida con el estado
+                const currentVal = state.config
+                  ? isCelebration
+                    ? (state.config as CelebrationConfig).activeParticipants || 1
+                    : (state.config as CeramicOnlyConfig).participants || 1
+                  : 1;
+                setParticipantsInput(currentVal.toString());
               }
             }}
             className="w-full sm:w-32 px-4 py-3 border-2 border-brand-border rounded-lg text-center text-2xl font-bold focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 transition-all"
