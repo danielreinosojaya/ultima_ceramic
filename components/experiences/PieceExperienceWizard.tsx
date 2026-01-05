@@ -18,6 +18,7 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
   isLoading = false
 }) => {
   const wizardRef = useRef<HTMLDivElement>(null);
+  const participantsSection = useRef<HTMLDivElement>(null);
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [technique, setTechnique] = useState<GroupTechnique>('hand_modeling');
   const [participants, setParticipants] = useState<number>(1);
@@ -199,7 +200,48 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
             <p className="text-gray-600">Esta es una experiencia para 1 persona</p>
           </div>
 
-          <div className="bg-blue-50 p-6 rounded-lg border border-blue-200 text-center">
+          <div className="space-y-4">
+            {/* Technique Selection (within Step 2) */}
+            <div>
+              <label className="block text-sm font-bold mb-3">Elige tu técnica:</label>
+              <div className="space-y-3">
+                {(['hand_modeling', 'potters_wheel', 'painting'] as GroupTechnique[]).map((tech) => (
+                  <button
+                    key={tech}
+                    onClick={() => {
+                      setTechnique(tech);
+                      // Auto-scroll a la sección de participantes
+                      setTimeout(() => {
+                        participantsSection.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      }, 100);
+                    }}
+                    className={`w-full p-3 rounded-lg border-2 transition-all text-left ${
+                      technique === tech
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="font-bold text-lg">{TECHNIQUE_INFO[tech].label}</div>
+                        <div className="text-sm text-gray-600">{TECHNIQUE_INFO[tech].desc}</div>
+                      </div>
+                      <div className="text-right">
+                        {tech === 'painting' ? (
+                          <div className="text-sm text-blue-600 font-bold">Depende<br />de pieza</div>
+                        ) : (
+                          <div className="text-2xl font-bold text-blue-600">${TECHNIQUE_INFO[tech].price}</div>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Participants Section */}
+          <div ref={participantsSection} className="bg-blue-50 p-6 rounded-lg border border-blue-200 text-center">
             <div className="text-5xl font-bold text-blue-600 mb-2">1</div>
             <div className="text-gray-600">persona</div>
           </div>
