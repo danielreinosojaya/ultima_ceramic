@@ -32,17 +32,20 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
     hand_modeling: {
       label: '🤚 Modelado a Mano',
       desc: 'Crea con tus manos usando arcilla',
-      price: 45
+      price: 45,
+      maxCapacity: 22
     },
     potters_wheel: {
       label: '🎡 Torno Alfarero',
       desc: 'Trabaja en la rueda de alfarero',
-      price: 55
+      price: 55,
+      maxCapacity: 8
     },
     painting: {
       label: '🎨 Pintura de Piezas',
       desc: 'Pinta piezas pre-moldeadas',
-      price: 0  // Depende de la pieza
+      price: 0,  // Depende de la pieza
+      maxCapacity: 22
     }
   };
 
@@ -266,32 +269,56 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
                   }
                   
                   const val = parseInt(inputVal);
+                  const maxCap = TECHNIQUE_INFO[technique].maxCapacity;
                   
                   // Actualizar input visualmente
                   setParticipantsInput(inputVal);
                   
                   // Actualizar estado solo si es válido
-                  if (val >= 1 && val <= 22) {
+                  if (val >= 1 && val <= maxCap) {
                     setParticipants(val);
                   }
                 }}
                 onBlur={(e) => {
                   const inputVal = e.target.value;
+                  const maxCap = TECHNIQUE_INFO[technique].maxCapacity;
                   
-                  // Si está vacío o inválido, restaurar a 1
-                  if (inputVal === '' || parseInt(inputVal) < 1) {
-                    setParticipantsInput('1');
-                    setParticipants(1);
+                  // Si está vacío, inválido o excede máximo, restaurar al último válido
+                  if (inputVal === '' || parseInt(inputVal) < 1 || parseInt(inputVal) > maxCap) {
+                    setParticipantsInput(participants.toString());
                   } else {
                     // Asegurar que el valor mostrado coincida con el estado
                     setParticipantsInput(participants.toString());
                   }
                 }}
-                className="w-20 px-4 py-3 border-2 border-brand-border rounded-lg text-center text-3xl font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                className={`w-20 px-4 py-3 border-2 rounded-lg text-center text-3xl font-bold transition-all ${
+                  participantsInput && parseInt(participantsInput) > TECHNIQUE_INFO[technique].maxCapacity
+                    ? 'border-red-500 bg-red-50 text-red-600 focus:border-red-500 focus:ring-2 focus:ring-red-200'
+                    : 'border-brand-border focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
+                }`}
               />
               <div className="text-gray-600 font-medium">persona{participants !== 1 ? 's' : ''}</div>
             </div>
-            <p className="text-xs text-blue-600 mt-3">Máximo 22 participantes</p>
+            
+            {/* Mensaje de error si excede máximo */}
+            {participantsInput && parseInt(participantsInput) > TECHNIQUE_INFO[technique].maxCapacity && (
+              <div className="mt-3 bg-red-50 border-l-4 border-red-500 rounded-r-lg p-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-red-600 font-bold">⚠️</span>
+                  <div>
+                    <p className="text-sm font-semibold text-red-900">Capacidad Excedida</p>
+                    <p className="text-xs text-red-700">
+                      {TECHNIQUE_INFO[technique].label} permite máximo {TECHNIQUE_INFO[technique].maxCapacity} participantes.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Mensaje informativo normal */}
+            {(!participantsInput || parseInt(participantsInput) <= TECHNIQUE_INFO[technique].maxCapacity) && (
+              <p className="text-xs text-blue-600 mt-3">Máximo {TECHNIQUE_INFO[technique].maxCapacity} participantes</p>
+            )}
           </div>
 
           {/* Piece Selection for Painting */}
@@ -429,8 +456,15 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
         {step < 4 ? (
           <button
             onClick={handleNext}
-            disabled={isLoading}
-            className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            disabled={isLoading || (() => {
+              // Validar participantes en Step 2
+              if (step === 2) {
+                const maxCap = TECHNIQUE_INFO[technique].maxCapacity;
+                return participants > maxCap || participants < 1;
+              }
+              return false;
+            })()}
+            className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
             Siguiente →
           </button>
