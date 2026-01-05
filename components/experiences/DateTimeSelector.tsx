@@ -56,10 +56,12 @@ export const DateTimeSelector: React.FC<DateTimeSelectorProps> = ({
   // Obtener fechas únicas disponibles
   const availableDates = [...new Set(availableSlots.map(s => s.date))].sort();
   
-  // Obtener horarios para la fecha seleccionada
-  const timesForSelectedDate = availableSlots.filter(s => s.date === selectedDate);
-
-  // Generar días del mes actual para el calendario
+  // Generar horas disponibles de 10am a 7pm cada 30 minutos (clases duran 2h)
+  const AVAILABLE_HOURS = [
+    '10:00', '10:30', '11:00', '11:30', '12:00', '12:30',
+    '13:00', '13:30', '14:00', '14:30', '15:00', '15:30',
+    '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00'
+  ];
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -212,15 +214,20 @@ export const DateTimeSelector: React.FC<DateTimeSelectorProps> = ({
       {/* Horarios disponibles */}
       {selectedDate && timesForSelectedDate.length > 0 && (
         <div className="space-y-3">
-          <h4 className="font-bold text-brand-text">
-            Horarios Disponibles - {new Date(selectedDate).toLocaleDateString('es-ES', { 
-              weekday: 'long', 
-              day: 'numeric', 
-              month: 'long' 
-            })}
-          </h4>
+          <div>
+            <h4 className="font-bold text-brand-text">
+              Horarios Disponibles - {new Date(selectedDate).toLocaleDateString('es-ES', { 
+                weekday: 'long', 
+                day: 'numeric', 
+                month: 'long' 
+              })}
+            </h4>
+            <p className="text-xs text-gray-600 mt-1">
+              💡 Horarios cada 30 minutos | Duración: 2 horas | Última clase: 7:00 PM
+            </p>
+          </div>
           
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
             {timesForSelectedDate.map(slot => {
               const isSelected = selectedSlot?.date === slot.date && selectedSlot?.time === slot.time;
               
