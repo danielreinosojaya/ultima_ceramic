@@ -358,7 +358,15 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                 <button
                   key={tech.id}
                   type="button"
-                  onClick={() => setState((prev) => ({ ...prev, technique: tech.id }))}
+                  onClick={() => {
+                    setState((prev) => ({ ...prev, technique: tech.id }));
+                    setTimeout(() => {
+                      // Auto-avanzar solo si ya hay config completada
+                      if (state.config) {
+                        handleNext();
+                      }
+                    }, 200);
+                  }}
                   className={`p-4 rounded-xl border-2 transition-all duration-300 text-left ${
                     isSelected
                       ? 'border-brand-primary bg-brand-primary/5 shadow-md'
@@ -1058,6 +1066,14 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
       }));
     }
   };
+
+  // Auto-scroll a top cuando cambia el step
+  useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  }, [state.currentStep]);
 
   const handleConfirm = async () => {
     // TODO: Implement booking confirmation
