@@ -387,7 +387,40 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json(info);
     }
 
-    // 🚨 MIGRATION ENDPOINT: Forzar creación de columnas
+    // � FIX CAPACITY: Resetear classCapacity a valores correctos
+    if (action === 'fixClassCapacity') {
+        console.log('🔧 [FIX] Reseteando classCapacity a valores correctos...');
+        try {
+            const correctCapacity = {
+                potters_wheel: 8,
+                molding: 22,
+                introductory_class: 8
+            };
+            
+            await sql`
+                INSERT INTO settings (key, value) 
+                VALUES ('classCapacity', ${JSON.stringify(correctCapacity)})
+                ON CONFLICT (key) 
+                DO UPDATE SET value = EXCLUDED.value
+            `;
+            
+            console.log('✅ classCapacity actualizado:', correctCapacity);
+            
+            return res.status(200).json({
+                success: true,
+                message: 'classCapacity actualizado correctamente',
+                classCapacity: correctCapacity
+            });
+        } catch (error) {
+            console.error('❌ [FIX] Error:', error);
+            return res.status(500).json({
+                success: false,
+                error: error instanceof Error ? error.message : String(error)
+            });
+        }
+    }
+
+    // �🚨 MIGRATION ENDPOINT: Forzar creación de columnas
     if (action === 'migrateGiftcardColumns') {
         console.log('🔧 [MIGRATION] Iniciando migración de columnas giftcard_requests...');
         try {
