@@ -755,6 +755,13 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         return Number.isFinite(cap) ? (cap as number) : 22;
                     };
 
+                    const resolveCapacity = (dateStr: string, tech: string) => {
+                        const override = scheduleOverrides[dateStr];
+                        const overrideCap = override?.capacity;
+                        if (typeof overrideCap === 'number' && overrideCap > 0) return overrideCap;
+                        return getMaxCapacityForTechnique(tech);
+                    };
+
                     const availableSlots: any[] = [];
                     const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -837,8 +844,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                 return sum + (b.participants || 1);
                             }, 0);
 
-                            // Capacidad máxima del slot
-                            const maxCapacity = override?.capacity ?? getMaxCapacityForTechnique(requestedTechnique);
+                            // Capacidad máxima del slot (override válido o fallback por técnica)
+                            const maxCapacity = resolveCapacity(dateStr, requestedTechnique);
                             const availableCapacity = maxCapacity - bookedParticipants;
 
                             // Solo incluir si hay capacidad suficiente
@@ -993,9 +1000,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         }
                     }
 
-                    // Verificar si hay override de capacidad para esta fecha
-                    const override = scheduleOverrides[requestedDate];
-                    const maxCapacity = override?.capacity ?? getMaxCapacityForTechnique(requestedTechnique);
+                    // Verificar capacidad (override válido o fallback por técnica)
+                    const maxCapacity = resolveCapacity(requestedDate, requestedTechnique);
                     const availableCapacity = maxCapacity - bookedParticipants;
                     const canBook = availableCapacity >= requestedParticipants;
 
