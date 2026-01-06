@@ -741,6 +741,20 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         'molding': classCapacity.molding || 22
                     };
 
+                    // Normalizar técnica para coincidir con los slots de disponibilidad (backend guarda molding)
+                    const slotTechniqueKey = (tech: string) => {
+                        if (tech === 'hand_modeling' || tech === 'painting' || tech === 'molding') return 'molding';
+                        if (tech === 'potters_wheel') return 'potters_wheel';
+                        return tech;
+                    };
+
+                    // Capacidad segura: si falta la clave, caer a la técnica normalizada o default 22
+                    const getMaxCapacityForTechnique = (tech: string) => {
+                        const key = slotTechniqueKey(tech);
+                        const cap = maxCapacityMap[tech] ?? maxCapacityMap[key];
+                        return Number.isFinite(cap) ? (cap as number) : 22;
+                    };
+
                     const availableSlots: any[] = [];
                     const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -788,7 +802,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         baseSlots.forEach((slot: any) => {
                             // Verificar si el slot es de la técnica solicitada
                             // IMPORTANTE: Solo contar overlaps de LA MISMA TÉCNICA, no de otras técnicas
-                            if (slot.technique !== requestedTechnique) return;
+                            const normalizedSlotTechnique = slotTechniqueKey(requestedTechnique);
+                            if (slot.technique !== normalizedSlotTechnique) return;
 
                             const slotTime = normalizeTime(slot.time);
                             
@@ -823,7 +838,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             }, 0);
 
                             // Capacidad máxima del slot
-                            const maxCapacity = override?.capacity ?? maxCapacityMap[requestedTechnique] ?? 22;
+                            const maxCapacity = override?.capacity ?? getMaxCapacityForTechnique(requestedTechnique);
                             const availableCapacity = maxCapacity - bookedParticipants;
 
                             // Solo incluir si hay capacidad suficiente
@@ -897,6 +912,19 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         'molding': classCapacity.molding || 22
                     };
 
+                    // Normalizar técnica para lookup de capacidad (slots se guardan como molding)
+                    const slotTechniqueKey = (tech: string) => {
+                        if (tech === 'hand_modeling' || tech === 'painting' || tech === 'molding') return 'molding';
+                        if (tech === 'potters_wheel') return 'potters_wheel';
+                        return tech;
+                    };
+
+                    const getMaxCapacityForTechnique = (tech: string) => {
+                        const key = slotTechniqueKey(tech);
+                        const cap = capacityMap[tech] ?? capacityMap[key];
+                        return Number.isFinite(cap) ? (cap as number) : 22;
+                    };
+
                     const normalizeTime = (t: string): string => {
                         if (!t) return '';
                         if (/^\d{2}:\d{2}$/.test(t)) return t;
@@ -967,7 +995,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
 
                     // Verificar si hay override de capacidad para esta fecha
                     const override = scheduleOverrides[requestedDate];
-                    const maxCapacity = override?.capacity ?? capacityMap[requestedTechnique] ?? 22;
+                    const maxCapacity = override?.capacity ?? getMaxCapacityForTechnique(requestedTechnique);
                     const availableCapacity = maxCapacity - bookedParticipants;
                     const canBook = availableCapacity >= requestedParticipants;
 
