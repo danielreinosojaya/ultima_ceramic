@@ -911,6 +911,10 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         const { scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
                         const maxCapacityMap = getMaxCapacityMap(classCapacity);
 
+                        console.log(`[checkSlotAvailability] Checking ${requestedDate} ${requestedTime} for ${requestedTechnique} (${requestedParticipants} people)`);
+                        console.log(`[checkSlotAvailability] classCapacity from DB:`, classCapacity);
+                        console.log(`[checkSlotAvailability] maxCapacityMap:`, maxCapacityMap);
+
                         const normalizedTime = normalizeTime(requestedTime);
 
                         // Calcular rango horario del slot solicitado (2 horas de duración)
@@ -957,6 +961,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
                         const availableCapacity = maxCapacity - bookedParticipants;
                         const canBook = availableCapacity >= requestedParticipants;
+
+                        console.log(`[checkSlotAvailability] maxCapacity: ${maxCapacity}, booked: ${bookedParticipants}, available: ${availableCapacity}, canBook: ${canBook}`);
 
                         const responseData = {
                             success: true,
