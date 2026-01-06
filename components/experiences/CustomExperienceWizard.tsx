@@ -1226,8 +1226,30 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
   }, [state.currentStep]);
 
   const handleConfirm = async () => {
-    // TODO: Implement booking confirmation
-    console.log('Booking confirmed:', state);
+    if (!userInfo || !selectedDate || !selectedTime || !state.technique) {
+      console.error('Missing required info for booking');
+      return;
+    }
+
+    // Construir objeto CustomExperienceBooking
+    const booking: CustomExperienceBooking = {
+      experienceType: state.experienceType,
+      technique: state.technique,
+      date: selectedDate,
+      time: selectedTime,
+      participants: state.experienceType === 'celebration' 
+        ? (state.config as CelebrationConfig)?.activeParticipants || 0
+        : (state.config as CeramicOnlyConfig)?.participants || 0,
+      config: state.config!,
+      userInfo: userInfo,
+      totalPrice: parseFloat(calculateTotalPricing()),
+      menuSelections: state.menuSelections,
+      childrenPieces: state.experienceType === 'celebration' 
+        ? (state.config as CelebrationConfig)?.childrenPieces || []
+        : undefined
+    };
+
+    onConfirm(booking);
   };
 
   // ============ RENDER ============
