@@ -959,7 +959,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         const availableCapacity = maxCapacity - bookedParticipants;
                         const canBook = availableCapacity >= requestedParticipants;
 
-                        data = {
+                        const responseData = {
                             success: true,
                             available: canBook,
                             date: requestedDate,
@@ -979,6 +979,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
 
                         // No cachear - datos en tiempo real
                         res.setHeader('Cache-Control', 'no-store');
+                        return res.status(200).json(responseData);
                     } catch (error) {
                         console.error('[checkSlotAvailability] Error:', error);
                         return res.status(500).json({ 
@@ -986,7 +987,6 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             error: error instanceof Error ? error.message : 'Unknown error checking availability' 
                         });
                     }
-                    break;
                 }
                 case 'listPieces': {
                     try {
