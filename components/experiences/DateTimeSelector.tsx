@@ -64,7 +64,7 @@ export const DateTimeSelector: React.FC<DateTimeSelectorProps> = ({
   
   // Generar horas disponibles según el día de la semana
   const getAvailableHours = (dateStr: string): string[] => {
-    const date = new Date(dateStr);
+    const date = parseLocalDate(dateStr);
     const dayOfWeek = date.getDay();
     const hours: string[] = [];
 
