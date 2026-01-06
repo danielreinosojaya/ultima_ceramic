@@ -755,6 +755,17 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         return t.trim().toLowerCase();
                     };
 
+                    // Convertir hora string a minutos para facilitar cálculos
+                    const timeToMinutes = (timeStr: string): number => {
+                        const [hours, mins] = timeStr.split(':').map(Number);
+                        return hours * 60 + mins;
+                    };
+
+                    // Verificar si dos rangos de tiempo se solapan
+                    const hasTimeOverlap = (start1: number, end1: number, start2: number, end2: number): boolean => {
+                        return start1 < end2 && start2 < end1;
+                    };
+
                     // Iterar sobre cada día
                     for (let i = 0; i < searchDays; i++) {
                         const currentDate = new Date(searchStartDate);
@@ -789,17 +800,27 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
 
                             const slotTime = normalizeTime(slot.time);
                             
-                            // Contar participantes ya reservados en este slot
-                            const bookingsForSlot = bookings.filter((b: any) => {
+                            // Calcular rango horario de este slot (2 horas de duración)
+                            const slotStartMinutes = timeToMinutes(slotTime);
+                            const slotEndMinutes = slotStartMinutes + (2 * 60); // 2 horas
+
+                            // Contar participantes que se solapan temporalmente con este slot
+                            const bookingsOverlapingSlot = bookings.filter((b: any) => {
                                 if (!b.slots || !Array.isArray(b.slots)) return false;
                                 return b.slots.some((s: any) => {
                                     if (s.date !== dateStr) return false;
-                                    return normalizeTime(s.time) === slotTime;
+                                    
+                                    // Calcular rango horario del booking (también 2 horas)
+                                    const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
+                                    const bookingEndMinutes = bookingStartMinutes + (2 * 60); // 2 horas
+                                    
+                                    // Verificar si hay overlap temporal
+                                    return hasTimeOverlap(slotStartMinutes, slotEndMinutes, bookingStartMinutes, bookingEndMinutes);
                                 });
                             });
 
-                            // Sumar participantes del slot
-                            const bookedParticipants = bookingsForSlot.reduce((sum: number, b: any) => {
+                            // Sumar participantes que solapan
+                            const bookedParticipants = bookingsOverlapingSlot.reduce((sum: number, b: any) => {
                                 return sum + (b.participants || 1);
                             }, 0);
 
@@ -895,10 +916,25 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         return t;
                     };
 
+                    // Convertir hora string a minutos para facilitar cálculos
+                    const timeToMinutes = (timeStr: string): number => {
+                        const [hours, mins] = timeStr.split(':').map(Number);
+                        return hours * 60 + mins;
+                    };
+
+                    // Verificar si dos rangos de tiempo se solapan
+                    const hasTimeOverlap = (start1: number, end1: number, start2: number, end2: number): boolean => {
+                        return start1 < end2 && start2 < end1;
+                    };
+
                     const normalizedTime = normalizeTime(requestedTime);
                     const matchingTechniques = techniqueMap[requestedTechnique] || [requestedTechnique];
 
-                    // Contar participantes en ese slot para la misma técnica
+                    // Calcular rango horario del slot solicitado (2 horas de duración)
+                    const requestedStartMinutes = timeToMinutes(normalizedTime);
+                    const requestedEndMinutes = requestedStartMinutes + (2 * 60); // 2 horas
+
+                    // Contar participantes que solapan temporalmente con el slot solicitado
                     let bookedParticipants = 0;
                     const bookingsInSlot: any[] = [];
 
@@ -912,13 +948,20 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         // Solo contar si es la misma técnica
                         if (!matchingTechniques.includes(bookingTechnique)) continue;
 
-                        // Verificar si tiene slot en esa fecha/hora
-                        const hasMatchingSlot = booking.slots.some((s: any) => {
+                        // Verificar si hay overlap temporal en la misma fecha
+                        const hasOverlapingSlot = booking.slots.some((s: any) => {
+                            // Debe ser la misma fecha
                             if (s.date !== requestedDate) return false;
-                            return normalizeTime(s.time) === normalizedTime;
+
+                            // Calcular rango horario del booking existente (también 2 horas)
+                            const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
+                            const bookingEndMinutes = bookingStartMinutes + (2 * 60); // 2 horas
+
+                            // Verificar si hay overlap
+                            return hasTimeOverlap(requestedStartMinutes, requestedEndMinutes, bookingStartMinutes, bookingEndMinutes);
                         });
 
-                        if (hasMatchingSlot) {
+                        if (hasOverlapingSlot) {
                             const participantCount = booking.participants || 1;
                             bookedParticipants += participantCount;
                             bookingsInSlot.push({
