@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { checkSlotAvailability, SlotAvailabilityResult } from '../../services/dataService';
 
 interface FreeDateTimePickerProps {
@@ -21,6 +21,8 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [slotAvailability, setSlotAvailability] = useState<SlotAvailabilityResult | null>(null);
+  const hourSectionRef = useRef<HTMLDivElement | null>(null);
+  const availabilityRef = useRef<HTMLDivElement | null>(null);
 
   // Parsear fecha ISO a fecha local (evitar problema UTC)
   const parseLocalDate = (dateStr: string): Date => {
@@ -88,6 +90,20 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     setSlotAvailability(null);
   }, [selectedDate]);
 
+  // Auto-scroll al selector de horas cuando se elige fecha
+  useEffect(() => {
+    if (selectedDate && hourSectionRef.current) {
+      hourSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [selectedDate]);
+
+  // Auto-scroll al resultado de disponibilidad cuando se obtiene
+  useEffect(() => {
+    if (slotAvailability && !checkingAvailability && availabilityRef.current) {
+      availabilityRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [slotAvailability, checkingAvailability]);
+
   // Generar días del mes
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
@@ -140,6 +156,12 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     
     const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     onSelectDate(dateStr);
+    // Llevar al selector de horas inmediatamente
+    requestAnimationFrame(() => {
+      if (hourSectionRef.current) {
+        hourSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
   };
 
   const handleTimeClick = async (time: string) => {
@@ -236,7 +258,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
 
       {/* Selector de hora con validación */}
       {selectedDate && (
-        <div className="space-y-3">
+        <div ref={hourSectionRef} className="space-y-3">
           <h4 className="font-bold text-brand-text">
             Selecciona la Hora - {parseLocalDate(selectedDate).toLocaleDateString('es-ES', { 
               weekday: 'long', 
@@ -282,7 +304,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
 
       {/* Resultado de disponibilidad */}
       {slotAvailability && !checkingAvailability && (
-        <div className={`p-4 rounded-xl border-2 ${
+        <div ref={availabilityRef} className={`p-4 rounded-xl border-2 ${
           slotAvailability.available 
             ? 'bg-green-50 border-green-300' 
             : 'bg-red-50 border-red-300'
