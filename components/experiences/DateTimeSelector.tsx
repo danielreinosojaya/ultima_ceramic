@@ -67,7 +67,7 @@ export const DateTimeSelector: React.FC<DateTimeSelectorProps> = ({
       for (let hour = 9; hour <= 19; hour++) {
         for (let min of ['00', '30']) {
           if (hour === 19 && min === '30') break;
-          hours.push(`${hour}:${min}`);
+          hours.push(`${String(hour).padStart(2, '0')}:${min}`);
         }
       }
     } else if (dayOfWeek === 0) {
@@ -75,7 +75,7 @@ export const DateTimeSelector: React.FC<DateTimeSelectorProps> = ({
       for (let hour = 10; hour <= 18; hour++) {
         for (let min of ['00', '30']) {
           if (hour === 18 && min === '30') break;
-          hours.push(`${hour}:${min}`);
+          hours.push(`${String(hour).padStart(2, '0')}:${min}`);
         }
       }
     } else {
@@ -83,7 +83,7 @@ export const DateTimeSelector: React.FC<DateTimeSelectorProps> = ({
       for (let hour = 10; hour <= 19; hour++) {
         for (let min of ['00', '30']) {
           if (hour === 19 && min === '30') break;
-          hours.push(`${hour}:${min}`);
+          hours.push(`${String(hour).padStart(2, '0')}:${min}`);
         }
       }
     }
