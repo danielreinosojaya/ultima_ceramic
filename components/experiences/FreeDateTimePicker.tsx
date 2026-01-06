@@ -15,6 +15,12 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
 }) => {
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
 
+  // Parsear fecha ISO a fecha local (evitar problema UTC)
+  const parseLocalDate = (dateStr: string): Date => {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+
   // Generar horas disponibles según el día de la semana
   const getAvailableHours = (dateStr: string): string[] => {
     const date = new Date(dateStr);
@@ -197,7 +203,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
       {selectedDate && (
         <div className="space-y-3">
           <h4 className="font-bold text-brand-text">
-            Selecciona la Hora - {new Date(selectedDate).toLocaleDateString('es-ES', { 
+            Selecciona la Hora - {parseLocalDate(selectedDate).toLocaleDateString('es-ES', { 
               weekday: 'long', 
               day: 'numeric', 
               month: 'long' 
