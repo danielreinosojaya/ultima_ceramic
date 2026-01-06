@@ -733,11 +733,12 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     const classCapacity: any = settingsResult.rows.find(s => s.key === 'classCapacity')?.value || 
                         { potters_wheel: 8, molding: 22, introductory_class: 8 };
 
-                    // Capacidad máxima por técnica
+                    // Capacidad máxima por técnica - USAR classCapacity de la DB
                     const maxCapacityMap: Record<string, number> = {
-                        'potters_wheel': 8,
-                        'hand_modeling': 22,
-                        'painting': 22
+                        'potters_wheel': classCapacity.potters_wheel || 8,
+                        'hand_modeling': classCapacity.molding || 22,
+                        'painting': classCapacity.molding || 22,
+                        'molding': classCapacity.molding || 22
                     };
 
                     const availableSlots: any[] = [];
@@ -839,6 +840,122 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
 
                     // Cache de 2 minutos (datos dinámicos que cambian con reservas)
                     res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=300');
+                    break;
+                }
+                case 'checkSlotAvailability': {
+                    // Endpoint para validar disponibilidad de un slot específico en tiempo real
+                    const { date, time, technique, participants } = req.query;
+                    
+                    if (!date || !time || !technique || !participants) {
+                        return res.status(400).json({ 
+                            success: false, 
+                            error: 'Missing required parameters: date, time, technique, participants' 
+                        });
+                    }
+
+                    const requestedDate = date as string;
+                    const requestedTime = time as string;
+                    const requestedTechnique = technique as string;
+                    const requestedParticipants = parseInt(participants as string);
+
+                    // Obtener datos
+                    const [bookingsResult, settingsResult] = await Promise.all([
+                        sql`SELECT * FROM bookings WHERE status != 'expired' ORDER BY created_at DESC`,
+                        sql`SELECT * FROM settings WHERE key IN ('classCapacity', 'scheduleOverrides')`
+                    ]);
+
+                    const bookings = bookingsResult.rows.map(parseBookingFromDB);
+                    const classCapacity: any = settingsResult.rows.find(s => s.key === 'classCapacity')?.value || 
+                        { potters_wheel: 8, molding: 22, introductory_class: 8 };
+                    const scheduleOverrides: any = settingsResult.rows.find(s => s.key === 'scheduleOverrides')?.value || {};
+
+                    // Mapear técnica a capacidad
+                    const capacityMap: Record<string, number> = {
+                        'potters_wheel': classCapacity.potters_wheel || 8,
+                        'hand_modeling': classCapacity.molding || 22,
+                        'painting': classCapacity.molding || 22,
+                        'molding': classCapacity.molding || 22
+                    };
+
+                    // Mapear técnica para filtrado de bookings
+                    const techniqueMap: Record<string, string[]> = {
+                        'potters_wheel': ['potters_wheel'],
+                        'hand_modeling': ['molding', 'hand_modeling'],
+                        'painting': ['molding', 'painting'],
+                        'molding': ['molding', 'hand_modeling', 'painting']
+                    };
+
+                    const normalizeTime = (t: string): string => {
+                        if (!t) return '';
+                        if (/^\d{2}:\d{2}$/.test(t)) return t;
+                        const match = t.match(/(\d{1,2}):(\d{2})/);
+                        if (match) {
+                            return `${match[1].padStart(2, '0')}:${match[2]}`;
+                        }
+                        return t;
+                    };
+
+                    const normalizedTime = normalizeTime(requestedTime);
+                    const matchingTechniques = techniqueMap[requestedTechnique] || [requestedTechnique];
+
+                    // Contar participantes en ese slot para la misma técnica
+                    let bookedParticipants = 0;
+                    const bookingsInSlot: any[] = [];
+
+                    for (const booking of bookings) {
+                        if (!booking.slots || !Array.isArray(booking.slots)) continue;
+                        
+                        // Técnica del booking
+                        const bookingTechnique = booking.technique || (booking.product?.details as any)?.technique;
+                        if (!bookingTechnique) continue;
+
+                        // Solo contar si es la misma técnica
+                        if (!matchingTechniques.includes(bookingTechnique)) continue;
+
+                        // Verificar si tiene slot en esa fecha/hora
+                        const hasMatchingSlot = booking.slots.some((s: any) => {
+                            if (s.date !== requestedDate) return false;
+                            return normalizeTime(s.time) === normalizedTime;
+                        });
+
+                        if (hasMatchingSlot) {
+                            const participantCount = booking.participants || 1;
+                            bookedParticipants += participantCount;
+                            bookingsInSlot.push({
+                                id: booking.id,
+                                participants: participantCount,
+                                userInfo: { name: booking.userInfo?.name },
+                                isPaid: booking.isPaid
+                            });
+                        }
+                    }
+
+                    // Verificar si hay override de capacidad para esta fecha
+                    const override = scheduleOverrides[requestedDate];
+                    const maxCapacity = override?.capacity ?? capacityMap[requestedTechnique] ?? 22;
+                    const availableCapacity = maxCapacity - bookedParticipants;
+                    const canBook = availableCapacity >= requestedParticipants;
+
+                    data = {
+                        success: true,
+                        available: canBook,
+                        date: requestedDate,
+                        time: normalizedTime,
+                        technique: requestedTechnique,
+                        requestedParticipants,
+                        capacity: {
+                            max: maxCapacity,
+                            booked: bookedParticipants,
+                            available: availableCapacity
+                        },
+                        bookingsCount: bookingsInSlot.length,
+                        message: canBook 
+                            ? `Hay ${availableCapacity} cupos disponibles de ${maxCapacity}` 
+                            : `Solo hay ${availableCapacity} cupos disponibles, necesitas ${requestedParticipants}`
+                    };
+
+                    // No cachear - datos en tiempo real
+                    res.setHeader('Cache-Control', 'no-store');
                     break;
                 }
                 case 'listPieces': {

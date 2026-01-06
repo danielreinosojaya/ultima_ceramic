@@ -18,8 +18,8 @@ import { SPACE_HOURLY_PRICING, CUSTOM_EXPERIENCE_TECHNIQUES as TECHNIQUES, TECHN
 import { InfoCircleIcon } from '../icons/InfoCircleIcon';
 import { CheckCircleIcon } from '../icons/CheckCircleIcon';
 import { MenuSelector } from './MenuSelector';
-import { DateTimeSelector } from './DateTimeSelector';
-import type { AvailableSlotResult } from '../../services/dataService';
+import { FreeDateTimePicker } from './FreeDateTimePicker';
+import type { AvailableSlotResult, SlotAvailabilityResult } from '../../services/dataService';
 import { ChildPieceSelector } from './ChildPieceSelector';
 import { UserInfoModal } from '../UserInfoModal';
 
@@ -180,7 +180,11 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
   const [menuTotal, setMenuTotal] = useState(0);
   const [showChildPieceSelector, setShowChildPieceSelector] = useState(false);
   const [participantsInput, setParticipantsInput] = useState<string>('1');
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState<AvailableSlotResult | null>(null);
+  
+  // Nuevo estado para fecha/hora con validación de disponibilidad
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [slotAvailability, setSlotAvailability] = useState<SlotAvailabilityResult | null>(null);
 
   // Steps configuration
   const STEP_TITLES = ['Tipo', 'Configurar', 'Fecha', 'Datos', 'Confirmar'];
@@ -792,13 +796,24 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
           </p>
         </div>
 
-        {/* DateTimeSelector Component con validación */}
+        {/* FreeDateTimePicker con validación en tiempo real */}
         {state.technique && (
-          <DateTimeSelector
+          <FreeDateTimePicker
             technique={state.technique}
             participants={activeParticipants}
-            selectedSlot={selectedTimeSlot ? { date: selectedTimeSlot.date, time: selectedTimeSlot.time } : null}
-            onSelectSlot={(slot) => setSelectedTimeSlot(slot)}
+            selectedDate={selectedDate}
+            selectedTime={selectedTime}
+            onSelectDate={(date) => {
+              setSelectedDate(date);
+              setSelectedTime(null);
+              setSlotAvailability(null);
+            }}
+            onSelectTime={(time, availability) => {
+              setSelectedTime(time);
+              if (availability) {
+                setSlotAvailability(availability);
+              }
+            }}
           />
         )}
 
@@ -847,12 +862,12 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                 </span>
               </div>
             )}
-            {selectedTimeSlot && (
+            {selectedDate && selectedTime && slotAvailability && (
               <>
                 <div className="flex justify-between py-2 border-b border-brand-border">
                   <span className="text-brand-secondary">Fecha:</span>
-                  <span className="font-semibold text-green-700">
-                    {new Date(selectedTimeSlot.date + 'T12:00:00').toLocaleDateString('es-ES', {
+                  <span className={`font-semibold ${slotAvailability.available ? 'text-green-700' : 'text-red-600'}`}>
+                    {new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-ES', {
                       weekday: 'long',
                       day: 'numeric',
                       month: 'long',
@@ -862,18 +877,21 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                 </div>
                 <div className="flex justify-between py-2 border-b border-brand-border">
                   <span className="text-brand-secondary">Hora:</span>
-                  <span className="font-semibold text-green-700">{selectedTimeSlot.time}</span>
+                  <span className={`font-semibold ${slotAvailability.available ? 'text-green-700' : 'text-red-600'}`}>{selectedTime}</span>
                 </div>
                 <div className="flex justify-between py-2 border-b border-brand-border">
                   <span className="text-brand-secondary">Disponibilidad:</span>
-                  <span className="font-semibold text-green-700">
-                    {selectedTimeSlot.available}/{selectedTimeSlot.total} cupos disponibles
+                  <span className={`font-semibold ${slotAvailability.available ? 'text-green-700' : 'text-red-600'}`}>
+                    {slotAvailability.capacity.available}/{slotAvailability.capacity.max} cupos disponibles
                   </span>
                 </div>
-                <div className="flex justify-between py-2">
-                  <span className="text-brand-secondary">Instructor:</span>
-                  <span className="font-semibold text-brand-text">{selectedTimeSlot.instructor}</span>
-                </div>
+                {!slotAvailability.available && (
+                  <div className="py-2 bg-red-50 rounded-lg px-3 mt-2">
+                    <span className="text-red-700 text-sm font-medium">
+                      ⚠️ No hay cupos suficientes para {slotAvailability.requestedParticipants} participantes
+                    </span>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -1029,6 +1047,25 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                     {(state.config as CelebrationConfig).hours}h
                   </span>
                 </div>
+                {selectedDate && selectedTime && (
+                  <>
+                    <div className="flex justify-between py-2 border-b border-brand-border">
+                      <span className="text-brand-secondary">📅 Fecha:</span>
+                      <span className="font-semibold text-green-700">
+                        {new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-ES', {
+                          weekday: 'long',
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric'
+                        })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-2 border-b border-brand-border">
+                      <span className="text-brand-secondary">🕐 Hora:</span>
+                      <span className="font-semibold text-green-700">{selectedTime}</span>
+                    </div>
+                  </>
+                )}
                 {menuTotal > 0 && (
                   <div className="flex justify-between py-2 border-b border-brand-border">
                     <span className="text-brand-secondary">Menú:</span>
@@ -1047,12 +1084,33 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                 )}
               </>
             ) : (
-              <div className="flex justify-between py-2 border-b border-brand-border">
-                <span className="text-brand-secondary">Participantes:</span>
-                <span className="font-semibold text-brand-text">
-                  {(state.config as CeramicOnlyConfig)?.participants}
-                </span>
-              </div>
+              <>
+                <div className="flex justify-between py-2 border-b border-brand-border">
+                  <span className="text-brand-secondary">Participantes:</span>
+                  <span className="font-semibold text-brand-text">
+                    {(state.config as CeramicOnlyConfig)?.participants}
+                  </span>
+                </div>
+                {selectedDate && selectedTime && (
+                  <>
+                    <div className="flex justify-between py-2 border-b border-brand-border">
+                      <span className="text-brand-secondary">📅 Fecha:</span>
+                      <span className="font-semibold text-green-700">
+                        {new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-ES', {
+                          weekday: 'long',
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric'
+                        })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-2 border-b border-brand-border">
+                      <span className="text-brand-secondary">🕐 Hora:</span>
+                      <span className="font-semibold text-green-700">{selectedTime}</span>
+                    </div>
+                  </>
+                )}
+              </>
             )}
             
             <div className="flex justify-between py-3 pt-4 border-t-2 border-brand-primary">
@@ -1260,6 +1318,13 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                       : (state.config as CeramicOnlyConfig).participants || 0
                     : 0;
                   return currentParticipants > maxCap || currentParticipants < 1;
+                }
+                // Validar fecha/hora y disponibilidad en Step 3
+                if (state.currentStep === 3) {
+                  // Debe tener fecha, hora y disponibilidad confirmada
+                  if (!selectedDate || !selectedTime || !slotAvailability) return true;
+                  // No permitir si no hay disponibilidad
+                  if (!slotAvailability.available) return true;
                 }
                 return false;
               })()}
