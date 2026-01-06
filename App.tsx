@@ -954,15 +954,34 @@ const App: React.FC = () => {
                 return (
                     <CustomExperienceWizard
                         pieces={pieces}
-                        onConfirm={(booking) => {
-                            // TODO: Implementar guardado de booking en backend
-                            console.log('Custom experience booking:', booking);
-                            // Por ahora, mostrar mensaje de éxito
-                            alert('¡Pre-reserva creada! (En construcción - próximamente se guardará en el sistema)');
-                            setView('welcome');
+                        onConfirm={async (booking) => {
+                            try {
+                                setView('loading');
+                                
+                                // Guardar reserva en el backend
+                                const response = await fetch('/api/data?action=createCustomExperienceBooking', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(booking)
+                                });
+
+                                const result = await response.json();
+
+                                if (!response.ok || !result.success) {
+                                    throw new Error(result.error || 'Error al crear la pre-reserva');
+                                }
+
+                                // Mostrar vista de confirmación
+                                setBookingResult(result);
+                                setView('confirmation');
+                            } catch (error) {
+                                console.error('Error creating custom experience booking:', error);
+                                alert(error instanceof Error ? error.message : 'Error al crear la pre-reserva. Por favor intenta de nuevo.');
+                                setView('custom_experience_wizard');
+                            }
                         }}
                         onBack={() => setView('welcome')}
-                        isLoading={false}
+                        isLoading={view === 'loading'}
                     />
                 );
 

@@ -3370,6 +3370,115 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             }
             return res.status(200).json(bookingResult);
         }
+        case 'createCustomExperienceBooking': {
+            try {
+                const { experienceType, technique, date, time, participants, config, userInfo, totalPrice, menuSelections, childrenPieces } = req.body;
+
+                // Validar campos requeridos
+                if (!experienceType || !technique || !date || !time || !participants || !userInfo || !totalPrice) {
+                    return res.status(400).json({ 
+                        success: false, 
+                        error: 'Faltan campos requeridos para la experiencia personalizada' 
+                    });
+                }
+
+                // Generar código de reserva
+                const bookingCode = generateBookingCode();
+
+                // Preparar slot
+                const slot = { date, time };
+
+                // Preparar product object
+                const productDetails = {
+                    type: 'CUSTOM_GROUP_EXPERIENCE',
+                    experienceType,
+                    technique,
+                    config,
+                    menuSelections: menuSelections || [],
+                    childrenPieces: childrenPieces || []
+                };
+
+                // Insertar booking en la base de datos
+                const { rows: [newBooking] } = await sql`
+                    INSERT INTO bookings (
+                        booking_code,
+                        product_type,
+                        technique,
+                        slots,
+                        participants,
+                        user_info,
+                        price,
+                        is_paid,
+                        status,
+                        created_at,
+                        expires_at,
+                        booking_mode,
+                        product,
+                        group_metadata
+                    ) VALUES (
+                        ${bookingCode},
+                        'CUSTOM_GROUP_EXPERIENCE',
+                        ${technique},
+                        ${JSON.stringify([slot])},
+                        ${participants},
+                        ${JSON.stringify(userInfo)},
+                        ${totalPrice},
+                        false,
+                        'pending',
+                        NOW(),
+                        NOW() + INTERVAL '2 hours',
+                        'online',
+                        ${JSON.stringify(productDetails)},
+                        ${JSON.stringify({ experienceType, config, menuSelections, childrenPieces })}
+                    )
+                    RETURNING *
+                `;
+
+                console.log('[createCustomExperienceBooking] Booking created:', bookingCode);
+
+                // Obtener detalles bancarios
+                const { rows: settingsRows } = await sql`SELECT * FROM settings WHERE key = 'bankDetails'`;
+                const bankDetails = settingsRows[0]?.value || {
+                    bank: 'Banco Pichincha',
+                    account: '1234567890',
+                    accountHolder: 'Ultima Ceramic',
+                    ruc: '1234567890001'
+                };
+
+                // Enviar correo de pre-reserva
+                try {
+                    const emailModule = await import('./customExperienceEmail.js');
+                    await emailModule.sendCustomExperiencePreBookingEmail({
+                        userInfo,
+                        bookingCode,
+                        experienceType,
+                        technique,
+                        date,
+                        time,
+                        participants,
+                        totalPrice,
+                        config
+                    }, bankDetails);
+                    console.log('[createCustomExperienceBooking] Email sent successfully');
+                } catch (emailError) {
+                    console.error('[createCustomExperienceBooking] Email send failed:', emailError);
+                    // No fallar la reserva si el email falla
+                }
+
+                return res.status(200).json({
+                    success: true,
+                    bookingCode,
+                    booking: toCamelCase(newBooking),
+                    message: 'Pre-reserva creada exitosamente. Revisa tu correo para instrucciones de pago.'
+                });
+            } catch (error) {
+                console.error('[createCustomExperienceBooking] Error:', error);
+                return res.status(500).json({
+                    success: false,
+                    error: error instanceof Error ? error.message : 'Error al crear la pre-reserva'
+                });
+            }
+        }
         case 'createDelivery': {
             const { customerEmail, customerName, description, scheduledDate, status = 'pending', notes, photos } = req.body;
             
