@@ -21,6 +21,8 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [slotAvailability, setSlotAvailability] = useState<SlotAvailabilityResult | null>(null);
+  const [hourAvailability, setHourAvailability] = useState<Record<string, SlotAvailabilityResult | null>>({});
+  const [loadingDayAvailability, setLoadingDayAvailability] = useState(false);
   const hourSectionRef = useRef<HTMLDivElement | null>(null);
   const availabilityRef = useRef<HTMLDivElement | null>(null);
 
@@ -88,7 +90,40 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   // Reset availability cuando cambia fecha
   useEffect(() => {
     setSlotAvailability(null);
+    setHourAvailability({});
   }, [selectedDate]);
+
+  // Prefetch disponibilidad de todas las horas del día seleccionado
+  useEffect(() => {
+    const fetchDayAvailability = async () => {
+      if (!selectedDate || !technique || !participants) return;
+
+      const hours = getAvailableHours(selectedDate);
+      setLoadingDayAvailability(true);
+      try {
+        const results = await Promise.all(
+          hours.map(async (hour) => {
+            try {
+              const res = await checkSlotAvailability(selectedDate, hour, technique, participants);
+              return [hour, res as SlotAvailabilityResult | null] as const;
+            } catch (error) {
+              console.error('Error pre-check availability:', error);
+              return [hour, null] as const;
+            }
+          })
+        );
+        const map: Record<string, SlotAvailabilityResult | null> = {};
+        results.forEach(([h, res]) => {
+          map[h] = res;
+        });
+        setHourAvailability(map);
+      } finally {
+        setLoadingDayAvailability(false);
+      }
+    };
+
+    fetchDayAvailability();
+  }, [selectedDate, technique, participants]);
 
   // Auto-scroll al selector de horas cuando se elige fecha
   useEffect(() => {
@@ -166,6 +201,16 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
 
   const handleTimeClick = async (time: string) => {
     if (!selectedDate) return;
+    // Si ya tenemos disponibilidad pre-checada, úsala sin nuevo request
+    const cached = hourAvailability[time];
+    if (cached) {
+      setSlotAvailability(cached);
+      onSelectTime(time, cached);
+      if (availabilityRef.current) {
+        availabilityRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      return;
+    }
     
     // Validar disponibilidad al seleccionar hora
     const availability = await validateSlotAvailability(selectedDate, time);
@@ -269,24 +314,34 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
           
           <div className="text-sm text-gray-600 mb-3">
             Selecciona la hora de inicio (las clases duran 2 horas)
+            {loadingDayAvailability && (
+              <span className="ml-2 text-blue-600">(cargando disponibilidad...)</span>
+            )}
           </div>
           
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
             {getAvailableHours(selectedDate).map(hour => {
               const isSelected = selectedTime === hour;
+              const hourState = hourAvailability[hour];
+              const isUnavailable = hourState ? hourState.available === false : false;
               
               return (
                 <button
                   key={hour}
                   onClick={() => handleTimeClick(hour)}
-                  disabled={checkingAvailability}
+                  disabled={checkingAvailability || loadingDayAvailability || isUnavailable}
                   className={`p-3 rounded-xl border-2 transition-all ${
                     isSelected
                       ? 'border-brand-primary bg-brand-primary text-white'
-                      : 'border-brand-border bg-white hover:border-brand-primary hover:bg-brand-primary/5'
-                  } ${checkingAvailability ? 'opacity-50' : ''}`}
+                      : isUnavailable
+                        ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'border-brand-border bg-white hover:border-brand-primary hover:bg-brand-primary/5'
+                  } ${(checkingAvailability || loadingDayAvailability) ? 'opacity-50' : ''}`}
                 >
                   <div className="font-bold">{hour}</div>
+                  {isUnavailable && (
+                    <div className="text-xs text-red-500 font-semibold">Sin cupo</div>
+                  )}
                 </button>
               );
             })}
