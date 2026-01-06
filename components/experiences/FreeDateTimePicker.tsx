@@ -39,26 +39,29 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     const hours: string[] = [];
 
     if (dayOfWeek === 6) {
-      // Sábado: 9am a 7pm - TODAS LAS HORAS cada 30 min
+      // Sábado: 9am a 7pm (cierre 9pm) - slots cada 30 min hasta 19:00
       for (let hour = 9; hour <= 19; hour++) {
         for (let min of ['00', '30']) {
-          if (hour === 19 && min === '30') break; // Última hora: 19:00
+          if (hour === 19 && min === '30') break; // Última hora que inicia: 19:00
           hours.push(`${String(hour).padStart(2, '0')}:${min}`);
         }
       }
     } else if (dayOfWeek === 0) {
-      // Domingo: 10am a 6pm - TODAS LAS HORAS cada 30 min
-      for (let hour = 10; hour <= 18; hour++) {
+      // Domingo: 10am a 4pm (cierre 6pm) - slots cada 30 min hasta 16:00
+      for (let hour = 10; hour <= 16; hour++) {
         for (let min of ['00', '30']) {
-          if (hour === 18 && min === '30') break; // Última hora: 18:00
+          if (hour === 16 && min === '30') break; // Última hora que inicia: 16:00
           hours.push(`${String(hour).padStart(2, '0')}:${min}`);
         }
       }
+    } else if (dayOfWeek === 1) {
+      // Lunes: cerrado
+      return [];
     } else {
-      // Otros días (excepto lunes): 10am a 7pm - TODAS LAS HORAS cada 30 min
+      // Martes a Viernes: 10am a 7pm (cierre 9pm) - slots cada 30 min hasta 19:00
       for (let hour = 10; hour <= 19; hour++) {
         for (let min of ['00', '30']) {
-          if (hour === 19 && min === '30') break; // Última hora: 19:00
+          if (hour === 19 && min === '30') break; // Última hora que inicia: 19:00
           hours.push(`${String(hour).padStart(2, '0')}:${min}`);
         }
       }
@@ -294,9 +297,9 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
           </div>
           <p className="text-xs text-gray-600 space-y-1">
             <div>💡 Cada 30 minutos | Duración: 2 horas</div>
+            <div>📅 Martes a Viernes: 10:00 AM - 7:00 PM</div>
             <div>📅 Sábados: 9:00 AM - 7:00 PM</div>
-            <div>📅 Domingos: 10:00 AM - 6:00 PM</div>
-            <div>📅 Otros días: 10:00 AM - 7:00 PM</div>
+            <div>📅 Domingos: 10:00 AM - 4:00 PM</div>
           </p>
         </div>
       </div>
