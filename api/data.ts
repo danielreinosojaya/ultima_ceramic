@@ -785,18 +785,10 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         const baseSlots = hasOverride ? override.slots : availability[dayKey];
                         if (!baseSlots || baseSlots.length === 0) continue;
 
-                        // Filtrar slots por técnica (convertir técnicas)
-                        const techniqueMap: Record<string, string> = {
-                            'hand_modeling': 'molding',
-                            'potters_wheel': 'potters_wheel',
-                            'painting': 'molding' // Painting usa capacidad de molding
-                        };
-
-                        const normalizedTechnique = techniqueMap[requestedTechnique] || requestedTechnique;
-
                         baseSlots.forEach((slot: any) => {
                             // Verificar si el slot es de la técnica solicitada
-                            if (slot.technique !== normalizedTechnique) return;
+                            // IMPORTANTE: Solo contar overlaps de LA MISMA TÉCNICA, no de otras técnicas
+                            if (slot.technique !== requestedTechnique) return;
 
                             const slotTime = normalizeTime(slot.time);
                             
@@ -805,8 +797,14 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             const slotEndMinutes = slotStartMinutes + (2 * 60); // 2 horas
 
                             // Contar participantes que se solapan temporalmente con este slot
+                            // IMPORTANTE: Solo contar bookings de LA MISMA TÉCNICA, no de otras
                             const bookingsOverlapingSlot = bookings.filter((b: any) => {
                                 if (!b.slots || !Array.isArray(b.slots)) return false;
+                                
+                                // La técnica del booking debe ser exactamente la misma que la solicitada
+                                const bookingTechnique = b.technique || (b.product?.details as any)?.technique;
+                                if (bookingTechnique !== requestedTechnique) return false;
+                                
                                 return b.slots.some((s: any) => {
                                     if (s.date !== dateStr) return false;
                                     
@@ -891,19 +889,12 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     const scheduleOverrides: any = settingsResult.rows.find(s => s.key === 'scheduleOverrides')?.value || {};
 
                     // Mapear técnica a capacidad
+                    // IMPORTANTE: Cada técnica tiene su propia capacidad y no compite con otras
                     const capacityMap: Record<string, number> = {
                         'potters_wheel': classCapacity.potters_wheel || 8,
                         'hand_modeling': classCapacity.molding || 22,
                         'painting': classCapacity.molding || 22,
                         'molding': classCapacity.molding || 22
-                    };
-
-                    // Mapear técnica para filtrado de bookings
-                    const techniqueMap: Record<string, string[]> = {
-                        'potters_wheel': ['potters_wheel'],
-                        'hand_modeling': ['molding', 'hand_modeling'],
-                        'painting': ['molding', 'painting'],
-                        'molding': ['molding', 'hand_modeling', 'painting']
                     };
 
                     const normalizeTime = (t: string): string => {
@@ -928,7 +919,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     };
 
                     const normalizedTime = normalizeTime(requestedTime);
-                    const matchingTechniques = techniqueMap[requestedTechnique] || [requestedTechnique];
+                    // Solo validar overlaps de LA MISMA TÉCNICA
 
                     // Calcular rango horario del slot solicitado (2 horas de duración)
                     const requestedStartMinutes = timeToMinutes(normalizedTime);
@@ -945,8 +936,9 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         const bookingTechnique = booking.technique || (booking.product?.details as any)?.technique;
                         if (!bookingTechnique) continue;
 
-                        // Solo contar si es la misma técnica
-                        if (!matchingTechniques.includes(bookingTechnique)) continue;
+                        // IMPORTANTE: Solo contar si es EXACTAMENTE la misma técnica
+                        // No agrupar hand_modeling, painting, molding entre sí
+                        if (bookingTechnique !== requestedTechnique) continue;
 
                         // Verificar si hay overlap temporal en la misma fecha
                         const hasOverlapingSlot = booking.slots.some((s: any) => {
