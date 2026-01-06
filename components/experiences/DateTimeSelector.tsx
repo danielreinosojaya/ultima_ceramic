@@ -62,6 +62,9 @@ export const DateTimeSelector: React.FC<DateTimeSelectorProps> = ({
   // Obtener fechas únicas disponibles
   const availableDates = [...new Set(availableSlots.map(s => s.date))].sort();
   
+  // Obtener horarios para la fecha seleccionada
+  const timesForSelectedDate = availableSlots.filter(s => s.date === selectedDate);
+  
   // Generar horas disponibles según el día de la semana
   const getAvailableHours = (dateStr: string): string[] => {
     const date = parseLocalDate(dateStr);
