@@ -20,6 +20,12 @@ export const DateTimeSelector: React.FC<DateTimeSelectorProps> = ({
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
 
+  // Parsear fecha ISO a fecha local (evitar problema UTC)
+  const parseLocalDate = (dateStr: string): Date => {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+
   // Cargar slots disponibles
   useEffect(() => {
     const loadSlots = async () => {
@@ -244,7 +250,7 @@ export const DateTimeSelector: React.FC<DateTimeSelectorProps> = ({
         <div className="space-y-3">
           <div>
             <h4 className="font-bold text-brand-text">
-              Horarios Disponibles - {new Date(selectedDate).toLocaleDateString('es-ES', { 
+              Horarios Disponibles - {parseLocalDate(selectedDate).toLocaleDateString('es-ES', { 
                 weekday: 'long', 
                 day: 'numeric', 
                 month: 'long' 
