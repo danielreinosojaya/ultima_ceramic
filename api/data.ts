@@ -460,6 +460,64 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
         }
     }
 
+    // ============ FUNCIONES HELPER COMPARTIDAS PARA DISPONIBILIDAD ============
+    // Funciones reutilizables para getAvailableSlots y checkSlotAvailability
+    const parseSlotAvailabilitySettings = async () => {
+        const settingsResult = await sql`SELECT * FROM settings WHERE key IN ('availability', 'scheduleOverrides', 'classCapacity')`;
+        const availability: any = settingsResult.rows.find(s => s.key === 'availability')?.value || 
+            { Sunday: [], Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [] };
+        const scheduleOverrides: any = settingsResult.rows.find(s => s.key === 'scheduleOverrides')?.value || {};
+        const classCapacity: any = settingsResult.rows.find(s => s.key === 'classCapacity')?.value || 
+            { potters_wheel: 8, molding: 22, introductory_class: 8 };
+        return { availability, scheduleOverrides, classCapacity };
+    };
+
+    const slotTechniqueKey = (tech: string) => {
+        if (tech === 'hand_modeling' || tech === 'painting' || tech === 'molding') return 'molding';
+        if (tech === 'potters_wheel') return 'potters_wheel';
+        return tech;
+    };
+
+    const getMaxCapacityMap = (classCapacity: any): Record<string, number> => ({
+        'potters_wheel': classCapacity.potters_wheel || 8,
+        'hand_modeling': classCapacity.molding || 22,
+        'painting': classCapacity.molding || 22,
+        'molding': classCapacity.molding || 22
+    });
+
+    const getMaxCapacityForTechnique = (tech: string, maxCapacityMap: Record<string, number>) => {
+        const key = slotTechniqueKey(tech);
+        const cap = maxCapacityMap[tech] ?? maxCapacityMap[key];
+        return Number.isFinite(cap) ? (cap as number) : 22;
+    };
+
+    const resolveCapacity = (dateStr: string, tech: string, maxCapacityMap: Record<string, number>, scheduleOverrides: any) => {
+        const override = scheduleOverrides[dateStr];
+        const overrideCap = override?.capacity;
+        if (typeof overrideCap === 'number' && overrideCap > 0) return overrideCap;
+        return getMaxCapacityForTechnique(tech, maxCapacityMap);
+    };
+
+    const normalizeTime = (t: string): string => {
+        if (!t) return '';
+        if (/^\d{2}:\d{2}$/.test(t)) return t;
+        const match = t.match(/(\d{1,2}):(\d{2})/);
+        if (match) {
+            return `${match[1].padStart(2, '0')}:${match[2]}`;
+        }
+        return t;
+    };
+
+    const timeToMinutes = (timeStr: string): number => {
+        const [hours, mins] = timeStr.split(':').map(Number);
+        return hours * 60 + mins;
+    };
+
+    const hasTimeOverlap = (start1: number, end1: number, start2: number, end2: number): boolean => {
+        return start1 < end2 && start2 < end1;
+    };
+    // ============ FIN FUNCIONES HELPER ============
+
     let data;
     if (action) {
         switch (action) {
@@ -698,65 +756,6 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
                     break;
                 }
-
-                // ============ FUNCIONES HELPER COMPARTIDAS PARA DISPONIBILIDAD ============
-                // Funciones reutilizables para getAvailableSlots y checkSlotAvailability
-                const parseSlotAvailabilitySettings = async () => {
-                    const settingsResult = await sql`SELECT * FROM settings WHERE key IN ('availability', 'scheduleOverrides', 'classCapacity')`;
-                    const availability: any = settingsResult.rows.find(s => s.key === 'availability')?.value || 
-                        { Sunday: [], Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [] };
-                    const scheduleOverrides: any = settingsResult.rows.find(s => s.key === 'scheduleOverrides')?.value || {};
-                    const classCapacity: any = settingsResult.rows.find(s => s.key === 'classCapacity')?.value || 
-                        { potters_wheel: 8, molding: 22, introductory_class: 8 };
-                    return { availability, scheduleOverrides, classCapacity };
-                };
-
-                const slotTechniqueKey = (tech: string) => {
-                    if (tech === 'hand_modeling' || tech === 'painting' || tech === 'molding') return 'molding';
-                    if (tech === 'potters_wheel') return 'potters_wheel';
-                    return tech;
-                };
-
-                const getMaxCapacityMap = (classCapacity: any): Record<string, number> => ({
-                    'potters_wheel': classCapacity.potters_wheel || 8,
-                    'hand_modeling': classCapacity.molding || 22,
-                    'painting': classCapacity.molding || 22,
-                    'molding': classCapacity.molding || 22
-                });
-
-                const getMaxCapacityForTechnique = (tech: string, maxCapacityMap: Record<string, number>) => {
-                    const key = slotTechniqueKey(tech);
-                    const cap = maxCapacityMap[tech] ?? maxCapacityMap[key];
-                    return Number.isFinite(cap) ? (cap as number) : 22;
-                };
-
-                const resolveCapacity = (dateStr: string, tech: string, maxCapacityMap: Record<string, number>, scheduleOverrides: any) => {
-                    const override = scheduleOverrides[dateStr];
-                    const overrideCap = override?.capacity;
-                    if (typeof overrideCap === 'number' && overrideCap > 0) return overrideCap;
-                    return getMaxCapacityForTechnique(tech, maxCapacityMap);
-                };
-
-                const normalizeTime = (t: string): string => {
-                    if (!t) return '';
-                    if (/^\d{2}:\d{2}$/.test(t)) return t;
-                    const match = t.match(/(\d{1,2}):(\d{2})/);
-                    if (match) {
-                        return `${match[1].padStart(2, '0')}:${match[2]}`;
-                    }
-                    return t;
-                };
-
-                const timeToMinutes = (timeStr: string): number => {
-                    const [hours, mins] = timeStr.split(':').map(Number);
-                    return hours * 60 + mins;
-                };
-
-                const hasTimeOverlap = (start1: number, end1: number, start2: number, end2: number): boolean => {
-                    return start1 < end2 && start2 < end1;
-                };
-
-                // ============ FIN FUNCIONES HELPER ============
 
                 case 'getAvailableSlots': {
                     // Endpoint inteligente para experiencias personalizadas
