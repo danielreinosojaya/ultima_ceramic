@@ -104,6 +104,10 @@ export default async function handler(req: any, res: any) {
         'cash_sales',
         'card_sales',
         'transfer_sales',
+        'sales_tc',      // Ventas tarjeta crédito
+        'sales_cash',    // Ventas efectivo
+        'sales_transfer', // Ventas transferencia
+        'transfers',     // Transferencias (alternativo)
         'final_cash_balance',
         'expenses',
         'total_expenses',
@@ -130,6 +134,10 @@ export default async function handler(req: any, res: any) {
         'cash_sales': 'DECIMAL DEFAULT 0',
         'card_sales': 'DECIMAL DEFAULT 0',
         'transfer_sales': 'DECIMAL DEFAULT 0',
+        'sales_tc': 'DECIMAL DEFAULT 0',      // Tarjeta de crédito
+        'sales_cash': 'DECIMAL DEFAULT 0',    // Efectivo
+        'sales_transfer': 'DECIMAL DEFAULT 0', // Transferencia
+        'transfers': 'DECIMAL DEFAULT 0',      // Transferencias (alternativo)
         'final_cash_balance': 'DECIMAL DEFAULT 0',
         'expenses': "JSONB DEFAULT '[]'::jsonb",
         'total_expenses': 'DECIMAL DEFAULT 0',
@@ -166,25 +174,30 @@ export default async function handler(req: any, res: any) {
         'id': id,
         'date': body.date,
         'initial_balance': body.initialBalance,
-        'cash_sales': body.cashSales,
+        'cash_sales': body.cashSales || 0,
         'card_sales': body.cardSales || 0,
         'transfer_sales': body.transferSales || 0,
+        // Nuevas columnas alternativas (mismo valor, diferente nombre)
+        'sales_tc': body.cardSales || 0,        // Ventas tarjeta crédito
+        'sales_cash': body.cashSales || 0,      // Ventas efectivo
+        'sales_transfer': body.transferSales || 0, // Ventas transferencia
+        'transfers': body.transferSales || 0,   // Transferencias (columna alternativa)
         'cash_denominations': JSON.stringify(body.cashDenominations),
-        'final_cash_balance': finalCashBalance,
+        'final_cash_balance': finalCashBalance || 0,
         'expenses': JSON.stringify(body.expenses || []),
-        'total_expenses': totalExpenses,
-        'manual_value_from_system': body.manualValueFromSystem,
-        'difference': difference,
-        'discrepancy': discrepancy,
+        'total_expenses': totalExpenses || 0,
+        'manual_value_from_system': body.manualValueFromSystem || 0,
+        'difference': difference || 0,
+        'discrepancy': discrepancy || false,
         'notes': body.notes || null,
         // Legacy columns from old schema (if they exist)
         'previous_system_balance': body.initialBalance || 0,
-        'total_cash': totalCashCounted,
-        'expected_total': finalCashBalance,
-        'cash_physical': totalCashCounted,
-        'opening_balance': body.initialBalance,
-        'closing_balance': finalCashBalance,
-        'counted_cash': totalCashCounted,
+        'total_cash': totalCashCounted || 0,
+        'expected_total': finalCashBalance || 0,
+        'cash_physical': totalCashCounted || 0,
+        'opening_balance': body.initialBalance || 0,
+        'closing_balance': finalCashBalance || 0,
+        'counted_cash': totalCashCounted || 0,
       };
 
       // Filter to only columns that exist
