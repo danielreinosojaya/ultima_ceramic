@@ -3437,13 +3437,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 console.log('[createCustomExperienceBooking] Booking created:', bookingCode);
 
                 // Obtener detalles bancarios
-                const { rows: settingsRows } = await sql`SELECT * FROM settings WHERE key = 'bankDetails'`;
-                const bankDetails = settingsRows[0]?.value || {
-                    bank: 'Banco Pichincha',
-                    account: '1234567890',
-                    accountHolder: 'Ultima Ceramic',
-                    ruc: '1234567890001'
-                };
+                const { rows: settingsRows } = await sql`SELECT key, value FROM settings WHERE key = 'bankDetails'`;
+                const bankDetails = (settingsRows.find(r => r.key === 'bankDetails')?.value as BankDetails[]) || [];
 
                 // Enviar correo de pre-reserva
                 try {

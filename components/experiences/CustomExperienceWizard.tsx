@@ -952,7 +952,8 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
   // ============ STEP 5: Confirmación ============
   const renderStepConfirmation = () => {
     const isCelebration = state.experienceType === 'celebration';
-    const confirmationCode = state.confirmationCode || `EXP-${Date.now().toString(36).toUpperCase().slice(-6)}`;
+    const bookingResult = (window as any).__bookingResult;
+    const confirmationCode = bookingResult?.bookingCode || `EXP-${Date.now().toString(36).toUpperCase().slice(-6)}`;
     
     // Calcular total final
     const calculateFinalTotal = () => {
@@ -986,6 +987,15 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
     
     return (
       <div className="space-y-6 animate-fade-in-up">
+        {/* Email Sent Notification */}
+        <div className="bg-brand-success/10 border-2 border-brand-success rounded-xl p-4 flex gap-3">
+          <CheckCircleIcon className="w-6 h-6 text-brand-success flex-shrink-0" />
+          <div>
+            <p className="font-semibold text-brand-success">✉️ Correo enviado</p>
+            <p className="text-sm text-brand-secondary">Revisa tu bandeja de entrada para instrucciones de pago. La pre-reserva expira en 2 horas.</p>
+          </div>
+        </div>
+
         {/* Success Icon */}
         <div className="text-center">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-brand-success rounded-full mb-4 animate-bounce-once">
@@ -995,7 +1005,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
             ¡Pre-reserva Confirmada!
           </h2>
           <p className="text-brand-secondary text-sm">
-            Revisa tu correo para más detalles
+            Guarda tu código para referencia
           </p>
         </div>
 
@@ -1137,13 +1147,37 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
         )}
 
         {/* Next Steps */}
-        <div className="bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-4">
-          <h4 className="font-semibold text-blue-900 mb-2">📋 Próximos Pasos</h4>
-          <ol className="text-sm text-blue-800 space-y-2 list-decimal list-inside">
-            <li>Recibirás un email de confirmación con los detalles</li>
-            <li>Te contactaremos por WhatsApp en las próximas 24 horas</li>
-            <li>Coordinaremos la fecha y hora exacta según tu disponibilidad</li>
-            <li>Te enviaremos las instrucciones de pago</li>
+        <div className="bg-brand-background p-6 rounded-lg shadow-subtle">
+          <h3 className="text-lg font-semibold text-brand-text mb-4">¿Qué sigue?</h3>
+          <ol className="space-y-4 text-left">
+            <li className="flex items-start gap-3">
+              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-primary text-white font-bold">1</span>
+              <div>
+                <span className="text-brand-text font-semibold">Realiza el pago</span>
+                <p className="text-brand-secondary text-sm">Utiliza cualquiera de las cuentas bancarias disponibles para transferir el monto total de tu reserva.</p>
+              </div>
+            </li>
+            <li className="flex items-start gap-3">
+              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-primary text-white font-bold">2</span>
+              <div>
+                <span className="text-brand-text font-semibold">Envía el comprobante por WhatsApp</span>
+                <p className="text-brand-secondary text-sm">Comparte el comprobante de pago al número de WhatsApp indicado para validar tu reserva.</p>
+              </div>
+            </li>
+            <li className="flex items-start gap-3">
+              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-primary text-white font-bold">3</span>
+              <div>
+                <span className="text-brand-text font-semibold">Validación interna</span>
+                <p className="text-brand-secondary text-sm">Nuestro equipo revisará tu comprobante y validará el pago en el sistema.</p>
+              </div>
+            </li>
+            <li className="flex items-start gap-3">
+              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-primary text-white font-bold">4</span>
+              <div>
+                <span className="text-brand-text font-semibold">Recibe tu confirmación final</span>
+                <p className="text-brand-secondary text-sm">Una vez validado el pago, recibirás un correo electrónico confirmando tu reserva final.</p>
+              </div>
+            </li>
           </ol>
         </div>
 
@@ -1225,31 +1259,25 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
     });
   }, [state.currentStep]);
 
-  const handleConfirm = async () => {
-    if (!userInfo || !selectedDate || !selectedTime || !state.technique) {
-      console.error('Missing required info for booking');
-      return;
-    }
-
-    // Construir objeto CustomExperienceBooking
-    const booking: CustomExperienceBooking = {
-      experienceType: state.experienceType,
-      technique: state.technique,
-      date: selectedDate,
-      time: selectedTime,
+  const handleConfirm = () => {
+    // El booking ya fue creado y el email ya fue enviado en handleUserInfoSubmit
+    // Solo notificar al padre que la confirmación está completa
+    onConfirm({
+      experienceType: state.experienceType as 'ceramic_only' | 'celebration',
+      technique: state.technique!,
+      date: selectedDate!,
+      time: selectedTime!,
       participants: state.experienceType === 'celebration' 
         ? (state.config as CelebrationConfig)?.activeParticipants || 0
         : (state.config as CeramicOnlyConfig)?.participants || 0,
       config: state.config!,
-      userInfo: userInfo,
+      userInfo: userInfo!,
       totalPrice: parseFloat(calculateTotalPricing()),
       menuSelections: state.menuSelections,
       childrenPieces: state.experienceType === 'celebration' 
         ? (state.config as CelebrationConfig)?.childrenPieces || []
         : undefined
-    };
-
-    onConfirm(booking);
+    });
   };
 
   // ============ RENDER ============
@@ -1285,9 +1313,60 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
     return total.toFixed(2);
   };
   
-  const handleUserInfoSubmit = (data: { userInfo: UserInfo; needsInvoice: boolean; invoiceData?: any; acceptedNoRefund?: boolean }) => {
+  const handleUserInfoSubmit = async (data: { userInfo: UserInfo; needsInvoice: boolean; invoiceData?: any; acceptedNoRefund?: boolean }) => {
     setUserInfo(data.userInfo);
-    setState(prev => ({ ...prev, currentStep: 5 }));
+    
+    // Crear booking inmediatamente cuando completa Step 4 (ANTES de ir a Step 5)
+    try {
+      setState(prev => ({ ...prev, isLoading: true, error: null }));
+
+      const bookingPayload = {
+        experienceType: state.experienceType,
+        technique: state.technique,
+        date: selectedDate,
+        time: selectedTime,
+        participants: state.experienceType === 'celebration' 
+          ? (state.config as CelebrationConfig)?.activeParticipants || 0
+          : (state.config as CeramicOnlyConfig)?.participants || 0,
+        config: state.config,
+        userInfo: data.userInfo,
+        totalPrice: parseFloat(calculateTotalPricing()),
+        menuSelections: state.menuSelections,
+        childrenPieces: state.experienceType === 'celebration' 
+          ? (state.config as CelebrationConfig)?.childrenPieces || []
+          : undefined
+      };
+
+      const response = await fetch('/api/data?action=createCustomExperienceBooking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bookingPayload)
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Error al crear la pre-reserva');
+      }
+
+      // Mostrar Step 5 (confirmación) con booking guardado y email enviado
+      setState(prev => ({ 
+        ...prev, 
+        currentStep: 5,
+        isLoading: false
+      }));
+      
+      // Guardar el resultado para mostrar en Step 5
+      (window as any).__bookingResult = result;
+
+    } catch (error) {
+      console.error('Error creating custom experience booking:', error);
+      setState(prev => ({ 
+        ...prev, 
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Error al crear la pre-reserva. Intenta de nuevo.'
+      }));
+    }
   };
   
   return (
