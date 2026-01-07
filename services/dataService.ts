@@ -1281,6 +1281,97 @@ export const getBackgroundSettings = (): Promise<BackgroundSettings> => getData(
 export const updateBackgroundSettings = (settings: BackgroundSettings): Promise<{ success: boolean }> => setData('backgroundSettings', settings);
 export const getBankDetails = (): Promise<BankDetails[]> => getData('bankDetails');
 
+// Custom Experiences - Available Slots
+export interface AvailableSlotSearchParams {
+    technique: string;          // 'potters_wheel' | 'hand_modeling' | 'painting'
+    participants: number;       // Cantidad de participantes
+    startDate?: string;         // YYYY-MM-DD, default: hoy
+    daysAhead?: number;         // default: 60 días
+}
+
+export interface AvailableSlotResult {
+    date: string;               // YYYY-MM-DD
+    time: string;               // HH:mm
+    available: number;          // Cupos disponibles
+    total: number;              // Capacidad total
+    canBook: boolean;           // true si tiene espacio suficiente
+    instructor: string;         // Nombre del instructor
+    instructorId: number;       // ID del instructor
+    technique: string;          // Técnica del slot
+}
+
+export const getAvailableSlotsForExperience = async (params: AvailableSlotSearchParams): Promise<AvailableSlotResult[]> => {
+    const { technique, participants, startDate, daysAhead } = params;
+    
+    const queryParams = new URLSearchParams({
+        technique,
+        participants: participants.toString(),
+        ...(startDate && { startDate }),
+        ...(daysAhead && { daysAhead: daysAhead.toString() })
+    });
+
+    const response = await fetchData(`/api/data?action=getAvailableSlots&${queryParams.toString()}`);
+    
+    if (response && response.success) {
+        return response.slots || [];
+    }
+    
+    console.error('Error fetching available slots:', response);
+    return [];
+};
+
+// Tipo para resultado de checkSlotAvailability
+export interface SlotAvailabilityResult {
+    success: boolean;
+    available: boolean;
+    date: string;
+    time: string;
+    technique: string;
+    requestedParticipants: number;
+    capacity: {
+        max: number;
+        booked: number;
+        available: number;
+    };
+    bookingsCount: number;
+    message: string;
+}
+
+// Validar disponibilidad de un slot específico en tiempo real
+export const checkSlotAvailability = async (
+    date: string, 
+    time: string, 
+    technique: string, 
+    participants: number
+): Promise<SlotAvailabilityResult> => {
+    const queryParams = new URLSearchParams({
+        action: 'checkSlotAvailability',
+        date,
+        time,
+        technique,
+        participants: participants.toString()
+    });
+
+    try {
+        const response = await fetch(`/api/data?${queryParams.toString()}`);
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Error checking slot availability:', error);
+        return {
+            success: false,
+            available: false,
+            date,
+            time,
+            technique,
+            requestedParticipants: participants,
+            capacity: { max: 0, booked: 0, available: 0 },
+            bookingsCount: 0,
+            message: 'Error al verificar disponibilidad'
+        };
+    }
+};
+
 // Función optimizada para cargar múltiples datos en batch
 export const getBatchedData = async (keys: string[]): Promise<Record<string, any>> => {
     const promises = keys.map(key => getData(key).then(data => ({ [key]: data })));

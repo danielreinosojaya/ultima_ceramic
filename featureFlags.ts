@@ -14,7 +14,7 @@ export const FEATURE_FLAGS = {
    * Experiencia Personalizada
    * Permite crear experiencias grupales personalizadas donde cada persona elige su técnica
    */
-  EXPERIENCIA_PERSONALIZADA: false,
+  EXPERIENCIA_PERSONALIZADA: true,
   
   /**
    * Clases Sueltas

@@ -387,7 +387,40 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json(info);
     }
 
-    // 🚨 MIGRATION ENDPOINT: Forzar creación de columnas
+    // � FIX CAPACITY: Resetear classCapacity a valores correctos
+    if (action === 'fixClassCapacity') {
+        console.log('🔧 [FIX] Reseteando classCapacity a valores correctos...');
+        try {
+            const correctCapacity = {
+                potters_wheel: 8,
+                molding: 22,
+                introductory_class: 8
+            };
+            
+            await sql`
+                INSERT INTO settings (key, value) 
+                VALUES ('classCapacity', ${JSON.stringify(correctCapacity)})
+                ON CONFLICT (key) 
+                DO UPDATE SET value = EXCLUDED.value
+            `;
+            
+            console.log('✅ classCapacity actualizado:', correctCapacity);
+            
+            return res.status(200).json({
+                success: true,
+                message: 'classCapacity actualizado correctamente',
+                classCapacity: correctCapacity
+            });
+        } catch (error) {
+            console.error('❌ [FIX] Error:', error);
+            return res.status(500).json({
+                success: false,
+                error: error instanceof Error ? error.message : String(error)
+            });
+        }
+    }
+
+    // �🚨 MIGRATION ENDPOINT: Forzar creación de columnas
     if (action === 'migrateGiftcardColumns') {
         console.log('🔧 [MIGRATION] Iniciando migración de columnas giftcard_requests...');
         try {
@@ -459,6 +492,64 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
             });
         }
     }
+
+    // ============ FUNCIONES HELPER COMPARTIDAS PARA DISPONIBILIDAD ============
+    // Funciones reutilizables para getAvailableSlots y checkSlotAvailability
+    const parseSlotAvailabilitySettings = async () => {
+        const settingsResult = await sql`SELECT * FROM settings WHERE key IN ('availability', 'scheduleOverrides', 'classCapacity')`;
+        const availability: any = settingsResult.rows.find(s => s.key === 'availability')?.value || 
+            { Sunday: [], Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [] };
+        const scheduleOverrides: any = settingsResult.rows.find(s => s.key === 'scheduleOverrides')?.value || {};
+        const classCapacity: any = settingsResult.rows.find(s => s.key === 'classCapacity')?.value || 
+            { potters_wheel: 8, molding: 22, introductory_class: 8 };
+        return { availability, scheduleOverrides, classCapacity };
+    };
+
+    const slotTechniqueKey = (tech: string) => {
+        if (tech === 'hand_modeling' || tech === 'painting' || tech === 'molding') return 'molding';
+        if (tech === 'potters_wheel') return 'potters_wheel';
+        return tech;
+    };
+
+    const getMaxCapacityMap = (classCapacity: any): Record<string, number> => ({
+        'potters_wheel': classCapacity.potters_wheel || 8,
+        'hand_modeling': classCapacity.molding || 22,
+        'painting': classCapacity.molding || 22,
+        'molding': classCapacity.molding || 22
+    });
+
+    const getMaxCapacityForTechnique = (tech: string, maxCapacityMap: Record<string, number>) => {
+        const key = slotTechniqueKey(tech);
+        const cap = maxCapacityMap[tech] ?? maxCapacityMap[key];
+        return Number.isFinite(cap) ? (cap as number) : 22;
+    };
+
+    const resolveCapacity = (dateStr: string, tech: string, maxCapacityMap: Record<string, number>, scheduleOverrides: any) => {
+        const override = scheduleOverrides[dateStr];
+        const overrideCap = override?.capacity;
+        if (typeof overrideCap === 'number' && overrideCap > 0) return overrideCap;
+        return getMaxCapacityForTechnique(tech, maxCapacityMap);
+    };
+
+    const normalizeTime = (t: string): string => {
+        if (!t) return '';
+        if (/^\d{2}:\d{2}$/.test(t)) return t;
+        const match = t.match(/(\d{1,2}):(\d{2})/);
+        if (match) {
+            return `${match[1].padStart(2, '0')}:${match[2]}`;
+        }
+        return t;
+    };
+
+    const timeToMinutes = (timeStr: string): number => {
+        const [hours, mins] = timeStr.split(':').map(Number);
+        return hours * 60 + mins;
+    };
+
+    const hasTimeOverlap = (start1: number, end1: number, start2: number, end2: number): boolean => {
+        return start1 < end2 && start2 < end1;
+    };
+    // ============ FIN FUNCIONES HELPER ============
 
     let data;
     if (action) {
@@ -697,6 +788,243 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     // ✅ OPTIMIZACIÓN: Cache CDN 5 minutos (datos dinámicos)
                     res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
                     break;
+                }
+
+                case 'getAvailableSlots': {
+                    // Endpoint inteligente para experiencias personalizadas
+                    const { technique, participants, startDate, daysAhead } = req.query;
+                    
+                    if (!technique || !participants) {
+                        return res.status(400).json({ 
+                            success: false, 
+                            error: 'Missing required parameters: technique and participants' 
+                        });
+                    }
+
+                    const requestedParticipants = parseInt(participants as string);
+                    const requestedTechnique = technique as string;
+                    const searchStartDate = startDate ? new Date(startDate as string) : new Date();
+                    const searchDays = daysAhead ? parseInt(daysAhead as string) : 60;
+
+                    console.log(`[getAvailableSlots] Searching: technique=${requestedTechnique}, participants=${requestedParticipants}, from=${searchStartDate.toISOString().split('T')[0]}, days=${searchDays}`);
+
+                    // Obtener datos necesarios
+                    const [bookingsResult, instructorsResult] = await Promise.all([
+                        sql`SELECT * FROM bookings WHERE status != 'expired' ORDER BY created_at DESC`,
+                        sql`SELECT * FROM instructors ORDER BY name ASC`
+                    ]);
+
+                    const bookings = bookingsResult.rows.map(parseBookingFromDB);
+                    const instructors = instructorsResult.rows.map(toCamelCase);
+                    
+                    // Parse settings reutilizando función helper
+                    const { availability, scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
+                    const maxCapacityMap = getMaxCapacityMap(classCapacity);
+
+                    const availableSlots: any[] = [];
+                    const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+                    // Iterar sobre cada día
+                    for (let i = 0; i < searchDays; i++) {
+                        const currentDate = new Date(searchStartDate);
+                        currentDate.setDate(currentDate.getDate() + i);
+                        const dateStr = currentDate.toISOString().split('T')[0];
+                        const dayKey = DAY_NAMES[currentDate.getDay()];
+                        
+                        // Obtener slots del día (availability o override)
+                        const override = scheduleOverrides[dateStr];
+                        const hasOverride = override !== undefined;
+                        
+                        if (hasOverride && override.slots === null) {
+                            // Día cerrado por override
+                            continue;
+                        }
+
+                        const baseSlots = hasOverride ? override.slots : availability[dayKey];
+                        if (!baseSlots || baseSlots.length === 0) continue;
+
+                        baseSlots.forEach((slot: any) => {
+                            // Verificar si el slot es de la técnica solicitada
+                            // IMPORTANTE: Solo contar overlaps de LA MISMA TÉCNICA, no de otras técnicas
+                            const normalizedSlotTechnique = slotTechniqueKey(requestedTechnique);
+                            if (slot.technique !== normalizedSlotTechnique) return;
+
+                            const slotTime = normalizeTime(slot.time);
+                            
+                            // Calcular rango horario de este slot (2 horas de duración)
+                            const slotStartMinutes = timeToMinutes(slotTime);
+                            const slotEndMinutes = slotStartMinutes + (2 * 60); // 2 horas
+
+                            // Contar participantes que se solapan temporalmente con este slot
+                            // IMPORTANTE: Solo contar bookings de LA MISMA TÉCNICA, no de otras
+                            const bookingsOverlapingSlot = bookings.filter((b: any) => {
+                                if (!b.slots || !Array.isArray(b.slots)) return false;
+                                
+                                // La técnica del booking debe ser exactamente la misma que la solicitada
+                                const bookingTechnique = b.technique || (b.product?.details as any)?.technique;
+                                if (bookingTechnique !== requestedTechnique) return false;
+                                
+                                return b.slots.some((s: any) => {
+                                    if (s.date !== dateStr) return false;
+                                    
+                                    // Calcular rango horario del booking (también 2 horas)
+                                    const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
+                                    const bookingEndMinutes = bookingStartMinutes + (2 * 60); // 2 horas
+                                    
+                                    // Verificar si hay overlap temporal
+                                    return hasTimeOverlap(slotStartMinutes, slotEndMinutes, bookingStartMinutes, bookingEndMinutes);
+                                });
+                            });
+
+                            // Sumar participantes que solapan
+                            const bookedParticipants = bookingsOverlapingSlot.reduce((sum: number, b: any) => {
+                                return sum + (b.participants || 1);
+                            }, 0);
+
+                            // Capacidad máxima del slot (override válido o fallback por técnica)
+                            const maxCapacity = resolveCapacity(dateStr, requestedTechnique, maxCapacityMap, scheduleOverrides);
+                            const availableCapacity = maxCapacity - bookedParticipants;
+
+                            // Solo incluir si hay capacidad suficiente
+                            if (availableCapacity >= requestedParticipants) {
+                                const instructor = instructors.find((inst: any) => inst.id === slot.instructorId);
+                                
+                                availableSlots.push({
+                                    date: dateStr,
+                                    time: slotTime,
+                                    available: availableCapacity,
+                                    total: maxCapacity,
+                                    canBook: true,
+                                    instructor: instructor?.name || 'Instructor',
+                                    instructorId: slot.instructorId,
+                                    technique: requestedTechnique
+                                });
+                            }
+                        });
+                    }
+
+                    console.log(`[getAvailableSlots] Found ${availableSlots.length} available slots`);
+                    
+                    data = {
+                        success: true,
+                        slots: availableSlots,
+                        searchParams: {
+                            technique: requestedTechnique,
+                            participants: requestedParticipants,
+                            startDate: searchStartDate.toISOString().split('T')[0],
+                            daysAhead: searchDays
+                        }
+                    };
+
+                    // Cache de 2 minutos (datos dinámicos que cambian con reservas)
+                    res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=300');
+                    break;
+                }
+                case 'checkSlotAvailability': {
+                    // Endpoint para validar disponibilidad de un slot específico en tiempo real
+                    const { date, time, technique, participants } = req.query;
+                    
+                    if (!date || !time || !technique || !participants) {
+                        return res.status(400).json({ 
+                            success: false, 
+                            error: 'Missing required parameters: date, time, technique, participants' 
+                        });
+                    }
+
+                    const requestedDate = date as string;
+                    const requestedTime = time as string;
+                    const requestedTechnique = technique as string;
+                    const requestedParticipants = parseInt(participants as string);
+
+                    try {
+                        // Obtener datos usando funciones helper
+                        const bookingsResult = await sql`SELECT * FROM bookings WHERE status != 'expired' ORDER BY created_at DESC`;
+                        const bookings = bookingsResult.rows.map(parseBookingFromDB);
+                        
+                        const { scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
+                        const maxCapacityMap = getMaxCapacityMap(classCapacity);
+
+                        console.log(`[checkSlotAvailability] Checking ${requestedDate} ${requestedTime} for ${requestedTechnique} (${requestedParticipants} people)`);
+                        console.log(`[checkSlotAvailability] classCapacity from DB:`, classCapacity);
+                        console.log(`[checkSlotAvailability] maxCapacityMap:`, maxCapacityMap);
+
+                        const normalizedTime = normalizeTime(requestedTime);
+
+                        // Calcular rango horario del slot solicitado (2 horas de duración)
+                        const requestedStartMinutes = timeToMinutes(normalizedTime);
+                        const requestedEndMinutes = requestedStartMinutes + (2 * 60); // 2 horas
+
+                        // Contar participantes que solapan temporalmente con el slot solicitado
+                        let bookedParticipants = 0;
+                        const bookingsInSlot: any[] = [];
+
+                        for (const booking of bookings) {
+                            if (!booking.slots || !Array.isArray(booking.slots)) continue;
+                            
+                            // Técnica del booking
+                            const bookingTechnique = booking.technique || (booking.product?.details as any)?.technique;
+                            if (!bookingTechnique) continue;
+
+                            // IMPORTANTE: Solo contar si es EXACTAMENTE la misma técnica
+                            if (bookingTechnique !== requestedTechnique) continue;
+
+                            // Verificar si hay overlap temporal en la misma fecha
+                            const hasOverlapingSlot = booking.slots.some((s: any) => {
+                                if (s.date !== requestedDate) return false;
+
+                                const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
+                                const bookingEndMinutes = bookingStartMinutes + (2 * 60);
+
+                                return hasTimeOverlap(requestedStartMinutes, requestedEndMinutes, bookingStartMinutes, bookingEndMinutes);
+                            });
+
+                            if (hasOverlapingSlot) {
+                                const participantCount = booking.participants || 1;
+                                bookedParticipants += participantCount;
+                                bookingsInSlot.push({
+                                    id: booking.id,
+                                    participants: participantCount,
+                                    userInfo: { name: booking.userInfo?.name },
+                                    isPaid: booking.isPaid
+                                });
+                            }
+                        }
+
+                        // Verificar capacidad (override válido o fallback por técnica)
+                        const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
+                        const availableCapacity = maxCapacity - bookedParticipants;
+                        const canBook = availableCapacity >= requestedParticipants;
+
+                        console.log(`[checkSlotAvailability] maxCapacity: ${maxCapacity}, booked: ${bookedParticipants}, available: ${availableCapacity}, canBook: ${canBook}`);
+
+                        const responseData = {
+                            success: true,
+                            available: canBook,
+                            date: requestedDate,
+                            time: normalizedTime,
+                            technique: requestedTechnique,
+                            requestedParticipants,
+                            capacity: {
+                                max: maxCapacity,
+                                booked: bookedParticipants,
+                                available: availableCapacity
+                            },
+                            bookingsCount: bookingsInSlot.length,
+                            message: canBook 
+                                ? `Hay ${availableCapacity} cupos disponibles de ${maxCapacity}` 
+                                : `Solo hay ${availableCapacity} cupos disponibles, necesitas ${requestedParticipants}`
+                        };
+
+                        // No cachear - datos en tiempo real
+                        res.setHeader('Cache-Control', 'no-store');
+                        return res.status(200).json(responseData);
+                    } catch (error) {
+                        console.error('[checkSlotAvailability] Error:', error);
+                        return res.status(500).json({ 
+                            success: false, 
+                            error: error instanceof Error ? error.message : 'Unknown error checking availability' 
+                        });
+                    }
                 }
                 case 'listPieces': {
                     try {
@@ -3041,6 +3369,109 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 return res.status(400).json({ error: bookingResult.message || 'Failed to add booking.' });
             }
             return res.status(200).json(bookingResult);
+        }
+        case 'createCustomExperienceBooking': {
+            try {
+                const { experienceType, technique, date, time, participants, config, userInfo, totalPrice, menuSelections, childrenPieces } = req.body;
+
+                // Validar campos requeridos
+                if (!experienceType || !technique || !date || !time || !participants || !userInfo || !totalPrice) {
+                    return res.status(400).json({ 
+                        success: false, 
+                        error: 'Faltan campos requeridos para la experiencia personalizada' 
+                    });
+                }
+
+                // Generar código de reserva
+                const bookingCode = generateBookingCode();
+
+                // Preparar slot
+                const slot = { date, time };
+
+                // Preparar product object
+                const productDetails = {
+                    type: 'CUSTOM_GROUP_EXPERIENCE',
+                    experienceType,
+                    technique,
+                    config,
+                    menuSelections: menuSelections || [],
+                    childrenPieces: childrenPieces || []
+                };
+
+                // Insertar booking en la base de datos
+                const { rows: [newBooking] } = await sql`
+                    INSERT INTO bookings (
+                        booking_code,
+                        product_type,
+                        technique,
+                        slots,
+                        participants,
+                        user_info,
+                        price,
+                        is_paid,
+                        status,
+                        created_at,
+                        expires_at,
+                        booking_mode,
+                        product,
+                        group_metadata
+                    ) VALUES (
+                        ${bookingCode},
+                        'CUSTOM_GROUP_EXPERIENCE',
+                        ${technique},
+                        ${JSON.stringify([slot])},
+                        ${participants},
+                        ${JSON.stringify(userInfo)},
+                        ${totalPrice},
+                        false,
+                        'pending',
+                        NOW(),
+                        NOW() + INTERVAL '2 hours',
+                        'online',
+                        ${JSON.stringify(productDetails)},
+                        ${JSON.stringify({ experienceType, config, menuSelections, childrenPieces })}
+                    )
+                    RETURNING *
+                `;
+
+                console.log('[createCustomExperienceBooking] Booking created:', bookingCode);
+
+                // Obtener detalles bancarios
+                const { rows: settingsRows } = await sql`SELECT key, value FROM settings WHERE key = 'bankDetails'`;
+                const bankDetails = (settingsRows.find(r => r.key === 'bankDetails')?.value as BankDetails[]) || [];
+
+                // Enviar correo de pre-reserva
+                try {
+                    await emailService.sendCustomExperiencePreBookingEmail({
+                        userInfo,
+                        bookingCode,
+                        experienceType,
+                        technique,
+                        date,
+                        time,
+                        participants,
+                        totalPrice,
+                        config
+                    }, bankDetails);
+                    console.log('[createCustomExperienceBooking] Email sent successfully');
+                } catch (emailError) {
+                    console.error('[createCustomExperienceBooking] Email send failed:', emailError);
+                    // No fallar la reserva si el email falla
+                }
+
+                return res.status(200).json({
+                    success: true,
+                    bookingCode,
+                    booking: toCamelCase(newBooking),
+                    message: 'Pre-reserva creada exitosamente. Revisa tu correo para instrucciones de pago.'
+                });
+            } catch (error) {
+                console.error('[createCustomExperienceBooking] Error:', error);
+                return res.status(500).json({
+                    success: false,
+                    error: error instanceof Error ? error.message : 'Error al crear la pre-reserva'
+                });
+            }
         }
         case 'createDelivery': {
             const { customerEmail, customerName, description, scheduledDate, status = 'pending', notes, photos } = req.body;

@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { Piece, SelectedPiece, ExperiencePricing, TimeSlot, GroupTechnique } from '../../types';
+import type { AvailableSlotResult } from '../../services/dataService';
 import * as dataService from '../../services/dataService';
+import { DateTimeSelector } from './DateTimeSelector';
 
 export interface PieceExperienceWizardProps {
   pieces: Piece[];
@@ -17,9 +19,13 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
   onBack,
   isLoading = false
 }) => {
+  const wizardRef = useRef<HTMLDivElement>(null);
+  const participantsSection = useRef<HTMLDivElement>(null);
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [technique, setTechnique] = useState<GroupTechnique>('hand_modeling');
   const [participants, setParticipants] = useState<number>(1);
+  const [participantsInput, setParticipantsInput] = useState<string>('1');
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<AvailableSlotResult | null>(null);
   const [selectedPiece, setSelectedPiece] = useState<string | null>(null);
   const [pricing, setPricing] = useState<ExperiencePricing | null>(null);
   const [error, setError] = useState<string>('');
@@ -29,19 +35,31 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
     hand_modeling: {
       label: '🤚 Modelado a Mano',
       desc: 'Crea con tus manos usando arcilla',
-      price: 45
+      price: 45,
+      maxCapacity: 22
     },
     potters_wheel: {
       label: '🎡 Torno Alfarero',
       desc: 'Trabaja en la rueda de alfarero',
-      price: 55
+      price: 55,
+      maxCapacity: 8
     },
     painting: {
       label: '🎨 Pintura de Piezas',
       desc: 'Pinta piezas pre-moldeadas',
-      price: 0  // Depende de la pieza
+      price: 0,  // Depende de la pieza
+      maxCapacity: 22
     }
   };
+
+  // Auto-scroll to top cuando cambia el step
+  useEffect(() => {
+    if (wizardRef.current) {
+      setTimeout(() => {
+        wizardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  }, [step]);
 
   // Calculate pricing when technique or participants change
   useEffect(() => {
@@ -123,7 +141,7 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-4 py-8">
+    <div ref={wizardRef} className="w-full max-w-2xl mx-auto px-4 py-8">
       {/* Progress Bar */}
       <div className="mb-8">
         <div className="flex justify-between text-sm text-gray-600 mb-2">
@@ -150,7 +168,10 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
             {(['hand_modeling', 'potters_wheel', 'painting'] as GroupTechnique[]).map((tech) => (
               <button
                 key={tech}
-                onClick={() => setTechnique(tech)}
+                onClick={() => {
+                  setTechnique(tech);
+                  setTimeout(() => setStep(2), 300);
+                }}
                 className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
                   technique === tech
                     ? 'border-blue-500 bg-blue-50'
@@ -186,9 +207,121 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
             <p className="text-gray-600">Esta es una experiencia para 1 persona</p>
           </div>
 
-          <div className="bg-blue-50 p-6 rounded-lg border border-blue-200 text-center">
-            <div className="text-5xl font-bold text-blue-600 mb-2">1</div>
-            <div className="text-gray-600">persona</div>
+          <div className="space-y-4">
+            {/* Technique Selection (within Step 2) */}
+            <div>
+              <label className="block text-sm font-bold mb-3">Elige tu técnica:</label>
+              <div className="space-y-3">
+                {(['hand_modeling', 'potters_wheel', 'painting'] as GroupTechnique[]).map((tech) => (
+                  <button
+                    key={tech}
+                    onClick={() => {
+                      setTechnique(tech);
+                      // Auto-scroll a la sección de participantes
+                      setTimeout(() => {
+                        participantsSection.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      }, 100);
+                    }}
+                    className={`w-full p-3 rounded-lg border-2 transition-all text-left ${
+                      technique === tech
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="font-bold text-lg">{TECHNIQUE_INFO[tech].label}</div>
+                        <div className="text-sm text-gray-600">{TECHNIQUE_INFO[tech].desc}</div>
+                      </div>
+                      <div className="text-right">
+                        {tech === 'painting' ? (
+                          <div className="text-sm text-blue-600 font-bold">Depende<br />de pieza</div>
+                        ) : (
+                          <div className="text-2xl font-bold text-blue-600">${TECHNIQUE_INFO[tech].price}</div>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Participants Section */}
+          <div ref={participantsSection} className="bg-blue-50 p-6 rounded-lg border border-blue-200">
+            <label className="block text-sm font-semibold text-brand-text mb-3">
+              Número de Participantes
+            </label>
+            <div className="flex items-center justify-center gap-4">
+              <input
+                type="text"
+                inputMode="numeric"
+                value={participantsInput}
+                onChange={(e) => {
+                  const inputVal = e.target.value;
+                  
+                  // Permitir vacío temporalmente
+                  if (inputVal === '') {
+                    setParticipantsInput('');
+                    return;
+                  }
+                  
+                  // Solo aceptar números
+                  if (!/^\d+$/.test(inputVal)) {
+                    return;
+                  }
+                  
+                  const val = parseInt(inputVal);
+                  const maxCap = TECHNIQUE_INFO[technique].maxCapacity;
+                  
+                  // Actualizar input visualmente
+                  setParticipantsInput(inputVal);
+                  
+                  // Actualizar estado solo si es válido
+                  if (val >= 1 && val <= maxCap) {
+                    setParticipants(val);
+                  }
+                }}
+                onBlur={(e) => {
+                  const inputVal = e.target.value;
+                  const maxCap = TECHNIQUE_INFO[technique].maxCapacity;
+                  
+                  // Si está vacío, inválido o excede máximo, restaurar al último válido
+                  if (inputVal === '' || parseInt(inputVal) < 1 || parseInt(inputVal) > maxCap) {
+                    setParticipantsInput(participants.toString());
+                  } else {
+                    // Asegurar que el valor mostrado coincida con el estado
+                    setParticipantsInput(participants.toString());
+                  }
+                }}
+                className={`w-20 px-4 py-3 border-2 rounded-lg text-center text-3xl font-bold transition-all ${
+                  participantsInput && parseInt(participantsInput) > TECHNIQUE_INFO[technique].maxCapacity
+                    ? 'border-red-500 bg-red-50 text-red-600 focus:border-red-500 focus:ring-2 focus:ring-red-200'
+                    : 'border-brand-border focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
+                }`}
+              />
+              <div className="text-gray-600 font-medium">persona{participants !== 1 ? 's' : ''}</div>
+            </div>
+            
+            {/* Mensaje de error si excede máximo */}
+            {participantsInput && parseInt(participantsInput) > TECHNIQUE_INFO[technique].maxCapacity && (
+              <div className="mt-3 bg-red-50 border-l-4 border-red-500 rounded-r-lg p-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-red-600 font-bold">⚠️</span>
+                  <div>
+                    <p className="text-sm font-semibold text-red-900">Capacidad Excedida</p>
+                    <p className="text-xs text-red-700">
+                      {TECHNIQUE_INFO[technique].label} permite máximo {TECHNIQUE_INFO[technique].maxCapacity} participantes.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Mensaje informativo normal */}
+            {(!participantsInput || parseInt(participantsInput) <= TECHNIQUE_INFO[technique].maxCapacity) && (
+              <p className="text-xs text-blue-600 mt-3">Máximo {TECHNIQUE_INFO[technique].maxCapacity} participantes</p>
+            )}
           </div>
 
           {/* Piece Selection for Painting */}
@@ -199,7 +332,10 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
                 {initialPieces.filter((p) => p.isActive).map((piece) => (
                   <button
                     key={piece.id}
-                    onClick={() => setSelectedPiece(piece.id)}
+                    onClick={() => {
+                      setSelectedPiece(piece.id);
+                      setTimeout(() => setStep(3), 300);
+                    }}
                     className={`p-3 rounded-lg border-2 transition-all text-left text-sm ${
                       selectedPiece === piece.id
                         ? 'border-blue-500 bg-blue-50'
@@ -247,25 +383,16 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
       {step === 3 && (
         <div className="space-y-6">
           <div>
-            <h3 className="text-2xl font-bold mb-2">Elige tu Horario</h3>
+            <h3 className="text-2xl font-bold mb-2">📅 Elige tu Horario</h3>
             <p className="text-gray-600">Selecciona el día y hora que prefieras</p>
           </div>
 
-          <div className="space-y-3 max-h-96 overflow-y-auto">
-            {availableSlots.length > 0 ? (
-              availableSlots.map((slot, idx) => (
-                <button
-                  key={idx}
-                  className="w-full p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all text-left"
-                >
-                  <div className="font-bold">{slot.date}</div>
-                  <div className="text-gray-600">{slot.time}</div>
-                </button>
-              ))
-            ) : (
-              <p className="text-gray-600 text-center py-8">No hay horarios disponibles</p>
-            )}
-          </div>
+          <DateTimeSelector
+            technique={technique}
+            participants={participants}
+            selectedSlot={selectedTimeSlot ? { date: selectedTimeSlot.date, time: selectedTimeSlot.time } : null}
+            onSelectSlot={(slot) => setSelectedTimeSlot(slot)}
+          />
         </div>
       )}
 
@@ -320,8 +447,15 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
         {step < 4 ? (
           <button
             onClick={handleNext}
-            disabled={isLoading}
-            className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            disabled={isLoading || (() => {
+              // Validar participantes en Step 2
+              if (step === 2) {
+                const maxCap = TECHNIQUE_INFO[technique].maxCapacity;
+                return participants > maxCap || participants < 1;
+              }
+              return false;
+            })()}
+            className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
             Siguiente →
           </button>
