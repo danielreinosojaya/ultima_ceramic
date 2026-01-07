@@ -3447,8 +3447,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
                 // Enviar correo de pre-reserva
                 try {
-                    const emailModule = await import('./customExperienceEmail.js');
-                    await emailModule.sendCustomExperiencePreBookingEmail({
+                    await emailService.sendCustomExperiencePreBookingEmail({
                         userInfo,
                         bookingCode,
                         experienceType,
