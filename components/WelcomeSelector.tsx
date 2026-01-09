@@ -105,7 +105,7 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
           subtitle="Reúne a tu grupo y diseña la clase perfecta. Cada persona elige su técnica."
           buttonText="Crear Experiencia"
           onClick={() => onSelect('custom_experience')}
-          isComingSoon={true}
+          isComingSoon={!FEATURE_FLAGS.EXPERIENCIA_PERSONALIZADA}
         />
         <ExperienceCard 
           title="Clases Sueltas"
