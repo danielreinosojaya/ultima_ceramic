@@ -24,12 +24,12 @@ export const SocialBadge: React.FC<SocialBadgeProps> = ({
     let badge: { emoji: string; text: string; bgColor: string; textColor: string; shouldPulse: boolean } | null = null;
 
     if (percentage === 100) {
-        // Clase llena - celebratorio
+        // Clase llena - más prominente
         badge = {
-            emoji: '🎉',
-            text: 'Llena',
-            bgColor: 'bg-green-100',
-            textColor: 'text-green-700',
+            emoji: '🔥',
+            text: 'Lleno',
+            bgColor: 'bg-red-500',
+            textColor: 'text-white',
             shouldPulse: false
         };
     } else if (percentage >= 75) {
