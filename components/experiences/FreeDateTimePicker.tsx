@@ -409,7 +409,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
                 >
                   <div className="flex flex-col items-center gap-1">
                     <span>{hour}</span>
-                    {!isUnavailable && hourState && hourState.capacity && (
+                    {hourState && hourState.capacity && (
                       <SocialBadge 
                         currentCount={hourState.capacity.booked} 
                         maxCapacity={hourState.capacity.max} 
@@ -417,7 +417,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
                       />
                     )}
                   </div>
-                  {isUnavailable && (
+                  {isUnavailable && hourState && hourState.capacity && hourState.capacity.available === 0 ? null : isUnavailable && (
                     <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
                       <span className="text-white text-xs font-bold">×</span>
                     </div>
