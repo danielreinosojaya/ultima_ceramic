@@ -990,7 +990,9 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         const requestedEndMinutes = requestedStartMinutes + (2 * 60); // 2 horas
 
                         // Contar participantes que solapan temporalmente (mismo grupo de capacidad)
-                        // Incluye exactos y parciales para validar capacidad real.
+                        // exactMatchParticipants: solo para badge visual (mismo horario exacto)
+                        // overlappingParticipants: todos los solapados (exacto + parcial) para validar capacidad real
+                        let exactMatchParticipants = 0;
                         let overlappingParticipants = 0;
                         const bookingsInSlot: any[] = [];
 
@@ -1039,19 +1041,23 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                 
                                 if (hasOverlap) {
                                     const participantCount = booking.participants || 1;
-                                    overlappingParticipants += participantCount; // suma para capacidad real (exacto o parcial)
-
-                                    if (!isSameExactTime) {
-                                        console.log(`[checkSlotAvailability] PARTIAL OVERLAP (COUNTED) - booking: ${s.time} (${bookingStartMinutes}-${bookingEndMinutes}min), requested: ${normalizedTime} (${requestedStartMinutes}-${requestedEndMinutes}min), technique: ${bookingTechnique || 'unknown'}`);
+                                    
+                                    // Contar para capacidad real (exacto + parcial)
+                                    overlappingParticipants += participantCount;
+                                    
+                                    // Contar solo exactos para badge visual
+                                    if (isSameExactTime) {
+                                        exactMatchParticipants += participantCount;
+                                        console.log(`[checkSlotAvailability] EXACT TIME MATCH - booking: ${s.time}, requested: ${normalizedTime}, participants: ${participantCount}, technique: ${bookingTechnique || 'unknown'}`);
                                     } else {
-                                        console.log(`[checkSlotAvailability] EXACT TIME MATCH - booking: ${s.time}, requested: ${normalizedTime}, technique: ${bookingTechnique || 'unknown'}`);
+                                        console.log(`[checkSlotAvailability] PARTIAL OVERLAP (COUNTED FOR CAPACITY) - booking: ${s.time} (${bookingStartMinutes}-${bookingEndMinutes}min), requested: ${normalizedTime} (${requestedStartMinutes}-${requestedEndMinutes}min), participants: ${participantCount}, technique: ${bookingTechnique || 'unknown'}`);
                                     }
                                 }
 
                                 return isSameExactTime; // Solo retornar true si es exactamente el mismo horario
                             });
 
-                            // Si es exactamente el mismo horario, contar participantes
+                            // Si es exactamente el mismo horario, agregar a lista de bookings
                             if (overlapInfo) {
                                 const participantCount = booking.participants || 1;
                                 bookingsInSlot.push({
@@ -1081,7 +1087,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             requestedParticipants,
                             capacity: {
                                 max: maxCapacity,
-                                booked: overlappingParticipants,
+                                booked: exactMatchParticipants,  // Solo exactos para badge visual
                                 available: availableCapacity
                             },
                             bookingsCount: bookingsInSlot.length,
