@@ -189,13 +189,32 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                   {bookingMode === 'monthly' ? 'Selecciona el horario para tus clases mensuales' : 'Selecciona el horario para tus clases'} <span className="font-bold text-brand-text">{pkg.name}</span>.
                 </p>
                 
-                {/* Social Proof Tip */}
-                <div className="bg-gradient-to-r from-blue-50 to-purple-50 border-l-4 border-blue-400 p-3 rounded-r-lg mb-4 animate-fade-in-fast">
-                  <div className="flex items-start gap-2">
-                    <span className="text-xl">💡</span>
-                    <div className="text-sm">
-                      <p className="font-semibold text-blue-900 mb-1">Tip: Clases con más participantes</p>
-                      <p className="text-blue-700 text-xs">Las clases marcadas con 🔥 o 👥 son perfectas para conocer gente y hacer amigos. ¡Únete a la comunidad!</p>
+                {/* Enhanced Social Proof Tip - More Visible */}
+                <div className="bg-gradient-to-r from-blue-50 via-purple-50 to-pink-50 border-2 border-blue-400 p-4 rounded-lg mb-4 shadow-md animate-fade-in-fast">
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl">💡</span>
+                    <div className="flex-1">
+                      <p className="font-bold text-blue-900 mb-2 text-base">¿Buscas hacer amigos mientras aprendes?</p>
+                      <div className="space-y-1.5 text-sm text-blue-800">
+                        <p className="flex items-center gap-2">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-700">
+                            <span className="text-xs">🔥</span> Popular
+                          </span>
+                          <span>Clase con alta demanda</span>
+                        </p>
+                        <p className="flex items-center gap-2">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">
+                            <span className="text-xs">👥</span> 3
+                          </span>
+                          <span>Ya hay gente registrada - ¡únete!</span>
+                        </p>
+                        <p className="flex items-center gap-2">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-yellow-100 text-yellow-700 animate-pulse">
+                            <span className="text-xs">✨</span> 2 cupos
+                          </span>
+                          <span>¡Últimos espacios disponibles!</span>
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -284,6 +303,7 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                       const slotsForDay = scheduleData[dateStr] || [];
                       const isPast = date < today;
                       const hasAvailableSlots = !isPast && slotsForDay.length > 0;
+                      const hasRegistrations = hasAvailableSlots && slotsForDay.some(s => s.paidBookingsCount > 0);
                       const isSelected = index === selectedDayIndex;
 
                       return (
@@ -298,7 +318,9 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                             isSelected
                               ? 'bg-brand-primary text-white border-brand-primary shadow-lg'
                               : hasAvailableSlots
-                              ? 'bg-white text-brand-text border-transparent hover:bg-gray-100'
+                              ? hasRegistrations 
+                                ? 'bg-blue-50 text-brand-text border-blue-300 hover:bg-blue-100' 
+                                : 'bg-white text-brand-text border-transparent hover:bg-gray-100'
                               : 'bg-brand-background text-gray-400 border-transparent opacity-70 cursor-not-allowed'
                           }`}
                         >
@@ -306,6 +328,9 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                           <span className="text-2xl font-extrabold mt-1">{date.getDate()}</span>
                           {hasAvailableSlots && (
                              <div className={`absolute bottom-2 h-1.5 w-1.5 rounded-full transition-colors ${isSelected ? 'bg-white' : 'bg-brand-primary'}`}></div>
+                          )}
+                          {hasRegistrations && !isSelected && (
+                            <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-500 rounded-full border border-white pulse-dot"></div>
                           )}
                         </button>
                       );
@@ -336,8 +361,9 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                             aria-disabled={isDisabled}
                             aria-label={isFull ? 'Lleno' : 'Horario disponible'}
                             className={`relative p-3 rounded-md text-left transition-all duration-200 border w-full flex items-center justify-between gap-4 ${
-                              isSelected ? 'bg-brand-primary/10 ring-2 ring-brand-primary border-transparent' : 
+                              isSelected ? 'bg-brand-primary/10 ring-2 ring-brand-primary border-transparent shadow-md' : 
                               isDisabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-70' :
+                              slot.paidBookingsCount > 0 ? 'bg-blue-50 border-blue-300 hover:border-brand-primary hover:shadow-md active:scale-[0.98]' :
                               'bg-white hover:border-brand-primary hover:shadow-sm'
                             }`}
                           >
@@ -350,6 +376,9 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                             </div>
                             <CapacityIndicator count={slot.paidBookingsCount} max={slot.maxCapacity} capacityMessages={appData.capacityMessages} />
                             {isFull && <div className="absolute top-1 right-1 text-[8px] font-bold bg-red-500 text-white px-1 rounded-sm">LLENO</div>}
+                            {!isSelected && slot.paidBookingsCount > 0 && !isFull && (
+                              <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full border-2 border-white pulse-dot"></div>
+                            )}
                           </button>
                         )
                       })

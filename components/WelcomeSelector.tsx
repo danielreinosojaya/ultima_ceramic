@@ -65,9 +65,20 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
       <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif font-bold text-brand-text mb-1.5 sm:mb-2">
         Bienvenido a Ceramicalma
       </h2>
-      <p className="text-sm sm:text-base md:text-lg text-brand-secondary mb-6 sm:mb-8 md:mb-10">
+      <p className="text-sm sm:text-base md:text-lg text-brand-secondary mb-3 sm:mb-4">
         ¿Es tu primera vez con nosotros?
       </p>
+      
+      {/* Visual Tip - Encourage group bookings */}
+      <div className="bg-gradient-to-r from-purple-50 to-pink-50 border-l-4 border-purple-400 p-3 sm:p-4 rounded-r-lg mb-6 sm:mb-8 text-left max-w-3xl mx-auto">
+        <div className="flex items-start gap-2 sm:gap-3">
+          <span className="text-xl sm:text-2xl">🎉</span>
+          <div className="text-xs sm:text-sm">
+            <p className="font-bold text-purple-900 mb-1">¿Vienes en grupo?</p>
+            <p className="text-purple-700">Las experiencias grupales son perfectas para cumpleaños, despedidas, team building o simplemente pasar un rato creativo con amigos.</p>
+          </div>
+        </div>
+      </div>
       
       {/* Main Options - Stack on mobile, grid on desktop */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-5 md:gap-6 mb-8 sm:mb-10 md:mb-12">
@@ -91,25 +102,29 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
         />
       </div>
 
-      {/* Section Divider */}
+      {/* Section Divider - With Strong Call-to-Action */}
       <div className="flex items-center gap-4 mb-6 sm:mb-8">
         <div className="flex-1 h-px bg-brand-border/50"></div>
-        <h3 className="text-base sm:text-lg font-semibold text-brand-text px-2">Nuevas Experiencias</h3>
+        <h3 className="text-base sm:text-lg font-bold text-brand-text px-2 flex items-center gap-2">
+          <span className="text-xl">✨</span>
+          Experiencias Grupales
+          <span className="text-xl">✨</span>
+        </h3>
         <div className="flex-1 h-px bg-brand-border/50"></div>
       </div>
 
-      {/* New Experiences Grid */}
+      {/* New Experiences Grid - Highlight Group Options */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 mb-6 sm:mb-8">
         <ExperienceCard 
-          title="Experiencia Personalizada"
-          subtitle="Reúne a tu grupo y diseña la clase perfecta. Cada persona elige su técnica."
+          title="🎨 Experiencia Personalizada"
+          subtitle="Perfecto para grupos de 2-10 personas. Cada uno elige su técnica (torno, moldeo o pintura)."
           buttonText="Crear Experiencia"
           onClick={() => onSelect('custom_experience')}
           isComingSoon={!FEATURE_FLAGS.EXPERIENCIA_PERSONALIZADA}
         />
         <ExperienceCard 
-          title="Clases Sueltas"
-          subtitle="Clase Individual o Grupal. Torno, Modelado o Pintura."
+          title="🏺 Clases Sueltas"
+          subtitle="Clase individual o grupal. Ideal para probar sin compromiso."
           buttonText="Reservar Clase"
           onClick={() => onSelect('single_class_wizard')}
           isComingSoon={!FEATURE_FLAGS.CLASES_SUELTAS}
