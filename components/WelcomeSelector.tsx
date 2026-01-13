@@ -60,6 +60,7 @@ const ExperienceCard: React.FC<{
 
 export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) => {
   const [showAllOptions, setShowAllOptions] = React.useState(false);
+  const [showHowItWorks, setShowHowItWorks] = React.useState(false);
   
   return (
     <div className="text-center px-4 py-6 sm:p-6 md:p-8 bg-transparent animate-fade-in-up max-w-6xl mx-auto w-full">
@@ -85,8 +86,14 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
       {/* Main CTA - Custom Experience First */}
       <div className="bg-brand-surface border-2 border-brand-primary p-6 sm:p-8 rounded-2xl shadow-lg mb-8">
         <h3 className="text-2xl sm:text-3xl font-bold mb-3 text-brand-text">Experiencia Personalizada</h3>
-        <p className="text-base sm:text-lg mb-4 text-brand-secondary">
-          ✨ Tu grupo elige una técnica: torno, modelado o pintura
+        <p className="text-base sm:text-lg mb-4 text-brand-secondary flex flex-col sm:flex-row items-center justify-center gap-2">
+          <span>✨ Tu grupo elige una técnica: torno, modelado o pintura</span>
+          <button
+            onClick={() => setShowHowItWorks(true)}
+            className="text-brand-primary hover:underline text-xs sm:text-sm font-medium whitespace-nowrap"
+          >
+            ¿Cómo funciona?
+          </button>
         </p>
         
         {/* Quick Info */}
@@ -282,6 +289,80 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
         />
       </div>
       </>
+      )}
+      {/* Modal: ¿Cómo funciona? */}
+      {showHowItWorks && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="sticky top-0 bg-gradient-to-r from-brand-primary to-brand-accent p-6 text-white flex items-center justify-between">
+              <h2 className="text-2xl font-bold">¿Cómo funciona?</h2>
+              <button
+                onClick={() => setShowHowItWorks(false)}
+                className="text-2xl font-bold hover:opacity-80 transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-6">
+              {/* Modelado a Mano */}
+              <div className="border-l-4 border-brand-primary pl-4">
+                <h3 className="text-xl font-bold text-brand-text mb-2">🖐️ Modelado a Mano</h3>
+                <p className="text-sm text-brand-secondary mb-3">Diversas técnicas de modelado creativo</p>
+                <div className="bg-brand-background rounded-lg p-3 space-y-2 text-xs text-brand-text">
+                  <div><strong>Duración:</strong> 2 horas por clase</div>
+                  <div><strong>Técnicas:</strong> Pinch/Pellizco, Slab/Plancha, Coiling/Churros</div>
+                  <div><strong>Materiales:</strong> Todo incluido (arcilla, herramientas, esmaltes, horneado)</div>
+                  <div><strong>Qué llevar:</strong> Ropa cómoda, uñas cortas, sin anillos</div>
+                  <div className="pt-2 text-brand-secondary">✓ Piezas aptas para alimentos, microondas y lavavajillas</div>
+                </div>
+              </div>
+
+              {/* Torno Alfarero */}
+              <div className="border-l-4 border-brand-secondary pl-4">
+                <h3 className="text-xl font-bold text-brand-text mb-2">🎯 Torno Alfarero</h3>
+                <p className="text-sm text-brand-secondary mb-3">Domina la técnica del torno clásico</p>
+                <div className="bg-brand-background rounded-lg p-3 space-y-2 text-xs text-brand-text">
+                  <div><strong>Duración:</strong> 2 horas por clase</div>
+                  <div><strong>Actividades:</strong> Centrado, cilindros, cuencos, retorneado y esmaltado</div>
+                  <div><strong>Materiales:</strong> Todo incluido (arcilla, herramientas, esmaltes, horneado)</div>
+                  <div><strong>Qué llevar:</strong> Ropa cómoda, uñas cortas, sin anillos, pelo recogido</div>
+                  <div className="pt-2 text-brand-secondary">✓ Piezas aptas para alimentos, microondas y lavavajillas</div>
+                </div>
+              </div>
+
+              {/* Pintado a Mano */}
+              <div className="border-l-4 border-brand-accent pl-4">
+                <h3 className="text-xl font-bold text-brand-text mb-2">🎨 Pintado a Mano</h3>
+                <p className="text-sm text-brand-secondary mb-3">Diseña y decora piezas de cerámica pre-hechas</p>
+                <div className="bg-brand-background rounded-lg p-3 space-y-2 text-xs text-brand-text">
+                  <div><strong>Duración:</strong> 2 horas por clase</div>
+                  <div><strong>Actividades:</strong> Pintura de piezas pre-hechas con diseños personalizados</div>
+                  <div><strong>Materiales:</strong> Todo incluido (piezas, pinceles, pinturas, horneado)</div>
+                  <div><strong>Qué llevar:</strong> Ropa cómoda que se pueda ensuciar</div>
+                  <div className="pt-2 text-brand-secondary">✓ Máximo 22 personas • Perfecto para todos los niveles</div>
+                </div>
+              </div>
+
+              {/* Footer Info */}
+              <div className="bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-4 text-sm text-blue-900">
+                <strong>💡 Tip:</strong> Todas las experiencias incluyen instrucción, materiales y horneado profesional. El espacio es privado con A/C, WiFi, mesas y servicio.
+              </div>
+            </div>
+
+            {/* Footer Button */}
+            <div className="bg-brand-background border-t border-brand-border p-4">
+              <button
+                onClick={() => setShowHowItWorks(false)}
+                className="w-full bg-brand-primary text-white font-bold py-3 rounded-xl hover:opacity-90 transition"
+              >
+                Entendido, volver
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
