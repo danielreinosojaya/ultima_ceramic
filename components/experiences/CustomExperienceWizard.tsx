@@ -910,7 +910,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                 <div className="flex justify-between py-3 border-b border-gray-100">
                   <span className="text-gray-600">Disponibilidad:</span>
                   <span className={`font-bold ${slotAvailability.available ? 'text-green-600' : 'text-red-600'}`}>
-                    {slotAvailability.capacity.available}/{slotAvailability.capacity.max} cupos disponibles
+                    {slotAvailability.capacity.available} cupos disponibles
                   </span>
                 </div>
                 {!slotAvailability.available && (
