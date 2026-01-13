@@ -63,73 +63,78 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
   
   return (
     <div className="text-center px-4 py-6 sm:p-6 md:p-8 bg-transparent animate-fade-in-up max-w-6xl mx-auto w-full">
-      {/* Hero Section - Focused on Group Experiences */}
+      {/* Hero Section - Focused on Custom Experience */}
       <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif font-bold text-brand-text mb-2 sm:mb-3">
-        🎉 Celebra con Amigos
+        🎨 Experiencia Personalizada
       </h2>
       <p className="text-base sm:text-lg text-brand-secondary mb-4 sm:mb-6">
-        El plan perfecto que todos recordarán
+        Reúne a tu grupo y diseña la clase perfecta
       </p>
       
       {/* Social Proof */}
       <div className="flex items-center justify-center gap-2 text-sm text-gray-600 mb-6">
         <div className="flex -space-x-2">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-400 border-2 border-white" />
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-orange-400 border-2 border-white" />
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-teal-400 border-2 border-white" />
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-indigo-400 border-2 border-white" />
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-400 border-2 border-white" />
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-red-400 border-2 border-white" />
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-400 to-pink-400 border-2 border-white" />
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-purple-400 border-2 border-white" />
         </div>
         <span className="font-medium">+247 personas celebraron este mes</span>
       </div>
       
-      {/* Main CTA - Group Experience First */}
-      <div className="bg-gradient-to-br from-purple-500 to-pink-500 p-6 sm:p-8 rounded-2xl shadow-xl mb-8 text-white">
-        <h3 className="text-2xl sm:text-3xl font-bold mb-3">Experiencias Grupales</h3>
-        <p className="text-base sm:text-lg mb-4 text-white/90">
-          ✨ Crea, ríe y llévate tu obra
+      {/* Main CTA - Custom Experience First */}
+      <div className="bg-brand-surface border-2 border-brand-primary p-6 sm:p-8 rounded-2xl shadow-lg mb-8">
+        <h3 className="text-2xl sm:text-3xl font-bold mb-3 text-brand-text">Experiencia Personalizada</h3>
+        <p className="text-base sm:text-lg mb-4 text-brand-secondary">
+          ✨ Cada persona elige su técnica: torno, modelado o pintura
         </p>
         
         {/* Quick Info */}
         <div className="flex flex-wrap justify-center gap-3 sm:gap-4 mb-6 text-sm">
-          <span className="bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full">
+          <span className="bg-brand-background px-3 py-1.5 rounded-full border border-brand-border text-brand-text font-medium">
             💰 Desde $45/persona
           </span>
-          <span className="bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full">
-            👥 3-15 personas
+          <span className="bg-brand-background px-3 py-1.5 rounded-full border border-brand-border text-brand-text font-medium">
+            👥 2-10 personas
           </span>
-          <span className="bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full">
+          <span className="bg-brand-background px-3 py-1.5 rounded-full border border-brand-border text-brand-text font-medium">
             ⏱️ 2 horas
           </span>
         </div>
         
         {/* Process Preview */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 mb-6 text-left">
-          <h4 className="font-semibold mb-3 text-center">📋 Proceso simple en 4 pasos (~5 min):</h4>
-          <div className="space-y-2 text-sm">
+        <div className="bg-brand-background rounded-xl p-4 mb-6 text-left border border-brand-border">
+          <h4 className="font-semibold mb-3 text-center text-brand-text">📋 Proceso simple en 4 pasos (~5 min):</h4>
+          <div className="space-y-2 text-sm text-brand-secondary">
             <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-white text-purple-600 flex items-center justify-center text-xs font-bold flex-shrink-0">1</span>
+              <span className="w-6 h-6 rounded-full bg-brand-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">1</span>
               <span>Cuántas personas → 30 seg</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-white text-purple-600 flex items-center justify-center text-xs font-bold flex-shrink-0">2</span>
-              <span>Elige técnicas (torno, moldeo, pintura) → 1 min</span>
+              <span className="w-6 h-6 rounded-full bg-brand-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">2</span>
+              <span>Cada uno elige técnica (torno, moldeo, pintura) → 1 min</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-white text-purple-600 flex items-center justify-center text-xs font-bold flex-shrink-0">3</span>
+              <span className="w-6 h-6 rounded-full bg-brand-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">3</span>
               <span>Selecciona fecha y hora → 1 min</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-white text-purple-600 flex items-center justify-center text-xs font-bold flex-shrink-0">4</span>
+              <span className="w-6 h-6 rounded-full bg-brand-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">4</span>
               <span>Confirma y paga → 2 min</span>
             </div>
           </div>
         </div>
         
         <button
-          onClick={() => onSelect('group_experience')}
-          className="bg-white text-purple-600 font-bold py-4 px-8 rounded-xl w-full hover:bg-gray-50 active:scale-[0.98] transition-all text-lg shadow-lg"
+          onClick={() => onSelect('custom_experience')}
+          disabled={!FEATURE_FLAGS.EXPERIENCIA_PERSONALIZADA}
+          className={`font-bold py-4 px-8 rounded-xl w-full transition-all text-lg shadow-md ${
+            FEATURE_FLAGS.EXPERIENCIA_PERSONALIZADA
+              ? 'bg-brand-accent text-white hover:opacity-90 active:scale-[0.98]'
+              : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+          }`}
         >
-          🎉 Planifica Tu Evento Grupal
+          {FEATURE_FLAGS.EXPERIENCIA_PERSONALIZADA ? '🎨 Crear Experiencia' : 'Próximamente'}
         </button>
       </div>
       
@@ -138,7 +143,7 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
         onClick={() => setShowAllOptions(!showAllOptions)}
         className="text-brand-primary font-medium mb-4 hover:underline flex items-center gap-2 mx-auto"
       >
-        <span>💭 ¿Solo yo o en pareja?</span>
+        <span>💭 Ver todas las opciones</span>
         <svg 
           className={`w-4 h-4 transition-transform ${showAllOptions ? 'rotate-180' : ''}`}
           fill="none" 
@@ -176,18 +181,17 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
       {/* Section Divider */}
       <div className="flex items-center gap-4 mb-6 sm:mb-8">
         <div className="flex-1 h-px bg-brand-border/50"></div>
-        <h3 className="text-base sm:text-lg font-semibold text-brand-text px-2">Otras Experiencias</h3>
+        <h3 className="text-base sm:text-lg font-semibold text-brand-text px-2">Otras Opciones</h3>
         <div className="flex-1 h-px bg-brand-border/50"></div>
       </div>
 
       {/* New Experiences Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 mb-6 sm:mb-8">
         <ExperienceCard 
-          title="Experiencia Personalizada"
-          subtitle="Perfecto para grupos de 2-10 personas. Cada uno elige su técnica (torno, moldeo o pintura)."
-          buttonText="Crear Experiencia"
-          onClick={() => onSelect('custom_experience')}
-          isComingSoon={!FEATURE_FLAGS.EXPERIENCIA_PERSONALIZADA}
+          title="Experiencias Grupales"
+          subtitle="Ideal para cumpleaños, despedidas, team building o reuniones con amigos."
+          buttonText="Planifica Tu Evento"
+          onClick={() => onSelect('group_experience')}
         />
         <ExperienceCard 
           title="Clases Sueltas"
