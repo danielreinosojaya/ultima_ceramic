@@ -1453,6 +1453,24 @@ export const sendCustomExperiencePreBookingEmail = async (
             </div>
 
 
+            <div style="background: #F3E8FF; border-left: 4px solid #A855F7; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3 style="color: #7E22CE; margin-top: 0;">🎁 Importante sobre tu reserva</h3>
+                <p style="color: #6B21A8; font-size: 14px; margin: 10px 0; line-height: 1.6;">
+                    Tu reserva es especial y personal. El valor que pagaste es exclusivo para esta experiencia en esta fecha, pensado para ti y tu grupo. Algunos puntos clave:
+                </p>
+                <ul style="color: #6B21A8; font-size: 14px; margin: 10px 0; padding-left: 20px; line-height: 1.8;">
+                    <li><strong>✓ Válido solo para esta experiencia y fecha</strong></li>
+                    <li><strong>✓ No transferible a otra persona</strong></li>
+                    <li><strong>✓ No acumulable con otros servicios o descuentos de Ceramicalma</strong></li>
+                    <li><strong>✓ Si necesitas cambiar la fecha, aplican términos de reprogramación</strong></li>
+                    <li><strong>✓ Tu inversión es final y no reembolsable</strong></li>
+                </ul>
+                <p style="color: #6B21A8; font-size: 14px; margin-top: 12px;">
+                    Queremos que disfrutes cada momento. Si tienes dudas, estamos aquí. 🎨
+                </p>
+            </div>
+
+
             <!-- Footer -->
             <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
                 <p style="color: #6B7280; font-size: 14px;">
