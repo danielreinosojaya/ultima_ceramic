@@ -86,16 +86,16 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
       <div className="bg-brand-surface border-2 border-brand-primary p-6 sm:p-8 rounded-2xl shadow-lg mb-8">
         <h3 className="text-2xl sm:text-3xl font-bold mb-3 text-brand-text">Experiencia Personalizada</h3>
         <p className="text-base sm:text-lg mb-4 text-brand-secondary">
-          ✨ Cada persona elige su técnica: torno, modelado o pintura
+          ✨ Tu grupo elige una técnica: torno, modelado o pintura
         </p>
         
         {/* Quick Info */}
         <div className="flex flex-wrap justify-center gap-3 sm:gap-4 mb-6 text-sm">
           <span className="bg-brand-background px-3 py-1.5 rounded-full border border-brand-border text-brand-text font-medium">
-            💰 Desde $45/persona
+            💰 Desde $18/persona
           </span>
           <span className="bg-brand-background px-3 py-1.5 rounded-full border border-brand-border text-brand-text font-medium">
-            👥 2-10 personas
+            👥 2-22 personas
           </span>
           <span className="bg-brand-background px-3 py-1.5 rounded-full border border-brand-border text-brand-text font-medium">
             ⏱️ 2 horas
@@ -104,23 +104,23 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
         
         {/* Process Preview */}
         <div className="bg-brand-background rounded-xl p-4 mb-6 text-left border border-brand-border">
-          <h4 className="font-semibold mb-3 text-center text-brand-text">📋 Proceso simple en 4 pasos (~5 min):</h4>
+          <h4 className="font-semibold mb-3 text-center text-brand-text">📋 Proceso simple en 4 pasos:</h4>
           <div className="space-y-2 text-sm text-brand-secondary">
             <div className="flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-brand-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">1</span>
-              <span>Cuántas personas → 30 seg</span>
+              <span>Cuántas personas</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-brand-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">2</span>
-              <span>Cada uno elige técnica (torno, moldeo, pintura) → 1 min</span>
+              <span>Elige la técnica del grupo (torno, moldeo o pintura)</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-brand-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">3</span>
-              <span>Selecciona fecha y hora → 1 min</span>
+              <span>Selecciona fecha y hora</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-brand-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">4</span>
-              <span>Confirma y paga → 2 min</span>
+              <span>Confirma y paga</span>
             </div>
           </div>
         </div>
