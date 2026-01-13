@@ -346,15 +346,11 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
                 <div className="bg-brand-background rounded-lg p-3 space-y-2 text-xs text-brand-text">
                   <div><strong>Duración:</strong> 2 horas por clase</div>
                   <div><strong>Actividades:</strong> Pintura de piezas pre-hechas con diseños personalizados</div>
+                  <div><strong>Precio:</strong> Desde $18 por la pieza básica; en el taller puedes elegir otras piezas y pagar solo la diferencia.</div>
                   <div><strong>Materiales:</strong> Todo incluido (piezas, pinceles, pinturas, horneado)</div>
                   <div><strong>Qué llevar:</strong> Ropa cómoda que se pueda ensuciar</div>
                   <div className="pt-2 text-brand-secondary">✓ Máximo 22 personas • Perfecto para todos los niveles</div>
                 </div>
-              </div>
-
-              {/* Footer Info */}
-              <div className="bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-4 text-sm text-blue-900">
-                <strong>💡 Tip:</strong> Todas las experiencias incluyen instrucción, materiales y horneado profesional. El espacio es privado con A/C, WiFi, mesas y servicio.
               </div>
             </div>
 
