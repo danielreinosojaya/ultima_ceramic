@@ -451,7 +451,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
             <div className="flex-1">
               <p className={`font-bold ${slotAvailability.available ? 'text-green-800' : 'text-red-800'}`}>
                 {slotAvailability.available 
-                  ? `¡Disponible! ${slotAvailability.capacity.available}/${slotAvailability.capacity.max} cupos libres`
+                  ? `¡Disponible! ${slotAvailability.capacity.available} cupos libres`
                   : 'No hay cupos suficientes'
                 }
               </p>
