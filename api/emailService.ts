@@ -1122,9 +1122,26 @@ export const sendGroupClassConfirmationEmail = async (
                 </p>
             </div>
 
+            <div style="background: #F3E8FF; border-left: 4px solid #A855F7; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3 style="color: #7E22CE; margin-top: 0;">🎁 Importante sobre tu reserva</h3>
+                <p style="color: #6B21A8; font-size: 14px; margin: 10px 0; line-height: 1.6;">
+                    Tu reserva es especial y personal. El valor que pagaste es exclusivo para esta experiencia en esta fecha, diseñado pensando en ti y tu grupo. Algunos detalles clave:
+                </p>
+                <ul style="color: #6B21A8; font-size: 14px; margin: 10px 0; padding-left: 20px; line-height: 1.8;">
+                    <li><strong>✓ Tu valor es válido únicamente para esta experiencia y fecha</strong></li>
+                    <li><strong>✓ No puede transferirse a otra persona</strong></li>
+                    <li><strong>✓ No se puede combinar con otros servicios o descuentos de Ceramicalma</strong></li>
+                    <li><strong>✓ Si necesitas cambiar la fecha, aplican términos de reprogramación</strong></li>
+                    <li><strong>✓ Tu inversión es final y no reembolsable</strong></li>
+                </ul>
+                <p style="color: #6B21A8; font-size: 14px; margin-top: 12px;">
+                    Queremos que disfrutes cada momento. Si tienes dudas, estamos aquí. 🎨
+                </p>
+            </div>
+
             <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
                 ¡Que disfruten su experiencia!<br/>
-                <strong>El equipo de Última Ceramic</strong>
+                <strong>El equipo de Ceramicalma</strong>
             </p>
         </div>
     `;
@@ -1175,7 +1192,7 @@ export const sendExperiencePendingReviewEmail = async (
 
             <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
                 Cualquier duda, no dudes en contactarnos.<br/>
-                <strong>El equipo de Última Ceramic</strong>
+                <strong>El equipo de Ceramicalma</strong>
             </p>
         </div>
     `;
@@ -1226,7 +1243,7 @@ export const sendExperienceConfirmedEmail = async (
 
             <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
                 ¡A crear se ha dicho!<br/>
-                <strong>El equipo de Última Ceramic</strong>
+                <strong>El equipo de Ceramicalma</strong>
             </p>
         </div>
     `;
@@ -1277,7 +1294,7 @@ export const sendExperienceRejectedEmail = async (
 
             <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
                 Esperamos verte pronto con otra experiencia.<br/>
-                <strong>El equipo de Última Ceramic</strong>
+                <strong>El equipo de Ceramicalma</strong>
             </p>
         </div>
     `;
