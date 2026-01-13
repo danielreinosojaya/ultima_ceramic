@@ -265,6 +265,12 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
             ))}
           </div>
 
+          {technique === 'painting' && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              Precio: Desde $18 por la pieza básica; en el taller puedes elegir otras piezas y pagar solo la diferencia.
+            </div>
+          )}
+
           {error && <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg">{error}</div>}
         </div>
       )}
