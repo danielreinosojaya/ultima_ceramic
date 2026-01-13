@@ -98,8 +98,11 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
           <span>✨ Tu grupo elige una técnica: torno, modelado o pintura</span>
           <button
             onClick={() => setShowHowItWorks(true)}
-            className="text-brand-primary hover:underline text-xs sm:text-sm font-medium whitespace-nowrap"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-brand-primary/10 text-brand-primary hover:bg-brand-primary hover:text-white transition-all text-xs sm:text-sm font-semibold whitespace-nowrap border border-brand-primary/20 hover:border-brand-primary"
           >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
             ¿Cómo funciona?
           </button>
         </p>
@@ -202,12 +205,7 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
 
       {/* New Experiences Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 mb-6 sm:mb-8">
-        <ExperienceCard 
-          title="Experiencias Grupales"
-          subtitle="Ideal para cumpleaños, despedidas, team building o reuniones con amigos."
-          buttonText="Planifica Tu Evento"
-          onClick={() => onSelect('group_experience')}
-        />
+        
         <ExperienceCard 
           title="Clases Sueltas"
           subtitle="Clase individual o grupal. Ideal para probar sin compromiso."
