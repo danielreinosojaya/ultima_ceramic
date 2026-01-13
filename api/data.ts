@@ -1039,8 +1039,13 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                 
                                 if (hasOverlap) {
                                     if (!isSameExactTime) {
-                                        console.log(`[checkSlotAvailability] PARTIAL OVERLAP (SAME GROUP) - booking: ${s.time} (${bookingStartMinutes}-${bookingEndMinutes}min), requested: ${normalizedTime} (${requestedStartMinutes}-${requestedEndMinutes}min), technique: ${bookingTechnique || 'unknown'}`);
-                                        hasPartialOverlapSameTechnique = true;
+                                        // Solo bloqueamos solapes parciales para técnicas de trabajo a mano (modelado/pintura). 
+                                        if (isHandWorkGroup && isBookingHandWorkGroup) {
+                                            console.log(`[checkSlotAvailability] PARTIAL OVERLAP (HANDWORK GROUP) - booking: ${s.time} (${bookingStartMinutes}-${bookingEndMinutes}min), requested: ${normalizedTime} (${requestedStartMinutes}-${requestedEndMinutes}min), technique: ${bookingTechnique || 'unknown'}`);
+                                            hasPartialOverlapSameTechnique = true;
+                                        } else {
+                                            console.log(`[checkSlotAvailability] PARTIAL OVERLAP (IGNORED FOR WHEEL/OTHER) - booking: ${s.time} (${bookingStartMinutes}-${bookingEndMinutes}min), requested: ${normalizedTime} (${requestedStartMinutes}-${requestedEndMinutes}min), technique: ${bookingTechnique || 'unknown'}`);
+                                        }
                                     } else {
                                         console.log(`[checkSlotAvailability] EXACT TIME MATCH - booking: ${s.time}, requested: ${normalizedTime}, technique: ${bookingTechnique || 'unknown'}`);
                                     }
