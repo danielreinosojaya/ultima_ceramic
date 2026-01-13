@@ -1004,7 +1004,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             
                             // Definir grupos de técnicas que comparten capacidad
                             const isHandWork = (tech: string | undefined) => 
-                                tech === 'molding' || tech === 'painting';
+                                tech === 'molding' || tech === 'painting' || tech === 'hand_modeling';
                             const isHandWorkGroup = isHandWork(requestedTechnique);
                             const isBookingHandWorkGroup = isHandWork(bookingTechnique);
                             
