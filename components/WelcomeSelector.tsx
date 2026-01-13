@@ -64,6 +64,14 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
   
   return (
     <div className="text-center px-4 py-6 sm:p-6 md:p-8 bg-transparent animate-fade-in-up max-w-6xl mx-auto w-full">
+      {/* Hero Section - Bienvenida */}
+      <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif font-bold text-brand-text mb-1.5 sm:mb-2">
+        Bienvenido a Ceramicalma
+      </h2>
+      <p className="text-sm sm:text-base md:text-lg text-brand-secondary mb-6 sm:mb-8">
+        ¿Es tu primera vez con nosotros?
+      </p>
+      
       {/* Hero Section - Focused on Custom Experience */}
       <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif font-bold text-brand-text mb-2 sm:mb-3">
         🎨 Experiencia Personalizada
@@ -293,7 +301,7 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
       {/* Modal: ¿Cómo funciona? */}
       {showHowItWorks && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             {/* Header */}
             <div className="sticky top-0 bg-gradient-to-r from-brand-primary to-brand-accent p-6 text-white flex items-center justify-between">
               <h2 className="text-2xl font-bold">¿Cómo funciona?</h2>
@@ -306,7 +314,7 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
             </div>
 
             {/* Content */}
-            <div className="p-6 space-y-6">
+            <div className="p-6 space-y-6 overflow-y-auto flex-1">
               {/* Modelado a Mano */}
               <div className="border-l-4 border-brand-primary pl-4">
                 <h3 className="text-xl font-bold text-brand-text mb-2">🖐️ Modelado a Mano</h3>
