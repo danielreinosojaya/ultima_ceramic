@@ -59,27 +59,98 @@ const ExperienceCard: React.FC<{
 
 
 export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) => {
+  const [showAllOptions, setShowAllOptions] = React.useState(false);
+  
   return (
     <div className="text-center px-4 py-6 sm:p-6 md:p-8 bg-transparent animate-fade-in-up max-w-6xl mx-auto w-full">
-      {/* Hero Section - Mobile optimized */}
-      <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif font-bold text-brand-text mb-1.5 sm:mb-2">
-        Bienvenido a Ceramicalma
+      {/* Hero Section - Focused on Group Experiences */}
+      <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif font-bold text-brand-text mb-2 sm:mb-3">
+        🎉 Celebra con Amigos
       </h2>
-      <p className="text-sm sm:text-base md:text-lg text-brand-secondary mb-3 sm:mb-4">
-        ¿Es tu primera vez con nosotros?
+      <p className="text-base sm:text-lg text-brand-secondary mb-4 sm:mb-6">
+        El plan perfecto que todos recordarán
       </p>
       
-      {/* Visual Tip - Encourage group bookings */}
-      <div className="bg-gradient-to-r from-purple-50 to-pink-50 border-l-4 border-purple-400 p-3 sm:p-4 rounded-r-lg mb-6 sm:mb-8 text-left max-w-3xl mx-auto">
-        <div className="flex items-start gap-2 sm:gap-3">
-          <span className="text-xl sm:text-2xl">🎉</span>
-          <div className="text-xs sm:text-sm">
-            <p className="font-bold text-purple-900 mb-1">¿Vienes en grupo?</p>
-            <p className="text-purple-700">Las experiencias grupales son perfectas para cumpleaños, despedidas, team building o simplemente pasar un rato creativo con amigos.</p>
-          </div>
+      {/* Social Proof */}
+      <div className="flex items-center justify-center gap-2 text-sm text-gray-600 mb-6">
+        <div className="flex -space-x-2">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-400 border-2 border-white" />
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-orange-400 border-2 border-white" />
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-teal-400 border-2 border-white" />
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-indigo-400 border-2 border-white" />
         </div>
+        <span className="font-medium">+247 personas celebraron este mes</span>
       </div>
       
+      {/* Main CTA - Group Experience First */}
+      <div className="bg-gradient-to-br from-purple-500 to-pink-500 p-6 sm:p-8 rounded-2xl shadow-xl mb-8 text-white">
+        <h3 className="text-2xl sm:text-3xl font-bold mb-3">Experiencias Grupales</h3>
+        <p className="text-base sm:text-lg mb-4 text-white/90">
+          ✨ Crea, ríe y llévate tu obra
+        </p>
+        
+        {/* Quick Info */}
+        <div className="flex flex-wrap justify-center gap-3 sm:gap-4 mb-6 text-sm">
+          <span className="bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full">
+            💰 Desde $45/persona
+          </span>
+          <span className="bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full">
+            👥 3-15 personas
+          </span>
+          <span className="bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full">
+            ⏱️ 2 horas
+          </span>
+        </div>
+        
+        {/* Process Preview */}
+        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 mb-6 text-left">
+          <h4 className="font-semibold mb-3 text-center">📋 Proceso simple en 4 pasos (~5 min):</h4>
+          <div className="space-y-2 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-white text-purple-600 flex items-center justify-center text-xs font-bold flex-shrink-0">1</span>
+              <span>Cuántas personas → 30 seg</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-white text-purple-600 flex items-center justify-center text-xs font-bold flex-shrink-0">2</span>
+              <span>Elige técnicas (torno, moldeo, pintura) → 1 min</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-white text-purple-600 flex items-center justify-center text-xs font-bold flex-shrink-0">3</span>
+              <span>Selecciona fecha y hora → 1 min</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-white text-purple-600 flex items-center justify-center text-xs font-bold flex-shrink-0">4</span>
+              <span>Confirma y paga → 2 min</span>
+            </div>
+          </div>
+        </div>
+        
+        <button
+          onClick={() => onSelect('group_experience')}
+          className="bg-white text-purple-600 font-bold py-4 px-8 rounded-xl w-full hover:bg-gray-50 active:scale-[0.98] transition-all text-lg shadow-lg"
+        >
+          🎉 Planifica Tu Evento Grupal
+        </button>
+      </div>
+      
+      {/* Other Options - Collapsed by default on mobile */}
+      <button
+        onClick={() => setShowAllOptions(!showAllOptions)}
+        className="text-brand-primary font-medium mb-4 hover:underline flex items-center gap-2 mx-auto"
+      >
+        <span>💭 ¿Solo yo o en pareja?</span>
+        <svg 
+          className={`w-4 h-4 transition-transform ${showAllOptions ? 'rotate-180' : ''}`}
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      
+      {showAllOptions && (
+        <>
       {/* Main Options - Stack on mobile, grid on desktop */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-5 md:gap-6 mb-8 sm:mb-10 md:mb-12">
         <ChoiceCard
@@ -102,28 +173,24 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
         />
       </div>
 
-      {/* Section Divider - With Strong Call-to-Action */}
+      {/* Section Divider */}
       <div className="flex items-center gap-4 mb-6 sm:mb-8">
         <div className="flex-1 h-px bg-brand-border/50"></div>
-        <h3 className="text-base sm:text-lg font-bold text-brand-text px-2 flex items-center gap-2">
-          <span className="text-xl">✨</span>
-          Experiencias Grupales
-          <span className="text-xl">✨</span>
-        </h3>
+        <h3 className="text-base sm:text-lg font-semibold text-brand-text px-2">Otras Experiencias</h3>
         <div className="flex-1 h-px bg-brand-border/50"></div>
       </div>
 
-      {/* New Experiences Grid - Highlight Group Options */}
+      {/* New Experiences Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 mb-6 sm:mb-8">
         <ExperienceCard 
-          title="🎨 Experiencia Personalizada"
+          title="Experiencia Personalizada"
           subtitle="Perfecto para grupos de 2-10 personas. Cada uno elige su técnica (torno, moldeo o pintura)."
           buttonText="Crear Experiencia"
           onClick={() => onSelect('custom_experience')}
           isComingSoon={!FEATURE_FLAGS.EXPERIENCIA_PERSONALIZADA}
         />
         <ExperienceCard 
-          title="🏺 Clases Sueltas"
+          title="Clases Sueltas"
           subtitle="Clase individual o grupal. Ideal para probar sin compromiso."
           buttonText="Reservar Clase"
           onClick={() => onSelect('single_class_wizard')}
@@ -204,18 +271,14 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
           isComingSoon={!FEATURE_FLAGS.EXPERIENCIAS_PAREJAS}
         />
         <ExperienceCard 
-          title="Experiencias Grupales"
-          subtitle="Ideal para cumpleaños, team building o reuniones creativas entre amigos."
-          buttonText="Planifica Tu Evento"
-          onClick={() => onSelect('group_experience')}
-        />
-        <ExperienceCard 
           title="Team Building Corporativo"
           subtitle="Fortalece a tu equipo con un taller de cerámica creativo y colaborativo."
           buttonText="Planifica tu Evento"
           onClick={() => onSelect('team_building')}
         />
       </div>
+      </>
+      )}
     </div>
   );
 };
