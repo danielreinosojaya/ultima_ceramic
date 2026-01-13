@@ -319,18 +319,6 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
           </button>
         </div>
 
-        {/* Info Box */}
-        <div className="bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-4 mt-8">
-          <div className="flex gap-3">
-            <InfoCircleIcon className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold text-blue-900 mb-1">Espacio Incluido</p>
-              <p className="text-sm text-blue-800">
-                Todas las experiencias incluyen: A/C, WiFi, mesas, sillas, menaje y servicio. El espacio se renta por hora.
-              </p>
-            </div>
-          </div>
-        </div>
       </div>
     );
   };
