@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { checkSlotAvailability, SlotAvailabilityResult } from '../../services/dataService';
+import { checkSlotAvailability, SlotAvailabilityResult, getAvailability } from '../../services/dataService';
+import type { AvailableSlot, DayKey } from '../../types';
+import { SocialBadge } from '../SocialBadge';
+
+// Nombres de días para mapear Date.getDay() a DayKey
+const DAY_KEYS: DayKey[] = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 interface FreeDateTimePickerProps {
   selectedDate?: string | null;
@@ -8,6 +13,8 @@ interface FreeDateTimePickerProps {
   onSelectTime: (time: string, availability?: SlotAvailabilityResult) => void;
   technique: string;
   participants: number;
+  /** Horarios base por día de la semana (opcional, se carga automáticamente si no se proporciona) */
+  availability?: Record<DayKey, AvailableSlot[]>;
 }
 
 export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
@@ -16,7 +23,8 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   onSelectDate,
   onSelectTime,
   technique,
-  participants
+  participants,
+  availability: propAvailability
 }) => {
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [checkingAvailability, setCheckingAvailability] = useState(false);
@@ -25,6 +33,21 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   const [loadingDayAvailability, setLoadingDayAvailability] = useState(false);
   const hourSectionRef = useRef<HTMLDivElement | null>(null);
   const availabilityRef = useRef<HTMLDivElement | null>(null);
+  
+  // Estado para availability cargada desde el servidor (si no se proporciona como prop)
+  const [loadedAvailability, setLoadedAvailability] = useState<Record<DayKey, AvailableSlot[]> | null>(null);
+  
+  // Usar availability de prop o la cargada del servidor
+  const availability = propAvailability || loadedAvailability;
+  
+  // Cargar availability desde el servidor si no se proporciona como prop
+  useEffect(() => {
+    if (!propAvailability) {
+      getAvailability().then(setLoadedAvailability).catch(err => {
+        console.error('[FreeDateTimePicker] Error loading availability:', err);
+      });
+    }
+  }, [propAvailability]);
 
   // Parsear fecha ISO a fecha local (evitar problema UTC)
   const parseLocalDate = (dateStr: string): Date => {
@@ -32,42 +55,74 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     return new Date(year, month - 1, day);
   };
 
-  // Generar horas disponibles según el día de la semana - TODAS las horas
+  /**
+   * REGLA DE NEGOCIO - TORNO ALFARERO:
+   * - Si participants < 3 (ej: 2 personas): SOLO horarios que coincidan con clases normales
+   * - Si participants >= 3: Cualquier horario dentro del horario de operación
+   * 
+   * Esto aplica específicamente para 'potters_wheel'. Otras técnicas pueden tener horarios libres.
+   */
   const getAvailableHours = (dateStr: string): string[] => {
     const date = parseLocalDate(dateStr);
     const dayOfWeek = date.getDay();
+    const dayKey = DAY_KEYS[dayOfWeek];
+    
+    // Lunes: cerrado
+    if (dayOfWeek === 1) {
+      return [];
+    }
+    
+    // REGLA: Para torno (potters_wheel) con menos de 3 personas → solo horarios fijos
+    const requiresFixedSchedule = technique === 'potters_wheel' && participants < 3;
+    
+    if (requiresFixedSchedule && availability) {
+      // Filtrar solo los horarios de clases normales para esta técnica
+      const fixedSlots = availability[dayKey]?.filter(slot => 
+        slot.technique === 'potters_wheel'
+      ) || [];
+      
+      const fixedHours = fixedSlots.map(slot => slot.time).sort();
+      
+      console.log(`🔒 [2 personas] Horarios FIJOS para ${dateStr} (${dayKey}):`, fixedHours);
+      
+      // Si no hay horarios fijos ese día, devolver array vacío
+      if (fixedHours.length === 0) {
+        console.log(`⚠️ No hay clases de torno programadas para ${dayKey}`);
+      }
+      
+      return fixedHours;
+    }
+    
+    // Para 3+ personas o técnicas sin restricción: generar todos los horarios
     const hours: string[] = [];
 
     if (dayOfWeek === 6) {
       // Sábado: 9am a 7pm (cierre 9pm) - slots cada 30 min hasta 19:00
       for (let hour = 9; hour <= 19; hour++) {
-        for (let min of ['00', '30']) {
-          if (hour === 19 && min === '30') break; // Última hora que inicia: 19:00
+        for (const min of ['00', '30']) {
+          if (hour === 19 && min === '30') break;
           hours.push(`${String(hour).padStart(2, '0')}:${min}`);
         }
       }
     } else if (dayOfWeek === 0) {
       // Domingo: 10am a 4pm (cierre 6pm) - slots cada 30 min hasta 16:00
       for (let hour = 10; hour <= 16; hour++) {
-        for (let min of ['00', '30']) {
-          if (hour === 16 && min === '30') break; // Última hora que inicia: 16:00
+        for (const min of ['00', '30']) {
+          if (hour === 16 && min === '30') break;
           hours.push(`${String(hour).padStart(2, '0')}:${min}`);
         }
       }
-    } else if (dayOfWeek === 1) {
-      // Lunes: cerrado
-      return [];
     } else {
       // Martes a Viernes: 10am a 7pm (cierre 9pm) - slots cada 30 min hasta 19:00
       for (let hour = 10; hour <= 19; hour++) {
-        for (let min of ['00', '30']) {
-          if (hour === 19 && min === '30') break; // Última hora que inicia: 19:00
+        for (const min of ['00', '30']) {
+          if (hour === 19 && min === '30') break;
           hours.push(`${String(hour).padStart(2, '0')}:${min}`);
         }
       }
     }
     
-    console.log(`🕐 Horas generadas para ${dateStr} (día ${dayOfWeek}):`, hours.length, 'slots', hours);
+    console.log(`🆓 [${participants}+ personas] Horarios LIBRES para ${dateStr} (día ${dayOfWeek}):`, hours.length, 'slots');
     return hours;
   };
 
@@ -221,47 +276,34 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   };
 
   return (
-    <div className="space-y-6 animate-fade-in-up">
-      {/* Info */}
-      <div className="bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-4">
-        <div className="flex items-center gap-2">
-          <span className="text-blue-600 text-xl">📅</span>
-          <div>
-            <p className="font-semibold text-blue-900">Elige tu Fecha y Hora</p>
-            <p className="text-sm text-blue-700">
-              Selecciona libremente tu día preferido (cerrado lunes) y horario. El sistema validará la disponibilidad.
-            </p>
-          </div>
-        </div>
-      </div>
-
+    <div className="space-y-5 animate-fade-in-up">
       {/* Calendario */}
-      <div className="bg-white border-2 border-brand-border rounded-xl p-4">
-        <div className="flex items-center justify-between mb-4">
+      <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+        <div className="flex items-center justify-between mb-5">
           <button
             onClick={() => handleMonthChange('prev')}
-            className="p-2 rounded-lg hover:bg-brand-background transition-colors"
+            className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600 hover:text-brand-primary"
           >
             ←
           </button>
-          <h3 className="text-lg font-bold text-brand-text capitalize">{monthName}</h3>
+          <h3 className="text-xl font-bold text-brand-text capitalize">{monthName}</h3>
           <button
             onClick={() => handleMonthChange('next')}
-            className="p-2 rounded-lg hover:bg-brand-background transition-colors"
+            className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600 hover:text-brand-primary"
           >
             →
           </button>
         </div>
 
-        <div className="grid grid-cols-7 gap-2 mb-2">
+        <div className="grid grid-cols-7 gap-1.5 mb-3">
           {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(day => (
-            <div key={day} className="text-center text-xs font-semibold text-gray-600">
+            <div key={day} className="text-center text-xs font-bold text-gray-500 py-1">
               {day}
             </div>
           ))}
         </div>
 
-        <div className="grid grid-cols-7 gap-2">
+        <div className="grid grid-cols-7 gap-1.5">
           {monthDays.map((day, index) => {
             if (!day) return <div key={`empty-${index}`}></div>;
             
@@ -276,12 +318,12 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
                 key={day}
                 onClick={() => handleDayClick(day)}
                 disabled={isDisabled}
-                className={`aspect-square rounded-lg font-semibold transition-all ${
+                className={`aspect-square rounded-xl font-semibold text-sm transition-all ${
                   isSelected
-                    ? 'bg-brand-primary text-white ring-2 ring-brand-primary'
+                    ? 'bg-gradient-to-br from-brand-primary to-brand-accent text-white shadow-lg scale-105'
                     : isDisabled
                     ? 'bg-transparent text-gray-300 cursor-not-allowed'
-                    : 'bg-brand-background text-brand-text hover:bg-brand-primary/10 ring-1 ring-brand-border'
+                    : 'bg-gray-50 text-brand-text hover:bg-brand-primary/10 hover:scale-105 border border-transparent hover:border-brand-primary/20'
                 }`}
               >
                 {day}
@@ -289,40 +331,64 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
             );
           })}
         </div>
-
-        <div className="mt-4 pt-4 border-t border-brand-border">
-          <div className="flex items-center gap-1 text-xs text-gray-600 mb-2">
-            <div className="w-3 h-3 bg-gray-300 rounded"></div>
-            <span>Lunes (cerrado)</span>
-          </div>
-          <p className="text-xs text-gray-600 space-y-1">
-            <div>💡 Cada 30 minutos | Duración: 2 horas</div>
-            <div>📅 Martes a Viernes: 10:00 AM - 7:00 PM</div>
-            <div>📅 Sábados: 9:00 AM - 7:00 PM</div>
-            <div>📅 Domingos: 10:00 AM - 4:00 PM</div>
-          </p>
-        </div>
       </div>
 
       {/* Selector de hora con validación */}
       {selectedDate && (
-        <div ref={hourSectionRef} className="space-y-3">
-          <h4 className="font-bold text-brand-text">
-            Selecciona la Hora - {parseLocalDate(selectedDate).toLocaleDateString('es-ES', { 
-              weekday: 'long', 
-              day: 'numeric', 
-              month: 'long' 
-            })}
-          </h4>
-          
-          <div className="text-sm text-gray-600 mb-3">
-            Selecciona la hora de inicio (las clases duran 2 horas)
+        <div ref={hourSectionRef} className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="font-bold text-brand-text text-lg">
+                Horarios Disponibles
+              </h4>
+              <p className="text-xs text-gray-500 mt-1">
+                {parseLocalDate(selectedDate).toLocaleDateString('es-ES', { 
+                  weekday: 'long', 
+                  day: 'numeric', 
+                  month: 'long' 
+                })} • Duración: 2 horas
+              </p>
+            </div>
             {loadingDayAvailability && (
-              <span className="ml-2 text-blue-600">(cargando disponibilidad...)</span>
+              <div className="flex items-center gap-2 text-brand-primary">
+                <div className="animate-spin w-4 h-4 border-2 border-brand-primary border-t-transparent rounded-full"></div>
+                <span className="text-xs font-medium">Verificando...</span>
+              </div>
             )}
           </div>
           
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+          {/* Mensaje informativo para grupos de 2 personas en torno */}
+          {technique === 'potters_wheel' && participants < 3 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <span className="text-xl">💡</span>
+                <div>
+                  <p className="font-semibold text-amber-900 text-sm">
+                    Horarios de clases programadas
+                  </p>
+                  <p className="text-amber-700 text-xs mt-1">
+                    Para grupos de 2 personas, solo están disponibles los horarios de clases ya programadas. 
+                    <strong> Si deseas elegir cualquier horario, agrega 1 persona más a tu grupo.</strong>
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Mensaje si no hay horarios disponibles */}
+          {getAvailableHours(selectedDate).length === 0 && (
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 text-center">
+              <span className="text-3xl mb-2 block">📭</span>
+              <p className="font-semibold text-gray-700">No hay horarios disponibles este día</p>
+              <p className="text-gray-500 text-sm mt-1">
+                {technique === 'potters_wheel' && participants < 3 
+                  ? 'No hay clases de torno programadas para este día. Prueba otro día o agrega más personas a tu grupo.'
+                  : 'Por favor selecciona otro día.'}
+              </p>
+            </div>
+          )}
+          
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
             {getAvailableHours(selectedDate).map(hour => {
               const isSelected = selectedTime === hour;
               const hourState = hourAvailability[hour];
@@ -333,17 +399,28 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
                   key={hour}
                   onClick={() => handleTimeClick(hour)}
                   disabled={checkingAvailability || loadingDayAvailability || isUnavailable}
-                  className={`p-3 rounded-xl border-2 transition-all ${
+                  className={`relative p-3.5 rounded-xl border-2 font-bold text-sm transition-all ${
                     isSelected
-                      ? 'border-brand-primary bg-brand-primary text-white'
+                      ? 'border-brand-primary bg-gradient-to-br from-brand-primary to-brand-accent text-white shadow-lg scale-105'
                       : isUnavailable
-                        ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : 'border-brand-border bg-white hover:border-brand-primary hover:bg-brand-primary/5'
+                        ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed opacity-50'
+                        : 'border-gray-200 bg-white hover:border-brand-primary hover:bg-brand-primary/5 hover:scale-105'
                   } ${(checkingAvailability || loadingDayAvailability) ? 'opacity-50' : ''}`}
                 >
-                  <div className="font-bold">{hour}</div>
+                  <div className="flex flex-col items-center gap-1">
+                    <span>{hour}</span>
+                    {!isUnavailable && hourState && hourState.capacity && (
+                      <SocialBadge 
+                        currentCount={hourState.capacity.booked} 
+                        maxCapacity={hourState.capacity.max} 
+                        variant="compact" 
+                      />
+                    )}
+                  </div>
                   {isUnavailable && (
-                    <div className="text-xs text-red-500 font-semibold">Sin cupo</div>
+                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
+                      <span className="text-white text-xs font-bold">×</span>
+                    </div>
                   )}
                 </button>
               );

@@ -5,6 +5,7 @@ import * as dataService from '../services/dataService.js';
 import { BookingSidebar } from './BookingSidebar.js';
 import ScheduleDetailPanel from './ScheduleDetailPanel';
 import { CapacityIndicator } from './CapacityIndicator.js';
+import { SocialBadge } from './SocialBadge.js';
 import { InstructorTag } from './InstructorTag.js';
 import { DAY_NAMES } from '../constants.js';
 
@@ -187,6 +188,17 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                 <p className="text-brand-secondary mb-2">
                   {bookingMode === 'monthly' ? 'Selecciona el horario para tus clases mensuales' : 'Selecciona el horario para tus clases'} <span className="font-bold text-brand-text">{pkg.name}</span>.
                 </p>
+                
+                {/* Social Proof Tip */}
+                <div className="bg-gradient-to-r from-blue-50 to-purple-50 border-l-4 border-blue-400 p-3 rounded-r-lg mb-4 animate-fade-in-fast">
+                  <div className="flex items-start gap-2">
+                    <span className="text-xl">💡</span>
+                    <div className="text-sm">
+                      <p className="font-semibold text-blue-900 mb-1">Tip: Clases con más participantes</p>
+                      <p className="text-blue-700 text-xs">Las clases marcadas con 🔥 o 👥 son perfectas para conocer gente y hacer amigos. ¡Únete a la comunidad!</p>
+                    </div>
+                  </div>
+                </div>
                 {bookingMode === 'flexible' && firstSelectionDate && bookingWindowEndDate && (
                     <div className="text-xs text-center font-semibold bg-amber-100 text-amber-800 p-2 rounded-md mb-4 animate-fade-in-fast">
                       {`Puedes seleccionar clases hasta el ${bookingWindowEndDate.toLocaleDateString(language, { month: 'long', day: 'numeric' })}.`}
@@ -241,7 +253,10 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                                         'bg-white hover:border-brand-primary hover:shadow-sm'
                                       }`}
                                     >
-                                      <span className="font-semibold text-sm text-brand-text">{slot.time}</span>
+                                      <div className="flex items-center justify-between gap-1">
+                                        <span className="font-semibold text-sm text-brand-text">{slot.time}</span>
+                                        <SocialBadge currentCount={slot.paidBookingsCount} maxCapacity={slot.maxCapacity} variant="compact" />
+                                      </div>
                                       <InstructorTag instructorId={slot.instructorId} instructors={appData.instructors} />
                                       <CapacityIndicator count={slot.paidBookingsCount} max={slot.maxCapacity} capacityMessages={appData.capacityMessages} />
                                       {isFull && <div className="absolute top-1 right-1 text-[8px] font-bold bg-red-500 text-white px-1 rounded-sm">LLENO</div>}
@@ -327,7 +342,10 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                             }`}
                           >
                             <div>
-                              <span className="font-semibold text-md text-brand-text">{slot.time}</span>
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <span className="font-semibold text-md text-brand-text">{slot.time}</span>
+                                <SocialBadge currentCount={slot.paidBookingsCount} maxCapacity={slot.maxCapacity} variant="full" />
+                              </div>
                               <InstructorTag instructorId={slot.instructorId} instructors={appData.instructors} />
                             </div>
                             <CapacityIndicator count={slot.paidBookingsCount} max={slot.maxCapacity} capacityMessages={appData.capacityMessages} />

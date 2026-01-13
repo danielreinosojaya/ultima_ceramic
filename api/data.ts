@@ -387,6 +387,41 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json(info);
     }
 
+    // 🔍 DEBUG: Ver bankDetails en BD (DISABLED - ya no necesario)
+    if (false && action === 'debugBankDetails') {
+        try {
+            const { rows } = await sql`SELECT key, value FROM settings WHERE key = 'bankDetails'`;
+            console.log('[debugBankDetails] Raw DB rows:', rows);
+            const bankDetailsRaw = rows[0]?.value;
+            console.log('[debugBankDetails] Raw value type:', typeof bankDetailsRaw);
+            console.log('[debugBankDetails] Raw value:', bankDetailsRaw);
+            
+            let parsed = bankDetailsRaw;
+            if (typeof bankDetailsRaw === 'string') {
+                try {
+                    parsed = JSON.parse(bankDetailsRaw);
+                } catch (e) {
+                    console.error('[debugBankDetails] Error parsing:', e);
+                }
+            }
+            
+            return res.status(200).json({
+                success: true,
+                rawValue: bankDetailsRaw,
+                parsedValue: parsed,
+                type: typeof bankDetailsRaw,
+                isArray: Array.isArray(parsed),
+                length: Array.isArray(parsed) ? parsed.length : 'not-array'
+            });
+        } catch (error) {
+            console.error('[debugBankDetails] Error:', error);
+            return res.status(500).json({
+                success: false,
+                error: error instanceof Error ? error.message : String(error)
+            });
+        }
+    }
+
     // � FIX CAPACITY: Resetear classCapacity a valores correctos
     if (action === 'fixClassCapacity') {
         console.log('🔧 [FIX] Reseteando classCapacity a valores correctos...');
@@ -957,35 +992,74 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         // Contar participantes que solapan temporalmente con el slot solicitado
                         let bookedParticipants = 0;
                         const bookingsInSlot: any[] = [];
+                        let hasPartialOverlapSameTechnique = false; // Solapamiento parcial con MISMA técnica/grupo
 
                         for (const booking of bookings) {
                             if (!booking.slots || !Array.isArray(booking.slots)) continue;
                             
-                            // Técnica del booking
+                            // Técnica del booking (extraer de técnica o de producto)
                             const bookingTechnique = booking.technique || (booking.product?.details as any)?.technique;
-                            if (!bookingTechnique) continue;
-
-                            // IMPORTANTE: Solo contar si es EXACTAMENTE la misma técnica
-                            if (bookingTechnique !== requestedTechnique) continue;
+                            
+                            // Definir grupos de técnicas que comparten capacidad
+                            const isHandWork = (tech: string | undefined) => 
+                                tech === 'molding' || tech === 'painting';
+                            const isHandWorkGroup = isHandWork(requestedTechnique);
+                            const isBookingHandWorkGroup = isHandWork(bookingTechnique);
+                            
+                            // Determinar si la técnica del booking compite por capacidad
+                            let techniquesMatch = false;
+                            if (isHandWorkGroup && isBookingHandWorkGroup) {
+                                // Ambas son trabajo manual (molding + painting comparten capacidad)
+                                techniquesMatch = true;
+                            } else if (!isHandWorkGroup && bookingTechnique === requestedTechnique) {
+                                // Misma técnica (ej: torno vs torno)
+                                techniquesMatch = true;
+                            } else if (!isHandWorkGroup && !bookingTechnique) {
+                                // Booking sin técnica especificada - contar para ser conservador
+                                techniquesMatch = true;
+                            }
+                            
+                            if (!techniquesMatch) {
+                                console.log(`[checkSlotAvailability] Skipping booking (technique incompatible): booking=${bookingTechnique}, requested=${requestedTechnique}`);
+                                continue;
+                            }
 
                             // Verificar si hay overlap temporal en la misma fecha
-                            const hasOverlapingSlot = booking.slots.some((s: any) => {
+                            const overlapInfo = booking.slots.find((s: any) => {
                                 if (s.date !== requestedDate) return false;
 
                                 const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
                                 const bookingEndMinutes = bookingStartMinutes + (2 * 60);
 
-                                return hasTimeOverlap(requestedStartMinutes, requestedEndMinutes, bookingStartMinutes, bookingEndMinutes);
+                                const hasOverlap = hasTimeOverlap(requestedStartMinutes, requestedEndMinutes, bookingStartMinutes, bookingEndMinutes);
+                                
+                                // Verificar si es EXACTAMENTE el mismo horario
+                                const isSameExactTime = bookingStartMinutes === requestedStartMinutes && 
+                                                       bookingEndMinutes === requestedEndMinutes;
+                                
+                                if (hasOverlap) {
+                                    if (!isSameExactTime) {
+                                        console.log(`[checkSlotAvailability] PARTIAL OVERLAP (SAME GROUP) - booking: ${s.time} (${bookingStartMinutes}-${bookingEndMinutes}min), requested: ${normalizedTime} (${requestedStartMinutes}-${requestedEndMinutes}min), technique: ${bookingTechnique || 'unknown'}`);
+                                        hasPartialOverlapSameTechnique = true;
+                                    } else {
+                                        console.log(`[checkSlotAvailability] EXACT TIME MATCH - booking: ${s.time}, requested: ${normalizedTime}, technique: ${bookingTechnique || 'unknown'}`);
+                                    }
+                                }
+                                
+                                return isSameExactTime; // Solo retornar true si es exactamente el mismo horario
                             });
 
-                            if (hasOverlapingSlot) {
+                            // Si es exactamente el mismo horario, contar participantes
+                            if (overlapInfo) {
                                 const participantCount = booking.participants || 1;
                                 bookedParticipants += participantCount;
                                 bookingsInSlot.push({
                                     id: booking.id,
                                     participants: participantCount,
                                     userInfo: { name: booking.userInfo?.name },
-                                    isPaid: booking.isPaid
+                                    isPaid: booking.isPaid,
+                                    bookingTechnique: bookingTechnique || 'unknown',
+                                    requestedTechnique: requestedTechnique
                                 });
                             }
                         }
@@ -993,9 +1067,11 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         // Verificar capacidad (override válido o fallback por técnica)
                         const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
                         const availableCapacity = maxCapacity - bookedParticipants;
-                        const canBook = availableCapacity >= requestedParticipants;
+                        
+                        // RECHAZAR SI hay solapamiento parcial (no es exactamente el mismo horario) con técnicas que compiten por capacidad
+                        const canBook = !hasPartialOverlapSameTechnique && (availableCapacity >= requestedParticipants);
 
-                        console.log(`[checkSlotAvailability] maxCapacity: ${maxCapacity}, booked: ${bookedParticipants}, available: ${availableCapacity}, canBook: ${canBook}`);
+                        console.log(`[checkSlotAvailability] maxCapacity: ${maxCapacity}, booked: ${bookedParticipants}, available: ${availableCapacity}, hasPartialOverlapSameTechnique: ${hasPartialOverlapSameTechnique}, canBook: ${canBook}`);
 
                         const responseData = {
                             success: true,
@@ -1010,9 +1086,11 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                 available: availableCapacity
                             },
                             bookingsCount: bookingsInSlot.length,
-                            message: canBook 
-                                ? `Hay ${availableCapacity} cupos disponibles de ${maxCapacity}` 
-                                : `Solo hay ${availableCapacity} cupos disponibles, necesitas ${requestedParticipants}`
+                            message: hasPartialOverlapSameTechnique
+                                ? `No disponible: hay un evento solapando en este horario. Intenta otro horario.`
+                                : (canBook 
+                                    ? `Hay ${availableCapacity} cupos disponibles de ${maxCapacity}` 
+                                    : `Solo hay ${availableCapacity} cupos disponibles, necesitas ${requestedParticipants}`)
                         };
 
                         // No cachear - datos en tiempo real
@@ -4556,7 +4634,14 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
 
     // COUPLES_EXPERIENCE VALIDATION
     const isCouplesExperience = body.productType === 'COUPLES_EXPERIENCE';
-    const technique = (body as any).technique;
+    
+    // Extract technique: first from direct field, then from product.details
+    let technique = (body as any).technique;
+    if (!technique && body.product && (body.product as any).details) {
+      technique = (body.product as any).details.technique;
+    }
+    
+    console.log(`[addBookingAction] productType=${body.productType}, technique=${technique} (from body.technique=${(body as any).technique}, from product.details=${body.product && (body.product as any).details ? (body.product as any).details.technique : 'N/A'})`);
 
     if (isCouplesExperience) {
       // Must have exactly 1 slot
