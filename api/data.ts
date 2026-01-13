@@ -989,10 +989,10 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         const requestedStartMinutes = timeToMinutes(normalizedTime);
                         const requestedEndMinutes = requestedStartMinutes + (2 * 60); // 2 horas
 
-                        // Contar participantes que solapan temporalmente con el slot solicitado
-                        let bookedParticipants = 0;
+                        // Contar participantes que solapan temporalmente (mismo grupo de capacidad)
+                        // Incluye exactos y parciales para validar capacidad real.
+                        let overlappingParticipants = 0;
                         const bookingsInSlot: any[] = [];
-                        let hasPartialOverlapSameTechnique = false; // Solapamiento parcial con MISMA técnica/grupo
 
                         for (const booking of bookings) {
                             if (!booking.slots || !Array.isArray(booking.slots)) continue;
@@ -1038,26 +1038,22 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                                        bookingEndMinutes === requestedEndMinutes;
                                 
                                 if (hasOverlap) {
+                                    const participantCount = booking.participants || 1;
+                                    overlappingParticipants += participantCount; // suma para capacidad real (exacto o parcial)
+
                                     if (!isSameExactTime) {
-                                        // Solo bloqueamos solapes parciales para técnicas de trabajo a mano (modelado/pintura). 
-                                        if (isHandWorkGroup && isBookingHandWorkGroup) {
-                                            console.log(`[checkSlotAvailability] PARTIAL OVERLAP (HANDWORK GROUP) - booking: ${s.time} (${bookingStartMinutes}-${bookingEndMinutes}min), requested: ${normalizedTime} (${requestedStartMinutes}-${requestedEndMinutes}min), technique: ${bookingTechnique || 'unknown'}`);
-                                            hasPartialOverlapSameTechnique = true;
-                                        } else {
-                                            console.log(`[checkSlotAvailability] PARTIAL OVERLAP (IGNORED FOR WHEEL/OTHER) - booking: ${s.time} (${bookingStartMinutes}-${bookingEndMinutes}min), requested: ${normalizedTime} (${requestedStartMinutes}-${requestedEndMinutes}min), technique: ${bookingTechnique || 'unknown'}`);
-                                        }
+                                        console.log(`[checkSlotAvailability] PARTIAL OVERLAP (COUNTED) - booking: ${s.time} (${bookingStartMinutes}-${bookingEndMinutes}min), requested: ${normalizedTime} (${requestedStartMinutes}-${requestedEndMinutes}min), technique: ${bookingTechnique || 'unknown'}`);
                                     } else {
                                         console.log(`[checkSlotAvailability] EXACT TIME MATCH - booking: ${s.time}, requested: ${normalizedTime}, technique: ${bookingTechnique || 'unknown'}`);
                                     }
                                 }
-                                
+
                                 return isSameExactTime; // Solo retornar true si es exactamente el mismo horario
                             });
 
                             // Si es exactamente el mismo horario, contar participantes
                             if (overlapInfo) {
                                 const participantCount = booking.participants || 1;
-                                bookedParticipants += participantCount;
                                 bookingsInSlot.push({
                                     id: booking.id,
                                     participants: participantCount,
@@ -1071,12 +1067,10 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
 
                         // Verificar capacidad (override válido o fallback por técnica)
                         const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
-                        const availableCapacity = maxCapacity - bookedParticipants;
-                        
-                        // RECHAZAR SI hay solapamiento parcial (no es exactamente el mismo horario) con técnicas que compiten por capacidad
-                        const canBook = !hasPartialOverlapSameTechnique && (availableCapacity >= requestedParticipants);
+                        const availableCapacity = maxCapacity - overlappingParticipants;
+                        const canBook = availableCapacity >= requestedParticipants;
 
-                        console.log(`[checkSlotAvailability] maxCapacity: ${maxCapacity}, booked: ${bookedParticipants}, available: ${availableCapacity}, hasPartialOverlapSameTechnique: ${hasPartialOverlapSameTechnique}, canBook: ${canBook}`);
+                        console.log(`[checkSlotAvailability] maxCapacity: ${maxCapacity}, booked(overlap): ${overlappingParticipants}, available: ${availableCapacity}, canBook: ${canBook}`);
 
                         const responseData = {
                             success: true,
@@ -1087,15 +1081,13 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             requestedParticipants,
                             capacity: {
                                 max: maxCapacity,
-                                booked: bookedParticipants,
+                                booked: overlappingParticipants,
                                 available: availableCapacity
                             },
                             bookingsCount: bookingsInSlot.length,
-                            message: hasPartialOverlapSameTechnique
-                                ? `No disponible: hay un evento solapando en este horario. Intenta otro horario.`
-                                : (canBook 
-                                    ? `¡Disponible! ${availableCapacity} cupos libres` 
-                                    : `Solo hay ${availableCapacity} cupos disponibles, necesitas ${requestedParticipants}`)
+                            message: canBook 
+                                ? `¡Disponible! ${availableCapacity} cupos libres` 
+                                : `Solo hay ${availableCapacity} cupos disponibles, necesitas ${requestedParticipants}`
                         };
 
                         // No cachear - datos en tiempo real
