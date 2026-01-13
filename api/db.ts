@@ -347,7 +347,7 @@ const seedSetting = async (key: string, value: any) => {
   await sql`
     INSERT INTO settings (key, value) 
     VALUES (${key}, ${JSON.stringify(value)}) 
-    ON CONFLICT (key) DO NOTHING;
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
   `;
 };
 
