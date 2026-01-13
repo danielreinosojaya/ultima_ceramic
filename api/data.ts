@@ -1089,7 +1089,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             message: hasPartialOverlapSameTechnique
                                 ? `No disponible: hay un evento solapando en este horario. Intenta otro horario.`
                                 : (canBook 
-                                    ? `Hay ${availableCapacity} cupos disponibles de ${maxCapacity}` 
+                                    ? `¡Disponible! ${availableCapacity} cupos libres` 
                                     : `Solo hay ${availableCapacity} cupos disponibles, necesitas ${requestedParticipants}`)
                         };
 
