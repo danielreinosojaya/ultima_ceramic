@@ -1013,11 +1013,14 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             if (isHandWorkGroup && isBookingHandWorkGroup) {
                                 // Ambas son trabajo manual (molding + painting comparten capacidad)
                                 techniquesMatch = true;
+                            } else if (isHandWorkGroup && !bookingTechnique) {
+                                // Requested es handwork pero booking no tiene técnica - contar por precaución
+                                techniquesMatch = true;
                             } else if (!isHandWorkGroup && bookingTechnique === requestedTechnique) {
                                 // Misma técnica (ej: torno vs torno)
                                 techniquesMatch = true;
                             } else if (!isHandWorkGroup && !bookingTechnique) {
-                                // Booking sin técnica especificada - contar para ser conservador
+                                // Requested no es handwork y booking tampoco tiene técnica - contar para ser conservador
                                 techniquesMatch = true;
                             }
                             
