@@ -387,40 +387,6 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json(info);
     }
 
-    // 🔍 DEBUG: Ver bankDetails en BD (DISABLED - ya no necesario)
-    if (false && action === 'debugBankDetails') {
-        try {
-            const { rows } = await sql`SELECT key, value FROM settings WHERE key = 'bankDetails'`;
-            console.log('[debugBankDetails] Raw DB rows:', rows);
-            const bankDetailsRaw = rows[0]?.value;
-            console.log('[debugBankDetails] Raw value type:', typeof bankDetailsRaw);
-            console.log('[debugBankDetails] Raw value:', bankDetailsRaw);
-            
-            let parsed = bankDetailsRaw;
-            if (typeof bankDetailsRaw === 'string') {
-                try {
-                    parsed = JSON.parse(bankDetailsRaw);
-                } catch (e) {
-                    console.error('[debugBankDetails] Error parsing:', e);
-                }
-            }
-            
-            return res.status(200).json({
-                success: true,
-                rawValue: bankDetailsRaw,
-                parsedValue: parsed,
-                type: typeof bankDetailsRaw,
-                isArray: Array.isArray(parsed),
-                length: Array.isArray(parsed) ? parsed.length : 'not-array'
-            });
-        } catch (error) {
-            console.error('[debugBankDetails] Error:', error);
-            return res.status(500).json({
-                success: false,
-                error: error instanceof Error ? error.message : String(error)
-            });
-        }
-    }
 
     // � FIX CAPACITY: Resetear classCapacity a valores correctos
     if (action === 'fixClassCapacity') {
@@ -752,8 +718,15 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     break;
                 }
                 case 'getCustomers': {
+                    // ⚡ OPTIMIZACIÓN: Usar pagination y caché agresivo (10 minutos)
+                    const page = req.query.page ? parseInt(req.query.page as string) : 1;
+                    const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+                    const offset = (page - 1) * limit;
+                    
+                    console.log(`[getCustomers] Page ${page}, Limit ${limit}`);
+                    
                     // Get all unique customers from bookings first
-                    const { rows: bookings } = await sql`SELECT * FROM bookings ORDER BY created_at DESC`;
+                    const { rows: bookings } = await sql`SELECT * FROM bookings WHERE status != 'expired' ORDER BY created_at DESC LIMIT 1000`;
                     const validBookings = bookings.filter(booking => booking && typeof booking === 'object');
                     const parsedBookings = validBookings.map(parseBookingFromDB).filter(Boolean);
                     const customerMap = new Map<string, Customer>();
@@ -784,12 +757,11 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         }
                     });
 
-                    // Also get standalone customers from customers table (e.g., delivery-only customers)
-                    const { rows: standaloneCustomers } = await sql`SELECT * FROM customers`;
+                    // Also get standalone customers from customers table
+                    const { rows: standaloneCustomers } = await sql`SELECT * FROM customers ORDER BY first_name ASC LIMIT 500`;
                     standaloneCustomers.forEach(customerRow => {
                         const email = customerRow.email;
                         if (!customerMap.has(email)) {
-                            // Create customer from customers table data
                             customerMap.set(email, {
                                 email,
                                 userInfo: {
@@ -806,9 +778,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                 lastBookingDate: new Date(0),
                                 deliveries: []
                             });
-                        }
-                        // If customer exists from bookings but has additional phone data from customers table, merge it
-                        else {
+                        } else {
                             const existing = customerMap.get(email)!;
                             if (customerRow.phone && !existing.userInfo.phone) {
                                 existing.userInfo.phone = customerRow.phone;
@@ -818,10 +788,21 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             }
                         }
                     });
-                    data = Array.from(customerMap.values());
-                    console.log(`[API] Generated ${data.length} customers from ${parsedBookings.length} bookings`);
-                    // ✅ OPTIMIZACIÓN: Cache CDN 5 minutos (datos dinámicos)
-                    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+                    
+                    const allCustomers = Array.from(customerMap.values());
+                    const paginatedCustomers = allCustomers.slice(offset, offset + limit);
+                    
+                    console.log(`[API] Generated ${allCustomers.length} customers, returning ${paginatedCustomers.length} for page ${page}`);
+                    
+                    // ✅ CACHE STRATEGY: 30 segundos para permitir updates rápidos después de pagos/bookings
+                    res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
+                    data = {
+                        customers: paginatedCustomers,
+                        total: allCustomers.length,
+                        page,
+                        limit,
+                        pages: Math.ceil(allCustomers.length / limit)
+                    };
                     break;
                 }
 
@@ -843,9 +824,22 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
 
                     console.log(`[getAvailableSlots] Searching: technique=${requestedTechnique}, participants=${requestedParticipants}, from=${searchStartDate.toISOString().split('T')[0]}, days=${searchDays}`);
 
+                    // ⚡ OPTIMIZACIÓN: Solo cargar bookings relevantes para el rango de fechas buscado
+                    // No necesitamos bookings de 2023 para calcular disponibilidad de febrero 2026
+                    const rangeStart = new Date(searchStartDate);
+                    rangeStart.setDate(rangeStart.getDate() - 7); // 7 días buffer
+                    const rangeEnd = new Date(searchStartDate);
+                    rangeEnd.setDate(rangeEnd.getDate() + searchDays + 7); // +7 días buffer
+                    
                     // Obtener datos necesarios
                     const [bookingsResult, instructorsResult] = await Promise.all([
-                        sql`SELECT * FROM bookings WHERE status != 'expired' ORDER BY created_at DESC`,
+                        sql`
+                            SELECT * FROM bookings 
+                            WHERE status != 'expired'
+                            AND created_at >= ${rangeStart.toISOString()}
+                            ORDER BY created_at DESC
+                            LIMIT 500
+                        `,
                         sql`SELECT * FROM instructors ORDER BY name ASC`
                     ]);
 
@@ -1021,8 +1015,21 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     const requestedParticipants = parseInt(participants as string);
 
                     try {
-                        // Obtener datos usando funciones helper
-                        const bookingsResult = await sql`SELECT * FROM bookings WHERE status != 'expired' ORDER BY created_at DESC`;
+                        // ⚡ OPTIMIZACIÓN: Solo cargar bookings del día específico a verificar
+                        const targetDate = new Date(requestedDate);
+                        const dayStart = new Date(targetDate);
+                        dayStart.setHours(0, 0, 0, 0);
+                        const dayEnd = new Date(targetDate);
+                        dayEnd.setHours(23, 59, 59, 999);
+                        
+                        // Obtener solo bookings del día
+                        const bookingsResult = await sql`
+                            SELECT * FROM bookings 
+                            WHERE status != 'expired'
+                            AND created_at >= ${dayStart.toISOString()}
+                            AND created_at <= ${dayEnd.toISOString()}
+                            ORDER BY created_at DESC
+                        `;
                         const bookings = bookingsResult.rows.map(parseBookingFromDB);
                         
                         const { scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
@@ -1199,8 +1206,19 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     data = [];
                 }
             } else if (key === 'bookings') {
-                const { rows: bookings } = await sql`SELECT * FROM bookings ORDER BY created_at DESC`;
-                console.log(`API: Raw database query returned ${bookings.length} rows`);
+                // ⚡ OPTIMIZACIÓN: Cargar solo bookings recientes (últimos 90 días) por defecto
+                // Bookings antiguos se cargan on-demand cuando usuario busca específicamente
+                const daysLimit = parseInt(req.query.daysLimit as string) || 90;
+                const limitDate = new Date();
+                limitDate.setDate(limitDate.getDate() - daysLimit);
+                
+                const { rows: bookings } = await sql`
+                    SELECT * FROM bookings 
+                    WHERE created_at >= ${limitDate.toISOString()}
+                    ORDER BY created_at DESC
+                    LIMIT 1000
+                `;
+                console.log(`API: Loaded ${bookings.length} bookings from last ${daysLimit} days`);
                 
                 if (bookings.length === 0) {
                     console.warn('API: No bookings found in database');
@@ -1214,11 +1232,22 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     console.log(`API: Successfully processed ${processedBookings.length} bookings out of ${bookings.length} raw bookings`);
                     data = processedBookings;
                 }
-                // ✅ OPTIMIZACIÓN: Cache CDN 5 minutos (datos dinámicos)
-                res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+                // ✅ CACHE STRATEGY: Cache CDN 30 segundos para balance entre performance y freshness
+                // Permite updates rápidos después de mutations sin sacrificar totalmente CDN
+                res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
             } else if (key === 'customers') {
-                // Get all unique customers from bookings
-                const { rows: bookings } = await sql`SELECT * FROM bookings ORDER BY created_at DESC`;
+                // ⚡ OPTIMIZACIÓN: Cargar solo bookings recientes para generar lista de customers activos
+                const daysLimit = 90;
+                const limitDate = new Date();
+                limitDate.setDate(limitDate.getDate() - daysLimit);
+                
+                const { rows: bookings } = await sql`
+                    SELECT * FROM bookings 
+                    WHERE created_at >= ${limitDate.toISOString()}
+                    ORDER BY created_at DESC
+                    LIMIT 1000
+                `;
+                console.log(`API: Loading customers from ${bookings.length} recent bookings`);
                 const validBookings = bookings.filter(booking => booking && typeof booking === 'object');
                 const parsedBookings = validBookings.map(parseBookingFromDB).filter(Boolean);
                 
