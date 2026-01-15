@@ -292,7 +292,7 @@ export const DEFAULT_BANK_DETAILS: BankDetails[] = [
         bankName: "Banco Bolivariano",
         accountHolder: "Carolina Isabel Massuh Moran",
         accountNumber: "0004381834",
-        accountType: "Cuenta Corriente",
+        accountType: "Ahorros",
         taxId: "0921343935"
     }
 ];

@@ -866,6 +866,55 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         const dateStr = currentDate.toISOString().split('T')[0];
                         const dayKey = DAY_NAMES[currentDate.getDay()];
                         
+                        // AGREGAR CLASES DE INTRODUCCIÓN DE TORNO PARA GRUPOS
+                        // Martes 19:00 y Miércoles 11:00 para grupos de 2+ personas
+                        if (requestedTechnique === 'potters_wheel' && requestedParticipants >= 2) {
+                            if ((dayKey === 'Tuesday' && currentDate >= searchStartDate) || 
+                                (dayKey === 'Wednesday' && currentDate >= searchStartDate)) {
+                                
+                                const introTime = dayKey === 'Tuesday' ? '19:00' : '11:00';
+                                const slotStartMinutes = timeToMinutes(introTime);
+                                const slotEndMinutes = slotStartMinutes + (2 * 60); // 2 horas
+                                
+                                // Contar participantes que se solapan con este slot de introducción
+                                const bookingsOverlappingIntro = bookings.filter((b: any) => {
+                                    if (!b.slots || !Array.isArray(b.slots)) return false;
+                                    
+                                    const bookingTechnique = b.technique || (b.product?.details as any)?.technique;
+                                    if (bookingTechnique !== 'potters_wheel') return false;
+                                    
+                                    return b.slots.some((s: any) => {
+                                        if (s.date !== dateStr) return false;
+                                        
+                                        const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
+                                        const bookingEndMinutes = bookingStartMinutes + (2 * 60);
+                                        
+                                        return hasTimeOverlap(slotStartMinutes, slotEndMinutes, bookingStartMinutes, bookingEndMinutes);
+                                    });
+                                });
+                                
+                                const bookedParticipantsIntro = bookingsOverlappingIntro.reduce((sum: number, b: any) => {
+                                    return sum + (b.participants || 1);
+                                }, 0);
+                                
+                                const maxCapacityIntro = resolveCapacity(dateStr, 'potters_wheel', maxCapacityMap, scheduleOverrides);
+                                const availableCapacityIntro = maxCapacityIntro - bookedParticipantsIntro;
+                                
+                                if (availableCapacityIntro >= requestedParticipants) {
+                                    availableSlots.push({
+                                        date: dateStr,
+                                        time: introTime,
+                                        available: availableCapacityIntro,
+                                        total: maxCapacityIntro,
+                                        canBook: true,
+                                        instructor: 'Instructor',
+                                        instructorId: 0,
+                                        technique: 'potters_wheel'
+                                    });
+                                }
+                            }
+                        }
+                        
                         // Obtener slots del día (availability o override)
                         const override = scheduleOverrides[dateStr];
                         const hasOverride = override !== undefined;

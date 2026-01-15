@@ -23,8 +23,8 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
   const participantsSection = useRef<HTMLDivElement>(null);
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [technique, setTechnique] = useState<GroupTechnique>('hand_modeling');
-  const [participants, setParticipants] = useState<number>(1);
-  const [participantsInput, setParticipantsInput] = useState<string>('1');
+  const [participants, setParticipants] = useState<number>(2);
+  const [participantsInput, setParticipantsInput] = useState<string>('2');
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<AvailableSlotResult | null>(null);
   const [selectedPiece, setSelectedPiece] = useState<string | null>(null);
   const [pricing, setPricing] = useState<ExperiencePricing | null>(null);
@@ -107,6 +107,11 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
       setError('');
       setStep(2);
     } else if (step === 2) {
+      // Validación: mínimo 2 personas para experiencias grupales
+      if (participants < 2) {
+        setError('❌ Las experiencias personalizadas requieren mínimo 2 personas');
+        return;
+      }
       // Validate painting piece selection if needed
       if (technique === 'painting' && !selectedPiece) {
         setError('Por favor selecciona una pieza para pintar');
@@ -208,6 +213,18 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
           </div>
 
           <div className="space-y-4">
+            {/* Advertencia: Mínimo 2 personas */}
+            <div className="bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-4">
+              <div className="flex items-start gap-3">
+                <span className="text-xl">👥</span>
+                <div>
+                  <p className="font-semibold text-blue-900">Experiencia Personalizada para Grupos</p>
+                  <p className="text-sm text-blue-700 mt-1">
+                    ⚠️ <strong>Mínimo 2 personas</strong> - Esta experiencia es para grupos. Si vienes solo, elige una clase individual.
+                  </p>
+                </div>
+              </div>
+            </div>
             {/* Technique Selection (within Step 2) */}
             <div>
               <label className="block text-sm font-bold mb-3">Elige tu técnica:</label>
@@ -278,13 +295,22 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
                   }
                   
                   const val = parseInt(inputVal);
+                  
+                  // Mínimo 2 personas para experiencias grupales
+                  if (val < 2) {
+                    setParticipantsInput('2');
+                    setParticipants(2);
+                    return;
+                  }
+                  
+                  // Máximo según técnica
                   const maxCap = TECHNIQUE_INFO[technique].maxCapacity;
                   
                   // Actualizar input visualmente
                   setParticipantsInput(inputVal);
                   
                   // Actualizar estado solo si es válido
-                  if (val >= 1 && val <= maxCap) {
+                  if (val >= 2 && val <= maxCap) {
                     setParticipants(val);
                   }
                 }}

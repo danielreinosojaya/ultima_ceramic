@@ -81,7 +81,17 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
         slot.technique === 'potters_wheel'
       ) || [];
       
-      const fixedHours = fixedSlots.map(slot => slot.time).sort();
+      let fixedHours = fixedSlots.map(slot => slot.time).sort();
+      
+      // AGREGAR HORARIOS ESPECIALES DE INTRODUCCIÓN PARA GRUPOS DE 2 PERSONAS
+      // Martes 19:00 y Miércoles 11:00 son clases de introducción de torno
+      if (dayOfWeek === 2) { // Tuesday
+        fixedHours.push('19:00');
+      } else if (dayOfWeek === 3) { // Wednesday
+        fixedHours.push('11:00');
+      }
+      
+      fixedHours = [...new Set(fixedHours)].sort(); // Eliminar duplicados y ordenar
       
       console.log(`🔒 [2 personas] Horarios FIJOS para ${dateStr} (${dayKey}):`, fixedHours);
       

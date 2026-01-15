@@ -181,7 +181,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [menuTotal, setMenuTotal] = useState(0);
   const [showChildPieceSelector, setShowChildPieceSelector] = useState(false);
-  const [participantsInput, setParticipantsInput] = useState<string>('1');
+  const [participantsInput, setParticipantsInput] = useState<string>('2');
   
   // Nuevo estado para fecha/hora con validación de disponibilidad
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -220,7 +220,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
               setState((prev) => ({ 
                 ...prev, 
                 experienceType: 'ceramic_only',
-                config: { participants: 1 } // Inicializar config
+                config: { participants: 2 } // Inicializar con mínimo 2 personas
               }));
               handleNext();
             }}
@@ -386,6 +386,22 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
           <label className="block text-sm font-semibold text-brand-text mb-3">
             {isCelebration ? 'Participantes Activos (harán cerámica)' : 'Número de Participantes'}
           </label>
+          
+          {/* Advertencia para experiencias no-celebración */}
+          {!isCelebration && (
+            <div className="bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-4 mb-4">
+              <div className="flex items-start gap-3">
+                <span className="text-xl">👥</span>
+                <div>
+                  <p className="font-semibold text-blue-900">Experiencia Grupal</p>
+                  <p className="text-sm text-blue-700 mt-1">
+                    ⚠️ <strong>Mínimo 2 personas</strong> - Estas experiencias son para grupos. Si vienes solo, elige una clase individual.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          
           <input
             type="text"
             inputMode="numeric"
@@ -407,11 +423,24 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
               const val = parseInt(inputVal);
               const maxCap = state.technique ? TECHNIQUES.find((t) => t.id === state.technique)?.maxCapacity || 22 : 22;
               
+              // VALIDACIÓN: Mínimo 2 personas para experiencias no-celebración
+              const minParticipants = isCelebration ? 1 : 2;
+              if (val < minParticipants) {
+                setParticipantsInput(minParticipants.toString());
+                setState((prev) => ({
+                  ...prev,
+                  config: isCelebration
+                    ? { ...(prev.config as CelebrationConfig), activeParticipants: minParticipants }
+                    : { participants: minParticipants },
+                }));
+                return;
+              }
+              
               // Actualizar input visualmente
               setParticipantsInput(inputVal);
               
               // Actualizar estado solo si es válido
-              if (val >= 1 && val <= maxCap) {
+              if (val >= minParticipants && val <= maxCap) {
                 setState((prev) => ({
                   ...prev,
                   config: isCelebration
@@ -423,22 +452,23 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
             onBlur={(e) => {
               const inputVal = e.target.value;
               const maxCap = state.technique ? TECHNIQUES.find((t) => t.id === state.technique)?.maxCapacity || 22 : 22;
+              const minParticipants = isCelebration ? 1 : 2;
               
-              // Si está vacío, inválido o excede máximo, restaurar al último válido
-              if (inputVal === '' || parseInt(inputVal) < 1 || parseInt(inputVal) > maxCap) {
+              // Si está vacío, inválido, por debajo del mínimo o excede máximo, restaurar al último válido
+              if (inputVal === '' || parseInt(inputVal) < minParticipants || parseInt(inputVal) > maxCap) {
                 const currentVal = state.config
                   ? isCelebration
-                    ? (state.config as CelebrationConfig).activeParticipants || 1
-                    : (state.config as CeramicOnlyConfig).participants || 1
-                  : 1;
+                    ? (state.config as CelebrationConfig).activeParticipants || minParticipants
+                    : (state.config as CeramicOnlyConfig).participants || minParticipants
+                  : minParticipants;
                 setParticipantsInput(currentVal.toString());
               } else {
                 // Asegurar que el valor mostrado coincida con el estado
                 const currentVal = state.config
                   ? isCelebration
-                    ? (state.config as CelebrationConfig).activeParticipants || 1
-                    : (state.config as CeramicOnlyConfig).participants || 1
-                  : 1;
+                    ? (state.config as CelebrationConfig).activeParticipants || minParticipants
+                    : (state.config as CeramicOnlyConfig).participants || minParticipants
+                  : minParticipants;
                 setParticipantsInput(currentVal.toString());
               }
             }}

@@ -113,6 +113,11 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
 
   const handleNext = () => {
     if (step === 1) {
+      // Validación estricta: debe ser mínimo 2 personas para experiencias grupales
+      if (totalParticipants < 2) {
+        setError('❌ Las experiencias grupales requieren mínimo 2 personas');
+        return;
+      }
       if (totalParticipants < config.minParticipants || totalParticipants > config.maxParticipants) {
         setError(`El grupo debe tener entre ${config.minParticipants} y ${config.maxParticipants} personas`);
         return;
@@ -230,6 +235,19 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
             <p className="text-gray-600">Entre {config.minParticipants} y {config.maxParticipants} personas</p>
           </div>
 
+          {/* Advertencia: Mínimo 2 personas */}
+          <div className="bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-4">
+            <div className="flex items-start gap-3">
+              <span className="text-xl">👥</span>
+              <div>
+                <p className="font-semibold text-blue-900">Experiencia Grupal</p>
+                <p className="text-sm text-blue-700 mt-1">
+                  ⚠️ <strong>Mínimo 2 personas</strong> - Las experiencias grupales no pueden realizarse con 1 persona. Si vienes solo, elige una experiencia individual.
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="bg-white p-6 rounded-lg border border-gray-200">
             <input
               type="range"
@@ -241,7 +259,7 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
             />
             <div className="text-center mt-4">
               <div className="text-5xl font-bold text-blue-600 mb-2">{totalParticipants}</div>
-              <div className="text-gray-600">personas</div>
+              <div className="text-gray-600">{totalParticipants === 1 ? 'persona' : 'personas'}</div>
             </div>
           </div>
 
@@ -256,7 +274,7 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
             </div>
           </div>
 
-          {error && <div className="text-red-600 text-sm">{error}</div>}
+          {error && <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg border border-red-300">{error}</div>}
         </div>
       )}
 

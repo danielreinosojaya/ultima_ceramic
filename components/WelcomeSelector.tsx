@@ -94,18 +94,20 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
       {/* Main CTA - Custom Experience First */}
       <div className="bg-brand-surface border-2 border-brand-primary p-6 sm:p-8 rounded-2xl shadow-lg mb-8">
         <h3 className="text-2xl sm:text-3xl font-bold mb-3 text-brand-text">Experiencia Personalizada</h3>
-        <p className="text-base sm:text-lg mb-4 text-brand-secondary flex flex-col sm:flex-row items-center justify-center gap-2">
-          <span>✨ Tu grupo elige una técnica: torno, modelado o pintura</span>
+        <p className="text-base sm:text-lg mb-4 text-brand-secondary">
+          ✨ Tu grupo elige una técnica: torno, modelado o pintura
+        </p>
+        <div className="flex justify-center mb-6">
           <button
             onClick={() => setShowHowItWorks(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-brand-primary/10 text-brand-primary hover:bg-brand-primary hover:text-white transition-all text-xs sm:text-sm font-semibold whitespace-nowrap border border-brand-primary/20 hover:border-brand-primary"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-brand-primary to-blue-600 text-white hover:from-blue-600 hover:to-brand-primary active:scale-95 transition-all duration-200 text-sm sm:text-base font-semibold whitespace-nowrap shadow-md hover:shadow-lg border border-transparent hover:border-white/30 cursor-pointer group"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 group-hover:animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             ¿Cómo funciona?
           </button>
-        </p>
+        </div>
         
         {/* Quick Info */}
         <div className="flex flex-wrap justify-center gap-3 sm:gap-4 mb-6 text-sm">
@@ -126,11 +128,11 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
           <div className="space-y-2 text-sm text-brand-secondary">
             <div className="flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-brand-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">1</span>
-              <span>Cuántas personas</span>
+              <span>Cantidad de personas</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-brand-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">2</span>
-              <span>Elige la técnica del grupo (torno, moldeo o pintura)</span>
+              <span>Elige la actividad (torno, modelado, pintura)</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-6 h-6 rounded-full bg-brand-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">3</span>
@@ -302,7 +304,13 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             {/* Header */}
             <div className="sticky top-0 bg-gradient-to-r from-brand-primary to-brand-accent p-6 text-white flex items-center justify-between">
-              <h2 className="text-2xl font-bold">¿Cómo funciona?</h2>
+              <div className="flex-1">
+                <h2 className="text-2xl sm:text-3xl font-bold">¿Cómo funciona?</h2>
+                <div className="mt-3 inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-4 py-2 border border-white/30">
+                  <span className="text-lg">🎓</span>
+                  <p className="text-sm sm:text-base font-semibold text-white">Todas las actividades son para principiantes • Sin restricciones</p>
+                </div>
+              </div>
               <button
                 onClick={() => setShowHowItWorks(false)}
                 className="text-2xl font-bold hover:opacity-80 transition"
@@ -320,7 +328,8 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
                 <div className="bg-brand-background rounded-lg p-3 space-y-2 text-xs text-brand-text">
                   <div><strong>Duración:</strong> 2 horas por clase</div>
                   <div><strong>Técnicas:</strong> Pinch/Pellizco, Slab/Plancha, Coiling/Churros</div>
-                  <div><strong>Materiales:</strong> Todo incluido (arcilla, herramientas, esmaltes, horneado)</div>
+                  <div><strong>Materiales:</strong> Todo incluido (arcilla, herramientas, esmaltado brillo transparente, horneado)</div>
+                  <div className="text-brand-secondary italic text-xs">Para pintar la pieza con colores: programa una clase extra de pintado (costo adicional). Consulta con nuestro staff.</div>
                   <div><strong>Qué llevar:</strong> Ropa cómoda, uñas cortas, sin anillos</div>
                   <div className="pt-2 text-brand-secondary">✓ Piezas aptas para alimentos, microondas y lavavajillas</div>
                 </div>
@@ -332,8 +341,9 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
                 <p className="text-sm text-brand-secondary mb-3">Domina la técnica del torno clásico</p>
                 <div className="bg-brand-background rounded-lg p-3 space-y-2 text-xs text-brand-text">
                   <div><strong>Duración:</strong> 2 horas por clase</div>
-                  <div><strong>Actividades:</strong> Centrado, cilindros, cuencos, retorneado y esmaltado</div>
-                  <div><strong>Materiales:</strong> Todo incluido (arcilla, herramientas, esmaltes, horneado)</div>
+                  <div><strong>Actividades:</strong> Centrado, cilindros, cuencos, retorneado</div>
+                  <div><strong>Materiales:</strong> Todo incluido (arcilla, herramientas, horneado)</div>
+                  <div className="text-brand-secondary italic text-xs">Para pintar la pieza con colores: programa una clase extra de pintado (costo adicional). Consulta con nuestro staff.</div>
                   <div><strong>Qué llevar:</strong> Ropa cómoda, uñas cortas, sin anillos, pelo recogido</div>
                   <div className="pt-2 text-brand-secondary">✓ Piezas aptas para alimentos, microondas y lavavajillas</div>
                 </div>
@@ -342,10 +352,10 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
               {/* Pintado a Mano */}
               <div className="border-l-4 border-brand-accent pl-4">
                 <h3 className="text-xl font-bold text-brand-text mb-2">🎨 Pintado a Mano</h3>
-                <p className="text-sm text-brand-secondary mb-3">Diseña y decora piezas de cerámica pre-hechas</p>
+                <p className="text-sm text-brand-secondary mb-3">Tenemos varios diseños, elige tu favorito y pinta</p>
                 <div className="bg-brand-background rounded-lg p-3 space-y-2 text-xs text-brand-text">
-                  <div><strong>Duración:</strong> 2 horas por clase</div>
-                  <div><strong>Actividades:</strong> Pintura de piezas pre-hechas con diseños personalizados</div>
+                  <div><strong>Duración:</strong> Máximo 2 horas por clase</div>
+                  <div><strong>Actividades:</strong> Pintura de piezas pre-elaboradas con diseños personalizados</div>
                   <div><strong>Precio:</strong> Desde $18 por la pieza básica; en el taller puedes elegir otras piezas y pagar solo la diferencia.</div>
                   <div><strong>Materiales:</strong> Todo incluido (piezas, pinceles, pinturas, horneado)</div>
                   <div><strong>Qué llevar:</strong> Ropa cómoda que se pueda ensuciar</div>
