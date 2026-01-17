@@ -88,6 +88,9 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
     const [selectedDeliveries, setSelectedDeliveries] = useState<Set<string>>(new Set());
     const [customerContacts, setCustomerContacts] = useState<{[email: string]: {phone?: string, countryCode?: string}}>({});
     const [isProcessingBulk, setIsProcessingBulk] = useState(false);
+    // ⚡ Cache local de fotos cargadas bajo demanda
+    const [loadedPhotos, setLoadedPhotos] = useState<{[deliveryId: string]: string[]}>({});
+    const [loadingPhotos, setLoadingPhotos] = useState<{[deliveryId: string]: boolean}>({});
     const [bulkFeedback, setBulkFeedback] = useState<{message: string; type: 'success' | 'error' | 'warning'} | null>(null);
 
     const filteredDeliveries = useMemo(() => {
@@ -170,10 +173,58 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
         };
     }, [deliveries]);
 
-    const handleOpenPhotos = (photos: string[], startIndex: number = 0) => {
-        setPhotosToView(photos);
-        setPhotoStartIndex(startIndex);
-        setPhotoViewerOpen(true);
+    // ⚡ Cargar fotos bajo demanda
+    const loadPhotosForDelivery = async (deliveryId: string): Promise<string[]> => {
+        // Si ya tenemos las fotos en cache, retornarlas
+        if (loadedPhotos[deliveryId]) {
+            return loadedPhotos[deliveryId];
+        }
+        
+        // Si ya está cargando, esperar
+        if (loadingPhotos[deliveryId]) {
+            return [];
+        }
+        
+        setLoadingPhotos(prev => ({ ...prev, [deliveryId]: true }));
+        
+        try {
+            const photos = await dataService.getDeliveryPhotos(deliveryId);
+            setLoadedPhotos(prev => ({ ...prev, [deliveryId]: photos }));
+            return photos;
+        } catch (error) {
+            console.error('[DeliveryList] Error loading photos for', deliveryId, error);
+            return [];
+        } finally {
+            setLoadingPhotos(prev => ({ ...prev, [deliveryId]: false }));
+        }
+    };
+
+    const handleOpenPhotos = async (deliveryId: string, existingPhotos: string[] | null | undefined, startIndex: number = 0) => {
+        // Si ya tiene fotos cargadas, usarlas directamente
+        if (existingPhotos && existingPhotos.length > 0) {
+            setPhotosToView(existingPhotos);
+            setPhotoStartIndex(startIndex);
+            setPhotoViewerOpen(true);
+            return;
+        }
+        
+        // Si no hay fotos pero hasPhotos indica que existen, cargarlas
+        const photos = await loadPhotosForDelivery(deliveryId);
+        if (photos.length > 0) {
+            setPhotosToView(photos);
+            setPhotoStartIndex(startIndex);
+            setPhotoViewerOpen(true);
+        }
+    };
+
+    // Obtener fotos de una delivery (del cache o de la prop)
+    const getDeliveryPhotos = (delivery: Delivery): string[] => {
+        // Primero verificar cache local
+        if (loadedPhotos[delivery.id] && loadedPhotos[delivery.id].length > 0) {
+            return loadedPhotos[delivery.id];
+        }
+        // Luego usar las fotos de la prop si existen
+        return delivery.photos || [];
     };
 
     // Cargar contactos de clientes al montar o cuando cambien las deliveries
@@ -242,7 +293,18 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
         window.open(whatsappUrl, '_blank');
     };
 
-    const exportToPDF = () => {
+    const exportToPDF = async () => {
+        // ⚡ Cargar fotos de todas las deliveries antes de exportar
+        const deliveriesWithPhotos = await Promise.all(
+            filteredDeliveries.map(async (delivery) => {
+                if (delivery.hasPhotos && (!delivery.photos || delivery.photos.length === 0)) {
+                    const photos = await dataService.getDeliveryPhotos(delivery.id);
+                    return { ...delivery, photos };
+                }
+                return delivery;
+            })
+        );
+        
         const doc = new jsPDF();
         const today = new Date();
         let yPosition = 12;
@@ -274,8 +336,8 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
         doc.line(margin, yPosition, pageWidth - margin, yPosition);
         yPosition += 5;
 
-        // Iterate through each delivery
-        filteredDeliveries.forEach((delivery, idx) => {
+        // Iterate through each delivery (using deliveries with photos already loaded)
+        deliveriesWithPhotos.forEach((delivery, idx) => {
             // Check if we need a new page
             if (yPosition > pageHeight - 15) {
                 doc.addPage();
@@ -726,34 +788,69 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                     </div>
                                 )}
 
-                                {/* Fotos - Responsive grid */}
-                                {delivery.photos && delivery.photos.length > 0 && (
-                                    <div className="grid grid-cols-3 xs:grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2">
-                                        {delivery.photos.slice(0, 5).map((photo, i) => (
-                                            <div
-                                                key={i}
-                                                className="aspect-square rounded-lg overflow-hidden border-2 border-gray-200 cursor-pointer hover:border-brand-primary transition-all hover:scale-105 shadow-sm"
-                                                onClick={() => handleOpenPhotos(delivery.photos, i)}
-                                                title="Click para ver en grande"
-                                            >
-                                                <img 
-                                                    src={photo} 
-                                                    alt={`Foto ${i + 1}`}
-                                                    className="w-full h-full object-cover"
-                                                />
+                                {/* Fotos - Responsive grid con lazy loading */}
+                                {(() => {
+                                    const photos = getDeliveryPhotos(delivery);
+                                    const hasPhotos = photos.length > 0 || delivery.hasPhotos;
+                                    const isLoading = loadingPhotos[delivery.id];
+                                    
+                                    if (!hasPhotos) return null;
+                                    
+                                    // Si hay fotos cargadas, mostrar grid
+                                    if (photos.length > 0) {
+                                        return (
+                                            <div className="grid grid-cols-3 xs:grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2">
+                                                {photos.slice(0, 5).map((photo, i) => (
+                                                    <div
+                                                        key={i}
+                                                        className="aspect-square rounded-lg overflow-hidden border-2 border-gray-200 cursor-pointer hover:border-brand-primary transition-all hover:scale-105 shadow-sm"
+                                                        onClick={() => handleOpenPhotos(delivery.id, photos, i)}
+                                                        title="Click para ver en grande"
+                                                    >
+                                                        <img 
+                                                            src={photo} 
+                                                            alt={`Foto ${i + 1}`}
+                                                            className="w-full h-full object-cover"
+                                                            loading="lazy"
+                                                        />
+                                                    </div>
+                                                ))}
+                                                {photos.length > 5 && (
+                                                    <div 
+                                                        className="aspect-square flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg border-2 border-gray-300 text-gray-700 text-xs sm:text-sm font-bold cursor-pointer hover:from-gray-200 hover:to-gray-300 transition-all shadow-sm"
+                                                        onClick={() => handleOpenPhotos(delivery.id, photos, 5)}
+                                                        title="Ver todas las fotos"
+                                                    >
+                                                        +{photos.length - 5}
+                                                    </div>
+                                                )}
                                             </div>
-                                        ))}
-                                        {delivery.photos.length > 5 && (
-                                            <div 
-                                                className="aspect-square flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg border-2 border-gray-300 text-gray-700 text-xs sm:text-sm font-bold cursor-pointer hover:from-gray-200 hover:to-gray-300 transition-all shadow-sm"
-                                                onClick={() => handleOpenPhotos(delivery.photos, 5)}
-                                                title="Ver todas las fotos"
-                                            >
-                                                +{delivery.photos.length - 5}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
+                                        );
+                                    }
+                                    
+                                    // Si hasPhotos pero no están cargadas, mostrar botón para cargar
+                                    return (
+                                        <button
+                                            onClick={() => loadPhotosForDelivery(delivery.id)}
+                                            disabled={isLoading}
+                                            className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-lg border border-blue-200 transition-all"
+                                        >
+                                            {isLoading ? (
+                                                <>
+                                                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                                                    </svg>
+                                                    Cargando fotos...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    📷 Ver fotos
+                                                </>
+                                            )}
+                                        </button>
+                                    );
+                                })()}
                             </div>
 
                             {/* Card Footer - Action Buttons */}

@@ -1587,15 +1587,11 @@ export const getStandaloneCustomers = async (): Promise<Customer[]> => {
 };
 
 export const getCustomersWithDeliveries = async (bookings: Booking[]): Promise<Customer[]> => {
-    // Eliminado debug
-    
     // Get customers from bookings first
-            const customersFromBookings = generateCustomersFromBookings(bookings);
-    // Eliminado debug
+    const customersFromBookings = generateCustomersFromBookings(bookings);
     
     // Get standalone customers from the customers table
     const standaloneCustomers = await getStandaloneCustomers();
-    // Eliminado debug
     
     // Merge customers, avoiding duplicates (booking-based customers take priority)
     const customerEmailsFromBookings = new Set(customersFromBookings.map(c => c.email.toLowerCase()));
@@ -1604,11 +1600,9 @@ export const getCustomersWithDeliveries = async (bookings: Booking[]): Promise<C
     );
     
     const allCustomers = [...customersFromBookings, ...uniqueStandaloneCustomers];
-    // Eliminado debug
     
-    // Get all deliveries
+    // ⚡ Get all deliveries (now lightweight - no photos loaded)
     const allDeliveries = await getDeliveries();
-    // Eliminado debug
     
     // Add deliveries to each customer
     const customersWithDeliveries = allCustomers.map(customer => {
@@ -1616,24 +1610,11 @@ export const getCustomersWithDeliveries = async (bookings: Booking[]): Promise<C
             d.customerEmail.toLowerCase() === customer.email.toLowerCase()
         );
         
-    // Eliminado debug
-        
         return {
             ...customer,
             deliveries: customerDeliveries
         };
     });
-    
-    console.log('DEBUG getCustomersWithDeliveries - Final customers with deliveries:', customersWithDeliveries);
-    console.log('DEBUG getCustomersWithDeliveries - Final count:', customersWithDeliveries.length);
-    
-    // Check specifically for Daniel Reinoso
-    const danielCustomer = customersWithDeliveries.find(c => 
-        (c.userInfo?.firstName?.toLowerCase() === 'daniel' && c.userInfo?.lastName?.toLowerCase() === 'reinoso') ||
-        c.email?.toLowerCase().includes('daniel') ||
-        c.email?.toLowerCase().includes('reinoso')
-    );
-    console.log('DEBUG getCustomersWithDeliveries - Daniel Reinoso found:', danielCustomer);
     
     return customersWithDeliveries;
 };
@@ -1923,13 +1904,44 @@ const parseDelivery = (d: any): Delivery => {
         deliveredAt: d.deliveredAt || d.delivered_at || null,
         readyAt: d.readyAt || d.ready_at || null,
         notes: d.notes || null,
-        photos: parsedPhotos
+        photos: parsedPhotos,
+        hasPhotos: d.hasPhotos || false // ⚡ Flag para lazy loading
     };
 };
 
+// ⚡ Carga ligera de deliveries (sin fotos - para listados)
 export const getDeliveries = async (): Promise<Delivery[]> => {
     const rawDeliveries = await fetchData('/api/data?action=deliveries');
     return rawDeliveries ? rawDeliveries.map(parseDelivery) : [];
+};
+
+// ⚡ Carga de fotos bajo demanda para una delivery específica
+export const getDeliveryPhotos = async (deliveryId: string): Promise<string[]> => {
+    try {
+        const result = await fetchData(`/api/data?action=getDeliveryPhotos&deliveryId=${deliveryId}`);
+        if (!result || !result.photos) return [];
+        
+        let photos = result.photos;
+        if (typeof photos === 'string') {
+            try {
+                photos = JSON.parse(photos);
+            } catch {
+                return [];
+            }
+        }
+        
+        if (!Array.isArray(photos)) return [];
+        
+        return photos.filter((photo: any) => {
+            if (typeof photo === 'string' && photo.trim()) {
+                return photo.startsWith('data:') || photo.startsWith('http://') || photo.startsWith('https://');
+            }
+            return false;
+        });
+    } catch (error) {
+        console.error('[getDeliveryPhotos] Error:', error);
+        return [];
+    }
 };
 
 export const getDeliveriesByCustomer = async (customerEmail: string): Promise<Delivery[]> => {
