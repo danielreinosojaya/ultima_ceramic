@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import type { Delivery } from '../../types';
 import { MagnifyingGlassIcon, FunnelIcon, XMarkIcon, QuestionMarkCircleIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import { PhotoViewerModal } from './PhotoViewerModal';
@@ -91,6 +91,9 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
     // ⚡ Cache local de fotos cargadas bajo demanda
     const [loadedPhotos, setLoadedPhotos] = useState<{[deliveryId: string]: string[]}>({});
     const [loadingPhotos, setLoadingPhotos] = useState<{[deliveryId: string]: boolean}>({});
+    // ⚡ Intersection Observer para lazy loading automático
+    const observerRef = useRef<IntersectionObserver | null>(null);
+    const loadQueueRef = useRef<Set<string>>(new Set());
     const [bulkFeedback, setBulkFeedback] = useState<{message: string; type: 'success' | 'error' | 'warning'} | null>(null);
 
     const filteredDeliveries = useMemo(() => {
@@ -222,7 +225,90 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
         // Primero verificar cache local
         if (loadedPhotos[delivery.id] && loadedPhotos[delivery.id].length > 0) {
             return loadedPhotos[delivery.id];
+      
+
+    // ⚡ Cargar fotos en batch con delay para evitar saturar
+    const loadPhotosInBatch = useCallback(async (deliveryIds: string[], delayMs: number = 100) => {
+        for (const deliveryId of deliveryIds) {
+            // Skip si ya están cargadas o cargando
+            if (loadedPhotos[deliveryId] || loadingPhotos[deliveryId]) continue;
+            
+            await loadPhotosForDelivery(deliveryId);
+            // Delay entre requests para no saturar
+            if (delayMs > 0) {
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+            }
         }
+    }, [loadedPhotos, loadingPhotos]);
+
+    // ⚡ Auto-cargar fotos progresivamente al montar componente
+    useEffect(() => {
+        const loadInitialPhotos = async () => {
+            // Priorizar deliveries críticas y pendientes
+            const priorityDeliveries = paginatedDeliveries
+                .filter(d => d.hasPhotos)
+                .sort((a, b) => {
+                    // Críticas primero
+                    const aCritical = isCritical(a);
+                    const bCritical = isCritical(b);
+                    if (aCritical && !bCritical) return -1;
+                    if (!aCritical && bCritical) return 1;
+                    // Luego pendientes
+                    if (a.status === 'pending' && b.status !== 'pending') return -1;
+                    if (a.status !== 'pending' && b.status === 'pending') return 1;
+                    return 0;
+                })
+                .slice(0, 10) // Primeras 10 deliveries prioritarias
+                .map(d => d.id);
+            
+            // Cargar en batch con delay corto
+            await loadPhotosInBatch(priorityDeliveries, 150);
+        };
+
+        loadInitialPhotos();
+    }, [paginatedDeliveries, loadPhotosInBatch]);
+
+    // ⚡ Setup Intersection Observer para lazy loading de fotos visibles
+    useEffect(() => {
+        const options = {
+            root: null,
+            rootMargin: '200px', // Precargar 200px antes de que sea visible
+            threshold: 0.1
+        };
+
+        observerRef.current = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                if (entry.isIntersecting) {
+                    const deliveryId = entry.target.getAttribute('data-delivery-id');
+                    if (deliveryId && !loadQueueRef.current.has(deliveryId)) {
+                        loadQueueRef.current.add(deliveryId);
+                        // Cargar fotos después de un pequeño delay
+                        setTimeout(() => {
+                            loadPhotosForDelivery(deliveryId).finally(() => {
+                                loadQueueRef.current.delete(deliveryId);
+                            });
+                        }, 100);
+                    }
+                }
+            });
+        }, options);
+
+        return () => {
+            if (observerRef.current) {
+                observerRef.current.disconnect();
+            }
+        };
+    }, []);
+
+    // ⚡ Hook para observar elementos de delivery
+    const deliveryCardRef = useCallback((node: HTMLDivElement | null, delivery: Delivery) => {
+        if (!node || !observerRef.current) return;
+        
+        // Solo observar si tiene fotos y no están cargadas
+        if (delivery.hasPhotos && !loadedPhotos[delivery.id]) {
+            observerRef.current.observe(node);
+        }
+    }, [loadedPhotos]);  }
         // Luego usar las fotos de la prop si existen
         return delivery.photos || [];
     };
@@ -643,7 +729,9 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
 
                     return (
                         <div 
-                            key={delivery.id} 
+                            key={delivery.id}
+                            ref={(node) => deliveryCardRef(node, delivery)}
+                            data-delivery-id={delivery.id}
                             className={`bg-white rounded-lg shadow-md border-2 transition-all duration-200 overflow-hidden ${
                                 isOverdue ? 'border-red-300 bg-red-50' : isSelected ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
                             }`}
@@ -788,7 +876,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                     </div>
                                 )}
 
-                                {/* Fotos - Responsive grid con lazy loading */}
+                                {/* Fotos - Responsive grid con lazy loading automático */}
                                 {(() => {
                                     const photos = getDeliveryPhotos(delivery);
                                     const hasPhotos = photos.length > 0 || delivery.hasPhotos;
@@ -828,27 +916,29 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                         );
                                     }
                                     
-                                    // Si hasPhotos pero no están cargadas, mostrar botón para cargar
+                                    // ⚡ Si hasPhotos pero no están cargadas, mostrar skeleton animado
+                                    if (isLoading) {
+                                        return (
+                                            <div className="grid grid-cols-3 xs:grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2">
+                                                {[...Array(3)].map((_, i) => (
+                                                    <div 
+                                                        key={i}
+                                                        className="aspect-square rounded-lg bg-gradient-to-br from-gray-200 via-gray-100 to-gray-200 animate-pulse border border-gray-300"
+                                                        style={{
+                                                            backgroundSize: '200% 200%',
+                                                            animation: 'gradient 1.5s ease infinite'
+                                                        }}
+                                                    />
+                                                ))}
+                                            </div>
+                                        );
+                                    }
+                                    
+                                    // Si hasPhotos pero aún no se han cargado (esperando Intersection Observer)
                                     return (
-                                        <button
-                                            onClick={() => loadPhotosForDelivery(delivery.id)}
-                                            disabled={isLoading}
-                                            className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-lg border border-blue-200 transition-all"
-                                        >
-                                            {isLoading ? (
-                                                <>
-                                                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
-                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
-                                                    </svg>
-                                                    Cargando fotos...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    📷 Ver fotos
-                                                </>
-                                            )}
-                                        </button>
+                                        <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
+                                            📷 Fotos disponibles (cargando automáticamente...)
+                                        </div>
                                     );
                                 })()}
                             </div>
