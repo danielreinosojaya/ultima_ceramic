@@ -60,6 +60,7 @@ export interface Delivery {
     deliveredAt?: string | null; // ISO date string - DEPRECATED: usar completedAt
     notes?: string | null;
     photos?: string[] | null; // Array de URLs de fotos
+    hasPhotos?: boolean; // ⚡ Flag para lazy loading - indica si hay fotos sin cargarlas
     createdByClient?: boolean; // true si el cliente subió las fotos directamente
 }
 

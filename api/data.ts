@@ -684,8 +684,54 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     break;
                 }
                 case 'deliveries': {
-                    const { rows: deliveries } = await sql`SELECT * FROM deliveries ORDER BY scheduled_date ASC, created_at DESC`;
-                    data = deliveries.map(toCamelCase);
+                    // ⚡ OPTIMIZACIÓN: Excluir fotos por defecto (muy pesadas - base64)
+                    // Las fotos se cargan bajo demanda con getDeliveryPhotos
+                    const includePhotos = req.query.includePhotos === 'true';
+                    const limit = req.query.limit ? parseInt(req.query.limit as string) : 500;
+                    
+                    if (includePhotos) {
+                        // Carga completa (solo cuando explícitamente se pide)
+                        const { rows: deliveries } = await sql`
+                            SELECT * FROM deliveries 
+                            ORDER BY scheduled_date ASC, created_at DESC 
+                            LIMIT ${limit}
+                        `;
+                        data = deliveries.map(toCamelCase);
+                    } else {
+                        // Carga ligera: excluir columna photos
+                        const { rows: deliveries } = await sql`
+                            SELECT id, customer_email, description, scheduled_date, status, 
+                                   created_at, completed_at, delivered_at, ready_at, notes,
+                                   CASE WHEN photos IS NOT NULL AND photos != '[]' AND photos != 'null' 
+                                        THEN true ELSE false END as has_photos
+                            FROM deliveries 
+                            ORDER BY scheduled_date ASC, created_at DESC 
+                            LIMIT ${limit}
+                        `;
+                        data = deliveries.map((d: any) => ({
+                            ...toCamelCase(d),
+                            photos: [] // Array vacío, se cargan bajo demanda
+                        }));
+                    }
+                    // ⚡ Cache 30 segundos para listado de deliveries
+                    res.setHeader('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+                    break;
+                }
+                case 'getDeliveryPhotos': {
+                    // ⚡ Endpoint para cargar fotos de una delivery específica
+                    const deliveryId = req.query.deliveryId as string;
+                    if (!deliveryId) {
+                        return res.status(400).json({ error: 'deliveryId required' });
+                    }
+                    const { rows } = await sql`
+                        SELECT photos FROM deliveries WHERE id = ${deliveryId}
+                    `;
+                    if (rows.length === 0) {
+                        return res.status(404).json({ error: 'Delivery not found' });
+                    }
+                    // ⚡ Cache 5 minutos para fotos (raramente cambian)
+                    res.setHeader('Cache-Control', 'private, max-age=300, stale-while-revalidate=600');
+                    data = { photos: rows[0].photos || [] };
                     break;
                 }
                 case 'standaloneCustomers': {
