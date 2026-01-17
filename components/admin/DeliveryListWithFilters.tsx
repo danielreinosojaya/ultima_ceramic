@@ -177,7 +177,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
     }, [deliveries]);
 
     // ⚡ Cargar fotos bajo demanda
-    const loadPhotosForDelivery = async (deliveryId: string): Promise<string[]> => {
+    const loadPhotosForDelivery = useCallback(async (deliveryId: string): Promise<string[]> => {
         // Si ya tenemos las fotos en cache, retornarlas
         if (loadedPhotos[deliveryId]) {
             return loadedPhotos[deliveryId];
@@ -200,9 +200,33 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
         } finally {
             setLoadingPhotos(prev => ({ ...prev, [deliveryId]: false }));
         }
-    };
+    }, [loadedPhotos, loadingPhotos]);
 
-    const handleOpenPhotos = async (deliveryId: string, existingPhotos: string[] | null | undefined, startIndex: number = 0) => {
+    // Obtener fotos de una delivery (del cache o de la prop)
+    const getDeliveryPhotos = useCallback((delivery: Delivery): string[] => {
+        // Primero verificar cache local
+        if (loadedPhotos[delivery.id] && loadedPhotos[delivery.id].length > 0) {
+            return loadedPhotos[delivery.id];
+        }
+        // Luego usar las fotos de la prop si existen
+        return delivery.photos || [];
+    }, [loadedPhotos]);
+
+    // ⚡ Cargar fotos en batch con delay para evitar saturar
+    const loadPhotosInBatch = useCallback(async (deliveryIds: string[], delayMs: number = 100) => {
+        for (const deliveryId of deliveryIds) {
+            // Skip si ya están cargadas o cargando
+            if (loadedPhotos[deliveryId] || loadingPhotos[deliveryId]) continue;
+            
+            await loadPhotosForDelivery(deliveryId);
+            // Delay entre requests para no saturar
+            if (delayMs > 0) {
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+            }
+        }
+    }, [loadedPhotos, loadingPhotos, loadPhotosForDelivery]);
+
+    const handleOpenPhotos = useCallback(async (deliveryId: string, existingPhotos: string[] | null | undefined, startIndex: number = 0) => {
         // Si ya tiene fotos cargadas, usarlas directamente
         if (existingPhotos && existingPhotos.length > 0) {
             setPhotosToView(existingPhotos);
@@ -218,28 +242,17 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
             setPhotoStartIndex(startIndex);
             setPhotoViewerOpen(true);
         }
-    };
+    }, [loadPhotosForDelivery]);
 
-    // Obtener fotos de una delivery (del cache o de la prop)
-    const getDeliveryPhotos = (delivery: Delivery): string[] => {
-        // Primero verificar cache local
-        if (loadedPhotos[delivery.id] && loadedPhotos[delivery.id].length > 0) {
-            return loadedPhotos[delivery.id];
-      
-
-    // ⚡ Cargar fotos en batch con delay para evitar saturar
-    const loadPhotosInBatch = useCallback(async (deliveryIds: string[], delayMs: number = 100) => {
-        for (const deliveryId of deliveryIds) {
-            // Skip si ya están cargadas o cargando
-            if (loadedPhotos[deliveryId] || loadingPhotos[deliveryId]) continue;
-            
-            await loadPhotosForDelivery(deliveryId);
-            // Delay entre requests para no saturar
-            if (delayMs > 0) {
-                await new Promise(resolve => setTimeout(resolve, delayMs));
-            }
+    // ⚡ Hook para observar elementos de delivery
+    const deliveryCardRef = useCallback((node: HTMLDivElement | null, delivery: Delivery) => {
+        if (!node || !observerRef.current) return;
+        
+        // Solo observar si tiene fotos y no están cargadas
+        if (delivery.hasPhotos && !loadedPhotos[delivery.id]) {
+            observerRef.current.observe(node);
         }
-    }, [loadedPhotos, loadingPhotos]);
+    }, [loadedPhotos]);
 
     // ⚡ Auto-cargar fotos progresivamente al montar componente
     useEffect(() => {
@@ -265,7 +278,9 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
             await loadPhotosInBatch(priorityDeliveries, 150);
         };
 
-        loadInitialPhotos();
+        if (paginatedDeliveries.length > 0) {
+            loadInitialPhotos();
+        }
     }, [paginatedDeliveries, loadPhotosInBatch]);
 
     // ⚡ Setup Intersection Observer para lazy loading de fotos visibles
@@ -298,20 +313,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                 observerRef.current.disconnect();
             }
         };
-    }, []);
-
-    // ⚡ Hook para observar elementos de delivery
-    const deliveryCardRef = useCallback((node: HTMLDivElement | null, delivery: Delivery) => {
-        if (!node || !observerRef.current) return;
-        
-        // Solo observar si tiene fotos y no están cargadas
-        if (delivery.hasPhotos && !loadedPhotos[delivery.id]) {
-            observerRef.current.observe(node);
-        }
-    }, [loadedPhotos]);  }
-        // Luego usar las fotos de la prop si existen
-        return delivery.photos || [];
-    };
+    }, [loadPhotosForDelivery]);
 
     // Cargar contactos de clientes al montar o cuando cambien las deliveries
     useEffect(() => {
