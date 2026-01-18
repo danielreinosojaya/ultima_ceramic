@@ -805,7 +805,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
     
     // Textos explicativos por técnica
     const techniqueExplanations: Record<string, string> = {
-      'potters_wheel': '🎯 Torno Alfarero: Es una mesa circular que gira para modelar cerámica. Mientras el plato da vueltas, tú usas las manos para dar forma a piezas redondas y simétricas (como tazas o cuencos) de manera fácil y rápida.',
+      'potters_wheel': '🎯 Torno Alfarero: Es una mesa circular que gira para modelar cerámica. Mientras el plato da vueltas, tú usas las manos para dar forma a piezas redondas y simétricas (como tazas o cuencos). Es una técnica que requiere tu atención y concentración para crear piezas perfectas.',
       'hand_modeling': '✋ Modelado a Mano: Crea formas libres usando solo tus manos. Técnicas como pellizco, churros y planchas te permiten explorar tu creatividad sin restricciones, ideal para esculturas y piezas únicas.',
       'painting': '🎨 Pintado a Mano: Pinta piezas de cerámica ya moldeadas con colores vibrantes. Perfecto para expresar tu creatividad visual en superficies preparadas sin necesidad de modelar.'
     };
