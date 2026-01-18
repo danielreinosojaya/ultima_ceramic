@@ -46,6 +46,7 @@ import { MyClassesPrompt } from './components/MyClassesPrompt';
 
 import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession, DeliveryMethod, GiftcardHold, Piece, ExperiencePricing, ExperienceUIState, CourseSchedule, CourseEnrollment } from './types';
 import * as dataService from './services/dataService';
+import { DEFAULT_POLICIES_TEXT } from './constants';
 import { slotsRequireNoRefund } from './utils/bookingPolicy';
 import { InstagramIcon } from './components/icons/InstagramIcon';
 import { WhatsAppIcon } from './components/icons/WhatsAppIcon';
@@ -105,7 +106,6 @@ const App: React.FC = () => {
     const [showMyClassesPrompt, setShowMyClassesPrompt] = useState(false);
     const [hasCheckedMyClasses, setHasCheckedMyClasses] = useState(false);
     const [clientEmail, setClientEmail] = useState<string | null>(null);
-    const [successModalData, setSuccessModalData] = useState<{ bookingCode: string } | null>(null);
     
     // COUPLES_EXPERIENCE states
     const [isCouplesExperience, setIsCouplesExperience] = useState(false);
@@ -189,7 +189,7 @@ const App: React.FC = () => {
                 setAppData({
                     products: essentialData.products || [], 
                     announcements: essentialData.announcements || [], 
-                    policies: essentialData.policies || '', 
+                    policies: essentialData.policies || DEFAULT_POLICIES_TEXT, 
                     footerInfo: safeFooter,
                     // Initialize empty data structures for lazy loading
                     instructors: [],
@@ -460,7 +460,7 @@ const App: React.FC = () => {
         }
 
         try {
-            // Attach giftcard info if the user applied a giftcard (supports holdId or immediate consume)
+            // Attach giftcard info if the user applied a giftcard
             if (activeGiftcardHold) {
                 if (activeGiftcardHold.holdId) {
                     (bookingData as any).holdId = activeGiftcardHold.holdId;
@@ -494,13 +494,11 @@ const App: React.FC = () => {
             } else {
                 console.error('[App] Booking failed:', result.message);
                 setBookingInProgress(false);
-                // NOTE: Using alert() is not recommended in immersive. Please use a custom modal instead.
                 alert(`Error: ${result.message}`);
             }
         } catch (error) {
             console.error("[App] Failed to add booking", error);
             setBookingInProgress(false);
-            // NOTE: Using alert() is not recommended in immersive. Please use a custom modal instead.
             alert("An error occurred while creating your booking.");
         }
     };
@@ -536,7 +534,11 @@ const App: React.FC = () => {
                         dataService.getConfirmationMessage(),
                         dataService.getBankDetails()
                     ]);
-                    console.log('App.tsx: bankDetails recibidos del backend:', bankDetails);
+                    console.log('🔍 App.tsx loadAdditionalData:', {
+                        bankDetailsRaw: bankDetails,
+                        isArray: Array.isArray(bankDetails),
+                        length: Array.isArray(bankDetails) ? bankDetails.length : 0
+                    });
                     updates = { confirmationMessage, bankDetails: Array.isArray(bankDetails) ? bankDetails : bankDetails ? [bankDetails] : [] };
                     break;
             }
@@ -957,11 +959,13 @@ const App: React.FC = () => {
                         pieces={pieces}
                         onConfirm={(booking) => {
                             // El booking ya fue guardado y el email ya fue enviado
-                            // Solo mostrar modal de éxito y volver al inicio
-                            setSuccessModalData({ bookingCode: booking.bookingCode || '' });
+                            // Guardar booking y navegar a ConfirmationPage para UX de clase mundial
+                            setConfirmedBooking(booking);
+                            setView('confirmation');
                         }}
                         onBack={() => setView('welcome')}
                         isLoading={false}
+                        onShowPolicies={() => setIsPolicyModalOpen(true)}
                     />
                 );
 
@@ -1143,70 +1147,6 @@ const App: React.FC = () => {
                     }}
                     onDismiss={() => setShowMyClassesPrompt(false)}
                 />
-            )}
-
-            {/* Success Modal for Custom Experience Booking */}
-            {successModalData && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-brand-surface rounded-2xl shadow-2xl p-8 w-full max-w-md animate-fade-in-up">
-                        {/* Success Icon */}
-                        <div className="flex justify-center mb-6">
-                            <div className="relative w-20 h-20">
-                                <div className="absolute inset-0 bg-gradient-to-br from-green-100 to-emerald-100 rounded-full flex items-center justify-center">
-                                    <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                    </svg>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Title */}
-                        <h2 className="text-2xl font-bold text-center text-brand-text mb-2">
-                            ¡Pre-reserva Confirmada!
-                        </h2>
-
-                        {/* Subtitle */}
-                        <p className="text-center text-brand-secondary text-sm mb-6">
-                            Tu experiencia grupal personalizada ha sido reservada exitosamente
-                        </p>
-
-                        {/* Booking Code */}
-                        <div className="bg-gradient-to-r from-brand-primary to-brand-accent rounded-xl p-6 mb-6 text-center">
-                            <p className="text-white text-sm opacity-90 mb-2">Tu código de pre-reserva</p>
-                            <p className="text-white text-3xl font-bold tracking-wider font-mono">{successModalData.bookingCode}</p>
-                            <p className="text-white text-xs opacity-80 mt-2">Guarda este código para referencia futura</p>
-                        </div>
-
-                        {/* Instructions */}
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                            <div className="flex items-start gap-3">
-                                <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M18 5v8a2 2 0 01-2 2h-5l-5 4v-4H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2zm-11-1a1 1 0 11-2 0 1 1 0 012 0z" clipRule="evenodd" />
-                                </svg>
-                                <div>
-                                    <p className="text-blue-900 font-semibold text-sm">Próximo paso</p>
-                                    <p className="text-blue-800 text-xs mt-1">Revisa tu correo electrónico para las instrucciones de pago. Tu pre-reserva expira en 2 horas.</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Action Button */}
-                        <button
-                            onClick={() => {
-                                setSuccessModalData(null);
-                                setView('welcome');
-                            }}
-                            className="w-full bg-brand-primary text-white font-bold py-3 px-6 rounded-lg hover:opacity-90 transition-opacity duration-300 shadow-lg"
-                        >
-                            Volver al Inicio
-                        </button>
-
-                        {/* Info Text */}
-                        <p className="text-center text-brand-secondary text-xs mt-4">
-                            Si no recibes el correo en 5 minutos, revisa tu carpeta de spam
-                        </p>
-                    </div>
-                </div>
             )}
             </div>
         </AuthProvider>

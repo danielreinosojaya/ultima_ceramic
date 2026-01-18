@@ -428,74 +428,95 @@ const clearCache = (key?: string): void => {
 // ===== OPTIMIZACIÓN: Invalidación granular de cache =====
 // Reemplazar invalidación binaria con invalidación selectiva
 
+// Timestamp de última mutation para cache-busting
+let lastMutationTimestamp = 0;
+
 export const invalidateBookingsCache = (): void => {
     console.log('[Cache] Invalidating bookings cache only');
     clearCache('bookings');
+    lastMutationTimestamp = Date.now(); // Update timestamp para cache-busting
     // ✅ NO invalida: customers, products, instructors, giftcards
 };
 
 export const invalidateCustomersCache = (): void => {
     console.log('[Cache] Invalidating customers cache only');
     clearCache('customers');
+    lastMutationTimestamp = Date.now();
 };
 
 export const invalidatePaymentsCache = (): void => {
     console.log('[Cache] Invalidating payments cache only');
     clearCache('payments');
+    lastMutationTimestamp = Date.now();
 };
 
 export const invalidateGiftcardsCache = (): void => {
     console.log('[Cache] Invalidating giftcards cache only');
     clearCache('giftcards');
+    lastMutationTimestamp = Date.now();
 };
 
 export const invalidateProductsCache = (): void => {
     console.log('[Cache] Invalidating products cache only');
     clearCache('products');
+    lastMutationTimestamp = Date.now();
 };
 
 // Para operaciones que afectan múltiples recursos
 export const invalidateMultiple = (keys: string[]): void => {
     console.log('[Cache] Invalidating multiple:', keys);
     keys.forEach(key => clearCache(key));
+    lastMutationTimestamp = Date.now(); // Update timestamp
 };
 
 const getData = async <T>(key: string): Promise<T> => {
-    // Intentar obtener de cache primero con prioridad alta
-    const cached = getCachedData<T>(key);
-    if (cached) {
-        console.log(`Cache hit for ${key}`);
-        return cached;
+    // Parse key para extract cache-busting timestamp si existe
+    const [actualKey, cacheBuster] = key.includes('&_t=') ? key.split('&') : [key, null];
+    
+    // Check si hay datos en cache válidos (solo si NO hay cache-buster)
+    if (!cacheBuster) {
+        const cached = getCachedData<T>(actualKey);
+        if (cached) {
+            console.log(`Cache hit for ${actualKey}`);
+            return cached;
+        }
+    } else {
+        // Si hay cache-buster, forzar bypass de cache
+        console.log(`Cache-busting fetch for ${actualKey} with ${cacheBuster}`);
+        clearCache(actualKey); // Limpiar cache viejo
     }
     
     // Verificar si ya hay un request pendiente para evitar duplicados
-    const requestKey = `get_${key}`;
+    const requestKey = `get_${actualKey}${cacheBuster || ''}`;
     if (pendingRequests.has(requestKey)) {
-        console.log(`Request already pending for ${key}, waiting...`);
+        console.log(`Request already pending for ${actualKey}, waiting...`);
         return pendingRequests.get(requestKey) as Promise<T>;
     }
     
-    console.log(`Cache miss for ${key}, fetching from API`);
-    const requestPromise = fetchData(`/api/data?key=${key}`)
+    // Construir URL con cache-buster si existe
+    const url = `/api/data?key=${actualKey}${cacheBuster ? `&${cacheBuster.substring(1)}` : ''}`;
+    console.log(`Cache miss for ${actualKey}, fetching from API: ${url}`);
+    
+    const requestPromise = fetchData(url)
         .then(data => {
-            setCachedData(key, data);
+            setCachedData(actualKey, data);
             pendingRequests.delete(requestKey);
             return data;
         })
         .catch(error => {
             pendingRequests.delete(requestKey);
-            console.error(`Failed to fetch ${key}:`, error);
+            console.error(`Failed to fetch ${actualKey}:`, error);
             
             // En caso de error, intentar devolver datos del cache aunque estén expirados
-            const expiredCache = cache.get(key);
+            const expiredCache = cache.get(actualKey);
             if (expiredCache) {
-                console.warn(`Using expired cache for ${key} due to fetch error`);
+                console.warn(`Using expired cache for ${actualKey} due to fetch error`);
                 return expiredCache.data as T;
             }
             
             // Si no hay cache, devolver datos por defecto según el tipo
-            console.warn(`No cache available for ${key}, returning default data`);
-            return getDefaultData<T>(key);
+            console.warn(`No cache available for ${actualKey}, returning default data`);
+            return getDefaultData<T>(actualKey);
         });
     
     pendingRequests.set(requestKey, requestPromise);
@@ -850,8 +871,9 @@ export const getCustomers = async (): Promise<Customer[]> => {
 
 export const getBookings = async (): Promise<Booking[]> => {
     try {
-        // Usar cache normal sin forzar limpieza
-        const rawBookings = await getData<any[]>('bookings');
+        // Agregar cache-busting timestamp si hubo mutation reciente
+        const cacheBuster = lastMutationTimestamp > 0 ? `&_t=${lastMutationTimestamp}` : '';
+        const rawBookings = await getData<any[]>(`bookings${cacheBuster}`);
         
         if (!rawBookings || !Array.isArray(rawBookings)) {
             console.warn('getBookings: No bookings data received, returning empty array');
@@ -1565,15 +1587,11 @@ export const getStandaloneCustomers = async (): Promise<Customer[]> => {
 };
 
 export const getCustomersWithDeliveries = async (bookings: Booking[]): Promise<Customer[]> => {
-    // Eliminado debug
-    
     // Get customers from bookings first
-            const customersFromBookings = generateCustomersFromBookings(bookings);
-    // Eliminado debug
+    const customersFromBookings = generateCustomersFromBookings(bookings);
     
     // Get standalone customers from the customers table
     const standaloneCustomers = await getStandaloneCustomers();
-    // Eliminado debug
     
     // Merge customers, avoiding duplicates (booking-based customers take priority)
     const customerEmailsFromBookings = new Set(customersFromBookings.map(c => c.email.toLowerCase()));
@@ -1582,11 +1600,9 @@ export const getCustomersWithDeliveries = async (bookings: Booking[]): Promise<C
     );
     
     const allCustomers = [...customersFromBookings, ...uniqueStandaloneCustomers];
-    // Eliminado debug
     
-    // Get all deliveries
+    // ⚡ Get all deliveries (now lightweight - no photos loaded)
     const allDeliveries = await getDeliveries();
-    // Eliminado debug
     
     // Add deliveries to each customer
     const customersWithDeliveries = allCustomers.map(customer => {
@@ -1594,24 +1610,11 @@ export const getCustomersWithDeliveries = async (bookings: Booking[]): Promise<C
             d.customerEmail.toLowerCase() === customer.email.toLowerCase()
         );
         
-    // Eliminado debug
-        
         return {
             ...customer,
             deliveries: customerDeliveries
         };
     });
-    
-    console.log('DEBUG getCustomersWithDeliveries - Final customers with deliveries:', customersWithDeliveries);
-    console.log('DEBUG getCustomersWithDeliveries - Final count:', customersWithDeliveries.length);
-    
-    // Check specifically for Daniel Reinoso
-    const danielCustomer = customersWithDeliveries.find(c => 
-        (c.userInfo?.firstName?.toLowerCase() === 'daniel' && c.userInfo?.lastName?.toLowerCase() === 'reinoso') ||
-        c.email?.toLowerCase().includes('daniel') ||
-        c.email?.toLowerCase().includes('reinoso')
-    );
-    console.log('DEBUG getCustomersWithDeliveries - Daniel Reinoso found:', danielCustomer);
     
     return customersWithDeliveries;
 };
@@ -1901,13 +1904,44 @@ const parseDelivery = (d: any): Delivery => {
         deliveredAt: d.deliveredAt || d.delivered_at || null,
         readyAt: d.readyAt || d.ready_at || null,
         notes: d.notes || null,
-        photos: parsedPhotos
+        photos: parsedPhotos,
+        hasPhotos: d.hasPhotos || false // ⚡ Flag para lazy loading
     };
 };
 
+// ⚡ Carga ligera de deliveries (sin fotos - para listados)
 export const getDeliveries = async (): Promise<Delivery[]> => {
     const rawDeliveries = await fetchData('/api/data?action=deliveries');
     return rawDeliveries ? rawDeliveries.map(parseDelivery) : [];
+};
+
+// ⚡ Carga de fotos bajo demanda para una delivery específica
+export const getDeliveryPhotos = async (deliveryId: string): Promise<string[]> => {
+    try {
+        const result = await fetchData(`/api/data?action=getDeliveryPhotos&deliveryId=${deliveryId}`);
+        if (!result || !result.photos) return [];
+        
+        let photos = result.photos;
+        if (typeof photos === 'string') {
+            try {
+                photos = JSON.parse(photos);
+            } catch {
+                return [];
+            }
+        }
+        
+        if (!Array.isArray(photos)) return [];
+        
+        return photos.filter((photo: any) => {
+            if (typeof photo === 'string' && photo.trim()) {
+                return photo.startsWith('data:') || photo.startsWith('http://') || photo.startsWith('https://');
+            }
+            return false;
+        });
+    } catch (error) {
+        console.error('[getDeliveryPhotos] Error:', error);
+        return [];
+    }
 };
 
 export const getDeliveriesByCustomer = async (customerEmail: string): Promise<Delivery[]> => {

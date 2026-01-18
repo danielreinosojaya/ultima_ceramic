@@ -387,6 +387,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json(info);
     }
 
+
     // � FIX CAPACITY: Resetear classCapacity a valores correctos
     if (action === 'fixClassCapacity') {
         console.log('🔧 [FIX] Reseteando classCapacity a valores correctos...');
@@ -683,8 +684,54 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     break;
                 }
                 case 'deliveries': {
-                    const { rows: deliveries } = await sql`SELECT * FROM deliveries ORDER BY scheduled_date ASC, created_at DESC`;
-                    data = deliveries.map(toCamelCase);
+                    // ⚡ OPTIMIZACIÓN: Excluir fotos por defecto (muy pesadas - base64)
+                    // Las fotos se cargan bajo demanda con getDeliveryPhotos
+                    const includePhotos = req.query.includePhotos === 'true';
+                    const limit = req.query.limit ? parseInt(req.query.limit as string) : 500;
+                    
+                    if (includePhotos) {
+                        // Carga completa (solo cuando explícitamente se pide)
+                        const { rows: deliveries } = await sql`
+                            SELECT * FROM deliveries 
+                            ORDER BY scheduled_date ASC, created_at DESC 
+                            LIMIT ${limit}
+                        `;
+                        data = deliveries.map(toCamelCase);
+                    } else {
+                        // Carga ligera: excluir columna photos
+                        const { rows: deliveries } = await sql`
+                            SELECT id, customer_email, description, scheduled_date, status, 
+                                   created_at, completed_at, delivered_at, ready_at, notes,
+                                   CASE WHEN photos IS NOT NULL AND photos != '[]' AND photos != 'null' 
+                                        THEN true ELSE false END as has_photos
+                            FROM deliveries 
+                            ORDER BY scheduled_date ASC, created_at DESC 
+                            LIMIT ${limit}
+                        `;
+                        data = deliveries.map((d: any) => ({
+                            ...toCamelCase(d),
+                            photos: [] // Array vacío, se cargan bajo demanda
+                        }));
+                    }
+                    // ⚡ Cache 30 segundos para listado de deliveries
+                    res.setHeader('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+                    break;
+                }
+                case 'getDeliveryPhotos': {
+                    // ⚡ Endpoint para cargar fotos de una delivery específica
+                    const deliveryId = req.query.deliveryId as string;
+                    if (!deliveryId) {
+                        return res.status(400).json({ error: 'deliveryId required' });
+                    }
+                    const { rows } = await sql`
+                        SELECT photos FROM deliveries WHERE id = ${deliveryId}
+                    `;
+                    if (rows.length === 0) {
+                        return res.status(404).json({ error: 'Delivery not found' });
+                    }
+                    // ⚡ Cache 5 minutos para fotos (raramente cambian)
+                    res.setHeader('Cache-Control', 'private, max-age=300, stale-while-revalidate=600');
+                    data = { photos: rows[0].photos || [] };
                     break;
                 }
                 case 'standaloneCustomers': {
@@ -717,8 +764,15 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     break;
                 }
                 case 'getCustomers': {
+                    // ⚡ OPTIMIZACIÓN: Usar pagination y caché agresivo (10 minutos)
+                    const page = req.query.page ? parseInt(req.query.page as string) : 1;
+                    const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+                    const offset = (page - 1) * limit;
+                    
+                    console.log(`[getCustomers] Page ${page}, Limit ${limit}`);
+                    
                     // Get all unique customers from bookings first
-                    const { rows: bookings } = await sql`SELECT * FROM bookings ORDER BY created_at DESC`;
+                    const { rows: bookings } = await sql`SELECT * FROM bookings WHERE status != 'expired' ORDER BY created_at DESC LIMIT 1000`;
                     const validBookings = bookings.filter(booking => booking && typeof booking === 'object');
                     const parsedBookings = validBookings.map(parseBookingFromDB).filter(Boolean);
                     const customerMap = new Map<string, Customer>();
@@ -749,12 +803,11 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         }
                     });
 
-                    // Also get standalone customers from customers table (e.g., delivery-only customers)
-                    const { rows: standaloneCustomers } = await sql`SELECT * FROM customers`;
+                    // Also get standalone customers from customers table
+                    const { rows: standaloneCustomers } = await sql`SELECT * FROM customers ORDER BY first_name ASC LIMIT 500`;
                     standaloneCustomers.forEach(customerRow => {
                         const email = customerRow.email;
                         if (!customerMap.has(email)) {
-                            // Create customer from customers table data
                             customerMap.set(email, {
                                 email,
                                 userInfo: {
@@ -771,9 +824,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                 lastBookingDate: new Date(0),
                                 deliveries: []
                             });
-                        }
-                        // If customer exists from bookings but has additional phone data from customers table, merge it
-                        else {
+                        } else {
                             const existing = customerMap.get(email)!;
                             if (customerRow.phone && !existing.userInfo.phone) {
                                 existing.userInfo.phone = customerRow.phone;
@@ -783,10 +834,21 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             }
                         }
                     });
-                    data = Array.from(customerMap.values());
-                    console.log(`[API] Generated ${data.length} customers from ${parsedBookings.length} bookings`);
-                    // ✅ OPTIMIZACIÓN: Cache CDN 5 minutos (datos dinámicos)
-                    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+                    
+                    const allCustomers = Array.from(customerMap.values());
+                    const paginatedCustomers = allCustomers.slice(offset, offset + limit);
+                    
+                    console.log(`[API] Generated ${allCustomers.length} customers, returning ${paginatedCustomers.length} for page ${page}`);
+                    
+                    // ✅ CACHE STRATEGY: 30 segundos para permitir updates rápidos después de pagos/bookings
+                    res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
+                    data = {
+                        customers: paginatedCustomers,
+                        total: allCustomers.length,
+                        page,
+                        limit,
+                        pages: Math.ceil(allCustomers.length / limit)
+                    };
                     break;
                 }
 
@@ -808,9 +870,22 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
 
                     console.log(`[getAvailableSlots] Searching: technique=${requestedTechnique}, participants=${requestedParticipants}, from=${searchStartDate.toISOString().split('T')[0]}, days=${searchDays}`);
 
+                    // ⚡ OPTIMIZACIÓN: Solo cargar bookings relevantes para el rango de fechas buscado
+                    // No necesitamos bookings de 2023 para calcular disponibilidad de febrero 2026
+                    const rangeStart = new Date(searchStartDate);
+                    rangeStart.setDate(rangeStart.getDate() - 7); // 7 días buffer
+                    const rangeEnd = new Date(searchStartDate);
+                    rangeEnd.setDate(rangeEnd.getDate() + searchDays + 7); // +7 días buffer
+                    
                     // Obtener datos necesarios
                     const [bookingsResult, instructorsResult] = await Promise.all([
-                        sql`SELECT * FROM bookings WHERE status != 'expired' ORDER BY created_at DESC`,
+                        sql`
+                            SELECT * FROM bookings 
+                            WHERE status != 'expired'
+                            AND created_at >= ${rangeStart.toISOString()}
+                            ORDER BY created_at DESC
+                            LIMIT 500
+                        `,
                         sql`SELECT * FROM instructors ORDER BY name ASC`
                     ]);
 
@@ -830,6 +905,61 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         currentDate.setDate(currentDate.getDate() + i);
                         const dateStr = currentDate.toISOString().split('T')[0];
                         const dayKey = DAY_NAMES[currentDate.getDay()];
+                        
+                        // AGREGAR CLASES DE INTRODUCCIÓN DE TORNO PARA GRUPOS
+                        // Martes 19:00 y Miércoles 11:00 para grupos de 2+ personas
+                        if (requestedTechnique === 'potters_wheel' && requestedParticipants >= 2) {
+                            if ((dayKey === 'Tuesday' && currentDate >= searchStartDate) || 
+                                (dayKey === 'Wednesday' && currentDate >= searchStartDate)) {
+                                
+                                const introTime = dayKey === 'Tuesday' ? '19:00' : '11:00';
+                                const slotStartMinutes = timeToMinutes(introTime);
+                                const slotEndMinutes = slotStartMinutes + (2 * 60); // 2 horas
+                                
+                                // Contar participantes que se solapan con este slot de introducción
+                                const bookingsOverlappingIntro = bookings.filter((b: any) => {
+                                    if (!b.slots || !Array.isArray(b.slots)) return false;
+                                    
+                                    const bookingTechnique = b.technique || (b.product?.details as any)?.technique;
+                                    if (bookingTechnique !== 'potters_wheel') return false;
+                                    
+                                    return b.slots.some((s: any) => {
+                                        if (s.date !== dateStr) return false;
+                                        
+                                        const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
+                                        const bookingEndMinutes = bookingStartMinutes + (2 * 60);
+                                        
+                                        return hasTimeOverlap(slotStartMinutes, slotEndMinutes, bookingStartMinutes, bookingEndMinutes);
+                                    });
+                                });
+                                
+                                let bookedParticipantsIntro = bookingsOverlappingIntro.reduce((sum: number, b: any) => {
+                                    return sum + (b.participants || 1);
+                                }, 0);
+                                
+                                // 🔒 REGLA CRÍTICA: Clases de introducción de torno son pre-establecidas, asumir MÍNIMO 1 persona
+                                if (bookedParticipantsIntro === 0) {
+                                    bookedParticipantsIntro = 1;
+                                    console.log(`🔒 [getAvailableSlots] Torno introducción ${introTime}: asumiendo 1 persona mínimo (clase pre-establecida)`);
+                                }
+                                
+                                const maxCapacityIntro = resolveCapacity(dateStr, 'potters_wheel', maxCapacityMap, scheduleOverrides);
+                                const availableCapacityIntro = maxCapacityIntro - bookedParticipantsIntro;
+                                
+                                if (availableCapacityIntro >= requestedParticipants) {
+                                    availableSlots.push({
+                                        date: dateStr,
+                                        time: introTime,
+                                        available: availableCapacityIntro,
+                                        total: maxCapacityIntro,
+                                        canBook: true,
+                                        instructor: 'Instructor',
+                                        instructorId: 0,
+                                        technique: 'potters_wheel'
+                                    });
+                                }
+                            }
+                        }
                         
                         // Obtener slots del día (availability o override)
                         const override = scheduleOverrides[dateStr];
@@ -877,9 +1007,17 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             });
 
                             // Sumar participantes que solapan
-                            const bookedParticipants = bookingsOverlapingSlot.reduce((sum: number, b: any) => {
+                            let bookedParticipants = bookingsOverlapingSlot.reduce((sum: number, b: any) => {
                                 return sum + (b.participants || 1);
                             }, 0);
+
+                            // 🔒 REGLA CRÍTICA: Para torno en horarios pre-establecidos, asumir MÍNIMO 1 persona
+                            // Esto previene que se reserve en slots intermedios (9:30) cuando hay clase fija a las 9:00
+                            // incluso si esa clase aún no tiene estudiantes registrados en la base de datos
+                            if (requestedTechnique === 'potters_wheel' && bookedParticipants === 0) {
+                                bookedParticipants = 1; // Asumir siempre 1 persona mínimo
+                                console.log(`🔒 [getAvailableSlots] Torno ${slotTime}: asumiendo 1 persona mínimo (clase pre-establecida)`);
+                            }
 
                             // Capacidad máxima del slot (override válido o fallback por técnica)
                             const maxCapacity = resolveCapacity(dateStr, requestedTechnique, maxCapacityMap, scheduleOverrides);
@@ -937,8 +1075,21 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     const requestedParticipants = parseInt(participants as string);
 
                     try {
-                        // Obtener datos usando funciones helper
-                        const bookingsResult = await sql`SELECT * FROM bookings WHERE status != 'expired' ORDER BY created_at DESC`;
+                        // ⚡ OPTIMIZACIÓN: Solo cargar bookings del día específico a verificar
+                        const targetDate = new Date(requestedDate);
+                        const dayStart = new Date(targetDate);
+                        dayStart.setHours(0, 0, 0, 0);
+                        const dayEnd = new Date(targetDate);
+                        dayEnd.setHours(23, 59, 59, 999);
+                        
+                        // Obtener solo bookings del día
+                        const bookingsResult = await sql`
+                            SELECT * FROM bookings 
+                            WHERE status != 'expired'
+                            AND created_at >= ${dayStart.toISOString()}
+                            AND created_at <= ${dayEnd.toISOString()}
+                            ORDER BY created_at DESC
+                        `;
                         const bookings = bookingsResult.rows.map(parseBookingFromDB);
                         
                         const { scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
@@ -954,48 +1105,97 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         const requestedStartMinutes = timeToMinutes(normalizedTime);
                         const requestedEndMinutes = requestedStartMinutes + (2 * 60); // 2 horas
 
-                        // Contar participantes que solapan temporalmente con el slot solicitado
-                        let bookedParticipants = 0;
+                        // Contar participantes que solapan temporalmente (mismo grupo de capacidad)
+                        // exactMatchParticipants: solo para badge visual (mismo horario exacto)
+                        // overlappingParticipants: todos los solapados (exacto + parcial) para validar capacidad real
+                        let exactMatchParticipants = 0;
+                        let overlappingParticipants = 0;
                         const bookingsInSlot: any[] = [];
 
                         for (const booking of bookings) {
                             if (!booking.slots || !Array.isArray(booking.slots)) continue;
                             
-                            // Técnica del booking
+                            // Técnica del booking (extraer de técnica o de producto)
                             const bookingTechnique = booking.technique || (booking.product?.details as any)?.technique;
-                            if (!bookingTechnique) continue;
-
-                            // IMPORTANTE: Solo contar si es EXACTAMENTE la misma técnica
-                            if (bookingTechnique !== requestedTechnique) continue;
+                            
+                            // Definir grupos de técnicas que comparten capacidad
+                            const isHandWork = (tech: string | undefined) => 
+                                tech === 'molding' || tech === 'painting' || tech === 'hand_modeling';
+                            const isHandWorkGroup = isHandWork(requestedTechnique);
+                            const isBookingHandWorkGroup = isHandWork(bookingTechnique);
+                            
+                            // Determinar si la técnica del booking compite por capacidad
+                            let techniquesMatch = false;
+                            if (isHandWorkGroup && isBookingHandWorkGroup) {
+                                // Ambas son trabajo manual (molding + painting comparten capacidad)
+                                techniquesMatch = true;
+                            } else if (isHandWorkGroup && !bookingTechnique) {
+                                // Requested es handwork pero booking no tiene técnica - contar por precaución
+                                techniquesMatch = true;
+                            } else if (!isHandWorkGroup && bookingTechnique === requestedTechnique) {
+                                // Misma técnica (ej: torno vs torno)
+                                techniquesMatch = true;
+                            } else if (!isHandWorkGroup && !bookingTechnique) {
+                                // Requested no es handwork y booking tampoco tiene técnica - contar para ser conservador
+                                techniquesMatch = true;
+                            }
+                            
+                            if (!techniquesMatch) {
+                                console.log(`[checkSlotAvailability] Skipping booking (technique incompatible): booking=${bookingTechnique}, requested=${requestedTechnique}`);
+                                continue;
+                            }
 
                             // Verificar si hay overlap temporal en la misma fecha
-                            const hasOverlapingSlot = booking.slots.some((s: any) => {
+                            const overlapInfo = booking.slots.find((s: any) => {
                                 if (s.date !== requestedDate) return false;
 
                                 const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
                                 const bookingEndMinutes = bookingStartMinutes + (2 * 60);
 
-                                return hasTimeOverlap(requestedStartMinutes, requestedEndMinutes, bookingStartMinutes, bookingEndMinutes);
+                                const hasOverlap = hasTimeOverlap(requestedStartMinutes, requestedEndMinutes, bookingStartMinutes, bookingEndMinutes);
+                                
+                                // Verificar si es EXACTAMENTE el mismo horario
+                                const isSameExactTime = bookingStartMinutes === requestedStartMinutes && 
+                                                       bookingEndMinutes === requestedEndMinutes;
+                                
+                                if (hasOverlap) {
+                                    const participantCount = booking.participants || 1;
+                                    
+                                    // Contar para capacidad real (exacto + parcial)
+                                    overlappingParticipants += participantCount;
+                                    
+                                    // Contar solo exactos para badge visual
+                                    if (isSameExactTime) {
+                                        exactMatchParticipants += participantCount;
+                                        console.log(`[checkSlotAvailability] EXACT TIME MATCH - booking: ${s.time}, requested: ${normalizedTime}, participants: ${participantCount}, technique: ${bookingTechnique || 'unknown'}`);
+                                    } else {
+                                        console.log(`[checkSlotAvailability] PARTIAL OVERLAP (COUNTED FOR CAPACITY) - booking: ${s.time} (${bookingStartMinutes}-${bookingEndMinutes}min), requested: ${normalizedTime} (${requestedStartMinutes}-${requestedEndMinutes}min), participants: ${participantCount}, technique: ${bookingTechnique || 'unknown'}`);
+                                    }
+                                }
+
+                                return isSameExactTime; // Solo retornar true si es exactamente el mismo horario
                             });
 
-                            if (hasOverlapingSlot) {
+                            // Si es exactamente el mismo horario, agregar a lista de bookings
+                            if (overlapInfo) {
                                 const participantCount = booking.participants || 1;
-                                bookedParticipants += participantCount;
                                 bookingsInSlot.push({
                                     id: booking.id,
                                     participants: participantCount,
                                     userInfo: { name: booking.userInfo?.name },
-                                    isPaid: booking.isPaid
+                                    isPaid: booking.isPaid,
+                                    bookingTechnique: bookingTechnique || 'unknown',
+                                    requestedTechnique: requestedTechnique
                                 });
                             }
                         }
 
                         // Verificar capacidad (override válido o fallback por técnica)
                         const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
-                        const availableCapacity = maxCapacity - bookedParticipants;
+                        const availableCapacity = maxCapacity - overlappingParticipants;
                         const canBook = availableCapacity >= requestedParticipants;
 
-                        console.log(`[checkSlotAvailability] maxCapacity: ${maxCapacity}, booked: ${bookedParticipants}, available: ${availableCapacity}, canBook: ${canBook}`);
+                        console.log(`[checkSlotAvailability] maxCapacity: ${maxCapacity}, booked(overlap): ${overlappingParticipants}, available: ${availableCapacity}, canBook: ${canBook}`);
 
                         const responseData = {
                             success: true,
@@ -1006,12 +1206,12 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             requestedParticipants,
                             capacity: {
                                 max: maxCapacity,
-                                booked: bookedParticipants,
+                                booked: exactMatchParticipants,  // Solo exactos para badge visual
                                 available: availableCapacity
                             },
                             bookingsCount: bookingsInSlot.length,
                             message: canBook 
-                                ? `Hay ${availableCapacity} cupos disponibles de ${maxCapacity}` 
+                                ? `¡Disponible! ${availableCapacity} cupos libres` 
                                 : `Solo hay ${availableCapacity} cupos disponibles, necesitas ${requestedParticipants}`
                         };
 
@@ -1066,8 +1266,19 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     data = [];
                 }
             } else if (key === 'bookings') {
-                const { rows: bookings } = await sql`SELECT * FROM bookings ORDER BY created_at DESC`;
-                console.log(`API: Raw database query returned ${bookings.length} rows`);
+                // ⚡ OPTIMIZACIÓN: Cargar solo bookings recientes (últimos 90 días) por defecto
+                // Bookings antiguos se cargan on-demand cuando usuario busca específicamente
+                const daysLimit = parseInt(req.query.daysLimit as string) || 90;
+                const limitDate = new Date();
+                limitDate.setDate(limitDate.getDate() - daysLimit);
+                
+                const { rows: bookings } = await sql`
+                    SELECT * FROM bookings 
+                    WHERE created_at >= ${limitDate.toISOString()}
+                    ORDER BY created_at DESC
+                    LIMIT 1000
+                `;
+                console.log(`API: Loaded ${bookings.length} bookings from last ${daysLimit} days`);
                 
                 if (bookings.length === 0) {
                     console.warn('API: No bookings found in database');
@@ -1081,11 +1292,22 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     console.log(`API: Successfully processed ${processedBookings.length} bookings out of ${bookings.length} raw bookings`);
                     data = processedBookings;
                 }
-                // ✅ OPTIMIZACIÓN: Cache CDN 5 minutos (datos dinámicos)
-                res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+                // ✅ CACHE STRATEGY: Cache CDN 30 segundos para balance entre performance y freshness
+                // Permite updates rápidos después de mutations sin sacrificar totalmente CDN
+                res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
             } else if (key === 'customers') {
-                // Get all unique customers from bookings
-                const { rows: bookings } = await sql`SELECT * FROM bookings ORDER BY created_at DESC`;
+                // ⚡ OPTIMIZACIÓN: Cargar solo bookings recientes para generar lista de customers activos
+                const daysLimit = 90;
+                const limitDate = new Date();
+                limitDate.setDate(limitDate.getDate() - daysLimit);
+                
+                const { rows: bookings } = await sql`
+                    SELECT * FROM bookings 
+                    WHERE created_at >= ${limitDate.toISOString()}
+                    ORDER BY created_at DESC
+                    LIMIT 1000
+                `;
+                console.log(`API: Loading customers from ${bookings.length} recent bookings`);
                 const validBookings = bookings.filter(booking => booking && typeof booking === 'object');
                 const parsedBookings = validBookings.map(parseBookingFromDB).filter(Boolean);
                 
@@ -4556,7 +4778,14 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
 
     // COUPLES_EXPERIENCE VALIDATION
     const isCouplesExperience = body.productType === 'COUPLES_EXPERIENCE';
-    const technique = (body as any).technique;
+    
+    // Extract technique: first from direct field, then from product.details
+    let technique = (body as any).technique;
+    if (!technique && body.product && (body.product as any).details) {
+      technique = (body.product as any).details.technique;
+    }
+    
+    console.log(`[addBookingAction] productType=${body.productType}, technique=${technique} (from body.technique=${(body as any).technique}, from product.details=${body.product && (body.product as any).details ? (body.product as any).details.technique : 'N/A'})`);
 
     if (isCouplesExperience) {
       // Must have exactly 1 slot

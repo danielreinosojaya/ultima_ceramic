@@ -1122,9 +1122,26 @@ export const sendGroupClassConfirmationEmail = async (
                 </p>
             </div>
 
+            <div style="background: #F3E8FF; border-left: 4px solid #A855F7; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3 style="color: #7E22CE; margin-top: 0;">🎁 Importante sobre tu reserva</h3>
+                <p style="color: #6B21A8; font-size: 14px; margin: 10px 0; line-height: 1.6;">
+                    Tu reserva es especial y personal. El valor que pagaste es exclusivo para esta experiencia en esta fecha, diseñado pensando en ti y tu grupo. Algunos detalles clave:
+                </p>
+                <ul style="color: #6B21A8; font-size: 14px; margin: 10px 0; padding-left: 20px; line-height: 1.8;">
+                    <li><strong>✓ Tu valor es válido únicamente para esta experiencia y fecha</strong></li>
+                    <li><strong>✓ No puede transferirse a otra persona</strong></li>
+                    <li><strong>✓ No se puede combinar con otros servicios o descuentos de Ceramicalma</strong></li>
+                    <li><strong>✓ Si necesitas cambiar la fecha, aplican términos de reprogramación</strong></li>
+                    <li><strong>✓ Tu inversión es final y no reembolsable</strong></li>
+                </ul>
+                <p style="color: #6B21A8; font-size: 14px; margin-top: 12px;">
+                    Queremos que disfrutes cada momento. Si tienes dudas, estamos aquí. 🎨
+                </p>
+            </div>
+
             <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
                 ¡Que disfruten su experiencia!<br/>
-                <strong>El equipo de Última Ceramic</strong>
+                <strong>El equipo de Ceramicalma</strong>
             </p>
         </div>
     `;
@@ -1175,7 +1192,7 @@ export const sendExperiencePendingReviewEmail = async (
 
             <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
                 Cualquier duda, no dudes en contactarnos.<br/>
-                <strong>El equipo de Última Ceramic</strong>
+                <strong>El equipo de Ceramicalma</strong>
             </p>
         </div>
     `;
@@ -1226,7 +1243,7 @@ export const sendExperienceConfirmedEmail = async (
 
             <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
                 ¡A crear se ha dicho!<br/>
-                <strong>El equipo de Última Ceramic</strong>
+                <strong>El equipo de Ceramicalma</strong>
             </p>
         </div>
     `;
@@ -1277,7 +1294,7 @@ export const sendExperienceRejectedEmail = async (
 
             <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
                 Esperamos verte pronto con otra experiencia.<br/>
-                <strong>El equipo de Última Ceramic</strong>
+                <strong>El equipo de Ceramicalma</strong>
             </p>
         </div>
     `;
@@ -1344,107 +1361,158 @@ export const sendCustomExperiencePreBookingEmail = async (
     const subject = `⏳ Pre-Reserva Experiencia Grupal - ${bookingCode}`;
     
     const html = `
-        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: #FFFFFF; padding: 20px;">
-            <!-- Header -->
-            <div style="text-align: center; margin-bottom: 30px;">
-                <h1 style="color: #8B5CF6; font-size: 28px; margin: 0;">Ceramicalma</h1>
-                <p style="color: #6B7280; font-size: 14px; margin: 5px 0;">Experiencia Grupal Personalizada</p>
+        <div style="font-family: 'Cardo', serif; max-width: 600px; margin: 0 auto; background: #FFFFFF; padding: 0;">
+            <!-- Header with brand gradient -->
+            <div style="background: linear-gradient(135deg, #828E98 0%, #6B7A86 100%); text-align: center; padding: 40px 20px; color: white;">
+                <h1 style="font-size: 32px; margin: 0 0 8px 0; font-weight: 700; letter-spacing: -0.5px;">Ceramicalma</h1>
+                <p style="font-size: 14px; margin: 0; opacity: 0.9; font-style: italic;">Experiencia Grupal Personalizada</p>
             </div>
 
-            <h2 style="color: #1F2937; font-size: 22px; margin-bottom: 20px;">⏳ ¡Tu Pre-Reserva Está Lista!</h2>
-            
-            <p style="color: #4B5563; font-size: 16px;">Hola ${userInfo.firstName},</p>
-            
-            <p style="color: #6B7280; font-size: 14px; line-height: 1.6;">
-                Hemos recibido tu solicitud para una experiencia grupal personalizada. Para confirmar tu reserva, por favor realiza el pago dentro de las próximas <strong>2 horas</strong>.
-            </p>
-
-            <!-- Booking Details -->
-            <div style="background: linear-gradient(135deg, #F3E8FF 0%, #E9D5FF 100%); border-left: 4px solid #8B5CF6; padding: 20px; margin: 25px 0; border-radius: 8px;">
-                <h3 style="color: #6B21A8; margin-top: 0; font-size: 18px;">📋 Detalles de tu Experiencia</h3>
-                <p style="margin: 8px 0; color: #374151;"><strong>Código de Reserva:</strong> ${bookingCode}</p>
-                <p style="margin: 8px 0; color: #374151;"><strong>Tipo:</strong> ${experienceTypeName}</p>
-                <p style="margin: 8px 0; color: #374151;"><strong>Técnica:</strong> ${techniqueName}</p>
-                <p style="margin: 8px 0; color: #374151;"><strong>📅 Fecha:</strong> ${formattedDate}</p>
-                <p style="margin: 8px 0; color: #374151;"><strong>🕐 Hora:</strong> ${time}</p>
-                <p style="margin: 8px 0; color: #374151;"><strong>👥 Participantes:</strong> ${participants} persona(s)</p>
-                ${additionalDetails}
-                <p style="margin: 20px 0 0 0; font-size: 24px; color: #8B5CF6; font-weight: bold;">Total: $${totalPrice.toFixed(2)}</p>
-            </div>
-
-            <!-- Payment Instructions -->
-            <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 20px; margin: 25px 0; border-radius: 8px;">
-                <h3 style="color: #92400E; margin-top: 0; font-size: 18px;">💳 Instrucciones de Pago</h3>
-                <p style="color: #78350F; font-size: 14px; margin-bottom: 20px;">
-                    Realiza tu transferencia bancaria a cualquiera de nuestras cuentas:
+            <!-- Main content -->
+            <div style="padding: 40px 30px;">
+                <h2 style="color: #828E98; font-size: 24px; margin: 0 0 20px 0; font-weight: 700;">⏳ ¡Tu Pre-Reserva Está Lista!</h2>
+                
+                <p style="color: #4A4540; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">Hola <strong>${userInfo.firstName}</strong>,</p>
+                
+                <p style="color: #958985; font-size: 15px; line-height: 1.7; margin: 0 0 28px 0;">
+                    Hemos recibido tu solicitud para una experiencia grupal personalizada. Para confirmar tu reserva, por favor realiza el pago dentro de las próximas <strong>2 horas</strong>.
                 </p>
-                ${Array.isArray(bankDetails) ? bankDetails.map(acc => `
-                    <div style="background: white; border: 1px solid #F59E0B; border-radius: 8px; padding: 15px; margin-bottom: 12px;">
-                        <div style="margin-bottom: 10px;">
-                            <p style="margin: 0 0 4px 0; font-size: 12px; color: #78350F; font-weight: bold; text-transform: uppercase;">Banco</p>
-                            <p style="margin: 0; font-size: 16px; font-weight: bold; color: #1F2937;">${acc.bankName}</p>
-                        </div>
-                        <div style="margin-bottom: 10px;">
-                            <p style="margin: 0 0 4px 0; font-size: 12px; color: #78350F; font-weight: bold; text-transform: uppercase;">Titular</p>
-                            <p style="margin: 0; font-size: 14px; color: #374151;">${acc.accountHolder}</p>
-                        </div>
-                        <div style="margin-bottom: 10px;">
-                            <p style="margin: 0 0 4px 0; font-size: 12px; color: #78350F; font-weight: bold; text-transform: uppercase;">Número de Cuenta</p>
-                            <p style="margin: 0; font-size: 15px; font-family: 'Courier New', monospace; font-weight: bold; color: #8B5CF6; letter-spacing: 1px;">${acc.accountNumber}</p>
-                        </div>
-                        <div style="display: flex; gap: 15px;">
-                            <div style="flex: 1;">
-                                <p style="margin: 0 0 4px 0; font-size: 12px; color: #78350F; font-weight: bold; text-transform: uppercase;">Tipo</p>
-                                <p style="margin: 0; font-size: 14px; color: #374151;">${acc.accountType}</p>
-                            </div>
-                            <div style="flex: 1;">
-                                <p style="margin: 0 0 4px 0; font-size: 12px; color: #78350F; font-weight: bold; text-transform: uppercase;">Cédula</p>
-                                <p style="margin: 0; font-size: 14px; color: #374151;">${acc.taxId}</p>
-                            </div>
-                        </div>
+
+                <!-- Booking Details Box -->
+                <div style="background: #F4F2F1; border-left: 5px solid #828E98; padding: 24px; margin: 28px 0; border-radius: 8px;">
+                    <h3 style="color: #828E98; margin: 0 0 16px 0; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">📋 Detalles de tu Experiencia</h3>
+                    <table style="width: 100%; color: #4A4540; font-size: 14px;">
+                        <tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600; width: 40%;">Código:</td>
+                            <td style="padding: 10px 0; font-family: 'Courier New', monospace; letter-spacing: 0.5px; color: #828E98; font-weight: 700;">${bookingCode}</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600;">Tipo:</td>
+                            <td style="padding: 10px 0;">${experienceTypeName}</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600;">Técnica:</td>
+                            <td style="padding: 10px 0;">${techniqueName}</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600;">📅 Fecha:</td>
+                            <td style="padding: 10px 0;">${formattedDate}</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600;">🕐 Hora:</td>
+                            <td style="padding: 10px 0;">${time}</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600;">👥 Participantes:</td>
+                            <td style="padding: 10px 0;">${participants} persona(s)</td>
+                        </tr>
+                    </table>
+                    ${additionalDetails}
+                    <div style="margin-top: 20px; padding-top: 16px; border-top: 2px solid #D1D0C6;">
+                        <p style="margin: 0; font-size: 24px; color: #828E98; font-weight: 700; text-align: right;">
+                            $${totalPrice.toFixed(2)}
+                        </p>
                     </div>
-                `).join('') : `
-                    <div style="background: white; border: 1px solid #F59E0B; border-radius: 8px; padding: 15px; margin-bottom: 12px;">
-                        <div style="margin-bottom: 10px;">
-                            <p style="margin: 0 0 4px 0; font-size: 12px; color: #78350F; font-weight: bold; text-transform: uppercase;">Banco</p>
-                            <p style="margin: 0; font-size: 16px; font-weight: bold; color: #1F2937;">${bankDetails.bankName}</p>
-                        </div>
-                        <div style="margin-bottom: 10px;">
-                            <p style="margin: 0 0 4px 0; font-size: 12px; color: #78350F; font-weight: bold; text-transform: uppercase;">Titular</p>
-                            <p style="margin: 0; font-size: 14px; color: #374151;">${bankDetails.accountHolder}</p>
-                        </div>
-                        <div style="margin-bottom: 10px;">
-                            <p style="margin: 0 0 4px 0; font-size: 12px; color: #78350F; font-weight: bold; text-transform: uppercase;">Número de Cuenta</p>
-                            <p style="margin: 0; font-size: 15px; font-family: 'Courier New', monospace; font-weight: bold; color: #8B5CF6; letter-spacing: 1px;">${bankDetails.accountNumber}</p>
-                        </div>
-                        <div style="display: flex; gap: 15px;">
-                            <div style="flex: 1;">
-                                <p style="margin: 0 0 4px 0; font-size: 12px; color: #78350F; font-weight: bold; text-transform: uppercase;">Tipo</p>
-                                <p style="margin: 0; font-size: 14px; color: #374151;">${bankDetails.accountType}</p>
+                </div>
+
+                <!-- Payment Instructions -->
+                <div style="background: linear-gradient(135deg, rgba(204, 188, 178, 0.08) 0%, transparent 100%); border: 2px solid #D1D0C6; padding: 24px; margin: 28px 0; border-radius: 8px;">
+                    <h3 style="color: #828E98; margin: 0 0 16px 0; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">💳 Instrucciones de Pago</h3>
+                    <p style="color: #4A4540; font-size: 14px; margin: 0 0 18px 0; line-height: 1.6;">
+                        Realiza tu transferencia bancaria a cualquiera de nuestras cuentas:
+                    </p>
+                    ${Array.isArray(bankDetails) ? bankDetails.map(acc => `
+                        <div style="background: white; border: 1px solid #D1D0C6; border-radius: 6px; padding: 16px; margin-bottom: 12px;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 12px;">
+                                <div>
+                                    <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Banco</p>
+                                    <p style="margin: 0; font-size: 15px; font-weight: 600; color: #4A4540;">${acc.bankName}</p>
+                                </div>
+                                <div>
+                                    <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Tipo Cuenta</p>
+                                    <p style="margin: 0; font-size: 15px; font-weight: 600; color: #4A4540;">${acc.accountType}</p>
+                                </div>
                             </div>
-                            <div style="flex: 1;">
-                                <p style="margin: 0 0 4px 0; font-size: 12px; color: #78350F; font-weight: bold; text-transform: uppercase;">Cédula</p>
-                                <p style="margin: 0; font-size: 14px; color: #374151;">${bankDetails.taxId}</p>
+                            <div style="margin-bottom: 12px;">
+                                <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Titular</p>
+                                <p style="margin: 0; font-size: 14px; color: #4A4540;">${acc.accountHolder}</p>
+                            </div>
+                            <div style="margin-bottom: 12px;">
+                                <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Número de Cuenta</p>
+                                <p style="margin: 0; font-size: 16px; font-family: 'Courier New', monospace; font-weight: 700; color: #828E98; letter-spacing: 1px; background: #F4F2F1; padding: 8px 12px; border-radius: 4px;">${acc.accountNumber}</p>
+                            </div>
+                            <div>
+                                <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Cédula</p>
+                                <p style="margin: 0; font-size: 14px; color: #4A4540;">${acc.taxId}</p>
                             </div>
                         </div>
+                    `).join('') : `
+                        <div style="background: white; border: 1px solid #D1D0C6; border-radius: 6px; padding: 16px;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 12px;">
+                                <div>
+                                    <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Banco</p>
+                                    <p style="margin: 0; font-size: 15px; font-weight: 600; color: #4A4540;">${bankDetails.bankName}</p>
+                                </div>
+                                <div>
+                                    <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Tipo Cuenta</p>
+                                    <p style="margin: 0; font-size: 15px; font-weight: 600; color: #4A4540;">${bankDetails.accountType}</p>
+                                </div>
+                            </div>
+                            <div style="margin-bottom: 12px;">
+                                <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Titular</p>
+                                <p style="margin: 0; font-size: 14px; color: #4A4540;">${bankDetails.accountHolder}</p>
+                            </div>
+                            <div style="margin-bottom: 12px;">
+                                <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Número de Cuenta</p>
+                                <p style="margin: 0; font-size: 16px; font-family: 'Courier New', monospace; font-weight: 700; color: #828E98; letter-spacing: 1px; background: #F4F2F1; padding: 8px 12px; border-radius: 4px;">${bankDetails.accountNumber}</p>
+                            </div>
+                            <div>
+                                <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Cédula</p>
+                                <p style="margin: 0; font-size: 14px; color: #4A4540;">${bankDetails.taxId}</p>
+                            </div>
+                        </div>
+                    `}
+                    <div style="margin-top: 20px; padding: 16px; background: white; border: 2px solid #828E98; border-radius: 8px; text-align: center;">
+                        <p style="margin: 0 0 6px 0; font-size: 12px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Monto a Transferir</p>
+                        <p style="margin: 0; font-size: 28px; color: #828E98; font-weight: 700;">$${totalPrice.toFixed(2)}</p>
                     </div>
-                `}
-                <p style="margin-top: 20px; font-size: 20px; color: #8B5CF6; font-weight: bold; text-align: center; padding: 15px; background: white; border-radius: 8px; border: 2px solid #8B5CF6;">Monto a transferir: $${totalPrice.toFixed(2)}</p>
-                <p style="color: #78350F; font-size: 13px; margin-top: 15px;">
-                    <strong>⏰ Importante:</strong> Usa tu código de reserva <strong>${bookingCode}</strong> como referencia en la transferencia. Esta pre-reserva expira en 2 horas.
+                    <p style="color: #4A4540; font-size: 13px; margin: 16px 0 0 0; line-height: 1.6;">
+                        <strong>⏰ Importante:</strong> Usa tu código de reserva <strong>${bookingCode}</strong> como referencia en la transferencia. Esta pre-reserva expira en <strong>2 horas</strong>.
+                    </p>
+                </div>
+
+                <!-- Terms & Conditions -->
+                <div style="background: #F4F2F1; border-left: 5px solid #CCBCB2; padding: 24px; margin: 28px 0; border-radius: 8px;">
+                    <h3 style="color: #4A4540; margin: 0 0 14px 0; font-size: 16px; font-weight: 700;">🎁 Términos de tu Reserva</h3>
+                    <p style="color: #4A4540; font-size: 14px; margin: 0 0 14px 0; line-height: 1.6;">
+                        Tu experiencia es especial y personalizada. El valor que pagaste es exclusivo para esta actividad en esta fecha, diseñado solo para ti y tu grupo.
+                    </p>
+                    <ul style="color: #4A4540; font-size: 14px; margin: 0; padding-left: 20px; line-height: 1.8;">
+                        <li style="margin-bottom: 6px;">✓ <strong>Válido solo para esta experiencia y fecha</strong></li>
+                        <li style="margin-bottom: 6px;">✓ <strong>No transferible a otra persona</strong></li>
+                        <li style="margin-bottom: 6px;">✓ <strong>No acumulable con otros servicios o descuentos</strong></li>
+                        <li style="margin-bottom: 6px;">✓ <strong>No reembolsable</strong></li>
+                        <li>✓ <strong>Cambios de fecha sujetos a disponibilidad y términos</strong></li>
+                    </ul>
+                </div>
+
+                <!-- Closing -->
+                <p style="color: #958985; font-size: 15px; line-height: 1.7; margin: 28px 0 0 0;">
+                    ¿Tienes preguntas? Estamos aquí para ayudarte. Contáctanos sin dudas. 🎨
                 </p>
             </div>
-
 
             <!-- Footer -->
-            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-                <p style="color: #6B7280; font-size: 14px;">
-                    ¿Dudas? Contáctanos:<br/>
-                    📧 Email: cmassuh@ceramicalma.com<br/>
-                    📱 WhatsApp: +593 98 581 3327
+            <div style="background: #F4F2F1; border-top: 1px solid #D1D0C6; padding: 24px 30px; text-align: center;">
+                <p style="color: #4A4540; font-size: 14px; margin: 0 0 12px 0;">
+                    <strong>¿Preguntas? Contáctanos</strong><br/>
+                    <span style="font-size: 13px; color: #958985;">
+                        📧 cmassuh@ceramicalma.com<br/>
+                        📱 +593 98 581 3327
+                    </span>
                 </p>
-                <p style="color: #9CA3AF; font-size: 12px; margin-top: 20px;">
-                    <strong>El equipo de Ceramicalma</strong>
+                <p style="color: #958985; font-size: 12px; margin: 14px 0 0 0; font-style: italic;">
+                    El equipo de Ceramicalma
                 </p>
             </div>
         </div>

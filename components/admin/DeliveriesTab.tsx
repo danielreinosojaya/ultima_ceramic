@@ -133,7 +133,8 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataC
                 delivery.readyAt ? formatDate(delivery.readyAt) : 'No lista',
                 delivery.completedAt ? formatDate(delivery.completedAt) : delivery.deliveredAt ? formatDate(delivery.deliveredAt) : 'No entregada',
                 daysUntilExpiration !== null ? daysUntilExpiration : daysUntil,
-                delivery.photos ? delivery.photos.length : 0
+                // ⚡ Usar hasPhotos o photos.length según disponibilidad
+                delivery.photos && delivery.photos.length > 0 ? delivery.photos.length : (delivery.hasPhotos ? '📷' : 0)
             ];
         });
 

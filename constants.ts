@@ -280,10 +280,19 @@ export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
     incentiveRenewal: { enabled: false, value: 1, unit: 'classes' }
 };
 
-export const DEFAULT_BANK_DETAILS: BankDetails = {
-    bankName: "",
-    accountHolder: "",
-    accountNumber: "",
-    accountType: "",
-    taxId: ""
-};
+export const DEFAULT_BANK_DETAILS: BankDetails[] = [
+    {
+        bankName: "Banco Pichincha",
+        accountHolder: "Carolina Massuh Morán",
+        accountNumber: "2100334248",
+        accountType: "Cuenta Corriente",
+        taxId: "0921343935"
+    },
+    {
+        bankName: "Banco Bolivariano",
+        accountHolder: "Carolina Isabel Massuh Moran",
+        accountNumber: "0004381834",
+        accountType: "Ahorros",
+        taxId: "0921343935"
+    }
+];

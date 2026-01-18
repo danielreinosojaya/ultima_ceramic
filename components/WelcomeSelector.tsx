@@ -59,16 +59,123 @@ const ExperienceCard: React.FC<{
 
 
 export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) => {
+  const [showAllOptions, setShowAllOptions] = React.useState(false);
+  const [showHowItWorks, setShowHowItWorks] = React.useState(false);
+  
   return (
     <div className="text-center px-4 py-6 sm:p-6 md:p-8 bg-transparent animate-fade-in-up max-w-6xl mx-auto w-full">
-      {/* Hero Section - Mobile optimized */}
+      {/* Hero Section - Bienvenida */}
       <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif font-bold text-brand-text mb-1.5 sm:mb-2">
         Bienvenido a Ceramicalma
       </h2>
-      <p className="text-sm sm:text-base md:text-lg text-brand-secondary mb-6 sm:mb-8 md:mb-10">
+      <p className="text-sm sm:text-base md:text-lg text-brand-secondary mb-6 sm:mb-8">
         ¿Es tu primera vez con nosotros?
       </p>
       
+      {/* Hero Section - Focused on Custom Experience */}
+      <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif font-bold text-brand-text mb-2 sm:mb-3">
+        🎨 Experiencia Personalizada
+      </h2>
+      <p className="text-base sm:text-lg text-brand-secondary mb-4 sm:mb-6">
+        Reúne a tu grupo y diseña la clase perfecta
+      </p>
+      
+      {/* Social Proof */}
+      <div className="flex items-center justify-center gap-2 text-sm text-gray-600 mb-6">
+        <div className="flex -space-x-2">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-400 border-2 border-white" />
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-red-400 border-2 border-white" />
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-400 to-pink-400 border-2 border-white" />
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-purple-400 border-2 border-white" />
+        </div>
+        <span className="font-medium">+247 personas celebraron este mes</span>
+      </div>
+      
+      {/* Main CTA - Custom Experience First */}
+      <div className="bg-brand-surface border-2 border-brand-primary p-6 sm:p-8 rounded-2xl shadow-lg mb-8">
+        <h3 className="text-2xl sm:text-3xl font-bold mb-3 text-brand-text">Experiencia Personalizada</h3>
+        <p className="text-base sm:text-lg mb-4 text-brand-secondary">
+          ✨ Tu grupo elige una técnica: torno, modelado o pintura
+        </p>
+        <div className="flex justify-center mb-6">
+          <button
+            onClick={() => setShowHowItWorks(true)}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-brand-primary to-blue-600 text-white hover:from-blue-600 hover:to-brand-primary active:scale-95 transition-all duration-200 text-sm sm:text-base font-semibold whitespace-nowrap shadow-md hover:shadow-lg border border-transparent hover:border-white/30 cursor-pointer group"
+          >
+            <svg className="w-5 h-5 group-hover:animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            ¿Cómo funciona?
+          </button>
+        </div>
+        
+        {/* Quick Info */}
+        <div className="flex flex-wrap justify-center gap-3 sm:gap-4 mb-6 text-sm">
+          <span className="bg-brand-background px-3 py-1.5 rounded-full border border-brand-border text-brand-text font-medium">
+            💰 Desde $18/persona
+          </span>
+          <span className="bg-brand-background px-3 py-1.5 rounded-full border border-brand-border text-brand-text font-medium">
+            👥 2-22 personas
+          </span>
+          <span className="bg-brand-background px-3 py-1.5 rounded-full border border-brand-border text-brand-text font-medium">
+            ⏱️ 2 horas
+          </span>
+        </div>
+        
+        {/* Process Preview */}
+        <div className="bg-brand-background rounded-xl p-4 mb-6 text-left border border-brand-border">
+          <h4 className="font-semibold mb-3 text-center text-brand-text">📋 Proceso simple en 4 pasos:</h4>
+          <div className="space-y-2 text-sm text-brand-secondary">
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-brand-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">1</span>
+              <span>Cantidad de personas</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-brand-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">2</span>
+              <span>Elige la actividad (torno, modelado, pintura)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-brand-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">3</span>
+              <span>Selecciona fecha y hora</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-brand-primary text-white flex items-center justify-center text-xs font-bold flex-shrink-0">4</span>
+              <span>Confirma y paga</span>
+            </div>
+          </div>
+        </div>
+        
+        <button
+          onClick={() => onSelect('custom_experience')}
+          disabled={!FEATURE_FLAGS.EXPERIENCIA_PERSONALIZADA}
+          className={`font-bold py-4 px-8 rounded-xl w-full transition-all text-lg shadow-md ${
+            FEATURE_FLAGS.EXPERIENCIA_PERSONALIZADA
+              ? 'bg-brand-accent text-white hover:opacity-90 active:scale-[0.98]'
+              : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+          }`}
+        >
+          {FEATURE_FLAGS.EXPERIENCIA_PERSONALIZADA ? '🎨 Crear Experiencia' : 'Próximamente'}
+        </button>
+      </div>
+      
+      {/* Other Options - Collapsed by default on mobile */}
+      <button
+        onClick={() => setShowAllOptions(!showAllOptions)}
+        className="text-brand-primary font-medium mb-4 hover:underline flex items-center gap-2 mx-auto"
+      >
+        <span>💭 Ver todas las opciones</span>
+        <svg 
+          className={`w-4 h-4 transition-transform ${showAllOptions ? 'rotate-180' : ''}`}
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      
+      {showAllOptions && (
+        <>
       {/* Main Options - Stack on mobile, grid on desktop */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-5 md:gap-6 mb-8 sm:mb-10 md:mb-12">
         <ChoiceCard
@@ -94,22 +201,16 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
       {/* Section Divider */}
       <div className="flex items-center gap-4 mb-6 sm:mb-8">
         <div className="flex-1 h-px bg-brand-border/50"></div>
-        <h3 className="text-base sm:text-lg font-semibold text-brand-text px-2">Nuevas Experiencias</h3>
+        <h3 className="text-base sm:text-lg font-semibold text-brand-text px-2">Otras Opciones</h3>
         <div className="flex-1 h-px bg-brand-border/50"></div>
       </div>
 
       {/* New Experiences Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 mb-6 sm:mb-8">
-        <ExperienceCard 
-          title="Experiencia Personalizada"
-          subtitle="Reúne a tu grupo y diseña la clase perfecta. Cada persona elige su técnica."
-          buttonText="Crear Experiencia"
-          onClick={() => onSelect('custom_experience')}
-          isComingSoon={true}
-        />
+        
         <ExperienceCard 
           title="Clases Sueltas"
-          subtitle="Clase Individual o Grupal. Torno, Modelado o Pintura."
+          subtitle="Clase individual o grupal. Ideal para probar sin compromiso."
           buttonText="Reservar Clase"
           onClick={() => onSelect('single_class_wizard')}
           isComingSoon={!FEATURE_FLAGS.CLASES_SUELTAS}
@@ -189,18 +290,92 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
           isComingSoon={!FEATURE_FLAGS.EXPERIENCIAS_PAREJAS}
         />
         <ExperienceCard 
-          title="Experiencias Grupales"
-          subtitle="Ideal para cumpleaños, team building o reuniones creativas entre amigos."
-          buttonText="Planifica Tu Evento"
-          onClick={() => onSelect('group_experience')}
-        />
-        <ExperienceCard 
           title="Team Building Corporativo"
           subtitle="Fortalece a tu equipo con un taller de cerámica creativo y colaborativo."
           buttonText="Planifica tu Evento"
           onClick={() => onSelect('team_building')}
         />
       </div>
+      </>
+      )}
+      {/* Modal: ¿Cómo funciona? */}
+      {showHowItWorks && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="sticky top-0 bg-gradient-to-r from-brand-primary to-brand-accent p-6 text-white flex items-center justify-between">
+              <div className="flex-1">
+                <h2 className="text-2xl sm:text-3xl font-bold">¿Cómo funciona?</h2>
+                <div className="mt-3 inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-4 py-2 border border-white/30">
+                  <span className="text-lg">🎓</span>
+                  <p className="text-sm sm:text-base font-semibold text-white">Todas las actividades son para principiantes • Sin restricciones</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowHowItWorks(false)}
+                className="text-2xl font-bold hover:opacity-80 transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-6 overflow-y-auto flex-1">
+              {/* Modelado a Mano */}
+              <div className="border-l-4 border-brand-primary pl-4">
+                <h3 className="text-xl font-bold text-brand-text mb-2">🖐️ Modelado a Mano</h3>
+                <p className="text-sm text-brand-secondary mb-3">Diversas técnicas de modelado creativo</p>
+                <div className="bg-brand-background rounded-lg p-3 space-y-2 text-xs text-brand-text">
+                  <div><strong>Duración:</strong> 2 horas por clase</div>
+                  <div><strong>Técnicas:</strong> Pinch/Pellizco, Slab/Plancha, Coiling/Churros</div>
+                  <div><strong>Materiales:</strong> Todo incluido (arcilla, herramientas, esmaltado brillo transparente, horneado)</div>
+                  <div className="text-brand-secondary italic text-xs">Para pintar la pieza con colores: programa una clase extra de pintado (costo adicional). Consulta con nuestro staff.</div>
+                  <div><strong>Qué llevar:</strong> Ropa cómoda, uñas cortas, sin anillos</div>
+                  <div className="pt-2 text-brand-secondary">✓ Piezas aptas para alimentos, microondas y lavavajillas</div>
+                </div>
+              </div>
+
+              {/* Torno Alfarero */}
+              <div className="border-l-4 border-brand-secondary pl-4">
+                <h3 className="text-xl font-bold text-brand-text mb-2">🎯 Torno Alfarero</h3>
+                <p className="text-sm text-brand-secondary mb-3">Domina la técnica del torno clásico</p>
+                <div className="bg-brand-background rounded-lg p-3 space-y-2 text-xs text-brand-text">
+                  <div><strong>Duración:</strong> 2 horas por clase</div>
+                  <div><strong>Actividades:</strong> Centrado, cilindros, cuencos, retorneado</div>
+                  <div><strong>Materiales:</strong> Todo incluido (arcilla, herramientas, horneado)</div>
+                  <div className="text-brand-secondary italic text-xs">Para pintar la pieza con colores: programa una clase extra de pintado (costo adicional). Consulta con nuestro staff.</div>
+                  <div><strong>Qué llevar:</strong> Ropa cómoda, uñas cortas, sin anillos, pelo recogido</div>
+                  <div className="pt-2 text-brand-secondary">✓ Piezas aptas para alimentos, microondas y lavavajillas</div>
+                </div>
+              </div>
+
+              {/* Pintado a Mano */}
+              <div className="border-l-4 border-brand-accent pl-4">
+                <h3 className="text-xl font-bold text-brand-text mb-2">🎨 Pintado a Mano</h3>
+                <p className="text-sm text-brand-secondary mb-3">Tenemos varios diseños, elige tu favorito y pinta</p>
+                <div className="bg-brand-background rounded-lg p-3 space-y-2 text-xs text-brand-text">
+                  <div><strong>Duración:</strong> Máximo 2 horas por clase</div>
+                  <div><strong>Actividades:</strong> Pintura de piezas pre-elaboradas con diseños personalizados</div>
+                  <div><strong>Precio:</strong> Desde $18 por la pieza básica; en el taller puedes elegir otras piezas y pagar solo la diferencia.</div>
+                  <div><strong>Materiales:</strong> Todo incluido (piezas, pinceles, pinturas, horneado)</div>
+                  <div><strong>Qué llevar:</strong> Ropa cómoda que se pueda ensuciar</div>
+                  <div className="pt-2 text-brand-secondary">✓ Máximo 22 personas • Perfecto para todos los niveles</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Button */}
+            <div className="bg-brand-background border-t border-brand-border p-4">
+              <button
+                onClick={() => setShowHowItWorks(false)}
+                className="w-full bg-brand-primary text-white font-bold py-3 rounded-xl hover:opacity-90 transition"
+              >
+                Entendido, volver
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

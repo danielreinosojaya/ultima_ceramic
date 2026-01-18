@@ -28,6 +28,7 @@ interface CustomExperienceWizardProps {
   onConfirm: (booking: CustomExperienceBooking) => void;
   onBack: () => void;
   isLoading?: boolean;
+  onShowPolicies: () => void;
 }
 
 // ============ SUB-COMPONENTS ============
@@ -158,6 +159,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
   onConfirm,
   onBack,
   isLoading = false,
+  onShowPolicies,
 }) => {
   // ============ REFS ============
   const participantsRef = useRef<HTMLDivElement>(null);
@@ -179,7 +181,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [menuTotal, setMenuTotal] = useState(0);
   const [showChildPieceSelector, setShowChildPieceSelector] = useState(false);
-  const [participantsInput, setParticipantsInput] = useState<string>('1');
+  const [participantsInput, setParticipantsInput] = useState<string>('2');
   
   // Nuevo estado para fecha/hora con validación de disponibilidad
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -218,7 +220,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
               setState((prev) => ({ 
                 ...prev, 
                 experienceType: 'ceramic_only',
-                config: { participants: 1 } // Inicializar config
+                config: { participants: 2 } // Inicializar con mínimo 2 personas
               }));
               handleNext();
             }}
@@ -231,7 +233,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                   Solo Cerámica
                 </h3>
                 <p className="text-sm text-brand-secondary">
-                  Actividad de cerámica pura. Todos los participantes eligen su técnica.
+                  Actividad de cerámica pura. Todos eligen la misma técnica.
                 </p>
               </div>
             </div>
@@ -245,10 +247,6 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                 <CheckCircleIcon className="w-4 h-4 text-brand-success" />
                 <span>Hasta 22 personas</span>
               </div>
-              <div className="flex items-center gap-2 text-sm text-brand-text">
-                <CheckCircleIcon className="w-4 h-4 text-brand-success" />
-                <span>Espacio privado con todos los servicios</span>
-              </div>
             </div>
 
             <div className="mt-6 text-center">
@@ -258,31 +256,18 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
             </div>
           </button>
 
-          {/* Celebración */}
+          {/* Celebración (deshabilitada: Muy pronto) */}
           <button
-            onClick={() => {
-              setState((prev) => ({ 
-                ...prev, 
-                experienceType: 'celebration',
-                config: { 
-                  activeParticipants: 1, 
-                  guests: 0, 
-                  hours: 2,
-                  bringDecoration: false, 
-                  bringCake: false, 
-                  hasChildren: false, 
-                  menuSelections: [] 
-                } as CelebrationConfig
-              }));
-              handleNext();
-            }}
-            className="group bg-white border-2 border-brand-border rounded-2xl p-6 sm:p-8 hover:border-brand-primary hover:shadow-lifted transition-all duration-300 text-left active:scale-[0.98]"
+            disabled
+            aria-disabled="true"
+            className="group bg-white border-2 border-brand-border rounded-2xl p-6 sm:p-8 text-left active:scale-[0.98] opacity-60 grayscale cursor-not-allowed"
           >
             <div className="flex items-start gap-4 mb-4">
               <div className="text-5xl">🎉</div>
               <div className="flex-1">
                 <h3 className="text-xl sm:text-2xl font-bold text-brand-text mb-2">
                   Celebración
+                  <span className="ml-2 inline-block px-2 py-1 text-xs font-semibold bg-gray-200 text-gray-700 rounded-full align-middle">Muy pronto</span>
                 </h3>
                 <p className="text-sm text-brand-secondary">
                   Evento completo con cerámica, invitados, decoración y menú personalizado.
@@ -314,25 +299,13 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
             </div>
 
             <div className="mt-6 text-center">
-              <span className="inline-block bg-brand-primary text-white px-6 py-3 rounded-xl font-semibold group-hover:bg-brand-accent transition-colors">
-                Elegir →
+              <span className="inline-block bg-gray-300 text-gray-700 px-6 py-3 rounded-xl font-semibold">
+                Muy pronto
               </span>
             </div>
           </button>
         </div>
 
-        {/* Info Box */}
-        <div className="bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-4 mt-8">
-          <div className="flex gap-3">
-            <InfoCircleIcon className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold text-blue-900 mb-1">Espacio Incluido</p>
-              <p className="text-sm text-blue-800">
-                Todas las experiencias incluyen: A/C, WiFi, mesas, sillas, menaje y servicio. El espacio se renta por hora.
-              </p>
-            </div>
-          </div>
-        </div>
       </div>
     );
   };
@@ -360,7 +333,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
         <div>
           <label className="block text-sm font-semibold text-brand-text mb-3 flex items-center">
             Técnica de Cerámica
-            <Tooltip text="Todos los participantes harán la misma técnica. Elige según el nivel de experiencia y preferencias del grupo." />
+            <Tooltip text="Todos los participantes harán la misma técnica." />
           </label>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -400,6 +373,22 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
           <label className="block text-sm font-semibold text-brand-text mb-3">
             {isCelebration ? 'Participantes Activos (harán cerámica)' : 'Número de Participantes'}
           </label>
+          
+          {/* Advertencia para experiencias no-celebración */}
+          {!isCelebration && (
+            <div className="bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-4 mb-4">
+              <div className="flex items-start gap-3">
+                <span className="text-xl">👥</span>
+                <div>
+                  <p className="font-semibold text-blue-900">Experiencia Grupal</p>
+                  <p className="text-sm text-blue-700 mt-1">
+                    ⚠️ <strong>Mínimo 2 personas</strong> - Estas experiencias son para grupos. Si vienes solo, elige una clase individual.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          
           <input
             type="text"
             inputMode="numeric"
@@ -421,11 +410,24 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
               const val = parseInt(inputVal);
               const maxCap = state.technique ? TECHNIQUES.find((t) => t.id === state.technique)?.maxCapacity || 22 : 22;
               
+              // VALIDACIÓN: Mínimo 2 personas para experiencias no-celebración
+              const minParticipants = isCelebration ? 1 : 2;
+              if (val < minParticipants) {
+                setParticipantsInput(minParticipants.toString());
+                setState((prev) => ({
+                  ...prev,
+                  config: isCelebration
+                    ? { ...(prev.config as CelebrationConfig), activeParticipants: minParticipants }
+                    : { participants: minParticipants },
+                }));
+                return;
+              }
+              
               // Actualizar input visualmente
               setParticipantsInput(inputVal);
               
               // Actualizar estado solo si es válido
-              if (val >= 1 && val <= maxCap) {
+              if (val >= minParticipants && val <= maxCap) {
                 setState((prev) => ({
                   ...prev,
                   config: isCelebration
@@ -437,22 +439,23 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
             onBlur={(e) => {
               const inputVal = e.target.value;
               const maxCap = state.technique ? TECHNIQUES.find((t) => t.id === state.technique)?.maxCapacity || 22 : 22;
+              const minParticipants = isCelebration ? 1 : 2;
               
-              // Si está vacío, inválido o excede máximo, restaurar al último válido
-              if (inputVal === '' || parseInt(inputVal) < 1 || parseInt(inputVal) > maxCap) {
+              // Si está vacío, inválido, por debajo del mínimo o excede máximo, restaurar al último válido
+              if (inputVal === '' || parseInt(inputVal) < minParticipants || parseInt(inputVal) > maxCap) {
                 const currentVal = state.config
                   ? isCelebration
-                    ? (state.config as CelebrationConfig).activeParticipants || 1
-                    : (state.config as CeramicOnlyConfig).participants || 1
-                  : 1;
+                    ? (state.config as CelebrationConfig).activeParticipants || minParticipants
+                    : (state.config as CeramicOnlyConfig).participants || minParticipants
+                  : minParticipants;
                 setParticipantsInput(currentVal.toString());
               } else {
                 // Asegurar que el valor mostrado coincida con el estado
                 const currentVal = state.config
                   ? isCelebration
-                    ? (state.config as CelebrationConfig).activeParticipants || 1
-                    : (state.config as CeramicOnlyConfig).participants || 1
-                  : 1;
+                    ? (state.config as CelebrationConfig).activeParticipants || minParticipants
+                    : (state.config as CeramicOnlyConfig).participants || minParticipants
+                  : minParticipants;
                 setParticipantsInput(currentVal.toString());
               }
             }}
@@ -511,8 +514,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
             <div className="mt-4 bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
               <p className="text-sm text-blue-900 font-medium mb-1">💡 Precio por Pieza</p>
               <p className="text-xs text-blue-700">
-                Cada participante elegirá su pieza. El precio mínimo es de $18 por persona (incluye IVA). 
-                La reserva se confirma con el pago del 100% del mínimo por persona.
+                Cada participante elegirá su pieza. El precio mínimo es de $18 por persona (incluye IVA). Hay piezas de mayor valor y se paga solo la diferencia en el taller. La reserva se confirma con el pago del 100% del mínimo por persona.
               </p>
               <div className="mt-3 pt-3 border-t border-blue-300">
                 <p className="text-sm font-semibold text-blue-900 mb-1">Pago mínimo de reserva</p>
@@ -681,9 +683,9 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                     <p className="text-xs text-purple-700">Ya incluye IVA</p>
                   </div>
                   
-                  {/* Total Estimado */}
+                  {/* Total a Pagar */}
                   <div className="mt-3 pt-3 border-t-2 border-purple-400 flex justify-between">
-                    <p className="text-base font-bold text-purple-900">Total Estimado</p>
+                    <p className="text-base font-bold text-purple-900">Total a Pagar</p>
                     <p className="text-2xl font-bold text-purple-600">
                       ${(
                         ((state.config as CelebrationConfig).hours * 100 * 1.15) +
@@ -785,13 +787,41 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
       ? (state.config as CelebrationConfig)?.activeParticipants || 1
       : (state.config as CeramicOnlyConfig)?.participants || 1;
     
+    // Obtener información de la técnica seleccionada
+    const selectedTechnique = TECHNIQUES.find(t => t.id === state.technique);
+    
+    // Textos explicativos por técnica
+    const techniqueExplanations: Record<string, string> = {
+      'potters_wheel': '🎯 Torno Alfarero: Es una mesa circular que gira para modelar cerámica. Mientras el plato da vueltas, tú usas las manos para dar forma a piezas redondas y simétricas (como tazas o cuencos). Es una técnica que requiere tu atención y concentración para crear piezas perfectas.',
+      'hand_modeling': '✋ Modelado a Mano: Crea formas libres usando solo tus manos. Técnicas como pellizco, churros y planchas te permiten explorar tu creatividad sin restricciones, ideal para esculturas y piezas únicas.',
+      'painting': '🎨 Pintado a Mano: Pinta piezas de cerámica ya moldeadas con colores vibrantes. Perfecto para expresar tu creatividad visual en superficies preparadas sin necesidad de modelar.'
+    };
+    
     return (
-      <div className="space-y-6 animate-fade-in-up">
-        <div className="text-center mb-6">
+      <div className="space-y-5 animate-fade-in-up">
+        {/* Botón Atrás superior */}
+        <button
+          onClick={handlePrevious}
+          disabled={isLoading}
+          className="px-4 py-2 rounded-lg border border-gray-300 text-brand-text font-semibold hover:bg-gray-50 hover:border-brand-primary disabled:opacity-50 transition-all inline-flex items-center gap-2 shadow-sm"
+        >
+          ← Atrás
+        </button>
+        
+        {/* Explicación de la técnica seleccionada */}
+        {state.technique && (
+          <div className="bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 border border-indigo-100 rounded-2xl p-4 shadow-sm">
+            <p className="text-sm text-gray-700 leading-relaxed font-medium">
+              {techniqueExplanations[state.technique] || selectedTechnique?.description}
+            </p>
+          </div>
+        )}
+        
+        <div className="text-center">
           <h2 className="text-2xl sm:text-3xl font-bold text-brand-text mb-2">
             📅 Selecciona Fecha y Hora
           </h2>
-          <p className="text-brand-secondary text-sm">
+          <p className="text-gray-500 text-sm">
             Elige el horario con disponibilidad para tu grupo
           </p>
         </div>
@@ -818,55 +848,57 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
         )}
 
         {/* Resumen visual */}
-        <div className="bg-white border-2 border-brand-border rounded-xl p-6 mt-6">
-          <h3 className="font-bold text-brand-text mb-4">Resumen de tu Experiencia</h3>
+        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+          <h3 className="font-bold text-brand-text text-lg mb-5 flex items-center gap-2">
+            <span className="text-xl">📝</span> Resumen de tu Experiencia
+          </h3>
           <div className="space-y-3 text-sm">
-            <div className="flex justify-between py-2 border-b border-brand-border">
-              <span className="text-brand-secondary">Tipo:</span>
-              <span className="font-semibold text-brand-text">
+            <div className="flex justify-between py-3 border-b border-gray-100">
+              <span className="text-gray-600">Tipo:</span>
+              <span className="font-bold text-brand-text">
                 {isCelebration ? '🎉 Celebración' : '🎨 Solo Cerámica'}
               </span>
             </div>
-            <div className="flex justify-between py-2 border-b border-brand-border">
-              <span className="text-brand-secondary">Técnica:</span>
-              <span className="font-semibold text-brand-text">
+            <div className="flex justify-between py-3 border-b border-gray-100">
+              <span className="text-gray-600">Técnica:</span>
+              <span className="font-bold text-brand-text">
                 {TECHNIQUES.find((t) => t.id === state.technique)?.icon} {TECHNIQUES.find((t) => t.id === state.technique)?.name}
               </span>
             </div>
             {isCelebration ? (
               <>
-                <div className="flex justify-between py-2 border-b border-brand-border">
-                  <span className="text-brand-secondary">Participantes activos:</span>
-                  <span className="font-semibold text-brand-text">
+                <div className="flex justify-between py-3 border-b border-gray-100">
+                  <span className="text-gray-600">Participantes activos:</span>
+                  <span className="font-bold text-brand-text">
                     {(state.config as CelebrationConfig)?.activeParticipants || 0}
                   </span>
                 </div>
-                <div className="flex justify-between py-2 border-b border-brand-border">
-                  <span className="text-brand-secondary">Invitados:</span>
-                  <span className="font-semibold text-brand-text">
+                <div className="flex justify-between py-3 border-b border-gray-100">
+                  <span className="text-gray-600">Invitados:</span>
+                  <span className="font-bold text-brand-text">
                     {(state.config as CelebrationConfig)?.guests || 0}
                   </span>
                 </div>
-                <div className="flex justify-between py-2 border-b border-brand-border">
-                  <span className="text-brand-secondary">Horas de espacio:</span>
-                  <span className="font-semibold text-brand-text">
+                <div className="flex justify-between py-3 border-b border-gray-100">
+                  <span className="text-gray-600">Horas de espacio:</span>
+                  <span className="font-bold text-brand-text">
                     {(state.config as CelebrationConfig)?.hours || 0}h
                   </span>
                 </div>
               </>
             ) : (
-              <div className="flex justify-between py-2 border-b border-brand-border">
-                <span className="text-brand-secondary">Participantes:</span>
-                <span className="font-semibold text-brand-text">
+              <div className="flex justify-between py-3 border-b border-gray-100">
+                <span className="text-gray-600">Participantes:</span>
+                <span className="font-bold text-brand-text">
                   {(state.config as CeramicOnlyConfig)?.participants || 0}
                 </span>
               </div>
             )}
             {selectedDate && selectedTime && slotAvailability && (
               <>
-                <div className="flex justify-between py-2 border-b border-brand-border">
-                  <span className="text-brand-secondary">Fecha:</span>
-                  <span className={`font-semibold ${slotAvailability.available ? 'text-green-700' : 'text-red-600'}`}>
+                <div className="flex justify-between py-3 border-b border-gray-100">
+                  <span className="text-gray-600">Fecha:</span>
+                  <span className={`font-bold ${slotAvailability.available ? 'text-green-600' : 'text-red-600'}`}>
                     {new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-ES', {
                       weekday: 'long',
                       day: 'numeric',
@@ -875,19 +907,19 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                     })}
                   </span>
                 </div>
-                <div className="flex justify-between py-2 border-b border-brand-border">
-                  <span className="text-brand-secondary">Hora:</span>
-                  <span className={`font-semibold ${slotAvailability.available ? 'text-green-700' : 'text-red-600'}`}>{selectedTime}</span>
+                <div className="flex justify-between py-3 border-b border-gray-100">
+                  <span className="text-gray-600">Hora:</span>
+                  <span className={`font-bold ${slotAvailability.available ? 'text-green-600' : 'text-red-600'}`}>{selectedTime}</span>
                 </div>
-                <div className="flex justify-between py-2 border-b border-brand-border">
-                  <span className="text-brand-secondary">Disponibilidad:</span>
-                  <span className={`font-semibold ${slotAvailability.available ? 'text-green-700' : 'text-red-600'}`}>
-                    {slotAvailability.capacity.available}/{slotAvailability.capacity.max} cupos disponibles
+                <div className="flex justify-between py-3 border-b border-gray-100">
+                  <span className="text-gray-600">Disponibilidad:</span>
+                  <span className={`font-bold ${slotAvailability.available ? 'text-green-600' : 'text-red-600'}`}>
+                    {slotAvailability.capacity.available} cupos disponibles
                   </span>
                 </div>
                 {!slotAvailability.available && (
-                  <div className="py-2 bg-red-50 rounded-lg px-3 mt-2">
-                    <span className="text-red-700 text-sm font-medium">
+                  <div className="py-3 bg-gradient-to-r from-red-50 to-orange-50 rounded-xl px-4 mt-2 border border-red-100">
+                    <span className="text-red-700 text-sm font-bold">
                       ⚠️ No hay cupos suficientes para {slotAvailability.requestedParticipants} participantes
                     </span>
                   </div>
@@ -949,253 +981,6 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
     return null;
   };
 
-  // ============ STEP 5: Confirmación ============
-  const renderStepConfirmation = () => {
-    const isCelebration = state.experienceType === 'celebration';
-    const bookingResult = (window as any).__bookingResult;
-    const confirmationCode = bookingResult?.bookingCode || `EXP-${Date.now().toString(36).toUpperCase().slice(-6)}`;
-    
-    // Calcular total final
-    const calculateFinalTotal = () => {
-      let total = 0;
-      
-      if (isCelebration && state.config) {
-        const config = state.config as CelebrationConfig;
-        total += config.hours * 100 * 1.15;
-        if (state.technique) {
-          const techPrice = state.technique === 'potters_wheel' ? TECHNIQUE_PRICES.potters_wheel :
-                           state.technique === 'hand_modeling' ? TECHNIQUE_PRICES.hand_modeling :
-                           TECHNIQUE_PRICES.painting;
-          total += config.activeParticipants * techPrice;
-        }
-        total += menuTotal;
-        if (config.childrenPieces) {
-          total += config.childrenPieces.reduce((sum, cp) => sum + cp.piecePrice, 0);
-        }
-      } else if (state.config && state.technique) {
-        const config = state.config as CeramicOnlyConfig;
-        if (state.technique === 'painting') {
-          total = config.participants * TECHNIQUE_PRICES.painting;
-        } else {
-          const techPrice = state.technique === 'potters_wheel' ? TECHNIQUE_PRICES.potters_wheel : TECHNIQUE_PRICES.hand_modeling;
-          total = config.participants * techPrice;
-        }
-      }
-      
-      return total.toFixed(2);
-    };
-    
-    return (
-      <div className="space-y-6 animate-fade-in-up">
-        {/* Email Sent Notification */}
-        <div className="bg-brand-success/10 border-2 border-brand-success rounded-xl p-4 flex gap-3">
-          <CheckCircleIcon className="w-6 h-6 text-brand-success flex-shrink-0" />
-          <div>
-            <p className="font-semibold text-brand-success">✉️ Correo enviado</p>
-            <p className="text-sm text-brand-secondary">Revisa tu bandeja de entrada para instrucciones de pago. La pre-reserva expira en 2 horas.</p>
-          </div>
-        </div>
-
-        {/* Success Icon */}
-        <div className="text-center">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-brand-success rounded-full mb-4 animate-bounce-once">
-            <CheckCircleIcon className="w-12 h-12 text-white" />
-          </div>
-          <h2 className="text-3xl font-bold text-brand-text mb-2">
-            ¡Pre-reserva Confirmada!
-          </h2>
-          <p className="text-brand-secondary text-sm">
-            Guarda tu código para referencia
-          </p>
-        </div>
-
-        {/* Confirmation Code */}
-        <div className="bg-gradient-to-r from-brand-primary to-brand-accent text-white rounded-xl p-6 text-center shadow-lg">
-          <p className="text-sm opacity-90 mb-2">Tu código de pre-reserva</p>
-          <p className="text-4xl font-bold tracking-wider mb-1">{confirmationCode}</p>
-          <p className="text-xs opacity-80">Guarda este código para referencia futura</p>
-        </div>
-
-        {/* Summary Card */}
-        <div className="bg-white border-2 border-brand-border rounded-xl p-6">
-          <h3 className="font-bold text-brand-text mb-4 flex items-center gap-2">
-            <span className="text-2xl">{isCelebration ? '🎉' : '🎨'}</span>
-            Resumen de tu Experiencia
-          </h3>
-          
-          <div className="space-y-3 text-sm">
-            <div className="flex justify-between py-2 border-b border-brand-border">
-              <span className="text-brand-secondary">Tipo:</span>
-              <span className="font-semibold text-brand-text">
-                {isCelebration ? 'Celebración' : 'Solo Cerámica'}
-              </span>
-            </div>
-            <div className="flex justify-between py-2 border-b border-brand-border">
-              <span className="text-brand-secondary">Técnica:</span>
-              <span className="font-semibold text-brand-text">
-                {TECHNIQUES.find(t => t.id === state.technique)?.name}
-              </span>
-            </div>
-            
-            {isCelebration && state.config ? (
-              <>
-                <div className="flex justify-between py-2 border-b border-brand-border">
-                  <span className="text-brand-secondary">Participantes activos:</span>
-                  <span className="font-semibold text-brand-text">
-                    {(state.config as CelebrationConfig).activeParticipants}
-                  </span>
-                </div>
-                <div className="flex justify-between py-2 border-b border-brand-border">
-                  <span className="text-brand-secondary">Invitados:</span>
-                  <span className="font-semibold text-brand-text">
-                    {(state.config as CelebrationConfig).guests}
-                  </span>
-                </div>
-                <div className="flex justify-between py-2 border-b border-brand-border">
-                  <span className="text-brand-secondary">Horas de espacio:</span>
-                  <span className="font-semibold text-brand-text">
-                    {(state.config as CelebrationConfig).hours}h
-                  </span>
-                </div>
-                {selectedDate && selectedTime && (
-                  <>
-                    <div className="flex justify-between py-2 border-b border-brand-border">
-                      <span className="text-brand-secondary">📅 Fecha:</span>
-                      <span className="font-semibold text-green-700">
-                        {new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-ES', {
-                          weekday: 'long',
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric'
-                        })}
-                      </span>
-                    </div>
-                    <div className="flex justify-between py-2 border-b border-brand-border">
-                      <span className="text-brand-secondary">🕐 Hora:</span>
-                      <span className="font-semibold text-green-700">{selectedTime}</span>
-                    </div>
-                  </>
-                )}
-                {menuTotal > 0 && (
-                  <div className="flex justify-between py-2 border-b border-brand-border">
-                    <span className="text-brand-secondary">Menú:</span>
-                    <span className="font-semibold text-brand-text">
-                      ${menuTotal.toFixed(2)}
-                    </span>
-                  </div>
-                )}
-                {(state.config as CelebrationConfig).childrenPieces && (state.config as CelebrationConfig).childrenPieces.length > 0 && (
-                  <div className="flex justify-between py-2 border-b border-brand-border">
-                    <span className="text-brand-secondary">Piezas para niños:</span>
-                    <span className="font-semibold text-brand-text">
-                      ${(state.config as CelebrationConfig).childrenPieces.reduce((sum, cp) => sum + cp.piecePrice, 0).toFixed(2)}
-                    </span>
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                <div className="flex justify-between py-2 border-b border-brand-border">
-                  <span className="text-brand-secondary">Participantes:</span>
-                  <span className="font-semibold text-brand-text">
-                    {(state.config as CeramicOnlyConfig)?.participants}
-                  </span>
-                </div>
-                {selectedDate && selectedTime && (
-                  <>
-                    <div className="flex justify-between py-2 border-b border-brand-border">
-                      <span className="text-brand-secondary">📅 Fecha:</span>
-                      <span className="font-semibold text-green-700">
-                        {new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-ES', {
-                          weekday: 'long',
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric'
-                        })}
-                      </span>
-                    </div>
-                    <div className="flex justify-between py-2 border-b border-brand-border">
-                      <span className="text-brand-secondary">🕐 Hora:</span>
-                      <span className="font-semibold text-green-700">{selectedTime}</span>
-                    </div>
-                  </>
-                )}
-              </>
-            )}
-            
-            <div className="flex justify-between py-3 pt-4 border-t-2 border-brand-primary">
-              <span className="font-bold text-brand-text text-lg">Total Estimado:</span>
-              <span className="font-bold text-brand-accent text-2xl">
-                ${calculateFinalTotal()}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Contact Info */}
-        {userInfo && (
-          <div className="bg-gray-50 border border-brand-border rounded-xl p-5">
-            <h4 className="font-semibold text-brand-text mb-3 text-sm">Datos de Contacto</h4>
-            <div className="space-y-2 text-sm">
-              <p className="text-brand-secondary">
-                <span className="font-medium text-brand-text">{userInfo.firstName} {userInfo.lastName}</span>
-              </p>
-              <p className="text-brand-secondary">{userInfo.email}</p>
-              <p className="text-brand-secondary">{userInfo.phone}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Next Steps */}
-        <div className="bg-brand-background p-6 rounded-lg shadow-subtle">
-          <h3 className="text-lg font-semibold text-brand-text mb-4">¿Qué sigue?</h3>
-          <ol className="space-y-4 text-left">
-            <li className="flex items-start gap-3">
-              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-primary text-white font-bold">1</span>
-              <div>
-                <span className="text-brand-text font-semibold">Realiza el pago</span>
-                <p className="text-brand-secondary text-sm">Utiliza cualquiera de las cuentas bancarias disponibles para transferir el monto total de tu reserva.</p>
-              </div>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-primary text-white font-bold">2</span>
-              <div>
-                <span className="text-brand-text font-semibold">Envía el comprobante por WhatsApp</span>
-                <p className="text-brand-secondary text-sm">Comparte el comprobante de pago al número de WhatsApp indicado para validar tu reserva.</p>
-              </div>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-primary text-white font-bold">3</span>
-              <div>
-                <span className="text-brand-text font-semibold">Validación interna</span>
-                <p className="text-brand-secondary text-sm">Nuestro equipo revisará tu comprobante y validará el pago en el sistema.</p>
-              </div>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-primary text-white font-bold">4</span>
-              <div>
-                <span className="text-brand-text font-semibold">Recibe tu confirmación final</span>
-                <p className="text-brand-secondary text-sm">Una vez validado el pago, recibirás un correo electrónico confirmando tu reserva final.</p>
-              </div>
-            </li>
-          </ol>
-        </div>
-
-        {/* Action Button */}
-        <div className="text-center pt-4">
-          <button
-            onClick={() => {
-              window.location.href = '/';
-            }}
-            className="px-8 py-3 bg-brand-primary text-white rounded-lg font-bold hover:bg-brand-accent transition-all shadow-md hover:shadow-lg"
-          >
-            Volver al Inicio
-          </button>
-        </div>
-      </div>
-    );
-  };
-
   // ============ NAVIGATION HANDLERS ============
   const handleNext = () => {
     const isCelebration = state.experienceType === 'celebration';
@@ -1234,7 +1019,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
 
     setState((prev) => ({
       ...prev,
-      currentStep: Math.min(prev.currentStep + 1, 5) as any,
+      currentStep: Math.min(prev.currentStep + 1, 4) as any,
       error: null,
     }));
   };
@@ -1258,27 +1043,6 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
       behavior: 'smooth'
     });
   }, [state.currentStep]);
-
-  const handleConfirm = () => {
-    // El booking ya fue creado y el email ya fue enviado en handleUserInfoSubmit
-    // Solo notificar al padre que la confirmación está completa
-    onConfirm({
-      experienceType: state.experienceType as 'ceramic_only' | 'celebration',
-      technique: state.technique!,
-      date: selectedDate!,
-      time: selectedTime!,
-      participants: state.experienceType === 'celebration' 
-        ? (state.config as CelebrationConfig)?.activeParticipants || 0
-        : (state.config as CeramicOnlyConfig)?.participants || 0,
-      config: state.config!,
-      userInfo: userInfo!,
-      totalPrice: parseFloat(calculateTotalPricing()),
-      menuSelections: state.menuSelections,
-      childrenPieces: state.experienceType === 'celebration' 
-        ? (state.config as CelebrationConfig)?.childrenPieces || []
-        : undefined
-    });
-  };
 
   // ============ RENDER ============
   
@@ -1349,15 +1113,14 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
         throw new Error(result.error || 'Error al crear la pre-reserva');
       }
 
-      // Mostrar Step 5 (confirmación) con booking guardado y email enviado
+      // Ir DIRECTAMENTE a ConfirmationPage, sin Step 5 redundante
       setState(prev => ({ 
         ...prev, 
-        currentStep: 5,
         isLoading: false
       }));
       
-      // Guardar el resultado para mostrar en Step 5
-      (window as any).__bookingResult = result;
+      // Notificar al padre para navegar a ConfirmationPage
+      onConfirm(result.booking);
 
     } catch (error) {
       console.error('Error creating custom experience booking:', error);
@@ -1372,7 +1135,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-6 sm:py-8">
       {/* Progress Indicator */}
-      <ProgressIndicator currentStep={state.currentStep} totalSteps={5} stepTitles={STEP_TITLES} />
+      <ProgressIndicator currentStep={state.currentStep} totalSteps={4} stepTitles={STEP_TITLES} />
 
       {/* Step Content - Solo mostrar contenedor si NO es Step 4 */}
       {state.currentStep !== 4 && (
@@ -1380,7 +1143,6 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
           {state.currentStep === 1 && renderStepActivityType()}
           {state.currentStep === 2 && renderStepConfiguration()}
           {state.currentStep === 3 && renderStepDateTime()}
-          {state.currentStep === 5 && renderStepConfirmation()}
         </div>
       )}
       
@@ -1389,9 +1151,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
         <UserInfoModal
           onClose={handlePrevious}
           onSubmit={handleUserInfoSubmit}
-          onShowPolicies={() => {
-            window.open('/politicas', '_blank');
-          }}
+          onShowPolicies={onShowPolicies}
           slots={[]}
         />
       )}
@@ -1432,15 +1192,6 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
               className="flex-1 px-6 py-3 bg-brand-primary text-white rounded-xl font-semibold hover:bg-brand-accent disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg active:scale-[0.98]"
             >
               Siguiente →
-            </button>
-          )}
-          {state.currentStep === 5 && (
-            <button
-              onClick={handleConfirm}
-              disabled={isLoading}
-              className="flex-1 px-6 py-3 bg-brand-success text-white rounded-xl font-semibold hover:opacity-90 disabled:opacity-50 transition-all shadow-md hover:shadow-lg active:scale-[0.98]"
-            >
-              {isLoading ? 'Procesando...' : '✓ Confirmar Reserva'}
             </button>
           )}
         </div>

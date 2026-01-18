@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import * as dataService from '../../services/dataService';
+import { SocialBadge } from '../SocialBadge';
 
 interface DateTimeSelectorProps {
   technique: string;              // 'potters_wheel' | 'hand_modeling' | 'painting'
@@ -281,14 +282,16 @@ export const DateTimeSelector: React.FC<DateTimeSelectorProps> = ({
                       : 'border-brand-border bg-white hover:border-brand-primary hover:bg-brand-primary/5'
                   }`}
                 >
-                  <div className="font-bold text-lg">{slot.time}</div>
-                  <div className={`text-xs mt-1 ${isSelected ? 'text-white/80' : 'text-brand-secondary'}`}>
-                    {slot.instructor}
-                  </div>
-                  <div className={`text-xs mt-1 font-semibold ${
-                    isSelected ? 'text-white' : 'text-green-600'
-                  }`}>
-                    ✓ {slot.available}/{slot.total} disponibles
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="font-bold text-lg">{slot.time}</div>
+                    <div className={`text-xs ${isSelected ? 'text-white/80' : 'text-brand-secondary'}`}>
+                      {slot.instructor}
+                    </div>
+                    <SocialBadge 
+                      currentCount={slot.total - slot.available} 
+                      maxCapacity={slot.total} 
+                      variant="compact" 
+                    />
                   </div>
                 </button>
               );
