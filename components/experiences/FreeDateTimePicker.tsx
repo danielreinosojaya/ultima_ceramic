@@ -421,23 +421,6 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
             </div>
           )}
           
-          {/* Mensaje informativo para grupos grandes de torno */}
-          {technique === 'potters_wheel' && participants >= 3 && (
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-              <div className="flex items-start gap-3">
-                <span className="text-xl">🎯</span>
-                <div>
-                  <p className="font-semibold text-blue-900 text-sm">
-                    Clase privada para tu grupo
-                  </p>
-                  <p className="text-blue-700 text-xs mt-1">
-                    No puedes reservar horarios que caigan dentro de clases ya programadas (ej: si hay clase 9:00-11:00, no verás 9:30).
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-          
           {/* Mensaje si no hay horarios disponibles */}
           {getAvailableHours(selectedDate).length === 0 && (
             <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 text-center">
