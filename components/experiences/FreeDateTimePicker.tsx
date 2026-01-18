@@ -56,82 +56,80 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   };
 
   /**
-   * REGLA DE NEGOCIO - TORNO ALFARERO:
-   * - SIEMPRE mostrar SOLO horarios fijos de INICIO (sin importar número de participantes)
-   * - Las clases de torno tienen duración fija (2 horas típicamente)
-   * - Si alguien reserva a las 9:00, NADIE puede unirse a las 9:30 porque la clase ya empezó
-   * - Por lo tanto, solo mostramos horarios de INICIO de clase, NO slots intermedios (9:30, 10:30...)
+   * REGLA DE NEGOCIO - HORARIOS FIJOS:
    * 
-   * IMPORTANTE: Esto aplica para grupos de 1, 2, 3, 5, 10+ personas - todos comparten el mismo horario
-   * de inicio. No se pueden unir a medio camino.
+   * Para TORNO ALFARERO con horarios fijos pre-establecidos:
+   * - NO se pueden reservar slots INTERMEDIOS que caigan dentro de una clase fija
+   * - Ejemplo: Si hay clase a las 9:00, NO se puede reservar 9:30-11:30 (cae dentro de 9:00-11:00)
+   * - Esto aplica INDEPENDIENTE del número de participantes
    * 
-   * Esto aplica específicamente para 'potters_wheel'. Otras técnicas pueden tener horarios libres.
+   * Flujo de horarios:
+   * 1. GRUPOS PEQUEÑOS (1-2 personas): Solo muestran horarios fijos de inicio
+   * 2. GRUPOS GRANDES (3+ personas): Muestran todos los horarios, PERO se filtran los que caen dentro de clases fijas
    */
+  
+  // Helper: Convertir tiempo HH:MM a minutos desde medianoche
+  const timeToMinutes = (time: string): number => {
+    const [hours, mins] = time.split(':').map(Number);
+    return hours * 60 + mins;
+  };
+  
+  // Helper: Verificar si un slot cae dentro de una clase fija
+  const slotOverlapsWithFixedClass = (slotTime: string, fixedClasses: string[]): boolean => {
+    const slotStart = timeToMinutes(slotTime);
+    const slotEnd = slotStart + 120; // 2 horas
+    
+    for (const fixedTime of fixedClasses) {
+      const fixedStart = timeToMinutes(fixedTime);
+      const fixedEnd = fixedStart + 120; // 2 horas
+      
+      // Verificar si hay overlap (slot intermedio)
+      // Permitir solo si coincide exactamente con el inicio
+      if (slotStart === fixedStart) {
+        continue; // Coincide exactamente, permitir
+      }
+      
+      // Si el slot empieza DURANTE una clase fija, bloquear
+      if (slotStart >= fixedStart && slotStart < fixedEnd) {
+        console.log(`🚫 Slot ${slotTime} bloqueado: cae dentro de clase fija ${fixedTime}-${fixedEnd/60}:00`);
+        return true;
+      }
+    }
+    
+    return false;
+  };
+  
   const getAvailableHours = (dateStr: string): string[] => {
     const date = parseLocalDate(dateStr);
     const dayOfWeek = date.getDay();
     const dayKey = DAY_KEYS[dayOfWeek];
     
-    // 🔍 LOGGING DETALLADO PARA DEBUG
-    console.log(`🔍 [getAvailableHours] DEBUG:`, {
-      dateStr,
-      dayKey,
-      technique,
-      participants,
-      hasAvailability: !!availability,
-      availabilityKeys: availability ? Object.keys(availability) : null
-    });
-    
     // Lunes: cerrado
     if (dayOfWeek === 1) {
-      console.log(`⛔ [getAvailableHours] Lunes cerrado`);
       return [];
     }
     
-    // REGLA: Para torno (potters_wheel) → SIEMPRE solo horarios fijos de INICIO (sin importar participantes)
-    const requiresFixedSchedule = technique === 'potters_wheel';
+    // Obtener horarios fijos de torno para este día (si existen)
+    const fixedTornoSlots = availability?.[dayKey]?.filter(slot => 
+      slot.technique === 'potters_wheel'
+    ).map(slot => slot.time) || [];
     
-    console.log(`🔍 [getAvailableHours] requiresFixedSchedule:`, requiresFixedSchedule, `(technique=${technique}, participants=${participants})`);
+    // Agregar clases especiales de introducción
+    if (technique === 'potters_wheel') {
+      if (dayOfWeek === 2) fixedTornoSlots.push('19:00'); // Martes
+      if (dayOfWeek === 3) fixedTornoSlots.push('11:00'); // Miércoles
+    }
     
-    if (requiresFixedSchedule && availability) {
-      // Filtrar solo los horarios de clases normales para esta técnica
-      const allDaySlots = availability[dayKey] || [];
-      console.log(`🔍 [getAvailableHours] availability[${dayKey}]:`, allDaySlots);
-      
-      const fixedSlots = allDaySlots.filter(slot => 
-        slot.technique === 'potters_wheel'
-      );
-      
-      console.log(`🔍 [getAvailableHours] fixedSlots de torno:`, fixedSlots);
-      
-      let fixedHours = fixedSlots.map(slot => slot.time).sort();
-      
-      // AGREGAR HORARIOS ESPECIALES DE INTRODUCCIÓN PARA GRUPOS DE 2 PERSONAS
-      // Martes 19:00 y Miércoles 11:00 son clases de introducción de torno
-      if (dayOfWeek === 2) { // Tuesday
-        fixedHours.push('19:00');
-      } else if (dayOfWeek === 3) { // Wednesday
-        fixedHours.push('11:00');
-      }
-      
-      fixedHours = [...new Set(fixedHours)].sort(); // Eliminar duplicados y ordenar
-      
-      console.log(`🔒 [Torno CUALQUIER número de personas] Horarios FIJOS de INICIO para ${dateStr} (${dayKey}):`, fixedHours);
-      console.log(`   ⚠️ No se muestran horarios intermedios (9:30, 10:30...) porque la clase ya habría empezado`);
-      console.log(`   ℹ️  Esto aplica para 1, 2, 3, 5, 10+ personas - todos comparten horario de inicio fijo`);
-      
-      // Si no hay horarios fijos ese día, devolver array vacío
-      if (fixedHours.length === 0) {
-        console.warn(`⚠️ No hay clases de torno programadas para ${dayKey}`);
-      }
-      
+    console.log(`🔍 [${dateStr}] Horarios fijos de torno:`, fixedTornoSlots);
+    
+    // CASO 1: Grupos pequeños de torno (<3) → solo horarios fijos
+    if (technique === 'potters_wheel' && participants < 3) {
+      const fixedHours = [...new Set(fixedTornoSlots)].sort();
+      console.log(`🔒 [Torno ${participants} personas] Solo horarios FIJOS:`, fixedHours);
       return fixedHours;
     }
     
-    console.log(`🆓 [getAvailableHours] Generando horarios LIBRES (no aplica restricción de horarios fijos)`);
-
-    
-    // Para otras técnicas sin restricción: generar todos los horarios
+    // CASO 2: Grupos grandes o otras técnicas → todos los horarios, PERO filtrar intermedios para torno
     const hours: string[] = [];
 
     if (dayOfWeek === 6) {
@@ -139,7 +137,8 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
       for (let hour = 9; hour <= 19; hour++) {
         for (const min of ['00', '30']) {
           if (hour === 19 && min === '30') break;
-          hours.push(`${String(hour).padStart(2, '0')}:${min}`);
+          const timeSlot = `${String(hour).padStart(2, '0')}:${min}`;
+          hours.push(timeSlot);
         }
       }
     } else if (dayOfWeek === 0) {
@@ -147,7 +146,8 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
       for (let hour = 10; hour <= 16; hour++) {
         for (const min of ['00', '30']) {
           if (hour === 16 && min === '30') break;
-          hours.push(`${String(hour).padStart(2, '0')}:${min}`);
+          const timeSlot = `${String(hour).padStart(2, '0')}:${min}`;
+          hours.push(timeSlot);
         }
       }
     } else {
@@ -155,12 +155,20 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
       for (let hour = 10; hour <= 19; hour++) {
         for (const min of ['00', '30']) {
           if (hour === 19 && min === '30') break;
-          hours.push(`${String(hour).padStart(2, '0')}:${min}`);
+          const timeSlot = `${String(hour).padStart(2, '0')}:${min}`;
+          hours.push(timeSlot);
         }
       }
     }
     
-    console.log(`🆓 [Otras técnicas] Horarios LIBRES para ${dateStr} (día ${dayOfWeek}):`, hours.length, 'slots');
+    // FILTRAR slots intermedios para torno si hay horarios fijos
+    if (technique === 'potters_wheel' && fixedTornoSlots.length > 0) {
+      const filtered = hours.filter(h => !slotOverlapsWithFixedClass(h, fixedTornoSlots));
+      console.log(`🔒 [Torno ${participants}+ personas] Horarios filtrados: ${hours.length} → ${filtered.length} (bloqueados ${hours.length - filtered.length} slots intermedios)`);
+      return filtered;
+    }
+    
+    console.log(`🆓 [${technique}] Horarios disponibles: ${hours.length} slots`);
     return hours;
   };
 
@@ -395,17 +403,35 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
             )}
           </div>
           
-          {/* Mensaje informativo para torno alfarero */}
-          {technique === 'potters_wheel' && (
+          {/* Mensaje informativo para grupos pequeños de torno */}
+          {technique === 'potters_wheel' && participants < 3 && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <span className="text-xl">�</span>
+                <div>
+                  <p className="font-semibold text-amber-900 text-sm">
+                    Te unirás a una clase existente
+                  </p>
+                  <p className="text-amber-700 text-xs mt-1">
+                    Grupos de 1-2 personas se unen a clases ya programadas. Solo horarios de inicio disponibles.
+                    <strong> Para clase privada con cualquier horario, agrega 1+ persona (mínimo 3).</strong>
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Mensaje informativo para grupos grandes de torno */}
+          {technique === 'potters_wheel' && participants >= 3 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
               <div className="flex items-start gap-3">
                 <span className="text-xl">🎯</span>
                 <div>
-                  <p className="font-semibold text-amber-900 text-sm">
-                    Horarios de inicio de clases de torno
+                  <p className="font-semibold text-blue-900 text-sm">
+                    Clase privada para tu grupo
                   </p>
-                  <p className="text-amber-700 text-xs mt-1">
-                    Solo puedes reservar en los horarios de INICIO de clase. No es posible unirse a una clase que ya empezó.
+                  <p className="text-blue-700 text-xs mt-1">
+                    <strong>Nota:</strong> No se muestran horarios que caigan dentro de clases fijas (ej: si hay clase 9:00, no verás 9:30).
                   </p>
                 </div>
               </div>
@@ -418,8 +444,8 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
               <span className="text-3xl mb-2 block">📭</span>
               <p className="font-semibold text-gray-700">No hay horarios disponibles este día</p>
               <p className="text-gray-500 text-sm mt-1">
-                {technique === 'potters_wheel'
-                  ? 'No hay clases de torno programadas para este día. Por favor selecciona otro día.'
+                {technique === 'potters_wheel' && participants < 3 
+                  ? 'No hay clases de torno programadas para este día. Prueba otro día o agrega más personas a tu grupo (3+ para clase privada).'
                   : 'Por favor selecciona otro día.'}
               </p>
             </div>
