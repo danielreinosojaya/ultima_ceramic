@@ -933,9 +933,15 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                     });
                                 });
                                 
-                                const bookedParticipantsIntro = bookingsOverlappingIntro.reduce((sum: number, b: any) => {
+                                let bookedParticipantsIntro = bookingsOverlappingIntro.reduce((sum: number, b: any) => {
                                     return sum + (b.participants || 1);
                                 }, 0);
+                                
+                                // 🔒 REGLA CRÍTICA: Clases de introducción de torno son pre-establecidas, asumir MÍNIMO 1 persona
+                                if (bookedParticipantsIntro === 0) {
+                                    bookedParticipantsIntro = 1;
+                                    console.log(`🔒 [getAvailableSlots] Torno introducción ${introTime}: asumiendo 1 persona mínimo (clase pre-establecida)`);
+                                }
                                 
                                 const maxCapacityIntro = resolveCapacity(dateStr, 'potters_wheel', maxCapacityMap, scheduleOverrides);
                                 const availableCapacityIntro = maxCapacityIntro - bookedParticipantsIntro;
@@ -1001,9 +1007,17 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             });
 
                             // Sumar participantes que solapan
-                            const bookedParticipants = bookingsOverlapingSlot.reduce((sum: number, b: any) => {
+                            let bookedParticipants = bookingsOverlapingSlot.reduce((sum: number, b: any) => {
                                 return sum + (b.participants || 1);
                             }, 0);
+
+                            // 🔒 REGLA CRÍTICA: Para torno en horarios pre-establecidos, asumir MÍNIMO 1 persona
+                            // Esto previene que se reserve en slots intermedios (9:30) cuando hay clase fija a las 9:00
+                            // incluso si esa clase aún no tiene estudiantes registrados en la base de datos
+                            if (requestedTechnique === 'potters_wheel' && bookedParticipants === 0) {
+                                bookedParticipants = 1; // Asumir siempre 1 persona mínimo
+                                console.log(`🔒 [getAvailableSlots] Torno ${slotTime}: asumiendo 1 persona mínimo (clase pre-establecida)`);
+                            }
 
                             // Capacidad máxima del slot (override válido o fallback por técnica)
                             const maxCapacity = resolveCapacity(dateStr, requestedTechnique, maxCapacityMap, scheduleOverrides);
