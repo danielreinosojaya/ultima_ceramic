@@ -60,6 +60,10 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
    * - Si participants < 3 (ej: 2 personas): SOLO horarios que coincidan con clases normales
    * - Si participants >= 3: Cualquier horario dentro del horario de operación
    * 
+   * IMPORTANTE: Las clases de torno alfarero tienen duración fija (2 horas típicamente).
+   * Si alguien reserva a las 9:00, NO se puede unir a las 9:30 porque la clase ya empezó.
+   * Por lo tanto, solo mostramos horarios de INICIO de clase, no slots intermedios.
+   * 
    * Esto aplica específicamente para 'potters_wheel'. Otras técnicas pueden tener horarios libres.
    */
   const getAvailableHours = (dateStr: string): string[] => {
@@ -72,7 +76,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
       return [];
     }
     
-    // REGLA: Para torno (potters_wheel) con menos de 3 personas → solo horarios fijos
+    // REGLA: Para torno (potters_wheel) con menos de 3 personas → solo horarios fijos de INICIO
     const requiresFixedSchedule = technique === 'potters_wheel' && participants < 3;
     
     if (requiresFixedSchedule && availability) {
@@ -93,7 +97,8 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
       
       fixedHours = [...new Set(fixedHours)].sort(); // Eliminar duplicados y ordenar
       
-      console.log(`🔒 [2 personas] Horarios FIJOS para ${dateStr} (${dayKey}):`, fixedHours);
+      console.log(`🔒 [Torno ${participants} personas] Horarios FIJOS de INICIO para ${dateStr} (${dayKey}):`, fixedHours);
+      console.log(`   ⚠️ No se muestran horarios intermedios (9:30, 10:30...) porque la clase ya habría empezado`);
       
       // Si no hay horarios fijos ese día, devolver array vacío
       if (fixedHours.length === 0) {
