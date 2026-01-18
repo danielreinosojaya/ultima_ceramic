@@ -413,8 +413,8 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
                     Te unirás a una clase existente
                   </p>
                   <p className="text-amber-700 text-xs mt-1">
-                    Grupos de 1-2 personas se unen a clases ya programadas. Solo horarios de inicio disponibles.
-                    <strong> Para clase privada con cualquier horario, agrega 1+ persona (mínimo 3).</strong>
+                    Solo verás horarios de inicio de clases ya programadas (ej: 9:00, 11:00).
+                    <strong> Para ver todos los horarios, agrega 1 persona más (necesitas 3 en total).</strong>
                   </p>
                 </div>
               </div>
@@ -431,7 +431,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
                     Clase privada para tu grupo
                   </p>
                   <p className="text-blue-700 text-xs mt-1">
-                    <strong>Nota:</strong> No se muestran horarios que caigan dentro de clases fijas (ej: si hay clase 9:00, no verás 9:30).
+                    No puedes reservar horarios que caigan dentro de clases ya programadas (ej: si hay clase 9:00-11:00, no verás 9:30).
                   </p>
                 </div>
               </div>
