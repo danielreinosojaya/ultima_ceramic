@@ -256,31 +256,18 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
             </div>
           </button>
 
-          {/* Celebración */}
+          {/* Celebración (deshabilitada: Muy pronto) */}
           <button
-            onClick={() => {
-              setState((prev) => ({ 
-                ...prev, 
-                experienceType: 'celebration',
-                config: { 
-                  activeParticipants: 1, 
-                  guests: 0, 
-                  hours: 2,
-                  bringDecoration: false, 
-                  bringCake: false, 
-                  hasChildren: false, 
-                  menuSelections: [] 
-                } as CelebrationConfig
-              }));
-              handleNext();
-            }}
-            className="group bg-white border-2 border-brand-border rounded-2xl p-6 sm:p-8 hover:border-brand-primary hover:shadow-lifted transition-all duration-300 text-left active:scale-[0.98]"
+            disabled
+            aria-disabled="true"
+            className="group bg-white border-2 border-brand-border rounded-2xl p-6 sm:p-8 text-left active:scale-[0.98] opacity-60 grayscale cursor-not-allowed"
           >
             <div className="flex items-start gap-4 mb-4">
               <div className="text-5xl">🎉</div>
               <div className="flex-1">
                 <h3 className="text-xl sm:text-2xl font-bold text-brand-text mb-2">
                   Celebración
+                  <span className="ml-2 inline-block px-2 py-1 text-xs font-semibold bg-gray-200 text-gray-700 rounded-full align-middle">Muy pronto</span>
                 </h3>
                 <p className="text-sm text-brand-secondary">
                   Evento completo con cerámica, invitados, decoración y menú personalizado.
@@ -312,8 +299,8 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
             </div>
 
             <div className="mt-6 text-center">
-              <span className="inline-block bg-brand-primary text-white px-6 py-3 rounded-xl font-semibold group-hover:bg-brand-accent transition-colors">
-                Elegir →
+              <span className="inline-block bg-gray-300 text-gray-700 px-6 py-3 rounded-xl font-semibold">
+                Muy pronto
               </span>
             </div>
           </button>
