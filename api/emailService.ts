@@ -587,7 +587,9 @@ export const sendDeliveryCreatedEmail = async (customerEmail: string, customerNa
     });
     
     const displayDescription = delivery.description || 'Tus piezas de cerámica';
-    const subject = `📦 Recogida programada - ${displayDescription}`;
+    // Sanitize subject: remove newlines and excessive whitespace
+    const sanitizedDescription = displayDescription.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const subject = `📦 Recogida programada - ${sanitizedDescription}`;
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
@@ -640,7 +642,9 @@ export const sendDeliveryCreatedByClientEmail = async (customerEmail: string, cu
     
     const displayDescription = delivery.description || 'Tus piezas de cerámica';
     const photoCount = delivery.photos || 0;
-    const subject = `✅ Recibimos tus fotos - ${displayDescription}`;
+    // Sanitize subject: remove newlines and excessive whitespace
+    const sanitizedDescription = displayDescription.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const subject = `✅ Recibimos tus fotos - ${sanitizedDescription}`;
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
@@ -712,7 +716,9 @@ export const sendDeliveryReadyEmail = async (customerEmail: string, customerName
     });
     
     const displayDescription = delivery.description || 'Tus piezas de cerámica';
-    const subject = `✨ ¡Tus piezas están listas! - ${displayDescription}`;
+    // Sanitize subject: remove newlines and excessive whitespace (email providers don't allow \n in subject)
+    const sanitizedDescription = displayDescription.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const subject = `✨ ¡Tus piezas están listas! - ${sanitizedDescription}`;
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
@@ -788,7 +794,9 @@ export const sendDeliveryReminderEmail = async (customerEmail: string, customerN
     });
     
     const displayDescription = delivery.description || 'Tus piezas de cerámica';
-    const subject = `🔔 Recordatorio: Recoge tus piezas mañana - ${displayDescription}`;
+    // Sanitize subject: remove newlines and excessive whitespace
+    const sanitizedDescription = displayDescription.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const subject = `🔔 Recordatorio: Recoge tus piezas mañana - ${sanitizedDescription}`;
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
@@ -851,7 +859,9 @@ export const sendDeliveryCompletedEmail = async (customerEmail: string, customer
     });
     
     const displayDescription = delivery.description || 'Tus piezas de cerámica';
-    const subject = `✅ Piezas entregadas - ${displayDescription}`;
+    // Sanitize subject: remove newlines and excessive whitespace
+    const sanitizedDescription = displayDescription.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const subject = `✅ Piezas entregadas - ${sanitizedDescription}`;
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #10B981;">¡Hola, ${customerName}!</h2>
