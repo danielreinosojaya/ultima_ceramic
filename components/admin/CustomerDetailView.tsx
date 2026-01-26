@@ -386,7 +386,9 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                             const result = await dataService.rescheduleBookingSlot(
                                 state.selectedBookingToReschedule.booking.id, 
                                 state.selectedBookingToReschedule.slot, 
-                                newSlot
+                                newSlot,
+                                true, // forceAdminReschedule: Admin puede reagendar sin restricciones
+                                'admin_user'
                             );
                             
                             console.log('[CustomerDetailView-PastClasses] Reschedule result:', result);
@@ -508,7 +510,9 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                             const result = await dataService.rescheduleBookingSlot(
                                 state.selectedBookingToReschedule.booking.id, 
                                 state.selectedBookingToReschedule.slot, 
-                                newSlot
+                                newSlot,
+                                true, // forceAdminReschedule: Admin puede reagendar sin restricciones
+                                'admin_user'
                             );
                             
                             console.log('[CustomerDetailView-Scheduled] Reschedule result:', result);

@@ -96,7 +96,7 @@ export const GiftcardManualPaymentInstructions: React.FC<{ onFinish: () => void;
   );
   const whatsappLink = `https://wa.me/${whatsappNumber.replace(/\D/g, '')}?text=${message}`;
   return (
-    <div className="w-full max-w-lg mx-auto flex flex-col items-center p-0 bg-brand-background rounded-3xl shadow-2xl border border-brand-border mx-4">
+    <div className="w-full max-w-lg mx-auto flex flex-col items-center p-0 bg-brand-background rounded-3xl shadow-2xl border border-brand-border">
       <div className="w-full rounded-t-3xl px-6 sm:px-8 md:px-10 pt-8 sm:pt-10 pb-6 bg-white border-b border-brand-border">
         <h2 className="text-2xl sm:text-3xl font-display font-extrabold mb-2 text-brand-primary text-center tracking-wide">Instrucciones de pago</h2>
         <p className="text-brand-secondary text-center text-xs sm:text-sm md:text-lg mb-2">Completa tu compra con una transferencia segura.</p>

@@ -7,7 +7,7 @@ interface LandingGiftcardProps {
 }
 
 export const LandingGiftcard: React.FC<LandingGiftcardProps> = ({ onStart, onCheckBalance }) => (
-  <section className="max-w-2xl mx-auto p-4 sm:p-6 md:p-8 bg-white rounded-xl shadow-lifted animate-fade-in-up flex flex-col items-center border border-brand-border mx-4">
+  <section className="max-w-2xl mx-auto p-4 sm:p-6 md:p-8 bg-white rounded-xl shadow-lifted animate-fade-in-up flex flex-col items-center border border-brand-border">
   <GiftIcon className="w-20 h-20 text-brand-primary mb-4" />
     <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-brand-text mb-2 text-center">Regala experiencias únicas</h1>
     <p className="text-brand-secondary text-xs sm:text-sm md:text-lg text-center mb-8">

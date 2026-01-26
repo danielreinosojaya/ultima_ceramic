@@ -462,7 +462,13 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
 
     const handleConfirmReschedule = async (newSlot: any) => {
         if (rescheduleInfo) {
-            const result = await dataService.rescheduleBookingSlot(rescheduleInfo.bookingId, rescheduleInfo.slot, newSlot);
+            const result = await dataService.rescheduleBookingSlot(
+                rescheduleInfo.bookingId, 
+                rescheduleInfo.slot, 
+                newSlot,
+                true, // forceAdminReschedule: Admin puede reagendar sin restricciones
+                'admin_user'
+            );
             if (!result.success) {
                 alert('Error al reprogramar la reserva: ' + result.message);
                 return;

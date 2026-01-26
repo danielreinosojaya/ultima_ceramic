@@ -3234,32 +3234,36 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     }
                 }
                 
-                // 3. Validar si tiene política acceptedNoRefund
-                if (booking.acceptedNoRefund === true) {
+                // 3. Validar si tiene política acceptedNoRefund (SKIP SI ES ADMIN)
+                if (booking.acceptedNoRefund === true && !forceAdminReschedule) {
                     return res.status(400).json({
                         success: false,
                         error: 'Esta clase no es reagendable (política de no reembolso)'
                     });
                 }
                 
-                // 4. Validar límite de reagendamientos
-                const product = booking.product as any;
-                const classCount = product?.classes || 1;
-                
-                // Calcular allowance según paquete
-                let allowance = 1; // default
-                if (classCount === 4) allowance = 1;
-                else if (classCount === 8) allowance = 2;
-                else if (classCount === 12) allowance = 3;
-                else if (classCount > 12) allowance = Math.ceil(classCount / 4);
-                
-                const rescheduleUsed = booking.rescheduleUsed || 0;
-                
-                if (rescheduleUsed >= allowance && !isRetroactive) {
-                    return res.status(400).json({
-                        success: false,
-                        error: `Agotaste tus ${allowance} reagendamientos disponibles para este paquete`
-                    });
+                // 4. Validar límite de reagendamientos (SKIP SI ES ADMIN)
+                if (!forceAdminReschedule) {
+                    const product = booking.product as any;
+                    const classCount = product?.classes || 1;
+                    
+                    // Calcular allowance según paquete
+                    let allowance = 1; // default
+                    if (classCount === 4) allowance = 1;
+                    else if (classCount === 8) allowance = 2;
+                    else if (classCount === 12) allowance = 3;
+                    else if (classCount > 12) allowance = Math.ceil(classCount / 4);
+                    
+                    const rescheduleUsed = booking.rescheduleUsed || 0;
+                    
+                    if (rescheduleUsed >= allowance && !isRetroactive) {
+                        return res.status(400).json({
+                            success: false,
+                            error: `Agotaste tus ${allowance} reagendamientos disponibles para este paquete`
+                        });
+                    }
+                } else {
+                    console.log(`[RESCHEDULE] Admin override: Saltando validación de límite de reagendamientos`);
                 }
                 
                 // 5. Validar capacidad del nuevo slot
