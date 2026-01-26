@@ -59,7 +59,7 @@ export const GiftcardBalanceChecker: React.FC<GiftcardBalanceCheckerProps> = ({ 
   const isExpired = result && new Date(result.expiresAt) < new Date();
 
   return (
-    <section className="max-w-2xl mx-auto p-4 sm:p-6 md:p-8 bg-white rounded-xl shadow-lifted animate-fade-in-up flex flex-col items-center border border-brand-border mx-4">
+    <section className="max-w-2xl mx-auto p-4 sm:p-6 md:p-8 bg-white rounded-xl shadow-lifted animate-fade-in-up flex flex-col items-center border border-brand-border">
       <GiftIcon className="w-16 h-16 text-brand-primary mb-4" />
       <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-brand-text mb-2 text-center">Consultar Saldo</h1>
       <p className="text-brand-secondary text-xs sm:text-sm md:text-lg text-center mb-8">
