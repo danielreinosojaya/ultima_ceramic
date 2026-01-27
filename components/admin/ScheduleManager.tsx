@@ -176,18 +176,18 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                     setCurrentDate(getWeekStartDate(slotDate));
                 }
                 setBookingToHighlight(booking);
-                // Abrir modal de detalles
+                // Abrir modal de detalles - UN attendee por booking, no por slot
                 setModalData({
                     date: booking.slots[0]?.date || '',
                     time: booking.slots[0]?.time || '',
                     instructorId: booking.slots[0]?.instructorId || 0,
-                    attendees: booking.slots.map(b => ({
+                    attendees: [{
                         userInfo: booking.userInfo,
                         bookingId: booking.id,
                         isPaid: booking.isPaid,
                         bookingCode: booking.bookingCode,
                         paymentDetails: booking.paymentDetails
-                    }))
+                    }]
                 });
                 setIsDetailsModalOpen(true);
                 setTimeout(() => setBookingToHighlight(null), 4000);
@@ -298,7 +298,11 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                         });
                     }
                     
-                    allSlots.get(slotId)!.bookings.push(booking);
+                    // Evitar duplicados: solo agregar si el booking no existe ya
+                    const existingSlot = allSlots.get(slotId)!;
+                    if (!existingSlot.bookings.some(b => b.id === booking.id)) {
+                        existingSlot.bookings.push(booking);
+                    }
                 }
             }
         }
@@ -432,11 +436,20 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     };
     
     const handleShiftClick = (date: string, slot: EnrichedSlot) => {
+        // Deduplicar bookings por ID antes de mostrar modal
+        const uniqueBookingsMap = new Map<string, typeof slot.bookings[0]>();
+        slot.bookings.forEach(b => {
+            if (!uniqueBookingsMap.has(b.id)) {
+                uniqueBookingsMap.set(b.id, b);
+            }
+        });
+        const uniqueBookings = Array.from(uniqueBookingsMap.values());
+        
         setModalData({
             date: date,
             time: slot.time,
             instructorId: slot.instructorId,
-            attendees: slot.bookings.map(b => ({ userInfo: b.userInfo, bookingId: b.id, isPaid: b.isPaid, bookingCode: b.bookingCode, paymentDetails: b.paymentDetails }))
+            attendees: uniqueBookings.map(b => ({ userInfo: b.userInfo, bookingId: b.id, isPaid: b.isPaid, bookingCode: b.bookingCode, paymentDetails: b.paymentDetails }))
         });
         setIsDetailsModalOpen(true);
     };
