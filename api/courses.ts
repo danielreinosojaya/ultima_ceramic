@@ -346,20 +346,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             case 'getAllEnrollments': {
                 const { scheduleId, status } = req.query;
 
-                let query = sql`
-                    SELECT * FROM course_enrollments
-                    WHERE 1=1
-                `;
-
-                if (scheduleId) {
-                    query = sql`${query} AND course_schedule_id = ${scheduleId as string}`;
+                // Construir query con condiciones
+                let query;
+                
+                if (scheduleId && status) {
+                    query = sql`
+                        SELECT * FROM course_enrollments
+                        WHERE course_schedule_id = ${scheduleId as string}
+                        AND status = ${status as string}
+                        ORDER BY enrollment_date DESC
+                    `;
+                } else if (scheduleId) {
+                    query = sql`
+                        SELECT * FROM course_enrollments
+                        WHERE course_schedule_id = ${scheduleId as string}
+                        ORDER BY enrollment_date DESC
+                    `;
+                } else if (status) {
+                    query = sql`
+                        SELECT * FROM course_enrollments
+                        WHERE status = ${status as string}
+                        ORDER BY enrollment_date DESC
+                    `;
+                } else {
+                    query = sql`
+                        SELECT * FROM course_enrollments
+                        ORDER BY enrollment_date DESC
+                    `;
                 }
-
-                if (status) {
-                    query = sql`${query} AND status = ${status as string}`;
-                }
-
-                query = sql`${query} ORDER BY enrollment_date DESC`;
 
                 const { rows } = await query;
 
