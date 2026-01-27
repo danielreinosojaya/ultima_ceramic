@@ -1498,8 +1498,22 @@ export const generateCustomersFromBookings = (bookings: Booking[]): Customer[] =
         return [];
     }
     
-    const customerMap: Map<string, { userInfo: UserInfo; bookings: Booking[] }> = new Map();
+    // PASO 1: Deduplicar bookings por ID
+    const uniqueBookingsMap = new Map<string, Booking>();
     for (const booking of bookings) {
+        if (booking && booking.id) {
+            uniqueBookingsMap.set(booking.id, booking);
+        }
+    }
+    const uniqueBookings = Array.from(uniqueBookingsMap.values());
+    
+    if (uniqueBookings.length !== bookings.length) {
+        console.warn(`[generateCustomersFromBookings] Removed ${bookings.length - uniqueBookings.length} duplicate bookings`);
+    }
+    
+    // PASO 2: Agrupar por email
+    const customerMap: Map<string, { userInfo: UserInfo; bookings: Booking[] }> = new Map();
+    for (const booking of uniqueBookings) {
         console.log('generateCustomersFromBookings: Processing booking', booking?.id, 'with userInfo:', !!booking?.userInfo);
         
         if (!booking.userInfo || !booking.userInfo.email) {
