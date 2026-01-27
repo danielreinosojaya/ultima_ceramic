@@ -3349,6 +3349,18 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 );
                 const updatedSlots = [...otherSlots, newSlot];
                 
+                // Deduplicar slots por seguridad (evitar duplicados si ya existían)
+                const uniqueSlotsMap = new Map<string, any>();
+                updatedSlots.forEach(slot => {
+                    const key = `${slot.date}|${slot.time}`;
+                    uniqueSlotsMap.set(key, slot);
+                });
+                const finalSlots = Array.from(uniqueSlotsMap.values());
+                
+                if (finalSlots.length !== updatedSlots.length) {
+                    console.warn(`[RESCHEDULE] Removed ${updatedSlots.length - finalSlots.length} duplicate slots`);
+                }
+                
                 // Crear entrada de historia
                 const rescheduleHistoryEntry = {
                     id: `reschedule_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
@@ -3379,7 +3391,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 // Actualizar booking
                 await sql`
                     UPDATE bookings SET 
-                        slots = ${JSON.stringify(updatedSlots)},
+                        slots = ${JSON.stringify(finalSlots)},
                         reschedule_used = ${rescheduleUsed + 1},
                         reschedule_history = ${JSON.stringify(updatedHistory)},
                         last_reschedule_at = NOW()
