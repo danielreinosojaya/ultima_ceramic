@@ -1182,7 +1182,11 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                 bookingsInSlot.push({
                                     id: booking.id,
                                     participants: participantCount,
-                                    userInfo: { name: booking.userInfo?.name },
+                                    userInfo: { 
+                                        name: booking.userInfo?.firstName 
+                                            ? `${booking.userInfo.firstName} ${booking.userInfo.lastName || ''}`.trim()
+                                            : 'Unknown'
+                                    },
                                     isPaid: booking.isPaid,
                                     bookingTechnique: bookingTechnique || 'unknown',
                                     requestedTechnique: requestedTechnique
@@ -3234,15 +3238,15 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     }
                 }
                 
-                // 3. Validar si tiene política acceptedNoRefund
-                if (booking.acceptedNoRefund === true) {
+                // 3. Validar si tiene política acceptedNoRefund (SKIP SI ES ADMIN)
+                if (booking.acceptedNoRefund === true && !forceAdminReschedule) {
                     return res.status(400).json({
                         success: false,
                         error: 'Esta clase no es reagendable (política de no reembolso)'
                     });
                 }
                 
-                // 4. Validar límite de reagendamientos
+                // 4. Calcular allowance y rescheduleUsed ANTES de validaciones
                 const product = booking.product as any;
                 const classCount = product?.classes || 1;
                 
@@ -3255,14 +3259,19 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 
                 const rescheduleUsed = booking.rescheduleUsed || 0;
                 
-                if (rescheduleUsed >= allowance && !isRetroactive) {
-                    return res.status(400).json({
-                        success: false,
-                        error: `Agotaste tus ${allowance} reagendamientos disponibles para este paquete`
-                    });
+                // 5. Validar límite de reagendamientos (SKIP SI ES ADMIN)
+                if (!forceAdminReschedule) {
+                    if (rescheduleUsed >= allowance && !isRetroactive) {
+                        return res.status(400).json({
+                            success: false,
+                            error: `Agotaste tus ${allowance} reagendamientos disponibles para este paquete`
+                        });
+                    }
+                } else {
+                    console.log(`[RESCHEDULE] Admin override: Saltando validación de límite de reagendamientos`);
                 }
                 
-                // 5. Validar capacidad del nuevo slot
+                // 6. Validar capacidad del nuevo slot
                 const { rows: products } = await sql`SELECT * FROM products WHERE id = ${bookingToReschedule.product_id}`;
                 if (products.length > 0) {
                     const classCapacityStr = process.env.CLASS_CAPACITY || '8,8,8';
@@ -3340,6 +3349,18 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 );
                 const updatedSlots = [...otherSlots, newSlot];
                 
+                // Deduplicar slots por seguridad (evitar duplicados si ya existían)
+                const uniqueSlotsMap = new Map<string, any>();
+                updatedSlots.forEach(slot => {
+                    const key = `${slot.date}|${slot.time}`;
+                    uniqueSlotsMap.set(key, slot);
+                });
+                const finalSlots = Array.from(uniqueSlotsMap.values());
+                
+                if (finalSlots.length !== updatedSlots.length) {
+                    console.warn(`[RESCHEDULE] Removed ${updatedSlots.length - finalSlots.length} duplicate slots`);
+                }
+                
                 // Crear entrada de historia
                 const rescheduleHistoryEntry = {
                     id: `reschedule_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
@@ -3370,7 +3391,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 // Actualizar booking
                 await sql`
                     UPDATE bookings SET 
-                        slots = ${JSON.stringify(updatedSlots)},
+                        slots = ${JSON.stringify(finalSlots)},
                         reschedule_used = ${rescheduleUsed + 1},
                         reschedule_history = ${JSON.stringify(updatedHistory)},
                         last_reschedule_at = NOW()
@@ -3660,7 +3681,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
                 // Obtener detalles bancarios
                 const { rows: settingsRows } = await sql`SELECT key, value FROM settings WHERE key = 'bankDetails'`;
-                const bankDetails = (settingsRows.find(r => r.key === 'bankDetails')?.value as BankDetails[]) || [];
+                const bankDetailsArray = (settingsRows.find(r => r.key === 'bankDetails')?.value as BankDetails[]) || [];
+                const bankDetails = bankDetailsArray[0] || {} as BankDetails;
 
                 // Enviar correo de pre-reserva
                 try {

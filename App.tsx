@@ -1061,7 +1061,7 @@ const App: React.FC = () => {
                             />
                         </div>
                     )}
-                    <div className={appData?.announcements && appData.announcements.length > 0 ? "mt-6" : ""}>
+                    <div className={`w-full ${appData?.announcements && appData.announcements.length > 0 ? "mt-6" : ""}`}>
                         {renderView()}
                     {isOpenStudioModalOpen && openStudioProduct && (
                         <ClassInfoModal

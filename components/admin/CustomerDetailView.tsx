@@ -321,8 +321,9 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                         const bookingCreatedAt = new Date(booking.createdAt);
                         const hoursDiff = (slotDate.getTime() - bookingCreatedAt.getTime()) / (1000 * 60 * 60);
                         const isNoRefund = hoursDiff < 48;
+                        const uniqueKey = `${booking.id}-${slot.date}-${slot.time}`;
                         return (
-                            <div key={idx} className={`p-6 border-b last:border-b-0 flex justify-between items-center gap-4 ${isPaid ? '' : 'bg-yellow-50'}`}>
+                            <div key={uniqueKey} className={`p-6 border-b last:border-b-0 flex justify-between items-center gap-4 ${isPaid ? '' : 'bg-yellow-50'}`}>
                                 <div>
                                     <p className="font-bold text-lg text-brand-text mb-1 flex items-center gap-2">
                                         {booking.product?.name || 'Clase individual'}
@@ -386,7 +387,9 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                             const result = await dataService.rescheduleBookingSlot(
                                 state.selectedBookingToReschedule.booking.id, 
                                 state.selectedBookingToReschedule.slot, 
-                                newSlot
+                                newSlot,
+                                true, // forceAdminReschedule: Admin puede reagendar sin restricciones
+                                'admin_user'
                             );
                             
                             console.log('[CustomerDetailView-PastClasses] Reschedule result:', result);
@@ -443,8 +446,9 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                         const bookingCreatedAt = new Date(booking.createdAt);
                         const hoursDiff = (slotDate.getTime() - bookingCreatedAt.getTime()) / (1000 * 60 * 60);
                         const isNoRefund = hoursDiff < 48;
+                        const uniqueKey = `${booking.id}-${slot.date}-${slot.time}`;
                         return (
-                        <div key={idx} className="p-6 border-b last:border-b-0 flex justify-between items-center gap-4">
+                        <div key={uniqueKey} className="p-6 border-b last:border-b-0 flex justify-between items-center gap-4">
                             <div>
                                 <p className="font-bold text-lg text-brand-text mb-1 flex items-center gap-2">
                                     {booking.product?.name || 'Clase individual'}
@@ -508,7 +512,9 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                             const result = await dataService.rescheduleBookingSlot(
                                 state.selectedBookingToReschedule.booking.id, 
                                 state.selectedBookingToReschedule.slot, 
-                                newSlot
+                                newSlot,
+                                true, // forceAdminReschedule: Admin puede reagendar sin restricciones
+                                'admin_user'
                             );
                             
                             console.log('[CustomerDetailView-Scheduled] Reschedule result:', result);
@@ -570,8 +576,10 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                     Pagos Realizados
                 </h3>
                 <div className="bg-white shadow overflow-hidden sm:rounded-md">
-                    {payments.length > 0 ? payments.map(({ payment, booking, idx }) => (
-                        <div key={idx} className="p-6 border-b last:border-b-0 flex items-center gap-6">
+                    {payments.length > 0 ? payments.map(({ payment, booking, idx }) => {
+                        const uniqueKey = `${payment.paymentId || payment.id || idx}-${booking.id}`;
+                        return (
+                        <div key={uniqueKey} className="p-6 border-b last:border-b-0 flex items-center gap-6">
                             <div className="flex-shrink-0 flex items-center justify-center h-16 w-16 rounded-full bg-green-100">
                                 <CurrencyDollarIcon className="h-8 w-8 text-green-500" />
                             </div>
@@ -608,7 +616,8 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                 )}
                             </div>
                         </div>
-                    )) : (
+                        );
+                    }) : (
                         <div className="p-8 flex flex-col items-center justify-center text-brand-secondary">
                             <CurrencyDollarIcon className="h-10 w-10 text-gray-300 mb-2" />
                             <span className="text-lg font-semibold">No hay pagos registrados.</span>
