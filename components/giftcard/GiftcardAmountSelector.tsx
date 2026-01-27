@@ -168,13 +168,13 @@ export const GiftcardAmountSelector: React.FC<GiftcardAmountSelectorProps> = ({ 
 
       {/* Modal de guía de precios */}
       {showPriceGuide && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowPriceGuide(false)}>
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto" onClick={() => setShowPriceGuide(false)}>
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full my-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-start mb-4">
               <h3 className="text-xl font-bold text-brand-primary">📚 Guía de Precios</h3>
               <button
                 onClick={() => setShowPriceGuide(false)}
-                className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none -mt-1"
               >
                 ×
               </button>
@@ -182,7 +182,7 @@ export const GiftcardAmountSelector: React.FC<GiftcardAmountSelectorProps> = ({ 
             <p className="text-sm text-brand-secondary mb-6">
               Estos son nuestros productos y experiencias disponibles:
             </p>
-            <div className="space-y-3">
+            <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2 -mr-2">
               {PRODUCTS.map((product, index) => (
                 <div
                   key={index}
