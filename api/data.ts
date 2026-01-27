@@ -1182,7 +1182,11 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                 bookingsInSlot.push({
                                     id: booking.id,
                                     participants: participantCount,
-                                    userInfo: { name: booking.userInfo?.name },
+                                    userInfo: { 
+                                        name: booking.userInfo?.firstName 
+                                            ? `${booking.userInfo.firstName} ${booking.userInfo.lastName || ''}`.trim()
+                                            : 'Unknown'
+                                    },
                                     isPaid: booking.isPaid,
                                     bookingTechnique: bookingTechnique || 'unknown',
                                     requestedTechnique: requestedTechnique
@@ -3242,20 +3246,21 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     });
                 }
                 
-                // 4. Validar límite de reagendamientos (SKIP SI ES ADMIN)
+                // 4. Calcular allowance y rescheduleUsed ANTES de validaciones
+                const product = booking.product as any;
+                const classCount = product?.classes || 1;
+                
+                // Calcular allowance según paquete
+                let allowance = 1; // default
+                if (classCount === 4) allowance = 1;
+                else if (classCount === 8) allowance = 2;
+                else if (classCount === 12) allowance = 3;
+                else if (classCount > 12) allowance = Math.ceil(classCount / 4);
+                
+                const rescheduleUsed = booking.rescheduleUsed || 0;
+                
+                // 5. Validar límite de reagendamientos (SKIP SI ES ADMIN)
                 if (!forceAdminReschedule) {
-                    const product = booking.product as any;
-                    const classCount = product?.classes || 1;
-                    
-                    // Calcular allowance según paquete
-                    let allowance = 1; // default
-                    if (classCount === 4) allowance = 1;
-                    else if (classCount === 8) allowance = 2;
-                    else if (classCount === 12) allowance = 3;
-                    else if (classCount > 12) allowance = Math.ceil(classCount / 4);
-                    
-                    const rescheduleUsed = booking.rescheduleUsed || 0;
-                    
                     if (rescheduleUsed >= allowance && !isRetroactive) {
                         return res.status(400).json({
                             success: false,
@@ -3266,7 +3271,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     console.log(`[RESCHEDULE] Admin override: Saltando validación de límite de reagendamientos`);
                 }
                 
-                // 5. Validar capacidad del nuevo slot
+                // 6. Validar capacidad del nuevo slot
                 const { rows: products } = await sql`SELECT * FROM products WHERE id = ${bookingToReschedule.product_id}`;
                 if (products.length > 0) {
                     const classCapacityStr = process.env.CLASS_CAPACITY || '8,8,8';
@@ -3664,7 +3669,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
                 // Obtener detalles bancarios
                 const { rows: settingsRows } = await sql`SELECT key, value FROM settings WHERE key = 'bankDetails'`;
-                const bankDetails = (settingsRows.find(r => r.key === 'bankDetails')?.value as BankDetails[]) || [];
+                const bankDetailsArray = (settingsRows.find(r => r.key === 'bankDetails')?.value as BankDetails[]) || [];
+                const bankDetails = bankDetailsArray[0] || {} as BankDetails;
 
                 // Enviar correo de pre-reserva
                 try {
