@@ -34,6 +34,10 @@ import { CourseWheelLanding } from './components/courses/CourseWheelLanding';
 import { CourseScheduleSelector } from './components/courses/CourseScheduleSelector';
 import { CourseRegistrationForm } from './components/courses/CourseRegistrationForm';
 import { CourseConfirmation } from './components/courses/CourseConfirmation';
+// Valentine Components
+import { ValentineLanding } from './components/valentine/ValentineLanding';
+import { ValentineRegistrationForm } from './components/valentine/ValentineRegistrationForm';
+import { ValentineSuccess } from './components/valentine/ValentineSuccess';
 // Lazy load AdminConsole to reduce initial bundle size
 const AdminConsole = lazy(() => import('./components/admin/AdminConsole').then(module => ({ default: module.AdminConsole })));
 import { NotificationProvider } from './context/NotificationContext';
@@ -135,6 +139,9 @@ const App: React.FC = () => {
     const [selectedCourseSchedule, setSelectedCourseSchedule] = useState<CourseSchedule | null>(null);
     const [confirmedEnrollment, setConfirmedEnrollment] = useState<CourseEnrollment | null>(null);
     
+    // VALENTINE 2026 states
+    const [valentineRegistrationId, setValentineRegistrationId] = useState<string | null>(null);
+    
     const [appData, setAppData] = useState<AppData | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -142,6 +149,12 @@ const App: React.FC = () => {
         const urlParams = new URLSearchParams(window.location.search);
         const pathname = window.location.pathname;
         const href = window.location.href;
+
+        // Check for Valentine registration page - /sanvalentin or ?sanvalentin=true
+        if (pathname.includes('/sanvalentin') || href.includes('/sanvalentin') || urlParams.get('sanvalentin') === 'true') {
+            setView('valentine_landing');
+            return;
+        }
 
         // Check for cashier mode - supports both /cuadre and ?cuadre=true
         if (pathname.includes('/cuadre') || href.includes('/cuadre') || urlParams.get('cuadre') === 'true') {
@@ -983,6 +996,37 @@ const App: React.FC = () => {
                         onBack={() => setView('welcome')}
                         isLoading={false}
                         onShowPolicies={() => setIsPolicyModalOpen(true)}
+                    />
+                );
+
+            // ==================== VALENTINE 2026 VIEWS ====================
+            case 'valentine_landing':
+                return (
+                    <ValentineLanding
+                        onStart={() => setView('valentine_form')}
+                        onBack={() => setView('welcome')}
+                    />
+                );
+            
+            case 'valentine_form':
+                return (
+                    <ValentineRegistrationForm
+                        onSuccess={(registrationId) => {
+                            setValentineRegistrationId(registrationId);
+                            setView('valentine_success');
+                        }}
+                        onBack={() => setView('valentine_landing')}
+                    />
+                );
+            
+            case 'valentine_success':
+                return (
+                    <ValentineSuccess
+                        registrationId={valentineRegistrationId || ''}
+                        onDone={() => {
+                            setValentineRegistrationId(null);
+                            setView('welcome');
+                        }}
                     />
                 );
 

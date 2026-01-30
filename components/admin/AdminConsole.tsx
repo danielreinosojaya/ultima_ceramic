@@ -17,7 +17,7 @@ import { SettingsManager } from './SettingsManager';
 import { PiecesManager } from './PiecesManager';
 import type { AdminTab, Notification, Product, Booking, Customer, GroupInquiry, Instructor, ScheduleOverrides, DayKey, AvailableSlot, ClassCapacity, CapacityMessageSettings, Announcement, AppData, BankDetails, InvoiceRequest, NavigationState } from '../../types';
 
-type ExtendedAdminTab = AdminTab | 'giftcards' | 'expired-bookings' | 'pieces' | 'courses';
+type ExtendedAdminTab = AdminTab | 'giftcards' | 'expired-bookings' | 'pieces' | 'courses' | 'valentine';
 import { ScheduleSettingsManager } from './ScheduleSettingsManager';
 import { CalendarEditIcon } from '../icons/CalendarEditIcon';
 import { InquiryManager } from './InquiryManager';
@@ -34,6 +34,7 @@ import { formatDistanceToNow } from 'date-fns';
 import ErrorBoundary from './ErrorBoundary';
 import { ExpiredBookingsManager } from './ExpiredBookingsManager';
 import { AdminCourseManagement } from './AdminCourseManagement';
+import { ValentineAdminPanel } from './ValentineAdminPanel';
 
 interface AdminData {
   products: Product[];
@@ -214,6 +215,8 @@ export const AdminConsole: React.FC = () => {
         return <ClientNotificationLog />;
       case 'courses':
         return <AdminCourseManagement />;
+      case 'valentine':
+        return <ValentineAdminPanel />;
       case 'expired-bookings':
         return <ExpiredBookingsManager />;
       case 'pieces':
@@ -281,6 +284,7 @@ export const AdminConsole: React.FC = () => {
               </button>
               <TabButton tab="giftcards" icon={<svg className="w-4 h-4" viewBox="0 0 24 24" fill="none"><rect x="3" y="7" width="18" height="10" rx="2" stroke="#A89C94" strokeWidth="2" fill="#F5F3EA"/><path d="M3 7l9 7 9-7" stroke="#A89C94" strokeWidth="2" fill="none"/></svg>}>Giftcards</TabButton>
               <TabButton tab="courses" icon={<svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3" strokeWidth="2"/><path d="M12 1v6m0 6v6M1 12h6m6 0h6" strokeWidth="2" strokeLinecap="round"/></svg>}>Cursos</TabButton>
+              <TabButton tab="valentine" icon={<svg className="w-4 h-4" viewBox="0 0 24 24" fill="none"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="#E11D48" stroke="#E11D48" strokeWidth="1"/></svg>}>San Valentín</TabButton>
               <TabButton tab="expired-bookings" icon={<svg className="w-4 h-4" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#E11D48" strokeWidth="2"/><path d="M12 7v5" stroke="#E11D48" strokeWidth="2"/><circle cx="12" cy="19" r="1" fill="#E11D48"/></svg>}>Pre-Reservas</TabButton>
               <TabButton tab="settings" icon={<CogIcon className="w-4 h-4" />}>Ajustes</TabButton>
             </div>

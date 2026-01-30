@@ -30,7 +30,10 @@ export type AppView =
   | 'wheel_course_landing'
   | 'wheel_course_schedule'
   | 'wheel_course_registration'
-  | 'wheel_course_confirmation';
+  | 'wheel_course_confirmation'
+  | 'valentine_landing'
+  | 'valentine_form'
+  | 'valentine_success';
 export type BookingMode = 'flexible' | 'monthly';
 export type Technique = 'potters_wheel' | 'molding';
 
@@ -1060,4 +1063,76 @@ export interface CustomExperienceBooking {
   // Metadata
   createdAt?: string;
   bookingCode?: string;
+}
+
+// ============================================
+// San Valentín 2026 - Inscripciones
+// ============================================
+
+export type ValentineWorkshopType = 
+  | 'florero_arreglo_floral'
+  | 'modelado_san_valentin'
+  | 'torno_san_valentin';
+
+export type ValentineRegistrationStatus = 
+  | 'pending'      // Esperando validación de pago
+  | 'confirmed'    // Pago verificado
+  | 'cancelled'    // Cancelado
+  | 'attended';    // Asistió al taller
+
+export interface ValentineWorkshopInfo {
+  type: ValentineWorkshopType;
+  name: string;
+  time: string;
+  priceIndividual: number;
+  pricePair: number;
+  description: string;
+  maxCapacity: number; // Cupos máximos (cuenta participantes, no inscripciones)
+}
+
+export const VALENTINE_WORKSHOPS: ValentineWorkshopInfo[] = [
+  {
+    type: 'florero_arreglo_floral',
+    name: 'Decoración de florero de cerámica + Arreglo Floral',
+    time: '10h00 a 12h00',
+    priceIndividual: 75,
+    pricePair: 140,
+    description: 'Ideal para compartir con amigas, familia o para ti mismo',
+    maxCapacity: 15
+  },
+  {
+    type: 'modelado_san_valentin',
+    name: 'Modelado a mano + Colores San Valentín',
+    time: '14h00 a 16h00',
+    priceIndividual: 65,
+    pricePair: 120,
+    description: 'Para mentes creativas que deseen explorar diversas formas',
+    maxCapacity: 20
+  },
+  {
+    type: 'torno_san_valentin',
+    name: 'Torno Alfarero San Valentín',
+    time: '17h00 a 19h00',
+    priceIndividual: 70,
+    pricePair: 130,
+    description: 'Conectaremos con los sentidos y daremos forma a una pieza única',
+    maxCapacity: 8
+  }
+];
+
+export interface ValentineRegistration {
+  id: string;
+  fullName: string;
+  birthDate: string; // YYYY-MM-DD
+  phone: string;
+  email: string;
+  workshop: ValentineWorkshopType;
+  participants: 1 | 2; // Individual o pareja
+  paymentProofUrl: string; // URL de la foto/screenshot del comprobante
+  status: ValentineRegistrationStatus;
+  createdAt: string;
+  updatedAt?: string;
+  adminNotes?: string;
+  confirmedBy?: string; // Admin que confirmó
+  confirmedAt?: string;
 }

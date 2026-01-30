@@ -1588,3 +1588,253 @@ export const sendCustomExperiencePreBookingEmail = async (
     console.info('[emailService] Custom experience pre-booking email sent to', userInfo.email);
     return result;
 };
+
+// ============================================
+// San Valentín 2026 - Emails
+// ============================================
+
+const getWorkshopName = (workshop: string): string => {
+    const names: Record<string, string> = {
+        'florero_arreglo_floral': 'Decoración de florero de cerámica + Arreglo Floral',
+        'modelado_san_valentin': 'Modelado a mano + Colores San Valentín',
+        'torno_san_valentin': 'Torno Alfarero San Valentín'
+    };
+    return names[workshop] || workshop;
+};
+
+const getWorkshopTime = (workshop: string): string => {
+    const times: Record<string, string> = {
+        'florero_arreglo_floral': '10h00 a 12h00',
+        'modelado_san_valentin': '14h00 a 16h00',
+        'torno_san_valentin': '17h00 a 19h00'
+    };
+    return times[workshop] || '';
+};
+
+/**
+ * Email de confirmación de inscripción (se envía inmediatamente al registrarse)
+ */
+export const sendValentineRegistrationEmail = async (data: {
+    id: string;
+    fullName: string;
+    email: string;
+    workshop: string;
+    participants: 1 | 2;
+}) => {
+    const { id, fullName, email, workshop, participants } = data;
+    const workshopName = getWorkshopName(workshop);
+    const workshopTime = getWorkshopTime(workshop);
+    const participantText = participants === 2 ? 'para 2 personas' : 'individual';
+
+    const subject = `💕 ¡Recibimos tu inscripción San Valentín! - ${workshopName}`;
+
+    const html = `
+        <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+            <!-- Header con tema de San Valentín -->
+            <div style="background: linear-gradient(135deg, #B8474B 0%, #D4686B 50%, #E8A1A4 100%); padding: 40px 30px; text-align: center;">
+                <h1 style="color: #fff; font-size: 28px; margin: 0 0 8px 0; font-weight: 600; letter-spacing: 0.5px;">
+                    💕 San Valentín en Ceramicalma
+                </h1>
+                <p style="color: rgba(255,255,255,0.95); font-size: 16px; margin: 0; font-weight: 400;">
+                    ¡Recibimos tu inscripción!
+                </p>
+            </div>
+
+            <!-- Contenido -->
+            <div style="padding: 35px 30px;">
+                <p style="color: #4A4540; font-size: 17px; line-height: 1.7; margin: 0 0 24px 0;">
+                    Hola <strong>${fullName}</strong>,
+                </p>
+
+                <p style="color: #4A4540; font-size: 15px; line-height: 1.7; margin: 0 0 20px 0;">
+                    ¡Gracias por inscribirte a nuestro evento especial de San Valentín! 💕
+                </p>
+
+                <!-- Detalles de inscripción -->
+                <div style="background: linear-gradient(135deg, #FDF2F2 0%, #FCEAEA 100%); border: 1px solid #F5C6C6; border-radius: 12px; padding: 24px; margin: 20px 0;">
+                    <h3 style="color: #B8474B; font-size: 16px; margin: 0 0 16px 0; font-weight: 600;">
+                        📋 Detalles de tu inscripción
+                    </h3>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="padding: 8px 0; color: #958985; font-size: 14px; border-bottom: 1px solid #F5C6C6;">Código:</td>
+                            <td style="padding: 8px 0; color: #4A4540; font-size: 14px; font-weight: 600; border-bottom: 1px solid #F5C6C6;">${id}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; color: #958985; font-size: 14px; border-bottom: 1px solid #F5C6C6;">Taller:</td>
+                            <td style="padding: 8px 0; color: #4A4540; font-size: 14px; font-weight: 500; border-bottom: 1px solid #F5C6C6;">${workshopName}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; color: #958985; font-size: 14px; border-bottom: 1px solid #F5C6C6;">Horario:</td>
+                            <td style="padding: 8px 0; color: #4A4540; font-size: 14px; border-bottom: 1px solid #F5C6C6;">${workshopTime}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; color: #958985; font-size: 14px; border-bottom: 1px solid #F5C6C6;">Fecha:</td>
+                            <td style="padding: 8px 0; color: #B8474B; font-size: 14px; font-weight: 600; border-bottom: 1px solid #F5C6C6;">14 de febrero, 2026</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; color: #958985; font-size: 14px;">Participantes:</td>
+                            <td style="padding: 8px 0; color: #4A4540; font-size: 14px;">${participantText}</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <!-- Estado -->
+                <div style="background: #FEF3CD; border: 1px solid #FFEEBA; border-radius: 10px; padding: 18px 20px; margin: 24px 0;">
+                    <p style="color: #856404; font-size: 14px; margin: 0; line-height: 1.5;">
+                        ⏳ <strong>Estado: Pendiente de validación</strong><br/>
+                        Estamos revisando tu comprobante de pago. Te enviaremos un email cuando sea confirmado.
+                    </p>
+                </div>
+
+                <!-- Qué incluye -->
+                <div style="margin: 28px 0;">
+                    <h3 style="color: #4A4540; font-size: 15px; margin: 0 0 14px 0; font-weight: 600;">
+                        ✨ Tu experiencia incluye:
+                    </h3>
+                    <ul style="color: #4A4540; font-size: 14px; margin: 0; padding-left: 20px; line-height: 1.8;">
+                        <li style="margin-bottom: 6px;">Clase guiada y acompañamiento de creación</li>
+                        <li style="margin-bottom: 6px;">Materiales y herramientas</li>
+                        <li style="margin-bottom: 6px;">Horneadas cerámicas de alta temperatura</li>
+                        <li style="margin-bottom: 6px;">Pieza lista para su uso (apta para alimentos, microondas y lavavajillas)</li>
+                        <li>Entrega en aproximadamente 2 semanas</li>
+                    </ul>
+                </div>
+
+                <p style="color: #B8474B; font-size: 15px; font-weight: 500; text-align: center; margin: 24px 0;">
+                    💕 ¡Tendremos sorpresas y sorteos de premios increíbles! 💕
+                </p>
+            </div>
+
+            <!-- Footer -->
+            <div style="background: linear-gradient(135deg, #FDF2F2 0%, #FCEAEA 100%); border-top: 1px solid #F5C6C6; padding: 24px 30px; text-align: center;">
+                <p style="color: #4A4540; font-size: 14px; margin: 0 0 12px 0;">
+                    <strong>¿Preguntas? Contáctanos</strong><br/>
+                    <span style="font-size: 13px; color: #958985;">
+                        📧 cmassuh@ceramicalma.com<br/>
+                        📱 +593 98 581 3327
+                    </span>
+                </p>
+                <p style="color: #B8474B; font-size: 12px; margin: 14px 0 0 0; font-style: italic;">
+                    Con amor, el equipo de Ceramicalma 💕
+                </p>
+            </div>
+        </div>
+    `;
+
+    const result = await sendEmail(email, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(email, 'valentine-registration', 'email', status, id);
+
+    console.info('[emailService] Valentine registration email sent to', email);
+    return result;
+};
+
+/**
+ * Email de confirmación de pago (se envía cuando admin valida el pago)
+ */
+export const sendValentinePaymentConfirmedEmail = async (data: {
+    id: string;
+    fullName: string;
+    email: string;
+    workshop: string;
+    participants: 1 | 2;
+}) => {
+    const { id, fullName, email, workshop, participants } = data;
+    const workshopName = getWorkshopName(workshop);
+    const workshopTime = getWorkshopTime(workshop);
+    const participantText = participants === 2 ? 'para 2 personas' : 'individual';
+
+    const subject = `💕 ¡Pago confirmado! Te esperamos el 14 de febrero - ${workshopName}`;
+
+    const html = `
+        <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+            <!-- Header con tema de San Valentín -->
+            <div style="background: linear-gradient(135deg, #B8474B 0%, #D4686B 50%, #E8A1A4 100%); padding: 40px 30px; text-align: center;">
+                <h1 style="color: #fff; font-size: 28px; margin: 0 0 8px 0; font-weight: 600; letter-spacing: 0.5px;">
+                    ✓ ¡Pago Confirmado!
+                </h1>
+                <p style="color: rgba(255,255,255,0.95); font-size: 16px; margin: 0; font-weight: 400;">
+                    Tu lugar está reservado 💕
+                </p>
+            </div>
+
+            <!-- Contenido -->
+            <div style="padding: 35px 30px;">
+                <p style="color: #4A4540; font-size: 17px; line-height: 1.7; margin: 0 0 24px 0;">
+                    Hola <strong>${fullName}</strong>,
+                </p>
+
+                <p style="color: #4A4540; font-size: 15px; line-height: 1.7; margin: 0 0 20px 0;">
+                    ¡Excelentes noticias! Hemos verificado tu pago y tu inscripción está <strong style="color: #28a745;">CONFIRMADA</strong>. 🎉
+                </p>
+
+                <!-- Detalles confirmados -->
+                <div style="background: linear-gradient(135deg, #D4EDDA 0%, #C3E6CB 100%); border: 1px solid #A8D5B8; border-radius: 12px; padding: 24px; margin: 20px 0;">
+                    <h3 style="color: #155724; font-size: 16px; margin: 0 0 16px 0; font-weight: 600;">
+                        ✓ Inscripción Confirmada
+                    </h3>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="padding: 8px 0; color: #155724; font-size: 14px; border-bottom: 1px solid #A8D5B8;">Código:</td>
+                            <td style="padding: 8px 0; color: #155724; font-size: 14px; font-weight: 600; border-bottom: 1px solid #A8D5B8;">${id}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; color: #155724; font-size: 14px; border-bottom: 1px solid #A8D5B8;">Taller:</td>
+                            <td style="padding: 8px 0; color: #155724; font-size: 14px; font-weight: 500; border-bottom: 1px solid #A8D5B8;">${workshopName}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; color: #155724; font-size: 14px; border-bottom: 1px solid #A8D5B8;">Horario:</td>
+                            <td style="padding: 8px 0; color: #155724; font-size: 14px; border-bottom: 1px solid #A8D5B8;">${workshopTime}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; color: #155724; font-size: 14px; border-bottom: 1px solid #A8D5B8;">Fecha:</td>
+                            <td style="padding: 8px 0; color: #B8474B; font-size: 15px; font-weight: 700; border-bottom: 1px solid #A8D5B8;">Sábado 14 de febrero, 2026</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; color: #155724; font-size: 14px;">Participantes:</td>
+                            <td style="padding: 8px 0; color: #155724; font-size: 14px;">${participantText}</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <!-- Recordatorio -->
+                <div style="background: #FDF2F2; border: 1px solid #F5C6C6; border-radius: 10px; padding: 18px 20px; margin: 24px 0;">
+                    <h4 style="color: #B8474B; font-size: 14px; margin: 0 0 10px 0; font-weight: 600;">
+                        📍 Recuerda:
+                    </h4>
+                    <ul style="color: #4A4540; font-size: 14px; margin: 0; padding-left: 20px; line-height: 1.7;">
+                        <li style="margin-bottom: 4px;">Llega 10 minutos antes de tu horario</li>
+                        <li style="margin-bottom: 4px;">Usa ropa cómoda que pueda mancharse</li>
+                        <li>Trae toda tu energía creativa ✨</li>
+                    </ul>
+                </div>
+
+                <p style="color: #B8474B; font-size: 16px; font-weight: 600; text-align: center; margin: 28px 0;">
+                    💕 ¡Nos vemos el 14 de febrero! 💕
+                </p>
+            </div>
+
+            <!-- Footer -->
+            <div style="background: linear-gradient(135deg, #FDF2F2 0%, #FCEAEA 100%); border-top: 1px solid #F5C6C6; padding: 24px 30px; text-align: center;">
+                <p style="color: #4A4540; font-size: 14px; margin: 0 0 12px 0;">
+                    <strong>¿Preguntas? Contáctanos</strong><br/>
+                    <span style="font-size: 13px; color: #958985;">
+                        📧 cmassuh@ceramicalma.com<br/>
+                        📱 +593 98 581 3327
+                    </span>
+                </p>
+                <p style="color: #B8474B; font-size: 12px; margin: 14px 0 0 0; font-style: italic;">
+                    Con amor, el equipo de Ceramicalma 💕
+                </p>
+            </div>
+        </div>
+    `;
+
+    const result = await sendEmail(email, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(email, 'valentine-payment-confirmed', 'email', status, id);
+
+    console.info('[emailService] Valentine payment confirmed email sent to', email);
+    return result;
+};
