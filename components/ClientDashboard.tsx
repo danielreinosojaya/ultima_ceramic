@@ -1,11 +1,51 @@
 import React, { useState, useEffect } from 'react';
-import type { Booking } from '../types';
+import type { Booking, GroupTechnique } from '../types';
 import * as dataService from '../services/dataService';
 import { ClientBookingsView } from './ClientBookingsView';
 import { ClientLogin } from './ClientLogin';
 import { ClientSessionOptions } from './ClientSessionOptions';
 import { CreateSessionForm } from './CreateSessionForm';
 import { useAuth } from '../context/AuthContext';
+
+// Helper para obtener nombre de técnica desde metadata
+const getTechniqueName = (technique: GroupTechnique): string => {
+  const names: Record<GroupTechnique, string> = {
+    'potters_wheel': 'Torno Alfarero',
+    'hand_modeling': 'Modelado a Mano',
+    'painting': 'Pintura de piezas'
+  };
+  return names[technique] || technique;
+};
+
+// Helper para traducir productType a nombre legible
+const getProductTypeName = (productType?: string): string => {
+  const typeNames: Record<string, string> = {
+    'SINGLE_CLASS': 'Clase Suelta',
+    'CLASS_PACKAGE': 'Paquete de Clases',
+    'INTRODUCTORY_CLASS': 'Clase Introductoria',
+    'GROUP_CLASS': 'Clase Grupal',
+    'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
+    'OPEN_STUDIO': 'Estudio Abierto'
+  };
+  return typeNames[productType || ''] || 'Clase';
+};
+
+// Helper para obtener el nombre del producto/técnica de un booking
+const getBookingDisplayName = (booking: Booking): string => {
+  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
+    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
+    const uniqueTechniques = [...new Set(techniques)];
+    if (uniqueTechniques.length === 1) {
+      return getTechniqueName(uniqueTechniques[0]);
+    }
+    return 'Clase Grupal (mixto)';
+  }
+  const productName = booking.product?.name;
+  if (!productName || productName === 'Unknown Product') {
+    return getProductTypeName(booking.productType);
+  }
+  return productName;
+};
 
 interface ClientDashboardProps {
     onClose?: () => void;
@@ -167,7 +207,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onClose }) => 
                                 className="w-full p-4 border-2 border-brand-border rounded-lg hover:border-brand-primary hover:bg-blue-50 text-left transition-colors"
                             >
                                 <p className="font-semibold text-brand-text">
-                                    {booking.product?.name || 'Experiencia'}
+                                    {getBookingDisplayName(booking)}
                                 </p>
                                 {booking.bookingDate && (
                                     <p className="text-sm text-brand-secondary mt-1">

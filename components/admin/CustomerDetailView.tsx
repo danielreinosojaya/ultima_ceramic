@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { Booking, InvoiceRequest, ClassPackage, Delivery, PaymentDetails, Customer, AppData, Product } from '../../types';
+import type { Booking, InvoiceRequest, ClassPackage, Delivery, PaymentDetails, Customer, AppData, Product, GroupTechnique } from '../../types';
 import { ActivePackagesDisplay } from './ActivePackagesDisplay';
 import { AcceptPaymentModal } from './AcceptPaymentModal';
 import { InvoiceReminderModal } from './InvoiceReminderModal';
@@ -28,6 +28,46 @@ import {
     TagIcon
 } from '@heroicons/react/24/outline';
 import * as dataService from '../../services/dataService';
+
+// Helper para obtener nombre de técnica desde metadata
+const getTechniqueName = (technique: GroupTechnique): string => {
+  const names: Record<GroupTechnique, string> = {
+    'potters_wheel': 'Torno Alfarero',
+    'hand_modeling': 'Modelado a Mano',
+    'painting': 'Pintura de piezas'
+  };
+  return names[technique] || technique;
+};
+
+// Helper para traducir productType a nombre legible
+const getProductTypeName = (productType?: string): string => {
+  const typeNames: Record<string, string> = {
+    'SINGLE_CLASS': 'Clase Suelta',
+    'CLASS_PACKAGE': 'Paquete de Clases',
+    'INTRODUCTORY_CLASS': 'Clase Introductoria',
+    'GROUP_CLASS': 'Clase Grupal',
+    'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
+    'OPEN_STUDIO': 'Estudio Abierto'
+  };
+  return typeNames[productType || ''] || 'Clase';
+};
+
+// Helper para obtener el nombre del producto/técnica de un booking
+const getBookingDisplayName = (booking: Booking): string => {
+  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
+    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
+    const uniqueTechniques = [...new Set(techniques)];
+    if (uniqueTechniques.length === 1) {
+      return getTechniqueName(uniqueTechniques[0]);
+    }
+    return 'Clase Grupal (mixto)';
+  }
+  const productName = booking.product?.name;
+  if (!productName || productName === 'Unknown Product' || productName === 'Unknown') {
+    return getProductTypeName(booking.productType);
+  }
+  return productName;
+};
 import { formatDate, formatCurrency, normalizeHour } from '../../utils/formatters';
 
 interface CustomerDetailViewProps {
@@ -326,7 +366,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                             <div key={uniqueKey} className={`p-6 border-b last:border-b-0 flex justify-between items-center gap-4 ${isPaid ? '' : 'bg-yellow-50'}`}>
                                 <div>
                                     <p className="font-bold text-lg text-brand-text mb-1 flex items-center gap-2">
-                                        {booking.product?.name || 'Clase individual'}
+                                        {getBookingDisplayName(booking)}
                                         {!isPaid && (
                                             <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800 ml-2">
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 20h.01" /></svg>
@@ -451,7 +491,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                         <div key={uniqueKey} className="p-6 border-b last:border-b-0 flex justify-between items-center gap-4">
                             <div>
                                 <p className="font-bold text-lg text-brand-text mb-1 flex items-center gap-2">
-                                    {booking.product?.name || 'Clase individual'}
+                                    {getBookingDisplayName(booking)}
                                     {!booking.isPaid && (
                                         <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800 ml-2">
                                             <ExclamationTriangleIcon className="h-4 w-4 text-orange-500" />
@@ -585,7 +625,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                             </div>
                             <div className="flex-1">
                                 <p className="font-bold text-xl text-brand-text mb-1 flex items-center gap-2">
-                                    {booking.product?.name || 'Clase individual'}
+                                    {getBookingDisplayName(booking)}
                                     <span className="inline-flex items-center px-2 py-1 text-sm font-semibold rounded bg-green-50 text-green-700 ml-2">
                                         ${formatCurrency(payment.amount).replace('€', '')}
                                     </span>
