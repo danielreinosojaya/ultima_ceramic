@@ -132,13 +132,26 @@ export const ValentineRegistrationForm: React.FC<ValentineRegistrationFormProps>
         e.preventDefault();
         setError(null);
 
+        console.log('[Valentine Form] Submit iniciado', {
+            birthDay: formData.birthDay,
+            birthMonth: formData.birthMonth,
+            birthYear: formData.birthYear,
+            birthDate: formData.birthDate,
+            workshop: formData.workshop,
+            hasPaymentProof: !!paymentProof
+        });
+
         // Validaciones
         if (!formData.fullName.trim()) {
             setError('Por favor ingresa tu nombre completo');
             return;
         }
+        if (!formData.birthDay || !formData.birthMonth || !formData.birthYear) {
+            setError('Por favor selecciona tu fecha de nacimiento completa (día, mes y año)');
+            return;
+        }
         if (!formData.birthDate) {
-            setError('Por favor ingresa tu fecha de nacimiento');
+            setError('Por favor selecciona tu fecha de nacimiento completa');
             return;
         }
         if (!formData.phone.trim()) {
@@ -168,13 +181,17 @@ export const ValentineRegistrationForm: React.FC<ValentineRegistrationFormProps>
             return;
         }
 
+        console.log('[Valentine Form] Validaciones pasadas, iniciando submit...');
         setIsSubmitting(true);
 
         try {
             // Subir comprobante
+            console.log('[Valentine Form] Subiendo comprobante...');
             const paymentProofUrl = await uploadPaymentProof(paymentProof);
+            console.log('[Valentine Form] Comprobante subido, tamaño:', paymentProofUrl.length);
 
             // Enviar inscripción
+            console.log('[Valentine Form] Enviando inscripción a API...');
             const response = await fetch('/api/valentine?action=register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -190,8 +207,10 @@ export const ValentineRegistrationForm: React.FC<ValentineRegistrationFormProps>
             });
 
             const result = await response.json();
+            console.log('[Valentine Form] Respuesta de API:', result);
 
             if (result.success) {
+                console.log('[Valentine Form] Inscripción exitosa, ID:', result.data.id);
                 onSuccess(result.data.id);
             } else {
                 // Si es error de capacidad, refrescar disponibilidad
@@ -201,9 +220,10 @@ export const ValentineRegistrationForm: React.FC<ValentineRegistrationFormProps>
                 setError(result.error || 'Error al procesar la inscripción');
             }
         } catch (err) {
-            console.error('Error submitting registration:', err);
+            console.error('[Valentine Form] Error en submit:', err);
             setError('Error de conexión. Por favor intenta de nuevo.');
         } finally {
+            console.log('[Valentine Form] Submit finalizado');
             setIsSubmitting(false);
         }
     };
@@ -551,6 +571,37 @@ export const ValentineRegistrationForm: React.FC<ValentineRegistrationFormProps>
                         </div>
                     )}
 
+                    {/* Información de Cuentas Bancarias */}
+                    {selectedWorkshop && (
+                        <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                            <div className="flex items-center gap-2 mb-3">
+                                <span className="text-lg">🏦</span>
+                                <h3 className="text-sm font-medium text-gray-700">Datos para transferencia</h3>
+                            </div>
+                            <div className="space-y-3 text-xs text-gray-600">
+                                <div className="bg-white p-3 rounded border border-gray-100">
+                                    <div className="font-semibold text-gray-800 mb-1">Banco Bolivariano - Ahorros</div>
+                                    <div className="space-y-0.5">
+                                        <div><span className="text-gray-500">Cuenta:</span> <span className="font-mono">0004381834</span></div>
+                                        <div><span className="text-gray-500">Titular:</span> Carolina Isabel Massuh Moran</div>
+                                        <div><span className="text-gray-500">CI:</span> 0921343935</div>
+                                    </div>
+                                </div>
+                                <div className="bg-white p-3 rounded border border-gray-100">
+                                    <div className="font-semibold text-gray-800 mb-1">Banco Pichincha - Corriente</div>
+                                    <div className="space-y-0.5">
+                                        <div><span className="text-gray-500">Cuenta:</span> <span className="font-mono">2100334248</span></div>
+                                        <div><span className="text-gray-500">Titular:</span> Carolina Isabel Massuh Morán</div>
+                                        <div><span className="text-gray-500">CI:</span> 0921343935</div>
+                                    </div>
+                                </div>
+                                <div className="text-center pt-1 border-t border-gray-200">
+                                    <span className="text-gray-500">Email:</span> <span className="font-medium">cmassuh@ceramicalma.com</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Subir Comprobante - OBLIGATORIO */}
                     <div className="mb-6">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -631,7 +682,7 @@ export const ValentineRegistrationForm: React.FC<ValentineRegistrationFormProps>
                         </button>
                         <button
                             type="submit"
-                            disabled={isSubmitting || !paymentProof || !formData.workshop}
+                            disabled={isSubmitting || !paymentProof || !formData.workshop || !formData.birthDay || !formData.birthMonth || !formData.birthYear}
                             className="flex-1 py-3 px-6 bg-gradient-to-r from-rose-500 to-pink-500 text-white rounded-xl font-semibold shadow-lg hover:from-rose-600 hover:to-pink-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
                         >
                             {isSubmitting ? (
