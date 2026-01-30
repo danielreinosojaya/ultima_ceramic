@@ -1704,6 +1704,20 @@ export const sendValentineRegistrationEmail = async (data: {
                 <p style="color: #B8474B; font-size: 15px; font-weight: 500; text-align: center; margin: 24px 0;">
                     💕 ¡Tendremos sorpresas y sorteos de premios increíbles! 💕
                 </p>
+
+                <!-- Términos y Condiciones -->
+                <div style="border-top: 1px solid #F5C6C6; margin: 28px 0 0 0; padding-top: 24px;">
+                    <h3 style="color: #4A4540; font-size: 14px; margin: 0 0 12px 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                        📜 Términos y Condiciones
+                    </h3>
+                    <ul style="color: #958985; font-size: 12px; margin: 0; padding-left: 20px; line-height: 1.8;">
+                        <li style="margin-bottom: 6px;"><strong style="color: #4A4540;">No reembolsable:</strong> No se realizan devoluciones de dinero bajo ninguna circunstancia.</li>
+                        <li style="margin-bottom: 6px;"><strong style="color: #4A4540;">Fecha específica:</strong> Este evento es válido únicamente para el 14 de febrero de 2026. No se puede reagendar.</li>
+                        <li style="margin-bottom: 6px;"><strong style="color: #4A4540;">No transferible:</strong> La inscripción es personal y no puede transferirse a otra persona.</li>
+                        <li style="margin-bottom: 6px;"><strong style="color: #4A4540;">No acumulable:</strong> No se puede combinar con otras ofertas, descuentos o promociones.</li>
+                        <li><strong style="color: #4A4540;">Puntualidad:</strong> Se requiere llegar puntual al horario del taller. No se garantiza acceso con más de 15 minutos de retraso.</li>
+                    </ul>
+                </div>
             </div>
 
             <!-- Footer -->
@@ -1745,7 +1759,7 @@ export const sendValentinePaymentConfirmedEmail = async (data: {
     const workshopTime = getWorkshopTime(workshop);
     const participantText = participants === 2 ? 'para 2 personas' : 'individual';
 
-    const subject = `💕 ¡Pago confirmado! Te esperamos el 14 de febrero - ${workshopName}`;
+    const subject = `✅ Pago Confirmado - Te esperamos el 14 de Febrero - ${workshopName}`;
 
     const html = `
         <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
@@ -1813,6 +1827,20 @@ export const sendValentinePaymentConfirmedEmail = async (data: {
                 <p style="color: #B8474B; font-size: 16px; font-weight: 600; text-align: center; margin: 28px 0;">
                     💕 ¡Nos vemos el 14 de febrero! 💕
                 </p>
+
+                <!-- Términos y Condiciones -->
+                <div style="border-top: 1px solid #F5C6C6; margin: 28px 0 0 0; padding-top: 24px;">
+                    <h3 style="color: #4A4540; font-size: 14px; margin: 0 0 12px 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                        📜 Términos y Condiciones
+                    </h3>
+                    <ul style="color: #958985; font-size: 12px; margin: 0; padding-left: 20px; line-height: 1.8;">
+                        <li style="margin-bottom: 6px;"><strong style="color: #4A4540;">No reembolsable:</strong> No se realizan devoluciones de dinero bajo ninguna circunstancia.</li>
+                        <li style="margin-bottom: 6px;"><strong style="color: #4A4540;">Fecha específica:</strong> Este evento es válido únicamente para el 14 de febrero de 2026. No se puede reagendar.</li>
+                        <li style="margin-bottom: 6px;"><strong style="color: #4A4540;">No transferible:</strong> La inscripción es personal y no puede transferirse a otra persona.</li>
+                        <li style="margin-bottom: 6px;"><strong style="color: #4A4540;">No acumulable:</strong> No se puede combinar con otras ofertas, descuentos o promociones.</li>
+                        <li><strong style="color: #4A4540;">Puntualidad:</strong> Se requiere llegar puntual al horario del taller. No se garantiza acceso con más de 15 minutos de retraso.</li>
+                    </ul>
+                </div>
             </div>
 
             <!-- Footer -->

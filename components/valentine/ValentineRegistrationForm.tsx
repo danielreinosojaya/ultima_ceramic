@@ -410,19 +410,11 @@ export const ValentineRegistrationForm: React.FC<ValentineRegistrationFormProps>
                                                         <span className="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full">
                                                             {workshop.time}
                                                         </span>
-                                                        {/* Indicador de disponibilidad */}
-                                                        {isFull ? (
+                                                        {/* Indicador de disponibilidad - SOLO AGOTADO */}
+                                                        {isFull && (
                                                             <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
                                                                 <XCircleIcon className="w-3 h-3" />
                                                                 AGOTADO
-                                                            </span>
-                                                        ) : (
-                                                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                                                                availableSpots <= 3 
-                                                                    ? 'bg-orange-100 text-orange-600' 
-                                                                    : 'bg-green-100 text-green-600'
-                                                            }`}>
-                                                                {availableSpots} {availableSpots === 1 ? 'cupo' : 'cupos'}
                                                             </span>
                                                         )}
                                                     </div>
