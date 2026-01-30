@@ -25,6 +25,37 @@ const getProductTypeName = (productType?: string): string => {
   return typeNames[productType || ''] || 'Clase';
 };
 
+// Helper para extraer la técnica subyacente de un booking
+// Unifica: "Clase suelta torno" + "Torno Alfarero" + "Clase intro torno" → "potters_wheel"
+const getUnderlyingTechnique = (booking: Booking): string => {
+  // 1. Buscar en groupClassMetadata (GROUP_CLASS)
+  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
+    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
+    const uniqueTechniques = [...new Set(techniques)];
+    if (uniqueTechniques.length === 1) {
+      return uniqueTechniques[0]; // Retorna 'potters_wheel', 'hand_modeling', 'painting'
+    }
+    return 'mixed'; // Múltiples técnicas en un solo booking
+  }
+  
+  // 2. Buscar en product.details.technique (CLASS_PACKAGE, SINGLE_CLASS)
+  if ('details' in booking.product && 'technique' in booking.product.details) {
+    return booking.product.details.technique;
+  }
+  
+  // 3. Para INTRODUCTORY_CLASS, asumir que son molding o potters_wheel según el nombre
+  if (booking.productType === 'INTRODUCTORY_CLASS') {
+    const productName = booking.product?.name?.toLowerCase() || '';
+    if (productName.includes('torno') || productName.includes('wheel')) {
+      return 'potters_wheel';
+    }
+    return 'molding'; // Default para intro
+  }
+  
+  // 4. Fallback: usar productType como identificador
+  return booking.productType || 'unknown';
+};
+
 // Helper para obtener el nombre display de un booking
 const getBookingDisplayName = (booking: Booking): string => {
   if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
@@ -43,7 +74,7 @@ const getBookingDisplayName = (booking: Booking): string => {
 };
 
 // Helper para obtener el nombre display de un slot
-// Como ahora cada slot agrupa por displayName, simplemente usa el primer booking
+// Ahora agrupa por técnica, así que usa el nombre unificado
 const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): string => {
   if (slot.bookings.length === 0) {
     // Slot vacío, usar producto del slot
@@ -54,7 +85,17 @@ const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): st
     return productName;
   }
 
-  // Como todos los bookings en el slot tienen el mismo displayName, usar el primero
+  // Obtener la técnica subyacente del primer booking
+  const technique = getUnderlyingTechnique(slot.bookings[0]);
+  
+  // Mapear técnica a nombre display unificado
+  if (technique === 'potters_wheel') return 'Torno Alfarero';
+  if (technique === 'hand_modeling') return 'Modelado a Mano';
+  if (technique === 'painting') return 'Pintura de piezas';
+  if (technique === 'molding') return 'Modelado';
+  if (technique === 'mixed') return 'Clase Grupal (mixto)';
+  
+  // Fallback: usar displayName del primer booking
   return getBookingDisplayName(slot.bookings[0]);
 };
 // import { useLanguage } from '../../context/LanguageContext';
@@ -315,10 +356,10 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 if (inCurrentWeek) {
                     const dateStr = slot.date;
                     const normalizedTime = normalizeTime(slot.time);
-                    // FIX FINAL: Agrupar slots por fecha+hora+displayName
-                    // Cada técnica/producto tiene su propia tarjeta con conteo correcto
-                    const displayName = getBookingDisplayName(booking);
-                    const slotId = `${dateStr}-${normalizedTime}-${displayName}`;
+                    // FIX FINAL: Agrupar por técnica subyacente
+                    // "Clase suelta torno" + "Torno Alfarero" + "Clase intro torno" → misma tarjeta
+                    const technique = getUnderlyingTechnique(booking);
+                    const slotId = `${dateStr}-${normalizedTime}-${technique}`;
                     
                     if (!allSlots.has(slotId)) {
                         let slotCapacity = 0;
