@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { VALENTINE_WORKSHOPS, ValentineWorkshopType } from '../../types';
 import { HeartIcon } from '@heroicons/react/24/solid';
 import { PhotoIcon, CheckCircleIcon, ExclamationCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
-import { MobileDatePicker } from './MobileDatePicker';
 
 interface ValentineRegistrationFormProps {
     onSuccess: (registrationId: string) => void;
@@ -307,13 +306,18 @@ export const ValentineRegistrationForm: React.FC<ValentineRegistrationFormProps>
 
                     {/* Fecha de Nacimiento */}
                     <div className="mb-5">
-                        <MobileDatePicker
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Fecha de Nacimiento *
+                        </label>
+                        <input
+                            type="date"
+                            name="birthDate"
                             value={formData.birthDate}
-                            onChange={(date) => setFormData(prev => ({ ...prev, birthDate: date }))}
-                            label="Fecha de Nacimiento"
-                            required={true}
-                            maxDate={new Date(new Date().getFullYear() - 10, 11, 31).toISOString().split('T')[0]}
-                            minDate="1940-01-01"
+                            onChange={handleInputChange}
+                            max={new Date(new Date().getFullYear() - 10, 11, 31).toISOString().split('T')[0]}
+                            min="1940-01-01"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition-colors text-base"
+                            required
                         />
                     </div>
 
@@ -509,7 +513,6 @@ export const ValentineRegistrationForm: React.FC<ValentineRegistrationFormProps>
                                 ref={fileInputRef}
                                 type="file"
                                 accept="image/*"
-                                capture="environment"
                                 onChange={handleFileChange}
                                 className="hidden"
                                 required
