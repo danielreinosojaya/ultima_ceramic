@@ -42,29 +42,44 @@ const getBookingDisplayName = (booking: Booking): string => {
   return productName;
 };
 
-// Helper para obtener el nombre del producto/técnica del primer booking de un slot
+// Helper para obtener el nombre display de un slot con TODOS los bookings
+// Ahora analiza todas las técnicas de todos los bookings del slot
 const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): string => {
-  // Si hay bookings con groupClassMetadata, usar la primera técnica encontrada
+  if (slot.bookings.length === 0) {
+    // Slot vacío, usar producto del slot
+    const productName = slot.product?.name;
+    if (!productName || productName === 'Unknown Product' || productName === 'Unknown') {
+      return 'Clase';
+    }
+    return productName;
+  }
+
+  // Recolectar TODAS las técnicas de TODOS los bookings
+  const allTechniques: string[] = [];
+  
   for (const booking of slot.bookings) {
+    // Si tiene groupClassMetadata, extraer técnicas
     if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
-      const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
-      const uniqueTechniques = [...new Set(techniques)];
-      
-      if (uniqueTechniques.length === 1) {
-        return getTechniqueName(uniqueTechniques[0]);
-      } else {
-        return `Clase Grupal (mixto)`;
+      for (const assignment of booking.groupClassMetadata.techniqueAssignments) {
+        allTechniques.push(getTechniqueName(assignment.technique));
       }
+    } else {
+      // Fallback: usar getBookingDisplayName para este booking
+      allTechniques.push(getBookingDisplayName(booking));
     }
   }
-  
-  // Fallback inteligente: si product.name es 'Unknown Product', usar productType del primer booking
-  const productName = slot.product?.name;
-  if (!productName || productName === 'Unknown Product' || productName === 'Unknown') {
-    const firstBooking = slot.bookings[0];
-    return firstBooking ? getProductTypeName(firstBooking.productType) : 'Clase';
+
+  // Obtener técnicas únicas
+  const uniqueTechniques = [...new Set(allTechniques)];
+
+  if (uniqueTechniques.length === 0) {
+    return 'Clase';
+  } else if (uniqueTechniques.length === 1) {
+    return uniqueTechniques[0];
+  } else {
+    // Múltiples técnicas: mostrar resumen
+    return `Mixto (${uniqueTechniques.length} tipos)`;
   }
-  return productName;
 };
 // import { useLanguage } from '../../context/LanguageContext';
 import { DAY_NAMES, PALETTE_COLORS } from '../../constants.js';
@@ -311,8 +326,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                     continue;
                 }
 
-                // Si no hay instructorId, usar un instructor por defecto o permitir el slot
-                const instructorId = slot.instructorId || 1; // Default instructor ID
+                // Usar instructor del booking si existe, sino default
+                const instructorId = slot.instructorId || 1;
 
                 const slotDate = new Date(slot.date + "T00:00:00");
                 if (isNaN(slotDate.getTime())) {
@@ -324,7 +339,9 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 if (inCurrentWeek) {
                     const dateStr = slot.date;
                     const normalizedTime = normalizeTime(slot.time);
-                    const slotId = `${dateStr}-${normalizedTime}-${instructorId}`;
+                    // FIX: Agrupar slots por fecha+hora SIN instructorId
+                    // Esto agrupa todos los bookings del mismo horario en una sola tarjeta
+                    const slotId = `${dateStr}-${normalizedTime}`;
                     
                     if (!allSlots.has(slotId)) {
                         let slotCapacity = 0;
@@ -382,7 +399,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             
             if (slotsSource) {
                 slotsSource.forEach(s => {
-                    const slotId = `${dateStr}-${normalizeTime(s.time)}-${s.instructorId}`;
+                    // FIX: Usar mismo formato de slotId sin instructorId
+                    const slotId = `${dateStr}-${normalizeTime(s.time)}`;
                     if (!allSlots.has(slotId)) {
                         const productForSlot = products.find(p => p.type === 'CLASS_PACKAGE' && p.details.technique === s.technique);
                         if (!productForSlot) return;
@@ -407,7 +425,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 const introSessions = dataService.generateIntroClassSessions(p, { bookings: [] }, { includeFull: true });
                 const sessionsForDay = introSessions.filter(s => s.date === dateStr);
                 sessionsForDay.forEach(s => {
-                    const slotId = `${dateStr}-${normalizeTime(s.time)}-${s.instructorId}`;
+                    // FIX: Usar mismo formato de slotId sin instructorId
+                    const slotId = `${dateStr}-${normalizeTime(s.time)}`;
                     if (!allSlots.has(slotId)) {
                          allSlots.set(slotId, {
                             date: dateStr,
