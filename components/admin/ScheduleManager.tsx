@@ -803,7 +803,17 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                     {pendingBookingsWithoutSlots.slice(0, 3).map(b => (
                                         <div key={b.id} className="text-xs text-amber-900 bg-white bg-opacity-50 p-2 rounded flex items-center justify-between">
                                             <span>
-                                                <strong>{b.bookingCode}</strong> · {b.userInfo.firstName} {b.userInfo.lastName} · {b.product.name}
+                                                <strong>{b.bookingCode}</strong> · {b.userInfo.firstName} {b.userInfo.lastName} · {(() => {
+                                                    if (b.groupClassMetadata?.techniqueAssignments && b.groupClassMetadata.techniqueAssignments.length > 0) {
+                                                        const techniques = b.groupClassMetadata.techniqueAssignments.map(a => a.technique);
+                                                        const uniqueTechniques = [...new Set(techniques)];
+                                                        if (uniqueTechniques.length === 1) {
+                                                            return getTechniqueName(uniqueTechniques[0]);
+                                                        }
+                                                        return 'Clase Grupal (mixto)';
+                                                    }
+                                                    return b.product?.name || 'Clase';
+                                                })()}
                                             </span>
                                             <button
                                                 onClick={() => {
