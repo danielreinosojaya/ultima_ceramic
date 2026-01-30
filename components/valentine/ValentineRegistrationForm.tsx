@@ -20,6 +20,9 @@ export const ValentineRegistrationForm: React.FC<ValentineRegistrationFormProps>
     const [formData, setFormData] = useState({
         fullName: '',
         birthDate: '',
+        birthDay: '',
+        birthMonth: '',
+        birthYear: '',
         phone: '',
         email: '',
         workshop: '' as ValentineWorkshopType | '',
@@ -69,7 +72,22 @@ export const ValentineRegistrationForm: React.FC<ValentineRegistrationFormProps>
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        setFormData(prev => {
+            const updated = { ...prev, [name]: value };
+            
+            // Construir birthDate cuando se seleccionan día/mes/año
+            if (name === 'birthDay' || name === 'birthMonth' || name === 'birthYear') {
+                const day = name === 'birthDay' ? value : updated.birthDay;
+                const month = name === 'birthMonth' ? value : updated.birthMonth;
+                const year = name === 'birthYear' ? value : updated.birthYear;
+                
+                if (day && month && year) {
+                    updated.birthDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                }
+            }
+            
+            return updated;
+        });
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -309,16 +327,58 @@ export const ValentineRegistrationForm: React.FC<ValentineRegistrationFormProps>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             Fecha de Nacimiento *
                         </label>
-                        <input
-                            type="date"
-                            name="birthDate"
-                            value={formData.birthDate}
-                            onChange={handleInputChange}
-                            max={new Date(new Date().getFullYear() - 10, 11, 31).toISOString().split('T')[0]}
-                            min="1940-01-01"
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition-colors text-base"
-                            required
-                        />
+                        <div className="grid grid-cols-3 gap-3">
+                            {/* Día */}
+                            <select
+                                name="birthDay"
+                                value={formData.birthDay}
+                                onChange={handleInputChange}
+                                className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition-colors text-base"
+                                required
+                            >
+                                <option value="">Día</option>
+                                {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
+                                    <option key={day} value={day}>{day}</option>
+                                ))}
+                            </select>
+                            
+                            {/* Mes */}
+                            <select
+                                name="birthMonth"
+                                value={formData.birthMonth}
+                                onChange={handleInputChange}
+                                className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition-colors text-base"
+                                required
+                            >
+                                <option value="">Mes</option>
+                                <option value="1">Enero</option>
+                                <option value="2">Febrero</option>
+                                <option value="3">Marzo</option>
+                                <option value="4">Abril</option>
+                                <option value="5">Mayo</option>
+                                <option value="6">Junio</option>
+                                <option value="7">Julio</option>
+                                <option value="8">Agosto</option>
+                                <option value="9">Septiembre</option>
+                                <option value="10">Octubre</option>
+                                <option value="11">Noviembre</option>
+                                <option value="12">Diciembre</option>
+                            </select>
+                            
+                            {/* Año */}
+                            <select
+                                name="birthYear"
+                                value={formData.birthYear}
+                                onChange={handleInputChange}
+                                className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition-colors text-base"
+                                required
+                            >
+                                <option value="">Año</option>
+                                {Array.from({ length: 2016 - 1940 + 1 }, (_, i) => 2016 - i).map(year => (
+                                    <option key={year} value={year}>{year}</option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
 
                     {/* Teléfono */}
