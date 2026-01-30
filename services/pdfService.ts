@@ -1,10 +1,56 @@
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import type { Booking, FooterInfo, Product, Instructor, OpenStudioSubscription } from '../types';
+import type { Booking, FooterInfo, Product, Instructor, OpenStudioSubscription, GroupTechnique } from '../types';
 import * as dataService from './dataService';
 import { DAY_NAMES } from '@/constants';
 
 // The `import 'jspdf-autotable';` statement is sufficient to load the necessary type augmentations.
+
+// Helper para obtener nombre de técnica desde metadata
+const getTechniqueName = (technique: GroupTechnique): string => {
+  const names: Record<GroupTechnique, string> = {
+    'potters_wheel': 'Torno Alfarero',
+    'hand_modeling': 'Modelado a Mano',
+    'painting': 'Pintura de piezas'
+  };
+  return names[technique] || technique;
+};
+
+// Helper para obtener el nombre del producto/técnica de un booking
+const getBookingDisplayName = (booking: Booking): string => {
+  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
+    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
+    const uniqueTechniques = [...new Set(techniques)];
+    
+    if (uniqueTechniques.length === 1) {
+      return getTechniqueName(uniqueTechniques[0]);
+    } else {
+      return `Clase Grupal (mixto)`;
+    }
+  }
+  
+  return booking.product?.name || 'Clase Individual';
+};
+
+// Helper para obtener el nombre del producto/técnica de un slot
+const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): string => {
+  // Si hay bookings con groupClassMetadata, usar la primera técnica encontrada
+  for (const booking of slot.bookings) {
+    if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
+      const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
+      const uniqueTechniques = [...new Set(techniques)];
+      
+      if (uniqueTechniques.length === 1) {
+        return getTechniqueName(uniqueTechniques[0]);
+      } else {
+        return `Clase Grupal (mixto)`;
+      }
+    }
+  }
+  
+  // Fallback al nombre del producto
+  return slot.product?.name || 'Clase';
+};
 
 interface PdfTranslations {
   title: string;
@@ -454,7 +500,7 @@ export const generateWeeklySchedulePDF = (
             const dateStr = date.toISOString().split('T')[0];
             const slots = schedule[dateStr] || [];
             const cellText = slots.map(slot => 
-                `${slot.time}\n${slot.product.name.substring(0, 20)}\n(${slot.bookings.length}/${slot.capacity})`
+                `${slot.time}\n${getSlotDisplayName(slot).substring(0, 20)}\n(${slot.bookings.length}/${slot.capacity})`
             ).join('\n\n');
             row.push(cellText);
         });
