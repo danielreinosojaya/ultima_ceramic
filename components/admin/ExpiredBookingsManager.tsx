@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import type { Booking } from '../../types';
+import type { Booking, GroupTechnique } from '../../types';
 import * as dataService from '../../services/dataService';
 import { fetchWithAbort } from '../../utils/fetchWithAbort';
 import { formatDistanceToNow } from 'date-fns';
@@ -8,6 +8,51 @@ import { XIcon } from '../icons/XIcon';
 import { CheckIcon } from '../icons/CheckIcon';
 import { ChevronUpIcon } from '../icons/ChevronUpIcon';
 import { ChevronDownIcon } from '../icons/ChevronDownIcon';
+
+// Helper para obtener nombre de técnica desde metadata
+const getTechniqueName = (technique: GroupTechnique): string => {
+  const names: Record<GroupTechnique, string> = {
+    'potters_wheel': 'Torno Alfarero',
+    'hand_modeling': 'Modelado a Mano',
+    'painting': 'Pintura de piezas'
+  };
+  return names[technique] || technique;
+};
+
+// Helper para traducir productType a nombre legible
+const getProductTypeName = (productType?: string): string => {
+  const typeNames: Record<string, string> = {
+    'SINGLE_CLASS': 'Clase Suelta',
+    'CLASS_PACKAGE': 'Paquete de Clases',
+    'INTRODUCTORY_CLASS': 'Clase Introductoria',
+    'GROUP_CLASS': 'Clase Grupal',
+    'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
+    'OPEN_STUDIO': 'Estudio Abierto'
+  };
+  return typeNames[productType || ''] || 'Clase';
+};
+
+// Helper para obtener el nombre del producto/técnica de un booking
+const getBookingDisplayName = (booking: Booking): string => {
+  // Si es una clase grupal con metadata de técnicas, extraer la técnica principal
+  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
+    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
+    const uniqueTechniques = [...new Set(techniques)];
+    
+    if (uniqueTechniques.length === 1) {
+      return getTechniqueName(uniqueTechniques[0]);
+    } else {
+      return `Clase Grupal (mixto)`;
+    }
+  }
+  
+  // Fallback inteligente: si product.name es 'Unknown Product' o no existe, usar productType
+  const productName = booking.product?.name;
+  if (!productName || productName === 'Unknown Product') {
+    return getProductTypeName(booking.productType);
+  }
+  return productName;
+};
 
 interface ExpiredBooking extends Booking {
   status: 'expired' | 'active';
@@ -293,7 +338,7 @@ export const ExpiredBookingsManager: React.FC = () => {
                         {booking.userInfo?.firstName} {booking.userInfo?.lastName}
                       </td>
                       <td className="px-4 py-3 text-xs text-brand-secondary">{booking.userInfo?.email}</td>
-                      <td className="px-4 py-3 text-sm text-brand-text">{booking.product?.name}</td>
+                      <td className="px-4 py-3 text-sm text-brand-text">{getBookingDisplayName(booking)}</td>
                       <td className="px-4 py-3 font-bold text-brand-primary text-right">${booking.price?.toFixed(2)}</td>
                       <td className="px-4 py-3">
                         <span

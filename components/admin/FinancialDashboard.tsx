@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Chart from 'chart.js/auto';
 import Papa from 'papaparse';
-import type { Booking, Product, PaymentDetails, AdminTab, InvoiceRequest } from '../../types.js';
+import type { Booking, Product, PaymentDetails, AdminTab, InvoiceRequest, GroupTechnique } from '../../types.js';
 import * as dataService from '../../services/dataService.js';
 import { AcceptPaymentModal } from './AcceptPaymentModal.js';
 import { CurrencyDollarIcon } from '../icons/CurrencyDollarIcon.js';
@@ -11,6 +11,54 @@ import { DeleteConfirmationModal } from './DeleteConfirmationModal.js';
 import { TrashIcon } from '../icons/TrashIcon.js';
 import { CalendarIcon } from '../icons/CalendarIcon.js';
 import { EditPaymentModal } from './EditPaymentModal';
+
+// Helper para obtener nombre de técnica desde metadata
+const getTechniqueName = (technique: GroupTechnique): string => {
+  const names: Record<GroupTechnique, string> = {
+    'potters_wheel': 'Torno Alfarero',
+    'hand_modeling': 'Modelado a Mano',
+    'painting': 'Pintura de piezas'
+  };
+  return names[technique] || technique;
+};
+
+// Helper para traducir productType a nombre legible
+const getProductTypeName = (productType?: string): string => {
+  const typeNames: Record<string, string> = {
+    'SINGLE_CLASS': 'Clase Suelta',
+    'CLASS_PACKAGE': 'Paquete de Clases',
+    'INTRODUCTORY_CLASS': 'Clase Introductoria',
+    'GROUP_CLASS': 'Clase Grupal',
+    'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
+    'OPEN_STUDIO': 'Estudio Abierto'
+  };
+  return typeNames[productType || ''] || 'Clase';
+};
+
+// Helper para obtener el nombre del producto/técnica de un booking
+const getBookingDisplayName = (booking: Booking): string => {
+  // Si es una clase grupal con metadata de técnicas, extraer la técnica principal
+  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
+    // Contar técnicas para determinar el nombre a mostrar
+    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
+    const uniqueTechniques = [...new Set(techniques)];
+    
+    if (uniqueTechniques.length === 1) {
+      // Todos los participantes tienen la misma técnica
+      return getTechniqueName(uniqueTechniques[0]);
+    } else {
+      // Técnicas mixtas - mostrar "Clase Grupal (mixto)"
+      return `Clase Grupal (mixto)`;
+    }
+  }
+  
+  // Fallback inteligente: si product.name es 'Unknown Product' o no existe, usar productType
+  const productName = booking.product?.name;
+  if (!productName || productName === 'Unknown Product') {
+    return getProductTypeName(booking.productType);
+  }
+  return productName;
+};
 
 
 type FilterPeriod = 'today' | 'week' | 'month' | 'custom';
@@ -328,7 +376,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
         // Doughnut Chart Data - Revenue by Package
         const revenueByPackage = summaryBookings.reduce((acc: Record<string, number>, b: Booking) => {
             if (!b.product || !b.paymentDetails) return acc;
-            const key = b.product.name;
+            const key = getBookingDisplayName(b);
             acc[key] = (acc[key] || 0) + b.paymentDetails.reduce((sum, p) => sum + p.amount, 0);
             return acc;
         }, {} as Record<string, number>);
@@ -364,7 +412,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
         const rows = summaryBookings.map(b => ({
             [headers[0]]: formatDate(b.paymentDetails?.[0].receivedAt, {}),
             [headers[1]]: `${b.userInfo?.firstName} ${b.userInfo?.lastName}`,
-            [headers[2]]: b.product?.name || 'N/A',
+            [headers[2]]: getBookingDisplayName(b),
             [headers[3]]: (b.paymentDetails?.[0]?.amount || 0).toFixed(2)
         }));
         const csv = Papa.unparse(rows, { quotes: true });
@@ -642,7 +690,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                                                         <tr key={b.id + '-' + idx}>
                                                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{formatDate(p.receivedAt, {})}</td>
                                                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{b.userInfo?.firstName} {b.userInfo?.lastName}</td>
-                                                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{b.product?.name || 'N/A'}</td>
+                                                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{getBookingDisplayName(b)}</td>
                                                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-semibold">${(p.amount || 0).toFixed(2)}
                                                                                 {(p.giftcardAmount || p.giftcardId) && (
                                                                                     <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-indigo-50 text-indigo-700 ml-2">
@@ -789,7 +837,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                                 <div className="text-xs text-brand-secondary">{b.userInfo?.email}</div>
                                             </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text" role="cell">
-                                                {b.product?.name || 'N/A'}
+                                                {getBookingDisplayName(b)}
                                                 {(!Array.isArray(b.slots) || b.slots.length === 0) && (
                                                     <span className="inline-flex items-center px-2 py-1 ml-2 text-xs font-semibold rounded bg-amber-100 text-amber-800" title="Sin fechas asignadas aún">
                                                         ⏳ Sin fechas

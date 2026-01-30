@@ -1,6 +1,103 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import type { Instructor, Booking, IntroductoryClass, Product, EditableBooking, RescheduleSlotInfo, PaymentDetails, AppData, InvoiceRequest, AdminTab, Customer, ClassPackage, EnrichedAvailableSlot, SingleClass, GroupClass, DayKey, AvailableSlot, ClassCapacity, Technique } from '../../types';
+import type { Instructor, Booking, IntroductoryClass, Product, EditableBooking, RescheduleSlotInfo, PaymentDetails, AppData, InvoiceRequest, AdminTab, Customer, ClassPackage, EnrichedAvailableSlot, SingleClass, GroupClass, DayKey, AvailableSlot, ClassCapacity, Technique, GroupTechnique } from '../../types';
 import * as dataService from '../../services/dataService';
+
+// Helper para obtener nombre de técnica desde metadata
+const getTechniqueName = (technique: GroupTechnique): string => {
+  const names: Record<GroupTechnique, string> = {
+    'potters_wheel': 'Torno Alfarero',
+    'hand_modeling': 'Modelado a Mano',
+    'painting': 'Pintura de piezas'
+  };
+  return names[technique] || technique;
+};
+
+// Helper para traducir productType a nombre legible
+const getProductTypeName = (productType?: string): string => {
+  const typeNames: Record<string, string> = {
+    'SINGLE_CLASS': 'Clase Suelta',
+    'CLASS_PACKAGE': 'Paquete de Clases',
+    'INTRODUCTORY_CLASS': 'Clase Introductoria',
+    'GROUP_CLASS': 'Clase Grupal',
+    'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
+    'OPEN_STUDIO': 'Estudio Abierto'
+  };
+  return typeNames[productType || ''] || 'Clase';
+};
+
+// Helper para extraer la técnica subyacente de un booking
+// Unifica: "Clase suelta torno" + "Torno Alfarero" + "Clase intro torno" → "potters_wheel"
+const getUnderlyingTechnique = (booking: Booking): string => {
+  // 1. Buscar en groupClassMetadata (GROUP_CLASS)
+  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
+    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
+    const uniqueTechniques = [...new Set(techniques)];
+    if (uniqueTechniques.length === 1) {
+      return uniqueTechniques[0]; // Retorna 'potters_wheel', 'hand_modeling', 'painting'
+    }
+    return 'mixed'; // Múltiples técnicas en un solo booking
+  }
+  
+  // 2. Buscar en product.details.technique (CLASS_PACKAGE, SINGLE_CLASS)
+  if ('details' in booking.product && 'technique' in booking.product.details) {
+    return booking.product.details.technique;
+  }
+  
+  // 3. Para INTRODUCTORY_CLASS, asumir que son molding o potters_wheel según el nombre
+  if (booking.productType === 'INTRODUCTORY_CLASS') {
+    const productName = booking.product?.name?.toLowerCase() || '';
+    if (productName.includes('torno') || productName.includes('wheel')) {
+      return 'potters_wheel';
+    }
+    return 'molding'; // Default para intro
+  }
+  
+  // 4. Fallback: usar productType como identificador
+  return booking.productType || 'unknown';
+};
+
+// Helper para obtener el nombre display de un booking
+const getBookingDisplayName = (booking: Booking): string => {
+  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
+    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
+    const uniqueTechniques = [...new Set(techniques)];
+    if (uniqueTechniques.length === 1) {
+      return getTechniqueName(uniqueTechniques[0]);
+    }
+    return 'Clase Grupal (mixto)';
+  }
+  const productName = booking.product?.name;
+  if (!productName || productName === 'Unknown Product' || productName === 'Unknown') {
+    return getProductTypeName(booking.productType);
+  }
+  return productName;
+};
+
+// Helper para obtener el nombre display de un slot
+// Ahora agrupa por técnica, así que usa el nombre unificado
+const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): string => {
+  if (slot.bookings.length === 0) {
+    // Slot vacío, usar producto del slot
+    const productName = slot.product?.name;
+    if (!productName || productName === 'Unknown Product' || productName === 'Unknown') {
+      return 'Clase';
+    }
+    return productName;
+  }
+
+  // Obtener la técnica subyacente del primer booking
+  const technique = getUnderlyingTechnique(slot.bookings[0]);
+  
+  // Mapear técnica a nombre display unificado
+  if (technique === 'potters_wheel') return 'Torno Alfarero';
+  if (technique === 'hand_modeling') return 'Modelado a Mano';
+  if (technique === 'painting') return 'Pintura de piezas';
+  if (technique === 'molding') return 'Modelado';
+  if (technique === 'mixed') return 'Clase Grupal (mixto)';
+  
+  // Fallback: usar displayName del primer booking
+  return getBookingDisplayName(slot.bookings[0]);
+};
 // import { useLanguage } from '../../context/LanguageContext';
 import { DAY_NAMES, PALETTE_COLORS } from '../../constants.js';
 import { InstructorTag } from '../InstructorTag';
@@ -246,8 +343,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                     continue;
                 }
 
-                // Si no hay instructorId, usar un instructor por defecto o permitir el slot
-                const instructorId = slot.instructorId || 1; // Default instructor ID
+                // Usar instructor del booking si existe, sino default
+                const instructorId = slot.instructorId || 1;
 
                 const slotDate = new Date(slot.date + "T00:00:00");
                 if (isNaN(slotDate.getTime())) {
@@ -259,7 +356,10 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 if (inCurrentWeek) {
                     const dateStr = slot.date;
                     const normalizedTime = normalizeTime(slot.time);
-                    const slotId = `${dateStr}-${normalizedTime}-${instructorId}`;
+                    // FIX FINAL: Agrupar por técnica subyacente
+                    // "Clase suelta torno" + "Torno Alfarero" + "Clase intro torno" → misma tarjeta
+                    const technique = getUnderlyingTechnique(booking);
+                    const slotId = `${dateStr}-${normalizedTime}-${technique}`;
                     
                     if (!allSlots.has(slotId)) {
                         let slotCapacity = 0;
@@ -317,7 +417,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             
             if (slotsSource) {
                 slotsSource.forEach(s => {
-                    const slotId = `${dateStr}-${normalizeTime(s.time)}-${s.instructorId}`;
+                    // FIX: Usar mismo formato de slotId sin instructorId
+                    const slotId = `${dateStr}-${normalizeTime(s.time)}`;
                     if (!allSlots.has(slotId)) {
                         const productForSlot = products.find(p => p.type === 'CLASS_PACKAGE' && p.details.technique === s.technique);
                         if (!productForSlot) return;
@@ -342,7 +443,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 const introSessions = dataService.generateIntroClassSessions(p, { bookings: [] }, { includeFull: true });
                 const sessionsForDay = introSessions.filter(s => s.date === dateStr);
                 sessionsForDay.forEach(s => {
-                    const slotId = `${dateStr}-${normalizeTime(s.time)}-${s.instructorId}`;
+                    // FIX: Usar mismo formato de slotId sin instructorId
+                    const slotId = `${dateStr}-${normalizeTime(s.time)}`;
                     if (!allSlots.has(slotId)) {
                          allSlots.set(slotId, {
                             date: dateStr,
@@ -658,7 +760,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 time={modalData.time}
                 attendees={modalData.attendees}
                 instructorId={modalData.instructorId}
-                product={{ id: 'unknown', name: 'Unknown', type: 'class', price: 0 } as any}
+                product={{ id: 'placeholder', name: 'Clase', type: 'class', price: 0 } as any}
                 allBookings={[]}
                 onClose={closeAllModals}
                 onRemoveAttendee={handleRemoveAttendee}
@@ -772,7 +874,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                     {pendingBookingsWithoutSlots.slice(0, 3).map(b => (
                                         <div key={b.id} className="text-xs text-amber-900 bg-white bg-opacity-50 p-2 rounded flex items-center justify-between">
                                             <span>
-                                                <strong>{b.bookingCode}</strong> · {b.userInfo.firstName} {b.userInfo.lastName} · {b.product.name}
+                                                <strong>{b.bookingCode}</strong> · {b.userInfo.firstName} {b.userInfo.lastName} · {getBookingDisplayName(b)}
                                             </span>
                                             <button
                                                 onClick={() => {
@@ -881,7 +983,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                                                     {isGroupClass && <UserGroupIcon className="w-3.5 h-3.5" />}
                                                                 </div>
                                                                 <div className="text-xs font-semibold text-gray-800 mt-1 truncate">
-                                                                    {slot.product.name}
+                                                                    {getSlotDisplayName(slot)}
                                                                 </div>
                                                                 <div className="text-xs text-gray-600 mt-1">
                                                                     {totalParticipants}/{slot.capacity} booked
@@ -968,7 +1070,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                                         <div className="font-bold text-sm text-brand-text flex items-center gap-1">{slot.time}
                                                         {isGroupClass && <UserGroupIcon className="w-3.5 h-3.5 text-blue-800" />}
                                                         </div>
-                                                        <div className="text-xs font-semibold text-gray-600 mt-1 truncate">{slot.product.name}</div>
+                                                        <div className="text-xs font-semibold text-gray-600 mt-1 truncate">{getSlotDisplayName(slot)}</div>
                                                     </div>
                                                     <div className={`text-xs font-bold px-2 py-0.5 rounded-full ${totalParticipants >= slot.capacity ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}> 
                                                         {totalParticipants}/{slot.capacity}

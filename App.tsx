@@ -44,7 +44,7 @@ import { OpenStudioModal } from './components/admin/OpenStudioModal';
 import { ClientDashboard } from './components/ClientDashboard';
 import { MyClassesPrompt } from './components/MyClassesPrompt';
 
-import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession, DeliveryMethod, GiftcardHold, Piece, ExperiencePricing, ExperienceUIState, CourseSchedule, CourseEnrollment } from './types';
+import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession, DeliveryMethod, GiftcardHold, Piece, ExperiencePricing, ExperienceUIState, CourseSchedule, CourseEnrollment, ParticipantTechniqueAssignment } from './types';
 import * as dataService from './services/dataService';
 import { DEFAULT_POLICIES_TEXT } from './constants';
 import { slotsRequireNoRefund } from './utils/bookingPolicy';
@@ -457,6 +457,23 @@ const App: React.FC = () => {
         // Add technique for COUPLES_EXPERIENCE
         if (finalDetails.product!.type === 'COUPLES_EXPERIENCE' && finalDetails.technique) {
             bookingData.technique = finalDetails.technique;
+        }
+
+        // Add groupClassMetadata for GROUP_CLASS bookings
+        if (finalDetails.product!.type === 'GROUP_CLASS') {
+            const assignments = (window as any).__groupClassAssignments as ParticipantTechniqueAssignment[] | undefined;
+            if (assignments && assignments.length > 0) {
+                const totalPrice = 'price' in finalDetails.product! ? finalDetails.product.price : 0;
+                const pricePerPerson = assignments.length > 0 ? totalPrice / assignments.length : 0;
+                
+                bookingData.groupClassMetadata = {
+                    totalParticipants: assignments.length,
+                    techniqueAssignments: assignments,
+                    pricePerPerson,
+                    totalPrice
+                };
+                bookingData.participants = assignments.length;
+            }
         }
 
         try {

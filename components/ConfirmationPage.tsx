@@ -13,6 +13,51 @@ import { DownloadIcon } from './icons/DownloadIcon';
 import { SINGLE_CLASS_PRICE, VAT_RATE } from '../constants';
 import { useEffect } from 'react';
 import { FEATURE_FLAGS } from '../featureFlags.ts';
+import type { GroupTechnique } from '../types';
+
+// Helper para obtener nombre de técnica desde metadata
+const getTechniqueName = (technique: GroupTechnique): string => {
+  const names: Record<GroupTechnique, string> = {
+    'potters_wheel': 'Torno Alfarero',
+    'hand_modeling': 'Modelado a Mano',
+    'painting': 'Pintura de piezas'
+  };
+  return names[technique] || technique;
+};
+
+// Helper para traducir productType a nombre legible
+const getProductTypeName = (productType?: string): string => {
+  const typeNames: Record<string, string> = {
+    'SINGLE_CLASS': 'Clase Suelta',
+    'CLASS_PACKAGE': 'Paquete de Clases',
+    'INTRODUCTORY_CLASS': 'Clase Introductoria',
+    'GROUP_CLASS': 'Clase Grupal',
+    'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
+    'OPEN_STUDIO': 'Estudio Abierto'
+  };
+  return typeNames[productType || ''] || 'Clase';
+};
+
+// Helper para obtener el nombre del producto/técnica de un booking
+const getBookingDisplayName = (booking: Booking): string => {
+  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
+    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
+    const uniqueTechniques = [...new Set(techniques)];
+    
+    if (uniqueTechniques.length === 1) {
+      return getTechniqueName(uniqueTechniques[0]);
+    } else {
+      return `Clase Grupal (mixto)`;
+    }
+  }
+  
+  // Fallback inteligente: si product.name es 'Unknown Product' o no existe, usar productType
+  const productName = booking.product?.name;
+  if (!productName || productName === 'Unknown Product') {
+    return getProductTypeName(booking.productType);
+  }
+  return productName;
+};
 
 interface ConfirmationPageProps {
     booking: Booking;
@@ -83,7 +128,7 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
             customerInfoTitle: 'Datos del Cliente',
             statusNotPaid: 'No Pagado',
             bookingCode: 'Código de Reserva',
-            packageName: product.name,
+            packageName: getBookingDisplayName(booking),
             packageDetailsTitle: 'Detalles del Paquete',
             durationLabel: 'Duración',
             durationValue: product.details?.duration || '-',
@@ -144,7 +189,7 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                     {/* Producto/Técnica */}
                     <div className="pb-4 border-b border-brand-border">
                         <p className="text-xs text-brand-secondary font-semibold uppercase mb-1">Experiencia</p>
-                        <p className="text-lg font-bold text-brand-text">{booking.product.name}</p>
+                        <p className="text-lg font-bold text-brand-text">{getBookingDisplayName(booking)}</p>
                     </div>
                     
                     {/* Detalles de la reserva */}
