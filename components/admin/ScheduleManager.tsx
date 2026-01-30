@@ -42,8 +42,8 @@ const getBookingDisplayName = (booking: Booking): string => {
   return productName;
 };
 
-// Helper para obtener el nombre display de un slot con TODOS los bookings
-// Ahora analiza todas las técnicas de todos los bookings del slot
+// Helper para obtener el nombre display de un slot
+// Como ahora cada slot agrupa por displayName, simplemente usa el primer booking
 const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): string => {
   if (slot.bookings.length === 0) {
     // Slot vacío, usar producto del slot
@@ -54,32 +54,8 @@ const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): st
     return productName;
   }
 
-  // Recolectar TODAS las técnicas de TODOS los bookings
-  const allTechniques: string[] = [];
-  
-  for (const booking of slot.bookings) {
-    // Si tiene groupClassMetadata, extraer técnicas
-    if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
-      for (const assignment of booking.groupClassMetadata.techniqueAssignments) {
-        allTechniques.push(getTechniqueName(assignment.technique));
-      }
-    } else {
-      // Fallback: usar getBookingDisplayName para este booking
-      allTechniques.push(getBookingDisplayName(booking));
-    }
-  }
-
-  // Obtener técnicas únicas
-  const uniqueTechniques = [...new Set(allTechniques)];
-
-  if (uniqueTechniques.length === 0) {
-    return 'Clase';
-  } else if (uniqueTechniques.length === 1) {
-    return uniqueTechniques[0];
-  } else {
-    // Múltiples técnicas: mostrar resumen
-    return `Mixto (${uniqueTechniques.length} tipos)`;
-  }
+  // Como todos los bookings en el slot tienen el mismo displayName, usar el primero
+  return getBookingDisplayName(slot.bookings[0]);
 };
 // import { useLanguage } from '../../context/LanguageContext';
 import { DAY_NAMES, PALETTE_COLORS } from '../../constants.js';
@@ -339,9 +315,10 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 if (inCurrentWeek) {
                     const dateStr = slot.date;
                     const normalizedTime = normalizeTime(slot.time);
-                    // FIX: Agrupar slots por fecha+hora SIN instructorId
-                    // Esto agrupa todos los bookings del mismo horario en una sola tarjeta
-                    const slotId = `${dateStr}-${normalizedTime}`;
+                    // FIX FINAL: Agrupar slots por fecha+hora+displayName
+                    // Cada técnica/producto tiene su propia tarjeta con conteo correcto
+                    const displayName = getBookingDisplayName(booking);
+                    const slotId = `${dateStr}-${normalizedTime}-${displayName}`;
                     
                     if (!allSlots.has(slotId)) {
                         let slotCapacity = 0;
