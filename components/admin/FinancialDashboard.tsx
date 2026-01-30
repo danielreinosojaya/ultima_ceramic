@@ -359,7 +359,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
         // Doughnut Chart Data - Revenue by Package
         const revenueByPackage = summaryBookings.reduce((acc: Record<string, number>, b: Booking) => {
             if (!b.product || !b.paymentDetails) return acc;
-            const key = b.product.name;
+            const key = getBookingDisplayName(b);
             acc[key] = (acc[key] || 0) + b.paymentDetails.reduce((sum, p) => sum + p.amount, 0);
             return acc;
         }, {} as Record<string, number>);
@@ -395,7 +395,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
         const rows = summaryBookings.map(b => ({
             [headers[0]]: formatDate(b.paymentDetails?.[0].receivedAt, {}),
             [headers[1]]: `${b.userInfo?.firstName} ${b.userInfo?.lastName}`,
-            [headers[2]]: b.product?.name || 'N/A',
+            [headers[2]]: getBookingDisplayName(b),
             [headers[3]]: (b.paymentDetails?.[0]?.amount || 0).toFixed(2)
         }));
         const csv = Papa.unparse(rows, { quotes: true });

@@ -13,6 +13,33 @@ import { DownloadIcon } from './icons/DownloadIcon';
 import { SINGLE_CLASS_PRICE, VAT_RATE } from '../constants';
 import { useEffect } from 'react';
 import { FEATURE_FLAGS } from '../featureFlags.ts';
+import type { GroupTechnique } from '../types';
+
+// Helper para obtener nombre de técnica desde metadata
+const getTechniqueName = (technique: GroupTechnique): string => {
+  const names: Record<GroupTechnique, string> = {
+    'potters_wheel': 'Torno Alfarero',
+    'hand_modeling': 'Modelado a Mano',
+    'painting': 'Pintura de piezas'
+  };
+  return names[technique] || technique;
+};
+
+// Helper para obtener el nombre del producto/técnica de un booking
+const getBookingDisplayName = (booking: Booking): string => {
+  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
+    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
+    const uniqueTechniques = [...new Set(techniques)];
+    
+    if (uniqueTechniques.length === 1) {
+      return getTechniqueName(uniqueTechniques[0]);
+    } else {
+      return `Clase Grupal (mixto)`;
+    }
+  }
+  
+  return booking.product?.name || 'Clase Individual';
+};
 
 interface ConfirmationPageProps {
     booking: Booking;
@@ -83,7 +110,7 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
             customerInfoTitle: 'Datos del Cliente',
             statusNotPaid: 'No Pagado',
             bookingCode: 'Código de Reserva',
-            packageName: product.name,
+            packageName: getBookingDisplayName(booking),
             packageDetailsTitle: 'Detalles del Paquete',
             durationLabel: 'Duración',
             durationValue: product.details?.duration || '-',
@@ -144,7 +171,7 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                     {/* Producto/Técnica */}
                     <div className="pb-4 border-b border-brand-border">
                         <p className="text-xs text-brand-secondary font-semibold uppercase mb-1">Experiencia</p>
-                        <p className="text-lg font-bold text-brand-text">{booking.product.name}</p>
+                        <p className="text-lg font-bold text-brand-text">{getBookingDisplayName(booking)}</p>
                     </div>
                     
                     {/* Detalles de la reserva */}
