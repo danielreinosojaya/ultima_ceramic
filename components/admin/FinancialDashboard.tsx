@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Chart from 'chart.js/auto';
 import Papa from 'papaparse';
-import type { Booking, Product, PaymentDetails, AdminTab, InvoiceRequest } from '../../types.js';
+import type { Booking, Product, PaymentDetails, AdminTab, InvoiceRequest, GroupTechnique } from '../../types.js';
 import * as dataService from '../../services/dataService.js';
 import { AcceptPaymentModal } from './AcceptPaymentModal.js';
 import { CurrencyDollarIcon } from '../icons/CurrencyDollarIcon.js';
@@ -11,6 +11,37 @@ import { DeleteConfirmationModal } from './DeleteConfirmationModal.js';
 import { TrashIcon } from '../icons/TrashIcon.js';
 import { CalendarIcon } from '../icons/CalendarIcon.js';
 import { EditPaymentModal } from './EditPaymentModal';
+
+// Helper para obtener nombre de técnica desde metadata
+const getTechniqueName = (technique: GroupTechnique): string => {
+  const names: Record<GroupTechnique, string> = {
+    'potters_wheel': 'Torno Alfarero',
+    'hand_modeling': 'Modelado a Mano',
+    'painting': 'Pintura de piezas'
+  };
+  return names[technique] || technique;
+};
+
+// Helper para obtener el nombre del producto/técnica de un booking
+const getBookingDisplayName = (booking: Booking): string => {
+  // Si es una clase grupal con metadata de técnicas, extraer la técnica principal
+  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
+    // Contar técnicas para determinar el nombre a mostrar
+    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
+    const uniqueTechniques = [...new Set(techniques)];
+    
+    if (uniqueTechniques.length === 1) {
+      // Todos los participantes tienen la misma técnica
+      return getTechniqueName(uniqueTechniques[0]);
+    } else {
+      // Técnicas mixtas - mostrar "Clase Grupal (mixto)"
+      return `Clase Grupal (mixto)`;
+    }
+  }
+  
+  // Fallback al nombre del producto
+  return booking.product?.name || 'Clase Individual';
+};
 
 
 type FilterPeriod = 'today' | 'week' | 'month' | 'custom';
@@ -789,7 +820,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                                 <div className="text-xs text-brand-secondary">{b.userInfo?.email}</div>
                                             </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text" role="cell">
-                                                {b.product?.name || 'N/A'}
+                                                {getBookingDisplayName(b)}
                                                 {(!Array.isArray(b.slots) || b.slots.length === 0) && (
                                                     <span className="inline-flex items-center px-2 py-1 ml-2 text-xs font-semibold rounded bg-amber-100 text-amber-800" title="Sin fechas asignadas aún">
                                                         ⏳ Sin fechas

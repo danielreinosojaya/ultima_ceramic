@@ -1,6 +1,37 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import type { Instructor, Booking, IntroductoryClass, Product, EditableBooking, RescheduleSlotInfo, PaymentDetails, AppData, InvoiceRequest, AdminTab, Customer, ClassPackage, EnrichedAvailableSlot, SingleClass, GroupClass, DayKey, AvailableSlot, ClassCapacity, Technique } from '../../types';
+import type { Instructor, Booking, IntroductoryClass, Product, EditableBooking, RescheduleSlotInfo, PaymentDetails, AppData, InvoiceRequest, AdminTab, Customer, ClassPackage, EnrichedAvailableSlot, SingleClass, GroupClass, DayKey, AvailableSlot, ClassCapacity, Technique, GroupTechnique } from '../../types';
 import * as dataService from '../../services/dataService';
+
+// Helper para obtener nombre de técnica desde metadata
+const getTechniqueName = (technique: GroupTechnique): string => {
+  const names: Record<GroupTechnique, string> = {
+    'potters_wheel': 'Torno Alfarero',
+    'hand_modeling': 'Modelado a Mano',
+    'painting': 'Pintura de piezas'
+  };
+  return names[technique] || technique;
+};
+
+// Helper para obtener el nombre del producto/técnica del primer booking de un slot
+const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): string => {
+  // Si hay bookings con groupClassMetadata, usar la primera técnica encontrada
+  for (const booking of slot.bookings) {
+    if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
+      const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
+      const uniqueTechniques = [...new Set(techniques)];
+      
+      if (uniqueTechniques.length === 1) {
+        return getTechniqueName(uniqueTechniques[0]);
+      } else {
+        // Técnicas mixtas
+        return `Clase Grupal (mixto)`;
+      }
+    }
+  }
+  
+  // Fallback al nombre del producto
+  return slot.product?.name || 'Clase';
+};
 // import { useLanguage } from '../../context/LanguageContext';
 import { DAY_NAMES, PALETTE_COLORS } from '../../constants.js';
 import { InstructorTag } from '../InstructorTag';
@@ -881,7 +912,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                                                     {isGroupClass && <UserGroupIcon className="w-3.5 h-3.5" />}
                                                                 </div>
                                                                 <div className="text-xs font-semibold text-gray-800 mt-1 truncate">
-                                                                    {slot.product.name}
+                                                                    {getSlotDisplayName(slot)}
                                                                 </div>
                                                                 <div className="text-xs text-gray-600 mt-1">
                                                                     {totalParticipants}/{slot.capacity} booked
@@ -968,7 +999,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                                         <div className="font-bold text-sm text-brand-text flex items-center gap-1">{slot.time}
                                                         {isGroupClass && <UserGroupIcon className="w-3.5 h-3.5 text-blue-800" />}
                                                         </div>
-                                                        <div className="text-xs font-semibold text-gray-600 mt-1 truncate">{slot.product.name}</div>
+                                                        <div className="text-xs font-semibold text-gray-600 mt-1 truncate">{getSlotDisplayName(slot)}</div>
                                                     </div>
                                                     <div className={`text-xs font-bold px-2 py-0.5 rounded-full ${totalParticipants >= slot.capacity ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}> 
                                                         {totalParticipants}/{slot.capacity}
