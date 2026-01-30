@@ -1629,14 +1629,14 @@ export const sendValentineRegistrationEmail = async (data: {
     const subject = `💕 ¡Recibimos tu inscripción San Valentín! - ${workshopName}`;
 
     const html = `
-        <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
-            <!-- Header con tema de San Valentín -->
-            <div style="background: linear-gradient(135deg, #B8474B 0%, #D4686B 50%, #E8A1A4 100%); padding: 40px 30px; text-align: center;">
-                <h1 style="color: #fff; font-size: 28px; margin: 0 0 8px 0; font-weight: 600; letter-spacing: 0.5px;">
-                    💕 San Valentín en Ceramicalma
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+            <!-- Header con paleta de marca + San Valentín -->
+            <div style="background: linear-gradient(135deg, #828E98 0%, #958985 100%); padding: 40px 30px; text-align: center; border-bottom: 3px solid #B8474B;">
+                <h1 style="color: #fff; font-size: 28px; margin: 0 0 8px 0; font-weight: 500; letter-spacing: 0.5px;">
+                    San Valentín en Ceramicalma
                 </h1>
-                <p style="color: rgba(255,255,255,0.95); font-size: 16px; margin: 0; font-weight: 400;">
-                    ¡Recibimos tu inscripción!
+                <p style="color: rgba(255,255,255,0.95); font-size: 16px; margin: 0; font-weight: 300;">
+                    Inscripción recibida 💕
                 </p>
             </div>
 
@@ -1762,13 +1762,13 @@ export const sendValentinePaymentConfirmedEmail = async (data: {
     const subject = `✅ Pago Confirmado - Te esperamos el 14 de Febrero - ${workshopName}`;
 
     const html = `
-        <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
-            <!-- Header con tema de San Valentín -->
-            <div style="background: linear-gradient(135deg, #B8474B 0%, #D4686B 50%, #E8A1A4 100%); padding: 40px 30px; text-align: center;">
-                <h1 style="color: #fff; font-size: 28px; margin: 0 0 8px 0; font-weight: 600; letter-spacing: 0.5px;">
-                    ✓ ¡Pago Confirmado!
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+            <!-- Header con paleta de marca + San Valentín -->
+            <div style="background: linear-gradient(135deg, #4A4540 0%, #828E98 100%); padding: 40px 30px; text-align: center; border-bottom: 3px solid #B8474B;">
+                <h1 style="color: #fff; font-size: 28px; margin: 0 0 8px 0; font-weight: 500; letter-spacing: 0.5px;">
+                    Pago Confirmado
                 </h1>
-                <p style="color: rgba(255,255,255,0.95); font-size: 16px; margin: 0; font-weight: 400;">
+                <p style="color: rgba(255,255,255,0.95); font-size: 16px; margin: 0; font-weight: 300;">
                     Tu lugar está reservado 💕
                 </p>
             </div>
