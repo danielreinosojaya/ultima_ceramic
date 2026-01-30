@@ -1,11 +1,41 @@
 import { Resend } from 'resend';
 import { toZonedTime, format } from 'date-fns-tz';
-import type { Booking, BankDetails, TimeSlot, PaymentDetails } from '../types.js';
+import type { Booking, BankDetails, TimeSlot, PaymentDetails, GroupTechnique } from '../types.js';
 import { sql } from './db.js';
 import { generateAllGiftcardVersions } from './utils/giftcardImageGenerator.js';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_FROM_ADDRESS || 'no-reply@ceramicalma.com';
+
+// Helper para obtener nombre de técnica desde metadata
+const getTechniqueName = (technique: GroupTechnique): string => {
+  const names: Record<GroupTechnique, string> = {
+    'potters_wheel': 'Torno Alfarero',
+    'hand_modeling': 'Modelado a Mano',
+    'painting': 'Pintura de piezas'
+  };
+  return names[technique] || technique;
+};
+
+// Helper para obtener el nombre del producto/técnica de un booking
+const getBookingDisplayName = (booking: Booking): string => {
+  // Si es una clase grupal con metadata de técnicas, extraer la técnica principal
+  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
+    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
+    const uniqueTechniques = [...new Set(techniques)];
+    
+    if (uniqueTechniques.length === 1) {
+      // Todos los participantes tienen la misma técnica
+      return getTechniqueName(uniqueTechniques[0]);
+    } else {
+      // Técnicas mixtas
+      return `Clase Grupal (mixto)`;
+    }
+  }
+  
+  // Fallback al nombre del producto
+  return booking.product?.name || 'Clase Individual';
+};
 
 export const isEmailServiceConfigured = (): { configured: boolean; reason?: string } => {
     if (!resend) return { configured: false, reason: 'Missing RESEND_API_KEY' };
@@ -154,6 +184,9 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
     const totalPaid = paymentDetails?.reduce((sum: number, p: any) => sum + (p.amount || 0), 0) || 0;
     const pendingBalance = Math.max(0, numericPrice - totalPaid);
     
+    // Obtener nombre del producto/técnica
+    const productName = getBookingDisplayName(booking);
+    
     const subject = `Tu Pre-Reserva en CeramicAlma está confirmada (Código: ${bookingCode})`;
     // Mostrar todas las cuentas en una tabla compacta y profesional
     const accounts = Array.isArray(bankDetails) ? bankDetails : [bankDetails];
@@ -186,7 +219,7 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333;">
             <h2>¡Hola, ${userInfo.firstName}!</h2>
-            <p>Gracias por tu pre-reserva para <strong>${product.name}</strong>. Tu lugar ha sido guardado con el código de reserva:</p>
+            <p>Gracias por tu pre-reserva para <strong>${productName}</strong>. Tu lugar ha sido guardado con el código de reserva:</p>
             <p style="font-size: 24px; font-weight: bold; color: #D95F43; margin: 20px 0;">${bookingCode}</p>
             <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 8px;">
                 <p style="margin: 0; color: #92400E; font-weight: bold;">⏰ Pre-Reserva Válida por 2 Horas</p>
@@ -266,10 +299,13 @@ export const sendPaymentReceiptEmail = async (booking: Booking, payment: Payment
            <p><strong>Saldo restante:</strong> $${(paymentAmount - giftcardAmount).toFixed(2)}</p>`
         : '';
 
+    // Obtener nombre del producto/técnica
+    const productName = getBookingDisplayName(booking);
+
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333;">
             <h2>¡Hola, ${userInfo.firstName}!</h2>
-            <p>Hemos recibido tu pago y tu reserva para <strong>${product.name}</strong> está oficialmente confirmada.</p>
+            <p>Hemos recibido tu pago y tu reserva para <strong>${productName}</strong> está oficialmente confirmada.</p>
             <p style="font-size: 20px; font-weight: bold; color: #16A34A; margin: 20px 0;">¡Tu plaza está asegurada!</p>
             <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; margin-top: 20px;">
                 <h3 style="color: #D95F43;">Detalles del Pago</h3>

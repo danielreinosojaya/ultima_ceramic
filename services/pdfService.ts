@@ -374,7 +374,7 @@ export const generateScheduleReportPDF = (
                                             '', // Empty first column for grouping
                                             `${b.userInfo.firstName} ${b.userInfo.lastName}`,
                                             typeof b.participants === 'number' ? b.participants : 1,
-                                            b.product?.name || 'N/A',
+                                            getBookingDisplayName(b),
                                             b.isPaid ? translations.paid : translations.unpaid
                                     ]),
                   theme: 'grid',
