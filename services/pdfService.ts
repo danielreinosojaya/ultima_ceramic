@@ -16,6 +16,19 @@ const getTechniqueName = (technique: GroupTechnique): string => {
   return names[technique] || technique;
 };
 
+// Helper para traducir productType a nombre legible
+const getProductTypeName = (productType?: string): string => {
+  const typeNames: Record<string, string> = {
+    'SINGLE_CLASS': 'Clase Suelta',
+    'CLASS_PACKAGE': 'Paquete de Clases',
+    'INTRODUCTORY_CLASS': 'Clase Introductoria',
+    'GROUP_CLASS': 'Clase Grupal',
+    'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
+    'OPEN_STUDIO': 'Estudio Abierto'
+  };
+  return typeNames[productType || ''] || 'Clase';
+};
+
 // Helper para obtener el nombre del producto/técnica de un booking
 const getBookingDisplayName = (booking: Booking): string => {
   if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
@@ -29,7 +42,12 @@ const getBookingDisplayName = (booking: Booking): string => {
     }
   }
   
-  return booking.product?.name || 'Clase Individual';
+  // Fallback inteligente: si product.name es 'Unknown Product' o no existe, usar productType
+  const productName = booking.product?.name;
+  if (!productName || productName === 'Unknown Product') {
+    return getProductTypeName(booking.productType);
+  }
+  return productName;
 };
 
 // Helper para obtener el nombre del producto/técnica de un slot
@@ -48,8 +66,13 @@ const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): st
     }
   }
   
-  // Fallback al nombre del producto
-  return slot.product?.name || 'Clase';
+  // Fallback inteligente: si product.name es 'Unknown Product', usar productType del primer booking
+  const productName = slot.product?.name;
+  if (!productName || productName === 'Unknown Product') {
+    const firstBooking = slot.bookings[0];
+    return firstBooking ? getProductTypeName(firstBooking.productType) : 'Clase';
+  }
+  return productName;
 };
 
 interface PdfTranslations {

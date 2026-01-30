@@ -12,6 +12,36 @@ const getTechniqueName = (technique: GroupTechnique): string => {
   return names[technique] || technique;
 };
 
+// Helper para traducir productType a nombre legible
+const getProductTypeName = (productType?: string): string => {
+  const typeNames: Record<string, string> = {
+    'SINGLE_CLASS': 'Clase Suelta',
+    'CLASS_PACKAGE': 'Paquete de Clases',
+    'INTRODUCTORY_CLASS': 'Clase Introductoria',
+    'GROUP_CLASS': 'Clase Grupal',
+    'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
+    'OPEN_STUDIO': 'Estudio Abierto'
+  };
+  return typeNames[productType || ''] || 'Clase';
+};
+
+// Helper para obtener el nombre display de un booking
+const getBookingDisplayName = (booking: Booking): string => {
+  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
+    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
+    const uniqueTechniques = [...new Set(techniques)];
+    if (uniqueTechniques.length === 1) {
+      return getTechniqueName(uniqueTechniques[0]);
+    }
+    return 'Clase Grupal (mixto)';
+  }
+  const productName = booking.product?.name;
+  if (!productName || productName === 'Unknown Product' || productName === 'Unknown') {
+    return getProductTypeName(booking.productType);
+  }
+  return productName;
+};
+
 // Helper para obtener el nombre del producto/técnica del primer booking de un slot
 const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): string => {
   // Si hay bookings con groupClassMetadata, usar la primera técnica encontrada
@@ -23,14 +53,18 @@ const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): st
       if (uniqueTechniques.length === 1) {
         return getTechniqueName(uniqueTechniques[0]);
       } else {
-        // Técnicas mixtas
         return `Clase Grupal (mixto)`;
       }
     }
   }
   
-  // Fallback al nombre del producto
-  return slot.product?.name || 'Clase';
+  // Fallback inteligente: si product.name es 'Unknown Product', usar productType del primer booking
+  const productName = slot.product?.name;
+  if (!productName || productName === 'Unknown Product' || productName === 'Unknown') {
+    const firstBooking = slot.bookings[0];
+    return firstBooking ? getProductTypeName(firstBooking.productType) : 'Clase';
+  }
+  return productName;
 };
 // import { useLanguage } from '../../context/LanguageContext';
 import { DAY_NAMES, PALETTE_COLORS } from '../../constants.js';
@@ -689,7 +723,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 time={modalData.time}
                 attendees={modalData.attendees}
                 instructorId={modalData.instructorId}
-                product={{ id: 'unknown', name: 'Unknown', type: 'class', price: 0 } as any}
+                product={{ id: 'placeholder', name: 'Clase', type: 'class', price: 0 } as any}
                 allBookings={[]}
                 onClose={closeAllModals}
                 onRemoveAttendee={handleRemoveAttendee}
@@ -803,17 +837,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                     {pendingBookingsWithoutSlots.slice(0, 3).map(b => (
                                         <div key={b.id} className="text-xs text-amber-900 bg-white bg-opacity-50 p-2 rounded flex items-center justify-between">
                                             <span>
-                                                <strong>{b.bookingCode}</strong> · {b.userInfo.firstName} {b.userInfo.lastName} · {(() => {
-                                                    if (b.groupClassMetadata?.techniqueAssignments && b.groupClassMetadata.techniqueAssignments.length > 0) {
-                                                        const techniques = b.groupClassMetadata.techniqueAssignments.map(a => a.technique);
-                                                        const uniqueTechniques = [...new Set(techniques)];
-                                                        if (uniqueTechniques.length === 1) {
-                                                            return getTechniqueName(uniqueTechniques[0]);
-                                                        }
-                                                        return 'Clase Grupal (mixto)';
-                                                    }
-                                                    return b.product?.name || 'Clase';
-                                                })()}
+                                                <strong>{b.bookingCode}</strong> · {b.userInfo.firstName} {b.userInfo.lastName} · {getBookingDisplayName(b)}
                                             </span>
                                             <button
                                                 onClick={() => {
