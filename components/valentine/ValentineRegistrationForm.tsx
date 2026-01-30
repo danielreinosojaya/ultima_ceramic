@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { VALENTINE_WORKSHOPS, ValentineWorkshopType } from '../../types';
 import { HeartIcon } from '@heroicons/react/24/solid';
 import { PhotoIcon, CheckCircleIcon, ExclamationCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
+import { MobileDatePicker } from './MobileDatePicker';
 
 interface ValentineRegistrationFormProps {
     onSuccess: (registrationId: string) => void;
@@ -75,10 +76,9 @@ export const ValentineRegistrationForm: React.FC<ValentineRegistrationFormProps>
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            // Validar tipo de archivo
-            const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-            if (!validTypes.includes(file.type)) {
-                setError('Por favor sube una imagen (JPG, PNG, WEBP) o PDF');
+            // Validar tipo de archivo (solo imágenes)
+            if (!file.type.startsWith('image/')) {
+                setError('Por favor sube solo una imagen (JPG, PNG, WEBP)');
                 return;
             }
             // Validar tamaño (max 10MB)
@@ -90,15 +90,11 @@ export const ValentineRegistrationForm: React.FC<ValentineRegistrationFormProps>
             setError(null);
             
             // Preview para imágenes
-            if (file.type.startsWith('image/')) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    setPaymentProofPreview(e.target?.result as string);
-                };
-                reader.readAsDataURL(file);
-            } else {
-                setPaymentProofPreview(null);
-            }
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                setPaymentProofPreview(e.target?.result as string);
+            };
+            reader.readAsDataURL(file);
         }
     };
 
@@ -311,16 +307,13 @@ export const ValentineRegistrationForm: React.FC<ValentineRegistrationFormProps>
 
                     {/* Fecha de Nacimiento */}
                     <div className="mb-5">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Fecha de Nacimiento *
-                        </label>
-                        <input
-                            type="date"
-                            name="birthDate"
+                        <MobileDatePicker
                             value={formData.birthDate}
-                            onChange={handleInputChange}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition-colors"
-                            required
+                            onChange={(date) => setFormData(prev => ({ ...prev, birthDate: date }))}
+                            label="Fecha de Nacimiento"
+                            required={true}
+                            maxDate={new Date(new Date().getFullYear() - 10, 11, 31).toISOString().split('T')[0]}
+                            minDate="1940-01-01"
                         />
                     </div>
 
@@ -500,7 +493,7 @@ export const ValentineRegistrationForm: React.FC<ValentineRegistrationFormProps>
                             Comprobante de Pago * <span className="text-red-500 font-bold">(OBLIGATORIO)</span>
                         </label>
                         <p className="text-xs text-gray-500 mb-3">
-                            ⚠️ Sube una foto, screenshot o PDF de tu comprobante de transferencia. 
+                            📸 Toma una foto o screenshot de tu comprobante de transferencia. 
                             <strong className="text-red-600"> Sin comprobante no se procesará tu inscripción.</strong>
                         </p>
                         
@@ -515,7 +508,8 @@ export const ValentineRegistrationForm: React.FC<ValentineRegistrationFormProps>
                             <input
                                 ref={fileInputRef}
                                 type="file"
-                                accept="image/*,.pdf"
+                                accept="image/*"
+                                capture="environment"
                                 onChange={handleFileChange}
                                 className="hidden"
                                 required
@@ -551,12 +545,12 @@ export const ValentineRegistrationForm: React.FC<ValentineRegistrationFormProps>
                                 </div>
                             ) : (
                                 <div className="flex flex-col items-center gap-2">
-                                    <PhotoIcon className="w-12 h-12 text-red-400" />
-                                    <span className="text-red-600 font-medium">
-                                        ⬆️ Haz clic para subir tu comprobante
+                                    <PhotoIcon className="w-12 h-12 text-rose-400" />
+                                    <span className="text-rose-600 font-medium">
+                                        📸 Toca para abrir tu galería
                                     </span>
                                     <span className="text-xs text-gray-400">
-                                        JPG, PNG, WEBP o PDF (máx. 10MB)
+                                        Selecciona una foto de tu comprobante (máx. 10MB)
                                     </span>
                                 </div>
                             )}
