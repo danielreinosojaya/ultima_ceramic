@@ -941,16 +941,15 @@ export interface CelebrationConfig {
   hours: number; // Horas de alquiler del espacio
   
   // Opciones extras
-  bringDecoration: boolean;
-  bringCake: boolean;
+  bringDecoration?: boolean;
+  bringCake?: boolean;
   
   // Niños (si aplica)
-  hasChildren: boolean;
+  hasChildren?: boolean;
   childrenCount?: number;
-  childrenPieces?: ChildPieceSelection[];
   
-  // Menú
-  menuSelections: MenuSelection[];
+  // DEPRECATED: menuSelections ya no se usa (se puede traer comida propia)
+  menuSelections?: string[];
 }
 
 /**
@@ -972,7 +971,7 @@ export interface SpaceHourlyPricing {
 }
 
 export const SPACE_HOURLY_PRICING: SpaceHourlyPricing = {
-  weekday: 65,
+  weekday: 75,
   weekend: 100,
   vatRate: 0.15
 };
