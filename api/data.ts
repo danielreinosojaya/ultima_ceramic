@@ -1004,9 +1004,30 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             const bookingsOverlapingSlot = bookings.filter((b: any) => {
                                 if (!b.slots || !Array.isArray(b.slots)) return false;
                                 
-                                // La técnica del booking debe ser exactamente la misma que la solicitada
-                                const bookingTechnique = b.technique || (b.product?.details as any)?.technique;
-                                if (bookingTechnique !== requestedTechnique) return false;
+                                // ===== DERIVAR TÉCNICA REAL DEL BOOKING =====
+                                // Priorizar product.name para derivar técnica (datos más confiables)
+                                let bookingTechnique: string | undefined;
+                                const productName = b.product?.name?.toLowerCase() || '';
+                                
+                                if (productName.includes('pintura')) {
+                                    bookingTechnique = 'painting';
+                                } else if (productName.includes('torno')) {
+                                    bookingTechnique = 'potters_wheel';
+                                } else if (productName.includes('modelado')) {
+                                    bookingTechnique = 'hand_modeling';
+                                } else {
+                                    bookingTechnique = b.technique || (b.product?.details as any)?.technique;
+                                }
+                                
+                                // Para handwork (painting, modeling), verificar si comparten capacidad
+                                const isHandWork = (tech: string | undefined) => 
+                                    tech === 'molding' || tech === 'painting' || tech === 'hand_modeling';
+                                
+                                if (isHandWork(requestedTechnique) && isHandWork(bookingTechnique)) {
+                                    // Handwork comparte capacidad entre sí
+                                } else if (bookingTechnique !== requestedTechnique) {
+                                    return false; // Técnicas diferentes, no contar
+                                }
                                 
                                 return b.slots.some((s: any) => {
                                     if (s.date !== dateStr) return false;
@@ -1132,8 +1153,26 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         for (const booking of bookings) {
                             if (!booking.slots || !Array.isArray(booking.slots)) continue;
                             
-                            // Técnica del booking (extraer de técnica o de producto)
-                            const bookingTechnique = booking.technique || (booking.product?.details as any)?.technique;
+                            // ===== DERIVAR TÉCNICA REAL DEL BOOKING =====
+                            // PROBLEMA: Muchas reservas tienen technique="potters_wheel" pero product.name="Pintura de piezas"
+                            // SOLUCIÓN: Priorizar product.name para derivar la técnica real
+                            
+                            let bookingTechnique: string | undefined;
+                            const productName = booking.product?.name?.toLowerCase() || '';
+                            
+                            // 1. Derivar técnica del nombre del producto (fuente más confiable)
+                            if (productName.includes('pintura')) {
+                                bookingTechnique = 'painting';
+                            } else if (productName.includes('torno')) {
+                                bookingTechnique = 'potters_wheel';
+                            } else if (productName.includes('modelado')) {
+                                bookingTechnique = 'hand_modeling';
+                            } else {
+                                // 2. Fallback: usar campo technique si product.name no es informativo
+                                bookingTechnique = booking.technique || (booking.product?.details as any)?.technique;
+                            }
+                            
+                            console.log(`[checkSlotAvailability] Booking ${booking.bookingCode}: product="${booking.product?.name}", derived technique="${bookingTechnique}" (original technique="${booking.technique}")`);
                             
                             // Definir grupos de técnicas que comparten capacidad
                             const isHandWork = (tech: string | undefined) => 
@@ -1158,7 +1197,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             }
                             
                             if (!techniquesMatch) {
-                                console.log(`[checkSlotAvailability] Skipping booking (technique incompatible): booking=${bookingTechnique}, requested=${requestedTechnique}`);
+                                console.log(`[checkSlotAvailability] Skipping booking (technique incompatible): derived=${bookingTechnique}, requested=${requestedTechnique}`);
                                 continue;
                             }
 
@@ -3677,8 +3716,20 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 for (const booking of bookingsOnDate) {
                     if (!booking.slots || !Array.isArray(booking.slots)) continue;
                     
-                    // Técnica del booking
-                    const bookingTechnique = booking.technique || (booking.product?.details as any)?.technique;
+                    // ===== DERIVAR TÉCNICA REAL DEL BOOKING =====
+                    // Priorizar product.name para derivar técnica (datos más confiables)
+                    let bookingTechnique: string | undefined;
+                    const productName = booking.product?.name?.toLowerCase() || '';
+                    
+                    if (productName.includes('pintura')) {
+                        bookingTechnique = 'painting';
+                    } else if (productName.includes('torno')) {
+                        bookingTechnique = 'potters_wheel';
+                    } else if (productName.includes('modelado')) {
+                        bookingTechnique = 'hand_modeling';
+                    } else {
+                        bookingTechnique = booking.technique || (booking.product?.details as any)?.technique;
+                    }
                     
                     // Definir grupos de técnicas que comparten capacidad
                     const isHandWork = (tech: string | undefined) => 
