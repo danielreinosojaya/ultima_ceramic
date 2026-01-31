@@ -8,6 +8,7 @@ import { PhoneIcon } from './icons/PhoneIcon';
 import { InfoCircleIcon } from './icons/InfoCircleIcon';
 import { GiftIcon } from './icons/GiftIcon';
 import { slotsRequireNoRefund } from '../utils/bookingPolicy';
+import { BirthdaySelector } from './common/BirthdaySelector';
 
 interface InvoiceData {
     companyName: string;
@@ -235,7 +236,7 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                                     <p className="text-xs text-brand-secondary mt-1">Comparte tu fecha de nacimiento.</p>
                                 </div>
                             </div>
-                            <InputField id="birthday" label="" type="date" value={birthday} onChange={e => setBirthday(e.target.value)} disabled={optOutBirthday} error={errors.birthday} placeholder="dd/mm/yyyy" />
+                            <BirthdaySelector value={birthday} onChange={setBirthday} disabled={optOutBirthday} error={errors.birthday} />
                             <label className="flex items-center gap-2 cursor-pointer text-xs text-brand-secondary hover:text-brand-text transition-colors">
                                 <div className={`relative inline-flex items-center h-5 rounded-full w-9 transition-colors flex-shrink-0 ${optOutBirthday ? 'bg-brand-primary' : 'bg-gray-300'}`}>
                                     <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${optOutBirthday ? 'translate-x-4' : 'translate-x-0.5'}`}/>

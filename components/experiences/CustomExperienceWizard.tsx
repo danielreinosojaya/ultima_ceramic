@@ -658,15 +658,21 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                 <input
                   type="text"
                   inputMode="numeric"
-                  value={(state.config as CelebrationConfig)?.childrenCount || 0}
+                  pattern="[0-9]*"
+                  value={(state.config as CelebrationConfig)?.childrenCount === 0 ? '' : (state.config as CelebrationConfig)?.childrenCount}
                   onChange={(e) => {
                     const val = e.target.value.replace(/\D/g, ''); // Solo números
-                    const count = val === '' ? 0 : Math.max(0, Math.min(10, parseInt(val)));
+                    const count = val === '' ? 0 : Math.max(0, Math.min(20, parseInt(val, 10)));
                     setState((prev) => ({
                       ...prev,
                       config: { ...(prev.config as CelebrationConfig), childrenCount: count },
                     }));
                   }}
+                  onFocus={(e) => {
+                    // Seleccionar todo el texto al enfocar para facilitar edición
+                    e.target.select();
+                  }}
+                  placeholder="0"
                   className="w-20 px-3 py-2 border-2 border-brand-border rounded-lg text-center font-semibold focus:border-brand-primary transition-all"
                 />
               </div>
