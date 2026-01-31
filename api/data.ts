@@ -870,27 +870,41 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
 
                     console.log(`[getAvailableSlots] Searching: technique=${requestedTechnique}, participants=${requestedParticipants}, from=${searchStartDate.toISOString().split('T')[0]}, days=${searchDays}`);
 
-                    // ⚡ OPTIMIZACIÓN: Solo cargar bookings relevantes para el rango de fechas buscado
-                    // No necesitamos bookings de 2023 para calcular disponibilidad de febrero 2026
-                    const rangeStart = new Date(searchStartDate);
-                    rangeStart.setDate(rangeStart.getDate() - 7); // 7 días buffer
-                    const rangeEnd = new Date(searchStartDate);
-                    rangeEnd.setDate(rangeEnd.getDate() + searchDays + 7); // +7 días buffer
+                    // ⚡ CRÍTICO: No filtrar por created_at - debemos cargar todos los bookings activos
+                    // y luego filtrar por fecha de slots en memoria
+                    // Una reserva creada hace 3 meses para una fecha futura DEBE considerarse
                     
                     // Obtener datos necesarios
                     const [bookingsResult, instructorsResult] = await Promise.all([
                         sql`
                             SELECT * FROM bookings 
                             WHERE status != 'expired'
-                            AND created_at >= ${rangeStart.toISOString()}
                             ORDER BY created_at DESC
-                            LIMIT 500
                         `,
                         sql`SELECT * FROM instructors ORDER BY name ASC`
                     ]);
 
-                    const bookings = bookingsResult.rows.map(parseBookingFromDB);
+                    const allBookings = bookingsResult.rows.map(parseBookingFromDB);
                     const instructors = instructorsResult.rows.map(toCamelCase);
+                    
+                    // Filtrar bookings que tengan slots dentro del rango de búsqueda
+                    const rangeStart = new Date(searchStartDate);
+                    rangeStart.setDate(rangeStart.getDate() - 1); // 1 día buffer antes
+                    const rangeEnd = new Date(searchStartDate);
+                    rangeEnd.setDate(rangeEnd.getDate() + searchDays + 1); // 1 día buffer después
+                    
+                    const rangeStartStr = rangeStart.toISOString().split('T')[0];
+                    const rangeEndStr = rangeEnd.toISOString().split('T')[0];
+                    
+                    const bookings = allBookings.filter(booking => {
+                        if (!booking.slots || !Array.isArray(booking.slots)) return false;
+                        return booking.slots.some((s: any) => {
+                            const slotDate = s.date;
+                            return slotDate >= rangeStartStr && slotDate <= rangeEndStr;
+                        });
+                    });
+                    
+                    console.log(`[getAvailableSlots] Filtered ${bookings.length} bookings with slots in range (out of ${allBookings.length} total)`);
                     
                     // Parse settings reutilizando función helper
                     const { availability, scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
@@ -1075,22 +1089,25 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     const requestedParticipants = parseInt(participants as string);
 
                     try {
-                        // ⚡ OPTIMIZACIÓN: Solo cargar bookings del día específico a verificar
-                        const targetDate = new Date(requestedDate);
-                        const dayStart = new Date(targetDate);
-                        dayStart.setHours(0, 0, 0, 0);
-                        const dayEnd = new Date(targetDate);
-                        dayEnd.setHours(23, 59, 59, 999);
+                        // ⚡ CRÍTICO: Buscar bookings que TENGAN SLOTS en la fecha solicitada
+                        // NO filtrar por created_at (fecha de creación) - eso es INCORRECTO
+                        // Una reserva creada el 25 de enero para el 31 de enero DEBE aparecer
+                        // cuando se consulta disponibilidad para el 31 de enero
                         
-                        // Obtener solo bookings del día
                         const bookingsResult = await sql`
                             SELECT * FROM bookings 
                             WHERE status != 'expired'
-                            AND created_at >= ${dayStart.toISOString()}
-                            AND created_at <= ${dayEnd.toISOString()}
                             ORDER BY created_at DESC
                         `;
-                        const bookings = bookingsResult.rows.map(parseBookingFromDB);
+                        
+                        // Filtrar en memoria: solo bookings que tengan slots en la fecha solicitada
+                        const allBookings = bookingsResult.rows.map(parseBookingFromDB);
+                        const bookings = allBookings.filter(booking => {
+                            if (!booking.slots || !Array.isArray(booking.slots)) return false;
+                            return booking.slots.some((s: any) => s.date === requestedDate);
+                        });
+                        
+                        console.log(`[checkSlotAvailability] Found ${bookings.length} bookings with slots on ${requestedDate} (out of ${allBookings.length} total)`);
                         
                         const { scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
                         const maxCapacityMap = getMaxCapacityMap(classCapacity);
@@ -3624,6 +3641,96 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         error: 'Faltan campos requeridos para la experiencia personalizada' 
                     });
                 }
+
+                // ===== VALIDACIÓN DE CAPACIDAD Y SOLAPAMIENTO =====
+                // CRÍTICO: Verificar disponibilidad ANTES de crear la reserva
+                
+                const requestedTechnique = technique as string;
+                const requestedParticipants = parseInt(participants as string);
+                const requestedDate = date as string;
+                const requestedTime = time as string;
+                
+                // Obtener todos los bookings activos que tengan slots en esa fecha
+                const { rows: allBookingsRows } = await sql`
+                    SELECT * FROM bookings 
+                    WHERE status != 'expired'
+                    ORDER BY created_at DESC
+                `;
+                const allBookings = allBookingsRows.map(parseBookingFromDB);
+                const bookingsOnDate = allBookings.filter(b => {
+                    if (!b.slots || !Array.isArray(b.slots)) return false;
+                    return b.slots.some((s: any) => s.date === requestedDate);
+                });
+                
+                // Obtener capacidades configuradas
+                const { scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
+                const maxCapacityMap = getMaxCapacityMap(classCapacity);
+                const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
+                
+                // Calcular rango horario del slot solicitado (2 horas de duración)
+                const requestedStartMinutes = timeToMinutes(normalizeTime(requestedTime));
+                const requestedEndMinutes = requestedStartMinutes + (2 * 60); // 2 horas
+                
+                // Contar participantes que solapan temporalmente
+                let overlappingParticipants = 0;
+                
+                for (const booking of bookingsOnDate) {
+                    if (!booking.slots || !Array.isArray(booking.slots)) continue;
+                    
+                    // Técnica del booking
+                    const bookingTechnique = booking.technique || (booking.product?.details as any)?.technique;
+                    
+                    // Definir grupos de técnicas que comparten capacidad
+                    const isHandWork = (tech: string | undefined) => 
+                        tech === 'molding' || tech === 'painting' || tech === 'hand_modeling';
+                    const isHandWorkGroup = isHandWork(requestedTechnique);
+                    const isBookingHandWorkGroup = isHandWork(bookingTechnique);
+                    
+                    // Determinar si la técnica del booking compite por capacidad
+                    let techniquesMatch = false;
+                    if (isHandWorkGroup && isBookingHandWorkGroup) {
+                        techniquesMatch = true;
+                    } else if (isHandWorkGroup && !bookingTechnique) {
+                        techniquesMatch = true;
+                    } else if (!isHandWorkGroup && bookingTechnique === requestedTechnique) {
+                        techniquesMatch = true;
+                    } else if (!isHandWorkGroup && !bookingTechnique) {
+                        techniquesMatch = true;
+                    }
+                    
+                    if (!techniquesMatch) continue;
+                    
+                    // Verificar si hay overlap temporal en la misma fecha
+                    for (const s of booking.slots) {
+                        if (s.date !== requestedDate) continue;
+                        
+                        const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
+                        const bookingEndMinutes = bookingStartMinutes + (2 * 60);
+                        
+                        const hasOverlap = hasTimeOverlap(requestedStartMinutes, requestedEndMinutes, bookingStartMinutes, bookingEndMinutes);
+                        
+                        if (hasOverlap) {
+                            const participantCount = booking.participants || 1;
+                            overlappingParticipants += participantCount;
+                            console.log(`[createCustomExperienceBooking] OVERLAP: ${s.time} with ${participantCount} participants`);
+                        }
+                    }
+                }
+                
+                const availableCapacity = maxCapacity - overlappingParticipants;
+                const canBook = availableCapacity >= requestedParticipants;
+                
+                console.log(`[createCustomExperienceBooking] Capacity check: max=${maxCapacity}, overlapping=${overlappingParticipants}, available=${availableCapacity}, requested=${requestedParticipants}, canBook=${canBook}`);
+                
+                if (!canBook) {
+                    return res.status(400).json({
+                        success: false,
+                        error: availableCapacity <= 0
+                            ? `Lo sentimos, no hay cupos disponibles para ${requestedDate} a las ${requestedTime}. El horario está lleno.`
+                            : `Solo hay ${availableCapacity} cupos disponibles, pero necesitas ${requestedParticipants}.`
+                    });
+                }
+                // ===== FIN VALIDACIÓN DE CAPACIDAD =====
 
                 // Generar código de reserva
                 const bookingCode = generateBookingCode();
