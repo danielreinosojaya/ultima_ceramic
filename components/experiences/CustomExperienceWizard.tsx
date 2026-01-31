@@ -597,7 +597,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
             <div className="bg-green-50 border-l-4 border-green-500 rounded-r-lg p-4">
               <p className="text-sm text-green-900 font-medium">
                 🎉 <strong>¡Buenas noticias!</strong> Puedes traer tu propia comida, bebidas, torta, decoración y menaje. 
-                El espacio incluye mesas, sillas, A/C, WiFi, refrigeradora y microondas.
+                El espacio incluye mesas, sillas, A/C y WiFi.
               </p>
             </div>
             
@@ -605,7 +605,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
             <div>
               <label className="block text-sm font-semibold text-brand-text mb-3 flex items-center">
                 ¿Cuántas horas necesitas el espacio?
-                <Tooltip text="El espacio se alquila por horas. Incluye mesas, sillas, A/C, WiFi, refrigeradora y microondas. Traes tu menaje, decoración y comida." />
+                <Tooltip text="El espacio se alquila por horas. Incluye mesas, sillas, A/C y WiFi. Traes tu menaje, decoración y comida." />
               </label>
               <select
                 value={(state.config as CelebrationConfig)?.hours || 2}
@@ -623,69 +623,6 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                 <option value="4">4 horas</option>
                 <option value="5">5 horas</option>
               </select>
-              
-              {/* Preview de pricing - Solo mostrar después de seleccionar fecha */}
-              {state.config && state.technique && selectedDate && selectedTime && (
-                <div className="mt-4 bg-purple-50 border-2 border-purple-200 rounded-xl p-4">
-                  <p className="text-sm font-semibold text-purple-900 mb-3">Resumen de Costos</p>
-                  
-                  {/* Espacio */}
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between text-purple-800">
-                      <span>Espacio ({(state.config as CelebrationConfig).hours}h × $100*)</span>
-                      <span className="font-semibold">${(state.config as CelebrationConfig).hours * 100}</span>
-                    </div>
-                    <div className="flex justify-between text-purple-700">
-                      <span>IVA (15%)</span>
-                      <span className="font-semibold">${((state.config as CelebrationConfig).hours * 100 * 0.15).toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-purple-900 font-bold pt-2 border-t border-purple-300">
-                      <span>Subtotal Espacio</span>
-                      <span>${((state.config as CelebrationConfig).hours * 100 * 1.15).toFixed(2)}</span>
-                    </div>
-                  </div>
-                  
-                  {/* Técnicas */}
-                  <div className="mt-3 pt-3 border-t border-purple-300 space-y-2 text-sm">
-                    <div className="flex justify-between text-purple-800">
-                      <span>
-                        Técnica ({(state.config as CelebrationConfig).activeParticipants} personas × 
-                        ${state.technique === 'potters_wheel' ? TECHNIQUE_PRICES.potters_wheel : 
-                          state.technique === 'hand_modeling' ? TECHNIQUE_PRICES.hand_modeling : TECHNIQUE_PRICES.painting})
-                      </span>
-                      <span className="font-semibold">
-                        ${(state.config as CelebrationConfig).activeParticipants * 
-                          (state.technique === 'potters_wheel' ? TECHNIQUE_PRICES.potters_wheel : 
-                           state.technique === 'hand_modeling' ? TECHNIQUE_PRICES.hand_modeling : TECHNIQUE_PRICES.painting)}
-                      </span>
-                    </div>
-                    <p className="text-xs text-purple-700">Ya incluye IVA</p>
-                  </div>
-                  
-                  {/* Total a Pagar */}
-                  <div className="mt-3 pt-3 border-t-2 border-purple-400 flex justify-between">
-                    <p className="text-base font-bold text-purple-900">Total a Pagar</p>
-                    <p className="text-2xl font-bold text-purple-600">
-                      ${(
-                        ((state.config as CelebrationConfig).hours * 100 * 1.15) +
-                        ((state.config as CelebrationConfig).activeParticipants * 
-                          (state.technique === 'potters_wheel' ? TECHNIQUE_PRICES.potters_wheel : 
-                           state.technique === 'hand_modeling' ? TECHNIQUE_PRICES.hand_modeling : TECHNIQUE_PRICES.painting)) +
-                        ((state.config as CelebrationConfig).hasChildren ? ((state.config as CelebrationConfig).childrenCount || 0) * 18 : 0)
-                      ).toFixed(2)}
-                    </p>
-                  </div>
-                  
-                  <p className="text-xs text-purple-700 mt-3">
-                    *Precio estimado basado en fin de semana ($100/h). El precio final se calculará según la fecha seleccionada.
-                  </p>
-                  <p className="text-xs text-purple-700 mt-1">
-                    {(state.config as CelebrationConfig)?.childrenCount > 0 
-                      ? `Incluye actividad para ${(state.config as CelebrationConfig).childrenCount} niño(s): +$${(state.config as CelebrationConfig).childrenCount * 18}`
-                      : 'Puedes agregar actividad para niños más abajo.'}
-                  </p>
-                </div>
-              )}
             </div>
             
             {/* Nota sobre comida - Sin MenuSelector */}
@@ -703,7 +640,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                   <li>Menaje (platos, vasos, cubiertos, manteles)</li>
                 </ul>
                 <p className="text-xs text-blue-700 mt-3 italic">
-                  El espacio incluye mesas, sillas, refrigeradora y microondas para tu comodidad.
+                  El espacio incluye mesas, sillas, A/C y WiFi para tu comodidad.
                 </p>
               </div>
             </div>
@@ -910,6 +847,100 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
             )}
           </div>
         </div>
+
+        {/* Resumen de Costos - Mostrar SOLO después de seleccionar fecha/hora */}
+        {selectedDate && selectedTime && slotAvailability && slotAvailability.available && isCelebration && state.config && (
+          <div className="mt-6 bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-200 rounded-2xl p-6 shadow-lg">
+            <h3 className="text-xl font-bold text-purple-900 mb-4 flex items-center gap-2">
+              <span>💰</span> Total a Pagar
+            </h3>
+            
+            {/* Determinar si es weekday o weekend */}
+            {(() => {
+              const dayOfWeek = new Date(selectedDate + 'T12:00:00').getDay();
+              const isWeekend = dayOfWeek === 5 || dayOfWeek === 6 || dayOfWeek === 0; // Vie, Sáb, Dom
+              const spaceRate = isWeekend ? 100 : 75;
+              const config = state.config as CelebrationConfig;
+              
+              const spaceSubtotal = config.hours * spaceRate;
+              const spaceVat = spaceSubtotal * 0.15;
+              const spaceTotalWithVat = spaceSubtotal + spaceVat;
+              
+              const techniquePrice = state.technique === 'potters_wheel' ? TECHNIQUE_PRICES.potters_wheel :
+                                    state.technique === 'hand_modeling' ? TECHNIQUE_PRICES.hand_modeling :
+                                    TECHNIQUE_PRICES.painting;
+              const techniqueTotal = config.activeParticipants * techniquePrice;
+              
+              const childrenTotal = (config.childrenCount || 0) * 18;
+              
+              const grandTotal = spaceTotalWithVat + techniqueTotal + childrenTotal;
+              
+              return (
+                <>
+                  {/* Espacio */}
+                  <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
+                    <p className="text-sm font-semibold text-gray-700 mb-2">🏠 Alquiler del Espacio</p>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between text-gray-600">
+                        <span>{config.hours}h × ${spaceRate}/h {isWeekend ? '(fin de semana)' : '(entre semana)'}</span>
+                        <span className="font-semibold">${spaceSubtotal.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-600">
+                        <span>IVA (15%)</span>
+                        <span className="font-semibold">${spaceVat.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-purple-900 font-bold pt-1 border-t border-gray-200">
+                        <span>Subtotal Espacio</span>
+                        <span>${spaceTotalWithVat.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Técnica */}
+                  <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
+                    <p className="text-sm font-semibold text-gray-700 mb-2">🎯 Actividad de Cerámica</p>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between text-gray-600">
+                        <span>{config.activeParticipants} personas × ${techniquePrice}</span>
+                        <span className="font-semibold">${techniqueTotal.toFixed(2)}</span>
+                      </div>
+                      <p className="text-xs text-gray-500 italic">Ya incluye IVA</p>
+                    </div>
+                  </div>
+                  
+                  {/* Niños */}
+                  {config.childrenCount > 0 && (
+                    <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
+                      <p className="text-sm font-semibold text-gray-700 mb-2">👶 Actividad para Niños</p>
+                      <div className="space-y-1 text-sm">
+                        <div className="flex justify-between text-gray-600">
+                          <span>{config.childrenCount} niño(s) × $18</span>
+                          <span className="font-semibold">${childrenTotal.toFixed(2)}</span>
+                        </div>
+                        <p className="text-xs text-gray-500 italic">Ya incluye IVA</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Total Final */}
+                  <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl p-4 text-white">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-sm opacity-90">Total a Pagar</p>
+                        <p className="text-xs opacity-75 mt-1">Reserva con 100% del monto</p>
+                      </div>
+                      <p className="text-3xl font-bold">${grandTotal.toFixed(2)}</p>
+                    </div>
+                  </div>
+                  
+                  <p className="text-xs text-gray-600 mt-3 text-center">
+                    ℹ️ Este es el monto total que necesitas pagar para confirmar tu reserva
+                  </p>
+                </>
+              );
+            })()}
+          </div>
+        )}
       </div>
     );
   };
