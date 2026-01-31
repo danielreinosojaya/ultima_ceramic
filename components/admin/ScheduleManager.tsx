@@ -377,17 +377,37 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 if (inCurrentWeek) {
                     const dateStr = slot.date;
                     const normalizedTime = normalizeTime(slot.time);
-                    // FIX FINAL: Agrupar por técnica subyacente
-                    // "Clase suelta torno" + "Torno Alfarero" + "Clase intro torno" → misma tarjeta
-                    const technique = getUnderlyingTechnique(booking);
-                    const slotId = `${dateStr}-${normalizedTime}-${technique}`;
+                    
+                    // CRÍTICO: Derivar técnica real del booking (priorizar technique field si existe)
+                    let bookingTechnique: string;
+                    if (booking.technique) {
+                        // Usar technique del booking (ya corregido en DB)
+                        bookingTechnique = booking.technique;
+                    } else {
+                        // Fallback: derivar de product.name
+                        const productName = booking.product?.name?.toLowerCase() || '';
+                        if (productName.includes('pintura')) {
+                            bookingTechnique = 'painting';
+                        } else if (productName.includes('torno')) {
+                            bookingTechnique = 'potters_wheel';
+                        } else if (productName.includes('modelado')) {
+                            bookingTechnique = 'hand_modeling';
+                        } else {
+                            bookingTechnique = getUnderlyingTechnique(booking);
+                        }
+                    }
+                    
+                    // Agrupar slots por fecha + hora + técnica específica
+                    const slotId = `${dateStr}-${normalizedTime}-${bookingTechnique}`;
                     
                     if (!allSlots.has(slotId)) {
                         let slotCapacity = 0;
                         let technique: Technique | undefined;
                         
-                        // Determine technique from product details
-                        if ('details' in booking.product && 'technique' in booking.product.details) {
+                        // Determine technique from booking technique field
+                        if (booking.technique) {
+                            technique = booking.technique as Technique;
+                        } else if ('details' in booking.product && 'technique' in booking.product.details) {
                             technique = booking.product.details.technique;
                         } else if (booking.productType === 'INTRODUCTORY_CLASS') {
                             technique = 'molding'; // Valor válido según type Technique
