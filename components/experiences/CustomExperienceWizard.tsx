@@ -542,14 +542,15 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                 <Tooltip text="Personas que solo acompañan y disfrutan el evento sin participar en la actividad de cerámica." />
               </label>
               <input
-                type="number"
-                min="0"
+                type="text"
+                inputMode="numeric"
                 value={(state.config as CelebrationConfig)?.guests || 0}
                 onChange={(e) => {
-                  const val = parseInt(e.target.value) || 0;
+                  const val = e.target.value.replace(/\D/g, '');
+                  const num = val === '' ? 0 : parseInt(val);
                   setState((prev) => ({
                     ...prev,
-                    config: { ...(prev.config as CelebrationConfig), guests: val },
+                    config: { ...(prev.config as CelebrationConfig), guests: num },
                   }));
                 }}
                 className="w-full sm:w-32 px-4 py-2 border-2 border-brand-border rounded-lg text-center font-semibold focus:border-brand-primary transition-all"
@@ -655,12 +656,12 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
               <div className="flex items-center gap-4 mb-4">
                 <label className="text-sm font-medium text-brand-text">¿Cuántos niños pintarán?</label>
                 <input
-                  type="number"
-                  min="0"
-                  max="10"
+                  type="text"
+                  inputMode="numeric"
                   value={(state.config as CelebrationConfig)?.childrenCount || 0}
                   onChange={(e) => {
-                    const count = Math.max(0, Math.min(10, parseInt(e.target.value) || 0));
+                    const val = e.target.value.replace(/\D/g, ''); // Solo números
+                    const count = val === '' ? 0 : Math.max(0, Math.min(10, parseInt(val)));
                     setState((prev) => ({
                       ...prev,
                       config: { ...(prev.config as CelebrationConfig), childrenCount: count },
@@ -729,7 +730,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
         
         {/* Explicación de la técnica seleccionada */}
         {state.technique && (
-          <div className="bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 border border-indigo-100 rounded-2xl p-4 shadow-sm">
+          <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-cyan-50 border border-blue-100 rounded-2xl p-4 shadow-sm">
             <p className="text-sm text-gray-700 leading-relaxed font-medium">
               {techniqueExplanations[state.technique] || selectedTechnique?.description}
             </p>
@@ -850,8 +851,8 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
 
         {/* Resumen de Costos - Mostrar SOLO después de seleccionar fecha/hora */}
         {selectedDate && selectedTime && slotAvailability && slotAvailability.available && isCelebration && state.config && (
-          <div className="mt-6 bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-200 rounded-2xl p-6 shadow-lg">
-            <h3 className="text-xl font-bold text-purple-900 mb-4 flex items-center gap-2">
+          <div className="mt-6 bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-brand-primary rounded-2xl p-6 shadow-lg">
+            <h3 className="text-xl font-bold text-brand-text mb-4 flex items-center gap-2">
               <span>💰</span> Total a Pagar
             </h3>
             
@@ -889,7 +890,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                         <span>IVA (15%)</span>
                         <span className="font-semibold">${spaceVat.toFixed(2)}</span>
                       </div>
-                      <div className="flex justify-between text-purple-900 font-bold pt-1 border-t border-gray-200">
+                      <div className="flex justify-between text-brand-text font-bold pt-1 border-t border-gray-200">
                         <span>Subtotal Espacio</span>
                         <span>${spaceTotalWithVat.toFixed(2)}</span>
                       </div>
@@ -923,7 +924,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                   )}
                   
                   {/* Total Final */}
-                  <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl p-4 text-white">
+                  <div className="bg-gradient-to-r from-brand-primary to-brand-accent rounded-xl p-4 text-white">
                     <div className="flex justify-between items-center">
                       <div>
                         <p className="text-sm opacity-90">Total a Pagar</p>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { checkSlotAvailability, SlotAvailabilityResult, getAvailability } from '../../services/dataService';
 import type { AvailableSlot, DayKey } from '../../types';
 import { SocialBadge } from '../SocialBadge';
@@ -69,13 +69,13 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
    */
   
   // Helper: Convertir tiempo HH:MM a minutos desde medianoche
-  const timeToMinutes = (time: string): number => {
+  const timeToMinutes = useCallback((time: string): number => {
     const [hours, mins] = time.split(':').map(Number);
     return hours * 60 + mins;
-  };
+  }, []);
   
   // Helper: Verificar si un slot cae dentro de una clase fija
-  const slotOverlapsWithFixedClass = (slotTime: string, fixedClasses: string[]): boolean => {
+  const slotOverlapsWithFixedClass = useCallback((slotTime: string, fixedClasses: string[]): boolean => {
     const slotStart = timeToMinutes(slotTime);
     const slotEnd = slotStart + 120; // 2 horas
     
@@ -97,9 +97,11 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     }
     
     return false;
-  };
+  }, [timeToMinutes]);
   
-  const getAvailableHours = (dateStr: string): string[] => {
+  // Memoizar getAvailableHours para evitar recálculos innecesarios
+  const getAvailableHours = useMemo(() => {
+    return (dateStr: string): string[] => {
     const date = parseLocalDate(dateStr);
     const dayOfWeek = date.getDay();
     const dayKey = DAY_KEYS[dayOfWeek];
@@ -171,6 +173,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     console.log(`🆓 [${technique}] Horarios disponibles: ${hours.length} slots`);
     return hours;
   };
+  }, [availability, technique, participants, slotOverlapsWithFixedClass]);
 
   // Validar disponibilidad cuando se selecciona hora
   const validateSlotAvailability = useCallback(async (date: string, time: string) => {
