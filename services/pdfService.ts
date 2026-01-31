@@ -31,7 +31,7 @@ const getProductTypeName = (productType?: string): string => {
 
 // Helper para obtener el nombre del producto/técnica de un booking
 const getBookingDisplayName = (booking: Booking): string => {
-  // 1. Si tiene groupClassMetadata con techniqueAssignments
+  // 1. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
   if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
     const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
     const uniqueTechniques = [...new Set(techniques)];
@@ -43,15 +43,15 @@ const getBookingDisplayName = (booking: Booking): string => {
     }
   }
   
-  // 2. Si tiene technique directamente (CUSTOM_GROUP_EXPERIENCE, COUPLES_EXPERIENCE)
-  if (booking.technique) {
-    return getTechniqueName(booking.technique as GroupTechnique);
-  }
-  
-  // 3. Fallback: product.name si existe y no es genérico
+  // 2. Prioridad: product.name (es la fuente más confiable)
   const productName = booking.product?.name;
   if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
     return productName;
+  }
+  
+  // 3. Fallback: technique directamente (solo si product.name no existe)
+  if (booking.technique) {
+    return getTechniqueName(booking.technique as GroupTechnique);
   }
   
   // 4. Último fallback: productType
@@ -60,7 +60,7 @@ const getBookingDisplayName = (booking: Booking): string => {
 
 // Helper para obtener el nombre del producto/técnica de un slot
 const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): string => {
-  // Si hay bookings con groupClassMetadata, usar la primera técnica encontrada
+  // 1. Si hay bookings con groupClassMetadata, usar la primera técnica encontrada
   for (const booking of slot.bookings) {
     if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
       const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
@@ -72,20 +72,24 @@ const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): st
         return `Clase Grupal (mixto)`;
       }
     }
-    
-    // Si tiene technique directamente
+  }
+  
+  // 2. Prioridad: product.name (fuente más confiable)
+  const productName = slot.product?.name;
+  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown') {
+    return productName;
+  }
+  
+  // 3. Fallback: technique del primer booking (si product.name no existe)
+  for (const booking of slot.bookings) {
     if (booking.technique) {
       return getTechniqueName(booking.technique as GroupTechnique);
     }
   }
   
-  // Fallback inteligente: si product.name es 'Unknown Product', usar productType del primer booking
-  const productName = slot.product?.name;
-  if (!productName || productName === 'Unknown Product') {
-    const firstBooking = slot.bookings[0];
-    return firstBooking ? getProductTypeName(firstBooking.productType) : 'Clase';
-  }
-  return productName;
+  // 4. Último fallback: productType
+  const firstBooking = slot.bookings[0];
+  return firstBooking ? getProductTypeName(firstBooking.productType) : 'Clase';
 };
 
 interface PdfTranslations {
