@@ -536,7 +536,9 @@ const getDefaultData = <T>(key: string): T => {
         announcements: [],
         invoiceRequests: [],
         notifications: [],
-        uiLabels: { taxIdLabel: 'RUC' }
+        uiLabels: { taxIdLabel: 'RUC' },
+        footerInfo: { whatsapp: '', email: '', instagramHandle: '', address: '', googleMapsLink: '#' },
+        policies: { cancellation: '', general: '', noRefund: '' }
     };
     
     return defaults[key] || [] as T;
