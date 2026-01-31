@@ -1,183 +1,215 @@
--- ============================================================
--- Script de corrección de datos: Técnicas corruptas en bookings
--- PROBLEMA: 91/279 bookings (32.6%) tienen técnica inconsistente
---           con product.name
--- SOLUCIÓN: Derivar la técnica correcta del nombre del producto
--- ============================================================
+-- ============================================================================
+-- SCRIPT SQL: Fix Technique Inconsistencies in Bookings
+-- ============================================================================
+-- Este script corrige bookings donde group_metadata.techniqueAssignments
+-- no coincide con product.name
+--
+-- Ejecute en: Vercel Postgres console o cualquier cliente PostgreSQL
+-- ============================================================================
 
--- 0. Respaldo de bookings antes de modificar
-CREATE TABLE IF NOT EXISTS bookings_backup_20260131 AS 
-SELECT * FROM bookings WHERE status != 'expired';
--- Rows respaldo: Verificar count antes de ejecutar
--- SELECT COUNT(*) as respaldo_count FROM bookings_backup_20260131;
+-- ============================================================================
+-- PARTE 1: IDENTIFICAR INCONSISTENCIAS
+-- ============================================================================
 
--- ============================================================
--- 1. DIAGNÓSTICO: Ver estado actual de datos
--- ============================================================
-
--- 1a. Contar bookings afectados
+-- 1.1: Ver todos los GROUP_CLASS bookings
 SELECT 
-    COUNT(*) as total_bookings,
-    COUNT(CASE 
-        WHEN LOWER(product->>'name') LIKE '%pintura%' AND technique != 'painting' THEN 1
-        WHEN LOWER(product->>'name') LIKE '%torno%' AND technique != 'potters_wheel' THEN 1
-        WHEN LOWER(product->>'name') LIKE '%modelado%' AND technique NOT IN ('hand_modeling', 'molding') THEN 1
-    END) as bookings_con_inconsistencia,
-    ROUND(
-        100.0 * COUNT(CASE 
-            WHEN LOWER(product->>'name') LIKE '%pintura%' AND technique != 'painting' THEN 1
-            WHEN LOWER(product->>'name') LIKE '%torno%' AND technique != 'potters_wheel' THEN 1
-            WHEN LOWER(product->>'name') LIKE '%modelado%' AND technique NOT IN ('hand_modeling', 'molding') THEN 1
-        END) / NULLIF(COUNT(*), 0)
-    , 1) as porcentaje_afectado
-FROM bookings
-WHERE status != 'expired';
-
--- 1b. Ver ejemplos de bookings con inconsistencia
-SELECT 
+    id,
     booking_code,
-    user_info->>'name' as customer,
-    technique as technique_actual,
     product->>'name' as product_name,
-    created_at::date as fecha_reserva,
-    slots->0->>'date' as fecha_clase,
-    CASE 
-        WHEN LOWER(product->>'name') LIKE '%pintura%' THEN 'debería ser: painting'
-        WHEN LOWER(product->>'name') LIKE '%torno%' THEN 'debería ser: potters_wheel'
-        WHEN LOWER(product->>'name') LIKE '%modelado%' THEN 'debería ser: hand_modeling'
-        ELSE 'revisar manualmente'
-    END as correccion_requerida
-FROM bookings
-WHERE status != 'expired'
-  AND product->>'name' IS NOT NULL
-  AND (
-    (LOWER(product->>'name') LIKE '%pintura%' AND technique != 'painting')
-    OR (LOWER(product->>'name') LIKE '%torno%' AND technique != 'potters_wheel')
-    OR (LOWER(product->>'name') LIKE '%modelado%' AND technique NOT IN ('hand_modeling', 'molding'))
-  )
-ORDER BY created_at DESC
-LIMIT 20;
-
--- 1c. Distribución por tipo de inconsistencia
-SELECT 
-    'Pintura con técnica incorrecta' as tipo_inconsistencia,
-    COUNT(*) as cantidad,
-    array_agg(DISTINCT technique) as tecnicas_incorrectas
-FROM bookings
-WHERE status != 'expired'
-  AND LOWER(product->>'name') LIKE '%pintura%'
-  AND technique != 'painting'
-UNION ALL
-SELECT 
-    'Torno con técnica incorrecta' as tipo_inconsistencia,
-    COUNT(*) as cantidad,
-    array_agg(DISTINCT technique) as tecnicas_incorrectas
-FROM bookings
-WHERE status != 'expired'
-  AND LOWER(product->>'name') LIKE '%torno%'
-  AND technique != 'potters_wheel'
-UNION ALL
-SELECT 
-    'Modelado con técnica incorrecta' as tipo_inconsistencia,
-    COUNT(*) as cantidad,
-    array_agg(DISTINCT technique) as tecnicas_incorrectas
-FROM bookings
-WHERE status != 'expired'
-  AND LOWER(product->>'name') LIKE '%modelado%'
-  AND technique NOT IN ('hand_modeling', 'molding');
-
--- ============================================================
--- 2. CORRECCIÓN: Actualizar técnicas basándose en product.name
--- ============================================================
-
--- 2a. Corregir reservas de PINTURA con técnica incorrecta
-UPDATE bookings
-SET technique = 'painting',
-    updated_at = NOW(),
-    updated_note = 'AUTO_FIX: Técnica corregida desde ' || technique || ' a painting basándose en product.name'
-WHERE status != 'expired'
-  AND LOWER(product->>'name') LIKE '%pintura%'
-  AND technique != 'painting';
-
--- 2b. Corregir reservas de TORNO con técnica incorrecta
-UPDATE bookings
-SET technique = 'potters_wheel',
-    updated_at = NOW(),
-    updated_note = 'AUTO_FIX: Técnica corregida desde ' || technique || ' a potters_wheel basándose en product.name'
-WHERE status != 'expired'
-  AND LOWER(product->>'name') LIKE '%torno%'
-  AND technique != 'potters_wheel';
-
--- 2c. Corregir reservas de MODELADO con técnica incorrecta
-UPDATE bookings
-SET technique = 'hand_modeling',
-    updated_at = NOW(),
-    updated_note = 'AUTO_FIX: Técnica corregida desde ' || technique || ' a hand_modeling basándose en product.name'
-WHERE status != 'expired'
-  AND LOWER(product->>'name') LIKE '%modelado%'
-  AND technique NOT IN ('hand_modeling', 'molding');
-
--- ============================================================
--- 3. VERIFICACIÓN POST-CORRECCIÓN
--- ============================================================
-
--- 3a. Contar inconsistencias restantes (debería ser 0)
-SELECT COUNT(*) as inconsistencias_restantes
-FROM bookings
-WHERE status != 'expired'
-  AND product->>'name' IS NOT NULL
-  AND (
-    (LOWER(product->>'name') LIKE '%pintura%' AND technique != 'painting')
-    OR (LOWER(product->>'name') LIKE '%torno%' AND technique != 'potters_wheel')
-    OR (LOWER(product->>'name') LIKE '%modelado%' AND technique NOT IN ('hand_modeling', 'molding'))
-  );
-
--- 3b. Verificar distribución de técnicas por producto
-SELECT 
-    product->>'name' as producto,
     technique,
-    COUNT(*) as cantidad
-FROM bookings
-WHERE status != 'expired'
-  AND product->>'name' IS NOT NULL
-  AND (
-    LOWER(product->>'name') LIKE '%pintura%'
-    OR LOWER(product->>'name') LIKE '%torno%'
-    OR LOWER(product->>'name') LIKE '%modelado%'
-  )
-GROUP BY product->>'name', technique
-ORDER BY product->>'name', technique;
+    group_metadata,
+    TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at
+FROM bookings 
+WHERE product_type = 'GROUP_CLASS'
+AND group_metadata IS NOT NULL
+AND status = 'active'
+ORDER BY created_at DESC;
 
--- 3c. Verificar bookings corregidos recientemente
+-- 1.2: Identificar bookings de "Pintura de piezas" con técnica incorrecta
 SELECT 
+    id,
     booking_code,
-    user_info->>'name' as customer,
+    product->>'name' as product_name,
     technique,
-    product->>'name' as producto,
-    updated_at,
-    updated_note
-FROM bookings
-WHERE updated_note IS NOT NULL
-  AND updated_note LIKE 'AUTO_FIX:%'
-ORDER BY updated_at DESC
-LIMIT 10;
+    group_metadata
+FROM bookings 
+WHERE product_type = 'GROUP_CLASS'
+AND group_metadata IS NOT NULL
+AND product->>'name' ILIKE '%pintura%'
+AND (
+    group_metadata::text LIKE '%potters_wheel%'
+    OR technique = 'potters_wheel'
+);
 
--- ============================================================
--- 4. REVERT: Script para revertir cambios si es necesario
--- ============================================================
--- UPDATE bookings b
--- SET technique = bk.technique,
---     updated_at = NOW(),
---     updated_note = 'REVERT: Restaurado desde backup'
--- FROM bookings_backup_20260131 bk
--- WHERE b.booking_code = bk.booking_code
---   AND bk.updated_note LIKE 'AUTO_FIX:%';
+-- 1.3: Identificar bookings de "Torno Alfarero" con técnica incorrecta
+SELECT 
+    id,
+    booking_code,
+    product->>'name' as product_name,
+    technique,
+    group_metadata
+FROM bookings 
+WHERE product_type = 'GROUP_CLASS'
+AND group_metadata IS NOT NULL
+AND product->>'name' ILIKE '%torno%'
+AND (
+    group_metadata::text LIKE '%painting%'
+    OR technique = 'painting'
+);
 
--- ============================================================
--- 5. PRÓXIMOS PASOS: Agregar constraints de prevención
--- ============================================================
--- Ejecutar database_technique_constraints.sql para:
--- - Crear tabla product_technique_mapping
--- - Crear trigger de validación
--- - Crear índices optimizados
--- - Crear función stored procedure para inserts seguros
+-- ============================================================================
+-- PARTE 2: CORRECCIÓN DE DATOS
+-- ============================================================================
+
+-- 2.1: Corregir bookings de "Pintura de piezas" con técnica incorrecta
+-- Cambia 'potters_wheel' a 'painting' en group_metadata
+
+UPDATE bookings
+SET 
+    group_metadata = (
+        SELECT jsonb_set(
+            group_metadata::jsonb,
+            '{techniqueAssignments}',
+            (
+                SELECT jsonb_agg(
+                    jsonb_set(ta, '{technique}', '"painting"')
+                )
+                FROM jsonb_array_elements(group_metadata::jsonb->'techniqueAssignments') AS ta
+            )
+        )::text
+    ),
+    technique = 'painting',
+    product = jsonb_set(product::jsonb, '{details,technique}', '"painting"')::jsonb,
+    updated_at = NOW()
+WHERE product_type = 'GROUP_CLASS'
+AND group_metadata IS NOT NULL
+AND product->>'name' ILIKE '%pintura%'
+AND (
+    group_metadata::text LIKE '%potters_wheel%'
+    OR technique = 'potters_wheel'
+);
+
+-- 2.2: Corregir bookings de "Torno Alfarero" con técnica incorrecta
+-- Cambia 'painting' a 'potters_wheel' en group_metadata
+
+UPDATE bookings
+SET 
+    group_metadata = (
+        SELECT jsonb_set(
+            group_metadata::jsonb,
+            '{techniqueAssignments}',
+            (
+                SELECT jsonb_agg(
+                    jsonb_set(ta, '{technique}', '"potters_wheel"')
+                )
+                FROM jsonb_array_elements(group_metadata::jsonb->'techniqueAssignments') AS ta
+            )
+        )::text
+    ),
+    technique = 'potters_wheel',
+    product = jsonb_set(product::jsonb, '{details,technique}', '"potters_wheel"')::jsonb,
+    updated_at = NOW()
+WHERE product_type = 'GROUP_CLASS'
+AND group_metadata IS NOT NULL
+AND product->>'name' ILIKE '%torno%'
+AND (
+    group_metadata::text LIKE '%painting%'
+    OR technique = 'painting'
+);
+
+-- 2.3: Corregir bookings de "Modelado a Mano" con técnica incorrecta
+-- Cambia 'potters_wheel' a 'hand_modeling' en group_metadata
+
+UPDATE bookings
+SET 
+    group_metadata = (
+        SELECT jsonb_set(
+            group_metadata::jsonb,
+            '{techniqueAssignments}',
+            (
+                SELECT jsonb_agg(
+                    jsonb_set(ta, '{technique}', '"hand_modeling"')
+                )
+                FROM jsonb_array_elements(group_metadata::jsonb->'techniqueAssignments') AS ta
+            )
+        )::text
+    ),
+    technique = 'hand_modeling',
+    product = jsonb_set(product::jsonb, '{details,technique}', '"hand_modeling"')::jsonb,
+    updated_at = NOW()
+WHERE product_type = 'GROUP_CLASS'
+AND group_metadata IS NOT NULL
+AND product->>'name' ILIKE '%modelado%'
+AND (
+    group_metadata::text LIKE '%potters_wheel%'
+    OR technique = 'potters_wheel'
+);
+
+-- ============================================================================
+-- PARTE 3: VERIFICACIÓN POST-CORRECCIÓN
+-- ============================================================================
+
+-- 3.1: Verificar que no quedan inconsistencias de "Pintura"
+SELECT 
+    id,
+    booking_code,
+    product->>'name' as product_name,
+    technique
+FROM bookings 
+WHERE product_type = 'GROUP_CLASS'
+AND group_metadata IS NOT NULL
+AND product->>'name' ILIKE '%pintura%'
+AND (
+    group_metadata::text LIKE '%potters_wheel%'
+    OR technique = 'potters_wheel'
+);
+
+-- 3.2: Verificar que no quedan inconsistencias de "Torno"
+SELECT 
+    id,
+    booking_code,
+    product->>'name' as product_name,
+    technique
+FROM bookings 
+WHERE product_type = 'GROUP_CLASS'
+AND group_metadata IS NOT NULL
+AND product->>'name' ILIKE '%torno%'
+AND (
+    group_metadata::text LIKE '%painting%'
+    OR technique = 'painting'
+);
+
+-- 3.3: Contar todos los GROUP_CLASS después de la corrección
+SELECT 
+    product->>'name' as product_name,
+    technique,
+    COUNT(*) as count
+FROM bookings 
+WHERE product_type = 'GROUP_CLASS'
+AND status = 'active'
+GROUP BY product->>'name', technique
+ORDER BY product_name, technique;
+
+-- ============================================================================
+-- RESUMEN DE CORRECCIONES APLICADAS
+-- ============================================================================
+/*
+Este script:
+
+1. IDENTIFICA bookings con inconsistencias entre:
+   - product.name (ej: "Pintura de piezas")
+   - group_metadata.techniqueAssignments (ej: "potters_wheel")
+   - technique (campo directo)
+
+2. CORRIGE los siguientes casos:
+   - "Pintura de piezas" con technique 'potters_wheel' → cambia a 'painting'
+   - "Torno Alfarero" con technique 'painting' → cambia a 'potters_wheel'
+   - "Modelado a Mano" con technique 'potters_wheel' → cambia a 'hand_modeling'
+
+3. ACTUALIZA los siguientes campos:
+   - group_metadata.techniqueAssignments[].technique
+   - technique (campo directo)
+   - product.details.technique
+
+4. VERIFICA que no queden inconsistencias después de la corrección
+*/
