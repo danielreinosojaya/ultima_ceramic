@@ -66,21 +66,18 @@ AND (
 
 UPDATE bookings
 SET 
-    group_metadata = (
-        SELECT jsonb_set(
-            group_metadata::jsonb,
-            '{techniqueAssignments}',
-            (
-                SELECT jsonb_agg(
-                    jsonb_set(ta, '{technique}', '"painting"')
-                )
-                FROM jsonb_array_elements(group_metadata::jsonb->'techniqueAssignments') AS ta
+    group_metadata = jsonb_set(
+        group_metadata::jsonb,
+        '{techniqueAssignments}',
+        (
+            SELECT jsonb_agg(
+                jsonb_set(ta, '{technique}', '"painting"')
             )
-        )::text
+            FROM jsonb_array_elements(group_metadata::jsonb->'techniqueAssignments') AS ta
+        )
     ),
     technique = 'painting',
-    product = jsonb_set(product::jsonb, '{details,technique}', '"painting"')::jsonb,
-    updated_at = NOW()
+    product = jsonb_set(product::jsonb, '{details,technique}', '"painting"')::jsonb
 WHERE product_type = 'GROUP_CLASS'
 AND group_metadata IS NOT NULL
 AND product->>'name' ILIKE '%pintura%'
@@ -94,21 +91,18 @@ AND (
 
 UPDATE bookings
 SET 
-    group_metadata = (
-        SELECT jsonb_set(
-            group_metadata::jsonb,
-            '{techniqueAssignments}',
-            (
-                SELECT jsonb_agg(
-                    jsonb_set(ta, '{technique}', '"potters_wheel"')
-                )
-                FROM jsonb_array_elements(group_metadata::jsonb->'techniqueAssignments') AS ta
+    group_metadata = jsonb_set(
+        group_metadata::jsonb,
+        '{techniqueAssignments}',
+        (
+            SELECT jsonb_agg(
+                jsonb_set(ta, '{technique}', '"potters_wheel"')
             )
-        )::text
+            FROM jsonb_array_elements(group_metadata::jsonb->'techniqueAssignments') AS ta
+        )
     ),
     technique = 'potters_wheel',
-    product = jsonb_set(product::jsonb, '{details,technique}', '"potters_wheel"')::jsonb,
-    updated_at = NOW()
+    product = jsonb_set(product::jsonb, '{details,technique}', '"potters_wheel"')::jsonb
 WHERE product_type = 'GROUP_CLASS'
 AND group_metadata IS NOT NULL
 AND product->>'name' ILIKE '%torno%'
@@ -122,21 +116,18 @@ AND (
 
 UPDATE bookings
 SET 
-    group_metadata = (
-        SELECT jsonb_set(
-            group_metadata::jsonb,
-            '{techniqueAssignments}',
-            (
-                SELECT jsonb_agg(
-                    jsonb_set(ta, '{technique}', '"hand_modeling"')
-                )
-                FROM jsonb_array_elements(group_metadata::jsonb->'techniqueAssignments') AS ta
+    group_metadata = jsonb_set(
+        group_metadata::jsonb,
+        '{techniqueAssignments}',
+        (
+            SELECT jsonb_agg(
+                jsonb_set(ta, '{technique}', '"hand_modeling"')
             )
-        )::text
+            FROM jsonb_array_elements(group_metadata::jsonb->'techniqueAssignments') AS ta
+        )
     ),
     technique = 'hand_modeling',
-    product = jsonb_set(product::jsonb, '{details,technique}', '"hand_modeling"')::jsonb,
-    updated_at = NOW()
+    product = jsonb_set(product::jsonb, '{details,technique}', '"hand_modeling"')::jsonb
 WHERE product_type = 'GROUP_CLASS'
 AND group_metadata IS NOT NULL
 AND product->>'name' ILIKE '%modelado%'
