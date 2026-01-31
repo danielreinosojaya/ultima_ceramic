@@ -295,7 +295,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
               </div>
               <div className="flex items-center gap-2 text-sm text-brand-text">
                 <CheckCircleIcon className="w-4 h-4 text-brand-success" />
-                <span>Espacio: $75/h (L-J) o $100/h (V-D) + IVA</span>
+                <span>Alquiler del espacio por hora: $75/h (L-J) o $100/h (V-D) + IVA</span>
               </div>
             </div>
 
@@ -591,35 +591,13 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                   Traer torta propia
                 </span>
               </label>
-
-              <label className="flex items-center gap-3 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  checked={(state.config as CelebrationConfig)?.hasChildren || false}
-                  onChange={(e) =>
-                    setState((prev) => ({
-                      ...prev,
-                      config: {
-                        ...(prev.config as CelebrationConfig),
-                        hasChildren: e.target.checked,
-                        childrenCount: e.target.checked ? 1 : 0,
-                        childrenPieces: [],
-                      },
-                    }))
-                  }
-                  className="w-5 h-5 text-brand-primary border-brand-border rounded focus:ring-brand-primary"
-                />
-                <span className="text-sm font-medium text-brand-text group-hover:text-brand-primary transition-colors">
-                  Incluir actividad para niños (pintado de piezas)
-                </span>
-              </label>
             </div>
 
             {/* Info: Pueden traer comida y bebidas */}
             <div className="bg-green-50 border-l-4 border-green-500 rounded-r-lg p-4">
               <p className="text-sm text-green-900 font-medium">
-                🎉 <strong>¡Buenas noticias!</strong> Puedes traer tu propia comida, bebidas, torta y decoración. 
-                El espacio incluye mesas, sillas, A/C, WiFi y menaje básico.
+                🎉 <strong>¡Buenas noticias!</strong> Puedes traer tu propia comida, bebidas, torta, decoración y menaje. 
+                El espacio incluye mesas, sillas, A/C, WiFi, refrigeradora y microondas.
               </p>
             </div>
             
@@ -627,7 +605,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
             <div>
               <label className="block text-sm font-semibold text-brand-text mb-3 flex items-center">
                 ¿Cuántas horas necesitas el espacio?
-                <Tooltip text="El espacio se alquila por horas. Incluye A/C, WiFi, mesas, sillas, menaje y servicio." />
+                <Tooltip text="El espacio se alquila por horas. Incluye mesas, sillas, A/C, WiFi, refrigeradora y microondas. Traes tu menaje, decoración y comida." />
               </label>
               <select
                 value={(state.config as CelebrationConfig)?.hours || 2}
@@ -646,8 +624,8 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                 <option value="5">5 horas</option>
               </select>
               
-              {/* Preview de pricing */}
-              {state.config && state.technique && (
+              {/* Preview de pricing - Solo mostrar después de seleccionar fecha */}
+              {state.config && state.technique && selectedDate && selectedTime && (
                 <div className="mt-4 bg-purple-50 border-2 border-purple-200 rounded-xl p-4">
                   <p className="text-sm font-semibold text-purple-900 mb-3">Resumen de Costos</p>
                   
@@ -699,12 +677,12 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                   </div>
                   
                   <p className="text-xs text-purple-700 mt-3">
-                    *Precio mostrado asume fin de semana ($100/h). Precio entre semana es $75/h + IVA.
+                    *Precio estimado basado en fin de semana ($100/h). El precio final se calculará según la fecha seleccionada.
                   </p>
                   <p className="text-xs text-purple-700 mt-1">
-                    {(state.config as CelebrationConfig)?.hasChildren && (state.config as CelebrationConfig)?.childrenCount > 0 
+                    {(state.config as CelebrationConfig)?.childrenCount > 0 
                       ? `Incluye actividad para ${(state.config as CelebrationConfig).childrenCount} niño(s): +$${(state.config as CelebrationConfig).childrenCount * 18}`
-                      : 'No incluye actividad para niños (opcional).'}
+                      : 'Puedes agregar actividad para niños más abajo.'}
                   </p>
                 </div>
               )}
@@ -722,54 +700,55 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                   <li>Bebidas (alcohólicas y no alcohólicas)</li>
                   <li>Torta de cumpleaños o postre</li>
                   <li>Decoración temática</li>
+                  <li>Menaje (platos, vasos, cubiertos, manteles)</li>
                 </ul>
                 <p className="text-xs text-blue-700 mt-3 italic">
-                  El espacio incluye refrigeradora, microondas y menaje básico (platos, vasos, cubiertos).
+                  El espacio incluye mesas, sillas, refrigeradora y microondas para tu comodidad.
                 </p>
               </div>
             </div>
             
-            {/* Actividad para niños simplificada */}
-            {(state.config as CelebrationConfig)?.hasChildren && (
-              <div className="border-t border-brand-border pt-6">
-                <h3 className="text-lg font-bold text-brand-text mb-3">👶 Actividad para Niños</h3>
-                <p className="text-sm text-brand-secondary mb-4">
-                  Los niños pintarán piezas de cerámica. Precio mínimo: <strong>$18 por niño</strong> (incluye IVA).
-                </p>
-                
-                <div className="flex items-center gap-4 mb-4">
-                  <label className="text-sm font-medium text-brand-text">¿Cuántos niños?</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="10"
-                    value={(state.config as CelebrationConfig)?.childrenCount || 1}
-                    onChange={(e) => {
-                      const count = Math.max(1, Math.min(10, parseInt(e.target.value) || 1));
-                      setState((prev) => ({
-                        ...prev,
-                        config: { ...(prev.config as CelebrationConfig), childrenCount: count },
-                      }));
-                    }}
-                    className="w-20 px-3 py-2 border-2 border-brand-border rounded-lg text-center font-semibold focus:border-brand-primary transition-all"
-                  />
-                </div>
-                
+            {/* Actividad para niños - Ahora independiente */}
+            <div className="border-t border-brand-border pt-6">
+              <h3 className="text-lg font-bold text-brand-text mb-3">👶 Actividad para Niños (Opcional)</h3>
+              <p className="text-sm text-brand-secondary mb-4">
+                ¿Habrá niños que quieran pintar piezas de cerámica? Precio: <strong>$18 por niño</strong> (incluye IVA).
+              </p>
+              
+              <div className="flex items-center gap-4 mb-4">
+                <label className="text-sm font-medium text-brand-text">¿Cuántos niños pintarán?</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="10"
+                  value={(state.config as CelebrationConfig)?.childrenCount || 0}
+                  onChange={(e) => {
+                    const count = Math.max(0, Math.min(10, parseInt(e.target.value) || 0));
+                    setState((prev) => ({
+                      ...prev,
+                      config: { ...(prev.config as CelebrationConfig), childrenCount: count },
+                    }));
+                  }}
+                  className="w-20 px-3 py-2 border-2 border-brand-border rounded-lg text-center font-semibold focus:border-brand-primary transition-all"
+                />
+              </div>
+              
+              {(state.config as CelebrationConfig)?.childrenCount > 0 && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-green-800">
-                      {(state.config as CelebrationConfig)?.childrenCount || 1} niño(s) × $18
+                      {(state.config as CelebrationConfig).childrenCount} niño(s) × $18
                     </span>
                     <span className="text-xl font-bold text-green-600">
-                      ${((state.config as CelebrationConfig)?.childrenCount || 1) * 18}
+                      ${(state.config as CelebrationConfig).childrenCount * 18}
                     </span>
                   </div>
                   <p className="text-xs text-green-700 mt-2">
                     La pieza se elige en el taller. Si escogen una pieza de mayor valor, pagan solo la diferencia.
                   </p>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         )}
 
