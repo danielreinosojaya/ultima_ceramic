@@ -54,6 +54,7 @@ const getProductTypeName = (productType?: string): string => {
 
 // Helper para obtener el nombre del producto/técnica de un booking
 const getBookingDisplayName = (booking: Booking): string => {
+  // 1. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
   if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
     const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
     const uniqueTechniques = [...new Set(techniques)];
@@ -62,11 +63,20 @@ const getBookingDisplayName = (booking: Booking): string => {
     }
     return 'Clase Grupal (mixto)';
   }
+  
+  // 2. Prioridad: product.name (es la fuente más confiable)
   const productName = booking.product?.name;
-  if (!productName || productName === 'Unknown Product' || productName === 'Unknown') {
-    return getProductTypeName(booking.productType);
+  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
+    return productName;
   }
-  return productName;
+  
+  // 3. Fallback: technique directamente (solo si product.name no existe)
+  if (booking.technique) {
+    return getTechniqueName(booking.technique);
+  }
+  
+  // 4. Último fallback: productType
+  return getProductTypeName(booking.productType);
 };
 import { formatDate, formatCurrency, normalizeHour } from '../../utils/formatters';
 

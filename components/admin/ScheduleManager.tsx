@@ -3,11 +3,13 @@ import type { Instructor, Booking, IntroductoryClass, Product, EditableBooking, 
 import * as dataService from '../../services/dataService';
 
 // Helper para obtener nombre de técnica desde metadata
-const getTechniqueName = (technique: GroupTechnique): string => {
-  const names: Record<GroupTechnique, string> = {
+// FIX: Acepta tanto Technique como GroupTechnique para mayor flexibilidad
+const getTechniqueName = (technique: GroupTechnique | Technique | string): string => {
+  const names: Record<string, string> = {
     'potters_wheel': 'Torno Alfarero',
     'hand_modeling': 'Modelado a Mano',
-    'painting': 'Pintura de piezas'
+    'painting': 'Pintura de piezas',
+    'molding': 'Modelado'
   };
   return names[technique] || technique;
 };
@@ -58,6 +60,7 @@ const getUnderlyingTechnique = (booking: Booking): string => {
 
 // Helper para obtener el nombre display de un booking
 const getBookingDisplayName = (booking: Booking): string => {
+  // 1. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
   if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
     const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
     const uniqueTechniques = [...new Set(techniques)];
@@ -66,15 +69,24 @@ const getBookingDisplayName = (booking: Booking): string => {
     }
     return 'Clase Grupal (mixto)';
   }
+  
+  // 2. Prioridad: product.name (es la fuente más confiable)
   const productName = booking.product?.name;
-  if (!productName || productName === 'Unknown Product' || productName === 'Unknown') {
-    return getProductTypeName(booking.productType);
+  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
+    return productName;
   }
-  return productName;
+  
+  // 3. Fallback: technique directamente (solo si product.name no existe)
+  if (booking.technique) {
+    return getTechniqueName(booking.technique);
+  }
+  
+  // 4. Último fallback: productType
+  return getProductTypeName(booking.productType);
 };
 
 // Helper para obtener el nombre display de un slot
-// Ahora agrupa por técnica, así que usa el nombre unificado
+// FIX: Prioriza product.name sobre techniqueAssignments para evitar inconsistencias
 const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): string => {
   if (slot.bookings.length === 0) {
     // Slot vacío, usar producto del slot
@@ -85,8 +97,17 @@ const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): st
     return productName;
   }
 
-  // Obtener la técnica subyacente del primer booking
-  const technique = getUnderlyingTechnique(slot.bookings[0]);
+  const firstBooking = slot.bookings[0];
+  
+  // FIX #1: Prioridad máxima a product.name (fuente más confiable)
+  // Esto evita que techniqueAssignments incorrecto sobrescriba el nombre correcto
+  const productName = firstBooking.product?.name;
+  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
+    return productName;
+  }
+  
+  // Si product.name no está disponible, usar la técnica subyacente
+  const technique = getUnderlyingTechnique(firstBooking);
   
   // Mapear técnica a nombre display unificado
   if (technique === 'potters_wheel') return 'Torno Alfarero';
@@ -95,8 +116,8 @@ const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): st
   if (technique === 'molding') return 'Modelado';
   if (technique === 'mixed') return 'Clase Grupal (mixto)';
   
-  // Fallback: usar displayName del primer booking
-  return getBookingDisplayName(slot.bookings[0]);
+  // Último fallback
+  return getBookingDisplayName(firstBooking);
 };
 // import { useLanguage } from '../../context/LanguageContext';
 import { DAY_NAMES, PALETTE_COLORS } from '../../constants.js';
@@ -356,17 +377,37 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 if (inCurrentWeek) {
                     const dateStr = slot.date;
                     const normalizedTime = normalizeTime(slot.time);
-                    // FIX FINAL: Agrupar por técnica subyacente
-                    // "Clase suelta torno" + "Torno Alfarero" + "Clase intro torno" → misma tarjeta
-                    const technique = getUnderlyingTechnique(booking);
-                    const slotId = `${dateStr}-${normalizedTime}-${technique}`;
+                    
+                    // CRÍTICO: Derivar técnica real del booking (priorizar technique field si existe)
+                    let bookingTechnique: string;
+                    if (booking.technique) {
+                        // Usar technique del booking (ya corregido en DB)
+                        bookingTechnique = booking.technique;
+                    } else {
+                        // Fallback: derivar de product.name
+                        const productName = booking.product?.name?.toLowerCase() || '';
+                        if (productName.includes('pintura')) {
+                            bookingTechnique = 'painting';
+                        } else if (productName.includes('torno')) {
+                            bookingTechnique = 'potters_wheel';
+                        } else if (productName.includes('modelado')) {
+                            bookingTechnique = 'hand_modeling';
+                        } else {
+                            bookingTechnique = getUnderlyingTechnique(booking);
+                        }
+                    }
+                    
+                    // Agrupar slots por fecha + hora + técnica específica
+                    const slotId = `${dateStr}-${normalizedTime}-${bookingTechnique}`;
                     
                     if (!allSlots.has(slotId)) {
                         let slotCapacity = 0;
                         let technique: Technique | undefined;
                         
-                        // Determine technique from product details
-                        if ('details' in booking.product && 'technique' in booking.product.details) {
+                        // Determine technique from booking technique field
+                        if (booking.technique) {
+                            technique = booking.technique as Technique;
+                        } else if ('details' in booking.product && 'technique' in booking.product.details) {
                             technique = booking.product.details.technique;
                         } else if (booking.productType === 'INTRODUCTORY_CLASS') {
                             technique = 'molding'; // Valor válido según type Technique

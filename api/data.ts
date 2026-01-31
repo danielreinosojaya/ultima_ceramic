@@ -293,6 +293,64 @@ const generateBookingCode = (): string => {
     return `${prefix}-${timestamp}${randomPart}`;
 };
 
+// ============ FUNCIONES HELPER COMPARTIDAS PARA DISPONIBILIDAD ============
+// Funciones reutilizables para getAvailableSlots, checkSlotAvailability y createCustomExperienceBooking
+const parseSlotAvailabilitySettings = async () => {
+    const settingsResult = await sql`SELECT * FROM settings WHERE key IN ('availability', 'scheduleOverrides', 'classCapacity')`;
+    const availability: any = settingsResult.rows.find(s => s.key === 'availability')?.value || 
+        { Sunday: [], Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [] };
+    const scheduleOverrides: any = settingsResult.rows.find(s => s.key === 'scheduleOverrides')?.value || {};
+    const classCapacity: any = settingsResult.rows.find(s => s.key === 'classCapacity')?.value || 
+        { potters_wheel: 8, molding: 22, introductory_class: 8 };
+    return { availability, scheduleOverrides, classCapacity };
+};
+
+const slotTechniqueKey = (tech: string) => {
+    if (tech === 'hand_modeling' || tech === 'painting' || tech === 'molding') return 'molding';
+    if (tech === 'potters_wheel') return 'potters_wheel';
+    return tech;
+};
+
+const getMaxCapacityMap = (classCapacity: any): Record<string, number> => ({
+    'potters_wheel': classCapacity.potters_wheel || 8,
+    'hand_modeling': classCapacity.molding || 22,
+    'painting': classCapacity.molding || 22,
+    'molding': classCapacity.molding || 22
+});
+
+const getMaxCapacityForTechnique = (tech: string, maxCapacityMap: Record<string, number>) => {
+    const key = slotTechniqueKey(tech);
+    const cap = maxCapacityMap[tech] ?? maxCapacityMap[key];
+    return Number.isFinite(cap) ? (cap as number) : 22;
+};
+
+const resolveCapacity = (dateStr: string, tech: string, maxCapacityMap: Record<string, number>, scheduleOverrides: any) => {
+    const override = scheduleOverrides[dateStr];
+    const overrideCap = override?.capacity;
+    if (typeof overrideCap === 'number' && overrideCap > 0) return overrideCap;
+    return getMaxCapacityForTechnique(tech, maxCapacityMap);
+};
+
+const normalizeTime = (t: string): string => {
+    if (!t) return '';
+    if (/^\d{2}:\d{2}$/.test(t)) return t;
+    const match = t.match(/(\d{1,2}):(\d{2})/);
+    if (match) {
+        return `${match[1].padStart(2, '0')}:${match[2]}`;
+    }
+    return t;
+};
+
+const timeToMinutes = (timeStr: string): number => {
+    const [hours, mins] = timeStr.split(':').map(Number);
+    return hours * 60 + mins;
+};
+
+const hasTimeOverlap = (start1: number, end1: number, start2: number, end2: number): boolean => {
+    return start1 < end2 && start2 < end1;
+};
+// ============ FIN FUNCIONES HELPER ============
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
@@ -493,64 +551,6 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
             });
         }
     }
-
-    // ============ FUNCIONES HELPER COMPARTIDAS PARA DISPONIBILIDAD ============
-    // Funciones reutilizables para getAvailableSlots y checkSlotAvailability
-    const parseSlotAvailabilitySettings = async () => {
-        const settingsResult = await sql`SELECT * FROM settings WHERE key IN ('availability', 'scheduleOverrides', 'classCapacity')`;
-        const availability: any = settingsResult.rows.find(s => s.key === 'availability')?.value || 
-            { Sunday: [], Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [] };
-        const scheduleOverrides: any = settingsResult.rows.find(s => s.key === 'scheduleOverrides')?.value || {};
-        const classCapacity: any = settingsResult.rows.find(s => s.key === 'classCapacity')?.value || 
-            { potters_wheel: 8, molding: 22, introductory_class: 8 };
-        return { availability, scheduleOverrides, classCapacity };
-    };
-
-    const slotTechniqueKey = (tech: string) => {
-        if (tech === 'hand_modeling' || tech === 'painting' || tech === 'molding') return 'molding';
-        if (tech === 'potters_wheel') return 'potters_wheel';
-        return tech;
-    };
-
-    const getMaxCapacityMap = (classCapacity: any): Record<string, number> => ({
-        'potters_wheel': classCapacity.potters_wheel || 8,
-        'hand_modeling': classCapacity.molding || 22,
-        'painting': classCapacity.molding || 22,
-        'molding': classCapacity.molding || 22
-    });
-
-    const getMaxCapacityForTechnique = (tech: string, maxCapacityMap: Record<string, number>) => {
-        const key = slotTechniqueKey(tech);
-        const cap = maxCapacityMap[tech] ?? maxCapacityMap[key];
-        return Number.isFinite(cap) ? (cap as number) : 22;
-    };
-
-    const resolveCapacity = (dateStr: string, tech: string, maxCapacityMap: Record<string, number>, scheduleOverrides: any) => {
-        const override = scheduleOverrides[dateStr];
-        const overrideCap = override?.capacity;
-        if (typeof overrideCap === 'number' && overrideCap > 0) return overrideCap;
-        return getMaxCapacityForTechnique(tech, maxCapacityMap);
-    };
-
-    const normalizeTime = (t: string): string => {
-        if (!t) return '';
-        if (/^\d{2}:\d{2}$/.test(t)) return t;
-        const match = t.match(/(\d{1,2}):(\d{2})/);
-        if (match) {
-            return `${match[1].padStart(2, '0')}:${match[2]}`;
-        }
-        return t;
-    };
-
-    const timeToMinutes = (timeStr: string): number => {
-        const [hours, mins] = timeStr.split(':').map(Number);
-        return hours * 60 + mins;
-    };
-
-    const hasTimeOverlap = (start1: number, end1: number, start2: number, end2: number): boolean => {
-        return start1 < end2 && start2 < end1;
-    };
-    // ============ FIN FUNCIONES HELPER ============
 
     let data;
     if (action) {
@@ -870,27 +870,41 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
 
                     console.log(`[getAvailableSlots] Searching: technique=${requestedTechnique}, participants=${requestedParticipants}, from=${searchStartDate.toISOString().split('T')[0]}, days=${searchDays}`);
 
-                    // ⚡ OPTIMIZACIÓN: Solo cargar bookings relevantes para el rango de fechas buscado
-                    // No necesitamos bookings de 2023 para calcular disponibilidad de febrero 2026
-                    const rangeStart = new Date(searchStartDate);
-                    rangeStart.setDate(rangeStart.getDate() - 7); // 7 días buffer
-                    const rangeEnd = new Date(searchStartDate);
-                    rangeEnd.setDate(rangeEnd.getDate() + searchDays + 7); // +7 días buffer
+                    // ⚡ CRÍTICO: No filtrar por created_at - debemos cargar todos los bookings activos
+                    // y luego filtrar por fecha de slots en memoria
+                    // Una reserva creada hace 3 meses para una fecha futura DEBE considerarse
                     
                     // Obtener datos necesarios
                     const [bookingsResult, instructorsResult] = await Promise.all([
                         sql`
                             SELECT * FROM bookings 
                             WHERE status != 'expired'
-                            AND created_at >= ${rangeStart.toISOString()}
                             ORDER BY created_at DESC
-                            LIMIT 500
                         `,
                         sql`SELECT * FROM instructors ORDER BY name ASC`
                     ]);
 
-                    const bookings = bookingsResult.rows.map(parseBookingFromDB);
+                    const allBookings = bookingsResult.rows.map(parseBookingFromDB);
                     const instructors = instructorsResult.rows.map(toCamelCase);
+                    
+                    // Filtrar bookings que tengan slots dentro del rango de búsqueda
+                    const rangeStart = new Date(searchStartDate);
+                    rangeStart.setDate(rangeStart.getDate() - 1); // 1 día buffer antes
+                    const rangeEnd = new Date(searchStartDate);
+                    rangeEnd.setDate(rangeEnd.getDate() + searchDays + 1); // 1 día buffer después
+                    
+                    const rangeStartStr = rangeStart.toISOString().split('T')[0];
+                    const rangeEndStr = rangeEnd.toISOString().split('T')[0];
+                    
+                    const bookings = allBookings.filter(booking => {
+                        if (!booking.slots || !Array.isArray(booking.slots)) return false;
+                        return booking.slots.some((s: any) => {
+                            const slotDate = s.date;
+                            return slotDate >= rangeStartStr && slotDate <= rangeEndStr;
+                        });
+                    });
+                    
+                    console.log(`[getAvailableSlots] Filtered ${bookings.length} bookings with slots in range (out of ${allBookings.length} total)`);
                     
                     // Parse settings reutilizando función helper
                     const { availability, scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
@@ -990,9 +1004,30 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             const bookingsOverlapingSlot = bookings.filter((b: any) => {
                                 if (!b.slots || !Array.isArray(b.slots)) return false;
                                 
-                                // La técnica del booking debe ser exactamente la misma que la solicitada
-                                const bookingTechnique = b.technique || (b.product?.details as any)?.technique;
-                                if (bookingTechnique !== requestedTechnique) return false;
+                                // ===== DERIVAR TÉCNICA REAL DEL BOOKING =====
+                                // Priorizar product.name para derivar técnica (datos más confiables)
+                                let bookingTechnique: string | undefined;
+                                const productName = b.product?.name?.toLowerCase() || '';
+                                
+                                if (productName.includes('pintura')) {
+                                    bookingTechnique = 'painting';
+                                } else if (productName.includes('torno')) {
+                                    bookingTechnique = 'potters_wheel';
+                                } else if (productName.includes('modelado')) {
+                                    bookingTechnique = 'hand_modeling';
+                                } else {
+                                    bookingTechnique = b.technique || (b.product?.details as any)?.technique;
+                                }
+                                
+                                // Para handwork (painting, modeling), verificar si comparten capacidad
+                                const isHandWork = (tech: string | undefined) => 
+                                    tech === 'molding' || tech === 'painting' || tech === 'hand_modeling';
+                                
+                                if (isHandWork(requestedTechnique) && isHandWork(bookingTechnique)) {
+                                    // Handwork comparte capacidad entre sí
+                                } else if (bookingTechnique !== requestedTechnique) {
+                                    return false; // Técnicas diferentes, no contar
+                                }
                                 
                                 return b.slots.some((s: any) => {
                                     if (s.date !== dateStr) return false;
@@ -1075,22 +1110,25 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     const requestedParticipants = parseInt(participants as string);
 
                     try {
-                        // ⚡ OPTIMIZACIÓN: Solo cargar bookings del día específico a verificar
-                        const targetDate = new Date(requestedDate);
-                        const dayStart = new Date(targetDate);
-                        dayStart.setHours(0, 0, 0, 0);
-                        const dayEnd = new Date(targetDate);
-                        dayEnd.setHours(23, 59, 59, 999);
+                        // ⚡ CRÍTICO: Buscar bookings que TENGAN SLOTS en la fecha solicitada
+                        // NO filtrar por created_at (fecha de creación) - eso es INCORRECTO
+                        // Una reserva creada el 25 de enero para el 31 de enero DEBE aparecer
+                        // cuando se consulta disponibilidad para el 31 de enero
                         
-                        // Obtener solo bookings del día
                         const bookingsResult = await sql`
                             SELECT * FROM bookings 
                             WHERE status != 'expired'
-                            AND created_at >= ${dayStart.toISOString()}
-                            AND created_at <= ${dayEnd.toISOString()}
                             ORDER BY created_at DESC
                         `;
-                        const bookings = bookingsResult.rows.map(parseBookingFromDB);
+                        
+                        // Filtrar en memoria: solo bookings que tengan slots en la fecha solicitada
+                        const allBookings = bookingsResult.rows.map(parseBookingFromDB);
+                        const bookings = allBookings.filter(booking => {
+                            if (!booking.slots || !Array.isArray(booking.slots)) return false;
+                            return booking.slots.some((s: any) => s.date === requestedDate);
+                        });
+                        
+                        console.log(`[checkSlotAvailability] Found ${bookings.length} bookings with slots on ${requestedDate} (out of ${allBookings.length} total)`);
                         
                         const { scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
                         const maxCapacityMap = getMaxCapacityMap(classCapacity);
@@ -1115,8 +1153,26 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         for (const booking of bookings) {
                             if (!booking.slots || !Array.isArray(booking.slots)) continue;
                             
-                            // Técnica del booking (extraer de técnica o de producto)
-                            const bookingTechnique = booking.technique || (booking.product?.details as any)?.technique;
+                            // ===== DERIVAR TÉCNICA REAL DEL BOOKING =====
+                            // PROBLEMA: Muchas reservas tienen technique="potters_wheel" pero product.name="Pintura de piezas"
+                            // SOLUCIÓN: Priorizar product.name para derivar la técnica real
+                            
+                            let bookingTechnique: string | undefined;
+                            const productName = booking.product?.name?.toLowerCase() || '';
+                            
+                            // 1. Derivar técnica del nombre del producto (fuente más confiable)
+                            if (productName.includes('pintura')) {
+                                bookingTechnique = 'painting';
+                            } else if (productName.includes('torno')) {
+                                bookingTechnique = 'potters_wheel';
+                            } else if (productName.includes('modelado')) {
+                                bookingTechnique = 'hand_modeling';
+                            } else {
+                                // 2. Fallback: usar campo technique si product.name no es informativo
+                                bookingTechnique = booking.technique || (booking.product?.details as any)?.technique;
+                            }
+                            
+                            console.log(`[checkSlotAvailability] Booking ${booking.bookingCode}: product="${booking.product?.name}", derived technique="${bookingTechnique}" (original technique="${booking.technique}")`);
                             
                             // Definir grupos de técnicas que comparten capacidad
                             const isHandWork = (tech: string | undefined) => 
@@ -1141,7 +1197,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             }
                             
                             if (!techniquesMatch) {
-                                console.log(`[checkSlotAvailability] Skipping booking (technique incompatible): booking=${bookingTechnique}, requested=${requestedTechnique}`);
+                                console.log(`[checkSlotAvailability] Skipping booking (technique incompatible): derived=${bookingTechnique}, requested=${requestedTechnique}`);
                                 continue;
                             }
 
@@ -3625,6 +3681,108 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     });
                 }
 
+                // ===== VALIDACIÓN DE CAPACIDAD Y SOLAPAMIENTO =====
+                // CRÍTICO: Verificar disponibilidad ANTES de crear la reserva
+                
+                const requestedTechnique = technique as string;
+                const requestedParticipants = parseInt(participants as string);
+                const requestedDate = date as string;
+                const requestedTime = time as string;
+                
+                // Obtener todos los bookings activos que tengan slots en esa fecha
+                const { rows: allBookingsRows } = await sql`
+                    SELECT * FROM bookings 
+                    WHERE status != 'expired'
+                    ORDER BY created_at DESC
+                `;
+                const allBookings = allBookingsRows.map(parseBookingFromDB);
+                const bookingsOnDate = allBookings.filter(b => {
+                    if (!b.slots || !Array.isArray(b.slots)) return false;
+                    return b.slots.some((s: any) => s.date === requestedDate);
+                });
+                
+                // Obtener capacidades configuradas
+                const { scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
+                const maxCapacityMap = getMaxCapacityMap(classCapacity);
+                const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
+                
+                // Calcular rango horario del slot solicitado (2 horas de duración)
+                const requestedStartMinutes = timeToMinutes(normalizeTime(requestedTime));
+                const requestedEndMinutes = requestedStartMinutes + (2 * 60); // 2 horas
+                
+                // Contar participantes que solapan temporalmente
+                let overlappingParticipants = 0;
+                
+                for (const booking of bookingsOnDate) {
+                    if (!booking.slots || !Array.isArray(booking.slots)) continue;
+                    
+                    // ===== DERIVAR TÉCNICA REAL DEL BOOKING =====
+                    // Priorizar product.name para derivar técnica (datos más confiables)
+                    let bookingTechnique: string | undefined;
+                    const productName = booking.product?.name?.toLowerCase() || '';
+                    
+                    if (productName.includes('pintura')) {
+                        bookingTechnique = 'painting';
+                    } else if (productName.includes('torno')) {
+                        bookingTechnique = 'potters_wheel';
+                    } else if (productName.includes('modelado')) {
+                        bookingTechnique = 'hand_modeling';
+                    } else {
+                        bookingTechnique = booking.technique || (booking.product?.details as any)?.technique;
+                    }
+                    
+                    // Definir grupos de técnicas que comparten capacidad
+                    const isHandWork = (tech: string | undefined) => 
+                        tech === 'molding' || tech === 'painting' || tech === 'hand_modeling';
+                    const isHandWorkGroup = isHandWork(requestedTechnique);
+                    const isBookingHandWorkGroup = isHandWork(bookingTechnique);
+                    
+                    // Determinar si la técnica del booking compite por capacidad
+                    let techniquesMatch = false;
+                    if (isHandWorkGroup && isBookingHandWorkGroup) {
+                        techniquesMatch = true;
+                    } else if (isHandWorkGroup && !bookingTechnique) {
+                        techniquesMatch = true;
+                    } else if (!isHandWorkGroup && bookingTechnique === requestedTechnique) {
+                        techniquesMatch = true;
+                    } else if (!isHandWorkGroup && !bookingTechnique) {
+                        techniquesMatch = true;
+                    }
+                    
+                    if (!techniquesMatch) continue;
+                    
+                    // Verificar si hay overlap temporal en la misma fecha
+                    for (const s of booking.slots) {
+                        if (s.date !== requestedDate) continue;
+                        
+                        const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
+                        const bookingEndMinutes = bookingStartMinutes + (2 * 60);
+                        
+                        const hasOverlap = hasTimeOverlap(requestedStartMinutes, requestedEndMinutes, bookingStartMinutes, bookingEndMinutes);
+                        
+                        if (hasOverlap) {
+                            const participantCount = booking.participants || 1;
+                            overlappingParticipants += participantCount;
+                            console.log(`[createCustomExperienceBooking] OVERLAP: ${s.time} with ${participantCount} participants`);
+                        }
+                    }
+                }
+                
+                const availableCapacity = maxCapacity - overlappingParticipants;
+                const canBook = availableCapacity >= requestedParticipants;
+                
+                console.log(`[createCustomExperienceBooking] Capacity check: max=${maxCapacity}, overlapping=${overlappingParticipants}, available=${availableCapacity}, requested=${requestedParticipants}, canBook=${canBook}`);
+                
+                if (!canBook) {
+                    return res.status(400).json({
+                        success: false,
+                        error: availableCapacity <= 0
+                            ? `Lo sentimos, no hay cupos disponibles para ${requestedDate} a las ${requestedTime}. El horario está lleno.`
+                            : `Solo hay ${availableCapacity} cupos disponibles, pero necesitas ${requestedParticipants}.`
+                    });
+                }
+                // ===== FIN VALIDACIÓN DE CAPACIDAD =====
+
                 // Generar código de reserva
                 const bookingCode = generateBookingCode();
 
@@ -4809,6 +4967,38 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
     
     console.log(`[addBookingAction] productType=${body.productType}, technique=${technique} (from body.technique=${(body as any).technique}, from product.details=${body.product && (body.product as any).details ? (body.product as any).details.technique : 'N/A'})`);
 
+    // FIX: Derivar technique desde product.name para garantizar consistencia
+    const productName = body.product?.name || '';
+    const normalizedProductName = productName.toLowerCase();
+    
+    // Mapeo de nombres de producto -> técnica válida
+    const productToTechnique: Record<string, string> = {
+      'pintura de piezas': 'painting',
+      'torno alfarero': 'potters_wheel',
+      'modelado a mano': 'hand_modeling',
+      'clase grupal': 'potters_wheel',
+      'clase grupal (mixto)': 'potters_wheel', // fallback para mixto
+    };
+    
+    // Encontrar técnica correcta basada en product.name
+    let correctTechnique: string | null = null;
+    for (const [name, tech] of Object.entries(productToTechnique)) {
+      if (normalizedProductName.includes(name)) {
+        correctTechnique = tech;
+        break;
+      }
+    }
+    
+    // Validar y corregir técnica si hay inconsistencia
+    if (correctTechnique && technique !== correctTechnique) {
+      console.log(`[addBookingAction] CORRECCIÓN: technique "${technique}" → "${correctTechnique}" basado en product.name="${productName}"`);
+      technique = correctTechnique;
+    } else if (!technique) {
+      // Si no hay técnica y no se puede derivar, usar fallback
+      technique = 'potters_wheel';
+      console.log(`[addBookingAction] ADVERTENCIA: technique null, usando fallback "potters_wheel"`);
+    }
+
     if (isCouplesExperience) {
       // Must have exactly 1 slot
       if (!body.slots || body.slots.length !== 1) {
@@ -4880,11 +5070,38 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
 
     const groupMetadata = (body as any).groupClassMetadata || null;
 
+    // FIX: Para GROUP_CLASS, actualizar product.name con la técnica específica
+    let finalProduct = body.product;
+    if (body.productType === 'GROUP_CLASS' && groupMetadata && groupMetadata.techniqueAssignments && groupMetadata.techniqueAssignments.length > 0) {
+      const techniques = groupMetadata.techniqueAssignments.map((a: any) => a.technique);
+      const uniqueTechniques = [...new Set(techniques)];
+      
+      // Nombres legibles de técnicas
+      const techniqueNames: Record<string, string> = {
+        'potters_wheel': 'Torno Alfarero',
+        'hand_modeling': 'Modelado a Mano',
+        'painting': 'Pintura de piezas'
+      };
+      
+      let productName: string;
+      if (uniqueTechniques.length === 1) {
+        // Todos usan la misma técnica - nombre específico
+        productName = techniqueNames[uniqueTechniques[0] as string] || 'Clase Grupal';
+      } else {
+        // Técnicas mixtas
+        productName = 'Clase Grupal (mixto)';
+      }
+      
+      // Clonar producto y actualizar name
+      finalProduct = { ...body.product, name: productName };
+      console.log(`[addBooking] GROUP_CLASS: Updated product.name from "${body.product.name}" to "${productName}"`);
+    }
+
     const { rows: created } = await sql`
       INSERT INTO bookings (
         booking_code, product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_date, accepted_no_refund, expires_at, status, technique, reschedule_allowance, reschedule_used, reschedule_history, participants, group_metadata
       ) VALUES (
-        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(body.product)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}, NOW() + INTERVAL '2 hours', 'active', ${technique || null}, ${rescheduleAllowance}, 0, '[]'::jsonb, ${(body as any).participants || 1}, ${groupMetadata ? JSON.stringify(groupMetadata) : null}
+        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(finalProduct)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}, NOW() + INTERVAL '2 hours', 'active', ${technique || null}, ${rescheduleAllowance}, 0, '[]'::jsonb, ${(body as any).participants || 1}, ${groupMetadata ? JSON.stringify(groupMetadata) : null}
       ) RETURNING *;
     `;
 

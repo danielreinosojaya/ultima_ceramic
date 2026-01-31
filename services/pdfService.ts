@@ -31,6 +31,7 @@ const getProductTypeName = (productType?: string): string => {
 
 // Helper para obtener el nombre del producto/técnica de un booking
 const getBookingDisplayName = (booking: Booking): string => {
+  // 1. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
   if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
     const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
     const uniqueTechniques = [...new Set(techniques)];
@@ -42,17 +43,24 @@ const getBookingDisplayName = (booking: Booking): string => {
     }
   }
   
-  // Fallback inteligente: si product.name es 'Unknown Product' o no existe, usar productType
+  // 2. Prioridad: product.name (es la fuente más confiable)
   const productName = booking.product?.name;
-  if (!productName || productName === 'Unknown Product') {
-    return getProductTypeName(booking.productType);
+  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
+    return productName;
   }
-  return productName;
+  
+  // 3. Fallback: technique directamente (solo si product.name no existe)
+  if (booking.technique) {
+    return getTechniqueName(booking.technique as GroupTechnique);
+  }
+  
+  // 4. Último fallback: productType
+  return getProductTypeName(booking.productType);
 };
 
 // Helper para obtener el nombre del producto/técnica de un slot
 const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): string => {
-  // Si hay bookings con groupClassMetadata, usar la primera técnica encontrada
+  // 1. Si hay bookings con groupClassMetadata, usar la primera técnica encontrada
   for (const booking of slot.bookings) {
     if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
       const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
@@ -66,13 +74,22 @@ const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): st
     }
   }
   
-  // Fallback inteligente: si product.name es 'Unknown Product', usar productType del primer booking
+  // 2. Prioridad: product.name (fuente más confiable)
   const productName = slot.product?.name;
-  if (!productName || productName === 'Unknown Product') {
-    const firstBooking = slot.bookings[0];
-    return firstBooking ? getProductTypeName(firstBooking.productType) : 'Clase';
+  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown') {
+    return productName;
   }
-  return productName;
+  
+  // 3. Fallback: technique del primer booking (si product.name no existe)
+  for (const booking of slot.bookings) {
+    if (booking.technique) {
+      return getTechniqueName(booking.technique as GroupTechnique);
+    }
+  }
+  
+  // 4. Último fallback: productType
+  const firstBooking = slot.bookings[0];
+  return firstBooking ? getProductTypeName(firstBooking.productType) : 'Clase';
 };
 
 interface PdfTranslations {

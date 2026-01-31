@@ -536,7 +536,9 @@ const getDefaultData = <T>(key: string): T => {
         announcements: [],
         invoiceRequests: [],
         notifications: [],
-        uiLabels: { taxIdLabel: 'RUC' }
+        uiLabels: { taxIdLabel: 'RUC' },
+        footerInfo: { whatsapp: '', email: '', instagramHandle: '', address: '', googleMapsLink: '#' },
+        policies: { cancellation: '', general: '', noRefund: '' }
     };
     
     return defaults[key] || [] as T;
@@ -1713,8 +1715,22 @@ const getBookingsForSlot = (date: Date, slot: AvailableSlot, appData: Pick<AppDa
     // Esto permite acumular cupos de paquetes + clases sueltas + introducción
     // para la misma técnica a la misma hora
     return appData.bookings.filter(b => {
-        // Obtener técnica del booking (puede estar en b.technique o b.product.details.technique)
-        const bookingTechnique = b.technique || (b.product?.details as any)?.technique;
+        // ===== DERIVAR TÉCNICA REAL DEL BOOKING =====
+        // Priorizar product.name para derivar técnica (datos más confiables)
+        let bookingTechnique: string | undefined;
+        const productName = b.product?.name?.toLowerCase() || '';
+        
+        if (productName.includes('pintura')) {
+            bookingTechnique = 'painting';
+        } else if (productName.includes('torno')) {
+            bookingTechnique = 'potters_wheel';
+        } else if (productName.includes('modelado')) {
+            bookingTechnique = 'hand_modeling';
+        } else {
+            // Fallback: usar campo technique si product.name no es informativo
+            bookingTechnique = b.technique || (b.product?.details as any)?.technique;
+        }
+        
         if (!bookingTechnique) return false; // Si no tiene técnica, ignorar
         
         // Verificar que coincidan técnica, fecha y hora
@@ -2470,10 +2486,18 @@ export const calculateSlotAvailability = (
   };
   
   appData.bookings.forEach(booking => {
-    // Determinar técnica del booking
+    // ===== DERIVAR TÉCNICA REAL DEL BOOKING =====
+    // Priorizar product.name para derivar técnica (datos más confiables)
     let bookingTechnique: 'potters_wheel' | 'hand_modeling' | 'painting' | undefined;
+    const productName = booking.product?.name?.toLowerCase() || '';
     
-    if (booking.technique) {
+    if (productName.includes('pintura')) {
+      bookingTechnique = 'painting';
+    } else if (productName.includes('torno')) {
+      bookingTechnique = 'potters_wheel';
+    } else if (productName.includes('modelado')) {
+      bookingTechnique = 'hand_modeling';
+    } else if (booking.technique) {
       bookingTechnique = booking.technique as any;
     } else if (booking.product && 'details' in booking.product) {
       const details = (booking.product as any).details;
