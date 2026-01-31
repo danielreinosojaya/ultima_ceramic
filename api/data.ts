@@ -4880,11 +4880,38 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
 
     const groupMetadata = (body as any).groupClassMetadata || null;
 
+    // FIX: Para GROUP_CLASS, actualizar product.name con la técnica específica
+    let finalProduct = body.product;
+    if (body.productType === 'GROUP_CLASS' && groupMetadata && groupMetadata.techniqueAssignments && groupMetadata.techniqueAssignments.length > 0) {
+      const techniques = groupMetadata.techniqueAssignments.map((a: any) => a.technique);
+      const uniqueTechniques = [...new Set(techniques)];
+      
+      // Nombres legibles de técnicas
+      const techniqueNames: Record<string, string> = {
+        'potters_wheel': 'Torno Alfarero',
+        'hand_modeling': 'Modelado a Mano',
+        'painting': 'Pintura de piezas'
+      };
+      
+      let productName: string;
+      if (uniqueTechniques.length === 1) {
+        // Todos usan la misma técnica - nombre específico
+        productName = techniqueNames[uniqueTechniques[0] as string] || 'Clase Grupal';
+      } else {
+        // Técnicas mixtas
+        productName = 'Clase Grupal (mixto)';
+      }
+      
+      // Clonar producto y actualizar name
+      finalProduct = { ...body.product, name: productName };
+      console.log(`[addBooking] GROUP_CLASS: Updated product.name from "${body.product.name}" to "${productName}"`);
+    }
+
     const { rows: created } = await sql`
       INSERT INTO bookings (
         booking_code, product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_date, accepted_no_refund, expires_at, status, technique, reschedule_allowance, reschedule_used, reschedule_history, participants, group_metadata
       ) VALUES (
-        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(body.product)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}, NOW() + INTERVAL '2 hours', 'active', ${technique || null}, ${rescheduleAllowance}, 0, '[]'::jsonb, ${(body as any).participants || 1}, ${groupMetadata ? JSON.stringify(groupMetadata) : null}
+        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(finalProduct)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}, NOW() + INTERVAL '2 hours', 'active', ${technique || null}, ${rescheduleAllowance}, 0, '[]'::jsonb, ${(body as any).participants || 1}, ${groupMetadata ? JSON.stringify(groupMetadata) : null}
       ) RETURNING *;
     `;
 
