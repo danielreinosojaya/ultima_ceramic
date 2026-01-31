@@ -32,26 +32,31 @@ const getProductTypeName = (productType?: string): string => {
 
 // Helper para obtener el nombre del producto/técnica de un booking
 const getBookingDisplayName = (booking: Booking): string => {
-  // Si es una clase grupal con metadata de técnicas, extraer la técnica principal
+  // 1. Si tiene groupClassMetadata con techniqueAssignments
   if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
     const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
     const uniqueTechniques = [...new Set(techniques)];
     
     if (uniqueTechniques.length === 1) {
-      // Todos los participantes tienen la misma técnica
       return getTechniqueName(uniqueTechniques[0]);
     } else {
-      // Técnicas mixtas
       return `Clase Grupal (mixto)`;
     }
   }
   
-  // Fallback inteligente: si product.name es 'Unknown Product' o no existe, usar productType
-  const productName = booking.product?.name;
-  if (!productName || productName === 'Unknown Product') {
-    return getProductTypeName(booking.productType);
+  // 2. Si tiene technique directamente (CUSTOM_GROUP_EXPERIENCE, COUPLES_EXPERIENCE)
+  if (booking.technique) {
+    return getTechniqueName(booking.technique as GroupTechnique);
   }
-  return productName;
+  
+  // 3. Fallback: product.name si existe y no es genérico
+  const productName = booking.product?.name;
+  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
+    return productName;
+  }
+  
+  // 4. Último fallback: productType
+  return getProductTypeName(booking.productType);
 };
 
 export const isEmailServiceConfigured = (): { configured: boolean; reason?: string } => {

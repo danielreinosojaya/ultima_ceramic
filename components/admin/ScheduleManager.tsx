@@ -58,6 +58,7 @@ const getUnderlyingTechnique = (booking: Booking): string => {
 
 // Helper para obtener el nombre display de un booking
 const getBookingDisplayName = (booking: Booking): string => {
+  // 1. Si tiene groupClassMetadata con techniqueAssignments
   if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
     const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
     const uniqueTechniques = [...new Set(techniques)];
@@ -66,11 +67,20 @@ const getBookingDisplayName = (booking: Booking): string => {
     }
     return 'Clase Grupal (mixto)';
   }
-  const productName = booking.product?.name;
-  if (!productName || productName === 'Unknown Product' || productName === 'Unknown') {
-    return getProductTypeName(booking.productType);
+  
+  // 2. Si tiene technique directamente (CUSTOM_GROUP_EXPERIENCE, COUPLES_EXPERIENCE)
+  if (booking.technique) {
+    return getTechniqueName(booking.technique);
   }
-  return productName;
+  
+  // 3. Fallback: product.name si existe y no es genérico
+  const productName = booking.product?.name;
+  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
+    return productName;
+  }
+  
+  // 4. Último fallback: productType
+  return getProductTypeName(booking.productType);
 };
 
 // Helper para obtener el nombre display de un slot
