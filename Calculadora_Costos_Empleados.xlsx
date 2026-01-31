@@ -1,0 +1,94 @@
+---
+# Datos Base
+
+| Concepto          | Valor        |
+|-------------------|--------------|
+| Nóminas           | $3,600      |
+| Renta             | $4,000      |
+| Servicios         | $1,000      |
+| Extras            | $300        |
+| **Total**         | **$8,900**  |
+
+| Horas Operativas   | Valor        |
+|-------------------|--------------|
+| Abierto           | 288 horas/mes |
+| Con clases        | 255 horas/mes |
+| Disponibles       | 33 horas/mes  |
+
+| Especificaciones del Horno | Valor         |
+|-------------------|--------------|
+| Modelo            | Skutt KMT-1227 |
+| Potencia          | 11.52 kW     |
+| Costo             | $12,000     |
+| Capacidad         | 60 piezas    |
+
+| Costos de Materiales | Valor        |
+|-------------------|--------------|
+| Arcilla           | $1.10/lb     |
+| Desperdicio       | 5%           |
+| Esmalte           | $0.50/pieza  |
+| Electricidad      | $0.13/kWh    |
+
+| Número de Empleados | 3            |
+
+---
+# Costos Reales
+
+| Concepto                   | Costo/pieza |
+|----------------------------|--------------|
+| Electricidad               | $0.17       |
+| Depreciación               | $0.21       |
+| Mantenimiento              | $0.09       |
+| **TOTAL**                  | **$0.46**   |
+
+| Concepto                   | Costo/hora  |
+|----------------------------|--------------|
+| Costos Directos            | $1.20       |
+| Costos Fijos Prorrateados  | $18.40      |
+| **TOTAL**                  | **$19.60**  |
+
+| Materiales con Desperdicio  | Valor        |
+|----------------------------|--------------|
+| Arcilla                    | $1.155/lb    |
+| Esmalte                    | $0.50/pieza  |
+
+---
+# Tarifas Propuestas
+
+| Escenario                     | Tarifa/hora | Tarifa/pieza | Tarifa/arcilla | Tarifa/indirecto |
+|-------------------------------|--------------|--------------|----------------|-------------------|
+| Propuesta Actual              | $2.00        | $2.00        | $1.57/lb       | $0.25/hora        |
+| Recomendación Margen 20%     | $23.50       | $0.60        | $1.40/lb       | $0.60/pieza       |
+| Recomendación Margen 30%     | $25.50       | $0.70        | $1.50/lb       | $0.65/pieza       |
+
+---
+# Simulador de Producción
+
+| Parámetro                    | Valor        |
+|-------------------------------|--------------|
+| Tamaño de Pieza              | (pequeña/mediana/grande) |
+| Peso de Arcilla (lbs)        | (ingresar)   |
+| Horas de Trabajo              | (ingresar)   |
+| **Costo Total de Producción** | (calcular)   |
+| **Precio de Venta Sugerido**  | (calcular)   |
+
+---
+# Impacto Financiero
+
+| Escenario                     | Ganancia/Pérdida Mensual | Ganancia/Pérdida Anual |
+|-------------------------------|--------------------------|-------------------------|
+| Propuesta Actual              | (calcular)              | (calcular)             |
+| Recomendación Margen 20%     | (calcular)              | (calcular)             |
+| Recomendación Margen 30%     | (calcular)              | (calcular)             |
+
+---
+# Calculadora por Pieza
+
+| Tipo de Pieza                | Peso (lbs) | Horas de Trabajo | Costo Tarifa Actual | Costo Tarifa 20% | Costo Tarifa 30% | Precio Sugerido |
+|-------------------------------|-------------|------------------|---------------------|-------------------|-------------------|------------------|
+| Taza Pequeña                 | 1           | 2                | (calcular)          | (calcular)        | (calcular)        | (calcular)       |
+| Taza Mediana                 | 1.5         | 2.5              | (calcular)          | (calcular)        | (calcular)        | (calcular)       |
+| Plato Grande                 | 2.5         | 3                | (calcular)          | (calcular)        | (calcular)        | (calcular)       |
+| Tazón Mediano                | 1.8         | 2.5              | (calcular)          | (calcular)        | (calcular)        | (calcular)       |
+| Jarrón Pequeño               | 1.5         | 3                | (calcular)          | (calcular)        | (calcular)        | (calcular)       |
+| Jarrón Grande                | 3           | 5                | (calcular)          | (calcular)        | (calcular)        | (calcular)       |
