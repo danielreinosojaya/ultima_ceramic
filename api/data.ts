@@ -4967,6 +4967,38 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
     
     console.log(`[addBookingAction] productType=${body.productType}, technique=${technique} (from body.technique=${(body as any).technique}, from product.details=${body.product && (body.product as any).details ? (body.product as any).details.technique : 'N/A'})`);
 
+    // FIX: Derivar technique desde product.name para garantizar consistencia
+    const productName = body.product?.name || '';
+    const normalizedProductName = productName.toLowerCase();
+    
+    // Mapeo de nombres de producto -> técnica válida
+    const productToTechnique: Record<string, string> = {
+      'pintura de piezas': 'painting',
+      'torno alfarero': 'potters_wheel',
+      'modelado a mano': 'hand_modeling',
+      'clase grupal': 'potters_wheel',
+      'clase grupal (mixto)': 'potters_wheel', // fallback para mixto
+    };
+    
+    // Encontrar técnica correcta basada en product.name
+    let correctTechnique: string | null = null;
+    for (const [name, tech] of Object.entries(productToTechnique)) {
+      if (normalizedProductName.includes(name)) {
+        correctTechnique = tech;
+        break;
+      }
+    }
+    
+    // Validar y corregir técnica si hay inconsistencia
+    if (correctTechnique && technique !== correctTechnique) {
+      console.log(`[addBookingAction] CORRECCIÓN: technique "${technique}" → "${correctTechnique}" basado en product.name="${productName}"`);
+      technique = correctTechnique;
+    } else if (!technique) {
+      // Si no hay técnica y no se puede derivar, usar fallback
+      technique = 'potters_wheel';
+      console.log(`[addBookingAction] ADVERTENCIA: technique null, usando fallback "potters_wheel"`);
+    }
+
     if (isCouplesExperience) {
       // Must have exactly 1 slot
       if (!body.slots || body.slots.length !== 1) {
