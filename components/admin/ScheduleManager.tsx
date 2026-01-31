@@ -3,11 +3,13 @@ import type { Instructor, Booking, IntroductoryClass, Product, EditableBooking, 
 import * as dataService from '../../services/dataService';
 
 // Helper para obtener nombre de técnica desde metadata
-const getTechniqueName = (technique: GroupTechnique): string => {
-  const names: Record<GroupTechnique, string> = {
+// FIX: Acepta tanto Technique como GroupTechnique para mayor flexibilidad
+const getTechniqueName = (technique: GroupTechnique | Technique | string): string => {
+  const names: Record<string, string> = {
     'potters_wheel': 'Torno Alfarero',
     'hand_modeling': 'Modelado a Mano',
-    'painting': 'Pintura de piezas'
+    'painting': 'Pintura de piezas',
+    'molding': 'Modelado'
   };
   return names[technique] || technique;
 };
@@ -84,7 +86,7 @@ const getBookingDisplayName = (booking: Booking): string => {
 };
 
 // Helper para obtener el nombre display de un slot
-// Ahora agrupa por técnica, así que usa el nombre unificado
+// FIX: Prioriza product.name sobre techniqueAssignments para evitar inconsistencias
 const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): string => {
   if (slot.bookings.length === 0) {
     // Slot vacío, usar producto del slot
@@ -95,8 +97,17 @@ const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): st
     return productName;
   }
 
-  // Obtener la técnica subyacente del primer booking
-  const technique = getUnderlyingTechnique(slot.bookings[0]);
+  const firstBooking = slot.bookings[0];
+  
+  // FIX #1: Prioridad máxima a product.name (fuente más confiable)
+  // Esto evita que techniqueAssignments incorrecto sobrescriba el nombre correcto
+  const productName = firstBooking.product?.name;
+  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
+    return productName;
+  }
+  
+  // Si product.name no está disponible, usar la técnica subyacente
+  const technique = getUnderlyingTechnique(firstBooking);
   
   // Mapear técnica a nombre display unificado
   if (technique === 'potters_wheel') return 'Torno Alfarero';
@@ -105,8 +116,8 @@ const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): st
   if (technique === 'molding') return 'Modelado';
   if (technique === 'mixed') return 'Clase Grupal (mixto)';
   
-  // Fallback: usar displayName del primer booking
-  return getBookingDisplayName(slot.bookings[0]);
+  // Último fallback
+  return getBookingDisplayName(firstBooking);
 };
 // import { useLanguage } from '../../context/LanguageContext';
 import { DAY_NAMES, PALETTE_COLORS } from '../../constants.js';
