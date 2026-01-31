@@ -147,14 +147,20 @@ export const PiecesManager: React.FC<PiecesManagerProps> = ({ onDataChange }) =>
 
   // Pagination logic
   const totalPages = Math.ceil(pieces.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
+  
+  // Safely handle out of bounds page (without causing setState during render)
+  const safePage = (currentPage > totalPages && totalPages > 0) ? 1 : currentPage;
+  
+  const startIndex = (safePage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const paginatedPieces = pieces.slice(startIndex, endIndex);
 
-  // Reset to page 1 if current page is out of bounds
-  if (currentPage > totalPages && totalPages > 0) {
-    setCurrentPage(1);
-  }
+  // Reset to page 1 if current page is out of bounds (in effect, not during render)
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(1);
+    }
+  }, [currentPage, totalPages]);
 
   return (
     <div className="space-y-6">

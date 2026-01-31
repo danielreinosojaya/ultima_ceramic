@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Test Mobile - San Valentín Form</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #fce7f3 0%, #fecaca 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #be123c;
+            font-size: 24px;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+        
+        p.subtitle {
+            color: #6b7280;
+            font-size: 14px;
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        
+        .test-section {
+            margin-bottom: 24px;
+            padding: 16px;
+            background: #f9fafb;
+            border-radius: 12px;
+            border: 2px solid #e5e7eb;
+        }
+        
+        .test-section.passed {
+            border-color: #10b981;
+            background: #d1fae5;
+        }
+        
+        .test-section.failed {
+            border-color: #ef4444;
+            background: #fee2e2;
+        }
+        
+        h2 {
+            font-size: 16px;
+            color: #374151;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .status-icon {
+            width: 20px;
+            height: 20px;
+            display: inline-block;
+        }
+        
+        label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+        }
+        
+        input[type="date"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 16px;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        
+        input[type="file"] {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            border: 2px dashed #f43f5e;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            background: #fff1f2;
+        }
+        
+        input[type="file"]::-webkit-file-upload-button {
+            background: #f43f5e;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        
+        .test-result {
+            margin-top: 12px;
+            padding: 12px;
+            background: white;
+            border-radius: 8px;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        
+        .test-result strong {
+            color: #374151;
+        }
+        
+        .preview-image {
+            max-width: 100%;
+            margin-top: 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+        
+        button {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        button.primary {
+            background: linear-gradient(135deg, #f43f5e 0%, #ec4899 100%);
+            color: white;
+        }
+        
+        button.secondary {
+            background: #f3f4f6;
+            color: #374151;
+        }
+        
+        button:active {
+            transform: scale(0.98);
+        }
+        
+        .info-box {
+            background: #dbeafe;
+            border: 1px solid #3b82f6;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 16px;
+            font-size: 13px;
+            color: #1e40af;
+        }
+        
+        .checklist {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .checklist li {
+            padding: 8px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+        
+        .checklist li::before {
+            content: '✓';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            background: #10b981;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 20px;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌹 Test Mobile San Valentín</h1>
+        <p class="subtitle">Validación de experiencia mobile-first</p>
+        
+        <!-- Test 1: Date Picker -->
+        <div class="test-section" id="test-date">
+            <h2>
+                <span class="status-icon" id="date-status">⏳</span>
+                Test 1: Selector de Fecha
+            </h2>
+            <label for="birthDate">Fecha de Nacimiento *</label>
+            <input 
+                type="date" 
+                id="birthDate" 
+                max="2016-12-31" 
+                min="1940-01-01"
+                onchange="validateDatePicker(this)"
+            >
+            <div class="test-result" id="date-result">
+                <strong>Objetivo:</strong> Abrir calendario nativo mobile con scroll suave de años.
+                <br>Selecciona una fecha para validar.
+            </div>
+        </div>
+        
+        <!-- Test 2: File Input (Gallery) -->
+        <div class="test-section" id="test-file">
+            <h2>
+                <span class="status-icon" id="file-status">⏳</span>
+                Test 2: Selector de Archivo
+            </h2>
+            <label for="paymentProof">Comprobante de Pago *</label>
+            <input 
+                type="file" 
+                id="paymentProof" 
+                accept="image/*" 
+                capture="environment"
+                onchange="validateFileInput(this)"
+            >
+            <div class="test-result" id="file-result">
+                <strong>Objetivo:</strong> Abrir galería de fotos directamente (no file manager).
+                <br>Toca para seleccionar una imagen.
+            </div>
+            <img id="preview" class="preview-image" style="display:none" />
+        </div>
+        
+        <!-- Checklist de Validación -->
+        <div class="info-box">
+            <strong>✅ Checklist de Experiencia Mobile:</strong>
+            <ul class="checklist">
+                <li>Date picker abre con rueda iOS/Android nativa</li>
+                <li>Años se pueden seleccionar fácilmente (no requiere 80 clicks)</li>
+                <li>File input abre GALERÍA no explorador de archivos</li>
+                <li>Capture="environment" funciona en mobile (iOS/Android)</li>
+                <li>Preview de imagen se muestra correctamente</li>
+            </ul>
+        </div>
+        
+        <div class="button-group">
+            <button class="secondary" onclick="resetTests()">🔄 Reset</button>
+            <button class="primary" onclick="runFullTest()">🚀 Test Completo</button>
+        </div>
+    </div>
+    
+    <script>
+        let testResults = {
+            date: false,
+            file: false
+        };
+        
+        function validateDatePicker(input) {
+            const testSection = document.getElementById('test-date');
+            const statusIcon = document.getElementById('date-status');
+            const resultDiv = document.getElementById('date-result');
+            
+            if (input.value) {
+                testResults.date = true;
+                testSection.classList.add('passed');
+                statusIcon.textContent = '✅';
+                
+                const selectedDate = new Date(input.value);
+                const formatted = selectedDate.toLocaleDateString('es-ES', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+                
+                resultDiv.innerHTML = `
+                    <strong>✓ Fecha seleccionada:</strong> ${formatted}
+                    <br><strong>Valor ISO:</strong> ${input.value}
+                    <br><strong>Experiencia:</strong> ¿El calendario fue fácil de usar en mobile?
+                `;
+            }
+        }
+        
+        function validateFileInput(input) {
+            const testSection = document.getElementById('test-file');
+            const statusIcon = document.getElementById('file-status');
+            const resultDiv = document.getElementById('file-result');
+            const preview = document.getElementById('preview');
+            
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                testResults.file = true;
+                testSection.classList.add('passed');
+                statusIcon.textContent = '✅';
+                
+                resultDiv.innerHTML = `
+                    <strong>✓ Archivo seleccionado:</strong> ${file.name}
+                    <br><strong>Tamaño:</strong> ${(file.size / 1024 / 1024).toFixed(2)} MB
+                    <br><strong>Tipo:</strong> ${file.type}
+                    <br><strong>Origen:</strong> ${input.capture ? 'Cámara/Galería' : 'File Manager'}
+                `;
+                
+                // Preview
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        preview.src = e.target.result;
+                        preview.style.display = 'block';
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+        }
+        
+        function resetTests() {
+            testResults = { date: false, file: false };
+            
+            document.getElementById('birthDate').value = '';
+            document.getElementById('paymentProof').value = '';
+            document.getElementById('preview').style.display = 'none';
+            
+            ['test-date', 'test-file'].forEach(id => {
+                document.getElementById(id).classList.remove('passed', 'failed');
+            });
+            
+            document.getElementById('date-status').textContent = '⏳';
+            document.getElementById('file-status').textContent = '⏳';
+            
+            document.getElementById('date-result').innerHTML = `
+                <strong>Objetivo:</strong> Abrir calendario nativo mobile con scroll suave de años.
+                <br>Selecciona una fecha para validar.
+            `;
+            
+            document.getElementById('file-result').innerHTML = `
+                <strong>Objetivo:</strong> Abrir galería de fotos directamente (no file manager).
+                <br>Toca para seleccionar una imagen.
+            `;
+        }
+        
+        function runFullTest() {
+            if (testResults.date && testResults.file) {
+                alert('✅ ¡Todos los tests pasaron!\n\n✓ Date picker funcionó\n✓ File input abrió galería\n\nExperiencia mobile validada correctamente.');
+            } else {
+                let missing = [];
+                if (!testResults.date) missing.push('Fecha de nacimiento');
+                if (!testResults.file) missing.push('Comprobante de pago');
+                
+                alert('⚠️ Tests incompletos\n\nFalta probar:\n' + missing.map(m => '• ' + m).join('\n'));
+            }
+        }
+        
+        // Auto-validación en carga
+        window.addEventListener('load', () => {
+            console.log('📱 Test Mobile San Valentín 2026 - Loaded');
+            console.log('✓ Date picker: HTML5 native con atributos max/min');
+            console.log('✓ File input: accept="image/*" + capture="environment"');
+        });
+    </script>
+</body>
+</html>

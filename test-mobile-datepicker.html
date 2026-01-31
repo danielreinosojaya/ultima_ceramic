@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Test Mobile DatePicker - San Valentín 2026</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            max-width: 500px;
+            width: 100%;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 30px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+        }
+        
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .test-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .test-section h2 {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .test-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #e3f2fd;
+            color: #1976d2;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .checklist {
+            list-style: none;
+        }
+        
+        .checklist li {
+            padding: 12px;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        
+        .checklist li::before {
+            content: '☐';
+            font-size: 20px;
+            color: #999;
+            flex-shrink: 0;
+        }
+        
+        .checklist li.pass::before {
+            content: '✓';
+            color: #4caf50;
+        }
+        
+        .checklist li.fail::before {
+            content: '✗';
+            color: #f44336;
+        }
+        
+        .instructions {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .instructions h3 {
+            font-size: 14px;
+            color: #856404;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        
+        .instructions p {
+            font-size: 13px;
+            color: #856404;
+            line-height: 1.5;
+        }
+        
+        .link-button {
+            display: block;
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 16px;
+            box-shadow: 0 4px 12px rgba(245, 87, 108, 0.3);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .link-button:active {
+            transform: scale(0.98);
+            box-shadow: 0 2px 8px rgba(245, 87, 108, 0.3);
+        }
+        
+        .device-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e8f5e9;
+            border-radius: 8px;
+            font-size: 12px;
+            color: #2e7d32;
+        }
+        
+        .device-info strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+        
+        .specs {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .spec-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .spec-card .label {
+            font-size: 11px;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+        
+        .spec-card .value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧪 Test Mobile DatePicker</h1>
+            <p>San Valentín 2026 - QA Checklist</p>
+        </div>
+        
+        <div class="instructions">
+            <h3>📋 Instrucciones de Testing</h3>
+            <p>
+                Abre el formulario de San Valentín y prueba el selector de fecha. 
+                Marca cada item abajo después de validarlo.
+            </p>
+        </div>
+        
+        <a href="/" class="link-button">
+            🚀 Abrir Formulario Valentine
+        </a>
+        
+        <div class="test-section">
+            <h2>
+                <span class="test-badge">UX Mobile</span>
+                Experiencia de Usuario
+            </h2>
+            <ul class="checklist">
+                <li>Modal slide-up aparece desde abajo</li>
+                <li>Backdrop oscuro se muestra correctamente</li>
+                <li>Se puede cerrar tocando fuera del modal</li>
+                <li>Botón X funciona para cerrar</li>
+                <li>Header con gradiente rose/pink visible</li>
+                <li>Transiciones suaves al cambiar vistas</li>
+            </ul>
+        </div>
+        
+        <div class="test-section">
+            <h2>
+                <span class="test-badge">Navegación</span>
+                Cambio de Vistas
+            </h2>
+            <ul class="checklist">
+                <li>Vista DÍA: Grid de días del mes</li>
+                <li>Vista MES: Grid 3x4 de meses</li>
+                <li>Vista AÑO: Lista scrolleable de años</li>
+                <li>Click en header cambia de vista (día→mes→año)</li>
+                <li>Flechas navegan mes anterior/siguiente</li>
+                <li>Años van desde 1940 hasta hace 10 años</li>
+            </ul>
+        </div>
+        
+        <div class="test-section">
+            <h2>
+                <span class="test-badge">Funcionalidad</span>
+                Selección de Fecha
+            </h2>
+            <ul class="checklist">
+                <li>Al seleccionar fecha, el modal se cierra</li>
+                <li>Fecha seleccionada se muestra en input</li>
+                <li>Formato legible: "15 de marzo, 1995"</li>
+                <li>Día actual marcado con ring rose</li>
+                <li>Día seleccionado con fondo rose</li>
+                <li>Días vacíos (inicio mes) no clickeables</li>
+            </ul>
+        </div>
+        
+        <div class="test-section">
+            <h2>
+                <span class="test-badge">Accesos Rápidos</span>
+                Atajos de Navegación
+            </h2>
+            <ul class="checklist">
+                <li>Footer con botones "25 años atrás"</li>
+                <li>Botón "30 años atrás" funciona</li>
+                <li>Atajos calculan fecha correcta</li>
+                <li>Al usar atajo, modal se cierra</li>
+            </ul>
+        </div>
+        
+        <div class="test-section">
+            <h2>
+                <span class="test-badge">Responsive</span>
+                Adaptabilidad Mobile
+            </h2>
+            <ul class="checklist">
+                <li>Modal ocupa 80vh en mobile</li>
+                <li>Contenido scrolleable si es muy largo</li>
+                <li>Taps en botones responden inmediato</li>
+                <li>No hay zoom involuntario al tocar</li>
+                <li>Texto legible sin hacer zoom</li>
+                <li>Elementos suficientemente grandes (44px min)</li>
+            </ul>
+        </div>
+        
+        <div class="test-section">
+            <h2>
+                <span class="test-badge">Desktop</span>
+                Fallback para Pantallas Grandes
+            </h2>
+            <ul class="checklist">
+                <li>En desktop, picker es dropdown (no fullscreen)</li>
+                <li>Posicionado debajo del input</li>
+                <li>Max-height 500px</li>
+                <li>Rounded corners en todas las esquinas</li>
+            </ul>
+        </div>
+        
+        <div class="specs">
+            <div class="spec-card">
+                <div class="label">Viewport</div>
+                <div class="value" id="viewport">-</div>
+            </div>
+            <div class="spec-card">
+                <div class="label">Device</div>
+                <div class="value" id="device">-</div>
+            </div>
+            <div class="spec-card">
+                <div class="label">Touch</div>
+                <div class="value" id="touch">-</div>
+            </div>
+            <div class="spec-card">
+                <div class="label">DPR</div>
+                <div class="value" id="dpr">-</div>
+            </div>
+        </div>
+        
+        <div class="device-info">
+            <strong>User Agent:</strong>
+            <span id="userAgent">-</span>
+        </div>
+    </div>
+    
+    <script>
+        // Detectar info del dispositivo
+        document.getElementById('viewport').textContent = `${window.innerWidth}x${window.innerHeight}`;
+        document.getElementById('dpr').textContent = window.devicePixelRatio + 'x';
+        document.getElementById('userAgent').textContent = navigator.userAgent;
+        
+        // Detectar tipo de dispositivo
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        const isTablet = /iPad|Android/i.test(navigator.userAgent) && window.innerWidth >= 768;
+        let deviceType = 'Desktop';
+        if (isTablet) deviceType = 'Tablet';
+        else if (isMobile) deviceType = 'Mobile';
+        document.getElementById('device').textContent = deviceType;
+        
+        // Detectar capacidad táctil
+        const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        document.getElementById('touch').textContent = hasTouch ? '✓' : '✗';
+        
+        // Hacer items clickeables para marcarlos
+        document.querySelectorAll('.checklist li').forEach(item => {
+            item.addEventListener('click', function() {
+                if (this.classList.contains('pass')) {
+                    this.classList.remove('pass');
+                    this.classList.add('fail');
+                } else if (this.classList.contains('fail')) {
+                    this.classList.remove('fail');
+                } else {
+                    this.classList.add('pass');
+                }
+            });
+        });
+        
+        // Update viewport on resize
+        window.addEventListener('resize', () => {
+            document.getElementById('viewport').textContent = `${window.innerWidth}x${window.innerHeight}`;
+        });
+    </script>
+</body>
+</html>
