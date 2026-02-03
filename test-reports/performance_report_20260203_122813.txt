@@ -1,0 +1,55 @@
+╔════════════════════════════════════════════════════════════════════╗
+║          REPORTE DE TESTS DE RENDIMIENTO - DELIVERY PHOTOS        ║
+╚════════════════════════════════════════════════════════════════════╝
+
+Fecha: Tue Feb  3 12:28:13 -05 2026
+Sistema: Darwin Daniels-MacBook-Air.local 25.2.0 Darwin Kernel Version 25.2.0: Tue Nov 18 21:09:34 PST 2025; root:xnu-12377.61.12~1/RELEASE_ARM64_T8112 arm64
+Node Version: v22.18.0
+
+════════════════════════════════════════════════════════════════════
+
+🧪 INICIANDO TESTS UNITARIOS DE API
+======================================================================
+🌐 API Base: http://localhost:3000
+
+❌ GET /api/data?action=getDeliveries - TypeError: fetch failed
+❌ Validate getDeliveries response structure - TypeError: fetch failed
+❌ Filter deliveries by status - TypeError: fetch failed
+❌ Search deliveries by text - TypeError: fetch failed
+TypeError: fetch failed
+    at node:internal/deps/undici/undici:13510:13
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async testGetDeliveryPhotosValid (file:///Users/danielreinoso/Downloads/ultima_ceramic%20copy%202/tests/api-unit-tests.test.ts:84:32)
+    at async runAllTests (file:///Users/danielreinoso/Downloads/ultima_ceramic%20copy%202/tests/api-unit-tests.test.ts:324:5) {
+  [cause]: AggregateError
+      at internalConnectMultiple (node:net:1134:18)
+      at afterConnectMultiple (node:net:1715:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+
+🔬 INICIANDO SUITE DE TESTS DE RENDIMIENTO
+======================================================================
+🚀 Performance Monitor iniciado
+
+🧪 TEST 1: Carga inicial de deliveries
+TypeError: fetch failed
+    at node:internal/deps/undici/undici:13510:13
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async monitoredFetch (file:///Users/danielreinoso/Downloads/ultima_ceramic%20copy%202/tests/performance-delivery-photos.test.ts:133:26)
+    at async testInitialLoad (file:///Users/danielreinoso/Downloads/ultima_ceramic%20copy%202/tests/performance-delivery-photos.test.ts:160:32)
+    at async runAllTests (file:///Users/danielreinoso/Downloads/ultima_ceramic%20copy%202/tests/performance-delivery-photos.test.ts:313:5) {
+  [cause]: AggregateError
+      at internalConnectMultiple (node:net:1134:18)
+      at afterConnectMultiple (node:net:1715:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+
+
+════════════════════════════════════════════════════════════════════
+
+Tests completados: Tue Feb  3 12:28:17 -05 2026
+
