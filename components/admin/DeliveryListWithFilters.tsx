@@ -339,6 +339,32 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
         };
     }, [loadPhotosForDelivery, loadedPhotos]);
 
+    // ⚡ Fallback: asegurar carga de fotos para todos los cards visibles en la página actual
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadVisiblePhotos = async () => {
+            const toLoad = paginatedDeliveries
+                .filter(d => d.hasPhotos && !loadedPhotos[d.id] && !loadingPhotos[d.id])
+                .map(d => d.id);
+
+            for (const deliveryId of toLoad) {
+                if (cancelled) return;
+                await loadPhotosForDelivery(deliveryId);
+                // Pequeño delay para no saturar
+                await new Promise(resolve => setTimeout(resolve, 120));
+            }
+        };
+
+        if (paginatedDeliveries.length > 0) {
+            loadVisiblePhotos();
+        }
+
+        return () => {
+            cancelled = true;
+        };
+    }, [paginatedDeliveries, loadedPhotos, loadingPhotos, loadPhotosForDelivery]);
+
     // Cargar contactos de clientes al montar o cuando cambien las deliveries
     useEffect(() => {
         const loadAllCustomerContacts = async () => {
