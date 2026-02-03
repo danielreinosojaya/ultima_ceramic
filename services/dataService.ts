@@ -2074,7 +2074,6 @@ export const createDeliveryFromClient = async (data: {
             
             if (result.success && result.delivery) {
                 // Invalidar cache después de crear delivery
-                invalidateDeliveriesCache();
                 invalidateCustomersCache();
                 
                 return { 

@@ -649,7 +649,11 @@ export const ClientDeliveryForm: React.FC = () => {
                                             ← Volver a elegir
                                         </button>
                                         <button
-                                            onClick={() => setFormData(prev => ({ ...prev, paintingConfirmed: true }))}
+                                            onClick={() => {
+                                                setFormData(prev => ({ ...prev, paintingConfirmed: true }));
+                                                // Avanzar automáticamente al siguiente paso
+                                                setTimeout(() => handleNextStep(), 100);
+                                            }}
                                             disabled={isSubmitting}
                                             className="px-4 py-2 bg-yellow-600 text-white font-semibold rounded-lg hover:bg-yellow-700 transition-colors disabled:opacity-50 text-sm"
                                         >

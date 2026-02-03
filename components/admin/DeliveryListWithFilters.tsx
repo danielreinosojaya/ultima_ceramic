@@ -269,7 +269,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
         const loadInitialPhotos = async () => {
             // Priorizar deliveries críticas y pendientes
             const priorityDeliveries = paginatedDeliveries
-                .filter(d => d.hasPhotos)
+                .filter(d => d.hasPhotos && !loadedPhotos[d.id]) // ✅ Evitar recargar fotos ya cargadas
                 .sort((a, b) => {
                     // Críticas primero
                     const aCritical = isCritical(a);
@@ -284,14 +284,16 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                 .slice(0, 10) // Primeras 10 deliveries prioritarias
                 .map(d => d.id);
             
-            // Cargar en batch con delay corto
-            await loadPhotosInBatch(priorityDeliveries, 150);
+            // Solo cargar si hay deliveries que necesitan fotos
+            if (priorityDeliveries.length > 0) {
+                await loadPhotosInBatch(priorityDeliveries, 150);
+            }
         };
 
         if (paginatedDeliveries.length > 0) {
             loadInitialPhotos();
         }
-    }, [paginatedDeliveries, loadPhotosInBatch]);
+    }, [paginatedDeliveries, loadPhotosInBatch, loadedPhotos]); // ✅ Agregar loadedPhotos como dep
 
     // ⚡ Setup Intersection Observer para lazy loading de fotos visibles
     useEffect(() => {

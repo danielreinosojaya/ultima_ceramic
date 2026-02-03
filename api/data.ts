@@ -29,6 +29,7 @@ import * as emailService from './emailService.js';
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { generatePaymentId, generateGiftcardCode } from '../utils/formatters.js';
 import { checkRateLimit } from './rateLimiter.js';
+import sharp from 'sharp';
 import type {
     Booking,
     ClientNotification,
@@ -729,9 +730,43 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     if (rows.length === 0) {
                         return res.status(404).json({ error: 'Delivery not found' });
                     }
+
+                    // 🔥 COMPRESIÓN DE IMÁGENES: Reducir de 200-600KB a 50-100KB
+                    const rawPhotos = rows[0].photos || [];
+                    const compressedPhotos = await Promise.all(
+                        rawPhotos.map(async (photoUrl: string) => {
+                            try {
+                                // Si ya es una URL externa, retornar sin modificar
+                                if (photoUrl.startsWith('http://') || photoUrl.startsWith('https://')) {
+                                    return photoUrl;
+                                }
+                                
+                                // Decodificar base64
+                                const base64Data = photoUrl.replace(/^data:image\/\w+;base64,/, '');
+                                const buffer = Buffer.from(base64Data, 'base64');
+                                
+                                // Comprimir con sharp: max 800px width, quality 75, formato webp
+                                const compressedBuffer = await sharp(buffer)
+                                    .resize(800, null, { 
+                                        withoutEnlargement: true,
+                                        fit: 'inside' 
+                                    })
+                                    .webp({ quality: 75 })
+                                    .toBuffer();
+                                
+                                // Re-encodificar a base64
+                                return `data:image/webp;base64,${compressedBuffer.toString('base64')}`;
+                            } catch (err) {
+                                console.error('[getDeliveryPhotos] Error comprimiendo imagen:', err);
+                                // En caso de error, retornar original
+                                return photoUrl;
+                            }
+                        })
+                    );
+
                     // ⚡ Cache 5 minutos para fotos (raramente cambian)
                     res.setHeader('Cache-Control', 'private, max-age=300, stale-while-revalidate=600');
-                    data = { photos: rows[0].photos || [] };
+                    data = { photos: compressedPhotos };
                     break;
                 }
                 case 'standaloneCustomers': {

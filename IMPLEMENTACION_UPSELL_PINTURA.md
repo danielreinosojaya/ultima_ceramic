@@ -384,5 +384,23 @@ Para dudas o issues:
 
 **Implementado por:** GitHub Copilot  
 **Fecha:** 3 de Febrero 2026  
-**Versión:** 1.0.0  
+**Versión:** 1.0.1  
 **Status:** ✅ Production Ready
+
+---
+
+## 🔧 Hotfixes Aplicados (v1.0.1)
+
+### Fix 1: Navegación del Formulario
+**Problema:** Al confirmar "sin pintura", el flujo no avanzaba al siguiente paso.  
+**Solución:** Agregado `setTimeout(() => handleNextStep(), 100)` después de confirmar.
+
+### Fix 2: Error de Cache
+**Problema:** `invalidateDeliveriesCache is not defined`  
+**Solución:** Eliminada llamada a función inexistente. Solo se usa `invalidateCustomersCache()`.
+
+**Archivos modificados:**
+- `components/ClientDeliveryForm.tsx` - Botón "Confirmar sin pintura" ahora avanza
+- `services/dataService.ts` - Removida llamada a función inexistente
+
+**Build Status:** ✅ Compilado exitosamente en 5.73s
