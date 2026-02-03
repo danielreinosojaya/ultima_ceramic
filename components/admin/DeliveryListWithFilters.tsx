@@ -1095,6 +1095,15 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                                 ⚠️ Cliente debe coordinar pago inmediato
                                             </p>
                                         )}
+                                        {delivery.readyAt ? (
+                                            <p className="text-xs text-purple-700 font-medium">
+                                                📧 Email enviado: lista para pintar
+                                            </p>
+                                        ) : (
+                                            <p className="text-xs text-purple-700 font-medium">
+                                                📧 Email pendiente: se envía al marcar "Lista"
+                                            </p>
+                                        )}
                                     </div>
                                 )}
 

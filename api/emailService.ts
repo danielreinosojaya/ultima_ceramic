@@ -898,7 +898,7 @@ export const sendDeliveryWithPaintingServiceEmail = async (
     return result;
 };
 
-export const sendDeliveryReadyEmail = async (customerEmail: string, customerName: string, delivery: { description?: string | null; readyAt: string; wantsPainting?: boolean; }) => {
+export const sendDeliveryReadyEmail = async (customerEmail: string, customerName: string, delivery: { description?: string | null; readyAt: string; wantsPainting?: boolean; paintingPrice?: number | null; }) => {
     console.log('[sendDeliveryReadyEmail] READY EMAIL - Starting send to:', customerEmail, 'wantsPainting:', delivery.wantsPainting);
     
     // Si el cliente quiere pintar, enviar email diferente
@@ -998,7 +998,7 @@ export const sendDeliveryReadyEmail = async (customerEmail: string, customerName
 export const sendDeliveryReadyForPaintingEmail = async (
     customerEmail: string, 
     customerName: string, 
-    delivery: { description?: string | null; readyAt: string; }
+    delivery: { description?: string | null; readyAt: string; paintingPrice?: number | null; }
 ) => {
     console.log('[sendDeliveryReadyForPaintingEmail] Starting email send to:', customerEmail);
     
@@ -1013,6 +1013,9 @@ export const sendDeliveryReadyForPaintingEmail = async (
     const displayDescription = delivery.description || 'Tu pieza de cerámica';
     const sanitizedDescription = displayDescription.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
     const subject = `🎨 ¡Tu pieza está lista para pintar! - ${sanitizedDescription}`;
+    const price = typeof delivery.paintingPrice === 'number' && !Number.isNaN(delivery.paintingPrice)
+        ? delivery.paintingPrice
+        : 25;
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
@@ -1047,7 +1050,7 @@ export const sendDeliveryReadyForPaintingEmail = async (
             <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 8px;">
                 <p style="margin: 0; color: #92400e; font-weight: bold;">💰 Recordatorio de Pago</p>
                 <p style="margin: 8px 0 0 0; color: #78350f; font-size: 14px;">
-                    El servicio de pintura tiene un costo de <strong>$25 USD</strong>.<br/>
+                    El servicio de pintura tiene un costo de <strong>$${price} USD</strong>.<br/>
                     El pago se coordina con el instructor antes de tu sesión de pintura.
                 </p>
             </div>

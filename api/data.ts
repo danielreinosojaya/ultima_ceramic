@@ -4282,11 +4282,15 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 
                 const emailServiceModule = await import('./emailService.js');
                 
+                const wantsPainting = Boolean((readyDelivery as any).wants_painting ?? (readyDelivery as any).wantsPainting);
+                const paintingPrice = (readyDelivery as any).painting_price ?? (readyDelivery as any).paintingPrice ?? null;
                 console.log('[markDeliveryAsReady] 🔍 Step 4: Calling sendDeliveryReadyEmail with:', {
                     email: readyDelivery.customer_email,
                     name: customerName,
                     description: readyDelivery.description,
-                    readyAt: readyAt
+                    readyAt: readyAt,
+                    wantsPainting,
+                    paintingPrice
                 });
                 
                 const emailResult = await emailServiceModule.sendDeliveryReadyEmail(
@@ -4294,7 +4298,9 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     customerName, 
                     {
                         description: readyDelivery.description,
-                        readyAt: readyAt
+                        readyAt: readyAt,
+                        wantsPainting,
+                        paintingPrice
                     }
                 );
                 
@@ -4409,12 +4415,16 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                                         
                                         console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Sending email to ${customerName} (${readyDelivery.customer_email})...`);
                                         const emailServiceModule = await import('./emailService.js');
+                                        const wantsPainting = Boolean((readyDelivery as any).wants_painting ?? (readyDelivery as any).wantsPainting);
+                                        const paintingPrice = (readyDelivery as any).painting_price ?? (readyDelivery as any).paintingPrice ?? null;
                                         const emailResult = await emailServiceModule.sendDeliveryReadyEmail(
                                             readyDelivery.customer_email, 
                                             customerName, 
                                             {
                                                 description: readyDelivery.description,
-                                                readyAt: readyDelivery.ready_at
+                                                readyAt: readyDelivery.ready_at,
+                                                wantsPainting,
+                                                paintingPrice
                                             }
                                         );
                                         emailSent = !!(emailResult && emailResult.sent);
