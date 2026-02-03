@@ -17,10 +17,8 @@ import type {
 import { SPACE_HOURLY_PRICING, CUSTOM_EXPERIENCE_TECHNIQUES as TECHNIQUES, TECHNIQUE_PRICES } from '../../types';
 import { InfoCircleIcon } from '../icons/InfoCircleIcon';
 import { CheckCircleIcon } from '../icons/CheckCircleIcon';
-import { MenuSelector } from './MenuSelector';
 import { FreeDateTimePicker } from './FreeDateTimePicker';
 import type { AvailableSlotResult, SlotAvailabilityResult } from '../../services/dataService';
-import { ChildPieceSelector } from './ChildPieceSelector';
 import { UserInfoModal } from '../UserInfoModal';
 
 interface CustomExperienceWizardProps {
@@ -179,8 +177,6 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
   });
 
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
-  const [menuTotal, setMenuTotal] = useState(0);
-  const [showChildPieceSelector, setShowChildPieceSelector] = useState(false);
   const [participantsInput, setParticipantsInput] = useState<string>('2');
   
   // Nuevo estado para fecha/hora con validación de disponibilidad
@@ -256,21 +252,26 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
             </div>
           </button>
 
-          {/* Celebración (deshabilitada: Muy pronto) */}
+          {/* Celebración */}
           <button
-            disabled
-            aria-disabled="true"
-            className="group bg-white border-2 border-brand-border rounded-2xl p-6 sm:p-8 text-left active:scale-[0.98] opacity-60 grayscale cursor-not-allowed"
+            onClick={() => {
+              setState((prev) => ({ 
+                ...prev, 
+                experienceType: 'celebration',
+                config: { activeParticipants: 2, guests: 0, hours: 2, hasChildren: false, childrenCount: 0 } as CelebrationConfig
+              }));
+              handleNext();
+            }}
+            className="group bg-white border-2 border-brand-border rounded-2xl p-6 sm:p-8 hover:border-brand-primary hover:shadow-lifted transition-all duration-300 text-left active:scale-[0.98]"
           >
             <div className="flex items-start gap-4 mb-4">
               <div className="text-5xl">🎉</div>
               <div className="flex-1">
                 <h3 className="text-xl sm:text-2xl font-bold text-brand-text mb-2">
                   Celebración
-                  <span className="ml-2 inline-block px-2 py-1 text-xs font-semibold bg-gray-200 text-gray-700 rounded-full align-middle">Muy pronto</span>
                 </h3>
                 <p className="text-sm text-brand-secondary">
-                  Evento completo con cerámica, invitados, decoración y menú personalizado.
+                  Evento completo con cerámica, invitados, decoración y alquiler de espacio.
                 </p>
               </div>
             </div>
@@ -286,21 +287,21 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
               </div>
               <div className="flex items-center gap-2 text-sm text-brand-text">
                 <CheckCircleIcon className="w-4 h-4 text-brand-success" />
-                <span>Traer decoración y torta</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-brand-text">
-                <CheckCircleIcon className="w-4 h-4 text-brand-success" />
-                <span>Menú de alimentos y bebidas</span>
+                <span>Traer decoración, comida y torta</span>
               </div>
               <div className="flex items-center gap-2 text-sm text-brand-text">
                 <CheckCircleIcon className="w-4 h-4 text-brand-success" />
                 <span>Actividad especial para niños</span>
               </div>
+              <div className="flex items-center gap-2 text-sm text-brand-text">
+                <CheckCircleIcon className="w-4 h-4 text-brand-success" />
+                <span>Alquiler del espacio por hora: $75/h (L-J) o $100/h (V-D) + IVA</span>
+              </div>
             </div>
 
             <div className="mt-6 text-center">
-              <span className="inline-block bg-gray-300 text-gray-700 px-6 py-3 rounded-xl font-semibold">
-                Muy pronto
+              <span className="inline-block bg-brand-primary text-white px-6 py-3 rounded-xl font-semibold group-hover:bg-brand-accent transition-colors">
+                Elegir →
               </span>
             </div>
           </button>
@@ -541,14 +542,15 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                 <Tooltip text="Personas que solo acompañan y disfrutan el evento sin participar en la actividad de cerámica." />
               </label>
               <input
-                type="number"
-                min="0"
+                type="text"
+                inputMode="numeric"
                 value={(state.config as CelebrationConfig)?.guests || 0}
                 onChange={(e) => {
-                  const val = parseInt(e.target.value) || 0;
+                  const val = e.target.value.replace(/\D/g, '');
+                  const num = val === '' ? 0 : parseInt(val);
                   setState((prev) => ({
                     ...prev,
-                    config: { ...(prev.config as CelebrationConfig), guests: val },
+                    config: { ...(prev.config as CelebrationConfig), guests: num },
                   }));
                 }}
                 className="w-full sm:w-32 px-4 py-2 border-2 border-brand-border rounded-lg text-center font-semibold focus:border-brand-primary transition-all"
@@ -590,35 +592,13 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                   Traer torta propia
                 </span>
               </label>
-
-              <label className="flex items-center gap-3 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  checked={(state.config as CelebrationConfig)?.hasChildren || false}
-                  onChange={(e) =>
-                    setState((prev) => ({
-                      ...prev,
-                      config: {
-                        ...(prev.config as CelebrationConfig),
-                        hasChildren: e.target.checked,
-                        childrenCount: e.target.checked ? 1 : 0,
-                        childrenPieces: [],
-                      },
-                    }))
-                  }
-                  className="w-5 h-5 text-brand-primary border-brand-border rounded focus:ring-brand-primary"
-                />
-                <span className="text-sm font-medium text-brand-text group-hover:text-brand-primary transition-colors">
-                  Incluir actividad para niños (pintado de piezas)
-                </span>
-              </label>
             </div>
 
-            {/* Info: No bebidas/alimentos de afuera */}
-            <div className="bg-amber-50 border-l-4 border-amber-500 rounded-r-lg p-4">
-              <p className="text-sm text-amber-900 font-medium">
-                ⚠️ <strong>Importante:</strong> No se permite traer bebidas ni alimentos de afuera (excepto torta). 
-                Tenemos un menú disponible para que puedas ordenar lo que necesites.
+            {/* Info: Pueden traer comida y bebidas */}
+            <div className="bg-green-50 border-l-4 border-green-500 rounded-r-lg p-4">
+              <p className="text-sm text-green-900 font-medium">
+                🎉 <strong>¡Buenas noticias!</strong> Puedes traer tu propia comida, bebidas, torta, decoración y menaje. 
+                El espacio incluye mesas, sillas, A/C y WiFi.
               </p>
             </div>
             
@@ -626,7 +606,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
             <div>
               <label className="block text-sm font-semibold text-brand-text mb-3 flex items-center">
                 ¿Cuántas horas necesitas el espacio?
-                <Tooltip text="El espacio se alquila por horas. Incluye A/C, WiFi, mesas, sillas, menaje y servicio." />
+                <Tooltip text="El espacio se alquila por horas. Incluye mesas, sillas, A/C y WiFi. Traes tu menaje, decoración y comida." />
               </label>
               <select
                 value={(state.config as CelebrationConfig)?.hours || 2}
@@ -644,129 +624,75 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                 <option value="4">4 horas</option>
                 <option value="5">5 horas</option>
               </select>
+            </div>
+            
+            {/* Nota sobre comida - Sin MenuSelector */}
+            <div className="border-t border-brand-border pt-6">
+              <h3 className="text-lg font-bold text-brand-text mb-3">🍽️ Comida y Bebidas</h3>
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <p className="text-sm text-blue-900 mb-2">
+                  <strong>Puedes traer todo lo que necesites:</strong>
+                </p>
+                <ul className="text-sm text-blue-800 space-y-1 ml-4 list-disc">
+                  <li>Comida y snacks de tu preferencia</li>
+                  <li>Bebidas (alcohólicas y no alcohólicas)</li>
+                  <li>Torta de cumpleaños o postre</li>
+                  <li>Decoración temática</li>
+                  <li>Menaje (platos, vasos, cubiertos, manteles)</li>
+                </ul>
+                <p className="text-xs text-blue-700 mt-3 italic">
+                  El espacio incluye mesas, sillas, A/C y WiFi para tu comodidad.
+                </p>
+              </div>
+            </div>
+            
+            {/* Actividad para niños - Ahora independiente */}
+            <div className="border-t border-brand-border pt-6">
+              <h3 className="text-lg font-bold text-brand-text mb-3">👶 Actividad para Niños (Opcional)</h3>
+              <p className="text-sm text-brand-secondary mb-4">
+                ¿Habrá niños que quieran pintar piezas de cerámica? Precio: <strong>$18 por niño</strong> (incluye IVA).
+              </p>
               
-              {/* Preview de pricing */}
-              {state.config && state.technique && (
-                <div className="mt-4 bg-purple-50 border-2 border-purple-200 rounded-xl p-4">
-                  <p className="text-sm font-semibold text-purple-900 mb-3">Resumen de Costos</p>
-                  
-                  {/* Espacio */}
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between text-purple-800">
-                      <span>Espacio ({(state.config as CelebrationConfig).hours}h × $100*)</span>
-                      <span className="font-semibold">${(state.config as CelebrationConfig).hours * 100}</span>
-                    </div>
-                    <div className="flex justify-between text-purple-700">
-                      <span>IVA (15%)</span>
-                      <span className="font-semibold">${((state.config as CelebrationConfig).hours * 100 * 0.15).toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-purple-900 font-bold pt-2 border-t border-purple-300">
-                      <span>Subtotal Espacio</span>
-                      <span>${((state.config as CelebrationConfig).hours * 100 * 1.15).toFixed(2)}</span>
-                    </div>
+              <div className="flex items-center gap-4 mb-4">
+                <label className="text-sm font-medium text-brand-text">¿Cuántos niños pintarán?</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={(state.config as CelebrationConfig)?.childrenCount === 0 ? '' : (state.config as CelebrationConfig)?.childrenCount}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, ''); // Solo números
+                    const count = val === '' ? 0 : Math.max(0, Math.min(20, parseInt(val, 10)));
+                    setState((prev) => ({
+                      ...prev,
+                      config: { ...(prev.config as CelebrationConfig), childrenCount: count },
+                    }));
+                  }}
+                  onFocus={(e) => {
+                    // Seleccionar todo el texto al enfocar para facilitar edición
+                    e.target.select();
+                  }}
+                  placeholder="0"
+                  className="w-20 px-3 py-2 border-2 border-brand-border rounded-lg text-center font-semibold focus:border-brand-primary transition-all"
+                />
+              </div>
+              
+              {(state.config as CelebrationConfig)?.childrenCount > 0 && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-green-800">
+                      {(state.config as CelebrationConfig).childrenCount} niño(s) × $18
+                    </span>
+                    <span className="text-xl font-bold text-green-600">
+                      ${(state.config as CelebrationConfig).childrenCount * 18}
+                    </span>
                   </div>
-                  
-                  {/* Técnicas */}
-                  <div className="mt-3 pt-3 border-t border-purple-300 space-y-2 text-sm">
-                    <div className="flex justify-between text-purple-800">
-                      <span>
-                        Técnica ({(state.config as CelebrationConfig).activeParticipants} personas × 
-                        ${state.technique === 'potters_wheel' ? TECHNIQUE_PRICES.potters_wheel : 
-                          state.technique === 'hand_modeling' ? TECHNIQUE_PRICES.hand_modeling : TECHNIQUE_PRICES.painting})
-                      </span>
-                      <span className="font-semibold">
-                        ${(state.config as CelebrationConfig).activeParticipants * 
-                          (state.technique === 'potters_wheel' ? TECHNIQUE_PRICES.potters_wheel : 
-                           state.technique === 'hand_modeling' ? TECHNIQUE_PRICES.hand_modeling : TECHNIQUE_PRICES.painting)}
-                      </span>
-                    </div>
-                    <p className="text-xs text-purple-700">Ya incluye IVA</p>
-                  </div>
-                  
-                  {/* Total a Pagar */}
-                  <div className="mt-3 pt-3 border-t-2 border-purple-400 flex justify-between">
-                    <p className="text-base font-bold text-purple-900">Total a Pagar</p>
-                    <p className="text-2xl font-bold text-purple-600">
-                      ${(
-                        ((state.config as CelebrationConfig).hours * 100 * 1.15) +
-                        ((state.config as CelebrationConfig).activeParticipants * 
-                          (state.technique === 'potters_wheel' ? TECHNIQUE_PRICES.potters_wheel : 
-                           state.technique === 'hand_modeling' ? TECHNIQUE_PRICES.hand_modeling : TECHNIQUE_PRICES.painting))
-                      ).toFixed(2)}
-                    </p>
-                  </div>
-                  
-                  <p className="text-xs text-purple-700 mt-3">
-                    *Precio mostrado asume fin de semana ($100/h). Precio entre semana es $65/h + IVA.
-                  </p>
-                  <p className="text-xs text-purple-700 mt-1">
-                    No incluye menú ni piezas para niños (se agregan después).
+                  <p className="text-xs text-green-700 mt-2">
+                    La pieza se elige en el taller. Si escogen una pieza de mayor valor, pagan solo la diferencia.
                   </p>
                 </div>
               )}
             </div>
-            
-            {/* Menu Selector */}
-            <div className="border-t border-brand-border pt-6">
-              <h3 className="text-lg font-bold text-brand-text mb-3">Selecciona tu Menú</h3>
-              <p className="text-sm text-brand-secondary mb-4">
-                Elige bebidas, snacks y comidas para tu celebración. No se permite traer alimentos de afuera (excepto torta).
-              </p>
-              <MenuSelector
-                selectedItems={(state.config as CelebrationConfig)?.menuSelections || []}
-                onSelectionChange={(items) => {
-                  setState((prev) => ({
-                    ...prev,
-                    config: { ...(prev.config as CelebrationConfig), menuSelections: items },
-                  }));
-                }}
-                onTotalChange={setMenuTotal}
-              />
-            </div>
-            
-            {/* Botón para seleccionar piezas para niños */}
-            {(state.config as CelebrationConfig)?.hasChildren && (
-              <div className="border-t border-brand-border pt-6">
-                <h3 className="text-lg font-bold text-brand-text mb-3">Piezas para Niños</h3>
-                <p className="text-sm text-brand-secondary mb-4">
-                  Los niños pintarán sus propias piezas. Precio mínimo: $18 por niño.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setShowChildPieceSelector(true)}
-                  className="w-full sm:w-auto px-6 py-3 bg-brand-secondary text-white rounded-lg font-semibold hover:bg-brand-secondary/90 transition-all"
-                >
-                  {(state.config as CelebrationConfig)?.childrenPieces?.length > 0
-                    ? `✓ Piezas Seleccionadas (${(state.config as CelebrationConfig).childrenPieces.length})`
-                    : '🎨 Seleccionar Piezas para Niños'}
-                </button>
-                
-                {(state.config as CelebrationConfig)?.childrenPieces?.length > 0 && (
-                  <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-3">
-                    <p className="text-sm font-semibold text-green-900">
-                      Total piezas niños: ${(state.config as CelebrationConfig).childrenPieces.reduce((sum, cp) => sum + cp.piecePrice, 0).toFixed(2)}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-            
-            {/* ChildPieceSelector Modal */}
-            {(state.config as CelebrationConfig)?.hasChildren && (
-              <ChildPieceSelector
-                isOpen={showChildPieceSelector}
-                onClose={() => setShowChildPieceSelector(false)}
-                pieces={pieces}
-                childrenCount={(state.config as CelebrationConfig)?.childrenCount || 1}
-                existingSelections={(state.config as CelebrationConfig)?.childrenPieces || []}
-                onConfirm={(selections) => {
-                  setState((prev) => ({
-                    ...prev,
-                    config: { ...(prev.config as CelebrationConfig), childrenPieces: selections },
-                  }));
-                }}
-              />
-            )}
           </div>
         )}
 
@@ -810,7 +736,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
         
         {/* Explicación de la técnica seleccionada */}
         {state.technique && (
-          <div className="bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 border border-indigo-100 rounded-2xl p-4 shadow-sm">
+          <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-cyan-50 border border-blue-100 rounded-2xl p-4 shadow-sm">
             <p className="text-sm text-gray-700 leading-relaxed font-medium">
               {techniqueExplanations[state.technique] || selectedTechnique?.description}
             </p>
@@ -928,6 +854,100 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
             )}
           </div>
         </div>
+
+        {/* Resumen de Costos - Mostrar SOLO después de seleccionar fecha/hora */}
+        {selectedDate && selectedTime && slotAvailability && slotAvailability.available && isCelebration && state.config && (
+          <div className="mt-6 bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-brand-primary rounded-2xl p-6 shadow-lg">
+            <h3 className="text-xl font-bold text-brand-text mb-4 flex items-center gap-2">
+              <span>💰</span> Total a Pagar
+            </h3>
+            
+            {/* Determinar si es weekday o weekend */}
+            {(() => {
+              const dayOfWeek = new Date(selectedDate + 'T12:00:00').getDay();
+              const isWeekend = dayOfWeek === 5 || dayOfWeek === 6 || dayOfWeek === 0; // Vie, Sáb, Dom
+              const spaceRate = isWeekend ? 100 : 75;
+              const config = state.config as CelebrationConfig;
+              
+              const spaceSubtotal = config.hours * spaceRate;
+              const spaceVat = spaceSubtotal * 0.15;
+              const spaceTotalWithVat = spaceSubtotal + spaceVat;
+              
+              const techniquePrice = state.technique === 'potters_wheel' ? TECHNIQUE_PRICES.potters_wheel :
+                                    state.technique === 'hand_modeling' ? TECHNIQUE_PRICES.hand_modeling :
+                                    TECHNIQUE_PRICES.painting;
+              const techniqueTotal = config.activeParticipants * techniquePrice;
+              
+              const childrenTotal = (config.childrenCount || 0) * 18;
+              
+              const grandTotal = spaceTotalWithVat + techniqueTotal + childrenTotal;
+              
+              return (
+                <>
+                  {/* Espacio */}
+                  <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
+                    <p className="text-sm font-semibold text-gray-700 mb-2">🏠 Alquiler del Espacio</p>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between text-gray-600">
+                        <span>{config.hours}h × ${spaceRate}/h {isWeekend ? '(fin de semana)' : '(entre semana)'}</span>
+                        <span className="font-semibold">${spaceSubtotal.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-600">
+                        <span>IVA (15%)</span>
+                        <span className="font-semibold">${spaceVat.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-brand-text font-bold pt-1 border-t border-gray-200">
+                        <span>Subtotal Espacio</span>
+                        <span>${spaceTotalWithVat.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Técnica */}
+                  <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
+                    <p className="text-sm font-semibold text-gray-700 mb-2">🎯 Actividad de Cerámica</p>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between text-gray-600">
+                        <span>{config.activeParticipants} personas × ${techniquePrice}</span>
+                        <span className="font-semibold">${techniqueTotal.toFixed(2)}</span>
+                      </div>
+                      <p className="text-xs text-gray-500 italic">Ya incluye IVA</p>
+                    </div>
+                  </div>
+                  
+                  {/* Niños */}
+                  {config.childrenCount > 0 && (
+                    <div className="bg-white rounded-xl p-4 mb-3 shadow-sm">
+                      <p className="text-sm font-semibold text-gray-700 mb-2">👶 Actividad para Niños</p>
+                      <div className="space-y-1 text-sm">
+                        <div className="flex justify-between text-gray-600">
+                          <span>{config.childrenCount} niño(s) × $18</span>
+                          <span className="font-semibold">${childrenTotal.toFixed(2)}</span>
+                        </div>
+                        <p className="text-xs text-gray-500 italic">Ya incluye IVA</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Total Final */}
+                  <div className="bg-gradient-to-r from-brand-primary to-brand-accent rounded-xl p-4 text-white">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-sm opacity-90">Total a Pagar</p>
+                        <p className="text-xs opacity-75 mt-1">Reserva con 100% del monto</p>
+                      </div>
+                      <p className="text-3xl font-bold">${grandTotal.toFixed(2)}</p>
+                    </div>
+                  </div>
+                  
+                  <p className="text-xs text-gray-600 mt-3 text-center">
+                    ℹ️ Este es el monto total que necesitas pagar para confirmar tu reserva
+                  </p>
+                </>
+              );
+            })()}
+          </div>
+        )}
       </div>
     );
   };
@@ -951,11 +971,9 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                            TECHNIQUE_PRICES.painting;
           total += config.activeParticipants * techPrice;
         }
-        // Menú
-        total += menuTotal;
-        // Piezas para niños
-        if (config.childrenPieces) {
-          total += config.childrenPieces.reduce((sum, cp) => sum + cp.piecePrice, 0);
+        // Actividad niños (simplificado: $18 por niño)
+        if (config.hasChildren && config.childrenCount > 0) {
+          total += config.childrenCount * 18;
         }
       } else if (state.config && state.technique) {
         // Solo Cerámica
@@ -1060,9 +1078,9 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                          TECHNIQUE_PRICES.painting;
         total += config.activeParticipants * techPrice;
       }
-      total += menuTotal;
-      if (config.childrenPieces) {
-        total += config.childrenPieces.reduce((sum, cp) => sum + cp.piecePrice, 0);
+      // Actividad niños (simplificado: $18 por niño)
+      if (config.hasChildren && config.childrenCount > 0) {
+        total += config.childrenCount * 18;
       }
     } else if (state.config && state.technique) {
       const config = state.config as CeramicOnlyConfig;

@@ -1,5 +1,4 @@
-import { GiftcardPersonalization } from './components/giftcard/GiftcardPersonalization';
-import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, ReactNode } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense, ReactNode } from 'react';
 import type { BankDetails } from './types';
 import { Header } from './components/Header';
 import { WelcomeSelector } from './components/WelcomeSelector';
@@ -8,7 +7,6 @@ import { PackageSelector } from './components/PackageSelector';
 import { IntroClassSelector } from './components/IntroClassSelector';
 import { ScheduleSelector } from './components/ScheduleSelector';
 import { BookingSummary } from './components/BookingSummary';
-import { GroupInquiryForm } from './components/GroupInquiryForm';
 import { CouplesTourModal } from './components/CouplesTourModal';
 import { CouplesTechniqueSelector } from './components/CouplesTechniqueSelector';
 import { CouplesExperienceScheduler } from './components/CouplesExperienceScheduler';
@@ -18,35 +16,37 @@ import { BookingTypeModal } from './components/BookingTypeModal';
 import { ClassInfoModal } from './components/ClassInfoModal';
 import { PrerequisiteModal } from './components/PrerequisiteModal';
 import { AnnouncementsBoard } from './components/AnnouncementsBoard';
-import { ClientDeliveryForm } from './components/ClientDeliveryForm';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ModuloMarcacionSimple } from './components/ModuloMarcacionSimple';
 import { AdminTimecardPanelSimple } from './components/admin/AdminTimecardPanelSimple';
-import { CashierDashboard } from './components/CashierDashboard';
 // New Experience Components
 import { ExperienceTypeSelector } from './components/experiences/ExperienceTypeSelector';
-import { GroupClassWizard } from './components/experiences/GroupClassWizard';
-import { PieceExperienceWizard } from './components/experiences/PieceExperienceWizard';
-import { SingleClassWizard } from './components/experiences/SingleClassWizard';
-import { CustomExperienceWizard } from './components/experiences/CustomExperienceWizard';
 // Wheel Course Components
-import { CourseWheelLanding } from './components/courses/CourseWheelLanding';
-import { CourseScheduleSelector } from './components/courses/CourseScheduleSelector';
-import { CourseRegistrationForm } from './components/courses/CourseRegistrationForm';
-import { CourseConfirmation } from './components/courses/CourseConfirmation';
 // Valentine Components
-import { ValentineLanding } from './components/valentine/ValentineLanding';
-import { ValentineRegistrationForm } from './components/valentine/ValentineRegistrationForm';
-import { ValentineSuccess } from './components/valentine/ValentineSuccess';
-// Lazy load AdminConsole to reduce initial bundle size
+// Lazy load heavy components to reduce initial bundle
 const AdminConsole = lazy(() => import('./components/admin/AdminConsole').then(module => ({ default: module.AdminConsole })));
+const GiftcardPersonalization = lazy(() => import('./components/giftcard/GiftcardPersonalization').then(m => ({ default: m.GiftcardPersonalization })));
+const GroupInquiryForm = lazy(() => import('./components/GroupInquiryForm').then(m => ({ default: m.GroupInquiryForm })));
+const ClientDeliveryForm = lazy(() => import('./components/ClientDeliveryForm').then(m => ({ default: m.ClientDeliveryForm })));
+const CashierDashboard = lazy(() => import('./components/CashierDashboard').then(m => ({ default: m.CashierDashboard })));
+const GroupClassWizard = lazy(() => import('./components/experiences/GroupClassWizard').then(m => ({ default: m.GroupClassWizard })));
+const PieceExperienceWizard = lazy(() => import('./components/experiences/PieceExperienceWizard').then(m => ({ default: m.PieceExperienceWizard })));
+const SingleClassWizard = lazy(() => import('./components/experiences/SingleClassWizard').then(m => ({ default: m.SingleClassWizard })));
+const CustomExperienceWizard = lazy(() => import('./components/experiences/CustomExperienceWizard').then(m => ({ default: m.CustomExperienceWizard })));
+const CourseWheelLanding = lazy(() => import('./components/courses/CourseWheelLanding').then(m => ({ default: m.CourseWheelLanding })));
+const CourseScheduleSelector = lazy(() => import('./components/courses/CourseScheduleSelector').then(m => ({ default: m.CourseScheduleSelector })));
+const CourseRegistrationForm = lazy(() => import('./components/courses/CourseRegistrationForm').then(m => ({ default: m.CourseRegistrationForm })));
+const CourseConfirmation = lazy(() => import('./components/courses/CourseConfirmation').then(m => ({ default: m.CourseConfirmation })));
+const ValentineLanding = lazy(() => import('./components/valentine/ValentineLanding').then(m => ({ default: m.ValentineLanding })));
+const ValentineRegistrationForm = lazy(() => import('./components/valentine/ValentineRegistrationForm').then(m => ({ default: m.ValentineRegistrationForm })));
+const ValentineSuccess = lazy(() => import('./components/valentine/ValentineSuccess').then(m => ({ default: m.ValentineSuccess })));
 import { NotificationProvider } from './context/NotificationContext';
 import { AdminDataProvider } from './context/AdminDataContext';
 import { AuthProvider } from './context/AuthContext';
 import { ConfirmationPage } from './components/ConfirmationPage';
 import { OpenStudioModal } from './components/admin/OpenStudioModal';
-import { ClientDashboard } from './components/ClientDashboard';
 import { MyClassesPrompt } from './components/MyClassesPrompt';
+const ClientDashboard = lazy(() => import('./components/ClientDashboard').then(m => ({ default: m.ClientDashboard })));
 
 import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession, DeliveryMethod, GiftcardHold, Piece, ExperiencePricing, ExperienceUIState, CourseSchedule, CourseEnrollment, ParticipantTechniqueAssignment } from './types';
 import * as dataService from './services/dataService';
@@ -56,9 +56,9 @@ import { InstagramIcon } from './components/icons/InstagramIcon';
 import { WhatsAppIcon } from './components/icons/WhatsAppIcon';
 import { MailIcon } from './components/icons/MailIcon';
 import { LocationPinIcon } from './components/icons/LocationPinIcon';
-import { LandingGiftcard } from './components/giftcard/LandingGiftcard';
-import { GiftcardAmountSelector } from './components/giftcard/GiftcardAmountSelector';
 import { GiftcardInviteModal } from './components/giftcard/GiftcardInviteModal';
+const LandingGiftcard = lazy(() => import('./components/giftcard/LandingGiftcard').then(m => ({ default: m.LandingGiftcard })));
+const GiftcardAmountSelector = lazy(() => import('./components/giftcard/GiftcardAmountSelector').then(m => ({ default: m.GiftcardAmountSelector })));
 import { GiftcardBanner } from './components/giftcard/GiftcardBanner';
 import { GiftcardDeliveryOptions } from './components/giftcard/GiftcardDeliveryOptions';
 import { GiftcardPayment } from './components/giftcard/GiftcardPayment';
@@ -533,9 +533,23 @@ const App: React.FC = () => {
         }
     };
     
+    // ✅ Ref para prevenir calls duplicados de datos adicionales
+    const loadingDataRef = useRef<Record<string, boolean>>({
+        scheduling: false,
+        bookings: false,
+        admin: false
+    });
+    
     // Función para cargar datos adicionales bajo demanda
     const loadAdditionalData = useCallback(async (dataType: 'scheduling' | 'bookings' | 'admin', currentAppData: AppData) => {
         if (!currentAppData) return;
+        
+        // ✅ Prevenir calls duplicados usando ref
+        if (loadingDataRef.current[dataType]) {
+            console.log(`[App] Already loading ${dataType}, skipping`);
+            return;
+        }
+        loadingDataRef.current[dataType] = true;
         
         try {
             let updates: Partial<AppData> = {};
@@ -584,6 +598,9 @@ const App: React.FC = () => {
             }
         } catch (error) {
             console.error(`Failed to load ${dataType} data:`, error);
+        } finally {
+            // ✅ Siempre resetear el flag para permitir recargas futuras
+            loadingDataRef.current[dataType] = false;
         }
     }, []);
 

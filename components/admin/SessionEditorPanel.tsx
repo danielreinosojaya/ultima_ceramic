@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import type { IntroductoryClass, Instructor, EnrichedIntroClassSession } from '../../types';
+import type { IntroductoryClass, EnrichedIntroClassSession } from '../../types';
 import * as dataService from '../../services/dataService';
 import { PlusIcon } from '../icons/PlusIcon';
 import { TrashIcon } from '../icons/TrashIcon';
+import { useAdminData } from '../../context/AdminDataContext';
 
 interface SessionEditorPanelProps {
   selectedDate: Date;
@@ -18,24 +19,20 @@ const formatTimeForInput = (time12h: string): string => {
 
 export const SessionEditorPanel: React.FC<SessionEditorPanelProps> = ({ selectedDate, product, onSave }) => {
   // Monolingüe español, textos hardcodeados. No usar useLanguage ni contextos de idioma.
+  const adminData = useAdminData();
+  const instructors = adminData.instructors; // ✅ Usar del context
   const dateStr = useMemo(() => selectedDate.toISOString().split('T')[0], [selectedDate]);
 
   const [sessions, setSessions] = useState<Omit<EnrichedIntroClassSession, 'id' | 'isOverride'>[]>([]);
   const [isCancelled, setIsCancelled] = useState(false);
-  
-  const [instructors, setInstructors] = useState<Instructor[]>([]);
   const [newSession, setNewSession] = useState({ time: '', instructorId: 0, capacity: 8 });
 
+  // ✅ Set default instructor cuando estén disponibles
   useEffect(() => {
-    const fetchInstructors = async () => {
-      const currentInstructors = await dataService.getInstructors();
-      setInstructors(currentInstructors);
-      if (currentInstructors.length > 0) {
-          setNewSession(s => ({...s, instructorId: currentInstructors[0].id}));
-      }
-    };
-    fetchInstructors();
-  }, []);
+    if (instructors.length > 0 && newSession.instructorId === 0) {
+      setNewSession(s => ({...s, instructorId: instructors[0].id}));
+    }
+  }, [instructors, newSession.instructorId]);
 
   useEffect(() => {
     const override = product.overrides.find(ov => ov.date === dateStr);

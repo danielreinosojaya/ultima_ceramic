@@ -197,7 +197,7 @@ async function logEmailEvent(
 }
 
 export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDetails: BankDetails) => {
-    const { userInfo, bookingCode, product, price, paymentDetails } = booking;
+    const { userInfo, bookingCode, product, price, paymentDetails, slots } = booking;
     
     // Ensure price is a number
     const numericPrice = typeof price === 'number' ? price : parseFloat(String(price));
@@ -208,6 +208,30 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
     
     // Obtener nombre del producto/técnica
     const productName = getBookingDisplayName(booking);
+    
+    // Formatear información de fecha/hora de las clases
+    const slotsHtml = slots && slots.length > 0 ? `
+        <div style="background-color: #f0f9ff; border-left: 4px solid #0EA5E9; padding: 15px; margin: 20px 0; border-radius: 8px;">
+            <p style="margin: 0; color: #0369A1; font-weight: bold;">📅 ${slots.length > 1 ? 'Tus Clases Programadas' : 'Tu Clase Programada'}</p>
+            <table style="margin-top: 10px; width: 100%; border-collapse: collapse;">
+                ${slots.map((slot, index) => {
+                    const slotDate = new Date(slot.date + 'T00:00:00').toLocaleDateString('es-ES', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                    });
+                    return `
+                        <tr style="border-bottom: 1px solid #e0f2fe;">
+                            <td style="padding: 8px 0; color: #0369A1; font-weight: bold;">${slots.length > 1 ? `Clase ${index + 1}:` : ''}</td>
+                            <td style="padding: 8px 0; color: #0c4a6e;">${slotDate}</td>
+                            <td style="padding: 8px 0; color: #0c4a6e; font-weight: bold;">${slot.time}</td>
+                        </tr>
+                    `;
+                }).join('')}
+            </table>
+        </div>
+    ` : '';
     
     const subject = `Tu Pre-Reserva en CeramicAlma está confirmada (Código: ${bookingCode})`;
     // Mostrar todas las cuentas en una tabla compacta y profesional
@@ -243,6 +267,7 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
             <h2>¡Hola, ${userInfo.firstName}!</h2>
             <p>Gracias por tu pre-reserva para <strong>${productName}</strong>. Tu lugar ha sido guardado con el código de reserva:</p>
             <p style="font-size: 24px; font-weight: bold; color: #D95F43; margin: 20px 0;">${bookingCode}</p>
+            ${slotsHtml}
             <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 8px;">
                 <p style="margin: 0; color: #92400E; font-weight: bold;">⏰ Pre-Reserva Válida por 2 Horas</p>
                 <p style="margin: 8px 0 0 0; color: #78350F; font-size: 14px;">
@@ -295,7 +320,7 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
 
 // Envía el recibo de pago al cliente
 export const sendPaymentReceiptEmail = async (booking: Booking, payment: PaymentDetails) => {
-    const { userInfo, bookingCode, product } = booking;
+    const { userInfo, bookingCode, product, slots } = booking;
     const subject = `¡Confirmación de Pago para tu reserva en CeramicAlma! (Código: ${bookingCode})`;
 
     // Ensure amounts are numbers
@@ -324,11 +349,36 @@ export const sendPaymentReceiptEmail = async (booking: Booking, payment: Payment
     // Obtener nombre del producto/técnica
     const productName = getBookingDisplayName(booking);
 
+    // Formatear información de fecha/hora de las clases
+    const slotsHtml = slots && slots.length > 0 ? `
+        <div style="background-color: #f0f9ff; border-left: 4px solid #0EA5E9; padding: 15px; margin-top: 20px; border-radius: 8px;">
+            <p style="margin: 0; color: #0369A1; font-weight: bold;">📅 ${slots.length > 1 ? 'Tus Clases Programadas' : 'Tu Clase Programada'}</p>
+            <table style="margin-top: 10px; width: 100%; border-collapse: collapse;">
+                ${slots.map((slot, index) => {
+                    const slotDate = new Date(slot.date + 'T00:00:00').toLocaleDateString('es-ES', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                    });
+                    return `
+                        <tr style="border-bottom: 1px solid #e0f2fe;">
+                            <td style="padding: 8px 0; color: #0369A1; font-weight: bold;">${slots.length > 1 ? `Clase ${index + 1}:` : ''}</td>
+                            <td style="padding: 8px 0; color: #0c4a6e;">${slotDate}</td>
+                            <td style="padding: 8px 0; color: #0c4a6e; font-weight: bold;">${slot.time}</td>
+                        </tr>
+                    `;
+                }).join('')}
+            </table>
+        </div>
+    ` : '';
+
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333;">
             <h2>¡Hola, ${userInfo.firstName}!</h2>
             <p>Hemos recibido tu pago y tu reserva para <strong>${productName}</strong> está oficialmente confirmada.</p>
             <p style="font-size: 20px; font-weight: bold; color: #16A34A; margin: 20px 0;">¡Tu plaza está asegurada!</p>
+            ${slotsHtml}
             <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; margin-top: 20px;">
                 <h3 style="color: #D95F43;">Detalles del Pago</h3>
                 <p><strong>Código de Reserva:</strong> ${bookingCode}</p>

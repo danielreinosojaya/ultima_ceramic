@@ -43,13 +43,45 @@ const TimeAgo: React.FC<{ isoDate: string | null }> = ({ isoDate }) => {
     const [timeAgo, setTimeAgo] = useState(() => calculateTimeAgo(isoDate));
 
     useEffect(() => {
-        setTimeAgo(calculateTimeAgo(isoDate)); // Recalculate when isoDate changes
+        setTimeAgo(calculateTimeAgo(isoDate));
 
-        const timer = setInterval(() => {
-            setTimeAgo(calculateTimeAgo(isoDate));
-        }, 60000); // Update every minute
+        let timer: NodeJS.Timeout | null = null;
+
+        const startTimer = () => {
+            if (timer) clearInterval(timer);
+            timer = setInterval(() => {
+                setTimeAgo(calculateTimeAgo(isoDate));
+            }, 60000);
+        };
+
+        const stopTimer = () => {
+            if (timer) {
+                clearInterval(timer);
+                timer = null;
+            }
+        };
+
+        // Visibility API: pausar cuando tab está hidden
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                stopTimer();
+            } else {
+                setTimeAgo(calculateTimeAgo(isoDate)); // Actualizar inmediatamente
+                startTimer();
+            }
+        };
+
+        // Iniciar timer si página está visible
+        if (!document.hidden) {
+            startTimer();
+        }
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
         
-        return () => clearInterval(timer);
+        return () => {
+            stopTimer();
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
     }, [isoDate]);
 
     return <span className="text-xs text-brand-secondary">{timeAgo}</span>;

@@ -39,13 +39,13 @@ export const InstructorManager: React.FC<InstructorManagerProps> = ({ onInstruct
     };
 
     const handleSave = async (data: Omit<Instructor, 'id'>, id?: number) => {
-        const currentInstructors = await dataService.getInstructors();
+        // ✅ Usar instructors actuales del state (ya sincronizados con context)
         let updatedInstructors;
         if (id) {
-            updatedInstructors = currentInstructors.map(i => i.id === id ? { ...data, id } : i);
+            updatedInstructors = instructors.map(i => i.id === id ? { ...data, id } : i);
         } else {
-            const newId = Math.max(0, ...currentInstructors.map(i => i.id)) + 1;
-            updatedInstructors = [...currentInstructors, { ...data, id: newId }];
+            const newId = Math.max(0, ...instructors.map(i => i.id)) + 1;
+            updatedInstructors = [...instructors, { ...data, id: newId }];
         }
         await dataService.updateInstructors(updatedInstructors);
         onInstructorsUpdate();

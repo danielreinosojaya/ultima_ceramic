@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useCallback, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useCallback, useEffect, ReactNode, useRef } from 'react';
 import * as dataService from '../services/dataService';
 import type { Product, Booking, Customer, GroupInquiry, Instructor, ScheduleOverrides, DayKey, AvailableSlot, ClassCapacity, CapacityMessageSettings, Announcement, InvoiceRequest } from '../types';
 
@@ -159,7 +159,7 @@ function adminReducer(state: AdminState, action: AdminAction): AdminState {
 }
 
 // Cache timeouts
-const CRITICAL_CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
+const CRITICAL_CACHE_DURATION = 10 * 60 * 1000; // 10 minutos (optimizado para reducir requests)
 const EXTENDED_CACHE_DURATION = 15 * 60 * 1000; // 15 minutos
 const SECONDARY_CACHE_DURATION = 30 * 60 * 1000; // 30 minutos - datos no críticos
 
@@ -174,27 +174,51 @@ export const useAdminData = () => {
 export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolean }> = ({ children, isAdmin = false }) => {
   const [state, dispatch] = useReducer(adminReducer, initialState);
 
-  // Helper para verificar si necesita actualizar (sin dependencias de state)
-  const needsUpdate = useCallback((lastUpdate: number | null, duration: number): boolean => {
+  // ✅ Refs para evitar dependencias de state en useCallback - PREVIENE LOOPS INFINITOS
+  const loadingRef = useRef({
+    critical: false,
+    extended: false,
+    secondary: false,
+  });
+  const lastUpdatedRef = useRef({
+    critical: null as number | null,
+    extended: null as number | null,
+    secondary: null as number | null,
+  });
+  const isAdminRef = useRef(isAdmin);
+  
+  // Mantener ref actualizado
+  useEffect(() => {
+    isAdminRef.current = isAdmin;
+  }, [isAdmin]);
+
+  // Helper para verificar si necesita actualizar - SIN dependencias
+  const needsUpdate = useCallback((type: 'critical' | 'extended' | 'secondary', duration: number): boolean => {
+    const lastUpdate = lastUpdatedRef.current[type];
     if (!lastUpdate) return true;
     return Date.now() - lastUpdate > duration;
   }, []);
 
   // Cargar datos críticos (más frecuentes)
   const fetchCriticalData = useCallback(async (force = false) => {
-    // CORREGIDO: Si force=true, ignorar el chequeo de loading para garantizar recarga
-    if (!force) {
-      if (!needsUpdate(state.lastUpdated.critical, CRITICAL_CACHE_DURATION)) return;
-      if (state.loadingState.critical) return;
-    }
-    
-    // Si force=true y ya está cargando, esperar a que termine antes de recargar
-    if (force && state.loadingState.critical) {
-      console.log('[AdminDataContext] Force refresh requested but already loading, waiting...');
-      // Esperar un poco para que termine la carga actual
-      await new Promise(resolve => setTimeout(resolve, 200));
+    // ✅ No cargar si tab está hidden (salvo que sea force explícito del usuario)
+    if (!force && document.hidden) {
+      console.log('[AdminDataContext] Tab hidden, skipping fetchCriticalData');
+      return;
     }
 
+    // ✅ Usar refs en lugar de state para evitar dependencias
+    if (!force) {
+      if (!needsUpdate('critical', CRITICAL_CACHE_DURATION)) return;
+      if (loadingRef.current.critical) return;
+    }
+    
+    if (loadingRef.current.critical) {
+      console.log('[AdminDataContext] Already loading critical, skipping');
+      return;
+    }
+
+    loadingRef.current.critical = true;
     dispatch({ type: 'SET_LOADING', dataType: 'critical', loading: true });
     dispatch({ type: 'SET_ERROR', error: null });
 
@@ -247,6 +271,7 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
         })));
       }
       console.debug('[AdminDataContext] Loaded critical data: booking count', bookings.length, 'customers count', customersWithDeliveries.length, 'giftcardRequests:', results[3].status === 'fulfilled' ? (results[3].value || []).length : 0);
+      lastUpdatedRef.current.critical = Date.now();
     } catch (error) {
       console.error('Error loading critical admin data:', error);
       // En lugar de mostrar error, cargar datos vacíos para que funcione
@@ -260,24 +285,25 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
         }
       });
     } finally {
+      loadingRef.current.critical = false;
       dispatch({ type: 'SET_LOADING', dataType: 'critical', loading: false });
     }
   }, [needsUpdate]);
 
   // Cargar datos extendidos (menos frecuentes)
   const fetchExtendedData = useCallback(async (force = false) => {
-    // CORREGIDO: Si force=true, ignorar el chequeo de loading para garantizar recarga
+    // ✅ Usar refs en lugar de state para evitar dependencias
     if (!force) {
-      if (!needsUpdate(state.lastUpdated.extended, EXTENDED_CACHE_DURATION)) return;
-      if (state.loadingState.extended) return;
+      if (!needsUpdate('extended', EXTENDED_CACHE_DURATION)) return;
+      if (loadingRef.current.extended) return;
     }
     
-    // Si force=true y ya está cargando, esperar a que termine antes de recargar
-    if (force && state.loadingState.extended) {
-      console.log('[AdminDataContext] Force refresh extended requested but already loading, waiting...');
-      await new Promise(resolve => setTimeout(resolve, 200));
+    if (loadingRef.current.extended) {
+      console.log('[AdminDataContext] Already loading extended, skipping');
+      return;
     }
 
+    loadingRef.current.extended = true;
     dispatch({ type: 'SET_LOADING', dataType: 'extended', loading: true });
 
     try {
@@ -301,6 +327,7 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
         }
       });
       console.debug('[AdminDataContext] Loaded extended data: products count', results[0].status === 'fulfilled' ? (results[0].value || []).length : 0, 'notifications:', results[4].status === 'fulfilled' ? (results[4].value || []).length : 0);
+      lastUpdatedRef.current.extended = Date.now();
     } catch (error) {
       console.error('Error loading extended admin data:', error);
       // Fallback con datos vacíos
@@ -315,23 +342,27 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
         }
       });
     } finally {
+      loadingRef.current.extended = false;
       dispatch({ type: 'SET_LOADING', dataType: 'extended', loading: false });
     }
   }, [needsUpdate]);
 
   // Cargar datos secundarios (solo admin, lazy loading)
   const fetchSecondaryData = useCallback(async (force = false) => {
-    if (!isAdmin) return; // No cargar si no es admin
+    if (!isAdminRef.current) return; // ✅ Usar ref en lugar de prop para evitar dependencia
 
+    // ✅ Usar refs en lugar de state para evitar dependencias
     if (!force) {
-      if (!needsUpdate(state.lastUpdated.secondary, SECONDARY_CACHE_DURATION)) return;
-      if (state.loadingState.secondary) return;
+      if (!needsUpdate('secondary', SECONDARY_CACHE_DURATION)) return;
+      if (loadingRef.current.secondary) return;
+    }
+    
+    if (loadingRef.current.secondary) {
+      console.log('[AdminDataContext] Already loading secondary, skipping');
+      return;
     }
 
-    if (force && state.loadingState.secondary) {
-      await new Promise(resolve => setTimeout(resolve, 200));
-    }
-
+    loadingRef.current.secondary = true;
     dispatch({ type: 'SET_LOADING', dataType: 'secondary', loading: true });
 
     try {
@@ -353,34 +384,48 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
         }
       });
       console.debug('[AdminDataContext] Loaded secondary data (admin): giftcards count', results[3].status === 'fulfilled' ? (results[3].value || []).length : 0);
+      lastUpdatedRef.current.secondary = Date.now();
     } catch (error) {
       console.error('Error loading secondary admin data:', error);
     } finally {
+      loadingRef.current.secondary = false;
       dispatch({ type: 'SET_LOADING', dataType: 'secondary', loading: false });
     }
-  }, [isAdmin, needsUpdate]);
+  }, [needsUpdate]); // ✅ Removido isAdmin - usar ref
+
+  // ✅ Refs estables para las funciones fetch - PREVIENE LOOPS
+  const fetchCriticalDataRef = useRef(fetchCriticalData);
+  const fetchExtendedDataRef = useRef(fetchExtendedData);
+  const fetchSecondaryDataRef = useRef(fetchSecondaryData);
+  
+  // Actualizar refs cuando las funciones cambien
+  useEffect(() => {
+    fetchCriticalDataRef.current = fetchCriticalData;
+    fetchExtendedDataRef.current = fetchExtendedData;
+    fetchSecondaryDataRef.current = fetchSecondaryData;
+  });
 
   // Refrescar todo
   const refresh = useCallback(() => {
-    fetchCriticalData(true);
-    fetchExtendedData(true);
-    fetchSecondaryData(true);
-  }, [fetchCriticalData, fetchExtendedData, fetchSecondaryData]);
+    fetchCriticalDataRef.current(true);
+    fetchExtendedDataRef.current(true);
+    fetchSecondaryDataRef.current(true);
+  }, []); // ✅ Sin dependencias - usar refs
 
   // Refrescar solo críticos
   const refreshCritical = useCallback(() => {
-    fetchCriticalData(true);
-  }, [fetchCriticalData]);
+    fetchCriticalDataRef.current(true);
+  }, []); // ✅ Sin dependencias - usar refs
 
   // Refrescar solo extendidos
   const refreshExtended = useCallback(() => {
-    fetchExtendedData(true);
-  }, [fetchExtendedData]);
+    fetchExtendedDataRef.current(true);
+  }, []); // ✅ Sin dependencias - usar refs
 
   // Refrescar solo secundarios
   const refreshSecondary = useCallback(() => {
-    fetchSecondaryData(true);
-  }, [fetchSecondaryData]);
+    fetchSecondaryDataRef.current(true);
+  }, []); // ✅ Sin dependencias - usar refs
 
   // Cargar datos iniciales - solo una vez al montar
   useEffect(() => {
@@ -388,16 +433,16 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
     
     const loadInitialData = async () => {
       if (mounted) {
-        await fetchCriticalData(true); // Force inicial load
+        await fetchCriticalDataRef.current(true); // ✅ Usar ref
         // Cargar datos extendidos después de un breve delay si aún está montado
         setTimeout(() => {
           if (mounted) {
-            fetchExtendedData(true);
+            fetchExtendedDataRef.current(true); // ✅ Usar ref
             // Si es admin, también cargar datos secundarios (después de más delay)
-            if (isAdmin) {
+            if (isAdminRef.current) { // ✅ Usar ref
               setTimeout(() => {
                 if (mounted) {
-                  fetchSecondaryData(true);
+                  fetchSecondaryDataRef.current(true); // ✅ Usar ref
                 }
               }, 300);
             }
@@ -407,11 +452,28 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
     };
     
     loadInitialData();
+
+    // ✅ Visibility API: recargar cuando tab vuelve a ser visible (después de estar hidden >5min)
+    let lastVisibleTime = Date.now();
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        const hiddenDuration = Date.now() - lastVisibleTime;
+        // Si estuvo hidden más de 5 minutos, refrescar datos
+        if (hiddenDuration > 5 * 60 * 1000) {
+          console.log('[AdminDataContext] Tab visible after', Math.round(hiddenDuration / 1000), 's - refreshing');
+          if (mounted) fetchCriticalDataRef.current(true); // ✅ Usar ref
+        }
+        lastVisibleTime = Date.now();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     
     return () => {
       mounted = false;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [isAdmin]); // Agrego isAdmin como dependencia para recargar si cambia
+  }, []); // ✅ Sin dependencias - todo usa refs ahora
 
   const adminData: AdminData = {
   ...state,
