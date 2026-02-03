@@ -222,20 +222,6 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
         return delivery.photos || [];
     }, [loadedPhotos]);
 
-    // ⚡ Cargar fotos en batch con delay para evitar saturar
-    const loadPhotosInBatch = useCallback(async (deliveryIds: string[], delayMs: number = 100) => {
-        for (const deliveryId of deliveryIds) {
-            // Skip si ya están cargadas o cargando
-            if (loadedPhotos[deliveryId] || loadingPhotos[deliveryId]) continue;
-            
-            await loadPhotosForDelivery(deliveryId);
-            // Delay entre requests para no saturar
-            if (delayMs > 0) {
-                await new Promise(resolve => setTimeout(resolve, delayMs));
-            }
-        }
-    }, [loadedPhotos, loadingPhotos, loadPhotosForDelivery]);
-
     const handleOpenPhotos = useCallback(async (deliveryId: string, existingPhotos: string[] | null | undefined, startIndex: number = 0) => {
         // Si ya tiene fotos cargadas, usarlas directamente
         if (existingPhotos && existingPhotos.length > 0) {
@@ -264,42 +250,11 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
         }
     }, [loadedPhotos]);
 
-    // ⚡ Auto-cargar fotos progresivamente al montar componente
-    useEffect(() => {
-        const loadInitialPhotos = async () => {
-            // Priorizar deliveries críticas y pendientes
-            const priorityDeliveries = paginatedDeliveries
-                .filter(d => d.hasPhotos && !loadedPhotos[d.id]) // ✅ Evitar recargar fotos ya cargadas
-                .sort((a, b) => {
-                    // Críticas primero
-                    const aCritical = isCritical(a);
-                    const bCritical = isCritical(b);
-                    if (aCritical && !bCritical) return -1;
-                    if (!aCritical && bCritical) return 1;
-                    // Luego pendientes
-                    if (a.status === 'pending' && b.status !== 'pending') return -1;
-                    if (a.status !== 'pending' && b.status === 'pending') return 1;
-                    return 0;
-                })
-                .slice(0, 10) // Primeras 10 deliveries prioritarias
-                .map(d => d.id);
-            
-            // Solo cargar si hay deliveries que necesitan fotos
-            if (priorityDeliveries.length > 0) {
-                await loadPhotosInBatch(priorityDeliveries, 150);
-            }
-        };
-
-        if (paginatedDeliveries.length > 0) {
-            loadInitialPhotos();
-        }
-    }, [paginatedDeliveries, loadPhotosInBatch, loadedPhotos]); // ✅ Agregar loadedPhotos como dep
-
-    // ⚡ Setup Intersection Observer para lazy loading de fotos visibles
+    // ⚡ Setup Intersection Observer para lazy loading de fotos visibles (ÚNICO PUNTO DE CARGA)
     useEffect(() => {
         const options = {
             root: null,
-            rootMargin: '200px', // Precargar 200px antes de que sea visible
+            rootMargin: '100px', // Precargar 100px antes de que sea visible
             threshold: 0.1
         };
 
@@ -307,14 +262,14 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
             entries.forEach((entry) => {
                 if (entry.isIntersecting) {
                     const deliveryId = entry.target.getAttribute('data-delivery-id');
-                    if (deliveryId && !loadQueueRef.current.has(deliveryId)) {
+                    if (deliveryId && !loadQueueRef.current.has(deliveryId) && !loadedPhotos[deliveryId]) {
                         loadQueueRef.current.add(deliveryId);
-                        // Cargar fotos después de un pequeño delay
+                        // Cargar fotos con delay para evitar saturación
                         setTimeout(() => {
                             loadPhotosForDelivery(deliveryId).finally(() => {
                                 loadQueueRef.current.delete(deliveryId);
                             });
-                        }, 100);
+                        }, 200);
                     }
                 }
             });
@@ -325,7 +280,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                 observerRef.current.disconnect();
             }
         };
-    }, [loadPhotosForDelivery]);
+    }, [loadPhotosForDelivery, loadedPhotos]);
 
     // Cargar contactos de clientes al montar o cuando cambien las deliveries
     useEffect(() => {
