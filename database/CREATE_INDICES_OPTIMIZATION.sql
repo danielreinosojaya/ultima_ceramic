@@ -41,20 +41,20 @@ CREATE INDEX IF NOT EXISTS idx_giftcard_requests_status
   ON giftcard_requests(status);
 
 -- =============================================
--- 5. ÍNDICE PAYMENTS: Booking ID
--- =============================================
--- Usado en: getBookings() con joins a payments
--- Beneficio: Joins serán más eficientes
-CREATE INDEX IF NOT EXISTS idx_payments_booking_id 
-  ON payments(booking_id);
-
--- =============================================
--- 6. ÍNDICE CUSTOMERS: Email (búsquedas)
+-- 5. ÍNDICE CUSTOMERS: Email (búsquedas)
 -- =============================================
 -- Usado en: búsquedas de clientes por email
 -- Beneficio: Búsquedas instantáneas
 CREATE INDEX IF NOT EXISTS idx_customers_email 
   ON customers(email);
+
+-- =============================================
+-- NOTA TÉCNICA: Pagos
+-- =============================================
+-- Los pagos NO están en una tabla separada.
+-- Se almacenan en bookings.payment_details (JSONB).
+-- No se requiere índice adicional ya que se acceden
+-- directamente desde la reserva.
 
 -- =============================================
 -- VERIFICACIÓN
@@ -69,7 +69,7 @@ SELECT
 FROM 
     pg_indexes
 WHERE 
-    tablename IN ('bookings', 'deliveries', 'giftcard_requests', 'payments', 'customers')
+    tablename IN ('bookings', 'deliveries', 'giftcard_requests', 'customers')
     AND indexname LIKE 'idx_%'
 ORDER BY 
     tablename, indexname;
@@ -77,6 +77,8 @@ ORDER BY
 -- =============================================
 -- ESTIMACIÓN DE IMPACTO
 -- =============================================
+-- 
+-- ÍNDICES CREADOS: 5 (payments eliminado - no existe tabla)
 -- 
 -- Antes de índices:
 -- - getBookings(): 800-1200ms
