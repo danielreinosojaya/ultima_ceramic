@@ -698,10 +698,12 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         `;
                         data = deliveries.map(toCamelCase);
                     } else {
-                        // Carga ligera: excluir columna photos
+                        // Carga ligera: excluir columna photos pero INCLUIR campos de pintura
                         const { rows: deliveries } = await sql`
                             SELECT id, customer_email, description, scheduled_date, status, 
                                    created_at, completed_at, delivered_at, ready_at, notes,
+                                   wants_painting, painting_price, painting_status, 
+                                   painting_booking_date, painting_paid_at, painting_completed_at,
                                    CASE WHEN photos IS NOT NULL AND photos != '[]' AND photos != 'null' 
                                         THEN true ELSE false END as has_photos
                             FROM deliveries 
