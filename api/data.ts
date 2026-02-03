@@ -1327,20 +1327,32 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     console.error('Error fetching products:', error);
                     data = [];
                 }
-            } else if (key === 'bookings') {
-                // ⚡ OPTIMIZACIÓN: Cargar solo bookings recientes (últimos 90 días) por defecto
-                // Bookings antiguos se cargan on-demand cuando usuario busca específicamente
-                const daysLimit = parseInt(req.query.daysLimit as string) || 90;
-                const limitDate = new Date();
-                limitDate.setDate(limitDate.getDate() - daysLimit);
+                        } else if (key === 'bookings') {
+                                // ⚡ OPTIMIZACIÓN: Cargar solo bookings recientes (últimos 90 días) por defecto
+                                // ⚠️ CRÍTICO: Incluir TODAS las reservas con slots futuros aunque fueron creadas hace meses
+                                const daysLimit = parseInt(req.query.daysLimit as string) || 90;
+                                const limitDate = new Date();
+                                limitDate.setDate(limitDate.getDate() - daysLimit);
+                                const todayStr = new Date().toISOString().split('T')[0];
                 
-                const { rows: bookings } = await sql`
-                    SELECT * FROM bookings 
-                    WHERE created_at >= ${limitDate.toISOString()}
-                    ORDER BY created_at DESC
-                    LIMIT 1000
-                `;
-                console.log(`API: Loaded ${bookings.length} bookings from last ${daysLimit} days`);
+                                const { rows: bookings } = await sql`
+                                        SELECT * FROM bookings 
+                                        WHERE status != 'expired'
+                                            AND (
+                                                created_at >= ${limitDate.toISOString()}
+                                                OR (
+                                                    slots IS NOT NULL
+                                                    AND EXISTS (
+                                                        SELECT 1
+                                                        FROM jsonb_array_elements(slots::jsonb) AS s
+                                                        WHERE (s->>'date')::date >= ${todayStr}::date
+                                                    )
+                                                )
+                                            )
+                                        ORDER BY created_at DESC
+                                        LIMIT 1500
+                                `;
+                                console.log(`API: Loaded ${bookings.length} bookings from last ${daysLimit} days + future slots`);
                 
                 if (bookings.length === 0) {
                     console.warn('API: No bookings found in database');
