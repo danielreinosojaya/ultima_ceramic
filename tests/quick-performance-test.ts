@@ -5,7 +5,7 @@
  */
 
 // Usar la URL de producción de Vercel
-const PRODUCTION_URL = 'https://ultima-ceramic-git-gif-daniel-reinosos-projects.vercel.app';
+const PRODUCTION_URL = process.env.TEST_URL || 'https://ceramicalma.vercel.app';
 
 interface Metrics {
     totalRequests: number;
@@ -34,7 +34,17 @@ async function measurePerformance(): Promise<Metrics> {
         
         const text = await response.text();
         totalData += new Blob([text]).size;
-        const data = JSON.parse(text);
+        
+        // Verificar si es JSON válido
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (parseError) {
+            console.log(`   ❌ Respuesta no es JSON válido`);
+            console.log(`   Status: ${response.status}`);
+            console.log(`   Respuesta (primeros 200 chars): ${text.substring(0, 200)}`);
+            throw new Error(`Invalid JSON response: ${text.substring(0, 100)}`);
+        }
         
         const deliveries = data.data || [];
         const withPhotos = deliveries.filter((d: any) => d.hasPhotos);
