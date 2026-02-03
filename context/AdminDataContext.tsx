@@ -185,9 +185,14 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
     extended: null as number | null,
     secondary: null as number | null,
   });
-  const mountedRef = useRef(true);
+  const isAdminRef = useRef(isAdmin);
+  
+  // Mantener ref actualizado
+  useEffect(() => {
+    isAdminRef.current = isAdmin;
+  }, [isAdmin]);
 
-  // Helper para verificar si necesita actualizar
+  // Helper para verificar si necesita actualizar - SIN dependencias
   const needsUpdate = useCallback((type: 'critical' | 'extended' | 'secondary', duration: number): boolean => {
     const lastUpdate = lastUpdatedRef.current[type];
     if (!lastUpdate) return true;
@@ -344,7 +349,7 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
 
   // Cargar datos secundarios (solo admin, lazy loading)
   const fetchSecondaryData = useCallback(async (force = false) => {
-    if (!isAdmin) return; // No cargar si no es admin
+    if (!isAdminRef.current) return; // ✅ Usar ref en lugar de prop para evitar dependencia
 
     // ✅ Usar refs en lugar de state para evitar dependencias
     if (!force) {
@@ -386,29 +391,41 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
       loadingRef.current.secondary = false;
       dispatch({ type: 'SET_LOADING', dataType: 'secondary', loading: false });
     }
-  }, [isAdmin, needsUpdate]);
+  }, [needsUpdate]); // ✅ Removido isAdmin - usar ref
+
+  // ✅ Refs estables para las funciones fetch - PREVIENE LOOPS
+  const fetchCriticalDataRef = useRef(fetchCriticalData);
+  const fetchExtendedDataRef = useRef(fetchExtendedData);
+  const fetchSecondaryDataRef = useRef(fetchSecondaryData);
+  
+  // Actualizar refs cuando las funciones cambien
+  useEffect(() => {
+    fetchCriticalDataRef.current = fetchCriticalData;
+    fetchExtendedDataRef.current = fetchExtendedData;
+    fetchSecondaryDataRef.current = fetchSecondaryData;
+  });
 
   // Refrescar todo
   const refresh = useCallback(() => {
-    fetchCriticalData(true);
-    fetchExtendedData(true);
-    fetchSecondaryData(true);
-  }, [fetchCriticalData, fetchExtendedData, fetchSecondaryData]);
+    fetchCriticalDataRef.current(true);
+    fetchExtendedDataRef.current(true);
+    fetchSecondaryDataRef.current(true);
+  }, []); // ✅ Sin dependencias - usar refs
 
   // Refrescar solo críticos
   const refreshCritical = useCallback(() => {
-    fetchCriticalData(true);
-  }, [fetchCriticalData]);
+    fetchCriticalDataRef.current(true);
+  }, []); // ✅ Sin dependencias - usar refs
 
   // Refrescar solo extendidos
   const refreshExtended = useCallback(() => {
-    fetchExtendedData(true);
-  }, [fetchExtendedData]);
+    fetchExtendedDataRef.current(true);
+  }, []); // ✅ Sin dependencias - usar refs
 
   // Refrescar solo secundarios
   const refreshSecondary = useCallback(() => {
-    fetchSecondaryData(true);
-  }, [fetchSecondaryData]);
+    fetchSecondaryDataRef.current(true);
+  }, []); // ✅ Sin dependencias - usar refs
 
   // Cargar datos iniciales - solo una vez al montar
   useEffect(() => {
@@ -416,16 +433,16 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
     
     const loadInitialData = async () => {
       if (mounted) {
-        await fetchCriticalData(true); // Force inicial load
+        await fetchCriticalDataRef.current(true); // ✅ Usar ref
         // Cargar datos extendidos después de un breve delay si aún está montado
         setTimeout(() => {
           if (mounted) {
-            fetchExtendedData(true);
+            fetchExtendedDataRef.current(true); // ✅ Usar ref
             // Si es admin, también cargar datos secundarios (después de más delay)
-            if (isAdmin) {
+            if (isAdminRef.current) { // ✅ Usar ref
               setTimeout(() => {
                 if (mounted) {
-                  fetchSecondaryData(true);
+                  fetchSecondaryDataRef.current(true); // ✅ Usar ref
                 }
               }, 300);
             }
@@ -444,7 +461,7 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
         // Si estuvo hidden más de 5 minutos, refrescar datos
         if (hiddenDuration > 5 * 60 * 1000) {
           console.log('[AdminDataContext] Tab visible after', Math.round(hiddenDuration / 1000), 's - refreshing');
-          if (mounted) fetchCriticalData(true);
+          if (mounted) fetchCriticalDataRef.current(true); // ✅ Usar ref
         }
         lastVisibleTime = Date.now();
       }
@@ -456,7 +473,7 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
       mounted = false;
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [isAdmin]);
+  }, []); // ✅ Sin dependencias - todo usa refs ahora
 
   const adminData: AdminData = {
   ...state,
