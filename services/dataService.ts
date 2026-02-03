@@ -2052,6 +2052,8 @@ export const getDeliveriesByCustomer = async (customerEmail: string): Promise<De
 export const createDelivery = async (deliveryData: Omit<Delivery, 'id' | 'createdAt'>): Promise<{ success: boolean; delivery?: Delivery }> => {
     const result = await postAction('createDelivery', deliveryData);
     if (result.success && result.delivery) {
+        invalidateDeliveriesCache();
+        invalidateCustomersCache();
         return { ...result, delivery: parseDelivery(result.delivery) };
     }
     return result;
@@ -2566,11 +2568,12 @@ export const calculateSlotAvailability = (
   const slotEnd = new Date(slotStart.getTime() + 2 * 60 * 60 * 1000); // +2 horas
   
   // FIX: Usar capacidad de appData en lugar de valores hardcodeados
-  const capacity = {
-    potters_wheel: { max: appData.classCapacity?.potters_wheel || 8, bookedInWindow: 0 },
-    hand_modeling: { max: appData.classCapacity?.molding || 14, bookedInWindow: 0 },
-    painting: { max: Infinity, bookedInWindow: 0 }
-  };
+    const pottersWheelMax = appData.classCapacity?.potters_wheel || 8;
+    const handWorkMax = appData.classCapacity?.molding || 14;
+    const capacity = {
+        potters_wheel: { max: pottersWheelMax, bookedInWindow: 0 },
+        hand_work: { max: handWorkMax, bookedInWindow: 0 }
+    };
 
   const overlappingDetails: string[] = [];
 
@@ -2584,13 +2587,6 @@ export const calculateSlotAvailability = (
       return d.toISOString().substr(11,5);
     }
     return t.trim().toLowerCase();
-  };
-  
-  // Bookings que se solapan - agrupados por técnica
-  const bookingsByTechnique: Record<string, Booking[]> = {
-    potters_wheel: [],
-    hand_modeling: [],
-    painting: []
   };
   
   appData.bookings.forEach(booking => {
@@ -2614,21 +2610,43 @@ export const calculateSlotAvailability = (
       }
     }
     
-    if (!bookingTechnique) {
-      bookingTechnique = 'hand_modeling';
-    }
-    
-    // Verificar si este booking coincide con la fecha/hora exacta (no ventana)
-    const hasMatchingSlot = booking.slots.some(slot => {
-      return slot.date === date && normalizeTime(slot.time) === normalizeTime(startTime);
-    });
-    
-    if (hasMatchingSlot) {
-      bookingsByTechnique[bookingTechnique].push(booking);
-      const participantCount = booking.participants ?? 1;
-      capacity[bookingTechnique].bookedInWindow += participantCount;
-      overlappingDetails.push(`${booking.productType}: ${participantCount} personas (${bookingTechnique})`);
-    }
+        if (!bookingTechnique) bookingTechnique = 'hand_modeling';
+
+        const isHandWork = (tech: string) => tech === 'hand_modeling' || tech === 'painting' || tech === 'molding';
+
+        const toMinutes = (t: string) => {
+            const normalized = normalizeTime(t);
+            const [h, m] = normalized.split(':').map(Number);
+            if (Number.isNaN(h) || Number.isNaN(m)) return NaN;
+            return (h * 60) + m;
+        };
+
+        const requestedStartMinutes = toMinutes(startTime);
+        const requestedEndMinutes = requestedStartMinutes + (2 * 60);
+
+        if (Number.isNaN(requestedStartMinutes)) return;
+
+        booking.slots.forEach(slot => {
+            if (slot.date !== date) return;
+
+            const bookingStartMinutes = toMinutes(slot.time);
+            if (Number.isNaN(bookingStartMinutes)) return;
+            const bookingEndMinutes = bookingStartMinutes + (2 * 60);
+
+            const hasOverlap = requestedStartMinutes < bookingEndMinutes && requestedEndMinutes > bookingStartMinutes;
+            if (!hasOverlap) return;
+
+            const participantCount = booking.participants ?? 1;
+            if (isHandWork(bookingTechnique)) {
+                capacity.hand_work.bookedInWindow += participantCount;
+            } else if (bookingTechnique === 'potters_wheel') {
+                capacity.potters_wheel.bookedInWindow += participantCount;
+            } else {
+                capacity.hand_work.bookedInWindow += participantCount;
+            }
+
+            overlappingDetails.push(`${booking.productType}: ${participantCount} personas (${bookingTechnique})`);
+        });
   });
 
   const endTimeFormatted = new Date(slotEnd).toLocaleTimeString('es-ES', {
@@ -2637,30 +2655,33 @@ export const calculateSlotAvailability = (
   });
 
   // Calcular disponibilidad
-  return {
+    const handWorkAvailable = Math.max(0, capacity.hand_work.max - capacity.hand_work.bookedInWindow);
+    const pottersWheelAvailable = Math.max(0, capacity.potters_wheel.max - capacity.potters_wheel.bookedInWindow);
+
+    return {
     date,
     startTime,
     endTime: endTimeFormatted,
     techniques: {
       potters_wheel: {
-        available: Math.max(0, capacity.potters_wheel.max - capacity.potters_wheel.bookedInWindow),
-        total: capacity.potters_wheel.max,
+                available: pottersWheelAvailable,
+                total: capacity.potters_wheel.max,
         bookedInWindow: capacity.potters_wheel.bookedInWindow,
         isAvailable: capacity.potters_wheel.bookedInWindow < capacity.potters_wheel.max,
         overlappingClasses: overlappingDetails.length > 0 ? overlappingDetails : undefined
       },
       hand_modeling: {
-        available: Math.max(0, capacity.hand_modeling.max - capacity.hand_modeling.bookedInWindow),
-        total: capacity.hand_modeling.max,
-        bookedInWindow: capacity.hand_modeling.bookedInWindow,
-        isAvailable: capacity.hand_modeling.bookedInWindow < capacity.hand_modeling.max,
+                available: handWorkAvailable,
+                total: capacity.hand_work.max,
+                bookedInWindow: capacity.hand_work.bookedInWindow,
+                isAvailable: capacity.hand_work.bookedInWindow < capacity.hand_work.max,
         overlappingClasses: overlappingDetails.length > 0 ? overlappingDetails : undefined
       },
       painting: {
-        available: Infinity,
-        total: Infinity,
-        bookedInWindow: capacity.painting.bookedInWindow,
-        isAvailable: true
+                available: handWorkAvailable,
+                total: capacity.hand_work.max,
+                bookedInWindow: capacity.hand_work.bookedInWindow,
+                isAvailable: capacity.hand_work.bookedInWindow < capacity.hand_work.max
       }
     }
   };

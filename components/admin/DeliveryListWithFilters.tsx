@@ -64,6 +64,8 @@ interface DeliveryListWithFiltersProps {
     onComplete: (deliveryId: string) => void;
     onMarkReady: (deliveryId: string) => void;
     formatDate: (date: string) => string;
+    onDeliveryUpdated?: (delivery: Delivery) => void;
+    onDataChange?: () => void;
 }
 
 type FilterStatus = 'all' | 'pending' | 'ready' | 'completed' | 'overdue' | 'critical' | 'due5days' | 'wants_painting' | 'painting_pending_payment' | 'painting_ready' | 'painting_scheduled' | 'painting_completed';
@@ -74,7 +76,9 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
     onDelete,
     onComplete,
     onMarkReady,
-    formatDate
+    formatDate,
+    onDeliveryUpdated,
+    onDataChange
 }) => {
     const adminData = useAdminData();
     const [searchQuery, setSearchQuery] = useState('');
@@ -1186,6 +1190,10 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                                 try {
                                                     const result = await dataService.updatePaintingStatus(delivery.id, 'paid');
                                                     if (result.success) {
+                                                        if (result.delivery) {
+                                                            onDeliveryUpdated?.(result.delivery);
+                                                        }
+                                                        onDataChange?.();
                                                         adminData.refreshCritical();
                                                     } else {
                                                         alert('Error: ' + (result.error || 'No se pudo actualizar'));
@@ -1219,6 +1227,10 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                                         paintingBookingDate: date.toISOString()
                                                     }).then(result => {
                                                         if (result.success) {
+                                                            if (result.delivery) {
+                                                                onDeliveryUpdated?.(result.delivery);
+                                                            }
+                                                            onDataChange?.();
                                                             adminData.refreshCritical();
                                                         } else {
                                                             alert('Error: ' + (result.error || 'No se pudo agendar'));
@@ -1245,6 +1257,10 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                                 try {
                                                     const result = await dataService.updatePaintingStatus(delivery.id, 'completed');
                                                     if (result.success) {
+                                                        if (result.delivery) {
+                                                            onDeliveryUpdated?.(result.delivery);
+                                                        }
+                                                        onDataChange?.();
                                                         adminData.refreshCritical();
                                                     } else {
                                                         alert('Error: ' + (result.error || 'No se pudo completar'));

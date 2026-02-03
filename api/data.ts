@@ -3878,7 +3878,21 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             }
         }
         case 'createDelivery': {
-            const { customerEmail, customerName, description, scheduledDate, status = 'pending', notes, photos } = req.body;
+            const { 
+                customerEmail, 
+                customerName, 
+                description, 
+                scheduledDate, 
+                status = 'pending', 
+                notes, 
+                photos,
+                wantsPainting,
+                paintingPrice,
+                paintingStatus,
+                paintingBookingDate,
+                paintingPaidAt,
+                paintingCompletedAt
+            } = req.body;
             
             // description ahora es opcional
             if (!customerEmail || !scheduledDate) {
@@ -3889,8 +3903,34 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             const photosJson = photos && Array.isArray(photos) ? JSON.stringify(photos) : null;
             
             const { rows: [newDelivery] } = await sql`
-                INSERT INTO deliveries (customer_email, description, scheduled_date, status, notes, photos)
-                VALUES (${customerEmail}, ${description || null}, ${scheduledDate}, ${status}, ${notes || null}, ${photosJson})
+                INSERT INTO deliveries (
+                    customer_email, 
+                    description, 
+                    scheduled_date, 
+                    status, 
+                    notes, 
+                    photos,
+                    wants_painting,
+                    painting_price,
+                    painting_status,
+                    painting_booking_date,
+                    painting_paid_at,
+                    painting_completed_at
+                )
+                VALUES (
+                    ${customerEmail}, 
+                    ${description || null}, 
+                    ${scheduledDate}, 
+                    ${status}, 
+                    ${notes || null}, 
+                    ${photosJson},
+                    ${typeof wantsPainting === 'boolean' ? wantsPainting : null},
+                    ${typeof paintingPrice === 'number' ? paintingPrice : null},
+                    ${paintingStatus || null},
+                    ${paintingBookingDate || null},
+                    ${paintingPaidAt || null},
+                    ${paintingCompletedAt || null}
+                )
                 RETURNING *;
             `;
             

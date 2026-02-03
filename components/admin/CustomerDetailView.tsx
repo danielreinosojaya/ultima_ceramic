@@ -717,6 +717,11 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                         onComplete={(deliveryId) => setCompleteModal({ open: true, deliveryId })}
                         onMarkReady={handleMarkDeliveryAsReady}
                         formatDate={formatDate}
+                        onDataChange={onDataChange}
+                        onDeliveryUpdated={(updatedDelivery) => setState(prev => ({
+                            ...prev,
+                            deliveries: prev.deliveries.map(d => d.id === updatedDelivery.id ? updatedDelivery : d)
+                        }))}
                     />
                 </div>
 

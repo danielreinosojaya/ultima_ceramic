@@ -526,11 +526,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                         {availableTimes.map(time => {
                           const slotInfo = appData ? dataService.calculateSlotAvailability(selectedDate, time, appData) : null;
                           const isSelected = selectedSlot?.time === time && selectedSlot?.date === selectedDate;
-                          
-                          // Determinar si el slot está disponible para cualquier técnica
-                          const hasAnyCapacity = slotInfo?.techniques.potters_wheel.isAvailable || 
-                                               slotInfo?.techniques.hand_modeling.isAvailable ||
-                                               slotInfo?.techniques.painting.isAvailable;
+                          const hasCapacityForSelection = slotInfo?.techniques[technique]?.isAvailable ?? false;
                           
                           return (
                             <div key={time} className="flex flex-col gap-1">
@@ -542,11 +538,11 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                                     instructorId: 0
                                   });
                                 }}
-                                disabled={!hasAnyCapacity}
+                                disabled={!hasCapacityForSelection}
                                 className={`p-2 rounded-lg border-2 transition-all text-center font-bold text-xs ${
                                   isSelected
                                     ? 'border-blue-500 bg-blue-500 text-white ring-2 ring-blue-300'
-                                    : hasAnyCapacity
+                                    : hasCapacityForSelection
                                     ? 'border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:bg-blue-50 cursor-pointer'
                                     : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-40'
                                 }`}
@@ -557,12 +553,20 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                               {/* Mostrar cupos disponibles */}
                               {slotInfo && (
                                 <div className="text-xs text-gray-600 space-y-0.5">
-                                  <div className={slotInfo.techniques.potters_wheel.isAvailable ? 'text-green-600' : 'text-red-500'}>
-                                    🎡 {slotInfo.techniques.potters_wheel.available}/{slotInfo.techniques.potters_wheel.total}
-                                  </div>
-                                  <div className={slotInfo.techniques.hand_modeling.isAvailable ? 'text-green-600' : 'text-red-500'}>
-                                    🤚 {slotInfo.techniques.hand_modeling.available}/{slotInfo.techniques.hand_modeling.total}
-                                  </div>
+                                  {technique === 'painting' ? (
+                                    <div className={slotInfo.techniques.painting.isAvailable ? 'text-green-600' : 'text-red-500'}>
+                                      🎨 {slotInfo.techniques.painting.available}/{slotInfo.techniques.painting.total}
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <div className={slotInfo.techniques.potters_wheel.isAvailable ? 'text-green-600' : 'text-red-500'}>
+                                        🎡 {slotInfo.techniques.potters_wheel.available}/{slotInfo.techniques.potters_wheel.total}
+                                      </div>
+                                      <div className={slotInfo.techniques.hand_modeling.isAvailable ? 'text-green-600' : 'text-red-500'}>
+                                        🤚 {slotInfo.techniques.hand_modeling.available}/{slotInfo.techniques.hand_modeling.total}
+                                      </div>
+                                    </>
+                                  )}
                                 </div>
                               )}
                             </div>
