@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, ReactNode } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense, ReactNode } from 'react';
 import type { BankDetails } from './types';
 import { Header } from './components/Header';
 import { WelcomeSelector } from './components/WelcomeSelector';
