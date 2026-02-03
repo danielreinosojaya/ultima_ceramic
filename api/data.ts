@@ -732,36 +732,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
 
                     // ⚡ Cache 5 minutos para fotos (raramente cambian)
                     res.setHeader('Cache-Control', 'private, max-age=300, stale-while-revalidate=600');
-                    
-                    const rawPhotos = rows[0].photos || [];
-                    
-                    // 🔥 COMPRESIÓN LAZY: Solo comprimir si es base64 y es muy grande
-                    const photos = rawPhotos.map((photoUrl: string) => {
-                        try {
-                            // Si ya es URL externa, retornar sin modificar
-                            if (photoUrl.startsWith('http://') || photoUrl.startsWith('https://')) {
-                                return photoUrl;
-                            }
-                            
-                            // Si es base64 pero pequeño (<100KB), no comprimir
-                            if (photoUrl.length < 150000) {
-                                return photoUrl;
-                            }
-                            
-                            // Para imágenes muy grandes, enviar señal al cliente para comprimir en navegador
-                            // El cliente usará canvas para comprimir antes de enviarlo
-                            return {
-                                url: photoUrl,
-                                needsCompression: true,
-                                size: photoUrl.length
-                            };
-                        } catch (err) {
-                            console.error('[getDeliveryPhotos] Error procesando imagen:', err);
-                            return photoUrl;
-                        }
-                    });
-                    
-                    data = { photos };
+                    data = { photos: rows[0].photos || [] };
                     break;
                 }
                 case 'standaloneCustomers': {
