@@ -729,7 +729,6 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     if (rows.length === 0) {
                         return res.status(404).json({ error: 'Delivery not found' });
                     }
-
                     // ⚡ Cache 5 minutos para fotos (raramente cambian)
                     res.setHeader('Cache-Control', 'private, max-age=300, stale-while-revalidate=600');
                     data = { photos: rows[0].photos || [] };
@@ -4349,6 +4348,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                                             }
                                         );
                                         emailSent = !!(emailResult && emailResult.sent);
+                                        emailError = (emailResult && !emailResult.sent) ? emailResult.error : undefined;
+                                        emailDryRunPath = (emailResult && !emailResult.sent) ? emailResult.dryRunPath : undefined;
                                         console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] 📧 Email sent successfully:`, emailResult);
                                     } else {
                                         console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Customer data not found for email`);
@@ -4422,6 +4423,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                                             }
                                         );
                                         emailSent = !!(emailResult && emailResult.sent);
+                                        emailError = (emailResult && !emailResult.sent) ? emailResult.error : undefined;
+                                        emailDryRunPath = (emailResult && !emailResult.sent) ? emailResult.dryRunPath : undefined;
                                         console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] 📧 Email sent successfully:`, emailResult);
                                     } else {
                                         console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Customer data not found for email`);
