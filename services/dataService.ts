@@ -1520,8 +1520,9 @@ export const getEssentialAppData = async () => {
 // Función específica para datos de scheduling
 export const getSchedulingData = async () => {
     // Cargar datos críticos para disponibilidad (instructores y availability)
+    // ✅ Usar getInstructors() que tiene cache dedicado de 1 hora
     const [instructors, availability] = await Promise.all([
-        getData('instructors'),
+        getInstructors(),
         getData('availability')
     ]);
     

@@ -533,9 +533,23 @@ const App: React.FC = () => {
         }
     };
     
+    // ✅ Ref para prevenir calls duplicados de datos adicionales
+    const loadingDataRef = useRef<Record<string, boolean>>({
+        scheduling: false,
+        bookings: false,
+        admin: false
+    });
+    
     // Función para cargar datos adicionales bajo demanda
     const loadAdditionalData = useCallback(async (dataType: 'scheduling' | 'bookings' | 'admin', currentAppData: AppData) => {
         if (!currentAppData) return;
+        
+        // ✅ Prevenir calls duplicados usando ref
+        if (loadingDataRef.current[dataType]) {
+            console.log(`[App] Already loading ${dataType}, skipping`);
+            return;
+        }
+        loadingDataRef.current[dataType] = true;
         
         try {
             let updates: Partial<AppData> = {};
@@ -584,6 +598,9 @@ const App: React.FC = () => {
             }
         } catch (error) {
             console.error(`Failed to load ${dataType} data:`, error);
+        } finally {
+            // ✅ Siempre resetear el flag para permitir recargas futuras
+            loadingDataRef.current[dataType] = false;
         }
     }, []);
 
