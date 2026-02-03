@@ -94,6 +94,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
     // ⚡ Intersection Observer para lazy loading automático
     const observerRef = useRef<IntersectionObserver | null>(null);
     const loadQueueRef = useRef<Set<string>>(new Set());
+    const deliveryNodesRef = useRef<Map<string, HTMLDivElement>>(new Map());
     const [bulkFeedback, setBulkFeedback] = useState<{message: string; type: 'success' | 'error' | 'warning'} | null>(null);
     
     // 📅 Nuevos filtros por rango de fechas y ordenamiento
@@ -274,10 +275,26 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
 
     // ⚡ Hook para observar elementos de delivery
     const deliveryCardRef = useCallback((node: HTMLDivElement | null, delivery: Delivery) => {
-        if (!node || !observerRef.current) return;
-        
+        const map = deliveryNodesRef.current;
+
+        if (!node) {
+            const existing = map.get(delivery.id);
+            if (existing && observerRef.current) {
+                observerRef.current.unobserve(existing);
+            }
+            map.delete(delivery.id);
+            return;
+        }
+
+        const existing = map.get(delivery.id);
+        if (existing && existing !== node && observerRef.current) {
+            observerRef.current.unobserve(existing);
+        }
+
+        map.set(delivery.id, node);
+
         // Solo observar si tiene fotos y no están cargadas
-        if (delivery.hasPhotos && !loadedPhotos[delivery.id]) {
+        if (delivery.hasPhotos && !loadedPhotos[delivery.id] && observerRef.current) {
             observerRef.current.observe(node);
         }
     }, [loadedPhotos]);
@@ -290,7 +307,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
             threshold: 0.1
         };
 
-        observerRef.current = new IntersectionObserver((entries) => {
+        const observer = new IntersectionObserver((entries) => {
             entries.forEach((entry) => {
                 if (entry.isIntersecting) {
                     const deliveryId = entry.target.getAttribute('data-delivery-id');
@@ -307,10 +324,18 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
             });
         }, options);
 
-        return () => {
-            if (observerRef.current) {
-                observerRef.current.disconnect();
+        observerRef.current = observer;
+
+        // Re-observar nodos ya montados (evita que solo carguen los primeros)
+        deliveryNodesRef.current.forEach((node, deliveryId) => {
+            const hasPhotos = node.getAttribute('data-has-photos') === 'true';
+            if (hasPhotos && !loadedPhotos[deliveryId]) {
+                observer.observe(node);
             }
+        });
+
+        return () => {
+            observer.disconnect();
         };
     }, [loadPhotosForDelivery, loadedPhotos]);
 
@@ -862,6 +887,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                             key={delivery.id}
                             ref={(node) => deliveryCardRef(node, delivery)}
                             data-delivery-id={delivery.id}
+                            data-has-photos={delivery.hasPhotos ? 'true' : 'false'}
                             className={`bg-white rounded-lg shadow-md border-2 transition-all duration-200 overflow-hidden ${
                                 isOverdue ? 'border-red-300 bg-red-50' : isSelected ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
                             }`}
