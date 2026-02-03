@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import type { Delivery } from '../../types';
-import { MagnifyingGlassIcon, FunnelIcon, XMarkIcon, QuestionMarkCircleIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon, FunnelIcon, XMarkIcon, QuestionMarkCircleIcon, ArrowDownTrayIcon, ArrowsUpDownIcon } from '@heroicons/react/24/outline';
 import { PhotoViewerModal } from './PhotoViewerModal';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -95,12 +95,17 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
     const observerRef = useRef<IntersectionObserver | null>(null);
     const loadQueueRef = useRef<Set<string>>(new Set());
     const [bulkFeedback, setBulkFeedback] = useState<{message: string; type: 'success' | 'error' | 'warning'} | null>(null);
+    
+    // 📅 Nuevos filtros por rango de fechas y ordenamiento
+    const [dateFrom, setDateFrom] = useState<string>(''); // formato YYYY-MM-DD
+    const [dateTo, setDateTo] = useState<string>(''); // formato YYYY-MM-DD
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc'); // orden por created_at
 
     const filteredDeliveries = useMemo(() => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        return deliveries.filter(delivery => {
+        let filtered = deliveries.filter(delivery => {
             // Search filter - busca por descripción, notas y nombre del cliente
             const matchesSearch = searchQuery.trim() === '' || 
                 (delivery.description?.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -137,27 +142,54 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                 matchesStatus = delivery.wantsPainting === true && delivery.paintingStatus === 'completed';
             }
 
-            return matchesSearch && matchesStatus;
-        }).sort((a, b) => {
-            // Sort: critical first, then by scheduled date
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            
-            const aDate = new Date(a.scheduledDate);
-            const bDate = new Date(b.scheduledDate);
-            aDate.setHours(0, 0, 0, 0);
-            bDate.setHours(0, 0, 0, 0);
-            
+            // 📅 Filtro por rango de fechas (created_at)
+            let matchesDateRange = true;
+            if (dateFrom || dateTo) {
+                const createdAt = new Date(delivery.createdAt);
+                createdAt.setHours(0, 0, 0, 0);
+                
+                if (dateFrom) {
+                    const fromDate = new Date(dateFrom);
+                    fromDate.setHours(0, 0, 0, 0);
+                    if (createdAt < fromDate) {
+                        matchesDateRange = false;
+                    }
+                }
+                
+                if (dateTo) {
+                    const toDate = new Date(dateTo);
+                    toDate.setHours(23, 59, 59, 999); // Incluir todo el día
+                    if (createdAt > toDate) {
+                        matchesDateRange = false;
+                    }
+                }
+            }
+
+            return matchesSearch && matchesStatus && matchesDateRange;
+        });
+
+        // Ordenamiento: primero críticos, luego por created_at según sortDirection
+        filtered.sort((a, b) => {
             const aCritical = isCritical(a);
             const bCritical = isCritical(b);
             
+            // Prioridad 1: críticos primero
             if (aCritical && !bCritical) return -1;
             if (!aCritical && bCritical) return 1;
             
-            // Both same priority, sort by date (closest first)
-            return aDate.getTime() - bDate.getTime();
+            // Prioridad 2: orden por created_at (fecha de recepción del formulario)
+            const aCreatedAt = new Date(a.createdAt).getTime();
+            const bCreatedAt = new Date(b.createdAt).getTime();
+            
+            if (sortDirection === 'asc') {
+                return aCreatedAt - bCreatedAt; // Más antiguo primero
+            } else {
+                return bCreatedAt - aCreatedAt; // Más reciente primero
+            }
         });
-    }, [deliveries, searchQuery, filterStatus]);
+
+        return filtered;
+    }, [deliveries, searchQuery, filterStatus, dateFrom, dateTo, sortDirection]);
 
     // Pagination logic
     const totalPages = Math.ceil(filteredDeliveries.length / itemsPerPage);
@@ -718,6 +750,63 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                             )}
                         </>
                     )}
+                    
+                    {/* 📅 Filtro por rango de fechas */}
+                    <div className="w-full border-t border-gray-300 my-2"></div>
+                    <div className="w-full flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-gray-700">📅 FECHA DE RECEPCIÓN:</span>
+                            <button
+                                onClick={() => {
+                                    setDateFrom('');
+                                    setDateTo('');
+                                }}
+                                disabled={!dateFrom && !dateTo}
+                                className={`text-xs px-2 py-1 rounded ${
+                                    dateFrom || dateTo
+                                        ? 'text-red-600 hover:bg-red-50 cursor-pointer'
+                                        : 'text-gray-400 cursor-not-allowed'
+                                }`}
+                            >
+                                Limpiar
+                            </button>
+                        </div>
+                        <div className="flex items-center gap-2 flex-1">
+                            <label className="text-xs text-gray-600">Desde:</label>
+                            <input
+                                type="date"
+                                value={dateFrom}
+                                onChange={(e) => {
+                                    setDateFrom(e.target.value);
+                                    setCurrentPage(1);
+                                }}
+                                className="px-3 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-brand-primary focus:border-transparent"
+                            />
+                            <label className="text-xs text-gray-600">Hasta:</label>
+                            <input
+                                type="date"
+                                value={dateTo}
+                                onChange={(e) => {
+                                    setDateTo(e.target.value);
+                                    setCurrentPage(1);
+                                }}
+                                className="px-3 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-brand-primary focus:border-transparent"
+                            />
+                        </div>
+                    </div>
+                    
+                    {/* 🔄 Toggle de ordenamiento */}
+                    <div className="w-full border-t border-gray-300 my-2"></div>
+                    <div className="w-full flex items-center gap-2">
+                        <span className="text-xs font-bold text-gray-700">🔄 ORDENAR POR FECHA RECEPCIÓN:</span>
+                        <button
+                            onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors"
+                        >
+                            <ArrowsUpDownIcon className="h-4 w-4" />
+                            {sortDirection === 'asc' ? '📈 Más antiguo primero' : '📉 Más reciente primero'}
+                        </button>
+                    </div>
                 </div>
             )}
 
@@ -741,15 +830,19 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                         <option value={50}>50</option>
                     </select>
                 </div>
-                {(searchQuery || filterStatus !== 'all') && (
+                {(searchQuery || filterStatus !== 'all' || dateFrom || dateTo || sortDirection !== 'asc') && (
                     <button
                         onClick={() => {
                             setSearchQuery('');
                             setFilterStatus('all');
+                            setDateFrom('');
+                            setDateTo('');
+                            setSortDirection('asc');
+                            setCurrentPage(1);
                         }}
-                        className="text-brand-primary hover:text-brand-secondary font-semibold"
+                        className="text-xs text-red-600 hover:underline font-semibold"
                     >
-                        Limpiar filtros
+                        Limpiar todos los filtros
                     </button>
                 )}
             </div>
