@@ -74,7 +74,7 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
     let pollTimer: NodeJS.Timeout | null = null;
     
     const schedulePoll = () => {
-      if (!isActive) return;
+      if (!isActive || document.hidden) return; // ✅ No programar si tab está hidden
       
       // Determinar intervalo basado en estado actual
       let nextInterval = 300000; // Default 5 minutos
@@ -100,20 +100,37 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
       
       // Programar siguiente poll
       pollTimer = setTimeout(() => {
-        if (isActive) {
+        if (isActive && !document.hidden) { // ✅ Verificar visibilidad
           loadDashboard();
           schedulePoll(); // Programar siguiente
         }
       }, nextInterval);
     };
     
+    // ✅ Visibility API: pausar/reanudar polling
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Tab hidden: cancelar polling
+        if (pollTimer) clearTimeout(pollTimer);
+      } else {
+        // Tab visible: reanudar polling
+        loadDashboard(); // Actualizar inmediatamente
+        schedulePoll();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
     // Programar primer poll después de carga inicial
-    schedulePoll();
+    if (!document.hidden) {
+      schedulePoll();
+    }
     
     return () => {
       isActive = false;
       if (pollTimer) clearTimeout(pollTimer);
       abortController.abort(); // Cancelar todas las fetches pendientes
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [adminCode]);
 

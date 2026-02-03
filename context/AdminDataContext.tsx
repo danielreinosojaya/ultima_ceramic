@@ -159,7 +159,7 @@ function adminReducer(state: AdminState, action: AdminAction): AdminState {
 }
 
 // Cache timeouts
-const CRITICAL_CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
+const CRITICAL_CACHE_DURATION = 10 * 60 * 1000; // 10 minutos (optimizado para reducir requests)
 const EXTENDED_CACHE_DURATION = 15 * 60 * 1000; // 15 minutos
 const SECONDARY_CACHE_DURATION = 30 * 60 * 1000; // 30 minutos - datos no críticos
 
@@ -182,6 +182,12 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
 
   // Cargar datos críticos (más frecuentes)
   const fetchCriticalData = useCallback(async (force = false) => {
+    // ✅ No cargar si tab está hidden (salvo que sea force explícito del usuario)
+    if (!force && document.hidden) {
+      console.log('[AdminDataContext] Tab hidden, skipping fetchCriticalData');
+      return;
+    }
+
     // CORREGIDO: Si force=true, ignorar el chequeo de loading para garantizar recarga
     if (!force) {
       if (!needsUpdate(state.lastUpdated.critical, CRITICAL_CACHE_DURATION)) return;
@@ -407,11 +413,28 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
     };
     
     loadInitialData();
+
+    // ✅ Visibility API: recargar cuando tab vuelve a ser visible (después de estar hidden >5min)
+    let lastVisibleTime = Date.now();
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        const hiddenDuration = Date.now() - lastVisibleTime;
+        // Si estuvo hidden más de 5 minutos, refrescar datos
+        if (hiddenDuration > 5 * 60 * 1000) {
+          console.log('[AdminDataContext] Tab visible after', Math.round(hiddenDuration / 1000), 's - refreshing');
+          if (mounted) fetchCriticalData(true);
+        }
+        lastVisibleTime = Date.now();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     
     return () => {
       mounted = false;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [isAdmin]); // Agrego isAdmin como dependencia para recargar si cambia
+  }, [isAdmin]);
 
   const adminData: AdminData = {
   ...state,

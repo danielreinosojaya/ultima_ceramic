@@ -1,4 +1,18 @@
-# 📊 ANÁLISIS END-TO-END: MÓDULO DE EXPERIENCIAS GRUPALES Y CELEBRACIÓN
+[02/02/26, 3:23:49 p.m.] ~Ceramicalma: Buenas tardes, el día de ayer quedó pendiente que les enviara el objetivo del taller. Se lo indico: Contribuir al empoderamiento de las mujeres a través de un taller de cerámica que promueva la autoexpresión, el desarrollo personal y el reconocimiento de su valor, fortaleciendo su confianza y sentido de logro.
+[02/02/26, 3:23:49 p.m.] ~Ceramicalma: Cotización sobre esto
+
+Ya te envio los valores más o menos 
+[02/02/26, 3:24:05 p.m.] ~Ceramicalma: sandra.davila@assaabloy.com
+
+
+A ese correo desde Ceramicalma
+[02/02/26, 3:28:22 p.m.] ~Ceramicalma: Hacer una propuesta bonita 
+2 horas de taller
+$45 por persona la actividad de ceramica.
+
+Enviar menú para que puedan escoger las bebidas y comidas adicionales que deseen. 
+
+Es necesario que la reserva sea anticipada (ahi tu ya sabes que poner sobre los pagos y etc)# 📊 ANÁLISIS END-TO-END: MÓDULO DE EXPERIENCIAS GRUPALES Y CELEBRACIÓN
 
 **Fecha de Análisis**: 2026-01-31  
 **Versión del Sistema**: Última Ceramic  

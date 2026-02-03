@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proforma Taller de Cerámica</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        body {
+            font-family: 'Calibri', 'Arial', sans-serif;
+            line-height: 1.6;
+            color: #4a4a4a;
+            background-color: #f5ede3;
+            margin: 0;
+            padding: 20px;
+        }
+        .btn-container {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .btn-pdf {
+            background-color: #c17857;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 12pt;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(193, 120, 87, 0.3);
+        }
+        .btn-pdf:hover {
+            background-color: #b06947;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(193, 120, 87, 0.4);
+        }
+        .container {
+            background-color: white;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 30px 40px;
+            box-shadow: 0 8px 20px rgba(193, 120, 87, 0.15);
+        }
+        
+        /* Controles de paginación para PDF */
+        .section-break {
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+        h2 {
+            page-break-after: avoid;
+            break-after: avoid;
+        }
+        table {
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+        .facilitadora, .destaque, .incluye, .no-incluye, .cierre, .contacto {
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+        .logo-header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-top: 10px;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #d4886f;
+            padding-bottom: 20px;
+        }
+        .header-info {
+            font-size: 11pt;
+            color: #8b6f47;
+            margin-bottom: 20px;
+        }
+        h1 {
+            font-size: 24pt;
+            font-weight: bold;
+            color: #c17857;
+            margin: 10px 0;
+        }
+        h2 {
+            font-size: 14pt;
+            font-weight: bold;
+            color: #c17857;
+            margin-top: 25px;
+            margin-bottom: 15px;
+            border-left: 4px solid #d4886f;
+            padding-left: 10px;
+        }
+        h3 {
+            font-size: 12pt;
+            font-weight: bold;
+            color: #4a4a4a;
+            margin-top: 15px;
+            margin-bottom: 10px;
+        }
+        p {
+            font-size: 11pt;
+            margin: 10px 0;
+            text-align: justify;
+            color: #4a4a4a;
+        }
+        .intro {
+            font-size: 11pt;
+            margin: 20px 0;
+            color: #4a4a4a;
+        }
+        ul {
+            font-size: 11pt;
+            margin: 10px 0;
+            padding-left: 30px;
+        }
+        li {
+            margin: 8px 0;
+            text-align: justify;
+            color: #4a4a4a;
+        }
+        .section-beneficios {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 15px 0;
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+        .beneficio {
+            font-size: 11pt;
+            padding: 12px;
+            background-color: #f5ede3;
+            border-left: 4px solid #d4886f;
+            line-height: 1.5;
+            border-radius: 3px;
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+        .beneficio strong {
+            color: #c17857;
+        }
+        .facilitadora {
+            background-color: #f5ede3;
+            padding: 15px;
+            margin: 15px 0;
+            border-left: 4px solid #d4886f;
+            border-radius: 3px;
+        }
+        .facilitadora-titulo {
+            font-size: 12pt;
+            font-weight: bold;
+            color: #c17857;
+            margin-bottom: 10px;
+        }
+        .facilitadora-info {
+            font-size: 11pt;
+            margin: 5px 0;
+            color: #4a4a4a;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 11pt;
+        }
+        th {
+            background-color: #c17857;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: bold;
+            border: 1px solid #d4886f;
+        }
+        td {
+            padding: 10px 12px;
+            border: 1px solid #e8b4a0;
+            color: #4a4a4a;
+        }
+        tr:nth-child(even) {
+            background-color: #faf8f5;
+        }
+        .destaque {
+            background-color: #f5ede3;
+            padding: 15px;
+            margin: 15px 0;
+            border-left: 4px solid #c17857;
+            border-radius: 3px;
+        }
+        .destaque-titulo {
+            font-weight: bold;
+            color: #c17857;
+            margin-bottom: 10px;
+        }
+        .incluye {
+            background-color: #f5ede3;
+            padding: 15px;
+            margin: 15px 0;
+            border-left: 4px solid #c17857;
+            border-radius: 3px;
+        }
+        .no-incluye {
+            background-color: #f5ede3;
+            padding: 15px;
+            margin: 15px 0;
+            border-left: 4px solid #d4886f;
+            border-radius: 3px;
+        }
+        .seccion-titulo {
+            font-weight: bold;
+            color: #c17857;
+            margin-bottom: 10px;
+        }
+        .include-list, .exclude-list {
+            font-size: 11pt;
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .include-list li {
+            list-style: none;
+            margin: 5px 0;
+        }
+        .include-list li:before {
+            content: "✓ ";
+            color: #d4886f;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+        .exclude-list li {
+            list-style: none;
+            margin: 5px 0;
+        }
+        .exclude-list li:before {
+            content: "✗ ";
+            color: #c17857;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+        .contacto {
+            background-color: #f5ede3;
+            padding: 20px;
+            margin: 20px 0;
+            border: 2px solid #d4886f;
+            text-align: center;
+            border-radius: 5px;
+        }
+        .contacto-titulo {
+            font-size: 12pt;
+            font-weight: bold;
+            color: #c17857;
+            margin-bottom: 10px;
+        }
+        .contacto-info {
+            font-size: 11pt;
+            margin: 5px 0;
+            color: #4a4a4a;
+        }
+        .cierre {
+            margin-top: 30px;
+            text-align: center;
+            padding: 20px;
+            background-color: #f5ede3;
+            border-radius: 5px;
+            border-left: 4px solid #d4886f;
+        }
+        .cierre-texto {
+            font-size: 11pt;
+            color: #4a4a4a;
+            line-height: 1.8;
+            margin: 10px 0;
+        }
+        .firma {
+            margin-top: 30px;
+            text-align: center;
+            border-top: 2px solid #e8b4a0;
+            padding-top: 20px;
+        }
+        .firma-texto {
+            font-size: 11pt;
+            margin: 10px 0;
+            font-weight: bold;
+            color: #c17857;
+        }
+        .fecha {
+            font-size: 11pt;
+            color: #8b6f47;
+            margin-bottom: 10px;
+        }
+        .destacado-precio {
+            font-size: 13pt;
+            font-weight: bold;
+            color: #c17857;
+        }
+        .linea-separacion {
+            border-top: 2px solid #d4886f;
+            margin: 20px 0;
+        }
+        @media print {
+            body {
+                background-color: white;
+                padding: 0;
+            }
+            .container {
+                box-shadow: none;
+                padding: 20px;
+                max-width: 100%;
+            }
+            .btn-container {
+                display: none;
+            }
+            h2 {
+                page-break-after: avoid;
+            }
+            .section-break, .facilitadora, .destaque, .incluye, .no-incluye, table, .cierre, .contacto {
+                page-break-inside: avoid;
+            }
+            .linea-separacion {
+                border-top: 2px solid #e8b4a0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="btn-container">
+        <button class="btn-pdf" onclick="descargarPDF()">📥 Descargar como PDF</button>
+    </div>
+
+    <div class="container" id="content">
+        <!-- LOGO -->
+        <div class="logo-header">
+            <div style="font-size: 36pt; font-weight: bold; color: #c17857; margin: 0;">Ceramicalma</div>
+            <div style="font-size: 10pt; color: #8b6f47; letter-spacing: 3px; margin-top: 5px;">HOLISTIC POTTERY STUDIO</div>
+        </div>
+
+        <!-- ENCABEZADO -->
+        <header>
+            <div class="header-info">
+                <div class="fecha">Guayaquil, 2 de febrero de 2026</div>
+            </div>
+            <h1>PROFORMA TALLER DE CERÁMICA</h1>
+            <div style="font-size: 12pt; color: #8b6f47;">Empoderamiento Femenino: Creatividad, Autoexpresión y Desarrollo Personal</div>
+        </header>
+
+        <!-- SALUDO INICIAL -->
+        <p class="intro">Hola Estimada Sandra,</p>
+        <p class="intro">Presentamos a tu amable consideración la siguiente proforma de acuerdo a lo conversado, detallando cada punto del Taller de Cerámica y sus beneficios:</p>
+
+        <div class="linea-separacion"></div>
+
+        <!-- SECCIÓN 1: TALLER DE CERÁMICA -->
+        <h2>TALLER DE CERÁMICA / HANDBUILDING</h2>
+
+        <h3>Objetivo del Taller:</h3>
+        <p>Contribuir al empoderamiento de las mujeres a través de un taller de cerámica que promueve la autoexpresión, el desarrollo personal y el reconocimiento de su valor, fortaleciendo su confianza y sentido de logro.</p>
+
+        <!-- SECCIÓN 2: ACTIVIDAD PRINCIPAL -->
+        <h2>OPCIONES DE TALLER</h2>
+
+        <h3>Opción 1: Técnica Pinch / Pellizco</h3>
+        <p>Aprenderemos una técnica de modelado a mano que se denomina <strong>pinch o pellizco</strong>, para crear piezas de cerámica 100% a mano con materiales de alta calidad, las cuales podrán ser utilitarias o decorativas.</p>
+
+        <ul style="padding-left: 20px; margin-bottom: 20px;">
+            <li><strong>Duración:</strong> 2 horas</li>
+            <li><strong>Piezas a realizar:</strong> taza, bowl, joyero, cenicero, portallaves, portavelas, portalápices, macetero</li>
+            <li><strong>Valor:</strong> <span class="destacado-precio">$45 por persona</span></li>
+        </ul>
+
+        <h3>Opción 2: Portapolaroid con Fotografía Instantánea</h3>
+        <p>Aprenderemos una técnica de modelado a mano para crear un hermoso <strong>portapolaroid</strong> (porta fotos polaroid), en el cual podrán personalizarlo a su gusto, utilizamos materiales de alta calidad. Durante el taller tendremos una cámara polaroid para tomar foto y que cada persona obtenga 1 foto impresa para su piecita creada.</p>
+
+        <ul style="padding-left: 20px; margin-bottom: 20px;">
+            <li><strong>Duración:</strong> 1 hora a 1 hora y media</li>
+            <li><strong>Pieza a realizar:</strong> portapolaroid</li>
+            <li><strong>Valor:</strong> <span class="destacado-precio">$35 por persona</span></li>
+        </ul>
+
+        <div class="incluye">
+            <div class="seccion-titulo">Incluye (ambas opciones):</div>
+            <ul class="include-list">
+                <li>Todos los materiales de alta calidad (aptos para alimentos, microondas, lavavajillas)</li>
+                <li>Herramientas especializadas</li>
+                <li>Esmaltes (brillo transparente)</li>
+                <li>Horneado profesional de las piezas</li>
+                <li>Piezas entregadas listas para su uso aproximadamente 2 a 3 semanas después del evento</li>
+                <li><strong>Opción 2:</strong> 1 foto polaroid impresa por participante</li>
+            </ul>
+        </div>
+
+        <div class="linea-separacion"></div>
+
+        <!-- SECCIÓN 3: BENEFICIOS -->
+        <h2>BENEFICIOS DE LA CERÁMICA PARA EL BIENESTAR INTEGRAL</h2>
+
+        <p>Durante el taller abordaremos cómo esta práctica creativa ofrece:</p>
+
+        <div class="section-beneficios">
+            <div class="beneficio">
+                <strong>Reducción de estrés</strong><br>
+                Conexión terapéutica con el presente
+            </div>
+            <div class="beneficio">
+                <strong>Fomento de la sociabilidad</strong><br>
+                Crear en comunidad
+            </div>
+            <div class="beneficio">
+                <strong>Desarrollo de la creatividad</strong><br>
+                Expresión personal sin límites
+            </div>
+            <div class="beneficio">
+                <strong>Aumento de concentración</strong><br>
+                Mindfulness a través del arte
+            </div>
+            <div class="beneficio">
+                <strong>Mejora de autoestima</strong><br>
+                Reconocimiento del logro personal
+            </div>
+            <div class="beneficio">
+                <strong>Conexión con el mundo interno</strong><br>
+                Autoconocimiento profundo
+            </div>
+            <div class="beneficio">
+                <strong>Desarrollo mental</strong><br>
+                Resolución de problemas y paciencia
+            </div>
+            <div class="beneficio">
+                <strong>Disminución de ansiedad</strong><br>
+                Gestión emocional efectiva
+            </div>
+            <div class="beneficio">
+                <strong>Tolerancia a la frustración</strong><br>
+                Mayor resiliencia emocional
+            </div>
+        </div>
+
+        <div class="linea-separacion"></div>
+
+        <!-- SECCIÓN 4: FACILITADORA -->
+        <h2>FACILITADORA DEL TALLER</h2>
+
+        <div class="facilitadora">
+            <div class="facilitadora-titulo">Carolina Massuh Morán</div>
+            <div class="facilitadora-info">• Psicóloga Clínica</div>
+            <div class="facilitadora-info">• Terapeuta Holística</div>
+            <div class="facilitadora-info">• Máster en Psicoterapia del Bienestar Integral</div>
+            <div class="facilitadora-info">• Ceramista especializada</div>
+
+            <p style="margin-top: 15px; font-size: 11pt; color: #4a4a4a;">Carolina combina sus diversos saberes para acompañar a los participantes en el maravilloso camino de creación y autoconocimiento. En su trayectoria como artista ha brindado talleres, workshops y clases en Guayaquil, Galápagos, Cuenca, Salinas, Olón y Ayampe. Su última capacitación fue en Enero-Marzo 2024 en Michigan-USA, donde reforzó sus técnicas e implementó mindfulness, meditación y conexión sensorial en sus clases de cerámica.</p>
+        </div>
+
+        <div class="linea-separacion"></div>
+
+        <!-- SECCIÓN 5: ADICIONALES -->
+        <h2>ADICIONALES: MENÚ DE BEBIDAS Y COMIDAS</h2>
+
+        <p>Para enriquecer la experiencia, adjuntaremos nuestro menú de bebidas y comidas a esta cotización. Podrán seleccionar las opciones que deseen según las preferencias de tu equipo.</p>
+
+        <div class="destaque">
+            <div class="destaque-titulo">Menú de bebidas y comidas:</div>
+            <p style="font-size: 11pt; margin: 10px 0;">Contamos con un menú variado que compartiremos contigo para que puedas seleccionar las opciones que prefieras.</p>
+        </div>
+
+        <div class="linea-separacion"></div>
+
+        <!-- SECCIÓN 6: RESERVA DE ESPACIO -->
+        <h2>RESERVA DE ESPACIO</h2>
+
+        <p>A la hora convenida, se reserva <strong>el espacio completo de Ceramicalma</strong> para garantizar una experiencia íntima y enfocada en el taller de cerámica para tu equipo.</p>
+
+        <div class="destaque">
+            <div class="destaque-titulo">Importante:</div>
+            <p style="font-size: 11pt; margin: 10px 0;">Si algunos de los invitados desean acompañar el evento sin participar en el taller de cerámica, pueden disfrutar del espacio y ser parte de la experiencia. Contáctanos con anticipación para coordinar estos detalles adicionales.</p>
+        </div>
+
+        <p style="margin-top: 15px; font-size: 11pt; color: #8b6f47;"><em>Si requieres tiempo adicional más allá de las 2 horas de taller, comunícanos para ajustar horarios. Disponemos de flexibilidad con valores por hora adicional según el día (ver tabla de inversión).</em></p>
+
+        <div class="linea-separacion"></div>
+
+        <!-- SECCIÓN 7: RESUMEN DE INVERSIÓN -->
+        <h2>RESUMEN DE INVERSIÓN</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Concepto</th>
+                    <th>Valor Unitario</th>
+                    <th>Aplicable</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Opción 1: Taller Pinch / Pellizco</strong></td>
+                    <td><span class="destacado-precio">$45</span></td>
+                    <td>Por persona (2 horas)</td>
+                </tr>
+                <tr>
+                    <td><strong>Opción 2: Portapolaroid + Foto</strong></td>
+                    <td><span class="destacado-precio">$35</span></td>
+                    <td>Por persona (1 - 1.5 horas)</td>
+                </tr>
+                <tr>
+                    <td><strong>Hora Adicional</strong> (martes a jueves)</td>
+                    <td><span class="destacado-precio">$75 + IVA</span></td>
+                    <td>Por hora, entre semana</td>
+                </tr>
+                <tr>
+                    <td><strong>Hora Adicional</strong> (viernes a domingo)</td>
+                    <td><span class="destacado-precio">$100 + IVA</span></td>
+                    <td>Por hora, fin de semana</td>
+                </tr>
+                <tr>
+                    <td><strong>Adicionales (Menú)</strong></td>
+                    <td>Variable</td>
+                    <td>Según selección del menú</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Forma de pago:</h3>
+        <ul style="padding-left: 20px;">
+            <li>50% anticipado para confirmar reserva</li>
+            <li>50% restante dos días antes del evento</li>
+        </ul>
+
+        <div class="linea-separacion"></div>
+
+        <!-- SECCIÓN 8: CONDICIONES -->
+        <h2>CONDICIONES IMPORTANTES</h2>
+
+        <div class="incluye">
+            <div class="seccion-titulo">Incluye en la cotización:</div>
+            <ul class="include-list">
+                <li>Taller completo con facilitadora especializada</li>
+                <li>Todos los materiales de alta calidad</li>
+                <li>Herramientas y esmaltes</li>
+                <li>Horneado profesional</li>
+                <li>Entrega de obras listas para usar (2-3 semanas posteriores)</li>
+                <li>Experiencia de empoderamiento y bienestar</li>
+            </ul>
+        </div>
+
+        <div class="no-incluye">
+            <div class="seccion-titulo">No incluye en la cotización:</div>
+            <ul class="exclude-list">
+                <li>Envíos individuales de las obras de arte fuera de Guayaquil*</li>
+            </ul>
+        </div>
+
+        <div class="linea-separacion"></div>
+
+        <!-- SECCIÓN 9: CIERRE -->
+        <div class="cierre">
+            <p class="cierre-texto">
+                <strong>¡Nos encantaría ser parte de esta experiencia transformadora para tu equipo!</strong>
+            </p>
+            <p class="cierre-texto">
+                Si tienes preguntas, deseas conocer más detalles o estás listo para confirmar tu reserva, no dudes en contactarnos. Estamos aquí para hacer de este taller de cerámica un momento memorable lleno de creatividad, bienestar y conexión genuina.
+            </p>
+        </div>
+
+        <div class="linea-separacion"></div>
+
+        <!-- SECCIÓN 10: CONTACTO -->
+        <div class="contacto">
+            <div class="contacto-titulo">INFORMACIÓN DE CONTACTO</div>
+            <div class="contacto-info"><strong>CERAMICALMA</strong></div>
+            <div class="contacto-info">📧 ceramicalma.ec@gmail.com</div>
+            <div class="contacto-info">📱 @ceramicalma.ec</div>
+            <div class="contacto-info">📍 Guayaquil - Ecuador</div>
+        </div>
+
+        <!-- FIRMA -->
+        <div class="firma">
+            <div class="firma-texto">Cordialmente,</div>
+            <div style="font-size: 12pt; font-weight: bold; color: #c17857; margin-top: 15px;">CERAMICALMA</div>
+        </div>
+
+    </div>
+
+    <script>
+        function descargarPDF() {
+            const element = document.getElementById('content');
+            const opt = {
+                margin: [10, 10, 10, 10],
+                filename: 'Proforma_Taller_Ceramica_Empoderamiento.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { 
+                    scale: 2,
+                    useCORS: true,
+                    logging: false,
+                    letterRendering: true
+                },
+                jsPDF: { 
+                    orientation: 'portrait', 
+                    unit: 'mm', 
+                    format: 'a4',
+                    compress: true
+                },
+                pagebreak: { 
+                    mode: ['avoid-all', 'css', 'legacy'],
+                    before: '.page-break-before',
+                    after: '.page-break-after',
+                    avoid: ['h2', 'table', '.facilitadora', '.destaque', '.incluye', '.no-incluye', '.section-break']
+                }
+            };
+            html2pdf().set(opt).from(element).save();
+        }
+    </script>
+</body>
+</html>
