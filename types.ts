@@ -751,8 +751,8 @@ export interface GroupClassState {
 // Group Class Capacity Limits
 export const GROUP_CLASS_CAPACITY = {
   potters_wheel: 8,      // Máximo 8 para torno
-  hand_modeling: 14,     // Máximo 14 para modelado
-  painting: Infinity     // Sin límite para pintura
+  hand_modeling: 22,     // Máximo 22 para modelado
+  painting: 22           // Máximo 22 para pintura
 } as const;
 
 // 8. Experience Pricing

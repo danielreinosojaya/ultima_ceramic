@@ -217,7 +217,7 @@ export const DEFAULT_PRODUCTS: Product[] = [
       durationHours: 2,
       activities: ["Cada participante elige su técnica", "Amasado y preparación", "Creación de piezas personalizadas", "Técnicas de acabado"],
       generalRecommendations: "Ideal para grupos de 2-30 personas. Traer ropa cómoda. Perfecto para celebraciones, eventos corporativos o reuniones creativas.",
-      materials: "Incluye arcilla, herramientas y quema de una pieza por participante. Capacidades: Torno (máx 8), Modelado (máx 14), Pintura (sin límite)."
+      materials: "Incluye arcilla, herramientas y quema de una pieza por participante. Capacidades: Torno (máx 8), Modelado (máx 22), Pintura (máx 22)."
     },
     isActive: true,
     sortOrder: 5

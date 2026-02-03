@@ -47,7 +47,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
       label: '🤚 Modelado a Mano',
       desc: 'Crea con tus manos usando arcilla',
       price: 45,
-      maxParticipants: 14
+      maxParticipants: 22
     },
     potters_wheel: {
       label: '🎡 Torno Alfarero',
@@ -59,7 +59,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
       label: '🎨 Pintura de Piezas',
       desc: 'Pinta piezas pre-moldeadas',
       price: 0,  // Depende de la pieza
-      maxParticipants: 30
+      maxParticipants: 22
     }
   };
 

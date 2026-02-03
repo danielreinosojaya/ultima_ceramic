@@ -2569,7 +2569,7 @@ export const calculateSlotAvailability = (
   
   // FIX: Usar capacidad de appData en lugar de valores hardcodeados
     const pottersWheelMax = appData.classCapacity?.potters_wheel || 8;
-    const handWorkMax = appData.classCapacity?.molding || 14;
+    const handWorkMax = appData.classCapacity?.molding || 22;
     const capacity = {
         potters_wheel: { max: pottersWheelMax, bookedInWindow: 0 },
         hand_work: { max: handWorkMax, bookedInWindow: 0 }
@@ -2736,8 +2736,8 @@ export const generateTimeSlots = (
           professorId: null,
           capacity: {
             potters_wheel: { max: 8, bookedInWindow: 0, available: 8, isAvailable: true },
-            hand_modeling: { max: 14, bookedInWindow: 0, available: 14, isAvailable: true },
-            painting: { max: Infinity, bookedInWindow: 0, available: Infinity, isAvailable: true }
+                        hand_modeling: { max: 22, bookedInWindow: 0, available: 22, isAvailable: true },
+                        painting: { max: 22, bookedInWindow: 0, available: 22, isAvailable: true }
           }
         });
       }

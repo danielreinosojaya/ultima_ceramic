@@ -82,9 +82,9 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
     
     switch (preset) {
       case 'balanced':
-        // Distribuir: 8 torno, 14 modelado, resto pintura
+        // Distribuir: 8 torno, 22 modelado, resto pintura
         const wheelCount = Math.min(8, totalParticipants);
-        const modelingCount = Math.min(14, totalParticipants - wheelCount);
+        const modelingCount = Math.min(22, totalParticipants - wheelCount);
         const paintingCount = totalParticipants - wheelCount - modelingCount;
         
         newAssignments = Array.from({ length: totalParticipants }, (_, i) => ({

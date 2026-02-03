@@ -617,10 +617,10 @@ const App: React.FC = () => {
 
     // Load scheduling data when needed for schedule view
     useEffect(() => {
-        if ((view === 'schedule' || view === 'group_class_wizard' || view === 'single_class_wizard') && appData && appData.instructors.length === 0) {
+        if ((view === 'schedule' || view === 'group_class_wizard' || view === 'single_class_wizard' || view === 'painting_booking') && appData && appData.instructors.length === 0) {
             loadAdditionalData('scheduling', appData);
         }
-        if ((view === 'schedule' || view === 'group_class_wizard' || view === 'single_class_wizard') && appData && appData.bookings.length === 0) {
+        if ((view === 'schedule' || view === 'group_class_wizard' || view === 'single_class_wizard' || view === 'painting_booking') && appData && appData.bookings.length === 0) {
             loadAdditionalData('bookings', appData);
         }
     }, [view, appData, loadAdditionalData]);
@@ -1003,7 +1003,15 @@ const App: React.FC = () => {
             case 'painting_booking':
                 return (
                     <PaintingBookingFlow
-                        pieces={pieces}
+                        availableSlots={appData?.availability ? 
+                            dataService.generateTimeSlots(new Date(), 180).map(slot => ({
+                              date: slot.date,
+                              time: slot.startTime,
+                              instructorId: 0
+                            }))
+                            : []
+                        }
+                        appData={appData}
                         onConfirm={(pricing: ExperiencePricing, selectedSlot: TimeSlot) => {
                             setExperienceUIState(prev => ({
                                 ...prev,
