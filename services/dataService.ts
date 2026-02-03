@@ -2199,6 +2199,39 @@ export const updateDeliveryStatuses = async (): Promise<{ success: boolean; upda
     return postAction('updateDeliveryStatuses', {});
 };
 
+// ⚡ Actualizar estado del servicio de pintura
+export const updatePaintingStatus = async (
+    deliveryId: string,
+    paintingStatus: 'pending_payment' | 'paid' | 'scheduled' | 'completed',
+    options?: {
+        paintingBookingDate?: string;
+        paintingPaidAt?: string;
+        paintingCompletedAt?: string;
+    }
+): Promise<{ success: boolean; delivery?: Delivery; error?: string }> => {
+    try {
+        const result = await postAction('updatePaintingStatus', {
+            deliveryId,
+            paintingStatus,
+            ...options
+        });
+        
+        if (result.success && result.delivery) {
+            // Invalidar cache de deliveries
+            invalidateDeliveriesCache();
+            return { ...result, delivery: parseDelivery(result.delivery) };
+        }
+        
+        return result;
+    } catch (error) {
+        console.error('[updatePaintingStatus] Error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error updating painting status'
+        };
+    }
+};
+
 // Función para migrar productos existentes y asignar sort_order
 export const migrateSortOrderForProducts = async (): Promise<{ success: boolean }> => {
     // Limpiar cache después de la migración

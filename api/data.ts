@@ -4141,6 +4141,74 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             
             return res.status(200).json({ success: true, delivery: toCamelCase(completedDelivery) });
         }
+        case 'updatePaintingStatus': {
+            // Endpoint específico para actualizar estado del servicio de pintura
+            const { deliveryId, paintingStatus, paintingBookingDate, paintingPaidAt, paintingCompletedAt } = req.body;
+            
+            if (!deliveryId) {
+                return res.status(400).json({ error: 'deliveryId is required' });
+            }
+            
+            if (!paintingStatus) {
+                return res.status(400).json({ error: 'paintingStatus is required' });
+            }
+            
+            // Validar estados permitidos
+            const validStatuses = ['pending_payment', 'paid', 'scheduled', 'completed'];
+            if (!validStatuses.includes(paintingStatus)) {
+                return res.status(400).json({ error: 'Invalid paintingStatus' });
+            }
+            
+            try {
+                // Construir query dinámico basado en los campos provistos
+                let updateFields = [`painting_status = '${paintingStatus}'`];
+                
+                // Auto-setear timestamps según el estado
+                if (paintingStatus === 'paid' && !paintingPaidAt) {
+                    updateFields.push(`painting_paid_at = NOW()`);
+                } else if (paintingPaidAt) {
+                    updateFields.push(`painting_paid_at = '${paintingPaidAt}'`);
+                }
+                
+                if (paintingStatus === 'completed' && !paintingCompletedAt) {
+                    updateFields.push(`painting_completed_at = NOW()`);
+                } else if (paintingCompletedAt) {
+                    updateFields.push(`painting_completed_at = '${paintingCompletedAt}'`);
+                }
+                
+                if (paintingStatus === 'scheduled' && paintingBookingDate) {
+                    updateFields.push(`painting_booking_date = '${paintingBookingDate}'`);
+                } else if (paintingBookingDate) {
+                    updateFields.push(`painting_booking_date = '${paintingBookingDate}'`);
+                }
+                
+                const { rows: [updatedDelivery] } = await sql.query(
+                    `UPDATE deliveries 
+                     SET ${updateFields.join(', ')} 
+                     WHERE id = $1 
+                     RETURNING *`,
+                    [deliveryId]
+                );
+                
+                if (!updatedDelivery) {
+                    return res.status(404).json({ error: 'Delivery not found' });
+                }
+                
+                console.log(`[updatePaintingStatus] Updated delivery ${deliveryId} to status: ${paintingStatus}`);
+                
+                return res.status(200).json({ 
+                    success: true, 
+                    delivery: toCamelCase(updatedDelivery) 
+                });
+                
+            } catch (error: any) {
+                console.error('[updatePaintingStatus] Error:', error);
+                return res.status(500).json({ 
+                    success: false, 
+                    error: error.message || 'Error updating painting status' 
+                });
+            }
+        }
         case 'markDeliveryAsReady': {
             const { deliveryId, resend = false } = req.body;
             

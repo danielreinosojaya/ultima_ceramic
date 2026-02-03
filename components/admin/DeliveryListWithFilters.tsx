@@ -1022,6 +1022,92 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
 
                             {/* Card Footer - Action Buttons */}
                             <div className="bg-gray-50 px-3 sm:px-4 py-2 sm:py-3 border-t border-gray-200 flex flex-wrap gap-2">
+                                {/* Botones de gestión de pintura */}
+                                {delivery.wantsPainting && delivery.paintingStatus === 'pending_payment' && (
+                                    <button
+                                        className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white border border-yellow-600 shadow-sm transition-all text-xs sm:text-sm font-bold"
+                                        title="Marcar pago de pintura como recibido"
+                                        onClick={async () => {
+                                            if (confirm('¿Confirmas que el cliente pagó el servicio de pintura ($25)?')) {
+                                                try {
+                                                    const result = await dataService.updatePaintingStatus(delivery.id, 'paid');
+                                                    if (result.success) {
+                                                        adminData.refreshCritical();
+                                                    } else {
+                                                        alert('Error: ' + (result.error || 'No se pudo actualizar'));
+                                                    }
+                                                } catch (error) {
+                                                    console.error('Error marking as paid:', error);
+                                                    alert('Error al actualizar el estado');
+                                                }
+                                            }
+                                        }}
+                                    >
+                                        <span>💰</span>
+                                        <span className="hidden xs:inline">Marcar Pagado</span>
+                                    </button>
+                                )}
+
+                                {delivery.wantsPainting && delivery.paintingStatus === 'paid' && delivery.status === 'ready' && (
+                                    <button
+                                        className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border border-blue-600 shadow-sm transition-all text-xs sm:text-sm font-bold"
+                                        title="Agendar sesión de pintura"
+                                        onClick={() => {
+                                            const dateStr = prompt('Fecha de pintura (YYYY-MM-DD):');
+                                            if (dateStr) {
+                                                try {
+                                                    const date = new Date(dateStr);
+                                                    if (isNaN(date.getTime())) {
+                                                        alert('Fecha inválida. Usa formato YYYY-MM-DD');
+                                                        return;
+                                                    }
+                                                    dataService.updatePaintingStatus(delivery.id, 'scheduled', {
+                                                        paintingBookingDate: date.toISOString()
+                                                    }).then(result => {
+                                                        if (result.success) {
+                                                            adminData.refreshCritical();
+                                                        } else {
+                                                            alert('Error: ' + (result.error || 'No se pudo agendar'));
+                                                        }
+                                                    });
+                                                } catch (error) {
+                                                    console.error('Error scheduling:', error);
+                                                    alert('Error al agendar');
+                                                }
+                                            }
+                                        }}
+                                    >
+                                        <span>📅</span>
+                                        <span className="hidden xs:inline">Agendar</span>
+                                    </button>
+                                )}
+
+                                {delivery.wantsPainting && delivery.paintingStatus === 'scheduled' && (
+                                    <button
+                                        className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white border border-purple-600 shadow-sm transition-all text-xs sm:text-sm font-bold"
+                                        title="Marcar pintura como completada"
+                                        onClick={async () => {
+                                            if (confirm('¿Confirmas que el cliente completó la sesión de pintura?')) {
+                                                try {
+                                                    const result = await dataService.updatePaintingStatus(delivery.id, 'completed');
+                                                    if (result.success) {
+                                                        adminData.refreshCritical();
+                                                    } else {
+                                                        alert('Error: ' + (result.error || 'No se pudo completar'));
+                                                    }
+                                                } catch (error) {
+                                                    console.error('Error completing painting:', error);
+                                                    alert('Error al completar');
+                                                }
+                                            }
+                                        }}
+                                    >
+                                        <span>🎉</span>
+                                        <span className="hidden xs:inline">Completar</span>
+                                    </button>
+                                )}
+
+                                {/* Botones estándar */}
                                 <button
                                     className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 shadow-sm transition-all text-xs sm:text-sm font-semibold"
                                     title="Contactar cliente por WhatsApp"
