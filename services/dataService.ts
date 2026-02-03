@@ -462,6 +462,12 @@ export const invalidateProductsCache = (): void => {
     lastMutationTimestamp = Date.now();
 };
 
+export const invalidateDeliveriesCache = (): void => {
+    console.log('[Cache] Invalidating deliveries cache only');
+    clearCache('deliveries');
+    lastMutationTimestamp = Date.now();
+};
+
 // Para operaciones que afectan múltiples recursos
 export const invalidateMultiple = (keys: string[]): void => {
     console.log('[Cache] Invalidating multiple:', keys);
