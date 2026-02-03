@@ -132,6 +132,30 @@ export const DeliveryDashboard: React.FC<DeliveryDashboardProps> = ({
         };
     }, [groups]);
 
+    // 🎨 Métricas de servicio de pintura
+    const paintingMetrics = useMemo(() => {
+        const wantsPaintingDeliveries = deliveries.filter(d => d.wantsPainting);
+        const pendingPayment = wantsPaintingDeliveries.filter(d => d.paintingStatus === 'pending_payment');
+        const paid = wantsPaintingDeliveries.filter(d => d.paintingStatus === 'paid');
+        const readyToPaint = wantsPaintingDeliveries.filter(d => d.paintingStatus === 'paid' && d.status === 'ready');
+        const scheduled = wantsPaintingDeliveries.filter(d => d.paintingStatus === 'scheduled');
+        const completed = wantsPaintingDeliveries.filter(d => d.paintingStatus === 'completed');
+        
+        const totalRevenue = paid.reduce((sum, d) => sum + (d.paintingPrice || 0), 0) +
+                            scheduled.reduce((sum, d) => sum + (d.paintingPrice || 0), 0) +
+                            completed.reduce((sum, d) => sum + (d.paintingPrice || 0), 0);
+
+        return {
+            total: wantsPaintingDeliveries.length,
+            pendingPayment: pendingPayment.length,
+            paid: paid.length,
+            readyToPaint: readyToPaint.length,
+            scheduled: scheduled.length,
+            completed: completed.length,
+            totalRevenue
+        };
+    }, [deliveries]);
+
     return (
         <div className="space-y-4">
             {/* Summary Cards with Tooltips */}
@@ -159,6 +183,33 @@ export const DeliveryDashboard: React.FC<DeliveryDashboardProps> = ({
                     </div>
                 ))}
             </div>
+
+            {/* 🎨 Servicio de Pintura Card (si hay upsells) */}
+            {paintingMetrics.total > 0 && (
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-300 rounded-lg p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                        <span className="text-3xl">🎨</span>
+                        <div>
+                            <h3 className="text-sm font-bold text-purple-900">Servicio de Pintura (Upsells)</h3>
+                            <p className="text-xs text-purple-700">Ingresos adicionales: <strong className="text-brand-primary">${paintingMetrics.totalRevenue.toFixed(2)}</strong></p>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                        <div className="bg-white rounded p-2 border border-purple-200">
+                            <div className="text-xs text-gray-600">Pendiente Pago</div>
+                            <div className="text-lg font-bold text-orange-600">{paintingMetrics.pendingPayment}</div>
+                        </div>
+                        <div className="bg-white rounded p-2 border border-purple-200">
+                            <div className="text-xs text-gray-600">Listos a Pintar</div>
+                            <div className="text-lg font-bold text-green-600">{paintingMetrics.readyToPaint}</div>
+                        </div>
+                        <div className="bg-white rounded p-2 border border-purple-200">
+                            <div className="text-xs text-gray-600">Completados</div>
+                            <div className="text-lg font-bold text-blue-600">{paintingMetrics.completed}</div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Alerts */}
             {totalByUrgency.critical > 0 && (

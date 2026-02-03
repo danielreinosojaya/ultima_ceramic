@@ -66,7 +66,7 @@ interface DeliveryListWithFiltersProps {
     formatDate: (date: string) => string;
 }
 
-type FilterStatus = 'all' | 'pending' | 'ready' | 'completed' | 'overdue' | 'critical' | 'due5days';
+type FilterStatus = 'all' | 'pending' | 'ready' | 'completed' | 'overdue' | 'critical' | 'due5days' | 'wants_painting' | 'painting_pending_payment' | 'painting_ready' | 'painting_scheduled' | 'painting_completed';
 
 export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = ({
     deliveries,
@@ -125,6 +125,16 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                 matchesStatus = isCritical(delivery);
             } else if (filterStatus === 'due5days') {
                 matchesStatus = isDueWithin5Days(delivery);
+            } else if (filterStatus === 'wants_painting') {
+                matchesStatus = delivery.wantsPainting === true;
+            } else if (filterStatus === 'painting_pending_payment') {
+                matchesStatus = delivery.wantsPainting === true && delivery.paintingStatus === 'pending_payment';
+            } else if (filterStatus === 'painting_ready') {
+                matchesStatus = delivery.wantsPainting === true && delivery.paintingStatus === 'paid' && delivery.status === 'ready';
+            } else if (filterStatus === 'painting_scheduled') {
+                matchesStatus = delivery.wantsPainting === true && delivery.paintingStatus === 'scheduled';
+            } else if (filterStatus === 'painting_completed') {
+                matchesStatus = delivery.wantsPainting === true && delivery.paintingStatus === 'completed';
             }
 
             return matchesSearch && matchesStatus;
@@ -682,6 +692,74 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                         >
                             ⏳ Próximas ({statusCounts.due5days})
                         </button>
+                    )}
+                    
+                    {/* 🎨 Filtros de Servicio de Pintura */}
+                    {(deliveries.filter(d => d.wantsPainting).length > 0) && (
+                        <>
+                            <div className="w-full border-t border-purple-200 my-2"></div>
+                            <div className="w-full flex items-center gap-2 mb-1">
+                                <span className="text-xs font-bold text-purple-700">🎨 SERVICIO DE PINTURA:</span>
+                            </div>
+                            <button
+                                onClick={() => setFilterStatus('wants_painting')}
+                                className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
+                                    filterStatus === 'wants_painting'
+                                        ? 'bg-purple-600 text-white'
+                                        : 'bg-white text-purple-700 hover:bg-purple-50 border border-purple-300'
+                                }`}
+                            >
+                                ✨ Todos con pintura ({deliveries.filter(d => d.wantsPainting).length})
+                            </button>
+                            {deliveries.filter(d => d.wantsPainting && d.paintingStatus === 'pending_payment').length > 0 && (
+                                <button
+                                    onClick={() => setFilterStatus('painting_pending_payment')}
+                                    className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
+                                        filterStatus === 'painting_pending_payment'
+                                            ? 'bg-orange-600 text-white'
+                                            : 'bg-white text-orange-700 hover:bg-orange-50 border border-orange-300'
+                                    }`}
+                                >
+                                    💰 Pendiente pago ({deliveries.filter(d => d.wantsPainting && d.paintingStatus === 'pending_payment').length})
+                                </button>
+                            )}
+                            {deliveries.filter(d => d.wantsPainting && d.paintingStatus === 'paid' && d.status === 'ready').length > 0 && (
+                                <button
+                                    onClick={() => setFilterStatus('painting_ready')}
+                                    className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
+                                        filterStatus === 'painting_ready'
+                                            ? 'bg-green-600 text-white'
+                                            : 'bg-white text-green-700 hover:bg-green-50 border border-green-300'
+                                    }`}
+                                >
+                                    🎨 Listos a pintar ({deliveries.filter(d => d.wantsPainting && d.paintingStatus === 'paid' && d.status === 'ready').length})
+                                </button>
+                            )}
+                            {deliveries.filter(d => d.wantsPainting && d.paintingStatus === 'scheduled').length > 0 && (
+                                <button
+                                    onClick={() => setFilterStatus('painting_scheduled')}
+                                    className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
+                                        filterStatus === 'painting_scheduled'
+                                            ? 'bg-blue-600 text-white'
+                                            : 'bg-white text-blue-700 hover:bg-blue-50 border border-blue-300'
+                                    }`}
+                                >
+                                    📅 Pintura agendada ({deliveries.filter(d => d.wantsPainting && d.paintingStatus === 'scheduled').length})
+                                </button>
+                            )}
+                            {deliveries.filter(d => d.wantsPainting && d.paintingStatus === 'completed').length > 0 && (
+                                <button
+                                    onClick={() => setFilterStatus('painting_completed')}
+                                    className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
+                                        filterStatus === 'painting_completed'
+                                            ? 'bg-indigo-600 text-white'
+                                            : 'bg-white text-indigo-700 hover:bg-indigo-50 border border-indigo-300'
+                                    }`}
+                                >
+                                    ✅ Pintura completada ({deliveries.filter(d => d.wantsPainting && d.paintingStatus === 'completed').length})
+                                </button>
+                            )}
+                        </>
                     )}
                 </div>
             )}

@@ -50,6 +50,7 @@ export interface UserInfo {
 
 // Delivery System Types
 export type DeliveryStatus = 'pending' | 'ready' | 'completed' | 'overdue';
+export type PaintingStatus = 'pending_payment' | 'paid' | 'scheduled' | 'completed';
 
 export interface Delivery {
     id: string;
@@ -65,6 +66,13 @@ export interface Delivery {
     photos?: string[] | null; // Array de URLs de fotos
     hasPhotos?: boolean; // ⚡ Flag para lazy loading - indica si hay fotos sin cargarlas
     createdByClient?: boolean; // true si el cliente subió las fotos directamente
+    // 🎨 Servicio de Pintura (Upsell)
+    wantsPainting?: boolean; // Cliente manifestó intención de pintar pieza
+    paintingPrice?: number | null; // Precio del servicio de pintura
+    paintingStatus?: PaintingStatus | null; // Estado: pending_payment, paid, scheduled, completed
+    paintingBookingDate?: string | null; // Fecha agendada para pintura
+    paintingPaidAt?: string | null; // Timestamp cuando pagó servicio
+    paintingCompletedAt?: string | null; // Timestamp cuando completó pintura
 }
 
 export interface Customer {

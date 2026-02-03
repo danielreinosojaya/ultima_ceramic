@@ -2050,9 +2050,11 @@ export const createDeliveryFromClient = async (data: {
     description: string | null;
     scheduledDate: string;
     photos: string[] | null;
+    wantsPainting?: boolean;
+    paintingPrice?: number | null;
 }): Promise<{ success: boolean; delivery?: Delivery; isNewCustomer?: boolean; error?: string; message?: string }> => {
     try {
-        console.log('[dataService] createDeliveryFromClient called');
+        console.log('[dataService] createDeliveryFromClient called with painting:', data.wantsPainting);
         
         // Add 60-second timeout protection (increased for mobile connections)
         const controller = new AbortController();
@@ -2071,6 +2073,10 @@ export const createDeliveryFromClient = async (data: {
             console.log('[dataService] createDeliveryFromClient response:', result);
             
             if (result.success && result.delivery) {
+                // Invalidar cache después de crear delivery
+                invalidateDeliveriesCache();
+                invalidateCustomersCache();
+                
                 return { 
                     ...result, 
                     delivery: parseDelivery(result.delivery),

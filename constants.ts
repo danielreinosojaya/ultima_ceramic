@@ -3,6 +3,9 @@ import type { Product, AvailableSlot, Instructor, ConfirmationMessage, ClassCapa
 export const SINGLE_CLASS_PRICE = 55;
 export const VAT_RATE = 0.15;
 
+// Servicio de Pintura de Piezas (Upsell)
+export const PAINTING_SERVICE_PRICE = 25; // Precio base del servicio de pintura por pieza
+
 export const PALETTE_COLORS = [
     { name: 'sky', bg: 'bg-sky-200', text: 'text-sky-800' },
     { name: 'teal', bg: 'bg-teal-200', text: 'text-teal-800' },

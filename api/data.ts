@@ -3930,7 +3930,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             return res.status(200).json({ success: true, delivery: toCamelCase(newDelivery) });
         }
         case 'createDeliveryFromClient': {
-            const { email, userInfo, description, scheduledDate, photos } = req.body;
+            const { email, userInfo, description, scheduledDate, photos, wantsPainting, paintingPrice } = req.body;
             
             if (!email || !scheduledDate) {
                 return res.status(400).json({ 
@@ -3984,8 +3984,9 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     }
                 }
 
-                // 3️⃣ Crear entrega con created_by_client = true
+                // 3️⃣ Crear entrega con created_by_client = true y campos de pintura
                 const photosJson = photos && Array.isArray(photos) ? JSON.stringify(photos) : null;
+                const paintingStatus = wantsPainting ? 'pending_payment' : null;
                 
                 const { rows: [newDelivery] } = await sql`
                     INSERT INTO deliveries (
@@ -3994,7 +3995,10 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         scheduled_date, 
                         status, 
                         photos,
-                        created_by_client
+                        created_by_client,
+                        wants_painting,
+                        painting_price,
+                        painting_status
                     )
                     VALUES (
                         ${email}, 
@@ -4002,28 +4006,46 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         ${scheduledDate}, 
                         'pending', 
                         ${photosJson},
-                        true
+                        true,
+                        ${wantsPainting || false},
+                        ${paintingPrice || null},
+                        ${paintingStatus}
                     )
                     RETURNING *
                 `;
 
-                console.log('[createDeliveryFromClient] ✅ Delivery created:', newDelivery.id);
+                console.log('[createDeliveryFromClient] ✅ Delivery created:', newDelivery.id, 'wantsPainting:', wantsPainting);
 
-                // 4️⃣ Enviar email de confirmación
+                // 4️⃣ Enviar email de confirmación (diferenciado según servicio de pintura)
                 try {
                     const customerName = userInfo?.firstName || 'Cliente';
                     const emailServiceModule = await import('./emailService.js');
                     
                     try {
-                        await emailServiceModule.sendDeliveryCreatedByClientEmail(
-                            email, 
-                            customerName, 
-                            {
-                                description: description || null,
-                                scheduledDate,
-                                photos: photos?.length || 0
-                            }
-                        );
+                        if (wantsPainting) {
+                            // Email especial para clientes que quieren pintura
+                            await emailServiceModule.sendDeliveryWithPaintingServiceEmail(
+                                email, 
+                                customerName, 
+                                {
+                                    description: description || null,
+                                    scheduledDate,
+                                    photos: photos?.length || 0,
+                                    paintingPrice: paintingPrice || 0
+                                }
+                            );
+                        } else {
+                            // Email estándar sin pintura
+                            await emailServiceModule.sendDeliveryCreatedByClientEmail(
+                                email, 
+                                customerName, 
+                                {
+                                    description: description || null,
+                                    scheduledDate,
+                                    photos: photos?.length || 0
+                                }
+                            );
+                        }
                         console.log('[createDeliveryFromClient] ✅ Confirmation email sent to:', email);
                     } catch (err) {
                         console.error('[createDeliveryFromClient] ⚠️ Email send failed:', err);
