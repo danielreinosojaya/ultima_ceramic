@@ -6,6 +6,7 @@ export interface SingleClassWizardProps {
   pieces: Piece[];
   availableSlots?: TimeSlot[];
   appData?: AppData;
+  initialTechnique?: GroupTechnique;
   onConfirm: (pricing: ExperiencePricing, selectedSlot: TimeSlot | null) => void;
   onBack: () => void;
   isLoading?: boolean;
@@ -18,13 +19,14 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
   pieces: initialPieces,
   availableSlots = [],
   appData,
+  initialTechnique,
   onConfirm,
   onBack,
   isLoading = false
 }) => {
   const [classType, setClassType] = useState<ClassType>(null);
   const [step, setStep] = useState<Step>('class-type');
-  const [technique, setTechnique] = useState<GroupTechnique>('hand_modeling');
+  const [technique, setTechnique] = useState<GroupTechnique>(initialTechnique || 'hand_modeling');
   const [participants, setParticipants] = useState<number>(1);
   const [selectedPiece, setSelectedPiece] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
@@ -33,6 +35,12 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
   const [error, setError] = useState<string>('');
   const [loadingPricing, setLoadingPricing] = useState(false);
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
+
+  useEffect(() => {
+    if (initialTechnique) {
+      setTechnique(initialTechnique);
+    }
+  }, [initialTechnique]);
 
   const TECHNIQUE_INFO = {
     hand_modeling: {

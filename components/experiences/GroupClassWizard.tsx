@@ -8,6 +8,7 @@ export interface GroupClassWizardProps {
   availableSlots: TimeSlot[];
   pieces: Piece[];
   appData?: AppData;
+  initialTechnique?: GroupTechnique;
   onConfirm: (totalParticipants: number, assignments: ParticipantTechniqueAssignment[], selectedSlot: TimeSlot) => void;
   onBack: () => void;
   isLoading?: boolean;
@@ -18,6 +19,7 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
   availableSlots,
   pieces,
   appData,
+  initialTechnique,
   onConfirm,
   onBack,
   isLoading = false
@@ -33,15 +35,16 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
 
   // Initialize participant assignments when total changes
   useEffect(() => {
+    const defaultTechnique: GroupTechnique = initialTechnique || 'hand_modeling';
     const newAssignments: ParticipantTechniqueAssignment[] = Array.from(
       { length: totalParticipants },
       (_, idx) => ({
         participantNumber: idx + 1,
-        technique: 'hand_modeling'
+        technique: defaultTechnique
       })
     );
     setParticipantAssignments(newAssignments);
-  }, [totalParticipants]);
+  }, [totalParticipants, initialTechnique]);
 
   // Initialize selected date with first available date
   useEffect(() => {

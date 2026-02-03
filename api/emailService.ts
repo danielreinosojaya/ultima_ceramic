@@ -823,55 +823,55 @@ export const sendDeliveryWithPaintingServiceEmail = async (
     const sanitizedDescription = displayDescription.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
     const subject = `✨ ¡Servicio de Pintura Reservado! - ${sanitizedDescription}`;
     const html = `
-        <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
+        <div style="font-family: Arial, sans-serif; color: #4A4540; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
             <p style="font-size: 16px;">¡Gracias por subir las fotos de tu pieza! Hemos recibido tu solicitud de entrega <strong>con servicio de pintura</strong>. ✨</p>
             
-            <div style="background-color: #faf5ff; border: 2px solid #a855f7; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <div style="background-color: #F4F2F1; border: 2px solid #D95F43; padding: 20px; border-radius: 10px; margin: 20px 0;">
                 <div style="text-align: center; margin-bottom: 15px;">
                     <span style="font-size: 48px;">🎨</span>
-                    <h3 style="color: #7c3aed; margin: 10px 0;">Servicio de Pintura Reservado</h3>
+                    <h3 style="color: #D95F43; margin: 10px 0;">Servicio de Pintura Reservado</h3>
                 </div>
-                <div style="background-color: white; border-radius: 8px; padding: 15px; margin: 15px 0;">
+                <div style="background-color: #FFFFFF; border-radius: 8px; padding: 15px; margin: 15px 0; border: 1px solid #E7E1DB;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <span style="font-weight: bold; color: #333;">Precio del servicio:</span>
+                        <span style="font-weight: bold; color: #4A4540;">Precio del servicio:</span>
                         <span style="font-size: 24px; font-weight: bold; color: #D95F43;">$${delivery.paintingPrice}</span>
                     </div>
-                    <p style="margin: 5px 0; color: #6B7280; font-size: 12px;">Por pieza • Incluye todos los colores</p>
+                    <p style="margin: 5px 0; color: #7A6F69; font-size: 12px;">Por pieza • Incluye todos los colores</p>
                 </div>
             </div>
 
-            <div style="background-color: #f0fdf4; border-left: 4px solid #22c55e; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                <h3 style="color: #15803d; margin-top: 0;">📸 Información Recibida</h3>
+            <div style="background-color: #FDF7F2; border-left: 4px solid #D95F43; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #D95F43; margin-top: 0;">📸 Información Recibida</h3>
                 <p style="margin: 10px 0;"><strong>Descripción:</strong> ${displayDescription}</p>
                 <p style="margin: 10px 0;"><strong>Fotos subidas:</strong> ${photoCount}</p>
                 <p style="margin: 10px 0; font-size: 18px;"><strong>Fecha estimada pieza lista:</strong> <span style="color: #D95F43;">${formattedDate}</span></p>
             </div>
 
-            <div style="background-color: #ecfccb; border-left: 4px solid #84cc16; padding: 15px; margin: 20px 0; border-radius: 8px;">
-                <p style="margin: 0; color: #3f6212; font-weight: bold;">✨ Próximos Pasos para Pintura</p>
-                <p style="margin: 8px 0 0 0; color: #4d7c0f; font-size: 14px;">
+            <div style="background-color: #F4F2F1; border-left: 4px solid #CCBCB2; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #4A4540; font-weight: bold;">✨ Próximos Pasos para Pintura</p>
+                <p style="margin: 8px 0 0 0; color: #6B5F58; font-size: 14px;">
                     1. <strong>Tu pieza se procesará normalmente</strong> (horneado y secado)<br/>
                     2. Cuando esté lista para pintar, <strong>recibirás un correo especial</strong><br/>
-                    3. Podrás <strong>reservar tu horario de pintura en línea</strong><br/>
-                    4. El pago de $${delivery.paintingPrice} se coordina con el instructor antes de la sesión
+                    3. Podrás <strong>reservar tu horario de pintura en línea</strong>
                 </p>
             </div>
 
-            <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 8px;">
-                <p style="margin: 0; color: #92400E; font-weight: bold;">⏳ Tiempo Estimado</p>
-                <p style="margin: 8px 0 0 0; color: #78350F; font-size: 14px;">
+            <div style="background-color: #FDF2F2; border-left: 4px solid #B8474B; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #B8474B; font-weight: bold;">⏳ Tiempo Estimado</p>
+                <p style="margin: 8px 0 0 0; color: #6B5F58; font-size: 14px;">
                     • Proceso de horneado y secado: <strong>~15 días</strong><br/>
                     • Te notificaremos 1-2 días antes de que esté lista<br/>
                     • Después de pintar: 5-7 días adicionales para horneado final
                 </p>
             </div>
 
-            <div style="background-color: #EFF6FF; border-left: 4px solid #3B82F6; padding: 15px; margin: 20px 0; border-radius: 8px;">
-                <p style="margin: 0; color: #1E40AF; font-weight: bold;">💡 Información del Taller</p>
-                <p style="margin: 8px 0 0 0; color: #1E3A8A; font-size: 14px;">
-                    • Horario de pintura: Martes a Sábado 10:00 AM - 8:00 PM<br/>
-                    • Domingos: 12:00 PM - 5:00 PM<br/>
+            <div style="background-color: #F4F2F1; border-left: 4px solid #D95F43; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #4A4540; font-weight: bold;">💡 Información del Taller</p>
+                <p style="margin: 8px 0 0 0; color: #6B5F58; font-size: 14px;">
+                    • Martes a Viernes: 10:00 AM - 9:00 PM<br/>
+                    • Sábados: 9:00 AM - 8:00 PM<br/>
+                    • Domingos: 10:00 AM - 6:00 PM<br/>
                     • Ubicación: Sol Plaza - Av. Samborondón<br/>
                     • Duración sesión de pintura: ~1-2 horas
                 </p>
@@ -880,7 +880,7 @@ export const sendDeliveryWithPaintingServiceEmail = async (
             <p style="margin-top: 20px;">Si tienes dudas sobre el proceso de pintura o necesitas hacer cambios, no dudes en contactarnos.</p>
             
             <div style="margin: 30px 0; text-align: center;">
-                <a href="https://wa.me/593985813327" style="display: inline-block; background-color: #a855f7; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                <a href="https://wa.me/593985813327" style="display: inline-block; background-color: #D95F43; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">
                     📱 Contactar por WhatsApp
                 </a>
             </div>
@@ -1013,61 +1013,50 @@ export const sendDeliveryReadyForPaintingEmail = async (
     const displayDescription = delivery.description || 'Tu pieza de cerámica';
     const sanitizedDescription = displayDescription.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
     const subject = `🎨 ¡Tu pieza está lista para pintar! - ${sanitizedDescription}`;
-    const price = typeof delivery.paintingPrice === 'number' && !Number.isNaN(delivery.paintingPrice)
-        ? delivery.paintingPrice
-        : 25;
     const html = `
-        <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
+        <div style="font-family: Arial, sans-serif; color: #4A4540; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
-            <p style="font-size: 18px; font-weight: bold; color: #a855f7;">🎨 ¡Buenas noticias! Tu pieza está lista para que la pintes.</p>
+            <p style="font-size: 18px; font-weight: bold; color: #D95F43;">🎨 ¡Buenas noticias! Tu pieza está lista para que la pintes.</p>
             
-            <div style="background-color: #faf5ff; border: 2px solid #a855f7; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <div style="background-color: #F4F2F1; border: 2px solid #D95F43; padding: 20px; border-radius: 10px; margin: 20px 0;">
                 <div style="text-align: center; margin-bottom: 15px;">
                     <span style="font-size: 48px;">✨</span>
-                    <h3 style="color: #7c3aed; margin: 10px 0;">Es momento de darle color a tu creación</h3>
+                    <h3 style="color: #D95F43; margin: 10px 0;">Es momento de darle color a tu creación</h3>
                 </div>
                 <p style="margin: 10px 0; font-size: 16px; text-align: center;"><strong>${displayDescription}</strong></p>
-                <p style="margin: 10px 0; color: #7c3aed; text-align: center;">Lista desde: ${formattedReadyDate}</p>
+                <p style="margin: 10px 0; color: #6B5F58; text-align: center;">Lista desde: ${formattedReadyDate}</p>
             </div>
 
-            <div style="background-color: #ecfccb; border-left: 4px solid #84cc16; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                <h3 style="color: #3f6212; margin-top: 0;">🎨 Reserva tu Horario de Pintura</h3>
-                <p style="margin: 10px 0; color: #4d7c0f; font-size: 14px;">
+            <div style="background-color: #FDF7F2; border-left: 4px solid #D95F43; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #D95F43; margin-top: 0;">🎨 Reserva tu Horario de Pintura</h3>
+                <p style="margin: 10px 0; color: #6B5F58; font-size: 14px;">
                     Necesitas agendar tu sesión de pintura en nuestro calendario. Es muy fácil:
                 </p>
-                <ol style="margin: 10px 0; color: #4d7c0f; font-size: 14px;">
+                <ol style="margin: 10px 0; color: #6B5F58; font-size: 14px;">
                     <li style="margin: 5px 0;"><strong>Visita nuestro sitio web</strong> y selecciona "Pintura de Piezas"</li>
                     <li style="margin: 5px 0;"><strong>Elige fecha y horario</strong> que más te convenga</li>
-                    <li style="margin: 5px 0;"><strong>Confirma tu reserva</strong> - el pago lo coordinamos en el taller</li>
+                    <li style="margin: 5px 0;"><strong>Confirma tu reserva</strong> en el calendario</li>
                 </ol>
                 <div style="text-align: center; margin-top: 20px;">
-                    <a href="https://www.ceramicalma.com" style="display: inline-block; background-color: #84cc16; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                    <a href="https://www.ceramicalma.com/?booking=painting" style="display: inline-block; background-color: #D95F43; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
                         📅 Reservar Horario de Pintura
                     </a>
                 </div>
             </div>
 
-            <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 8px;">
-                <p style="margin: 0; color: #92400e; font-weight: bold;">💰 Recordatorio de Pago</p>
-                <p style="margin: 8px 0 0 0; color: #78350f; font-size: 14px;">
-                    El servicio de pintura tiene un costo de <strong>$${price} USD</strong>.<br/>
-                    El pago se coordina con el instructor antes de tu sesión de pintura.
-                </p>
-            </div>
-
-            <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 20px; margin: 20px 0; border-radius: 8px;">
-                <p style="margin: 0; color: #1e40af; font-weight: bold;">🕐 Horarios Disponibles</p>
-                <p style="margin: 8px 0 0 0; color: #1e3a8a; font-size: 14px;">
-                    • Martes a Sábado: 10:00 AM - 8:00 PM<br/>
-                    • Domingos: 12:00 PM - 5:00 PM<br/>
-                    • Lunes: Cerrado<br/>
+            <div style="background-color: #F4F2F1; border-left: 4px solid #CCBCB2; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #4A4540; font-weight: bold;">🕐 Horarios Disponibles</p>
+                <p style="margin: 8px 0 0 0; color: #6B5F58; font-size: 14px;">
+                    • Martes a Viernes: 10:00 AM - 9:00 PM<br/>
+                    • Sábados: 9:00 AM - 8:00 PM<br/>
+                    • Domingos: 10:00 AM - 6:00 PM<br/>
                     • Duración: ~1-2 horas
                 </p>
             </div>
 
-            <div style="background-color: #fef3c7; border: 1px solid #fbbf24; padding: 15px; margin: 20px 0; border-radius: 8px;">
-                <p style="margin: 0; color: #92400e; font-weight: bold;">⏰ Después de Pintar</p>
-                <p style="margin: 8px 0 0 0; color: #78350f; font-size: 14px;">
+            <div style="background-color: #FDF2F2; border: 1px solid #E7E1DB; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #B8474B; font-weight: bold;">⏰ Después de Pintar</p>
+                <p style="margin: 8px 0 0 0; color: #6B5F58; font-size: 14px;">
                     Tu pieza necesitará <strong>5-7 días adicionales</strong> para el horneado final.<br/>
                     Te notificaremos cuando esté lista para recoger. 🎁
                 </p>
@@ -1078,7 +1067,7 @@ export const sendDeliveryReadyForPaintingEmail = async (
             </p>
             
             <div style="margin: 30px 0; text-align: center;">
-                <a href="https://wa.me/593985813327" style="display: inline-block; background-color: #a855f7; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                <a href="https://wa.me/593985813327" style="display: inline-block; background-color: #D95F43; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
                     📱 Contactar por WhatsApp
                 </a>
             </div>

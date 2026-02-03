@@ -48,7 +48,7 @@ import { OpenStudioModal } from './components/admin/OpenStudioModal';
 import { MyClassesPrompt } from './components/MyClassesPrompt';
 const ClientDashboard = lazy(() => import('./components/ClientDashboard').then(m => ({ default: m.ClientDashboard })));
 
-import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession, DeliveryMethod, GiftcardHold, Piece, ExperiencePricing, ExperienceUIState, CourseSchedule, CourseEnrollment, ParticipantTechniqueAssignment } from './types';
+import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession, DeliveryMethod, GiftcardHold, Piece, ExperiencePricing, ExperienceUIState, CourseSchedule, CourseEnrollment, ParticipantTechniqueAssignment, GroupTechnique } from './types';
 import * as dataService from './services/dataService';
 import { DEFAULT_POLICIES_TEXT } from './constants';
 import { slotsRequireNoRefund } from './utils/bookingPolicy';
@@ -74,6 +74,7 @@ const App: React.FC = () => {
     const [selectedDelivery, setSelectedDelivery] = useState<DeliveryMethod | null>(null);
     const [giftcardBuyerEmail, setGiftcardBuyerEmail] = useState<string>('');
     const [showGiftcardBanner, setShowGiftcardBanner] = useState(true);
+    const [prefillTechnique, setPrefillTechnique] = useState<GroupTechnique | null>(null);
     // Modal informativo de Open Studio usando ClassInfoModal
     const handleOpenStudioInfoModalClose = () => {
         setIsOpenStudioModalOpen(false);
@@ -159,6 +160,20 @@ const App: React.FC = () => {
         // Check for cashier mode - supports both /cuadre and ?cuadre=true
         if (pathname.includes('/cuadre') || href.includes('/cuadre') || urlParams.get('cuadre') === 'true') {
             setIsCashierMode(true);
+            return;
+        }
+
+        const bookingParam = urlParams.get('booking') || urlParams.get('product');
+        const techniqueParam = urlParams.get('technique');
+        const flowParam = urlParams.get('flow');
+
+        if (bookingParam === 'painting' || techniqueParam === 'painting') {
+            setPrefillTechnique('painting');
+            if (flowParam === 'group') {
+                setView('group_class_wizard');
+            } else {
+                setView('single_class_wizard');
+            }
             return;
         }
 
@@ -295,6 +310,7 @@ const App: React.FC = () => {
     }, [loading, hasCheckedMyClasses, view]);
 
     const handleWelcomeSelect = (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio' | 'group_class_wizard' | 'single_class_wizard' | 'wheel_course' | 'custom_experience') => {
+        setPrefillTechnique(null);
         if (userType === 'new') {
             setView('intro_classes');
         } else if (userType === 'returning') {
@@ -906,6 +922,7 @@ const App: React.FC = () => {
             case 'group_class_wizard':
                 return (
                     <GroupClassWizard
+                        initialTechnique={prefillTechnique || undefined}
                         config={groupClassConfig}
                         availableSlots={appData?.availability ? 
                             dataService.generateTimeSlots(new Date(), 180).map(slot => ({
@@ -958,6 +975,7 @@ const App: React.FC = () => {
             case 'single_class_wizard':
                 return (
                     <SingleClassWizard
+                        initialTechnique={prefillTechnique || undefined}
                         pieces={pieces}
                         availableSlots={appData?.availability ? 
                             dataService.generateTimeSlots(new Date(), 180).map(slot => ({
