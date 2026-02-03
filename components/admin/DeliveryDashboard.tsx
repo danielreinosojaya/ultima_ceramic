@@ -141,9 +141,9 @@ export const DeliveryDashboard: React.FC<DeliveryDashboardProps> = ({
         const scheduled = wantsPaintingDeliveries.filter(d => d.paintingStatus === 'scheduled');
         const completed = wantsPaintingDeliveries.filter(d => d.paintingStatus === 'completed');
         
-        const totalRevenue = paid.reduce((sum, d) => sum + (d.paintingPrice || 0), 0) +
-                            scheduled.reduce((sum, d) => sum + (d.paintingPrice || 0), 0) +
-                            completed.reduce((sum, d) => sum + (d.paintingPrice || 0), 0);
+        const totalRevenue = paid.reduce((sum, d) => sum + (parseFloat(d.paintingPrice as any) || 0), 0) +
+                            scheduled.reduce((sum, d) => sum + (parseFloat(d.paintingPrice as any) || 0), 0) +
+                            completed.reduce((sum, d) => sum + (parseFloat(d.paintingPrice as any) || 0), 0);
 
         return {
             total: wantsPaintingDeliveries.length,
