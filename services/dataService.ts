@@ -1229,14 +1229,70 @@ export const updateAvailability = (availability: Record<DayKey, AvailableSlot[]>
 export const getScheduleOverrides = (): Promise<ScheduleOverrides> => getData('scheduleOverrides');
 export const updateScheduleOverrides = (overrides: ScheduleOverrides): Promise<{ success: boolean }> => setData('scheduleOverrides', overrides);
 
-// Instructors
+// Instructors - ✅ Usar cache para evitar requests múltiples
+let instructorsCache: { data: Instructor[] | null; timestamp: number } = { data: null, timestamp: 0 };
+const INSTRUCTORS_CACHE_DURATION = 60 * 60 * 1000; // 1 hora cache para instructors
+let instructorsFetchPromise: Promise<Instructor[]> | null = null;
+
 export const getInstructors = async (): Promise<Instructor[]> => {
-    const rawInstructors = await fetchData('/api/data?action=instructors');
-    return rawInstructors.map(parseInstructor);
+    // ✅ Check cache primero
+    const now = Date.now();
+    if (instructorsCache.data && (now - instructorsCache.timestamp) < INSTRUCTORS_CACHE_DURATION) {
+        console.log('[getInstructors] Cache hit');
+        return instructorsCache.data;
+    }
+    
+    // ✅ Deduplicar requests concurrentes
+    if (instructorsFetchPromise) {
+        console.log('[getInstructors] Reusing pending request');
+        return instructorsFetchPromise;
+    }
+    
+    console.log('[getInstructors] Cache miss, fetching...');
+    instructorsFetchPromise = fetchData('/api/data?action=instructors')
+        .then(rawInstructors => {
+            const parsed = rawInstructors.map(parseInstructor);
+            instructorsCache = { data: parsed, timestamp: Date.now() };
+            instructorsFetchPromise = null;
+            return parsed;
+        })
+        .catch(error => {
+            instructorsFetchPromise = null;
+            console.error('[getInstructors] Error:', error);
+            // Retornar cache expirado si existe
+            if (instructorsCache.data) {
+                console.warn('[getInstructors] Using expired cache');
+                return instructorsCache.data;
+            }
+            return [];
+        });
+    
+    return instructorsFetchPromise;
 };
-export const updateInstructors = (instructors: Instructor[]): Promise<{ success: boolean }> => setData('instructors', instructors);
-export const reassignAnddeleteInstructor = (instructorIdToDelete: number, replacementInstructorId: number): Promise<{ success: boolean }> => postAction('reassignAndDeleteInstructor', { instructorIdToDelete, replacementInstructorId });
-export const deleteInstructor = (id: number): Promise<{ success: boolean }> => postAction('deleteInstructor', { id });
+
+// ✅ Invalidar cache de instructors cuando se actualizan
+export const invalidateInstructorsCache = (): void => {
+    console.log('[Cache] Invalidating instructors cache');
+    instructorsCache = { data: null, timestamp: 0 };
+    instructorsFetchPromise = null;
+};
+
+export const updateInstructors = async (instructors: Instructor[]): Promise<{ success: boolean }> => {
+    const result = await setData('instructors', instructors);
+    // Invalidar cache después de actualizar
+    invalidateInstructorsCache();
+    return result;
+};
+export const reassignAnddeleteInstructor = async (instructorIdToDelete: number, replacementInstructorId: number): Promise<{ success: boolean }> => {
+    const result = await postAction('reassignAndDeleteInstructor', { instructorIdToDelete, replacementInstructorId });
+    invalidateInstructorsCache();
+    return result;
+};
+export const deleteInstructor = async (id: number): Promise<{ success: boolean }> => {
+    const result = await postAction('deleteInstructor', { id });
+    invalidateInstructorsCache();
+    return result;
+};
 export const checkInstructorUsage = (instructorId: number): Promise<{ hasUsage: boolean }> => postAction('checkInstructorUsage', { instructorId });
 
 
