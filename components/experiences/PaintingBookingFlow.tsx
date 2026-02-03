@@ -35,15 +35,6 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
     };
   }, [participants]);
 
-  const hasAnyAvailability = (date: string) => {
-    if (!appData) return true;
-    return availableSlots.some(slot => {
-      if (slot.date !== date) return false;
-      const info = dataService.calculateSlotAvailability(slot.date, slot.time, appData);
-      return info.techniques.painting.available >= participants;
-    });
-  };
-
   useEffect(() => {
     setSelectedSlot(null);
   }, [participants, selectedDate]);
@@ -51,10 +42,9 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
   useEffect(() => {
     if (!selectedDate && availableSlots.length > 0) {
       const uniqueDates = [...new Set(availableSlots.map(s => s.date))].sort();
-      const firstDate = uniqueDates.find(date => hasAnyAvailability(date));
-      if (firstDate) setSelectedDate(firstDate);
+      if (uniqueDates[0]) setSelectedDate(uniqueDates[0]);
     }
-  }, [availableSlots, selectedDate, participants, appData]);
+  }, [availableSlots, selectedDate]);
 
   const handleConfirm = () => {
     if (!selectedSlot) {
@@ -74,7 +64,7 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
     <div className="w-full max-w-3xl mx-auto px-4 py-8">
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-brand-text">🎨 Reserva tu clase de Pintado a Mano</h2>
-        <p className="text-brand-secondary mt-1">Selecciona participantes, pieza y horario disponible.</p>
+        <p className="text-brand-secondary mt-1">Selecciona participantes y horario disponible.</p>
       </div>
 
       <div className="grid gap-6">
@@ -105,7 +95,7 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
         <div className="bg-white border border-brand-border rounded-xl p-4 space-y-4">
           <div>
             <h3 className="text-lg font-semibold text-brand-text">Selecciona tu Horario</h3>
-            <p className="text-sm text-brand-secondary">Mostrando solo horarios con espacio para {participants} participante{participants !== 1 ? 's' : ''}</p>
+            <p className="text-sm text-brand-secondary">Disponible de 9 AM a 7 PM en intervalos de 30 minutos</p>
           </div>
 
           {availableSlots.length > 0 ? (
@@ -174,7 +164,7 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
                           ))}
 
                           {(() => {
-                            const dates = currentMonthData.dates.filter(date => hasAnyAvailability(date));
+                            const dates = currentMonthData.dates;
                             if (dates.length === 0) {
                               return (
                                 <div className="col-span-7 text-center py-6 bg-gray-50 rounded-lg">
@@ -251,7 +241,7 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
                         {availableTimes.map(time => {
                           const slotInfo = appData ? dataService.calculateSlotAvailability(selectedDate, time, appData) : null;
                           const isSelected = selectedSlot?.time === time && selectedSlot?.date === selectedDate;
-                          const hasCapacity = slotInfo ? slotInfo.techniques.painting.available >= participants : true;
+                          const hasCapacity = slotInfo ? slotInfo.techniques.painting.isAvailable : true;
 
                           return (
                             <div key={time} className="flex flex-col gap-1">
