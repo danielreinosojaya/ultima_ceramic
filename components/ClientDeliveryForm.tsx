@@ -667,9 +667,20 @@ export const ClientDeliveryForm: React.FC = () => {
                                 <div className="mt-4 bg-green-50 border-2 border-green-300 rounded-lg p-4">
                                     <p className="text-green-900 font-semibold mb-2">🎉 ¡Excelente elección!</p>
                                     <p className="text-green-800 text-sm mb-3">
-                                        Cuando tu pieza esté lista para pintar, recibirás un correo para reservar tu horario. 
-                                        El pago se coordina con el instructor antes de la sesión de pintura.
+                                        <strong>Precio del servicio de pintura: $25</strong>
                                     </p>
+                                    <p className="text-green-800 text-sm mb-3">
+                                        💳 <strong>Pago inmediato:</strong> Por favor, coordina el pago ahora para asegurar tu cupo. 
+                                        Puedes pagar por transferencia, Zelle o efectivo en el local.
+                                    </p>
+                                    <div className="bg-white rounded-lg p-3 mb-3 border border-green-200">
+                                        <p className="text-xs font-semibold text-gray-700 mb-1">Opciones de pago:</p>
+                                        <ul className="text-xs text-gray-700 space-y-1">
+                                            <li>💵 Efectivo en el local</li>
+                                            <li>📱 Zelle: [tu-email@ejemplo.com]</li>
+                                            <li>🏦 Transferencia bancaria</li>
+                                        </ul>
+                                    </div>
                                     <button
                                         onClick={() => setFormData(prev => ({ ...prev, wantsPainting: null }))}
                                         disabled={isSubmitting}
@@ -761,9 +772,9 @@ export const ClientDeliveryForm: React.FC = () => {
                             <div className="bg-purple-50 border-2 border-purple-300 rounded-lg p-4">
                                 <p className="text-purple-900 font-semibold mb-2">🎨 Próximos pasos para pintura:</p>
                                 <ul className="text-sm text-purple-800 space-y-1">
+                                    <li>✅ Pago de $25 realizado/coordinado</li>
                                     <li>• Recibirás un email cuando tu pieza esté lista para pintar</li>
                                     <li>• Podrás reservar tu horario de pintura en línea</li>
-                                    <li>• El pago de $25 se coordina antes de la sesión de pintura</li>
                                 </ul>
                             </div>
                         )}
