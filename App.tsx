@@ -32,6 +32,7 @@ const CashierDashboard = lazy(() => import('./components/CashierDashboard').then
 const GroupClassWizard = lazy(() => import('./components/experiences/GroupClassWizard').then(m => ({ default: m.GroupClassWizard })));
 const PieceExperienceWizard = lazy(() => import('./components/experiences/PieceExperienceWizard').then(m => ({ default: m.PieceExperienceWizard })));
 const SingleClassWizard = lazy(() => import('./components/experiences/SingleClassWizard').then(m => ({ default: m.SingleClassWizard })));
+const PaintingBookingFlow = lazy(() => import('./components/experiences/PaintingBookingFlow').then(m => ({ default: m.PaintingBookingFlow })));
 const CustomExperienceWizard = lazy(() => import('./components/experiences/CustomExperienceWizard').then(m => ({ default: m.CustomExperienceWizard })));
 const CourseWheelLanding = lazy(() => import('./components/courses/CourseWheelLanding').then(m => ({ default: m.CourseWheelLanding })));
 const CourseScheduleSelector = lazy(() => import('./components/courses/CourseScheduleSelector').then(m => ({ default: m.CourseScheduleSelector })));
@@ -165,15 +166,9 @@ const App: React.FC = () => {
 
         const bookingParam = urlParams.get('booking') || urlParams.get('product');
         const techniqueParam = urlParams.get('technique');
-        const flowParam = urlParams.get('flow');
-
         if (bookingParam === 'painting' || techniqueParam === 'painting') {
             setPrefillTechnique('painting');
-            if (flowParam === 'group') {
-                setView('group_class_wizard');
-            } else {
-                setView('single_class_wizard');
-            }
+            setView('painting_booking');
             return;
         }
 
@@ -995,6 +990,29 @@ const App: React.FC = () => {
                             setBookingDetails(prev => ({
                                 ...prev,
                                 slots: selectedSlot ? [selectedSlot] : [],
+                                userInfo: null // Will be filled by user info modal
+                            }));
+                            setExperienceType('experience');
+                            setIsUserInfoModalOpen(true);
+                        }}
+                        onBack={() => setView('welcome')}
+                        isLoading={experienceUIState.isLoading}
+                    />
+                );
+
+            case 'painting_booking':
+                return (
+                    <PaintingBookingFlow
+                        pieces={pieces}
+                        onConfirm={(pricing: ExperiencePricing, selectedSlot: TimeSlot) => {
+                            setExperienceUIState(prev => ({
+                                ...prev,
+                                pricing,
+                                piecesSelected: pricing.pieces
+                            }));
+                            setBookingDetails(prev => ({
+                                ...prev,
+                                slots: [selectedSlot],
                                 userInfo: null // Will be filled by user info modal
                             }));
                             setExperienceType('experience');

@@ -25,6 +25,7 @@ export type AppView =
   | 'group_class_wizard'
   | 'piece_experience_wizard'
   | 'single_class_wizard'
+  | 'painting_booking'
   | 'experience_confirmation'
   | 'custom_experience_wizard'
   | 'wheel_course_landing'
