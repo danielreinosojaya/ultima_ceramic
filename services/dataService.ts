@@ -1992,7 +1992,14 @@ const parseDelivery = (d: any): Delivery => {
         readyAt: d.readyAt || d.ready_at || null,
         notes: d.notes || null,
         photos: parsedPhotos,
-        hasPhotos: d.hasPhotos || false // ⚡ Flag para lazy loading
+        hasPhotos: d.hasPhotos || false, // ⚡ Flag para lazy loading
+        // ⚡ Campos de servicio de pintura
+        wantsPainting: d.wantsPainting ?? d.wants_painting ?? false,
+        paintingPrice: d.paintingPrice ?? d.painting_price ?? null,
+        paintingStatus: d.paintingStatus ?? d.painting_status ?? null,
+        paintingBookingDate: d.paintingBookingDate ?? d.painting_booking_date ?? null,
+        paintingPaidAt: d.paintingPaidAt ?? d.painting_paid_at ?? null,
+        paintingCompletedAt: d.paintingCompletedAt ?? d.painting_completed_at ?? null
     };
 };
 
