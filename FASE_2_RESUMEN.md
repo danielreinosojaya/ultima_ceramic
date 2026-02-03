@@ -116,23 +116,34 @@ Ahorro:      $225-285/mes (30-37%)
 
 ## 🚀 Próximos Pasos
 
-### Fase 3: Split del Backend (FUTURO)
-**Cuando**: Después de validar ahorro actual por 1 semana
+### ⚡ ACCIÓN INMEDIATA: Ejecutar Índices SQL
 
-**Objetivo**: Dividir `api/data.ts` (273KB) en módulos:
-- `api/giftcards.ts` (~50KB) - 14 endpoints
-- `api/bookings.ts` (~60KB) - 12 endpoints
-- `api/customers.ts` (~40KB) - 8 endpoints
-- `api/availability.ts` (~30KB) - 4 endpoints
-- `api/settings.ts` (~20KB) - 8 endpoints
+**Prioridad**: ALTA  
+**Impacto**: $20-30/mes ahorro inmediato  
+**Tiempo**: 5 minutos  
+**Guía**: Ver [`database/GUIA_EJECUCION_INDICES.md`](database/GUIA_EJECUCION_INDICES.md)
 
-**Ahorro adicional esperado**: $300-400/mes
+---
 
-**Plan**:
-1. Usar `api/shared/utils.ts` ya creado
-2. Migrar endpoint por endpoint (incremental)
-3. Testing exhaustivo en cada paso
-4. Mantener backward compatibility
+### Fase 3: Split del Backend (PAUSADO)
+
+**Decisión**: NO proceder aún con split del backend
+
+**Razones**:
+1. Riesgo alto de breaking changes en 273KB de código
+2. Requiere 2-3 semanas de testing exhaustivo
+3. Beneficio marginal vs optimizaciones ya implementadas
+4. Fase 1 + índices SQL ya dan 30-37% de ahorro
+
+**Alternativa adoptada**: 
+- ✅ Mantener `api/data.ts` como está (funciona)
+- ✅ Shared utilities creados para futuro
+- ✅ Priorizar índices SQL (bajo riesgo, alto impacto)
+
+**Reconsiderar cuando**:
+- Validar 2 semanas de ahorro con Fase 1 + índices
+- Tener plan de testing end-to-end completo
+- Período de baja actividad de usuarios
 
 ---
 
@@ -144,9 +155,10 @@ Ahorro:      $225-285/mes (30-37%)
 - [ ] Confirmar que no hay errores nuevos
 
 ### Esta Semana
+- [x] Validar que Fase 1 está activa
+- [ ] **EJECUTAR índices SQL en Neon** (ver guía)
 - [ ] Validar ahorro real en billing
 - [ ] Documentar baseline de performance
-- [ ] Decidir si proceder con Fase 3
 
 ### Métricas a Monitorear
 - Vercel Functions invocations (debe bajar 30-40%)
