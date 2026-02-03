@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import type { ExperiencePricing, TimeSlot } from '../../types';
+import type { ExperiencePricing, TimeSlot, AppData } from '../../types';
 import * as dataService from '../../services/dataService';
 
 interface PaintingBookingFlowProps {
   availableSlots: TimeSlot[];
+  appData?: AppData;
   onConfirm: (pricing: ExperiencePricing, selectedSlot: TimeSlot) => void;
   onBack: () => void;
   isLoading?: boolean;
@@ -11,6 +12,7 @@ interface PaintingBookingFlowProps {
 
 export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
   availableSlots,
+  appData,
   onConfirm,
   onBack,
   isLoading = false
@@ -20,8 +22,6 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [error, setError] = useState<string>('');
-  const [slots, setSlots] = useState<dataService.AvailableSlotResult[]>(availableSlots as any);
-  const [isLoadingSlots, setIsLoadingSlots] = useState<boolean>(false);
 
   const MIN_PAINTING_PRICE = 18;
 
@@ -36,7 +36,12 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
   }, [participants]);
 
   const hasAnyAvailability = (date: string) => {
-    return slots.some(slot => slot.date === date);
+    if (!appData) return true;
+    return availableSlots.some(slot => {
+      if (slot.date !== date) return false;
+      const info = dataService.calculateSlotAvailability(slot.date, slot.time, appData);
+      return info.techniques.painting.available >= participants;
+    });
   };
 
   useEffect(() => {
@@ -44,45 +49,12 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
   }, [participants, selectedDate]);
 
   useEffect(() => {
-    let isActive = true;
-
-    const loadSlots = async () => {
-      try {
-        setIsLoadingSlots(true);
-        const result = await dataService.getAvailableSlotsForExperience({
-          technique: 'painting',
-          participants,
-          daysAhead: 180
-        });
-        if (isActive) {
-          setSlots(result);
-        }
-      } catch (err) {
-        if (isActive) {
-          console.error('[PaintingBookingFlow] Error loading slots:', err);
-          setSlots([]);
-        }
-      } finally {
-        if (isActive) {
-          setIsLoadingSlots(false);
-        }
-      }
-    };
-
-    loadSlots();
-
-    return () => {
-      isActive = false;
-    };
-  }, [participants]);
-
-  useEffect(() => {
-    if (!selectedDate && slots.length > 0) {
-      const uniqueDates = [...new Set(slots.map(s => s.date))].sort();
+    if (!selectedDate && availableSlots.length > 0) {
+      const uniqueDates = [...new Set(availableSlots.map(s => s.date))].sort();
       const firstDate = uniqueDates.find(date => hasAnyAvailability(date));
       if (firstDate) setSelectedDate(firstDate);
     }
-  }, [slots, selectedDate]);
+  }, [availableSlots, selectedDate, participants, appData]);
 
   const handleConfirm = () => {
     if (!selectedSlot) {
@@ -102,7 +74,7 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
     <div className="w-full max-w-3xl mx-auto px-4 py-8">
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-brand-text">🎨 Reserva tu clase de Pintado a Mano</h2>
-        <p className="text-brand-secondary mt-1">Selecciona participantes y horario disponible.</p>
+        <p className="text-brand-secondary mt-1">Selecciona participantes, pieza y horario disponible.</p>
       </div>
 
       <div className="grid gap-6">
@@ -136,10 +108,10 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
             <p className="text-sm text-brand-secondary">Mostrando solo horarios con espacio para {participants} participante{participants !== 1 ? 's' : ''}</p>
           </div>
 
-          {slots.length > 0 ? (
+          {availableSlots.length > 0 ? (
             <div className="space-y-6">
               {(() => {
-                const uniqueDates = [...new Set(slots.map(s => s.date))].sort();
+                const uniqueDates = [...new Set(availableSlots.map(s => s.date))].sort();
                 const allMonths: { key: string; dates: string[]; date: Date }[] = [];
 
                 const groupedByMonth: Record<string, string[]> = {};
@@ -263,7 +235,7 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
                   </div>
 
                   {(() => {
-                    const slotsForDate = slots.filter(s => s.date === selectedDate);
+                    const slotsForDate = availableSlots.filter(s => s.date === selectedDate);
                     const availableTimes = [...new Set(slotsForDate.map(s => s.time))].sort();
 
                     if (availableTimes.length === 0) {
@@ -277,9 +249,9 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
                     return (
                       <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 p-2 bg-gray-50 rounded-lg">
                         {availableTimes.map(time => {
-                          const slotInfo = slotsForDate.find(s => s.time === time) || null;
+                          const slotInfo = appData ? dataService.calculateSlotAvailability(selectedDate, time, appData) : null;
                           const isSelected = selectedSlot?.time === time && selectedSlot?.date === selectedDate;
-                          const hasCapacity = slotInfo ? slotInfo.available >= participants : true;
+                          const hasCapacity = slotInfo ? slotInfo.techniques.painting.available >= participants : true;
 
                           return (
                             <div key={time} className="flex flex-col gap-1">
@@ -306,7 +278,7 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
 
                               {slotInfo && (
                                 <div className={`text-[11px] text-center ${hasCapacity ? 'text-green-600' : 'text-red-500'}`}>
-                                  🎨 {slotInfo.available}/{slotInfo.total}
+                                  🎨 {slotInfo.techniques.painting.available}/{slotInfo.techniques.painting.total}
                                 </div>
                               )}
                             </div>
@@ -320,7 +292,7 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
             </div>
           ) : (
             <div className="text-center py-6 bg-gray-50 rounded-lg">
-              <p className="text-gray-600">{isLoadingSlots ? 'Cargando horarios...' : 'No hay horarios disponibles'}</p>
+              <p className="text-gray-600">No hay horarios disponibles</p>
             </div>
           )}
         </div>

@@ -2636,13 +2636,7 @@ export const calculateSlotAvailability = (
             const hasOverlap = requestedStartMinutes < bookingEndMinutes && requestedEndMinutes > bookingStartMinutes;
             if (!hasOverlap) return;
 
-            const participantCount =
-                booking.participants
-                ?? booking.groupClassMetadata?.totalParticipants
-                ?? (typeof booking.product === 'object' && 'minParticipants' in booking.product
-                    ? (booking.product as any).minParticipants
-                    : undefined)
-                ?? 1;
+            const participantCount = booking.participants ?? 1;
             if (isHandWork(bookingTechnique)) {
                 capacity.hand_work.bookedInWindow += participantCount;
             } else if (bookingTechnique === 'potters_wheel') {
