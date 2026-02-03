@@ -3,7 +3,7 @@
   "devCommand": "vite --port $PORT",
   "functions": {
     "api/**/*.ts": {
-      "maxDuration": 15
+      "maxDuration": 30
     }
   },
   "rewrites": [
