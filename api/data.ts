@@ -4378,8 +4378,6 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                                             }
                                         );
                                         emailSent = !!(emailResult && emailResult.sent);
-                                        emailError = (emailResult && !emailResult.sent) ? emailResult.error : undefined;
-                                        emailDryRunPath = (emailResult && !emailResult.sent) ? emailResult.dryRunPath : undefined;
                                         console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] 📧 Email sent successfully:`, emailResult);
                                     } else {
                                         console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Customer data not found for email`);
@@ -4453,8 +4451,6 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                                             }
                                         );
                                         emailSent = !!(emailResult && emailResult.sent);
-                                        emailError = (emailResult && !emailResult.sent) ? emailResult.error : undefined;
-                                        emailDryRunPath = (emailResult && !emailResult.sent) ? emailResult.dryRunPath : undefined;
                                         console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] 📧 Email sent successfully:`, emailResult);
                                     } else {
                                         console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Customer data not found for email`);

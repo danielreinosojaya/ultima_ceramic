@@ -1,0 +1,16 @@
+# Ignorar archivos markdown de documentación que no se necesitan en Vercel
+*.md
+!README.md
+
+# Ignorar archivos de test/debug que no afecten el deployment
+*.test.ts
+*.spec.ts
+test-*.ts
+test-*.mjs
+test-*.sh
+*.test.json
+
+# Ignorar archivos temporales
+tmp/
+.DS_Store
+*.log
