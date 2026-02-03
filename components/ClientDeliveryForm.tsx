@@ -670,17 +670,8 @@ export const ClientDeliveryForm: React.FC = () => {
                                         <strong>Precio del servicio de pintura: $25</strong>
                                     </p>
                                     <p className="text-green-800 text-sm mb-3">
-                                        💳 <strong>Pago inmediato:</strong> Por favor, coordina el pago ahora para asegurar tu cupo. 
-                                        Puedes pagar por transferencia, Zelle o efectivo en el local.
+                                        💳 <strong>Pago inmediato:</strong> Por favor, coordina el pago ahora con el staff para asegurar tu cupo.
                                     </p>
-                                    <div className="bg-white rounded-lg p-3 mb-3 border border-green-200">
-                                        <p className="text-xs font-semibold text-gray-700 mb-1">Opciones de pago:</p>
-                                        <ul className="text-xs text-gray-700 space-y-1">
-                                            <li>💵 Efectivo en el local</li>
-                                            <li>📱 Zelle: [tu-email@ejemplo.com]</li>
-                                            <li>🏦 Transferencia bancaria</li>
-                                        </ul>
-                                    </div>
                                     <button
                                         onClick={() => setFormData(prev => ({ ...prev, wantsPainting: null }))}
                                         disabled={isSubmitting}

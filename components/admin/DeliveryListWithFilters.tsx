@@ -913,6 +913,46 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                     </div>
                                 )}
 
+                                {/* Servicio de Pintura */}
+                                {delivery.wantsPainting && (
+                                    <div className="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300 rounded-lg p-3 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-sm font-bold text-purple-900">🎨 Servicio de Pintura</p>
+                                            <span className="text-xs bg-purple-600 text-white px-2 py-1 rounded-full font-bold">
+                                                ${delivery.paintingPrice || 25}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-semibold text-gray-700">Estado:</span>
+                                            {delivery.paintingStatus === 'pending_payment' && (
+                                                <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-bold border border-yellow-300">
+                                                    💰 Pendiente pago
+                                                </span>
+                                            )}
+                                            {delivery.paintingStatus === 'paid' && (
+                                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-bold border border-green-300">
+                                                    ✅ Pagado
+                                                </span>
+                                            )}
+                                            {delivery.paintingStatus === 'scheduled' && delivery.paintingBookingDate && (
+                                                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-bold border border-blue-300">
+                                                    📅 Agendado: {formatDate(delivery.paintingBookingDate)}
+                                                </span>
+                                            )}
+                                            {delivery.paintingStatus === 'completed' && (
+                                                <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full font-bold border border-purple-300">
+                                                    🎉 Completado
+                                                </span>
+                                            )}
+                                        </div>
+                                        {delivery.paintingStatus === 'pending_payment' && (
+                                            <p className="text-xs text-purple-700 font-medium">
+                                                ⚠️ Cliente debe coordinar pago inmediato
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+
                                 {/* Fotos - Responsive grid con lazy loading automático */}
                                 {(() => {
                                     const photos = getDeliveryPhotos(delivery);
