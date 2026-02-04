@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { UserInfo } from '../types';
 import * as dataService from '../services/dataService';
+import { PAINTING_SERVICE_PRICE } from '../constants';
 
 interface Step {
     email: string;
@@ -11,6 +12,8 @@ interface Step {
     description: string;
     scheduledDate: string;
     photos: string[];
+    wantsPainting: boolean | null; // null = no decidió, true = sí, false = no
+    paintingConfirmed: boolean; // Confirmación después de advertencia
 }
 
 const INITIAL_STEP: Step = {
@@ -21,11 +24,13 @@ const INITIAL_STEP: Step = {
     countryCode: '+1',
     description: '',
     scheduledDate: '',
-    photos: []
+    photos: [],
+    wantsPainting: null,
+    paintingConfirmed: false
 };
 
 export const ClientDeliveryForm: React.FC = () => {
-    const [currentStep, setCurrentStep] = useState<'info' | 'photos' | 'confirmation'>('info');
+    const [currentStep, setCurrentStep] = useState<'info' | 'photos' | 'painting' | 'confirmation'>('info');
     const [formData, setFormData] = useState<Step>(INITIAL_STEP);
     const [errors, setErrors] = useState<{ [key: string]: string }>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -240,6 +245,8 @@ export const ClientDeliveryForm: React.FC = () => {
         if (currentStep === 'info') {
             setCurrentStep('photos');
         } else if (currentStep === 'photos') {
+            setCurrentStep('painting');
+        } else if (currentStep === 'painting') {
             setCurrentStep('confirmation');
         }
     };
@@ -247,8 +254,10 @@ export const ClientDeliveryForm: React.FC = () => {
     const handlePreviousStep = () => {
         if (currentStep === 'photos') {
             setCurrentStep('info');
-        } else if (currentStep === 'confirmation') {
+        } else if (currentStep === 'painting') {
             setCurrentStep('photos');
+        } else if (currentStep === 'confirmation') {
+            setCurrentStep('painting');
         }
     };
 
@@ -295,7 +304,9 @@ export const ClientDeliveryForm: React.FC = () => {
                 userInfo,
                 description: formData.description.trim() || null,
                 scheduledDate: scheduledDateStr,
-                photos: photosToSend
+                photos: photosToSend,
+                wantsPainting: formData.wantsPainting || false,
+                paintingPrice: formData.wantsPainting ? PAINTING_SERVICE_PRICE : null
             });
 
             console.log('[ClientDeliveryForm] API Response:', result);
@@ -347,8 +358,9 @@ export const ClientDeliveryForm: React.FC = () => {
                 </p>
             </div>                {/* Progress Indicator */}
                 <div className="flex justify-between mb-8">
-                    <div className={`flex-1 h-2 rounded-full mr-2 transition-colors ${currentStep === 'info' || currentStep === 'photos' || currentStep === 'confirmation' ? 'bg-brand-primary' : 'bg-gray-300'}`} />
-                    <div className={`flex-1 h-2 rounded-full mr-2 transition-colors ${currentStep === 'photos' || currentStep === 'confirmation' ? 'bg-brand-primary' : 'bg-gray-300'}`} />
+                    <div className={`flex-1 h-2 rounded-full mr-2 transition-colors ${currentStep === 'info' || currentStep === 'photos' || currentStep === 'painting' || currentStep === 'confirmation' ? 'bg-brand-primary' : 'bg-gray-300'}`} />
+                    <div className={`flex-1 h-2 rounded-full mr-2 transition-colors ${currentStep === 'photos' || currentStep === 'painting' || currentStep === 'confirmation' ? 'bg-brand-primary' : 'bg-gray-300'}`} />
+                    <div className={`flex-1 h-2 rounded-full mr-2 transition-colors ${currentStep === 'painting' || currentStep === 'confirmation' ? 'bg-brand-primary' : 'bg-gray-300'}`} />
                     <div className={`flex-1 h-2 rounded-full transition-colors ${currentStep === 'confirmation' ? 'bg-brand-primary' : 'bg-gray-300'}`} />
                 </div>
 
@@ -570,13 +582,127 @@ export const ClientDeliveryForm: React.FC = () => {
                                 disabled={isSubmitting || formData.photos.length === 0}
                                 className="px-6 py-2 text-sm font-semibold text-white bg-brand-primary rounded-lg hover:bg-brand-secondary transition-colors disabled:opacity-50"
                             >
+                                Siguiente →
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Step 3: Servicio de Pintura (Upsell) */}
+                {currentStep === 'painting' && (
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-bold text-brand-text mb-4">🎨 Servicio de Pintura</h3>
+                        
+                        <div className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg p-6">
+                            <div className="text-center mb-4">
+                                <span className="text-4xl">✨</span>
+                                <h4 className="text-xl font-bold text-purple-900 mt-2">¿Te gustaría pintar esta pieza?</h4>
+                                <p className="text-purple-700 text-sm mt-2">Dale vida y color a tu creación cuando esté lista</p>
+                            </div>
+
+                            <div className="bg-white rounded-lg p-4 mb-4 border border-purple-200">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="font-semibold text-gray-700">Precio del servicio:</span>
+                                    <span className="text-2xl font-bold text-brand-primary">$20 USD</span>
+                                </div>
+                                <p className="text-xs text-gray-600">Por pieza • Incluye todos los colores</p>
+                            </div>
+
+                            <div className="space-y-3 mb-4">
+                                <p className="text-sm text-gray-700">✅ Elige entre nuestra paleta completa de colores</p>
+                                <p className="text-sm text-gray-700">✅ Te contactaremos cuando la pieza esté lista</p>
+                                <p className="text-sm text-gray-700">✅ Reserva tu horario para pintarla</p>
+                            </div>
+
+                            {formData.wantsPainting === null && (
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button
+                                        onClick={() => setFormData(prev => ({ ...prev, wantsPainting: true }))}
+                                        disabled={isSubmitting}
+                                        className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105 disabled:opacity-50"
+                                    >
+                                        ✨ ¡Sí, quiero pintar!
+                                    </button>
+                                    <button
+                                        onClick={() => setFormData(prev => ({ ...prev, wantsPainting: false }))}
+                                        disabled={isSubmitting}
+                                        className="px-6 py-3 bg-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-400 transition-colors disabled:opacity-50"
+                                    >
+                                        No, gracias
+                                    </button>
+                                </div>
+                            )}
+
+                            {formData.wantsPainting === false && !formData.paintingConfirmed && (
+                                <div className="mt-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4">
+                                    <p className="text-yellow-900 font-semibold mb-2">⚠️ ¿Estás seguro?</p>
+                                    <p className="text-yellow-800 text-sm mb-3">
+                                        Tu pieza se pintará con <strong>esmalte base brillante transparente</strong>. 
+                                        No podrás agregar colores posteriormente.
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <button
+                                            onClick={() => setFormData(prev => ({ ...prev, wantsPainting: null }))}
+                                            disabled={isSubmitting}
+                                            className="px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 text-sm"
+                                        >
+                                            ← Volver a elegir
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setFormData(prev => ({ ...prev, paintingConfirmed: true }));
+                                                // Avanzar automáticamente al siguiente paso
+                                                setTimeout(() => handleNextStep(), 100);
+                                            }}
+                                            disabled={isSubmitting}
+                                            className="px-4 py-2 bg-yellow-600 text-white font-semibold rounded-lg hover:bg-yellow-700 transition-colors disabled:opacity-50 text-sm"
+                                        >
+                                            Confirmar sin pintura
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {formData.wantsPainting === true && (
+                                <div className="mt-4 bg-green-50 border-2 border-green-300 rounded-lg p-4">
+                                    <p className="text-green-900 font-semibold mb-2">🎉 ¡Excelente elección!</p>
+                                    <p className="text-green-800 text-sm mb-3">
+                                        <strong>Precio del servicio de pintura: $20</strong>
+                                    </p>
+                                    <p className="text-green-800 text-sm mb-3">
+                                        💳 <strong>Pago inmediato:</strong> Por favor, coordina el pago ahora con el staff para asegurar tu cupo.
+                                    </p>
+                                    <button
+                                        onClick={() => setFormData(prev => ({ ...prev, wantsPainting: null }))}
+                                        disabled={isSubmitting}
+                                        className="w-full px-4 py-2 bg-white border-2 border-green-300 text-green-700 font-semibold rounded-lg hover:bg-green-50 transition-colors disabled:opacity-50 text-sm"
+                                    >
+                                        ← Cambiar decisión
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex justify-between pt-4">
+                            <button
+                                onClick={handlePreviousStep}
+                                disabled={isSubmitting}
+                                className="px-6 py-2 text-sm font-semibold text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
+                            >
+                                ← Atrás
+                            </button>
+                            <button
+                                onClick={handleNextStep}
+                                disabled={isSubmitting || formData.wantsPainting === null || (formData.wantsPainting === false && !formData.paintingConfirmed)}
+                                className="px-6 py-2 text-sm font-semibold text-white bg-brand-primary rounded-lg hover:bg-brand-secondary transition-colors disabled:opacity-50"
+                            >
                                 Revisar →
                             </button>
                         </div>
                     </div>
                 )}
 
-                {/* Step 3: Confirmation */}
+                {/* Step 4: Confirmation */}
                 {currentStep === 'confirmation' && (
                     <div className="space-y-4">
                         <h3 className="text-lg font-bold text-brand-text mb-4">Confirmación</h3>
@@ -620,7 +746,29 @@ export const ClientDeliveryForm: React.FC = () => {
                                 <p className="text-xs text-gray-600">Fotos</p>
                                 <p className="font-semibold text-brand-text">{formData.photos.length} foto(s)</p>
                             </div>
+                            <div>
+                                <p className="text-xs text-gray-600">Servicio de Pintura</p>
+                                {formData.wantsPainting ? (
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-semibold text-green-700">✨ Sí, quiero pintar</span>
+                                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-semibold">+$20</span>
+                                    </div>
+                                ) : (
+                                    <p className="font-semibold text-gray-600">Esmalte base brillante</p>
+                                )}
+                            </div>
                         </div>
+
+                        {formData.wantsPainting && (
+                            <div className="bg-purple-50 border-2 border-purple-300 rounded-lg p-4">
+                                <p className="text-purple-900 font-semibold mb-2">🎨 Próximos pasos para pintura:</p>
+                                <ul className="text-sm text-purple-800 space-y-1">
+                                    <li>✅ Pago de $20 realizado/coordinado</li>
+                                    <li>• Recibirás un email cuando tu pieza esté lista para pintar</li>
+                                    <li>• Podrás reservar tu horario de pintura en línea</li>
+                                </ul>
+                            </div>
+                        )}
 
                         <div className="space-y-3">
                             <p className="text-sm text-gray-600 bg-blue-50 border border-blue-200 rounded-lg p-3">

@@ -6,6 +6,7 @@ export interface SingleClassWizardProps {
   pieces: Piece[];
   availableSlots?: TimeSlot[];
   appData?: AppData;
+  initialTechnique?: GroupTechnique;
   onConfirm: (pricing: ExperiencePricing, selectedSlot: TimeSlot | null) => void;
   onBack: () => void;
   isLoading?: boolean;
@@ -18,13 +19,14 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
   pieces: initialPieces,
   availableSlots = [],
   appData,
+  initialTechnique,
   onConfirm,
   onBack,
   isLoading = false
 }) => {
   const [classType, setClassType] = useState<ClassType>(null);
   const [step, setStep] = useState<Step>('class-type');
-  const [technique, setTechnique] = useState<GroupTechnique>('hand_modeling');
+  const [technique, setTechnique] = useState<GroupTechnique>(initialTechnique || 'hand_modeling');
   const [participants, setParticipants] = useState<number>(1);
   const [selectedPiece, setSelectedPiece] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
@@ -34,12 +36,18 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
   const [loadingPricing, setLoadingPricing] = useState(false);
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
 
+  useEffect(() => {
+    if (initialTechnique) {
+      setTechnique(initialTechnique);
+    }
+  }, [initialTechnique]);
+
   const TECHNIQUE_INFO = {
     hand_modeling: {
       label: '🤚 Modelado a Mano',
       desc: 'Crea con tus manos usando arcilla',
       price: 45,
-      maxParticipants: 14
+      maxParticipants: 22
     },
     potters_wheel: {
       label: '🎡 Torno Alfarero',
@@ -51,7 +59,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
       label: '🎨 Pintura de Piezas',
       desc: 'Pinta piezas pre-moldeadas',
       price: 0,  // Depende de la pieza
-      maxParticipants: 30
+      maxParticipants: 22
     }
   };
 
@@ -518,11 +526,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                         {availableTimes.map(time => {
                           const slotInfo = appData ? dataService.calculateSlotAvailability(selectedDate, time, appData) : null;
                           const isSelected = selectedSlot?.time === time && selectedSlot?.date === selectedDate;
-                          
-                          // Determinar si el slot está disponible para cualquier técnica
-                          const hasAnyCapacity = slotInfo?.techniques.potters_wheel.isAvailable || 
-                                               slotInfo?.techniques.hand_modeling.isAvailable ||
-                                               slotInfo?.techniques.painting.isAvailable;
+                          const hasCapacityForSelection = slotInfo?.techniques[technique]?.isAvailable ?? false;
                           
                           return (
                             <div key={time} className="flex flex-col gap-1">
@@ -534,11 +538,11 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                                     instructorId: 0
                                   });
                                 }}
-                                disabled={!hasAnyCapacity}
+                                disabled={!hasCapacityForSelection}
                                 className={`p-2 rounded-lg border-2 transition-all text-center font-bold text-xs ${
                                   isSelected
                                     ? 'border-blue-500 bg-blue-500 text-white ring-2 ring-blue-300'
-                                    : hasAnyCapacity
+                                    : hasCapacityForSelection
                                     ? 'border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:bg-blue-50 cursor-pointer'
                                     : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-40'
                                 }`}
@@ -549,12 +553,20 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                               {/* Mostrar cupos disponibles */}
                               {slotInfo && (
                                 <div className="text-xs text-gray-600 space-y-0.5">
-                                  <div className={slotInfo.techniques.potters_wheel.isAvailable ? 'text-green-600' : 'text-red-500'}>
-                                    🎡 {slotInfo.techniques.potters_wheel.available}/{slotInfo.techniques.potters_wheel.total}
-                                  </div>
-                                  <div className={slotInfo.techniques.hand_modeling.isAvailable ? 'text-green-600' : 'text-red-500'}>
-                                    🤚 {slotInfo.techniques.hand_modeling.available}/{slotInfo.techniques.hand_modeling.total}
-                                  </div>
+                                  {technique === 'painting' ? (
+                                    <div className={slotInfo.techniques.painting.isAvailable ? 'text-green-600' : 'text-red-500'}>
+                                      🎨 {slotInfo.techniques.painting.available}/{slotInfo.techniques.painting.total}
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <div className={slotInfo.techniques.potters_wheel.isAvailable ? 'text-green-600' : 'text-red-500'}>
+                                        🎡 {slotInfo.techniques.potters_wheel.available}/{slotInfo.techniques.potters_wheel.total}
+                                      </div>
+                                      <div className={slotInfo.techniques.hand_modeling.isAvailable ? 'text-green-600' : 'text-red-500'}>
+                                        🤚 {slotInfo.techniques.hand_modeling.available}/{slotInfo.techniques.hand_modeling.total}
+                                      </div>
+                                    </>
+                                  )}
                                 </div>
                               )}
                             </div>

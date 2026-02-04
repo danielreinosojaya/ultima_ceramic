@@ -25,6 +25,7 @@ export type AppView =
   | 'group_class_wizard'
   | 'piece_experience_wizard'
   | 'single_class_wizard'
+  | 'painting_booking'
   | 'experience_confirmation'
   | 'custom_experience_wizard'
   | 'wheel_course_landing'
@@ -50,6 +51,7 @@ export interface UserInfo {
 
 // Delivery System Types
 export type DeliveryStatus = 'pending' | 'ready' | 'completed' | 'overdue';
+export type PaintingStatus = 'pending_payment' | 'paid' | 'scheduled' | 'completed';
 
 export interface Delivery {
     id: string;
@@ -65,6 +67,13 @@ export interface Delivery {
     photos?: string[] | null; // Array de URLs de fotos
     hasPhotos?: boolean; // ⚡ Flag para lazy loading - indica si hay fotos sin cargarlas
     createdByClient?: boolean; // true si el cliente subió las fotos directamente
+    // 🎨 Servicio de Pintura (Upsell)
+    wantsPainting?: boolean; // Cliente manifestó intención de pintar pieza
+    paintingPrice?: number | null; // Precio del servicio de pintura
+    paintingStatus?: PaintingStatus | null; // Estado: pending_payment, paid, scheduled, completed
+    paintingBookingDate?: string | null; // Fecha agendada para pintura
+    paintingPaidAt?: string | null; // Timestamp cuando pagó servicio
+    paintingCompletedAt?: string | null; // Timestamp cuando completó pintura
 }
 
 export interface Customer {
@@ -742,8 +751,8 @@ export interface GroupClassState {
 // Group Class Capacity Limits
 export const GROUP_CLASS_CAPACITY = {
   potters_wheel: 8,      // Máximo 8 para torno
-  hand_modeling: 14,     // Máximo 14 para modelado
-  painting: Infinity     // Sin límite para pintura
+  hand_modeling: 22,     // Máximo 22 para modelado
+  painting: 22           // Máximo 22 para pintura
 } as const;
 
 // 8. Experience Pricing

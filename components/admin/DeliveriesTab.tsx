@@ -2,8 +2,11 @@ import React, { useState, useMemo, useCallback } from 'react';
 import type { Delivery, Customer } from '../../types';
 import { DeliveryDashboard } from './DeliveryDashboard';
 import { DeliveryListWithFilters } from './DeliveryListWithFilters';
+import { NewLegacyCustomerDeliveryModal } from './NewLegacyCustomerDeliveryModal';
+import { LegacyPaintingRegistrationModal } from './LegacyPaintingRegistrationModal';
 import * as dataService from '../../services/dataService';
 import { formatDate } from '../../utils/formatters';
+import { useAdminData } from '../../context/AdminDataContext';
 
 interface DeliveriesTabProps {
     customers: Customer[];
@@ -15,9 +18,12 @@ interface DeliveriesTabProps {
  * Displays all deliveries across all customers without needing to navigate to individual customer views
  */
 export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataChange }) => {
+    const adminData = useAdminData();
     const [loading, setLoading] = useState(false);
     const [editingDeliveryId, setEditingDeliveryId] = useState<string | null>(null);
     const [editModal, setEditModal] = useState(false);
+    const [legacyModalOpen, setLegacyModalOpen] = useState(false);
+    const [legacyPaintingModalOpen, setLegacyPaintingModalOpen] = useState(false);
 
     // Combine all deliveries from all customers
     const allDeliveries = useMemo((): (Delivery & { customerEmail: string; customerName: string })[] => {
@@ -44,7 +50,11 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataC
         try {
             const result = await dataService.markDeliveryAsReady(deliveryId);
             if (result.success) {
-                onDataChange();
+                if (result.delivery) {
+                    adminData.optimisticUpsertDelivery(result.delivery);
+                } else {
+                    adminData.refreshCritical();
+                }
             } else {
                 alert(`Error: ${result.error}`);
             }
@@ -62,7 +72,11 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataC
         try {
             const result = await dataService.markDeliveryAsCompleted(deliveryId);
             if (result.success) {
-                onDataChange();
+                if (result.delivery) {
+                    adminData.optimisticUpsertDelivery(result.delivery);
+                } else {
+                    adminData.refreshCritical();
+                }
             } else {
                 alert('Error al completar entrega');
             }
@@ -84,7 +98,7 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataC
         try {
             const result = await dataService.deleteDelivery(delivery.id);
             if (result.success) {
-                onDataChange();
+                adminData.optimisticRemoveDelivery(delivery.id);
             } else {
                 alert('Error al eliminar entrega');
             }
@@ -159,14 +173,28 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataC
     return (
         <div className="space-y-6">
             {/* Header with export button */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <h1 className="text-3xl font-bold text-brand-text">📦 Entregas</h1>
-                <button
-                    onClick={handleExportCSV}
-                    className="px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-secondary transition-colors font-semibold flex items-center gap-2"
-                >
-                    📥 Exportar CSV
-                </button>
+                <div className="flex flex-wrap gap-2">
+                    <button
+                        onClick={() => setLegacyModalOpen(true)}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold"
+                    >
+                        ➕ Cliente sin reserva
+                    </button>
+                    <button
+                        onClick={() => setLegacyPaintingModalOpen(true)}
+                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-semibold"
+                    >
+                        🎨 Registrar pintura (legacy)
+                    </button>
+                    <button
+                        onClick={handleExportCSV}
+                        className="px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-secondary transition-colors font-semibold flex items-center gap-2"
+                    >
+                        📥 Exportar CSV
+                    </button>
+                </div>
             </div>
 
             {/* Dashboard - Summary cards */}
@@ -180,6 +208,52 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataC
                 onComplete={handleComplete}
                 onMarkReady={handleMarkReady}
                 formatDate={formatDate}
+                onDataChange={onDataChange}
+            />
+
+            <NewLegacyCustomerDeliveryModal
+                isOpen={legacyModalOpen}
+                onClose={() => setLegacyModalOpen(false)}
+                onSave={async ({ userInfo, deliveryData, customerName }) => {
+                    setLoading(true);
+                    try {
+                        const customerResult = await dataService.ensureStandaloneCustomer(userInfo);
+                        if (!customerResult.success) {
+                            throw new Error(customerResult.error || 'No se pudo crear el cliente');
+                        }
+
+                        const deliveryResult = await dataService.createDelivery({
+                            ...deliveryData,
+                            customerEmail: userInfo.email,
+                            customerName
+                        } as any);
+
+                        if (!deliveryResult.success) {
+                            throw new Error(deliveryResult.error || 'No se pudo crear la entrega');
+                        }
+
+                        if (deliveryResult.delivery) {
+                            adminData.optimisticUpsertDelivery(deliveryResult.delivery);
+                        } else {
+                            adminData.refreshCritical();
+                        }
+                        setLegacyModalOpen(false);
+                    } finally {
+                        setLoading(false);
+                    }
+                }}
+            />
+
+            <LegacyPaintingRegistrationModal
+                isOpen={legacyPaintingModalOpen}
+                onClose={() => setLegacyPaintingModalOpen(false)}
+                deliveries={allDeliveries}
+                onSaved={(delivery) => {
+                    adminData.optimisticUpsertDelivery(delivery);
+                }}
+                onFallbackRefresh={() => {
+                    adminData.refreshCritical();
+                }}
             />
 
             {loading && (

@@ -59,6 +59,12 @@ export const EditPaymentModal: React.FC<EditPaymentModalProps> = ({ isOpen, onCl
           }
           throw new Error(errorMsg);
         }
+
+        if (result.booking) {
+          adminData.optimisticUpsertBooking(result.booking as any);
+        } else {
+          adminData.optimisticRemoveBookingPayment(bookingId, payment.id);
+        }
       } else {
         console.warn('[EditPaymentModal] Payment has no ID, falling back to index-based deletion');
         // Refetch booking to get fresh payment array and correct index
@@ -91,7 +97,13 @@ export const EditPaymentModal: React.FC<EditPaymentModalProps> = ({ isOpen, onCl
         }
 
         console.log('[EditPaymentModal] Deleting payment with realIndex:', realIndex, 'from', freshBooking.paymentDetails.length, 'payments');
-        await dataService.deletePaymentFromBooking(bookingId, realIndex, cancelReason);
+
+        const result = await dataService.deletePaymentFromBooking(bookingId, realIndex, cancelReason);
+        if (result?.success && result.booking) {
+          adminData.optimisticUpsertBooking(result.booking as any);
+        } else {
+          adminData.optimisticRemoveBookingPayment(bookingId, realIndex);
+        }
       }
       
       setShowConfirm(false);

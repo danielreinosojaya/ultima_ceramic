@@ -139,9 +139,7 @@ export const AdminConsole: React.FC = () => {
   };
 
   const renderContent = () => {
-    if (adminData.loading) {
-      return <div>Cargando datos de administración...</div>;
-    }
+    // Mantener contenido montado durante refresh para evitar pérdida de estado en módulos
 
   // targetId para ScheduleManager si la navegación viene de 'schedule' o 'calendar'
   const targetId = (navigateTo && (navigateTo.tab === 'schedule' || navigateTo.tab === 'calendar')) ? navigateTo.targetId : undefined;
@@ -249,6 +247,13 @@ export const AdminConsole: React.FC = () => {
   return (
     <div className="bg-brand-background min-h-screen text-brand-text font-sans">
       <NotificationToast />
+      {adminData.loading && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center pointer-events-none">
+          <div className="mt-4 px-4 py-2 bg-white/90 border border-brand-border rounded-lg shadow text-sm font-semibold text-brand-secondary">
+            Actualizando datos…
+          </div>
+        </div>
+      )}
       <header className="bg-brand-surface shadow-md">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="w-24">

@@ -261,6 +261,7 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
 }) => {
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+    const [selectedCustomerEmail, setSelectedCustomerEmail] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterByClassesRemaining, setFilterByClassesRemaining] = useState<FilterType>('all');
@@ -339,6 +340,7 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
             const customer = customers.find(c => c.userInfo?.email === navigateToEmail);
             if (customer) {
                 setSelectedCustomer(customer);
+                setSelectedCustomerEmail(customer.email);
                 setSearchTerm('');
             }
             onNavigationComplete();
@@ -356,6 +358,16 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
         }
       }
     }, [bookings, selectedCustomer, customers]);
+
+    // Rehidratar selección cuando cambian los datos (refresh)
+    useEffect(() => {
+        if (!selectedCustomer && selectedCustomerEmail) {
+            const customer = customers.find(c => c.email === selectedCustomerEmail);
+            if (customer) {
+                setSelectedCustomer(customer);
+            }
+        }
+    }, [customers, selectedCustomer, selectedCustomerEmail]);
 
 
     const augmentedAndFilteredCustomers = useMemo((): AugmentedCustomer[] => {
@@ -441,17 +453,20 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
 
     const handleSelectCustomer = (customer: Customer) => {
         setSelectedCustomer(customer);
+        setSelectedCustomerEmail(customer.email);
     };
     
     const handleNavigateToCustomer = (email: string) => {
         const customer = customers.find(c => c.userInfo?.email === email);
         if (customer) {
             setSelectedCustomer(customer);
+            setSelectedCustomerEmail(customer.email);
         }
     };
 
     const handleBackToList = () => {
         setSelectedCustomer(null);
+        setSelectedCustomerEmail(null);
     };
     
     const handleCreateCustomer = async (userInfo: UserInfo) => {
@@ -487,8 +502,10 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
                 const createdCustomer = allCustomers.find(c => c.email === newCustomer.email);
                 if (createdCustomer) {
                     setSelectedCustomer(createdCustomer);
+                    setSelectedCustomerEmail(createdCustomer.email);
                 } else {
                     setSelectedCustomer(newCustomer);
+                    setSelectedCustomerEmail(newCustomer.email);
                 }
             } catch (loadError) {
                 setCustomers(prev => {
@@ -496,6 +513,7 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
                     return [...filtered, newCustomer];
                 });
                 setSelectedCustomer(newCustomer);
+                setSelectedCustomerEmail(newCustomer.email);
             } finally {
                 setLoading(false);
             }

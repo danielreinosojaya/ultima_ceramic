@@ -11,6 +11,7 @@ import { DeleteConfirmationModal } from './DeleteConfirmationModal.js';
 import { TrashIcon } from '../icons/TrashIcon.js';
 import { CalendarIcon } from '../icons/CalendarIcon.js';
 import { EditPaymentModal } from './EditPaymentModal';
+import { useAdminData } from '../../context/AdminDataContext';
 
 // Helper para obtener nombre de técnica desde metadata
 const getTechniqueName = (technique: GroupTechnique): string => {
@@ -174,6 +175,7 @@ const CapacityHealthView: React.FC = () => {
 };
 
 export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings: allBookings, invoiceRequests, onDataChange, setNavigateTo }) => {
+    const adminData = useAdminData();
     // Feedback state
     const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
     const [feedbackType, setFeedbackType] = useState<'success' | 'error' | null>(null);
@@ -449,17 +451,21 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                 ...details,
                 receivedAt: new Date().toISOString()
             };
-            await dataService.addPaymentToBooking(bookingToPay.id, payment);
+            const res = await dataService.addPaymentToBooking(bookingToPay.id, payment);
+            if (res?.success && res.booking) {
+                adminData.optimisticUpsertBooking(res.booking);
+            } else {
+                adminData.refreshCritical();
+            }
             setBookingToPay(null);
-            onDataChange();
         }
     };
     
     const handleDeleteBooking = async () => {
         if (bookingToDelete) {
             await dataService.deleteBooking(bookingToDelete.id);
+            adminData.optimisticRemoveBooking(bookingToDelete.id);
             setBookingToDelete(null);
-            onDataChange();
         }
     };
 
@@ -503,11 +509,11 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
         try {
             for (const id of selectedBookings) {
                 await dataService.deleteBooking(id);
+                adminData.optimisticRemoveBooking(id);
             }
             setSelectedBookings([]);
             setFeedbackMsg('Reservas eliminadas correctamente');
             setFeedbackType('success');
-            onDataChange();
         } catch (e) {
             setFeedbackMsg('Error al eliminar reservas');
             setFeedbackType('error');
@@ -519,11 +525,11 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
         try {
             for (const id of selectedBookings) {
                 await dataService.acceptPaymentForBooking(id);
+                adminData.optimisticPatchBooking(id, { isPaid: true } as any);
             }
             setSelectedBookings([]);
             setFeedbackMsg('Pagos aceptados correctamente');
             setFeedbackType('success');
-            onDataChange();
         } catch (e) {
             setFeedbackMsg('Error al aceptar pagos');
             setFeedbackType('error');
@@ -539,7 +545,6 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
             setSelectedBookings([]);
             setFeedbackMsg('Recordatorios enviados correctamente');
             setFeedbackType('success');
-            onDataChange();
         } catch (e) {
             setFeedbackMsg('Error al enviar recordatorios');
             setFeedbackType('error');
@@ -611,8 +616,8 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                     // Prefer paymentId if available, fallback to index
                                     const identifier = paymentToEdit.payment.id || paymentToEdit.index;
                                     await dataService.updatePaymentDetails(paymentToEdit.bookingId, identifier, updated);
+                                    adminData.optimisticUpdateBookingPayment(paymentToEdit.bookingId, identifier, updated);
                                     setPaymentToEdit(null);
-                                    onDataChange();
                                 }}
                             />
                         )}

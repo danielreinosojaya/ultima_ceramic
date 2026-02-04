@@ -32,6 +32,7 @@ const CashierDashboard = lazy(() => import('./components/CashierDashboard').then
 const GroupClassWizard = lazy(() => import('./components/experiences/GroupClassWizard').then(m => ({ default: m.GroupClassWizard })));
 const PieceExperienceWizard = lazy(() => import('./components/experiences/PieceExperienceWizard').then(m => ({ default: m.PieceExperienceWizard })));
 const SingleClassWizard = lazy(() => import('./components/experiences/SingleClassWizard').then(m => ({ default: m.SingleClassWizard })));
+const PaintingBookingFlow = lazy(() => import('./components/experiences/PaintingBookingFlow').then(m => ({ default: m.PaintingBookingFlow })));
 const CustomExperienceWizard = lazy(() => import('./components/experiences/CustomExperienceWizard').then(m => ({ default: m.CustomExperienceWizard })));
 const CourseWheelLanding = lazy(() => import('./components/courses/CourseWheelLanding').then(m => ({ default: m.CourseWheelLanding })));
 const CourseScheduleSelector = lazy(() => import('./components/courses/CourseScheduleSelector').then(m => ({ default: m.CourseScheduleSelector })));
@@ -48,7 +49,7 @@ import { OpenStudioModal } from './components/admin/OpenStudioModal';
 import { MyClassesPrompt } from './components/MyClassesPrompt';
 const ClientDashboard = lazy(() => import('./components/ClientDashboard').then(m => ({ default: m.ClientDashboard })));
 
-import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession, DeliveryMethod, GiftcardHold, Piece, ExperiencePricing, ExperienceUIState, CourseSchedule, CourseEnrollment, ParticipantTechniqueAssignment } from './types';
+import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession, DeliveryMethod, GiftcardHold, Piece, ExperiencePricing, ExperienceUIState, CourseSchedule, CourseEnrollment, ParticipantTechniqueAssignment, GroupTechnique } from './types';
 import * as dataService from './services/dataService';
 import { DEFAULT_POLICIES_TEXT } from './constants';
 import { slotsRequireNoRefund } from './utils/bookingPolicy';
@@ -74,6 +75,7 @@ const App: React.FC = () => {
     const [selectedDelivery, setSelectedDelivery] = useState<DeliveryMethod | null>(null);
     const [giftcardBuyerEmail, setGiftcardBuyerEmail] = useState<string>('');
     const [showGiftcardBanner, setShowGiftcardBanner] = useState(true);
+    const [prefillTechnique, setPrefillTechnique] = useState<GroupTechnique | null>(null);
     // Modal informativo de Open Studio usando ClassInfoModal
     const handleOpenStudioInfoModalClose = () => {
         setIsOpenStudioModalOpen(false);
@@ -141,6 +143,7 @@ const App: React.FC = () => {
     
     // VALENTINE 2026 states
     const [valentineRegistrationId, setValentineRegistrationId] = useState<string | null>(null);
+    const [paintingDeliveryId, setPaintingDeliveryId] = useState<string | null>(null);
     
     const [appData, setAppData] = useState<AppData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -159,6 +162,15 @@ const App: React.FC = () => {
         // Check for cashier mode - supports both /cuadre and ?cuadre=true
         if (pathname.includes('/cuadre') || href.includes('/cuadre') || urlParams.get('cuadre') === 'true') {
             setIsCashierMode(true);
+            return;
+        }
+
+        const bookingParam = urlParams.get('booking') || urlParams.get('product');
+        const techniqueParam = urlParams.get('technique');
+        if (bookingParam === 'painting' || techniqueParam === 'painting') {
+            setPrefillTechnique('painting');
+            setPaintingDeliveryId(urlParams.get('deliveryId'));
+            setView('painting_booking');
             return;
         }
 
@@ -295,6 +307,7 @@ const App: React.FC = () => {
     }, [loading, hasCheckedMyClasses, view]);
 
     const handleWelcomeSelect = (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio' | 'group_class_wizard' | 'single_class_wizard' | 'wheel_course' | 'custom_experience') => {
+        setPrefillTechnique(null);
         if (userType === 'new') {
             setView('intro_classes');
         } else if (userType === 'returning') {
@@ -606,10 +619,10 @@ const App: React.FC = () => {
 
     // Load scheduling data when needed for schedule view
     useEffect(() => {
-        if ((view === 'schedule' || view === 'group_class_wizard' || view === 'single_class_wizard') && appData && appData.instructors.length === 0) {
+        if ((view === 'schedule' || view === 'group_class_wizard' || view === 'single_class_wizard' || view === 'painting_booking') && appData && appData.instructors.length === 0) {
             loadAdditionalData('scheduling', appData);
         }
-        if ((view === 'schedule' || view === 'group_class_wizard' || view === 'single_class_wizard') && appData && appData.bookings.length === 0) {
+        if ((view === 'schedule' || view === 'group_class_wizard' || view === 'single_class_wizard' || view === 'painting_booking') && appData && appData.bookings.length === 0) {
             loadAdditionalData('bookings', appData);
         }
     }, [view, appData, loadAdditionalData]);
@@ -906,6 +919,7 @@ const App: React.FC = () => {
             case 'group_class_wizard':
                 return (
                     <GroupClassWizard
+                        initialTechnique={prefillTechnique || undefined}
                         config={groupClassConfig}
                         availableSlots={appData?.availability ? 
                             dataService.generateTimeSlots(new Date(), 180).map(slot => ({
@@ -958,6 +972,7 @@ const App: React.FC = () => {
             case 'single_class_wizard':
                 return (
                     <SingleClassWizard
+                        initialTechnique={prefillTechnique || undefined}
                         pieces={pieces}
                         availableSlots={appData?.availability ? 
                             dataService.generateTimeSlots(new Date(), 180).map(slot => ({
@@ -982,6 +997,15 @@ const App: React.FC = () => {
                             setExperienceType('experience');
                             setIsUserInfoModalOpen(true);
                         }}
+                        onBack={() => setView('welcome')}
+                        isLoading={experienceUIState.isLoading}
+                    />
+                );
+
+            case 'painting_booking':
+                return (
+                    <PaintingBookingFlow
+                        deliveryId={paintingDeliveryId}
                         onBack={() => setView('welcome')}
                         isLoading={experienceUIState.isLoading}
                     />

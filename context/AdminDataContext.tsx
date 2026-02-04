@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect, ReactNode, useRef } from 'react';
 import * as dataService from '../services/dataService';
-import type { Product, Booking, Customer, GroupInquiry, Instructor, ScheduleOverrides, DayKey, AvailableSlot, ClassCapacity, CapacityMessageSettings, Announcement, InvoiceRequest } from '../types';
+import type { Product, Booking, Customer, GroupInquiry, Instructor, ScheduleOverrides, DayKey, AvailableSlot, ClassCapacity, CapacityMessageSettings, Announcement, InvoiceRequest, Delivery, PaymentDetails } from '../types';
 
 interface AdminData {
   products: Product[];
@@ -34,6 +34,20 @@ interface AdminData {
   refreshCritical: () => void;
   refreshExtended: () => void;
   refreshSecondary: () => void;
+
+  // Optimistic updates (evitar refresh completo tras mutaciones)
+  optimisticUpsertBooking: (booking: Booking) => void;
+  optimisticPatchBooking: (bookingId: string, patch: Partial<Booking>) => void;
+  optimisticUpdateBookingPayment: (bookingId: string, paymentIdOrIndex: string | number, patch: Partial<PaymentDetails>) => void;
+  optimisticRemoveBookingPayment: (bookingId: string, paymentIdOrIndex: string | number) => void;
+  optimisticRemoveBookingSlot: (bookingId: string, slotToRemove: { date: string; time: string }) => void;
+  optimisticRemoveBooking: (bookingId: string) => void;
+  optimisticPatchCustomer: (email: string, patch: Partial<Customer>) => void;
+  optimisticRemoveCustomer: (email: string) => void;
+  optimisticUpsertDelivery: (delivery: Delivery) => void;
+  optimisticRemoveDelivery: (deliveryId: string) => void;
+  optimisticUpsertInvoiceRequest: (request: InvoiceRequest) => void;
+  optimisticPatchInvoiceRequest: (id: string, patch: Partial<InvoiceRequest>) => void;
 }
 
 // Estado inicial
@@ -77,7 +91,65 @@ type AdminAction =
   | { type: 'SET_INDIVIDUAL_DATA'; dataType: string; data: any }
   | { type: 'SET_ERROR'; error: string | null }
   | { type: 'UPDATE_TIMESTAMP'; dataType: 'critical' | 'extended' | 'secondary' }
-  | { type: 'SET_GIFTCARD_REQUESTS'; requests: import('../services/dataService').GiftcardRequest[] };
+  | { type: 'SET_GIFTCARD_REQUESTS'; requests: import('../services/dataService').GiftcardRequest[] }
+  | { type: 'UPSERT_BOOKING'; booking: Booking }
+  | { type: 'PATCH_BOOKING'; bookingId: string; patch: Partial<Booking> }
+  | { type: 'UPDATE_BOOKING_PAYMENT'; bookingId: string; paymentIdOrIndex: string | number; patch: Partial<PaymentDetails> }
+  | { type: 'REMOVE_BOOKING_PAYMENT'; bookingId: string; paymentIdOrIndex: string | number }
+  | { type: 'REMOVE_BOOKING_SLOT'; bookingId: string; slotToRemove: { date: string; time: string } }
+  | { type: 'REMOVE_BOOKING'; bookingId: string }
+  | { type: 'PATCH_CUSTOMER'; email: string; patch: Partial<Customer> }
+  | { type: 'REMOVE_CUSTOMER'; email: string }
+  | { type: 'UPSERT_DELIVERY'; delivery: Delivery }
+  | { type: 'REMOVE_DELIVERY'; deliveryId: string }
+  | { type: 'UPSERT_INVOICE_REQUEST'; request: InvoiceRequest }
+  | { type: 'PATCH_INVOICE_REQUEST'; id: string; patch: Partial<InvoiceRequest> };
+
+const normalizeEmail = (email: string | null | undefined): string => (email || '').trim().toLowerCase();
+
+const recomputeCustomerSummary = (customer: Customer): Customer => {
+  const bookings = Array.isArray(customer.bookings) ? customer.bookings : [];
+  const totalBookings = bookings.length;
+  const totalSpent = bookings.reduce((sum, booking) => {
+    const bookingPayments = Array.isArray(booking.paymentDetails) ? booking.paymentDetails : [];
+    return sum + bookingPayments.reduce((s, p) => s + (typeof p.amount === 'number' ? p.amount : 0), 0);
+  }, 0);
+
+  let lastBookingDate = customer.lastBookingDate instanceof Date ? customer.lastBookingDate : new Date(0);
+  bookings.forEach((booking) => {
+    const candidateDates: Date[] = [];
+    if (booking.createdAt) {
+      const d = new Date(booking.createdAt);
+      if (!isNaN(d.getTime())) candidateDates.push(d);
+    }
+    if (Array.isArray(booking.slots)) {
+      booking.slots.forEach((slot: any) => {
+        if (slot?.date) {
+          const d = new Date(String(slot.date) + 'T12:00:00');
+          if (!isNaN(d.getTime())) candidateDates.push(d);
+        }
+      });
+    }
+    candidateDates.forEach((d) => {
+      if (d.getTime() > lastBookingDate.getTime()) lastBookingDate = d;
+    });
+  });
+
+  return {
+    ...customer,
+    totalBookings,
+    totalSpent,
+    lastBookingDate,
+  };
+};
+
+const upsertById = <T extends { id: string }>(items: T[], item: T): T[] => {
+  const idx = items.findIndex((x) => x.id === item.id);
+  if (idx === -1) return [item, ...items];
+  const next = items.slice();
+  next[idx] = item;
+  return next;
+};
 
 // Reducer
 function adminReducer(state: AdminState, action: AdminAction): AdminState {
@@ -153,6 +225,186 @@ function adminReducer(state: AdminState, action: AdminAction): AdminState {
           [action.dataType]: Date.now(),
         },
       };
+
+    case 'UPSERT_BOOKING': {
+      const nextBookings = upsertById(state.bookings as any, action.booking as any) as any;
+      const bookingEmail = normalizeEmail((action.booking as any)?.userInfo?.email);
+      const nextCustomers = state.customers.map((customer) => {
+        const customerEmail = normalizeEmail(customer.email || customer.userInfo?.email);
+        if (!bookingEmail || customerEmail !== bookingEmail) return customer;
+        const nextCustomerBookings = upsertById(customer.bookings as any, action.booking as any) as any;
+        return recomputeCustomerSummary({ ...customer, bookings: nextCustomerBookings });
+      });
+      return {
+        ...state,
+        bookings: nextBookings,
+        customers: nextCustomers,
+      };
+    }
+
+    case 'PATCH_BOOKING': {
+      const nextBookings = state.bookings.map((b) => (b.id === action.bookingId ? ({ ...b, ...action.patch } as any) : b));
+      const nextCustomers = state.customers.map((customer) => {
+        const nextCustomerBookings = customer.bookings.map((b) => (b.id === action.bookingId ? ({ ...b, ...action.patch } as any) : b));
+        const changed = nextCustomerBookings.some((b, idx) => b !== customer.bookings[idx]);
+        return changed ? recomputeCustomerSummary({ ...customer, bookings: nextCustomerBookings }) : customer;
+      });
+      return {
+        ...state,
+        bookings: nextBookings,
+        customers: nextCustomers,
+      };
+    }
+
+    case 'UPDATE_BOOKING_PAYMENT': {
+      const patchPayment = (payments: PaymentDetails[]): PaymentDetails[] => {
+        if (!Array.isArray(payments)) return payments;
+        if (typeof action.paymentIdOrIndex === 'number') {
+          const idx = action.paymentIdOrIndex;
+          if (idx < 0 || idx >= payments.length) return payments;
+          return payments.map((p, i) => (i === idx ? ({ ...p, ...action.patch } as any) : p));
+        }
+        const id = String(action.paymentIdOrIndex);
+        return payments.map((p: any) => {
+          const pid = p?.id || p?.paymentId;
+          return pid === id ? ({ ...p, ...action.patch } as any) : p;
+        });
+      };
+
+      const nextBookings = state.bookings.map((b: any) => {
+        if (b.id !== action.bookingId) return b;
+        const nextPayments = patchPayment(Array.isArray(b.paymentDetails) ? b.paymentDetails : []);
+        return { ...b, paymentDetails: nextPayments };
+      });
+      const nextCustomers = state.customers.map((customer) => {
+        const nextCustomerBookings = customer.bookings.map((b: any) => {
+          if (b.id !== action.bookingId) return b;
+          const nextPayments = patchPayment(Array.isArray(b.paymentDetails) ? b.paymentDetails : []);
+          return { ...b, paymentDetails: nextPayments };
+        });
+        const changed = nextCustomerBookings.some((b, idx) => b !== customer.bookings[idx]);
+        return changed ? recomputeCustomerSummary({ ...customer, bookings: nextCustomerBookings }) : customer;
+      });
+      return { ...state, bookings: nextBookings, customers: nextCustomers };
+    }
+
+    case 'REMOVE_BOOKING_PAYMENT': {
+      const removePayment = (payments: PaymentDetails[]): PaymentDetails[] => {
+        if (!Array.isArray(payments)) return payments;
+        if (typeof action.paymentIdOrIndex === 'number') {
+          return payments.filter((_, i) => i !== action.paymentIdOrIndex);
+        }
+        const id = String(action.paymentIdOrIndex);
+        return payments.filter((p: any) => {
+          const pid = p?.id || p?.paymentId;
+          return pid !== id;
+        });
+      };
+
+      const nextBookings = state.bookings.map((b: any) => (b.id === action.bookingId ? { ...b, paymentDetails: removePayment(b.paymentDetails || []) } : b));
+      const nextCustomers = state.customers.map((customer) => {
+        const nextCustomerBookings = customer.bookings.map((b: any) => (b.id === action.bookingId ? { ...b, paymentDetails: removePayment(b.paymentDetails || []) } : b));
+        const changed = nextCustomerBookings.some((b, idx) => b !== customer.bookings[idx]);
+        return changed ? recomputeCustomerSummary({ ...customer, bookings: nextCustomerBookings }) : customer;
+      });
+      return { ...state, bookings: nextBookings, customers: nextCustomers };
+    }
+
+    case 'REMOVE_BOOKING_SLOT': {
+      const slotMatches = (slot: any): boolean => slot?.date === action.slotToRemove.date && slot?.time === action.slotToRemove.time;
+      const nextBookings = state.bookings.map((b: any) => {
+        if (b.id !== action.bookingId) return b;
+        const nextSlots = Array.isArray(b.slots) ? b.slots.filter((s: any) => !slotMatches(s)) : b.slots;
+        return { ...b, slots: nextSlots };
+      });
+      const nextCustomers = state.customers.map((customer) => {
+        const nextCustomerBookings = customer.bookings.map((b: any) => {
+          if (b.id !== action.bookingId) return b;
+          const nextSlots = Array.isArray(b.slots) ? b.slots.filter((s: any) => !slotMatches(s)) : b.slots;
+          return { ...b, slots: nextSlots };
+        });
+        const changed = nextCustomerBookings.some((b, idx) => b !== customer.bookings[idx]);
+        return changed ? recomputeCustomerSummary({ ...customer, bookings: nextCustomerBookings }) : customer;
+      });
+      return { ...state, bookings: nextBookings, customers: nextCustomers };
+    }
+
+    case 'REMOVE_BOOKING': {
+      const nextBookings = state.bookings.filter((b) => b.id !== action.bookingId);
+      const nextCustomers = state.customers.map((customer) => {
+        const nextCustomerBookings = customer.bookings.filter((b) => b.id !== action.bookingId);
+        if (nextCustomerBookings.length === customer.bookings.length) return customer;
+        return recomputeCustomerSummary({ ...customer, bookings: nextCustomerBookings });
+      });
+      return { ...state, bookings: nextBookings, customers: nextCustomers };
+    }
+
+    case 'PATCH_CUSTOMER': {
+      const targetEmail = normalizeEmail(action.email);
+      const nextCustomers = state.customers.map((customer) => {
+        const customerEmail = normalizeEmail(customer.email || customer.userInfo?.email);
+        if (customerEmail !== targetEmail) return customer;
+        const nextUserInfo = action.patch.userInfo
+          ? { ...(customer.userInfo || {}), ...(action.patch.userInfo as any) }
+          : customer.userInfo;
+        return {
+          ...customer,
+          ...action.patch,
+          userInfo: nextUserInfo,
+        };
+      });
+
+      const nextBookings = state.bookings.map((booking: any) => {
+        const bookingEmail = normalizeEmail(booking?.userInfo?.email);
+        if (bookingEmail !== targetEmail) return booking;
+        if (!action.patch.userInfo) return booking;
+        return { ...booking, userInfo: { ...(booking.userInfo || {}), ...(action.patch.userInfo as any) } };
+      });
+
+      return { ...state, customers: nextCustomers, bookings: nextBookings };
+    }
+
+    case 'REMOVE_CUSTOMER': {
+      const targetEmail = normalizeEmail(action.email);
+      const nextCustomers = state.customers.filter((c) => normalizeEmail(c.email || c.userInfo?.email) !== targetEmail);
+      const nextBookings = state.bookings.filter((b: any) => normalizeEmail(b?.userInfo?.email) !== targetEmail);
+      return { ...state, customers: nextCustomers, bookings: nextBookings };
+    }
+
+    case 'UPSERT_DELIVERY': {
+      const deliveryEmail = normalizeEmail((action.delivery as any)?.customerEmail);
+      const nextCustomers = state.customers.map((customer) => {
+        const customerEmail = normalizeEmail(customer.email || customer.userInfo?.email);
+        if (!deliveryEmail || customerEmail !== deliveryEmail) return customer;
+        const deliveries = Array.isArray(customer.deliveries) ? customer.deliveries : [];
+        const idx = deliveries.findIndex((d) => d.id === action.delivery.id);
+        const nextDeliveries = idx === -1
+          ? [action.delivery, ...deliveries]
+          : deliveries.map((d) => (d.id === action.delivery.id ? action.delivery : d));
+        return { ...customer, deliveries: nextDeliveries };
+      });
+      return { ...state, customers: nextCustomers };
+    }
+
+    case 'REMOVE_DELIVERY': {
+      const nextCustomers = state.customers.map((customer) => {
+        const deliveries = Array.isArray(customer.deliveries) ? customer.deliveries : [];
+        const nextDeliveries = deliveries.filter((d) => d.id !== action.deliveryId);
+        return nextDeliveries.length === deliveries.length ? customer : { ...customer, deliveries: nextDeliveries };
+      });
+      return { ...state, customers: nextCustomers };
+    }
+
+    case 'UPSERT_INVOICE_REQUEST': {
+      const next = upsertById(state.invoiceRequests as any, action.request as any) as any;
+      return { ...state, invoiceRequests: next };
+    }
+
+    case 'PATCH_INVOICE_REQUEST': {
+      const next = state.invoiceRequests.map((r) => (r.id === action.id ? ({ ...r, ...action.patch } as any) : r));
+      return { ...state, invoiceRequests: next };
+    }
+
     default:
       return state;
   }
@@ -427,6 +679,66 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
     fetchSecondaryDataRef.current(true);
   }, []); // ✅ Sin dependencias - usar refs
 
+  const optimisticUpsertBooking = useCallback((booking: Booking) => {
+    dispatch({ type: 'UPSERT_BOOKING', booking });
+    lastUpdatedRef.current.critical = Date.now();
+  }, []);
+
+  const optimisticPatchBooking = useCallback((bookingId: string, patch: Partial<Booking>) => {
+    dispatch({ type: 'PATCH_BOOKING', bookingId, patch });
+    lastUpdatedRef.current.critical = Date.now();
+  }, []);
+
+  const optimisticUpdateBookingPayment = useCallback((bookingId: string, paymentIdOrIndex: string | number, patch: Partial<PaymentDetails>) => {
+    dispatch({ type: 'UPDATE_BOOKING_PAYMENT', bookingId, paymentIdOrIndex, patch });
+    lastUpdatedRef.current.critical = Date.now();
+  }, []);
+
+  const optimisticRemoveBookingPayment = useCallback((bookingId: string, paymentIdOrIndex: string | number) => {
+    dispatch({ type: 'REMOVE_BOOKING_PAYMENT', bookingId, paymentIdOrIndex });
+    lastUpdatedRef.current.critical = Date.now();
+  }, []);
+
+  const optimisticRemoveBookingSlot = useCallback((bookingId: string, slotToRemove: { date: string; time: string }) => {
+    dispatch({ type: 'REMOVE_BOOKING_SLOT', bookingId, slotToRemove });
+    lastUpdatedRef.current.critical = Date.now();
+  }, []);
+
+  const optimisticRemoveBooking = useCallback((bookingId: string) => {
+    dispatch({ type: 'REMOVE_BOOKING', bookingId });
+    lastUpdatedRef.current.critical = Date.now();
+  }, []);
+
+  const optimisticPatchCustomer = useCallback((email: string, patch: Partial<Customer>) => {
+    dispatch({ type: 'PATCH_CUSTOMER', email, patch });
+    lastUpdatedRef.current.critical = Date.now();
+  }, []);
+
+  const optimisticRemoveCustomer = useCallback((email: string) => {
+    dispatch({ type: 'REMOVE_CUSTOMER', email });
+    lastUpdatedRef.current.critical = Date.now();
+  }, []);
+
+  const optimisticUpsertDelivery = useCallback((delivery: Delivery) => {
+    dispatch({ type: 'UPSERT_DELIVERY', delivery });
+    lastUpdatedRef.current.critical = Date.now();
+  }, []);
+
+  const optimisticRemoveDelivery = useCallback((deliveryId: string) => {
+    dispatch({ type: 'REMOVE_DELIVERY', deliveryId });
+    lastUpdatedRef.current.critical = Date.now();
+  }, []);
+
+  const optimisticUpsertInvoiceRequest = useCallback((request: InvoiceRequest) => {
+    dispatch({ type: 'UPSERT_INVOICE_REQUEST', request });
+    lastUpdatedRef.current.secondary = Date.now();
+  }, []);
+
+  const optimisticPatchInvoiceRequest = useCallback((id: string, patch: Partial<InvoiceRequest>) => {
+    dispatch({ type: 'PATCH_INVOICE_REQUEST', id, patch });
+    lastUpdatedRef.current.secondary = Date.now();
+  }, []);
+
   // Cargar datos iniciales - solo una vez al montar
   useEffect(() => {
     let mounted = true;
@@ -482,6 +794,18 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
   refreshCritical,
   refreshExtended,
   refreshSecondary,
+  optimisticUpsertBooking,
+  optimisticPatchBooking,
+  optimisticUpdateBookingPayment,
+  optimisticRemoveBookingPayment,
+  optimisticRemoveBookingSlot,
+  optimisticRemoveBooking,
+  optimisticPatchCustomer,
+  optimisticRemoveCustomer,
+  optimisticUpsertDelivery,
+  optimisticRemoveDelivery,
+  optimisticUpsertInvoiceRequest,
+  optimisticPatchInvoiceRequest,
   };
 
   return (

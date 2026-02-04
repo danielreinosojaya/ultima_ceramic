@@ -6,6 +6,7 @@ import { DocumentTextIcon } from '../icons/DocumentTextIcon';
 import { CheckCircleIcon } from '../icons/CheckCircleIcon';
 import { MailIcon } from '../icons/MailIcon';
 import { UserIcon } from '../icons/UserIcon';
+import { useAdminData } from '../../context/AdminDataContext';
 
 type FilterType = 'all' | 'Pending' | 'Processed';
 
@@ -22,6 +23,7 @@ interface InvoiceManagerProps {
 }
 
 export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ navigateToId, invoiceRequests = [], onDataChange, setNavigateTo }) => {
+    const adminData = useAdminData();
     // Eliminado useLanguage, la app ahora es monolingüe en español
     const language = 'es-ES';
     const [highlightedRequestId, setHighlightedRequestId] = useState<string | null>(null);
@@ -38,7 +40,7 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ navigateToId, in
 
     const handleMarkAsProcessed = async (id: string) => {
         await dataService.markInvoiceAsProcessed(id);
-        onDataChange();
+        adminData.optimisticPatchInvoiceRequest(id, { status: 'Processed' } as any);
     };
     
     const formatDate = (dateInput: string | Date | null | undefined): string => {

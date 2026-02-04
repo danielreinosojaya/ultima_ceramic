@@ -462,6 +462,12 @@ export const invalidateProductsCache = (): void => {
     lastMutationTimestamp = Date.now();
 };
 
+export const invalidateDeliveriesCache = (): void => {
+    console.log('[Cache] Invalidating deliveries cache only');
+    clearCache('deliveries');
+    lastMutationTimestamp = Date.now();
+};
+
 // Para operaciones que afectan múltiples recursos
 export const invalidateMultiple = (keys: string[]): void => {
     console.log('[Cache] Invalidating multiple:', keys);
@@ -1992,7 +1998,14 @@ const parseDelivery = (d: any): Delivery => {
         readyAt: d.readyAt || d.ready_at || null,
         notes: d.notes || null,
         photos: parsedPhotos,
-        hasPhotos: d.hasPhotos || false // ⚡ Flag para lazy loading
+        hasPhotos: d.hasPhotos || false, // ⚡ Flag para lazy loading
+        // ⚡ Campos de servicio de pintura
+        wantsPainting: d.wantsPainting ?? d.wants_painting ?? false,
+        paintingPrice: d.paintingPrice ?? d.painting_price ?? null,
+        paintingStatus: d.paintingStatus ?? d.painting_status ?? null,
+        paintingBookingDate: d.paintingBookingDate ?? d.painting_booking_date ?? null,
+        paintingPaidAt: d.paintingPaidAt ?? d.painting_paid_at ?? null,
+        paintingCompletedAt: d.paintingCompletedAt ?? d.painting_completed_at ?? null
     };
 };
 
@@ -2039,6 +2052,8 @@ export const getDeliveriesByCustomer = async (customerEmail: string): Promise<De
 export const createDelivery = async (deliveryData: Omit<Delivery, 'id' | 'createdAt'>): Promise<{ success: boolean; delivery?: Delivery }> => {
     const result = await postAction('createDelivery', deliveryData);
     if (result.success && result.delivery) {
+        invalidateDeliveriesCache();
+        invalidateCustomersCache();
         return { ...result, delivery: parseDelivery(result.delivery) };
     }
     return result;
@@ -2050,9 +2065,11 @@ export const createDeliveryFromClient = async (data: {
     description: string | null;
     scheduledDate: string;
     photos: string[] | null;
+    wantsPainting?: boolean;
+    paintingPrice?: number | null;
 }): Promise<{ success: boolean; delivery?: Delivery; isNewCustomer?: boolean; error?: string; message?: string }> => {
     try {
-        console.log('[dataService] createDeliveryFromClient called');
+        console.log('[dataService] createDeliveryFromClient called with painting:', data.wantsPainting);
         
         // Add 60-second timeout protection (increased for mobile connections)
         const controller = new AbortController();
@@ -2071,6 +2088,9 @@ export const createDeliveryFromClient = async (data: {
             console.log('[dataService] createDeliveryFromClient response:', result);
             
             if (result.success && result.delivery) {
+                // Invalidar cache después de crear delivery
+                invalidateCustomersCache();
+                
                 return { 
                     ...result, 
                     delivery: parseDelivery(result.delivery),
@@ -2106,6 +2126,9 @@ export const createDeliveryFromClient = async (data: {
 export const updateDelivery = async (deliveryId: string, updates: Partial<Omit<Delivery, 'id' | 'customerEmail' | 'createdAt'>>): Promise<{ success: boolean; delivery?: Delivery }> => {
     const result = await postAction('updateDelivery', { deliveryId, updates });
     if (result.success && result.delivery) {
+        // Mantener caches consistentes para otras vistas/flows
+        invalidateDeliveriesCache();
+        invalidateCustomersCache();
         return { ...result, delivery: parseDelivery(result.delivery) };
     }
     return result;
@@ -2192,6 +2215,62 @@ export const bulkUpdateDeliveryStatus = async (
 
 export const updateDeliveryStatuses = async (): Promise<{ success: boolean; updated: number }> => {
     return postAction('updateDeliveryStatuses', {});
+};
+
+// ⚡ Actualizar estado del servicio de pintura
+export const updatePaintingStatus = async (
+    deliveryId: string,
+    paintingStatus: 'pending_payment' | 'paid' | 'scheduled' | 'completed',
+    options?: {
+        paintingBookingDate?: string;
+        paintingPaidAt?: string;
+        paintingCompletedAt?: string;
+    }
+): Promise<{ success: boolean; delivery?: Delivery; error?: string }> => {
+    try {
+        const result = await postAction('updatePaintingStatus', {
+            deliveryId,
+            paintingStatus,
+            ...options
+        });
+        
+        if (result.success && result.delivery) {
+            // Invalidar cache de deliveries
+            invalidateDeliveriesCache();
+            return { ...result, delivery: parseDelivery(result.delivery) };
+        }
+        
+        return result;
+    } catch (error) {
+        console.error('[updatePaintingStatus] Error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error updating painting status'
+        };
+    }
+};
+
+// ⚡ Agendar reserva de pintura (cliente) - ya pagada
+export const schedulePaintingBooking = async (payload: {
+    deliveryId: string;
+    date: string; // YYYY-MM-DD
+    time: string; // HH:mm
+    participants: number;
+}): Promise<{ success: boolean; delivery?: Delivery; error?: string }> => {
+    try {
+        const result = await postAction('schedulePaintingBooking', payload);
+        if (result.success && result.delivery) {
+            invalidateDeliveriesCache();
+            return { ...result, delivery: parseDelivery(result.delivery) };
+        }
+        return result;
+    } catch (error) {
+        console.error('[schedulePaintingBooking] Error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error scheduling painting booking'
+        };
+    }
 };
 
 // Función para migrar productos existentes y asignar sort_order
@@ -2515,11 +2594,12 @@ export const calculateSlotAvailability = (
   const slotEnd = new Date(slotStart.getTime() + 2 * 60 * 60 * 1000); // +2 horas
   
   // FIX: Usar capacidad de appData en lugar de valores hardcodeados
-  const capacity = {
-    potters_wheel: { max: appData.classCapacity?.potters_wheel || 8, bookedInWindow: 0 },
-    hand_modeling: { max: appData.classCapacity?.molding || 14, bookedInWindow: 0 },
-    painting: { max: Infinity, bookedInWindow: 0 }
-  };
+    const pottersWheelMax = appData.classCapacity?.potters_wheel || 8;
+    const handWorkMax = appData.classCapacity?.molding || 22;
+    const capacity = {
+        potters_wheel: { max: pottersWheelMax, bookedInWindow: 0 },
+        hand_work: { max: handWorkMax, bookedInWindow: 0 }
+    };
 
   const overlappingDetails: string[] = [];
 
@@ -2533,13 +2613,6 @@ export const calculateSlotAvailability = (
       return d.toISOString().substr(11,5);
     }
     return t.trim().toLowerCase();
-  };
-  
-  // Bookings que se solapan - agrupados por técnica
-  const bookingsByTechnique: Record<string, Booking[]> = {
-    potters_wheel: [],
-    hand_modeling: [],
-    painting: []
   };
   
   appData.bookings.forEach(booking => {
@@ -2563,21 +2636,49 @@ export const calculateSlotAvailability = (
       }
     }
     
-    if (!bookingTechnique) {
-      bookingTechnique = 'hand_modeling';
-    }
-    
-    // Verificar si este booking coincide con la fecha/hora exacta (no ventana)
-    const hasMatchingSlot = booking.slots.some(slot => {
-      return slot.date === date && normalizeTime(slot.time) === normalizeTime(startTime);
-    });
-    
-    if (hasMatchingSlot) {
-      bookingsByTechnique[bookingTechnique].push(booking);
-      const participantCount = booking.participants ?? 1;
-      capacity[bookingTechnique].bookedInWindow += participantCount;
-      overlappingDetails.push(`${booking.productType}: ${participantCount} personas (${bookingTechnique})`);
-    }
+        if (!bookingTechnique) bookingTechnique = 'hand_modeling';
+
+        const isHandWork = (tech: string) => tech === 'hand_modeling' || tech === 'painting' || tech === 'molding';
+
+        const toMinutes = (t: string) => {
+            const normalized = normalizeTime(t);
+            const [h, m] = normalized.split(':').map(Number);
+            if (Number.isNaN(h) || Number.isNaN(m)) return NaN;
+            return (h * 60) + m;
+        };
+
+        const requestedStartMinutes = toMinutes(startTime);
+        const requestedEndMinutes = requestedStartMinutes + (2 * 60);
+
+        if (Number.isNaN(requestedStartMinutes)) return;
+
+        booking.slots.forEach(slot => {
+            if (slot.date !== date) return;
+
+            const bookingStartMinutes = toMinutes(slot.time);
+            if (Number.isNaN(bookingStartMinutes)) return;
+            const bookingEndMinutes = bookingStartMinutes + (2 * 60);
+
+            const hasOverlap = requestedStartMinutes < bookingEndMinutes && requestedEndMinutes > bookingStartMinutes;
+            if (!hasOverlap) return;
+
+            const participantCount =
+                booking.participants
+                ?? booking.groupClassMetadata?.totalParticipants
+                ?? (typeof booking.product === 'object' && 'minParticipants' in booking.product
+                    ? (booking.product as any).minParticipants
+                    : undefined)
+                ?? 1;
+            if (isHandWork(bookingTechnique)) {
+                capacity.hand_work.bookedInWindow += participantCount;
+            } else if (bookingTechnique === 'potters_wheel') {
+                capacity.potters_wheel.bookedInWindow += participantCount;
+            } else {
+                capacity.hand_work.bookedInWindow += participantCount;
+            }
+
+            overlappingDetails.push(`${booking.productType}: ${participantCount} personas (${bookingTechnique})`);
+        });
   });
 
   const endTimeFormatted = new Date(slotEnd).toLocaleTimeString('es-ES', {
@@ -2586,30 +2687,33 @@ export const calculateSlotAvailability = (
   });
 
   // Calcular disponibilidad
-  return {
+    const handWorkAvailable = Math.max(0, capacity.hand_work.max - capacity.hand_work.bookedInWindow);
+    const pottersWheelAvailable = Math.max(0, capacity.potters_wheel.max - capacity.potters_wheel.bookedInWindow);
+
+    return {
     date,
     startTime,
     endTime: endTimeFormatted,
     techniques: {
       potters_wheel: {
-        available: Math.max(0, capacity.potters_wheel.max - capacity.potters_wheel.bookedInWindow),
-        total: capacity.potters_wheel.max,
+                available: pottersWheelAvailable,
+                total: capacity.potters_wheel.max,
         bookedInWindow: capacity.potters_wheel.bookedInWindow,
         isAvailable: capacity.potters_wheel.bookedInWindow < capacity.potters_wheel.max,
         overlappingClasses: overlappingDetails.length > 0 ? overlappingDetails : undefined
       },
       hand_modeling: {
-        available: Math.max(0, capacity.hand_modeling.max - capacity.hand_modeling.bookedInWindow),
-        total: capacity.hand_modeling.max,
-        bookedInWindow: capacity.hand_modeling.bookedInWindow,
-        isAvailable: capacity.hand_modeling.bookedInWindow < capacity.hand_modeling.max,
+                available: handWorkAvailable,
+                total: capacity.hand_work.max,
+                bookedInWindow: capacity.hand_work.bookedInWindow,
+                isAvailable: capacity.hand_work.bookedInWindow < capacity.hand_work.max,
         overlappingClasses: overlappingDetails.length > 0 ? overlappingDetails : undefined
       },
       painting: {
-        available: Infinity,
-        total: Infinity,
-        bookedInWindow: capacity.painting.bookedInWindow,
-        isAvailable: true
+                available: handWorkAvailable,
+                total: capacity.hand_work.max,
+                bookedInWindow: capacity.hand_work.bookedInWindow,
+                isAvailable: capacity.hand_work.bookedInWindow < capacity.hand_work.max
       }
     }
   };
@@ -2664,8 +2768,8 @@ export const generateTimeSlots = (
           professorId: null,
           capacity: {
             potters_wheel: { max: 8, bookedInWindow: 0, available: 8, isAvailable: true },
-            hand_modeling: { max: 14, bookedInWindow: 0, available: 14, isAvailable: true },
-            painting: { max: Infinity, bookedInWindow: 0, available: Infinity, isAvailable: true }
+                        hand_modeling: { max: 22, bookedInWindow: 0, available: 22, isAvailable: true },
+                        painting: { max: 22, bookedInWindow: 0, available: 22, isAvailable: true }
           }
         });
       }

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import type { Delivery } from '../../types';
-import { MagnifyingGlassIcon, FunnelIcon, XMarkIcon, QuestionMarkCircleIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon, FunnelIcon, XMarkIcon, QuestionMarkCircleIcon, ArrowDownTrayIcon, ArrowsUpDownIcon } from '@heroicons/react/24/outline';
 import { PhotoViewerModal } from './PhotoViewerModal';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -64,9 +64,11 @@ interface DeliveryListWithFiltersProps {
     onComplete: (deliveryId: string) => void;
     onMarkReady: (deliveryId: string) => void;
     formatDate: (date: string) => string;
+    onDeliveryUpdated?: (delivery: Delivery) => void;
+    onDataChange?: () => void;
 }
 
-type FilterStatus = 'all' | 'pending' | 'ready' | 'completed' | 'overdue' | 'critical' | 'due5days';
+type FilterStatus = 'all' | 'pending' | 'ready' | 'completed' | 'overdue' | 'critical' | 'due5days' | 'wants_painting' | 'painting_pending_payment' | 'painting_paid' | 'painting_ready' | 'painting_scheduled' | 'painting_completed';
 
 export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = ({
     deliveries,
@@ -74,7 +76,9 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
     onDelete,
     onComplete,
     onMarkReady,
-    formatDate
+    formatDate,
+    onDeliveryUpdated,
+    onDataChange
 }) => {
     const adminData = useAdminData();
     const [searchQuery, setSearchQuery] = useState('');
@@ -94,13 +98,19 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
     // ⚡ Intersection Observer para lazy loading automático
     const observerRef = useRef<IntersectionObserver | null>(null);
     const loadQueueRef = useRef<Set<string>>(new Set());
+    const deliveryNodesRef = useRef<Map<string, HTMLDivElement>>(new Map());
     const [bulkFeedback, setBulkFeedback] = useState<{message: string; type: 'success' | 'error' | 'warning'} | null>(null);
+    
+    // 📅 Nuevos filtros por rango de fechas y ordenamiento
+    const [dateFrom, setDateFrom] = useState<string>(''); // formato YYYY-MM-DD
+    const [dateTo, setDateTo] = useState<string>(''); // formato YYYY-MM-DD
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc'); // orden por created_at
 
     const filteredDeliveries = useMemo(() => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        return deliveries.filter(delivery => {
+        let filtered = deliveries.filter(delivery => {
             // Search filter - busca por descripción, notas y nombre del cliente
             const matchesSearch = searchQuery.trim() === '' || 
                 (delivery.description?.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -125,29 +135,68 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                 matchesStatus = isCritical(delivery);
             } else if (filterStatus === 'due5days') {
                 matchesStatus = isDueWithin5Days(delivery);
+            } else if (filterStatus === 'wants_painting') {
+                matchesStatus = delivery.wantsPainting === true;
+            } else if (filterStatus === 'painting_pending_payment') {
+                matchesStatus = delivery.wantsPainting === true && delivery.paintingStatus === 'pending_payment';
+            } else if (filterStatus === 'painting_paid') {
+                matchesStatus = delivery.wantsPainting === true && delivery.paintingStatus === 'paid';
+            } else if (filterStatus === 'painting_ready') {
+                matchesStatus = delivery.wantsPainting === true && delivery.paintingStatus === 'paid' && delivery.status === 'ready';
+            } else if (filterStatus === 'painting_scheduled') {
+                matchesStatus = delivery.wantsPainting === true && delivery.paintingStatus === 'scheduled';
+            } else if (filterStatus === 'painting_completed') {
+                matchesStatus = delivery.wantsPainting === true && delivery.paintingStatus === 'completed';
             }
 
-            return matchesSearch && matchesStatus;
-        }).sort((a, b) => {
-            // Sort: critical first, then by scheduled date
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            
-            const aDate = new Date(a.scheduledDate);
-            const bDate = new Date(b.scheduledDate);
-            aDate.setHours(0, 0, 0, 0);
-            bDate.setHours(0, 0, 0, 0);
-            
+            // 📅 Filtro por rango de fechas (created_at)
+            let matchesDateRange = true;
+            if (dateFrom || dateTo) {
+                const createdAt = new Date(delivery.createdAt);
+                createdAt.setHours(0, 0, 0, 0);
+                
+                if (dateFrom) {
+                    const fromDate = new Date(dateFrom);
+                    fromDate.setHours(0, 0, 0, 0);
+                    if (createdAt < fromDate) {
+                        matchesDateRange = false;
+                    }
+                }
+                
+                if (dateTo) {
+                    const toDate = new Date(dateTo);
+                    toDate.setHours(23, 59, 59, 999); // Incluir todo el día
+                    if (createdAt > toDate) {
+                        matchesDateRange = false;
+                    }
+                }
+            }
+
+            return matchesSearch && matchesStatus && matchesDateRange;
+        });
+
+        // Ordenamiento: primero críticos, luego por created_at según sortDirection
+        filtered.sort((a, b) => {
             const aCritical = isCritical(a);
             const bCritical = isCritical(b);
             
+            // Prioridad 1: críticos primero
             if (aCritical && !bCritical) return -1;
             if (!aCritical && bCritical) return 1;
             
-            // Both same priority, sort by date (closest first)
-            return aDate.getTime() - bDate.getTime();
+            // Prioridad 2: orden por created_at (fecha de recepción del formulario)
+            const aCreatedAt = new Date(a.createdAt).getTime();
+            const bCreatedAt = new Date(b.createdAt).getTime();
+            
+            if (sortDirection === 'asc') {
+                return aCreatedAt - bCreatedAt; // Más antiguo primero
+            } else {
+                return bCreatedAt - aCreatedAt; // Más reciente primero
+            }
         });
-    }, [deliveries, searchQuery, filterStatus]);
+
+        return filtered;
+    }, [deliveries, searchQuery, filterStatus, dateFrom, dateTo, sortDirection]);
 
     // Pagination logic
     const totalPages = Math.ceil(filteredDeliveries.length / itemsPerPage);
@@ -212,20 +261,6 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
         return delivery.photos || [];
     }, [loadedPhotos]);
 
-    // ⚡ Cargar fotos en batch con delay para evitar saturar
-    const loadPhotosInBatch = useCallback(async (deliveryIds: string[], delayMs: number = 100) => {
-        for (const deliveryId of deliveryIds) {
-            // Skip si ya están cargadas o cargando
-            if (loadedPhotos[deliveryId] || loadingPhotos[deliveryId]) continue;
-            
-            await loadPhotosForDelivery(deliveryId);
-            // Delay entre requests para no saturar
-            if (delayMs > 0) {
-                await new Promise(resolve => setTimeout(resolve, delayMs));
-            }
-        }
-    }, [loadedPhotos, loadingPhotos, loadPhotosForDelivery]);
-
     const handleOpenPhotos = useCallback(async (deliveryId: string, existingPhotos: string[] | null | undefined, startIndex: number = 0) => {
         // Si ya tiene fotos cargadas, usarlas directamente
         if (existingPhotos && existingPhotos.length > 0) {
@@ -246,74 +281,95 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
 
     // ⚡ Hook para observar elementos de delivery
     const deliveryCardRef = useCallback((node: HTMLDivElement | null, delivery: Delivery) => {
-        if (!node || !observerRef.current) return;
-        
+        const map = deliveryNodesRef.current;
+
+        if (!node) {
+            const existing = map.get(delivery.id);
+            if (existing && observerRef.current) {
+                observerRef.current.unobserve(existing);
+            }
+            map.delete(delivery.id);
+            return;
+        }
+
+        const existing = map.get(delivery.id);
+        if (existing && existing !== node && observerRef.current) {
+            observerRef.current.unobserve(existing);
+        }
+
+        map.set(delivery.id, node);
+
         // Solo observar si tiene fotos y no están cargadas
-        if (delivery.hasPhotos && !loadedPhotos[delivery.id]) {
+        if (delivery.hasPhotos && !loadedPhotos[delivery.id] && observerRef.current) {
             observerRef.current.observe(node);
         }
     }, [loadedPhotos]);
 
-    // ⚡ Auto-cargar fotos progresivamente al montar componente
-    useEffect(() => {
-        const loadInitialPhotos = async () => {
-            // Priorizar deliveries críticas y pendientes
-            const priorityDeliveries = paginatedDeliveries
-                .filter(d => d.hasPhotos)
-                .sort((a, b) => {
-                    // Críticas primero
-                    const aCritical = isCritical(a);
-                    const bCritical = isCritical(b);
-                    if (aCritical && !bCritical) return -1;
-                    if (!aCritical && bCritical) return 1;
-                    // Luego pendientes
-                    if (a.status === 'pending' && b.status !== 'pending') return -1;
-                    if (a.status !== 'pending' && b.status === 'pending') return 1;
-                    return 0;
-                })
-                .slice(0, 10) // Primeras 10 deliveries prioritarias
-                .map(d => d.id);
-            
-            // Cargar en batch con delay corto
-            await loadPhotosInBatch(priorityDeliveries, 150);
-        };
-
-        if (paginatedDeliveries.length > 0) {
-            loadInitialPhotos();
-        }
-    }, [paginatedDeliveries, loadPhotosInBatch]);
-
-    // ⚡ Setup Intersection Observer para lazy loading de fotos visibles
+    // ⚡ Setup Intersection Observer para lazy loading de fotos visibles (ÚNICO PUNTO DE CARGA)
     useEffect(() => {
         const options = {
             root: null,
-            rootMargin: '200px', // Precargar 200px antes de que sea visible
+            rootMargin: '100px', // Precargar 100px antes de que sea visible
             threshold: 0.1
         };
 
-        observerRef.current = new IntersectionObserver((entries) => {
+        const observer = new IntersectionObserver((entries) => {
             entries.forEach((entry) => {
                 if (entry.isIntersecting) {
                     const deliveryId = entry.target.getAttribute('data-delivery-id');
-                    if (deliveryId && !loadQueueRef.current.has(deliveryId)) {
+                    if (deliveryId && !loadQueueRef.current.has(deliveryId) && !loadedPhotos[deliveryId]) {
                         loadQueueRef.current.add(deliveryId);
-                        // Cargar fotos después de un pequeño delay
+                        // Cargar fotos con delay para evitar saturación
                         setTimeout(() => {
                             loadPhotosForDelivery(deliveryId).finally(() => {
                                 loadQueueRef.current.delete(deliveryId);
                             });
-                        }, 100);
+                        }, 200);
                     }
                 }
             });
         }, options);
 
+        observerRef.current = observer;
+
+        // Re-observar nodos ya montados (evita que solo carguen los primeros)
+        deliveryNodesRef.current.forEach((node, deliveryId) => {
+            const hasPhotos = node.getAttribute('data-has-photos') === 'true';
+            if (hasPhotos && !loadedPhotos[deliveryId]) {
+                observer.observe(node);
+            }
+        });
+
         return () => {
-            if (observerRef.current) {
-                observerRef.current.disconnect();
+            observer.disconnect();
+        };
+    }, [loadPhotosForDelivery, loadedPhotos]);
+
+    // ⚡ Fallback: asegurar carga de fotos para todos los cards visibles en la página actual
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadVisiblePhotos = async () => {
+            const toLoad = paginatedDeliveries
+                .filter(d => d.hasPhotos && !loadedPhotos[d.id] && !loadingPhotos[d.id])
+                .map(d => d.id);
+
+            for (const deliveryId of toLoad) {
+                if (cancelled) return;
+                await loadPhotosForDelivery(deliveryId);
+                // Pequeño delay para no saturar
+                await new Promise(resolve => setTimeout(resolve, 120));
             }
         };
-    }, [loadPhotosForDelivery]);
+
+        if (paginatedDeliveries.length > 0) {
+            loadVisiblePhotos();
+        }
+
+        return () => {
+            cancelled = true;
+        };
+    }, [paginatedDeliveries, loadedPhotos, loadingPhotos, loadPhotosForDelivery]);
 
     // Cargar contactos de clientes al montar o cuando cambien las deliveries
     useEffect(() => {
@@ -683,6 +739,143 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                             ⏳ Próximas ({statusCounts.due5days})
                         </button>
                     )}
+                    
+                    {/* 🎨 Filtros de Servicio de Pintura */}
+                    {(deliveries.filter(d => d.wantsPainting).length > 0) && (
+                        <>
+                            <div className="w-full border-t border-purple-200 my-2"></div>
+                            <div className="w-full flex items-center gap-2 mb-1">
+                                <span className="text-xs font-bold text-purple-700">🎨 SERVICIO DE PINTURA:</span>
+                            </div>
+                            <button
+                                onClick={() => setFilterStatus('wants_painting')}
+                                className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
+                                    filterStatus === 'wants_painting'
+                                        ? 'bg-purple-600 text-white'
+                                        : 'bg-white text-purple-700 hover:bg-purple-50 border border-purple-300'
+                                }`}
+                            >
+                                ✨ Todos con pintura ({deliveries.filter(d => d.wantsPainting).length})
+                            </button>
+                            {deliveries.filter(d => d.wantsPainting && d.paintingStatus === 'pending_payment').length > 0 && (
+                                <button
+                                    onClick={() => setFilterStatus('painting_pending_payment')}
+                                    className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
+                                        filterStatus === 'painting_pending_payment'
+                                            ? 'bg-orange-600 text-white'
+                                            : 'bg-white text-orange-700 hover:bg-orange-50 border border-orange-300'
+                                    }`}
+                                >
+                                    💰 Pendiente pago ({deliveries.filter(d => d.wantsPainting && d.paintingStatus === 'pending_payment').length})
+                                </button>
+                            )}
+                            {deliveries.filter(d => d.wantsPainting && d.paintingStatus === 'paid').length > 0 && (
+                                <button
+                                    onClick={() => setFilterStatus('painting_paid')}
+                                    className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
+                                        filterStatus === 'painting_paid'
+                                            ? 'bg-emerald-600 text-white'
+                                            : 'bg-white text-emerald-700 hover:bg-emerald-50 border border-emerald-300'
+                                    }`}
+                                >
+                                    💳 Pagado (activo) ({deliveries.filter(d => d.wantsPainting && d.paintingStatus === 'paid').length})
+                                </button>
+                            )}
+                            {deliveries.filter(d => d.wantsPainting && d.paintingStatus === 'paid' && d.status === 'ready').length > 0 && (
+                                <button
+                                    onClick={() => setFilterStatus('painting_ready')}
+                                    className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
+                                        filterStatus === 'painting_ready'
+                                            ? 'bg-green-600 text-white'
+                                            : 'bg-white text-green-700 hover:bg-green-50 border border-green-300'
+                                    }`}
+                                >
+                                    🎨 Listos a pintar ({deliveries.filter(d => d.wantsPainting && d.paintingStatus === 'paid' && d.status === 'ready').length})
+                                </button>
+                            )}
+                            {deliveries.filter(d => d.wantsPainting && d.paintingStatus === 'scheduled').length > 0 && (
+                                <button
+                                    onClick={() => setFilterStatus('painting_scheduled')}
+                                    className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
+                                        filterStatus === 'painting_scheduled'
+                                            ? 'bg-blue-600 text-white'
+                                            : 'bg-white text-blue-700 hover:bg-blue-50 border border-blue-300'
+                                    }`}
+                                >
+                                    📅 Pintura agendada ({deliveries.filter(d => d.wantsPainting && d.paintingStatus === 'scheduled').length})
+                                </button>
+                            )}
+                            {deliveries.filter(d => d.wantsPainting && d.paintingStatus === 'completed').length > 0 && (
+                                <button
+                                    onClick={() => setFilterStatus('painting_completed')}
+                                    className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
+                                        filterStatus === 'painting_completed'
+                                            ? 'bg-indigo-600 text-white'
+                                            : 'bg-white text-indigo-700 hover:bg-indigo-50 border border-indigo-300'
+                                    }`}
+                                >
+                                    ✅ Pintura completada ({deliveries.filter(d => d.wantsPainting && d.paintingStatus === 'completed').length})
+                                </button>
+                            )}
+                        </>
+                    )}
+                    
+                    {/* 📅 Filtro por rango de fechas */}
+                    <div className="w-full border-t border-gray-300 my-2"></div>
+                    <div className="w-full flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-gray-700">📅 FECHA DE RECEPCIÓN:</span>
+                            <button
+                                onClick={() => {
+                                    setDateFrom('');
+                                    setDateTo('');
+                                }}
+                                disabled={!dateFrom && !dateTo}
+                                className={`text-xs px-2 py-1 rounded ${
+                                    dateFrom || dateTo
+                                        ? 'text-red-600 hover:bg-red-50 cursor-pointer'
+                                        : 'text-gray-400 cursor-not-allowed'
+                                }`}
+                            >
+                                Limpiar
+                            </button>
+                        </div>
+                        <div className="flex items-center gap-2 flex-1">
+                            <label className="text-xs text-gray-600">Desde:</label>
+                            <input
+                                type="date"
+                                value={dateFrom}
+                                onChange={(e) => {
+                                    setDateFrom(e.target.value);
+                                    setCurrentPage(1);
+                                }}
+                                className="px-3 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-brand-primary focus:border-transparent"
+                            />
+                            <label className="text-xs text-gray-600">Hasta:</label>
+                            <input
+                                type="date"
+                                value={dateTo}
+                                onChange={(e) => {
+                                    setDateTo(e.target.value);
+                                    setCurrentPage(1);
+                                }}
+                                className="px-3 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-brand-primary focus:border-transparent"
+                            />
+                        </div>
+                    </div>
+                    
+                    {/* 🔄 Toggle de ordenamiento */}
+                    <div className="w-full border-t border-gray-300 my-2"></div>
+                    <div className="w-full flex items-center gap-2">
+                        <span className="text-xs font-bold text-gray-700">🔄 ORDENAR POR FECHA RECEPCIÓN:</span>
+                        <button
+                            onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors"
+                        >
+                            <ArrowsUpDownIcon className="h-4 w-4" />
+                            {sortDirection === 'asc' ? '📈 Más antiguo primero' : '📉 Más reciente primero'}
+                        </button>
+                    </div>
                 </div>
             )}
 
@@ -706,15 +899,19 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                         <option value={50}>50</option>
                     </select>
                 </div>
-                {(searchQuery || filterStatus !== 'all') && (
+                {(searchQuery || filterStatus !== 'all' || dateFrom || dateTo || sortDirection !== 'asc') && (
                     <button
                         onClick={() => {
                             setSearchQuery('');
                             setFilterStatus('all');
+                            setDateFrom('');
+                            setDateTo('');
+                            setSortDirection('asc');
+                            setCurrentPage(1);
                         }}
-                        className="text-brand-primary hover:text-brand-secondary font-semibold"
+                        className="text-xs text-red-600 hover:underline font-semibold"
                     >
-                        Limpiar filtros
+                        Limpiar todos los filtros
                     </button>
                 )}
             </div>
@@ -734,6 +931,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                             key={delivery.id}
                             ref={(node) => deliveryCardRef(node, delivery)}
                             data-delivery-id={delivery.id}
+                            data-has-photos={delivery.hasPhotos ? 'true' : 'false'}
                             className={`bg-white rounded-lg shadow-md border-2 transition-all duration-200 overflow-hidden ${
                                 isOverdue ? 'border-red-300 bg-red-50' : isSelected ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
                             }`}
@@ -878,6 +1076,55 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                     </div>
                                 )}
 
+                                {/* Servicio de Pintura */}
+                                {delivery.wantsPainting && (
+                                    <div className="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300 rounded-lg p-3 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-sm font-bold text-purple-900">🎨 Servicio de Pintura</p>
+                                            <span className="text-xs bg-purple-600 text-white px-2 py-1 rounded-full font-bold">
+                                                ${delivery.paintingPrice || 20}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-semibold text-gray-700">Estado:</span>
+                                            {delivery.paintingStatus === 'pending_payment' && (
+                                                <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-bold border border-yellow-300">
+                                                    💰 Pendiente pago
+                                                </span>
+                                            )}
+                                            {delivery.paintingStatus === 'paid' && (
+                                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-bold border border-green-300">
+                                                    ✅ Pagado
+                                                </span>
+                                            )}
+                                            {delivery.paintingStatus === 'scheduled' && delivery.paintingBookingDate && (
+                                                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-bold border border-blue-300">
+                                                    📅 Agendado: {formatDate(delivery.paintingBookingDate)}
+                                                </span>
+                                            )}
+                                            {delivery.paintingStatus === 'completed' && (
+                                                <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full font-bold border border-purple-300">
+                                                    🎉 Completado
+                                                </span>
+                                            )}
+                                        </div>
+                                        {delivery.paintingStatus === 'pending_payment' && (
+                                            <p className="text-xs text-purple-700 font-medium">
+                                                ⚠️ Cliente debe coordinar pago inmediato
+                                            </p>
+                                        )}
+                                        {delivery.readyAt ? (
+                                            <p className="text-xs text-purple-700 font-medium">
+                                                📧 Email enviado: lista para pintar
+                                            </p>
+                                        ) : (
+                                            <p className="text-xs text-purple-700 font-medium">
+                                                📧 Email pendiente: se envía al marcar "Lista"
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+
                                 {/* Fotos - Responsive grid con lazy loading automático */}
                                 {(() => {
                                     const photos = getDeliveryPhotos(delivery);
@@ -947,6 +1194,101 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
 
                             {/* Card Footer - Action Buttons */}
                             <div className="bg-gray-50 px-3 sm:px-4 py-2 sm:py-3 border-t border-gray-200 flex flex-wrap gap-2">
+                                {/* Botones de gestión de pintura */}
+                                {delivery.wantsPainting && delivery.paintingStatus === 'pending_payment' && (
+                                    <button
+                                        className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white border border-yellow-600 shadow-sm transition-all text-xs sm:text-sm font-bold"
+                                        title="Marcar pago de pintura como recibido"
+                                        onClick={async () => {
+                                            if (confirm('¿Confirmas que el cliente pagó el servicio de pintura ($20)?')) {
+                                                try {
+                                                    const result = await dataService.updatePaintingStatus(delivery.id, 'paid');
+                                                    if (result.success) {
+                                                        if (result.delivery) {
+                                                            onDeliveryUpdated?.(result.delivery);
+                                                            adminData.optimisticUpsertDelivery(result.delivery);
+                                                        }
+                                                    } else {
+                                                        alert('Error: ' + (result.error || 'No se pudo actualizar'));
+                                                    }
+                                                } catch (error) {
+                                                    console.error('Error marking as paid:', error);
+                                                    alert('Error al actualizar el estado');
+                                                }
+                                            }
+                                        }}
+                                    >
+                                        <span>💰</span>
+                                        <span className="hidden xs:inline">Marcar Pagado</span>
+                                    </button>
+                                )}
+
+                                {delivery.wantsPainting && delivery.paintingStatus === 'paid' && delivery.status === 'ready' && (
+                                    <button
+                                        className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border border-blue-600 shadow-sm transition-all text-xs sm:text-sm font-bold"
+                                        title="Agendar sesión de pintura"
+                                        onClick={() => {
+                                            const dateStr = prompt('Fecha de pintura (YYYY-MM-DD):');
+                                            if (dateStr) {
+                                                try {
+                                                    const date = new Date(dateStr);
+                                                    if (isNaN(date.getTime())) {
+                                                        alert('Fecha inválida. Usa formato YYYY-MM-DD');
+                                                        return;
+                                                    }
+                                                    dataService.updatePaintingStatus(delivery.id, 'scheduled', {
+                                                        paintingBookingDate: date.toISOString()
+                                                    }).then(result => {
+                                                        if (result.success) {
+                                                            if (result.delivery) {
+                                                                onDeliveryUpdated?.(result.delivery);
+                                                                adminData.optimisticUpsertDelivery(result.delivery);
+                                                            }
+                                                        } else {
+                                                            alert('Error: ' + (result.error || 'No se pudo agendar'));
+                                                        }
+                                                    });
+                                                } catch (error) {
+                                                    console.error('Error scheduling:', error);
+                                                    alert('Error al agendar');
+                                                }
+                                            }
+                                        }}
+                                    >
+                                        <span>📅</span>
+                                        <span className="hidden xs:inline">Agendar</span>
+                                    </button>
+                                )}
+
+                                {delivery.wantsPainting && delivery.paintingStatus === 'scheduled' && (
+                                    <button
+                                        className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white border border-purple-600 shadow-sm transition-all text-xs sm:text-sm font-bold"
+                                        title="Marcar pintura como completada"
+                                        onClick={async () => {
+                                            if (confirm('¿Confirmas que el cliente completó la sesión de pintura?')) {
+                                                try {
+                                                    const result = await dataService.updatePaintingStatus(delivery.id, 'completed');
+                                                    if (result.success) {
+                                                        if (result.delivery) {
+                                                            onDeliveryUpdated?.(result.delivery);
+                                                            adminData.optimisticUpsertDelivery(result.delivery);
+                                                        }
+                                                    } else {
+                                                        alert('Error: ' + (result.error || 'No se pudo completar'));
+                                                    }
+                                                } catch (error) {
+                                                    console.error('Error completing painting:', error);
+                                                    alert('Error al completar');
+                                                }
+                                            }
+                                        }}
+                                    >
+                                        <span>🎉</span>
+                                        <span className="hidden xs:inline">Completar</span>
+                                    </button>
+                                )}
+
+                                {/* Botones estándar */}
                                 <button
                                     className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 shadow-sm transition-all text-xs sm:text-sm font-semibold"
                                     title="Contactar cliente por WhatsApp"

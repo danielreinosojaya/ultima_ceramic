@@ -304,9 +304,14 @@ export async function ensureTablesExist() {
     // Quick column checks only - skip heavy migrations for now
     try {
         console.log('Checking essential columns...');
+        // Some legacy DBs were created without timestamps. Several endpoints rely on these columns in ORDER BY.
+        await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();`;
+        await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();`;
         await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS min_participants INT;`;
         await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS price_per_person NUMERIC(10, 2);`;
         await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS sort_order INT DEFAULT 0;`;
+
+        await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();`;
         await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS participants INT DEFAULT 1;`;
         
         // Migration: Add created_by_client column to deliveries table

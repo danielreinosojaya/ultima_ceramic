@@ -1,4 +1,5 @@
-import sharp from 'sharp';
+// NO usar sharp - no funciona en Vercel serverless
+// Retornamos SVG directamente como base64
 
 export interface GiftcardData {
   code: string;
@@ -10,7 +11,7 @@ export interface GiftcardData {
 
 export type GiftcardVersion = 'v1' | 'v2';
 
-// Crear SVG manualmente - sin depender de Satori/JSX
+// Crear SVG manualmente - sin depender de Satori/JSX ni Sharp
 const createGiftcardSVG = (data: GiftcardData): string => {
   const recipientName = (data.recipientName || 'María').substring(0, 30);
   const senderName = (data.senderName || 'Juan').substring(0, 30);
@@ -75,25 +76,16 @@ const createGiftcardSVG = (data: GiftcardData): string => {
   return svg;
 };
 
+// Retorna SVG como Buffer (no PNG, para compatibilidad con Vercel)
 export const generateGiftcardImage = async (
   data: GiftcardData,
-  version: GiftcardVersion = 'v1'
+  _version: GiftcardVersion = 'v1'
 ): Promise<Buffer> => {
-  try {
-    const svg = createGiftcardSVG(data);
-
-    // Convertir SVG a PNG con Sharp
-    const pngBuffer = await sharp(Buffer.from(svg))
-      .png()
-      .toBuffer();
-
-    return pngBuffer;
-  } catch (error) {
-    console.error('[generateGiftcardImage] Error:', error);
-    throw error;
-  }
+  const svg = createGiftcardSVG(data);
+  return Buffer.from(svg, 'utf-8');
 };
 
+// Retorna SVG como base64
 export const generateGiftcardImageBase64 = async (
   data: GiftcardData,
   version: GiftcardVersion = 'v1'
@@ -102,17 +94,19 @@ export const generateGiftcardImageBase64 = async (
   return buffer.toString('base64');
 };
 
+// Retorna el SVG raw (para uso directo en emails como inline SVG)
+export const generateGiftcardSVG = (data: GiftcardData): string => {
+  return createGiftcardSVG(data);
+};
+
 export const generateAllGiftcardVersions = async (
   data: GiftcardData
 ): Promise<{ v1: string; v2: string }> => {
   try {
-    // Generar solo v1 (puedes hacer v2 diferente después)
     const v1Base64 = await generateGiftcardImageBase64(data, 'v1');
-    
-    return { v1: v1Base64, v2: v1Base64 }; // Ambas iguales por ahora
+    return { v1: v1Base64, v2: v1Base64 };
   } catch (error) {
     console.error('[generateAllGiftcardVersions] Error:', error);
-    // Si falla, retornar vacíos para que el email se envíe sin attachments
     return { v1: '', v2: '' };
   }
 };
