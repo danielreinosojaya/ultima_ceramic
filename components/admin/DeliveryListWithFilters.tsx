@@ -68,7 +68,7 @@ interface DeliveryListWithFiltersProps {
     onDataChange?: () => void;
 }
 
-type FilterStatus = 'all' | 'pending' | 'ready' | 'completed' | 'overdue' | 'critical' | 'due5days' | 'wants_painting' | 'painting_pending_payment' | 'painting_ready' | 'painting_scheduled' | 'painting_completed';
+type FilterStatus = 'all' | 'pending' | 'ready' | 'completed' | 'overdue' | 'critical' | 'due5days' | 'wants_painting' | 'painting_pending_payment' | 'painting_paid' | 'painting_ready' | 'painting_scheduled' | 'painting_completed';
 
 export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = ({
     deliveries,
@@ -139,6 +139,8 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                 matchesStatus = delivery.wantsPainting === true;
             } else if (filterStatus === 'painting_pending_payment') {
                 matchesStatus = delivery.wantsPainting === true && delivery.paintingStatus === 'pending_payment';
+            } else if (filterStatus === 'painting_paid') {
+                matchesStatus = delivery.wantsPainting === true && delivery.paintingStatus === 'paid';
             } else if (filterStatus === 'painting_ready') {
                 matchesStatus = delivery.wantsPainting === true && delivery.paintingStatus === 'paid' && delivery.status === 'ready';
             } else if (filterStatus === 'painting_scheduled') {
@@ -767,6 +769,18 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                     💰 Pendiente pago ({deliveries.filter(d => d.wantsPainting && d.paintingStatus === 'pending_payment').length})
                                 </button>
                             )}
+                            {deliveries.filter(d => d.wantsPainting && d.paintingStatus === 'paid').length > 0 && (
+                                <button
+                                    onClick={() => setFilterStatus('painting_paid')}
+                                    className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
+                                        filterStatus === 'painting_paid'
+                                            ? 'bg-emerald-600 text-white'
+                                            : 'bg-white text-emerald-700 hover:bg-emerald-50 border border-emerald-300'
+                                    }`}
+                                >
+                                    💳 Pagado (activo) ({deliveries.filter(d => d.wantsPainting && d.paintingStatus === 'paid').length})
+                                </button>
+                            )}
                             {deliveries.filter(d => d.wantsPainting && d.paintingStatus === 'paid' && d.status === 'ready').length > 0 && (
                                 <button
                                     onClick={() => setFilterStatus('painting_ready')}
@@ -1192,9 +1206,8 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                                     if (result.success) {
                                                         if (result.delivery) {
                                                             onDeliveryUpdated?.(result.delivery);
+                                                            adminData.optimisticUpsertDelivery(result.delivery);
                                                         }
-                                                        onDataChange?.();
-                                                        adminData.refreshCritical();
                                                     } else {
                                                         alert('Error: ' + (result.error || 'No se pudo actualizar'));
                                                     }
@@ -1229,9 +1242,8 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                                         if (result.success) {
                                                             if (result.delivery) {
                                                                 onDeliveryUpdated?.(result.delivery);
+                                                                adminData.optimisticUpsertDelivery(result.delivery);
                                                             }
-                                                            onDataChange?.();
-                                                            adminData.refreshCritical();
                                                         } else {
                                                             alert('Error: ' + (result.error || 'No se pudo agendar'));
                                                         }
@@ -1259,9 +1271,8 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                                     if (result.success) {
                                                         if (result.delivery) {
                                                             onDeliveryUpdated?.(result.delivery);
+                                                            adminData.optimisticUpsertDelivery(result.delivery);
                                                         }
-                                                        onDataChange?.();
-                                                        adminData.refreshCritical();
                                                     } else {
                                                         alert('Error: ' + (result.error || 'No se pudo completar'));
                                                     }

@@ -80,18 +80,25 @@ export const DeliveryDashboard: React.FC<DeliveryDashboardProps> = ({
                             <p className="text-xs text-purple-700">Ingresos adicionales: <strong className="text-brand-primary">${paintingMetrics.totalRevenue.toFixed(2)}</strong></p>
                         </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         <div className="bg-white rounded p-2 border border-purple-200">
                             <div className="text-xs text-gray-600">Pendiente Pago</div>
                             <div className="text-lg font-bold text-orange-600">{paintingMetrics.pendingPayment}</div>
                         </div>
                         <div className="bg-white rounded p-2 border border-purple-200">
-                            <div className="text-xs text-gray-600">Listos a Pintar</div>
-                            <div className="text-lg font-bold text-green-600">{paintingMetrics.readyToPaint}</div>
+                            <div className="text-xs text-gray-600">Pagado (activo)</div>
+                            <div className="text-lg font-bold text-emerald-700">{paintingMetrics.paid}</div>
+                            {paintingMetrics.readyToPaint > 0 && (
+                                <div className="text-[10px] text-gray-500">Listos a pintar: {paintingMetrics.readyToPaint}</div>
+                            )}
+                        </div>
+                        <div className="bg-white rounded p-2 border border-purple-200">
+                            <div className="text-xs text-gray-600">Agendados</div>
+                            <div className="text-lg font-bold text-blue-700">{paintingMetrics.scheduled}</div>
                         </div>
                         <div className="bg-white rounded p-2 border border-purple-200">
                             <div className="text-xs text-gray-600">Completados</div>
-                            <div className="text-lg font-bold text-blue-600">{paintingMetrics.completed}</div>
+                            <div className="text-lg font-bold text-indigo-700">{paintingMetrics.completed}</div>
                         </div>
                     </div>
                 </div>

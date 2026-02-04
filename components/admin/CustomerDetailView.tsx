@@ -194,7 +194,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
             if (deleteResult.success) {
                 setFeedbackMsg('Cliente eliminado exitosamente');
                 setFeedbackType('success');
-                onDataChange(); // Refresh data
+                adminData.optimisticRemoveCustomer(customer.email);
                 onBack(); // Redirigir a la lista de clientes
             } else {
                 throw new Error(deleteResult.error || 'Cliente no encontrado');
@@ -248,7 +248,10 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                 });
             }
             setDeleteModal({ open: false, bookingId: null, slot: null });
-            onDataChange();
+            adminData.optimisticRemoveBookingSlot(deleteModal.bookingId, {
+                date: deleteModal.slot.date,
+                time: deleteModal.slot.time
+            });
         } catch (e) {
             console.error('Error deleting slot:', e);
         }
@@ -270,7 +273,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                     }));
                     setCompleteModal({ open: false, deliveryId: null });
                     setCompleteDate("");
-                    onDataChange();
+                    adminData.optimisticUpsertDelivery(updateRes.delivery);
                 }
             }
         } catch (e) {
@@ -311,7 +314,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                     ...prev,
                     deliveries: prev.deliveries.map(d => d.id === result.delivery.id ? result.delivery : d)
                 }));
-                onDataChange();
+                adminData.optimisticUpsertDelivery(result.delivery);
                 
                 if (isResend) {
                     alert('✅ Email reenviado al cliente.');
@@ -742,7 +745,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                     deliveries: [...prev.deliveries, result.delivery],
                                     isNewDeliveryModalOpen: false
                                 }));
-                                onDataChange();
+                                adminData.optimisticUpsertDelivery(result.delivery);
                             } else {
                                 setState(prev => ({ ...prev, isNewDeliveryModalOpen: false }));
                             }
@@ -772,7 +775,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                         ),
                                         deliveryToEdit: null
                                     }));
-                                    onDataChange();
+                                    adminData.optimisticUpsertDelivery(result.delivery);
                                 } else {
                                     setState(prev => ({ ...prev, deliveryToEdit: null }));
                                 }
@@ -855,7 +858,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                     onClick={async () => {
                                         await handleDeleteDelivery(state.deliveryToDelete.id);
                                         setState(prev => ({ ...prev, deliveryToDelete: null }));
-                                        onDataChange();
+                                        adminData.optimisticRemoveDelivery(state.deliveryToDelete.id);
                                     }}
                                 >Eliminar</button>
                             </div>
@@ -909,6 +912,19 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                     birthday: state.editInfo.birthday || undefined
                                 }
                             );
+
+                            adminData.optimisticPatchCustomer(customer.email, {
+                                email: state.editInfo.email,
+                                userInfo: {
+                                    ...(customer.userInfo || {}),
+                                    email: state.editInfo.email,
+                                    firstName: state.editInfo.firstName,
+                                    lastName: state.editInfo.lastName,
+                                    phone: state.editInfo.phone,
+                                    countryCode: state.editInfo.countryCode,
+                                    birthday: state.editInfo.birthday || null,
+                                } as any,
+                            } as any);
                             setState(prev => ({
                                 ...prev,
                                 editMode: false,
@@ -916,7 +932,6 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                     ...prev.editInfo
                                 }
                             }));
-                            onDataChange();
                         }}
                     >
                         {/* Nombre y Apellido - responsive grid */}

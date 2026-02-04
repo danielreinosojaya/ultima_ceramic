@@ -4361,7 +4361,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     technique: 'painting'
                 };
 
-                const bookingResult = await addBookingAction(bookingPayload);
+                const bookingResult = await addBookingAction(bookingPayload, { suppressPreBookingEmail: true });
                 if (!bookingResult?.success) {
                     return res.status(500).json({
                         success: false,
@@ -5241,7 +5241,10 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 }
 
 
-async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookingCode'> & { invoiceData?: Omit<InvoiceRequest, 'id' | 'bookingId' | 'status' | 'requestedAt' | 'processedAt'> }): Promise<AddBookingResult> {
+async function addBookingAction(
+    body: Omit<Booking, 'id' | 'createdAt' | 'bookingCode'> & { invoiceData?: Omit<InvoiceRequest, 'id' | 'bookingId' | 'status' | 'requestedAt' | 'processedAt'> },
+    options?: { suppressPreBookingEmail?: boolean }
+): Promise<AddBookingResult> {
   const bookingCodeCheck = (body as any).bookingCode;
   if (bookingCodeCheck) {
     const { rows: existingByCode } = await sql`SELECT * FROM bookings WHERE booking_code = ${bookingCodeCheck}`;
@@ -5608,9 +5611,11 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
       }
     }
 
-    // Send pre-booking confirmation email
-    try {
-      console.log('[ADD BOOKING] Sending pre-booking confirmation email to:', booking.userInfo.email);
+        // Send pre-booking confirmation email
+        const suppressPreBookingEmail = Boolean(options?.suppressPreBookingEmail) || technique === 'painting';
+        if (!suppressPreBookingEmail) {
+            try {
+                console.log('[ADD BOOKING] Sending pre-booking confirmation email to:', booking.userInfo.email);
       
       // CRÍTICO: Re-fetch booking ANTES de enviar email para obtener payment_details actualizados
       let bookingForEmail = booking;
@@ -5642,12 +5647,13 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
       } else {
         await emailService.sendPreBookingConfirmationEmail(bookingForEmail, bankDetails);
       }
-      console.log('[ADD BOOKING] Confirmation email sent successfully');
-    } catch (emailError) {
-      console.error('[ADD BOOKING] Error sending confirmation email:', emailError);
-      // Don't fail the booking creation if email fails
-      // The booking is already created, just log the error
-    }
+                console.log('[ADD BOOKING] Confirmation email sent successfully');
+            } catch (emailError) {
+                console.error('[ADD BOOKING] Error sending confirmation email:', emailError);
+                // Don't fail the booking creation if email fails
+                // The booking is already created, just log the error
+            }
+        }
 
     // Re-fetch booking para obtener datos actualizados después de payment_details
     try {

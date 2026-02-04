@@ -5,6 +5,7 @@ import { DeliveryListWithFilters } from './DeliveryListWithFilters';
 import { NewLegacyCustomerDeliveryModal } from './NewLegacyCustomerDeliveryModal';
 import * as dataService from '../../services/dataService';
 import { formatDate } from '../../utils/formatters';
+import { useAdminData } from '../../context/AdminDataContext';
 
 interface DeliveriesTabProps {
     customers: Customer[];
@@ -16,6 +17,7 @@ interface DeliveriesTabProps {
  * Displays all deliveries across all customers without needing to navigate to individual customer views
  */
 export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataChange }) => {
+    const adminData = useAdminData();
     const [loading, setLoading] = useState(false);
     const [editingDeliveryId, setEditingDeliveryId] = useState<string | null>(null);
     const [editModal, setEditModal] = useState(false);
@@ -46,7 +48,11 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataC
         try {
             const result = await dataService.markDeliveryAsReady(deliveryId);
             if (result.success) {
-                onDataChange();
+                if (result.delivery) {
+                    adminData.optimisticUpsertDelivery(result.delivery);
+                } else {
+                    adminData.refreshCritical();
+                }
             } else {
                 alert(`Error: ${result.error}`);
             }
@@ -64,7 +70,11 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataC
         try {
             const result = await dataService.markDeliveryAsCompleted(deliveryId);
             if (result.success) {
-                onDataChange();
+                if (result.delivery) {
+                    adminData.optimisticUpsertDelivery(result.delivery);
+                } else {
+                    adminData.refreshCritical();
+                }
             } else {
                 alert('Error al completar entrega');
             }
@@ -86,7 +96,7 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataC
         try {
             const result = await dataService.deleteDelivery(delivery.id);
             if (result.success) {
-                onDataChange();
+                adminData.optimisticRemoveDelivery(delivery.id);
             } else {
                 alert('Error al eliminar entrega');
             }
@@ -214,7 +224,11 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataC
                             throw new Error(deliveryResult.error || 'No se pudo crear la entrega');
                         }
 
-                        onDataChange();
+                        if (deliveryResult.delivery) {
+                            adminData.optimisticUpsertDelivery(deliveryResult.delivery);
+                        } else {
+                            adminData.refreshCritical();
+                        }
                         setLegacyModalOpen(false);
                     } finally {
                         setLoading(false);
