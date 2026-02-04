@@ -1097,9 +1097,7 @@ export const sendPaintingBookingScheduledEmail = async (
     payload: { description?: string | null; bookingDate: string; bookingTime: string; participants: number; }
 ) => {
     const displayDescription = payload.description || 'Tu pieza de cerámica';
-    const sanitizedDescription = displayDescription.replace(/[
-
-]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const sanitizedDescription = displayDescription.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
     const subject = `🎨 Reserva de pintura confirmada - ${sanitizedDescription}`;
     const formattedDate = new Date(payload.bookingDate + 'T00:00:00').toLocaleDateString('es-ES', {
         weekday: 'long',
