@@ -2247,6 +2247,29 @@ export const updatePaintingStatus = async (
     }
 };
 
+// ⚡ Agendar reserva de pintura (cliente) - ya pagada
+export const schedulePaintingBooking = async (payload: {
+    deliveryId: string;
+    date: string; // YYYY-MM-DD
+    time: string; // HH:mm
+    participants: number;
+}): Promise<{ success: boolean; delivery?: Delivery; error?: string }> => {
+    try {
+        const result = await postAction('schedulePaintingBooking', payload);
+        if (result.success && result.delivery) {
+            invalidateDeliveriesCache();
+            return { ...result, delivery: parseDelivery(result.delivery) };
+        }
+        return result;
+    } catch (error) {
+        console.error('[schedulePaintingBooking] Error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error scheduling painting booking'
+        };
+    }
+};
+
 // Función para migrar productos existentes y asignar sort_order
 export const migrateSortOrderForProducts = async (): Promise<{ success: boolean }> => {
     // Limpiar cache después de la migración

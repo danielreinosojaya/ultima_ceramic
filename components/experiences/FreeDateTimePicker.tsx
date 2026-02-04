@@ -198,7 +198,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   useEffect(() => {
     setSlotAvailability(null);
     setHourAvailability({});
-  }, [selectedDate]);
+  }, [selectedDate, participants, technique]);
 
   // Prefetch disponibilidad de todas las horas del día seleccionado
   useEffect(() => {

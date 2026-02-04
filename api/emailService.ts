@@ -898,7 +898,7 @@ export const sendDeliveryWithPaintingServiceEmail = async (
     return result;
 };
 
-export const sendDeliveryReadyEmail = async (customerEmail: string, customerName: string, delivery: { description?: string | null; readyAt: string; wantsPainting?: boolean; paintingPrice?: number | null; }) => {
+export const sendDeliveryReadyEmail = async (customerEmail: string, customerName: string, delivery: { id?: string | null; description?: string | null; readyAt: string; wantsPainting?: boolean; paintingPrice?: number | null; }) => {
     console.log('[sendDeliveryReadyEmail] READY EMAIL - Starting send to:', customerEmail, 'wantsPainting:', delivery.wantsPainting);
     
     // Si el cliente quiere pintar, enviar email diferente
@@ -998,7 +998,7 @@ export const sendDeliveryReadyEmail = async (customerEmail: string, customerName
 export const sendDeliveryReadyForPaintingEmail = async (
     customerEmail: string, 
     customerName: string, 
-    delivery: { description?: string | null; readyAt: string; paintingPrice?: number | null; }
+    delivery: { id?: string | null; description?: string | null; readyAt: string; paintingPrice?: number | null; }
 ) => {
     console.log('[sendDeliveryReadyForPaintingEmail] Starting email send to:', customerEmail);
     
@@ -1038,7 +1038,7 @@ export const sendDeliveryReadyForPaintingEmail = async (
                     <li style="margin: 5px 0;"><strong>Confirma tu reserva</strong> en el calendario</li>
                 </ol>
                 <div style="text-align: center; margin-top: 20px;">
-                    <a href="https://www.ceramicalma.com/?booking=painting" style="display: inline-block; background-color: #D95F43; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                    <a href="https://www.ceramicalma.com/?booking=painting${delivery.id ? `&deliveryId=${encodeURIComponent(String(delivery.id))}` : ''}" style="display: inline-block; background-color: #D95F43; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
                         📅 Reservar Horario de Pintura
                     </a>
                 </div>
@@ -1086,6 +1086,60 @@ export const sendDeliveryReadyForPaintingEmail = async (
         await logEmailEvent(customerEmail, 'delivery_ready_painting', 'email', (result as any)?.sent ? 'sent' : 'failed');
     } catch (e) {
         console.warn('[sendDeliveryReadyForPaintingEmail] Failed to log email event:', e);
+    }
+    return result;
+};
+
+// Email: Confirmación de reserva de pintura (ya pagada)
+export const sendPaintingBookingScheduledEmail = async (
+    customerEmail: string,
+    customerName: string,
+    payload: { description?: string | null; bookingDate: string; bookingTime: string; participants: number; }
+) => {
+    const displayDescription = payload.description || 'Tu pieza de cerámica';
+    const sanitizedDescription = displayDescription.replace(/[
+
+]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const subject = `🎨 Reserva de pintura confirmada - ${sanitizedDescription}`;
+    const formattedDate = new Date(payload.bookingDate + 'T00:00:00').toLocaleDateString('es-ES', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+
+    const html = `
+        <div style="font-family: Arial, sans-serif; color: #4A4540; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
+            <p style="font-size: 18px; font-weight: bold; color: #D95F43;">🎨 Tu reserva de pintura ha sido confirmada.</p>
+
+            <div style="background-color: #FDF7F2; border-left: 4px solid #D95F43; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <p style="margin: 0; font-size: 16px;"><strong>${displayDescription}</strong></p>
+                <p style="margin: 8px 0 0 0; color: #6B5F58; font-size: 14px;">Fecha: ${formattedDate}</p>
+                <p style="margin: 4px 0 0 0; color: #6B5F58; font-size: 14px;">Hora: ${payload.bookingTime}</p>
+                <p style="margin: 4px 0 0 0; color: #6B5F58; font-size: 14px;">Participantes: ${payload.participants}</p>
+            </div>
+
+            <div style="background-color: #F4F2F1; border-left: 4px solid #CCBCB2; padding: 18px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #4A4540; font-weight: bold;">✅ Servicio ya pagado</p>
+                <p style="margin: 8px 0 0 0; color: #6B5F58; font-size: 14px;">No necesitas realizar ningún pago adicional.</p>
+            </div>
+
+            <p style="margin-top: 20px; font-size: 15px;">Si necesitas cambiar la hora, contáctanos por WhatsApp.</p>
+            <div style="margin: 20px 0; text-align: center;">
+                <a href="https://wa.me/593985813327" style="display: inline-block; background-color: #D95F43; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                    📱 Contactar por WhatsApp
+                </a>
+            </div>
+            <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">Saludos,<br/><strong>El equipo de CeramicAlma</strong></p>
+        </div>
+    `;
+
+    const result = await sendEmail(customerEmail, subject, html);
+    try {
+        await logEmailEvent(customerEmail, 'painting_booking_scheduled', 'email', (result as any)?.sent ? 'sent' : 'failed');
+    } catch (e) {
+        console.warn('[sendPaintingBookingScheduledEmail] Failed to log email event:', e);
     }
     return result;
 };

@@ -143,6 +143,7 @@ const App: React.FC = () => {
     
     // VALENTINE 2026 states
     const [valentineRegistrationId, setValentineRegistrationId] = useState<string | null>(null);
+    const [paintingDeliveryId, setPaintingDeliveryId] = useState<string | null>(null);
     
     const [appData, setAppData] = useState<AppData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -168,6 +169,7 @@ const App: React.FC = () => {
         const techniqueParam = urlParams.get('technique');
         if (bookingParam === 'painting' || techniqueParam === 'painting') {
             setPrefillTechnique('painting');
+            setPaintingDeliveryId(urlParams.get('deliveryId'));
             setView('painting_booking');
             return;
         }
@@ -1003,20 +1005,7 @@ const App: React.FC = () => {
             case 'painting_booking':
                 return (
                     <PaintingBookingFlow
-                        onConfirm={(pricing: ExperiencePricing, selectedSlot: TimeSlot) => {
-                            setExperienceUIState(prev => ({
-                                ...prev,
-                                pricing,
-                                piecesSelected: pricing.pieces
-                            }));
-                            setBookingDetails(prev => ({
-                                ...prev,
-                                slots: [selectedSlot],
-                                userInfo: null // Will be filled by user info modal
-                            }));
-                            setExperienceType('experience');
-                            setIsUserInfoModalOpen(true);
-                        }}
+                        deliveryId={paintingDeliveryId}
                         onBack={() => setView('welcome')}
                         isLoading={experienceUIState.isLoading}
                     />
