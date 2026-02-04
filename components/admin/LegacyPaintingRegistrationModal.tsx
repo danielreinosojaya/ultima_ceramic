@@ -23,7 +23,7 @@ export const LegacyPaintingRegistrationModal: React.FC<LegacyPaintingRegistratio
     const [selectedDeliveryId, setSelectedDeliveryId] = useState<string | null>(null);
 
     const [wantsPainting, setWantsPainting] = useState(true);
-    const [paintingPrice, setPaintingPrice] = useState<number>(25);
+    const [paintingPrice, setPaintingPrice] = useState<number>(20);
     const [markPaidNow, setMarkPaidNow] = useState(false);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -93,7 +93,7 @@ export const LegacyPaintingRegistrationModal: React.FC<LegacyPaintingRegistratio
                 updates.paintingCompletedAt = null;
             } else {
                 updates.wantsPainting = true;
-                updates.paintingPrice = Number.isFinite(paintingPrice) ? paintingPrice : 25;
+                updates.paintingPrice = Number.isFinite(paintingPrice) ? paintingPrice : 20;
                 updates.paintingStatus = markPaidNow ? 'paid' : 'pending_payment';
                 if (markPaidNow) {
                     updates.paintingPaidAt = selectedDelivery.paintingPaidAt || nowIso;

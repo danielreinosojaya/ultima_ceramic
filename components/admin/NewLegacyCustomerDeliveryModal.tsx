@@ -29,7 +29,7 @@ export const NewLegacyCustomerDeliveryModal: React.FC<NewLegacyCustomerDeliveryM
     const [description, setDescription] = useState('');
     const [notes, setNotes] = useState('');
     const [wantsPainting, setWantsPainting] = useState(true);
-    const [paintingPrice, setPaintingPrice] = useState(25);
+    const [paintingPrice, setPaintingPrice] = useState(20);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
@@ -99,7 +99,7 @@ export const NewLegacyCustomerDeliveryModal: React.FC<NewLegacyCustomerDeliveryM
             setDescription('');
             setNotes('');
             setWantsPainting(true);
-            setPaintingPrice(25);
+            setPaintingPrice(20);
             setErrors({});
             onClose();
         } catch (error) {

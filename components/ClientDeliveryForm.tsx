@@ -603,7 +603,7 @@ export const ClientDeliveryForm: React.FC = () => {
                             <div className="bg-white rounded-lg p-4 mb-4 border border-purple-200">
                                 <div className="flex items-center justify-between mb-2">
                                     <span className="font-semibold text-gray-700">Precio del servicio:</span>
-                                    <span className="text-2xl font-bold text-brand-primary">$25 USD</span>
+                                    <span className="text-2xl font-bold text-brand-primary">$20 USD</span>
                                 </div>
                                 <p className="text-xs text-gray-600">Por pieza • Incluye todos los colores</p>
                             </div>
@@ -667,7 +667,7 @@ export const ClientDeliveryForm: React.FC = () => {
                                 <div className="mt-4 bg-green-50 border-2 border-green-300 rounded-lg p-4">
                                     <p className="text-green-900 font-semibold mb-2">🎉 ¡Excelente elección!</p>
                                     <p className="text-green-800 text-sm mb-3">
-                                        <strong>Precio del servicio de pintura: $25</strong>
+                                        <strong>Precio del servicio de pintura: $20</strong>
                                     </p>
                                     <p className="text-green-800 text-sm mb-3">
                                         💳 <strong>Pago inmediato:</strong> Por favor, coordina el pago ahora con el staff para asegurar tu cupo.
@@ -751,7 +751,7 @@ export const ClientDeliveryForm: React.FC = () => {
                                 {formData.wantsPainting ? (
                                     <div className="flex items-center gap-2">
                                         <span className="font-semibold text-green-700">✨ Sí, quiero pintar</span>
-                                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-semibold">+$25</span>
+                                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-semibold">+$20</span>
                                     </div>
                                 ) : (
                                     <p className="font-semibold text-gray-600">Esmalte base brillante</p>
