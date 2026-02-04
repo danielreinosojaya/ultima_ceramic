@@ -2126,6 +2126,9 @@ export const createDeliveryFromClient = async (data: {
 export const updateDelivery = async (deliveryId: string, updates: Partial<Omit<Delivery, 'id' | 'customerEmail' | 'createdAt'>>): Promise<{ success: boolean; delivery?: Delivery }> => {
     const result = await postAction('updateDelivery', { deliveryId, updates });
     if (result.success && result.delivery) {
+        // Mantener caches consistentes para otras vistas/flows
+        invalidateDeliveriesCache();
+        invalidateCustomersCache();
         return { ...result, delivery: parseDelivery(result.delivery) };
     }
     return result;

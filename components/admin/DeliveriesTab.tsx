@@ -3,6 +3,7 @@ import type { Delivery, Customer } from '../../types';
 import { DeliveryDashboard } from './DeliveryDashboard';
 import { DeliveryListWithFilters } from './DeliveryListWithFilters';
 import { NewLegacyCustomerDeliveryModal } from './NewLegacyCustomerDeliveryModal';
+import { LegacyPaintingRegistrationModal } from './LegacyPaintingRegistrationModal';
 import * as dataService from '../../services/dataService';
 import { formatDate } from '../../utils/formatters';
 import { useAdminData } from '../../context/AdminDataContext';
@@ -22,6 +23,7 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataC
     const [editingDeliveryId, setEditingDeliveryId] = useState<string | null>(null);
     const [editModal, setEditModal] = useState(false);
     const [legacyModalOpen, setLegacyModalOpen] = useState(false);
+    const [legacyPaintingModalOpen, setLegacyPaintingModalOpen] = useState(false);
 
     // Combine all deliveries from all customers
     const allDeliveries = useMemo((): (Delivery & { customerEmail: string; customerName: string })[] => {
@@ -181,6 +183,12 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataC
                         ➕ Cliente sin reserva
                     </button>
                     <button
+                        onClick={() => setLegacyPaintingModalOpen(true)}
+                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-semibold"
+                    >
+                        🎨 Registrar pintura (legacy)
+                    </button>
+                    <button
                         onClick={handleExportCSV}
                         className="px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-secondary transition-colors font-semibold flex items-center gap-2"
                     >
@@ -233,6 +241,18 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataC
                     } finally {
                         setLoading(false);
                     }
+                }}
+            />
+
+            <LegacyPaintingRegistrationModal
+                isOpen={legacyPaintingModalOpen}
+                onClose={() => setLegacyPaintingModalOpen(false)}
+                deliveries={allDeliveries}
+                onSaved={(delivery) => {
+                    adminData.optimisticUpsertDelivery(delivery);
+                }}
+                onFallbackRefresh={() => {
+                    adminData.refreshCritical();
                 }}
             />
 

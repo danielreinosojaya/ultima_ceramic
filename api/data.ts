@@ -4107,11 +4107,11 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             if (!deliveryId || !updates) {
                 return res.status(400).json({ error: 'deliveryId and updates are required.' });
             }
-            const setClause = Object.entries(updates)
-                .filter(([key, value]) => value !== undefined)
-                .map(([key, value]) => {
+            const definedEntries = Object.entries(updates).filter(([, value]) => value !== undefined);
+            const setClause = definedEntries
+                .map(([key], idx) => {
                     const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
-                    return `${snakeKey} = $${Object.keys(updates).indexOf(key) + 2}`;
+                    return `${snakeKey} = $${idx + 2}`;
                 })
                 .join(', ');
             
@@ -4119,7 +4119,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 return res.status(400).json({ error: 'No valid updates provided.' });
             }
             
-            const values = [deliveryId, ...Object.values(updates).filter(v => v !== undefined)];
+            const values = [deliveryId, ...definedEntries.map(([, value]) => value)];
             const { rows: [updatedDelivery] } = await sql.query(
                 `UPDATE deliveries SET ${setClause} WHERE id = $1 RETURNING *`,
                 values
