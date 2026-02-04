@@ -7,10 +7,10 @@
 
 ## 📋 Resumen Ejecutivo
 
-Sistema completo de upsell que captura la intención del cliente de regresar a pintar su pieza de cerámica cuando esté lista, generando ingresos adicionales de $25 USD por pieza.
+Sistema completo de upsell que captura la intención del cliente de regresar a pintar su pieza de cerámica cuando esté lista, generando ingresos adicionales de $20 USD por pieza.
 
 ### Métricas Clave
-- **Precio del servicio:** $25 USD por pieza
+- **Precio del servicio:** $20 USD por pieza
 - **Tiempo estimado de proceso:** 15 días (horneado) + 5-7 días (post-pintura)
 - **Flujo diferenciado:** Emails distintos según elección del cliente
 - **Performance:** Sin impacto en tiempo de carga (lazy loading implementado)
@@ -53,7 +53,7 @@ painting_completed_at   TIMESTAMP WITH TIME ZONE DEFAULT NULL
 - ✅ 4 pasos totales (antes eran 3): Info → Fotos → **Pintura** → Confirmación
 - ✅ UX de doble confirmación cuando cliente dice "NO" (evita arrepentimientos)
 - ✅ Diseño atractivo con gradientes purple-pink para captar atención
-- ✅ Precio visible: $25 USD destacado
+- ✅ Precio visible: $20 USD destacado
 - ✅ Importa `PAINTING_SERVICE_PRICE` desde constants.ts
 
 **Estados del Form:**
@@ -119,7 +119,7 @@ if (wantsPainting) {
 #### Email 2: Cliente CON servicio de pintura ✨
 **Función:** `sendDeliveryWithPaintingServiceEmail()`
 - ✨ Banner especial "Servicio de Pintura Reservado"
-- 🎨 Precio destacado: $25 USD
+- 🎨 Precio destacado: $20 USD
 - ✅ Explicación de próximos pasos:
   1. Pieza se procesa normalmente
   2. Email cuando esté lista para pintar
@@ -132,7 +132,7 @@ if (wantsPainting) {
 - Diferente al email "lista para recoger"
 - 🎨 Call-to-action: "Reservar Horario de Pintura"
 - 📅 Botón que lleva a www.ceramicalma.com
-- 💰 Recordatorio: Pago $25 con instructor
+- 💰 Recordatorio: Pago $20 con instructor
 - ⏰ Duración sesión: 1-2 horas
 - 🎁 Después: 5-7 días adicionales para horneado final
 
@@ -272,7 +272,7 @@ npm run build
 - [x] Progreso 4 pasos funciona correctamente
 - [x] Validación impide continuar sin elegir
 - [x] Confirmación "NO" muestra advertencia
-- [x] Precio $25 visible y claro
+- [x] Precio $20 visible y claro
 - [x] Diseño atractivo (gradient purple-pink)
 - [x] Responsive en móvil
 
@@ -369,7 +369,7 @@ export const PAINTING_SERVICE_PRICE = 25; // Ajustar aquí
 2. **Pago online** - Stripe integration para pago inmediato
 3. **Recordatorios automáticos** - Cron job para enviar reminders
 4. **Analytics avanzado** - Dashboard de conversión en tiempo real
-5. **A/B Testing** - Probar precios diferentes ($20, $25, $30)
+5. **A/B Testing** - Probar precios diferentes ($20, $30)
 
 ---
 

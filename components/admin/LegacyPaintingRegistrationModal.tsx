@@ -61,7 +61,7 @@ export const LegacyPaintingRegistrationModal: React.FC<LegacyPaintingRegistratio
     const applySelectionDefaults = (delivery: DeliveryWithCustomer) => {
         const existingWantsPainting = Boolean(delivery.wantsPainting);
         setWantsPainting(existingWantsPainting || true);
-        setPaintingPrice(typeof delivery.paintingPrice === 'number' ? delivery.paintingPrice : 25);
+        setPaintingPrice(typeof delivery.paintingPrice === 'number' ? delivery.paintingPrice : 20);
         setMarkPaidNow(Boolean(delivery.paintingStatus === 'paid' || delivery.paintingPaidAt));
         setError('');
     };

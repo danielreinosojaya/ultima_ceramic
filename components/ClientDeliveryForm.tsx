@@ -763,7 +763,7 @@ export const ClientDeliveryForm: React.FC = () => {
                             <div className="bg-purple-50 border-2 border-purple-300 rounded-lg p-4">
                                 <p className="text-purple-900 font-semibold mb-2">🎨 Próximos pasos para pintura:</p>
                                 <ul className="text-sm text-purple-800 space-y-1">
-                                    <li>✅ Pago de $25 realizado/coordinado</li>
+                                    <li>✅ Pago de $20 realizado/coordinado</li>
                                     <li>• Recibirás un email cuando tu pieza esté lista para pintar</li>
                                     <li>• Podrás reservar tu horario de pintura en línea</li>
                                 </ul>

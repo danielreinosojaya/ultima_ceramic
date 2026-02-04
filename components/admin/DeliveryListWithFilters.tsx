@@ -1082,7 +1082,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                         <div className="flex items-center justify-between">
                                             <p className="text-sm font-bold text-purple-900">🎨 Servicio de Pintura</p>
                                             <span className="text-xs bg-purple-600 text-white px-2 py-1 rounded-full font-bold">
-                                                ${delivery.paintingPrice || 25}
+                                                ${delivery.paintingPrice || 20}
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-2">
@@ -1200,7 +1200,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                         className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white border border-yellow-600 shadow-sm transition-all text-xs sm:text-sm font-bold"
                                         title="Marcar pago de pintura como recibido"
                                         onClick={async () => {
-                                            if (confirm('¿Confirmas que el cliente pagó el servicio de pintura ($25)?')) {
+                                            if (confirm('¿Confirmas que el cliente pagó el servicio de pintura ($20)?')) {
                                                 try {
                                                     const result = await dataService.updatePaintingStatus(delivery.id, 'paid');
                                                     if (result.success) {
