@@ -6,7 +6,7 @@ import { generateAllGiftcardVersions } from './utils/giftcardImageGenerator.js';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_FROM_ADDRESS || 'no-reply@ceramicalma.com';
-const alianzaEmail = process.env.EMAIL_ALIANZA || 'alianza@ceramicalma.com';
+const alianzaEmail = process.env.EMAIL_ALIANZA || 'Ceramicalma <alianza@ceramicalma.com>';
 
 // Emails disponibles
 export const AVAILABLE_FROM_EMAILS = {
