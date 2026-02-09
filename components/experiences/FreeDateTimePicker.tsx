@@ -99,29 +99,40 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     return false;
   }, [timeToMinutes]);
   
+  // Obtener horarios fijos de torno para una fecha (helper)
+  const getFixedTornoSlots = useCallback((dateStr: string): string[] => {
+    const date = parseLocalDate(dateStr);
+    const dayOfWeek = date.getDay();
+    const dayKey = DAY_KEYS[dayOfWeek];
+    const fixedTornoSlots = availability?.[dayKey]?.filter(slot => 
+      slot.technique === 'potters_wheel'
+    ).map(slot => slot.time) || [];
+    if (technique === 'potters_wheel') {
+      if (dayOfWeek === 2) fixedTornoSlots.push('19:00'); // Martes
+      if (dayOfWeek === 3) fixedTornoSlots.push('11:00'); // Miércoles
+    }
+    return fixedTornoSlots;
+  }, [availability, technique]);
+
+  // Verificar si un slot está bloqueado por clase fija
+  const isSlotBlockedByFixedClass = useCallback((dateStr: string, time: string): boolean => {
+    if (technique !== 'potters_wheel') return false;
+    const fixedSlots = getFixedTornoSlots(dateStr);
+    return slotOverlapsWithFixedClass(time, fixedSlots);
+  }, [technique, getFixedTornoSlots, slotOverlapsWithFixedClass]);
+
   // Memoizar getAvailableHours para evitar recálculos innecesarios
   const getAvailableHours = useMemo(() => {
     return (dateStr: string): string[] => {
     const date = parseLocalDate(dateStr);
     const dayOfWeek = date.getDay();
-    const dayKey = DAY_KEYS[dayOfWeek];
     
     // Lunes: cerrado
     if (dayOfWeek === 1) {
       return [];
     }
     
-    // Obtener horarios fijos de torno para este día (si existen)
-    const fixedTornoSlots = availability?.[dayKey]?.filter(slot => 
-      slot.technique === 'potters_wheel'
-    ).map(slot => slot.time) || [];
-    
-    // Agregar clases especiales de introducción
-    if (technique === 'potters_wheel') {
-      if (dayOfWeek === 2) fixedTornoSlots.push('19:00'); // Martes
-      if (dayOfWeek === 3) fixedTornoSlots.push('11:00'); // Miércoles
-    }
-    
+    const fixedTornoSlots = getFixedTornoSlots(dateStr);
     console.log(`🔍 [${dateStr}] Horarios fijos de torno:`, fixedTornoSlots);
     
     // CASO 1: Grupos pequeños de torno (<3) → solo horarios fijos
@@ -131,7 +142,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
       return fixedHours;
     }
     
-    // CASO 2: Grupos grandes o otras técnicas → todos los horarios, PERO filtrar intermedios para torno
+    // CASO 2: Grupos grandes o otras técnicas → MOSTRAR TODOS los horarios, sin filtrar
     const hours: string[] = [];
 
     if (dayOfWeek === 6) {
@@ -163,17 +174,10 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
       }
     }
     
-    // FILTRAR slots intermedios para torno si hay horarios fijos
-    if (technique === 'potters_wheel' && fixedTornoSlots.length > 0) {
-      const filtered = hours.filter(h => !slotOverlapsWithFixedClass(h, fixedTornoSlots));
-      console.log(`🔒 [Torno ${participants}+ personas] Horarios filtrados: ${hours.length} → ${filtered.length} (bloqueados ${hours.length - filtered.length} slots intermedios)`);
-      return filtered;
-    }
-    
-    console.log(`🆓 [${technique}] Horarios disponibles: ${hours.length} slots`);
+    console.log(`🆓 [${technique}] Horarios totales: ${hours.length} slots`);
     return hours;
   };
-  }, [availability, technique, participants, slotOverlapsWithFixedClass]);
+  }, [availability, technique, participants, getFixedTornoSlots]);
 
   // Validar disponibilidad cuando se selecciona hora
   const validateSlotAvailability = useCallback(async (date: string, time: string) => {
@@ -441,24 +445,29 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
             {getAvailableHours(selectedDate).map(hour => {
               const isSelected = selectedTime === hour;
               const hourState = hourAvailability[hour];
-              const isUnavailable = hourState ? hourState.available === false : false;
+              const isBlockedByFixedClass = isSlotBlockedByFixedClass(selectedDate, hour);
+              const isUnavailableByCapacity = hourState ? hourState.available === false : false;
+              const isUnavailable = isBlockedByFixedClass || isUnavailableByCapacity;
               
               return (
                 <button
                   key={hour}
                   onClick={() => handleTimeClick(hour)}
                   disabled={checkingAvailability || loadingDayAvailability || isUnavailable}
+                  title={isBlockedByFixedClass ? 'Bloqueado por clase fija de torno' : (isUnavailableByCapacity ? 'Sin cupos disponibles' : 'Click para seleccionar')}
                   className={`relative p-3.5 rounded-xl border-2 font-bold text-sm transition-all ${
                     isSelected
                       ? 'border-brand-primary bg-gradient-to-br from-brand-primary to-brand-accent text-white shadow-lg scale-105'
                       : isUnavailable
-                        ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed opacity-50'
+                        ? 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
                         : 'border-gray-200 bg-white hover:border-brand-primary hover:bg-brand-primary/5 hover:scale-105'
                   } ${(checkingAvailability || loadingDayAvailability) ? 'opacity-50' : ''}`}
                 >
                   <div className="flex flex-col items-center gap-1">
                     <span>{hour}</span>
-                    {hourState && hourState.capacity && (
+                    {isBlockedByFixedClass ? (
+                      <span className="text-xs font-bold text-red-600">🔒</span>
+                    ) : hourState && hourState.capacity && (
                       <SocialBadge 
                         currentCount={hourState.capacity.booked} 
                         maxCapacity={hourState.capacity.max} 
