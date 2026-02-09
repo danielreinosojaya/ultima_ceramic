@@ -125,7 +125,21 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
         });
     };
     
-    const whatsappMessage = `¡Hola! Mi código de pre-reserva es *${booking.bookingCode}*. Adjunto el comprobante de pago para validar mi reserva.`;
+    const whatsappParticipants = typeof booking.participants === 'number' && booking.participants > 0
+        ? `${booking.participants} ${booking.participants === 1 ? 'persona' : 'personas'}`
+        : 'personas por confirmar';
+    const whatsappSlot = booking.slots && booking.slots.length > 0 ? booking.slots[0] : null;
+    const whatsappDate = whatsappSlot?.date
+        ? (() => {
+            const [year, month, day] = whatsappSlot.date.split('-').map(Number);
+            const localDate = new Date(year, month - 1, day);
+            return localDate.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        })()
+        : 'fecha por confirmar';
+    const whatsappTime = whatsappSlot?.time ? ` (${whatsappSlot.time})` : '';
+    const whatsappActivity = getBookingDisplayName(booking);
+
+    const whatsappMessage = `¡Hola! Mi código de pre-reserva es *${booking.bookingCode}*. Reservé *${whatsappActivity}* para *${whatsappParticipants}* el *${whatsappDate}${whatsappTime}*. Adjunto el comprobante de pago para validar mi reserva.`;
     const whatsappLink = `https://wa.me/${footerInfo.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(whatsappMessage)}`;
     
     const handleDownloadTicket = async () => {
