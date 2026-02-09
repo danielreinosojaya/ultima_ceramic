@@ -1384,6 +1384,22 @@ export interface AvailableSlotResult {
     instructor: string;         // Nombre del instructor
     instructorId: number;       // ID del instructor
     technique: string;          // Técnica del slot
+    blockedReason?: string | null;  // 'course_conflict' si está bloqueado por curso
+}
+
+export interface GroupClassSlotResult extends AvailableSlotResult {
+    capacityDetails?: {
+        pottersWheel?: { available: number; total: number; requested: number };
+        handWork?: { available: number; total: number; requested: number };
+    };
+}
+
+export interface GroupClassSlotsParams {
+    pottersWheel: number;
+    handModeling: number;
+    painting: number;
+    startDate?: string;
+    daysAhead?: number;
 }
 
 export const getAvailableSlotsForExperience = async (params: AvailableSlotSearchParams): Promise<AvailableSlotResult[]> => {
@@ -1403,6 +1419,27 @@ export const getAvailableSlotsForExperience = async (params: AvailableSlotSearch
     }
     
     console.error('Error fetching available slots:', response);
+    return [];
+};
+
+export const getGroupClassSlots = async (params: GroupClassSlotsParams): Promise<GroupClassSlotResult[]> => {
+    const { pottersWheel, handModeling, painting, startDate, daysAhead } = params;
+
+    const queryParams = new URLSearchParams({
+        pottersWheel: pottersWheel.toString(),
+        handModeling: handModeling.toString(),
+        painting: painting.toString(),
+        ...(startDate && { startDate }),
+        ...(daysAhead && { daysAhead: daysAhead.toString() })
+    });
+
+    const response = await fetchData(`/api/data?action=getGroupClassSlots&${queryParams.toString()}`);
+
+    if (response && response.success) {
+        return response.slots || [];
+    }
+
+    console.error('Error fetching group class slots:', response);
     return [];
 };
 

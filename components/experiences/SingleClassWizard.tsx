@@ -509,11 +509,11 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                   </div>
                   
                   {(() => {
-                    // Get ONLY the actual available times for this specific date
+                    // Obtener TODOS los slots para la fecha (disponibles e indisponibles)
                     const slotsForDate = availableSlots.filter(s => s.date === selectedDate);
-                    const availableTimes = [...new Set(slotsForDate.map(s => s.time))].sort();
+                    const allTimes = [...new Set(slotsForDate.map(s => s.time))].sort();
 
-                    if (availableTimes.length === 0) {
+                    if (allTimes.length === 0) {
                       return (
                         <div className="text-center py-6 bg-gray-50 rounded-lg">
                           <p className="text-gray-600">No hay horarios disponibles para este día</p>
@@ -523,49 +523,48 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
 
                     return (
                       <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 p-2 bg-gray-50 rounded-lg">
-                        {availableTimes.map(time => {
-                          const slotInfo = appData ? dataService.calculateSlotAvailability(selectedDate, time, appData) : null;
+                        {allTimes.map(time => {
+                          const slot = slotsForDate.find(s => s.time === time);
                           const isSelected = selectedSlot?.time === time && selectedSlot?.date === selectedDate;
-                          const hasCapacityForSelection = slotInfo?.techniques[technique]?.isAvailable ?? false;
+                          const canBook = slot?.canBook ?? false;
+                          const isBlocked = slot?.blockedReason === 'course_conflict';
+                          const available = slot?.available ?? 0;
+                          const total = slot?.total ?? 0;
                           
                           return (
                             <div key={time} className="flex flex-col gap-1">
                               <button
                                 onClick={() => {
-                                  setSelectedSlot({
-                                    date: selectedDate,
-                                    time: time,
-                                    instructorId: 0
-                                  });
+                                  if (canBook) {
+                                    setSelectedSlot({
+                                      date: selectedDate,
+                                      time: time,
+                                      instructorId: 0
+                                    });
+                                  }
                                 }}
-                                disabled={!hasCapacityForSelection}
+                                disabled={!canBook}
+                                title={isBlocked ? 'Bloqueado por curso' : canBook ? 'Disponible' : 'Sin cupos'}
                                 className={`p-2 rounded-lg border-2 transition-all text-center font-bold text-xs ${
                                   isSelected
                                     ? 'border-blue-500 bg-blue-500 text-white ring-2 ring-blue-300'
-                                    : hasCapacityForSelection
+                                    : canBook
                                     ? 'border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:bg-blue-50 cursor-pointer'
-                                    : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-40'
+                                    : 'border-gray-300 bg-gray-200 text-gray-500 cursor-not-allowed opacity-60'
                                 }`}
                               >
                                 {time}
                               </button>
                               
-                              {/* Mostrar cupos disponibles */}
-                              {slotInfo && (
-                                <div className="text-xs text-gray-600 space-y-0.5">
-                                  {technique === 'painting' ? (
-                                    <div className={slotInfo.techniques.painting.isAvailable ? 'text-green-600' : 'text-red-500'}>
-                                      🎨 {slotInfo.techniques.painting.available}/{slotInfo.techniques.painting.total}
-                                    </div>
+                              {/* Mostrar cupos o razón bloqueo */}
+                              {slot && (
+                                <div className="text-xs text-center">
+                                  {isBlocked ? (
+                                    <div className="text-red-600 font-semibold">🔒 Curso</div>
                                   ) : (
-                                    <>
-                                      <div className={slotInfo.techniques.potters_wheel.isAvailable ? 'text-green-600' : 'text-red-500'}>
-                                        🎡 {slotInfo.techniques.potters_wheel.available}/{slotInfo.techniques.potters_wheel.total}
-                                      </div>
-                                      <div className={slotInfo.techniques.hand_modeling.isAvailable ? 'text-green-600' : 'text-red-500'}>
-                                        🤚 {slotInfo.techniques.hand_modeling.available}/{slotInfo.techniques.hand_modeling.total}
-                                      </div>
-                                    </>
+                                    <div className={canBook ? 'text-green-600' : 'text-orange-600'}>
+                                      {available}/{total}
+                                    </div>
                                   )}
                                 </div>
                               )}

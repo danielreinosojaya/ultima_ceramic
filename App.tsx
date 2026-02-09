@@ -921,14 +921,6 @@ const App: React.FC = () => {
                     <GroupClassWizard
                         initialTechnique={prefillTechnique || undefined}
                         config={groupClassConfig}
-                        availableSlots={appData?.availability ? 
-                            dataService.generateTimeSlots(new Date(), 180).map(slot => ({
-                              date: slot.date,
-                              time: slot.startTime,
-                              instructorId: 0
-                            }))
-                            : []
-                        }
                         pieces={pieces}
                         appData={appData}
                         onConfirm={(totalParticipants, assignments, selectedSlot) => {
