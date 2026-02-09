@@ -647,6 +647,31 @@ const computeSlotAvailability = async (
         }
     }
 
+    // Check for fixed class conflicts (potters_wheel only)
+    const { availability } = await parseSlotAvailabilitySettings();
+    const dayKey = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date(`${requestedDate}T00:00:00`).getDay()];
+    
+    if (requestedTechnique === 'potters_wheel') {
+        const fixedPottersTimes = getFixedSlotTimesForDate(requestedDate, dayKey, availability, scheduleOverrides, 'potters_wheel');
+        const fixedPottersMinutes = fixedPottersTimes.map(timeToMinutes);
+        
+        // Check if requested slot conflicts with fixed class times (±120 min window)
+        if (isPottersFixedConflict(requestedStartMinutes, fixedPottersMinutes)) {
+            const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
+            return {
+                available: false,
+                normalizedTime,
+                capacity: {
+                    max: maxCapacity,
+                    booked: maxCapacity,
+                    available: 0
+                },
+                bookingsCount: 0,
+                message: 'Horario no disponible por clase fija de torno'
+            };
+        }
+    }
+
     const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
     const availableCapacity = maxCapacity - overlappingParticipants;
     const canBook = availableCapacity >= requestedParticipants;
