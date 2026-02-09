@@ -238,6 +238,18 @@ export const BookingSummary: React.FC<BookingSummaryProps> = ({
 
         {/* Footer with Action Buttons */}
         <div className="bg-white border-t border-brand-border p-5 sm:p-6 md:p-8 space-y-3 sm:space-y-4">
+          
+          {/* Advertencia de 2 horas PROMINENTE */}
+          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg mb-4">
+            <div className="flex items-start gap-3">
+              <span className="text-yellow-600 text-2xl font-bold">⏰</span>
+              <div className="text-sm text-yellow-800">
+                <p className="font-bold text-base mb-1">Pre-reserva válida por 2 horas</p>
+                <p className="text-xs">Una vez confirmada, tendrás 2 horas para completar el pago. Recibirás un correo con las instrucciones bancarias.</p>
+              </div>
+            </div>
+          </div>
+
           {activeGiftcardHold && (Number(activeGiftcardHold.amount || 0) >= Number(product.price || 0)) ? (
             <div className="space-y-3">
               <div className="flex items-center justify-center gap-2 px-4 py-3 bg-green-100 text-green-800 rounded-lg font-bold text-sm sm:text-base">

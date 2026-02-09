@@ -37,18 +37,16 @@ export const IntroClassModal: React.FC<IntroClassModalProps> = ({ isOpen, onClos
     name: '', price: 0, description: '', imageUrl: '', schedulingRules: [], overrides: [],
     details: { duration: '', durationHours: 0, activities: [], generalRecommendations: '', materials: '', technique: 'potters_wheel' },
   });
-  const [instructors, setInstructors] = useState<Instructor[]>([]);
+  const adminData = useAdminData();
+  const instructors = adminData.instructors; // ✅ Usar del context
   const [newRule, setNewRule] = useState({ dayOfWeek: 1, time: '', instructorId: 0, capacity: 8 });
 
   useEffect(() => {
     const initialize = async () => {
-      const [currentInstructors, classCapacity] = await Promise.all([
-         dataService.getInstructors(),
-         dataService.getClassCapacity()
-      ]);
-      setInstructors(currentInstructors);
-      if (currentInstructors.length > 0) {
-          setNewRule(s => ({...s, instructorId: currentInstructors[0].id, capacity: classCapacity.introductory_class || 6 }));
+      const classCapacity = await dataService.getClassCapacity();
+      // ✅ Set default instructor y capacity cuando estén disponibles
+      if (instructors.length > 0) {
+          setNewRule(s => ({...s, instructorId: instructors[0].id, capacity: classCapacity.introductory_class || 6 }));
       }
 
       if (classToEdit) {
@@ -80,7 +78,7 @@ export const IntroClassModal: React.FC<IntroClassModalProps> = ({ isOpen, onClos
     if (isOpen) {
       initialize();
     }
-  }, [classToEdit, isOpen]);
+  }, [classToEdit, isOpen, instructors]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;

@@ -5,6 +5,7 @@ import { CurrencyDollarIcon } from '../icons/CurrencyDollarIcon';
 import { CreditCardIcon } from '../icons/CreditCardIcon';
 import { BankIcon } from '../icons/BankIcon';
 import { CheckCircleIcon } from '@heroicons/react/24/outline';
+import { useAdminData } from '../../context/AdminDataContext';
 
 interface AcceptPaymentModalProps {
     isOpen: boolean;
@@ -14,6 +15,7 @@ interface AcceptPaymentModalProps {
 }
 
 export const AcceptPaymentModal: React.FC<AcceptPaymentModalProps> = ({ isOpen, onClose, booking, onDataChange }) => {
+    const adminData = useAdminData();
     // Idioma fijo español
     const initialTotalPaid = typeof (booking as any).totalPaid === 'number' ? (booking as any).totalPaid : (booking.paymentDetails || []).reduce((s: number, p: any) => s + (p.amount || 0), 0);
     const initialPending = typeof (booking as any).pendingBalance === 'number' ? (booking as any).pendingBalance : Math.max(0, (booking.price || 0) - initialTotalPaid);
@@ -110,9 +112,14 @@ export const AcceptPaymentModal: React.FC<AcceptPaymentModalProps> = ({ isOpen, 
 
             const res = await dataService.addPaymentToBooking(booking.id, paymentDetails);
             if (res && res.success) {
-                // Ensure cache invalidation and parent refresh
+                // Cache invalidation + optimistic update
                 if (dataService.invalidateBookingsCache) dataService.invalidateBookingsCache();
-                onDataChange();
+                if (res.booking) {
+                    adminData.optimisticUpsertBooking(res.booking);
+                } else {
+                    // Fallback: recargar críticos solo si el backend no devuelve booking
+                    adminData.refreshCritical();
+                }
                 onClose();
             } else {
                 console.error('addPaymentToBooking failed', res);

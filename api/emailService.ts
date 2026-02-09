@@ -1,11 +1,70 @@
 import { Resend } from 'resend';
 import { toZonedTime, format } from 'date-fns-tz';
-import type { Booking, BankDetails, TimeSlot, PaymentDetails } from '../types.js';
+import type { Booking, BankDetails, TimeSlot, PaymentDetails, GroupTechnique } from '../types.js';
 import { sql } from './db.js';
 import { generateAllGiftcardVersions } from './utils/giftcardImageGenerator.js';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_FROM_ADDRESS || 'no-reply@ceramicalma.com';
+const alianzaEmail = process.env.EMAIL_ALIANZA || 'Ceramicalma <alianza@ceramicalma.com>';
+
+// Emails disponibles
+export const AVAILABLE_FROM_EMAILS = {
+  DEFAULT: fromEmail,
+  ALIANZA: alianzaEmail
+} as const;
+
+// Helper para obtener nombre de técnica desde metadata
+const getTechniqueName = (technique: GroupTechnique): string => {
+  const names: Record<GroupTechnique, string> = {
+    'potters_wheel': 'Torno Alfarero',
+    'hand_modeling': 'Modelado a Mano',
+    'painting': 'Pintura de piezas'
+  };
+  return names[technique] || technique;
+};
+
+// Helper para traducir productType a nombre legible
+const getProductTypeName = (productType?: string): string => {
+  const typeNames: Record<string, string> = {
+    'SINGLE_CLASS': 'Clase Suelta',
+    'CLASS_PACKAGE': 'Paquete de Clases',
+    'INTRODUCTORY_CLASS': 'Clase Introductoria',
+    'GROUP_CLASS': 'Clase Grupal',
+    'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
+    'OPEN_STUDIO': 'Estudio Abierto'
+  };
+  return typeNames[productType || ''] || 'Clase';
+};
+
+// Helper para obtener el nombre del producto/técnica de un booking
+const getBookingDisplayName = (booking: Booking): string => {
+  // 1. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
+  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
+    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
+    const uniqueTechniques = [...new Set(techniques)];
+    
+    if (uniqueTechniques.length === 1) {
+      return getTechniqueName(uniqueTechniques[0]);
+    } else {
+      return `Clase Grupal (mixto)`;
+    }
+  }
+  
+  // 2. Prioridad: product.name (es la fuente más confiable)
+  const productName = booking.product?.name;
+  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
+    return productName;
+  }
+  
+  // 3. Fallback: technique directamente (solo si product.name no existe)
+  if (booking.technique) {
+    return getTechniqueName(booking.technique as GroupTechnique);
+  }
+  
+  // 4. Último fallback: productType
+  return getProductTypeName(booking.productType);
+};
 
 export const isEmailServiceConfigured = (): { configured: boolean; reason?: string } => {
     if (!resend) return { configured: false, reason: 'Missing RESEND_API_KEY' };
@@ -58,8 +117,10 @@ const wrapHtmlEmail = (maybeHtml: string) => {
     return `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Email</title><style>body{font-family: Arial, Helvetica, sans-serif; color:#333; margin:0; padding:12px;} a{color:#1d4ed8;}</style></head><body>${maybeHtml}</body></html>`;
 };
 
-const sendEmail = async (to: string, subject: string, html: string, attachments?: { filename: string; data: string; type?: string }[]): Promise<SendEmailResult | void> => {
+const sendEmail = async (to: string, subject: string, html: string, attachments?: { filename: string; data: string; type?: string }[], fromOverride?: string): Promise<SendEmailResult | void> => {
     const cfg = isEmailServiceConfigured();
+    const finalFromEmail = fromOverride || fromEmail;
+    
     // Dry-run when not configured
     if (!cfg.configured) {
         console.warn(`Email service not configured (${cfg.reason}). Performing dry-run and saving email to disk.`);
@@ -68,11 +129,11 @@ const sendEmail = async (to: string, subject: string, html: string, attachments?
             const path = await import('path');
             const outDir = process.env.EMAIL_DRYRUN_DIR || path.join('/tmp', 'ceramicalma-emails');
             try { fs.mkdirSync(outDir, { recursive: true }); } catch {}
-            const safeTo = to.replace(/[@<>\\/\\s]/g, '_').slice(0, 64);
+            const safeTo = to.replace(/[@<>\/\s]/g, '_').slice(0, 64);
             const safeSubject = subject.replace(/[^a-zA-Z0-9-_ ]/g, '').slice(0, 48).replace(/\s+/g, '_');
             const filename = `${Date.now()}_${safeTo}_${safeSubject}.html`;
             const filePath = path.join(outDir, filename);
-            let content = `To: ${to}\nSubject: ${subject}\n\n${html}\n\n`;
+            let content = `From: ${finalFromEmail}\nTo: ${to}\nSubject: ${subject}\n\n${html}\n\n`;
             if (attachments && attachments.length > 0) {
                 content += '\nAttachments:\n';
                     for (const a of attachments) {
@@ -91,7 +152,7 @@ const sendEmail = async (to: string, subject: string, html: string, attachments?
     // Generate a conservative plain-text fallback from the wrapped HTML
     const textFallback = typeof wrappedHtml === 'string' ? wrappedHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : undefined;
     const payload: any = {
-        from: fromEmail,
+        from: finalFromEmail,
         to,
         subject,
         html: wrappedHtml,
@@ -145,7 +206,7 @@ async function logEmailEvent(
 }
 
 export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDetails: BankDetails) => {
-    const { userInfo, bookingCode, product, price, paymentDetails } = booking;
+    const { userInfo, bookingCode, product, price, paymentDetails, slots } = booking;
     
     // Ensure price is a number
     const numericPrice = typeof price === 'number' ? price : parseFloat(String(price));
@@ -153,6 +214,33 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
     // Calculate total paid and pending balance
     const totalPaid = paymentDetails?.reduce((sum: number, p: any) => sum + (p.amount || 0), 0) || 0;
     const pendingBalance = Math.max(0, numericPrice - totalPaid);
+    
+    // Obtener nombre del producto/técnica
+    const productName = getBookingDisplayName(booking);
+    
+    // Formatear información de fecha/hora de las clases
+    const slotsHtml = slots && slots.length > 0 ? `
+        <div style="background-color: #f0f9ff; border-left: 4px solid #0EA5E9; padding: 15px; margin: 20px 0; border-radius: 8px;">
+            <p style="margin: 0; color: #0369A1; font-weight: bold;">📅 ${slots.length > 1 ? 'Tus Clases Programadas' : 'Tu Clase Programada'}</p>
+            <table style="margin-top: 10px; width: 100%; border-collapse: collapse;">
+                ${slots.map((slot, index) => {
+                    const slotDate = new Date(slot.date + 'T00:00:00').toLocaleDateString('es-ES', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                    });
+                    return `
+                        <tr style="border-bottom: 1px solid #e0f2fe;">
+                            <td style="padding: 8px 0; color: #0369A1; font-weight: bold;">${slots.length > 1 ? `Clase ${index + 1}:` : ''}</td>
+                            <td style="padding: 8px 0; color: #0c4a6e;">${slotDate}</td>
+                            <td style="padding: 8px 0; color: #0c4a6e; font-weight: bold;">${slot.time}</td>
+                        </tr>
+                    `;
+                }).join('')}
+            </table>
+        </div>
+    ` : '';
     
     const subject = `Tu Pre-Reserva en CeramicAlma está confirmada (Código: ${bookingCode})`;
     // Mostrar todas las cuentas en una tabla compacta y profesional
@@ -186,8 +274,9 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333;">
             <h2>¡Hola, ${userInfo.firstName}!</h2>
-            <p>Gracias por tu pre-reserva para <strong>${product.name}</strong>. Tu lugar ha sido guardado con el código de reserva:</p>
+            <p>Gracias por tu pre-reserva para <strong>${productName}</strong>. Tu lugar ha sido guardado con el código de reserva:</p>
             <p style="font-size: 24px; font-weight: bold; color: #D95F43; margin: 20px 0;">${bookingCode}</p>
+            ${slotsHtml}
             <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 8px;">
                 <p style="margin: 0; color: #92400E; font-weight: bold;">⏰ Pre-Reserva Válida por 2 Horas</p>
                 <p style="margin: 8px 0 0 0; color: #78350F; font-size: 14px;">
@@ -240,7 +329,7 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
 
 // Envía el recibo de pago al cliente
 export const sendPaymentReceiptEmail = async (booking: Booking, payment: PaymentDetails) => {
-    const { userInfo, bookingCode, product } = booking;
+    const { userInfo, bookingCode, product, slots } = booking;
     const subject = `¡Confirmación de Pago para tu reserva en CeramicAlma! (Código: ${bookingCode})`;
 
     // Ensure amounts are numbers
@@ -266,11 +355,39 @@ export const sendPaymentReceiptEmail = async (booking: Booking, payment: Payment
            <p><strong>Saldo restante:</strong> $${(paymentAmount - giftcardAmount).toFixed(2)}</p>`
         : '';
 
+    // Obtener nombre del producto/técnica
+    const productName = getBookingDisplayName(booking);
+
+    // Formatear información de fecha/hora de las clases
+    const slotsHtml = slots && slots.length > 0 ? `
+        <div style="background-color: #f0f9ff; border-left: 4px solid #0EA5E9; padding: 15px; margin-top: 20px; border-radius: 8px;">
+            <p style="margin: 0; color: #0369A1; font-weight: bold;">📅 ${slots.length > 1 ? 'Tus Clases Programadas' : 'Tu Clase Programada'}</p>
+            <table style="margin-top: 10px; width: 100%; border-collapse: collapse;">
+                ${slots.map((slot, index) => {
+                    const slotDate = new Date(slot.date + 'T00:00:00').toLocaleDateString('es-ES', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                    });
+                    return `
+                        <tr style="border-bottom: 1px solid #e0f2fe;">
+                            <td style="padding: 8px 0; color: #0369A1; font-weight: bold;">${slots.length > 1 ? `Clase ${index + 1}:` : ''}</td>
+                            <td style="padding: 8px 0; color: #0c4a6e;">${slotDate}</td>
+                            <td style="padding: 8px 0; color: #0c4a6e; font-weight: bold;">${slot.time}</td>
+                        </tr>
+                    `;
+                }).join('')}
+            </table>
+        </div>
+    ` : '';
+
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333;">
             <h2>¡Hola, ${userInfo.firstName}!</h2>
-            <p>Hemos recibido tu pago y tu reserva para <strong>${product.name}</strong> está oficialmente confirmada.</p>
+            <p>Hemos recibido tu pago y tu reserva para <strong>${productName}</strong> está oficialmente confirmada.</p>
             <p style="font-size: 20px; font-weight: bold; color: #16A34A; margin: 20px 0;">¡Tu plaza está asegurada!</p>
+            ${slotsHtml}
             <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; margin-top: 20px;">
                 <h3 style="color: #D95F43;">Detalles del Pago</h3>
                 <p><strong>Código de Reserva:</strong> ${bookingCode}</p>
@@ -587,7 +704,9 @@ export const sendDeliveryCreatedEmail = async (customerEmail: string, customerNa
     });
     
     const displayDescription = delivery.description || 'Tus piezas de cerámica';
-    const subject = `📦 Recogida programada - ${displayDescription}`;
+    // Sanitize subject: remove newlines and excessive whitespace
+    const sanitizedDescription = displayDescription.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const subject = `📦 Recogida programada - ${sanitizedDescription}`;
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
@@ -640,7 +759,9 @@ export const sendDeliveryCreatedByClientEmail = async (customerEmail: string, cu
     
     const displayDescription = delivery.description || 'Tus piezas de cerámica';
     const photoCount = delivery.photos || 0;
-    const subject = `✅ Recibimos tus fotos - ${displayDescription}`;
+    // Sanitize subject: remove newlines and excessive whitespace
+    const sanitizedDescription = displayDescription.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const subject = `✅ Recibimos tus fotos - ${sanitizedDescription}`;
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
@@ -691,9 +812,110 @@ export const sendDeliveryCreatedByClientEmail = async (customerEmail: string, cu
     return result;
 };
 
-export const sendDeliveryReadyEmail = async (customerEmail: string, customerName: string, delivery: { description?: string | null; readyAt: string; }) => {
-    console.log('[sendDeliveryReadyEmail] READY EMAIL - Starting send to:', customerEmail);
+// Nuevo email: Delivery con servicio de pintura
+export const sendDeliveryWithPaintingServiceEmail = async (
+    customerEmail: string, 
+    customerName: string, 
+    delivery: { description?: string | null; scheduledDate: string; photos?: number; paintingPrice: number; }
+) => {
+    console.log('[sendDeliveryWithPaintingServiceEmail] Starting email send to:', customerEmail);
     
+    const formattedDate = new Date(delivery.scheduledDate).toLocaleDateString('es-ES', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
+    
+    const displayDescription = delivery.description || 'Tus piezas de cerámica';
+    const photoCount = delivery.photos || 0;
+    const sanitizedDescription = displayDescription.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const subject = `✨ ¡Servicio de Pintura Reservado! - ${sanitizedDescription}`;
+    const html = `
+        <div style="font-family: Arial, sans-serif; color: #4A4540; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
+            <p style="font-size: 16px;">¡Gracias por subir las fotos de tu pieza! Hemos recibido tu solicitud de entrega <strong>con servicio de pintura</strong>. ✨</p>
+            
+            <div style="background-color: #F4F2F1; border: 2px solid #D95F43; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                <div style="text-align: center; margin-bottom: 15px;">
+                    <span style="font-size: 48px;">🎨</span>
+                    <h3 style="color: #D95F43; margin: 10px 0;">Servicio de Pintura Reservado</h3>
+                </div>
+                <div style="background-color: #FFFFFF; border-radius: 8px; padding: 15px; margin: 15px 0; border: 1px solid #E7E1DB;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <span style="font-weight: bold; color: #4A4540;">Precio del servicio:</span>
+                        <span style="font-size: 24px; font-weight: bold; color: #D95F43;">$${delivery.paintingPrice}</span>
+                    </div>
+                    <p style="margin: 5px 0; color: #7A6F69; font-size: 12px;">Por pieza • Incluye todos los colores</p>
+                </div>
+            </div>
+
+            <div style="background-color: #FDF7F2; border-left: 4px solid #D95F43; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #D95F43; margin-top: 0;">📸 Información Recibida</h3>
+                <p style="margin: 10px 0;"><strong>Descripción:</strong> ${displayDescription}</p>
+                <p style="margin: 10px 0;"><strong>Fotos subidas:</strong> ${photoCount}</p>
+                <p style="margin: 10px 0; font-size: 18px;"><strong>Fecha estimada pieza lista:</strong> <span style="color: #D95F43;">${formattedDate}</span></p>
+            </div>
+
+            <div style="background-color: #F4F2F1; border-left: 4px solid #CCBCB2; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #4A4540; font-weight: bold;">✨ Próximos Pasos para Pintura</p>
+                <p style="margin: 8px 0 0 0; color: #6B5F58; font-size: 14px;">
+                    1. <strong>Tu pieza se procesará normalmente</strong> (horneado y secado)<br/>
+                    2. Cuando esté lista para pintar, <strong>recibirás un correo especial</strong><br/>
+                    3. Podrás <strong>reservar tu horario de pintura en línea</strong>
+                </p>
+            </div>
+
+            <div style="background-color: #FDF2F2; border-left: 4px solid #B8474B; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #B8474B; font-weight: bold;">⏳ Tiempo Estimado</p>
+                <p style="margin: 8px 0 0 0; color: #6B5F58; font-size: 14px;">
+                    • Proceso de horneado y secado: <strong>~15 días</strong><br/>
+                    • Te notificaremos 1-2 días antes de que esté lista<br/>
+                    • Después de pintar: 5-7 días adicionales para horneado final
+                </p>
+            </div>
+
+            <div style="background-color: #F4F2F1; border-left: 4px solid #D95F43; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #4A4540; font-weight: bold;">💡 Información del Taller</p>
+                <p style="margin: 8px 0 0 0; color: #6B5F58; font-size: 14px;">
+                    • Martes a Viernes: 10:00 AM - 9:00 PM<br/>
+                    • Sábados: 9:00 AM - 8:00 PM<br/>
+                    • Domingos: 10:00 AM - 6:00 PM<br/>
+                    • Ubicación: Sol Plaza - Av. Samborondón<br/>
+                    • Duración sesión de pintura: ~1-2 horas
+                </p>
+            </div>
+
+            <p style="margin-top: 20px;">Si tienes dudas sobre el proceso de pintura o necesitas hacer cambios, no dudes en contactarnos.</p>
+            
+            <div style="margin: 30px 0; text-align: center;">
+                <a href="https://wa.me/593985813327" style="display: inline-block; background-color: #D95F43; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                    📱 Contactar por WhatsApp
+                </a>
+            </div>
+
+            <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
+                ¡Estamos emocionados de ver tu pieza pintada!<br/><br/>
+                Saludos,<br/>
+                <strong>El equipo de CeramicAlma</strong>
+            </p>
+        </div>
+    `;
+    
+    const result = await sendEmail(customerEmail, subject, html);
+    console.log('[sendDeliveryWithPaintingServiceEmail] Email send result:', result);
+    return result;
+};
+
+export const sendDeliveryReadyEmail = async (customerEmail: string, customerName: string, delivery: { id?: string | null; description?: string | null; readyAt: string; wantsPainting?: boolean; paintingPrice?: number | null; }) => {
+    console.log('[sendDeliveryReadyEmail] READY EMAIL - Starting send to:', customerEmail, 'wantsPainting:', delivery.wantsPainting);
+    
+    // Si el cliente quiere pintar, enviar email diferente
+    if (delivery.wantsPainting) {
+        return await sendDeliveryReadyForPaintingEmail(customerEmail, customerName, delivery);
+    }
+    
+    // Email estándar para pickup (sin pintura)
     const readyDate = new Date(delivery.readyAt);
     const expirationDate = new Date(readyDate);
     expirationDate.setMonth(expirationDate.getMonth() + 2);
@@ -712,7 +934,9 @@ export const sendDeliveryReadyEmail = async (customerEmail: string, customerName
     });
     
     const displayDescription = delivery.description || 'Tus piezas de cerámica';
-    const subject = `✨ ¡Tus piezas están listas! - ${displayDescription}`;
+    // Sanitize subject: remove newlines and excessive whitespace (email providers don't allow \n in subject)
+    const sanitizedDescription = displayDescription.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const subject = `✨ ¡Tus piezas están listas! - ${sanitizedDescription}`;
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
@@ -771,6 +995,159 @@ export const sendDeliveryReadyEmail = async (customerEmail: string, customerName
     
     const result = await sendEmail(customerEmail, subject, html);
     console.log('[sendDeliveryReadyEmail] Email send result:', result);
+    try {
+        await logEmailEvent(customerEmail, 'delivery_ready', 'email', (result as any)?.sent ? 'sent' : 'failed');
+    } catch (e) {
+        console.warn('[sendDeliveryReadyEmail] Failed to log email event:', e);
+    }
+    return result;
+};
+
+// Nuevo email: Pieza lista para PINTAR (diferente al pickup normal)
+export const sendDeliveryReadyForPaintingEmail = async (
+    customerEmail: string, 
+    customerName: string, 
+    delivery: { id?: string | null; description?: string | null; readyAt: string; paintingPrice?: number | null; }
+) => {
+    console.log('[sendDeliveryReadyForPaintingEmail] Starting email send to:', customerEmail);
+    
+    const readyDate = new Date(delivery.readyAt);
+    const formattedReadyDate = readyDate.toLocaleDateString('es-ES', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
+    
+    const displayDescription = delivery.description || 'Tu pieza de cerámica';
+    const sanitizedDescription = displayDescription.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const subject = `🎨 ¡Tu pieza está lista para pintar! - ${sanitizedDescription}`;
+    const html = `
+        <div style="font-family: Arial, sans-serif; color: #4A4540; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
+            <p style="font-size: 18px; font-weight: bold; color: #D95F43;">🎨 ¡Buenas noticias! Tu pieza está lista para que la pintes.</p>
+            
+            <div style="background-color: #F4F2F1; border: 2px solid #D95F43; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                <div style="text-align: center; margin-bottom: 15px;">
+                    <span style="font-size: 48px;">✨</span>
+                    <h3 style="color: #D95F43; margin: 10px 0;">Es momento de darle color a tu creación</h3>
+                </div>
+                <p style="margin: 10px 0; font-size: 16px; text-align: center;"><strong>${displayDescription}</strong></p>
+                <p style="margin: 10px 0; color: #6B5F58; text-align: center;">Lista desde: ${formattedReadyDate}</p>
+            </div>
+
+            <div style="background-color: #FDF7F2; border-left: 4px solid #D95F43; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #D95F43; margin-top: 0;">🎨 Reserva tu Horario de Pintura</h3>
+                <p style="margin: 10px 0; color: #6B5F58; font-size: 14px;">
+                    Necesitas agendar tu sesión de pintura en nuestro calendario. Es muy fácil:
+                </p>
+                <ol style="margin: 10px 0; color: #6B5F58; font-size: 14px;">
+                    <li style="margin: 5px 0;"><strong>Visita nuestro sitio web</strong> y selecciona "Pintura de Piezas"</li>
+                    <li style="margin: 5px 0;"><strong>Elige fecha y horario</strong> que más te convenga</li>
+                    <li style="margin: 5px 0;"><strong>Confirma tu reserva</strong> en el calendario</li>
+                </ol>
+                <div style="text-align: center; margin-top: 20px;">
+                    <a href="https://www.ceramicalma.com/?booking=painting${delivery.id ? `&deliveryId=${encodeURIComponent(String(delivery.id))}` : ''}" style="display: inline-block; background-color: #D95F43; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                        📅 Reservar Horario de Pintura
+                    </a>
+                </div>
+            </div>
+
+            <div style="background-color: #F4F2F1; border-left: 4px solid #CCBCB2; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #4A4540; font-weight: bold;">🕐 Horarios Disponibles</p>
+                <p style="margin: 8px 0 0 0; color: #6B5F58; font-size: 14px;">
+                    • Martes a Viernes: 10:00 AM - 9:00 PM<br/>
+                    • Sábados: 9:00 AM - 8:00 PM<br/>
+                    • Domingos: 10:00 AM - 6:00 PM<br/>
+                    • Duración: ~1-2 horas
+                </p>
+            </div>
+
+            <div style="background-color: #FDF2F2; border: 1px solid #E7E1DB; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #B8474B; font-weight: bold;">⏰ Después de Pintar</p>
+                <p style="margin: 8px 0 0 0; color: #6B5F58; font-size: 14px;">
+                    Tu pieza necesitará <strong>5-7 días adicionales</strong> para el horneado final.<br/>
+                    Te notificaremos cuando esté lista para recoger. 🎁
+                </p>
+            </div>
+
+            <p style="margin-top: 20px; font-size: 15px;">
+                Si tienes preguntas sobre colores, técnicas o el proceso, contáctanos por WhatsApp.
+            </p>
+            
+            <div style="margin: 30px 0; text-align: center;">
+                <a href="https://wa.me/593985813327" style="display: inline-block; background-color: #D95F43; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                    📱 Contactar por WhatsApp
+                </a>
+            </div>
+
+            <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+                ¡Estamos emocionados de ver tu pieza con los colores que elijas!<br/><br/>
+                Saludos,<br/>
+                <strong>El equipo de CeramicAlma</strong>
+            </p>
+        </div>
+    `;
+    
+    const result = await sendEmail(customerEmail, subject, html);
+    console.log('[sendDeliveryReadyForPaintingEmail] Email send result:', result);
+    try {
+        await logEmailEvent(customerEmail, 'delivery_ready_painting', 'email', (result as any)?.sent ? 'sent' : 'failed');
+    } catch (e) {
+        console.warn('[sendDeliveryReadyForPaintingEmail] Failed to log email event:', e);
+    }
+    return result;
+};
+
+// Email: Confirmación de reserva de pintura (ya pagada)
+export const sendPaintingBookingScheduledEmail = async (
+    customerEmail: string,
+    customerName: string,
+    payload: { description?: string | null; bookingDate: string; bookingTime: string; participants: number; }
+) => {
+    const displayDescription = payload.description || 'Tu pieza de cerámica';
+    const sanitizedDescription = displayDescription.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const subject = `🎨 Reserva de pintura confirmada - ${sanitizedDescription}`;
+    const formattedDate = new Date(payload.bookingDate + 'T00:00:00').toLocaleDateString('es-ES', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+
+    const html = `
+        <div style="font-family: Arial, sans-serif; color: #4A4540; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
+            <p style="font-size: 18px; font-weight: bold; color: #D95F43;">🎨 Tu reserva de pintura ha sido confirmada.</p>
+
+            <div style="background-color: #FDF7F2; border-left: 4px solid #D95F43; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <p style="margin: 0; font-size: 16px;"><strong>${displayDescription}</strong></p>
+                <p style="margin: 8px 0 0 0; color: #6B5F58; font-size: 14px;">Fecha: ${formattedDate}</p>
+                <p style="margin: 4px 0 0 0; color: #6B5F58; font-size: 14px;">Hora: ${payload.bookingTime}</p>
+                <p style="margin: 4px 0 0 0; color: #6B5F58; font-size: 14px;">Participantes: ${payload.participants}</p>
+            </div>
+
+            <div style="background-color: #F4F2F1; border-left: 4px solid #CCBCB2; padding: 18px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #4A4540; font-weight: bold;">✅ Servicio ya pagado</p>
+                <p style="margin: 8px 0 0 0; color: #6B5F58; font-size: 14px;">No necesitas realizar ningún pago adicional.</p>
+            </div>
+
+            <p style="margin-top: 20px; font-size: 15px;">Si necesitas cambiar la hora, contáctanos por WhatsApp.</p>
+            <div style="margin: 20px 0; text-align: center;">
+                <a href="https://wa.me/593985813327" style="display: inline-block; background-color: #D95F43; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                    📱 Contactar por WhatsApp
+                </a>
+            </div>
+            <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">Saludos,<br/><strong>El equipo de CeramicAlma</strong></p>
+        </div>
+    `;
+
+    const result = await sendEmail(customerEmail, subject, html);
+    try {
+        await logEmailEvent(customerEmail, 'painting_booking_scheduled', 'email', (result as any)?.sent ? 'sent' : 'failed');
+    } catch (e) {
+        console.warn('[sendPaintingBookingScheduledEmail] Failed to log email event:', e);
+    }
     return result;
 };
 
@@ -783,7 +1160,9 @@ export const sendDeliveryReminderEmail = async (customerEmail: string, customerN
     });
     
     const displayDescription = delivery.description || 'Tus piezas de cerámica';
-    const subject = `🔔 Recordatorio: Recoge tus piezas mañana - ${displayDescription}`;
+    // Sanitize subject: remove newlines and excessive whitespace
+    const sanitizedDescription = displayDescription.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const subject = `🔔 Recordatorio: Recoge tus piezas mañana - ${sanitizedDescription}`;
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
@@ -827,7 +1206,12 @@ export const sendDeliveryReminderEmail = async (customerEmail: string, customerN
         </div>
     `;
     
-    await sendEmail(customerEmail, subject, html);
+    const result = await sendEmail(customerEmail, subject, html);
+    try {
+        await logEmailEvent(customerEmail, 'delivery_completed', 'email', (result as any)?.sent ? 'sent' : 'failed');
+    } catch (e) {
+        console.warn('[sendDeliveryCompletedEmail] Failed to log email event:', e);
+    }
 };
 
 export const sendDeliveryCompletedEmail = async (customerEmail: string, customerName: string, delivery: { description?: string | null; deliveredAt: string; }) => {
@@ -841,7 +1225,9 @@ export const sendDeliveryCompletedEmail = async (customerEmail: string, customer
     });
     
     const displayDescription = delivery.description || 'Tus piezas de cerámica';
-    const subject = `✅ Piezas entregadas - ${displayDescription}`;
+    // Sanitize subject: remove newlines and excessive whitespace
+    const sanitizedDescription = displayDescription.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const subject = `✅ Piezas entregadas - ${sanitizedDescription}`;
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #10B981;">¡Hola, ${customerName}!</h2>
@@ -879,7 +1265,13 @@ export const sendDeliveryCompletedEmail = async (customerEmail: string, customer
         </div>
     `;
     
-    await sendEmail(customerEmail, subject, html);
+    const result = await sendEmail(customerEmail, subject, html);
+    try {
+        await logEmailEvent(customerEmail, 'delivery_completed', 'email', (result as any)?.sent ? 'sent' : 'failed');
+    } catch (e) {
+        console.warn('[sendDeliveryCompletedEmail] Failed to log email event:', e);
+    }
+    return result;
 };
 
 // Special email for couples experience bookings with technique details
@@ -1106,9 +1498,26 @@ export const sendGroupClassConfirmationEmail = async (
                 </p>
             </div>
 
+            <div style="background: #F3E8FF; border-left: 4px solid #A855F7; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3 style="color: #7E22CE; margin-top: 0;">🎁 Importante sobre tu reserva</h3>
+                <p style="color: #6B21A8; font-size: 14px; margin: 10px 0; line-height: 1.6;">
+                    Tu reserva es especial y personal. El valor que pagaste es exclusivo para esta experiencia en esta fecha, diseñado pensando en ti y tu grupo. Algunos detalles clave:
+                </p>
+                <ul style="color: #6B21A8; font-size: 14px; margin: 10px 0; padding-left: 20px; line-height: 1.8;">
+                    <li><strong>✓ Tu valor es válido únicamente para esta experiencia y fecha</strong></li>
+                    <li><strong>✓ No puede transferirse a otra persona</strong></li>
+                    <li><strong>✓ No se puede combinar con otros servicios o descuentos de Ceramicalma</strong></li>
+                    <li><strong>✓ Si necesitas cambiar la fecha, aplican términos de reprogramación</strong></li>
+                    <li><strong>✓ Tu inversión es final y no reembolsable</strong></li>
+                </ul>
+                <p style="color: #6B21A8; font-size: 14px; margin-top: 12px;">
+                    Queremos que disfrutes cada momento. Si tienes dudas, estamos aquí. 🎨
+                </p>
+            </div>
+
             <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
                 ¡Que disfruten su experiencia!<br/>
-                <strong>El equipo de Última Ceramic</strong>
+                <strong>El equipo de Ceramicalma</strong>
             </p>
         </div>
     `;
@@ -1159,7 +1568,7 @@ export const sendExperiencePendingReviewEmail = async (
 
             <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
                 Cualquier duda, no dudes en contactarnos.<br/>
-                <strong>El equipo de Última Ceramic</strong>
+                <strong>El equipo de Ceramicalma</strong>
             </p>
         </div>
     `;
@@ -1210,7 +1619,7 @@ export const sendExperienceConfirmedEmail = async (
 
             <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
                 ¡A crear se ha dicho!<br/>
-                <strong>El equipo de Última Ceramic</strong>
+                <strong>El equipo de Ceramicalma</strong>
             </p>
         </div>
     `;
@@ -1261,7 +1670,7 @@ export const sendExperienceRejectedEmail = async (
 
             <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
                 Esperamos verte pronto con otra experiencia.<br/>
-                <strong>El equipo de Última Ceramic</strong>
+                <strong>El equipo de Ceramicalma</strong>
             </p>
         </div>
     `;
@@ -1272,4 +1681,640 @@ export const sendExperienceRejectedEmail = async (
 
     console.info('[emailService] Experience rejected sent to', customerEmail);
     return result;
+};
+
+// ============ CUSTOM GROUP EXPERIENCE EMAIL ============
+
+export const sendCustomExperiencePreBookingEmail = async (
+    booking: {
+        userInfo: { firstName: string; email: string; phone?: string };
+        bookingCode: string;
+        experienceType: 'ceramic_only' | 'celebration';
+        technique: string;
+        date: string;
+        time: string;
+        participants: number;
+        totalPrice: number;
+        config: any;
+    },
+    bankDetails: BankDetails
+) => {
+    const { userInfo, bookingCode, experienceType, technique, date, time, participants, totalPrice, config } = booking;
+    
+    // Formatear fecha
+    const dateObj = new Date(date);
+    const formattedDate = dateObj.toLocaleDateString('es-ES', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
+
+    // Traducir técnica
+    const techniqueNames: Record<string, string> = {
+        'potters_wheel': 'Torno',
+        'hand_modeling': 'Modelado a Mano',
+        'painting': 'Pintura'
+    };
+    const techniqueName = techniqueNames[technique] || technique;
+
+    // Tipo de experiencia
+    const experienceTypeName = experienceType === 'celebration' ? '🎉 Celebración' : '🎨 Solo Cerámica';
+
+    // Detalles adicionales
+    let additionalDetails = '';
+    if (experienceType === 'celebration' && config) {
+        additionalDetails = `
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #E5E7EB;">
+                <p style="margin: 8px 0;"><strong>⏰ Duración:</strong> ${config.hours} hora(s)</p>
+                <p style="margin: 8px 0;"><strong>👥 Participantes activos:</strong> ${config.activeParticipants}</p>
+                ${config.spectators > 0 ? `<p style="margin: 8px 0;"><strong>👀 Espectadores:</strong> ${config.spectators}</p>` : ''}
+                ${config.childrenPieces && config.childrenPieces.length > 0 ? `<p style="margin: 8px 0;"><strong>👶 Piezas para niños:</strong> ${config.childrenPieces.length}</p>` : ''}
+            </div>
+        `;
+    }
+
+    const subject = `⏳ Pre-Reserva Experiencia Grupal - ${bookingCode}`;
+    
+    const html = `
+        <div style="font-family: 'Cardo', serif; max-width: 600px; margin: 0 auto; background: #FFFFFF; padding: 0;">
+            <!-- Header with brand gradient -->
+            <div style="background: linear-gradient(135deg, #828E98 0%, #6B7A86 100%); text-align: center; padding: 40px 20px; color: white;">
+                <h1 style="font-size: 32px; margin: 0 0 8px 0; font-weight: 700; letter-spacing: -0.5px;">Ceramicalma</h1>
+                <p style="font-size: 14px; margin: 0; opacity: 0.9; font-style: italic;">Experiencia Grupal Personalizada</p>
+            </div>
+
+            <!-- Main content -->
+            <div style="padding: 40px 30px;">
+                <h2 style="color: #828E98; font-size: 24px; margin: 0 0 20px 0; font-weight: 700;">⏳ ¡Tu Pre-Reserva Está Lista!</h2>
+                
+                <p style="color: #4A4540; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">Hola <strong>${userInfo.firstName}</strong>,</p>
+                
+                <p style="color: #958985; font-size: 15px; line-height: 1.7; margin: 0 0 28px 0;">
+                    Hemos recibido tu solicitud para una experiencia grupal personalizada. Para confirmar tu reserva, por favor realiza el pago dentro de las próximas <strong>2 horas</strong>.
+                </p>
+
+                <!-- Booking Details Box -->
+                <div style="background: #F4F2F1; border-left: 5px solid #828E98; padding: 24px; margin: 28px 0; border-radius: 8px;">
+                    <h3 style="color: #828E98; margin: 0 0 16px 0; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">📋 Detalles de tu Experiencia</h3>
+                    <table style="width: 100%; color: #4A4540; font-size: 14px;">
+                        <tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600; width: 40%;">Código:</td>
+                            <td style="padding: 10px 0; font-family: 'Courier New', monospace; letter-spacing: 0.5px; color: #828E98; font-weight: 700;">${bookingCode}</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600;">Tipo:</td>
+                            <td style="padding: 10px 0;">${experienceTypeName}</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600;">Técnica:</td>
+                            <td style="padding: 10px 0;">${techniqueName}</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600;">📅 Fecha:</td>
+                            <td style="padding: 10px 0;">${formattedDate}</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600;">🕐 Hora:</td>
+                            <td style="padding: 10px 0;">${time}</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600;">👥 Participantes:</td>
+                            <td style="padding: 10px 0;">${participants} persona(s)</td>
+                        </tr>
+                    </table>
+                    ${additionalDetails}
+                    <div style="margin-top: 20px; padding-top: 16px; border-top: 2px solid #D1D0C6;">
+                        <p style="margin: 0; font-size: 24px; color: #828E98; font-weight: 700; text-align: right;">
+                            $${totalPrice.toFixed(2)}
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Payment Instructions -->
+                <div style="background: linear-gradient(135deg, rgba(204, 188, 178, 0.08) 0%, transparent 100%); border: 2px solid #D1D0C6; padding: 24px; margin: 28px 0; border-radius: 8px;">
+                    <h3 style="color: #828E98; margin: 0 0 16px 0; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">💳 Instrucciones de Pago</h3>
+                    <p style="color: #4A4540; font-size: 14px; margin: 0 0 18px 0; line-height: 1.6;">
+                        Realiza tu transferencia bancaria a cualquiera de nuestras cuentas:
+                    </p>
+                    ${Array.isArray(bankDetails) ? bankDetails.map(acc => `
+                        <div style="background: white; border: 1px solid #D1D0C6; border-radius: 6px; padding: 16px; margin-bottom: 12px;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 12px;">
+                                <div>
+                                    <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Banco</p>
+                                    <p style="margin: 0; font-size: 15px; font-weight: 600; color: #4A4540;">${acc.bankName}</p>
+                                </div>
+                                <div>
+                                    <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Tipo Cuenta</p>
+                                    <p style="margin: 0; font-size: 15px; font-weight: 600; color: #4A4540;">${acc.accountType}</p>
+                                </div>
+                            </div>
+                            <div style="margin-bottom: 12px;">
+                                <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Titular</p>
+                                <p style="margin: 0; font-size: 14px; color: #4A4540;">${acc.accountHolder}</p>
+                            </div>
+                            <div style="margin-bottom: 12px;">
+                                <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Número de Cuenta</p>
+                                <p style="margin: 0; font-size: 16px; font-family: 'Courier New', monospace; font-weight: 700; color: #828E98; letter-spacing: 1px; background: #F4F2F1; padding: 8px 12px; border-radius: 4px;">${acc.accountNumber}</p>
+                            </div>
+                            <div>
+                                <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Cédula</p>
+                                <p style="margin: 0; font-size: 14px; color: #4A4540;">${acc.taxId}</p>
+                            </div>
+                        </div>
+                    `).join('') : `
+                        <div style="background: white; border: 1px solid #D1D0C6; border-radius: 6px; padding: 16px;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 12px;">
+                                <div>
+                                    <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Banco</p>
+                                    <p style="margin: 0; font-size: 15px; font-weight: 600; color: #4A4540;">${bankDetails.bankName}</p>
+                                </div>
+                                <div>
+                                    <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Tipo Cuenta</p>
+                                    <p style="margin: 0; font-size: 15px; font-weight: 600; color: #4A4540;">${bankDetails.accountType}</p>
+                                </div>
+                            </div>
+                            <div style="margin-bottom: 12px;">
+                                <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Titular</p>
+                                <p style="margin: 0; font-size: 14px; color: #4A4540;">${bankDetails.accountHolder}</p>
+                            </div>
+                            <div style="margin-bottom: 12px;">
+                                <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Número de Cuenta</p>
+                                <p style="margin: 0; font-size: 16px; font-family: 'Courier New', monospace; font-weight: 700; color: #828E98; letter-spacing: 1px; background: #F4F2F1; padding: 8px 12px; border-radius: 4px;">${bankDetails.accountNumber}</p>
+                            </div>
+                            <div>
+                                <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Cédula</p>
+                                <p style="margin: 0; font-size: 14px; color: #4A4540;">${bankDetails.taxId}</p>
+                            </div>
+                        </div>
+                    `}
+                    <div style="margin-top: 20px; padding: 16px; background: white; border: 2px solid #828E98; border-radius: 8px; text-align: center;">
+                        <p style="margin: 0 0 6px 0; font-size: 12px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Monto a Transferir</p>
+                        <p style="margin: 0; font-size: 28px; color: #828E98; font-weight: 700;">$${totalPrice.toFixed(2)}</p>
+                    </div>
+                    <p style="color: #4A4540; font-size: 13px; margin: 16px 0 0 0; line-height: 1.6;">
+                        <strong>⏰ Importante:</strong> Usa tu código de reserva <strong>${bookingCode}</strong> como referencia en la transferencia. Esta pre-reserva expira en <strong>2 horas</strong>.
+                    </p>
+                </div>
+
+                <!-- Terms & Conditions -->
+                <div style="background: #F4F2F1; border-left: 5px solid #CCBCB2; padding: 24px; margin: 28px 0; border-radius: 8px;">
+                    <h3 style="color: #4A4540; margin: 0 0 14px 0; font-size: 16px; font-weight: 700;">🎁 Términos de tu Reserva</h3>
+                    <p style="color: #4A4540; font-size: 14px; margin: 0 0 14px 0; line-height: 1.6;">
+                        Tu experiencia es especial y personalizada. El valor que pagaste es exclusivo para esta actividad en esta fecha, diseñado solo para ti y tu grupo.
+                    </p>
+                    <ul style="color: #4A4540; font-size: 14px; margin: 0; padding-left: 20px; line-height: 1.8;">
+                        <li style="margin-bottom: 6px;">✓ <strong>Válido solo para esta experiencia y fecha</strong></li>
+                        <li style="margin-bottom: 6px;">✓ <strong>No transferible a otra persona</strong></li>
+                        <li style="margin-bottom: 6px;">✓ <strong>No acumulable con otros servicios o descuentos</strong></li>
+                        <li style="margin-bottom: 6px;">✓ <strong>No reembolsable</strong></li>
+                        <li>✓ <strong>Cambios de fecha sujetos a disponibilidad y términos</strong></li>
+                    </ul>
+                </div>
+
+                <!-- Closing -->
+                <p style="color: #958985; font-size: 15px; line-height: 1.7; margin: 28px 0 0 0;">
+                    ¿Tienes preguntas? Estamos aquí para ayudarte. Contáctanos sin dudas. 🎨
+                </p>
+            </div>
+
+            <!-- Footer -->
+            <div style="background: #F4F2F1; border-top: 1px solid #D1D0C6; padding: 24px 30px; text-align: center;">
+                <p style="color: #4A4540; font-size: 14px; margin: 0 0 12px 0;">
+                    <strong>¿Preguntas? Contáctanos</strong><br/>
+                    <span style="font-size: 13px; color: #958985;">
+                        📧 cmassuh@ceramicalma.com<br/>
+                        📱 +593 98 581 3327
+                    </span>
+                </p>
+                <p style="color: #958985; font-size: 12px; margin: 14px 0 0 0; font-style: italic;">
+                    El equipo de Ceramicalma
+                </p>
+            </div>
+        </div>
+    `;
+
+    const result = await sendEmail(userInfo.email, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(userInfo.email, 'custom-experience-prebooking', 'email', status, bookingCode);
+
+    console.info('[emailService] Custom experience pre-booking email sent to', userInfo.email);
+    return result;
+};
+
+// ============================================
+// San Valentín 2026 - Emails
+// ============================================
+
+const getWorkshopName = (workshop: string): string => {
+    const names: Record<string, string> = {
+        'florero_arreglo_floral': 'Decoración de florero de cerámica + Arreglo Floral',
+        'modelado_san_valentin': 'Modelado a mano + Colores San Valentín',
+        'torno_san_valentin': 'Torno Alfarero San Valentín'
+    };
+    return names[workshop] || workshop;
+};
+
+const getWorkshopTime = (workshop: string): string => {
+    const times: Record<string, string> = {
+        'florero_arreglo_floral': '10h00 a 12h00',
+        'modelado_san_valentin': '14h00 a 16h00',
+        'torno_san_valentin': '17h00 a 19h00'
+    };
+    return times[workshop] || '';
+};
+
+/**
+ * Email de confirmación de inscripción (se envía inmediatamente al registrarse)
+ */
+export const sendValentineRegistrationEmail = async (data: {
+    id: string;
+    fullName: string;
+    email: string;
+    workshop: string;
+    participants: 1 | 2;
+}) => {
+    const { id, fullName, email, workshop, participants } = data;
+    const workshopName = getWorkshopName(workshop);
+    const workshopTime = getWorkshopTime(workshop);
+    const participantText = participants === 2 ? 'para 2 personas' : 'individual';
+
+    const subject = `💕 ¡Recibimos tu inscripción San Valentín! - ${workshopName}`;
+
+    const html = `
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+            <!-- Header con paleta de marca + San Valentín -->
+            <div style="background: linear-gradient(135deg, #828E98 0%, #958985 100%); padding: 40px 30px; text-align: center; border-bottom: 3px solid #B8474B;">
+                <h1 style="color: #fff; font-size: 28px; margin: 0 0 8px 0; font-weight: 500; letter-spacing: 0.5px;">
+                    San Valentín en Ceramicalma
+                </h1>
+                <p style="color: rgba(255,255,255,0.95); font-size: 16px; margin: 0; font-weight: 300;">
+                    Inscripción recibida 💕
+                </p>
+            </div>
+
+            <!-- Contenido -->
+            <div style="padding: 35px 30px;">
+                <p style="color: #4A4540; font-size: 17px; line-height: 1.7; margin: 0 0 24px 0;">
+                    Hola <strong>${fullName}</strong>,
+                </p>
+
+                <p style="color: #4A4540; font-size: 15px; line-height: 1.7; margin: 0 0 20px 0;">
+                    ¡Gracias por inscribirte a nuestro evento especial de San Valentín! 💕
+                </p>
+
+                <!-- Detalles de inscripción -->
+                <div style="background: linear-gradient(135deg, #FDF2F2 0%, #FCEAEA 100%); border: 1px solid #F5C6C6; border-radius: 12px; padding: 24px; margin: 20px 0;">
+                    <h3 style="color: #B8474B; font-size: 16px; margin: 0 0 16px 0; font-weight: 600;">
+                        📋 Detalles de tu inscripción
+                    </h3>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="padding: 8px 0; color: #958985; font-size: 14px; border-bottom: 1px solid #F5C6C6;">Código:</td>
+                            <td style="padding: 8px 0; color: #4A4540; font-size: 14px; font-weight: 600; border-bottom: 1px solid #F5C6C6;">${id}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; color: #958985; font-size: 14px; border-bottom: 1px solid #F5C6C6;">Taller:</td>
+                            <td style="padding: 8px 0; color: #4A4540; font-size: 14px; font-weight: 500; border-bottom: 1px solid #F5C6C6;">${workshopName}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; color: #958985; font-size: 14px; border-bottom: 1px solid #F5C6C6;">Horario:</td>
+                            <td style="padding: 8px 0; color: #4A4540; font-size: 14px; border-bottom: 1px solid #F5C6C6;">${workshopTime}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; color: #958985; font-size: 14px; border-bottom: 1px solid #F5C6C6;">Fecha:</td>
+                            <td style="padding: 8px 0; color: #B8474B; font-size: 14px; font-weight: 600; border-bottom: 1px solid #F5C6C6;">14 de febrero, 2026</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; color: #958985; font-size: 14px;">Participantes:</td>
+                            <td style="padding: 8px 0; color: #4A4540; font-size: 14px;">${participantText}</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <!-- Estado -->
+                <div style="background: #FEF3CD; border: 1px solid #FFEEBA; border-radius: 10px; padding: 18px 20px; margin: 24px 0;">
+                    <p style="color: #856404; font-size: 14px; margin: 0; line-height: 1.5;">
+                        ⏳ <strong>Estado: Pendiente de validación</strong><br/>
+                        Estamos revisando tu comprobante de pago. Te enviaremos un email cuando sea confirmado.
+                    </p>
+                </div>
+
+                <!-- Qué incluye -->
+                <div style="margin: 28px 0;">
+                    <h3 style="color: #4A4540; font-size: 15px; margin: 0 0 14px 0; font-weight: 600;">
+                        ✨ Tu experiencia incluye:
+                    </h3>
+                    <ul style="color: #4A4540; font-size: 14px; margin: 0; padding-left: 20px; line-height: 1.8;">
+                        <li style="margin-bottom: 6px;">Clase guiada y acompañamiento de creación</li>
+                        <li style="margin-bottom: 6px;">Materiales y herramientas</li>
+                        <li style="margin-bottom: 6px;">Horneadas cerámicas de alta temperatura</li>
+                        <li style="margin-bottom: 6px;">Pieza lista para su uso (apta para alimentos, microondas y lavavajillas)</li>
+                        <li>Entrega en aproximadamente 2 semanas</li>
+                    </ul>
+                </div>
+
+                <p style="color: #B8474B; font-size: 15px; font-weight: 500; text-align: center; margin: 24px 0;">
+                    💕 ¡Tendremos sorpresas y sorteos de premios increíbles! 💕
+                </p>
+
+                <!-- Términos y Condiciones -->
+                <div style="border-top: 1px solid #F5C6C6; margin: 28px 0 0 0; padding-top: 24px;">
+                    <h3 style="color: #4A4540; font-size: 14px; margin: 0 0 12px 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                        📜 Términos y Condiciones
+                    </h3>
+                    <ul style="color: #958985; font-size: 12px; margin: 0; padding-left: 20px; line-height: 1.8;">
+                        <li style="margin-bottom: 6px;"><strong style="color: #4A4540;">No reembolsable:</strong> No se realizan devoluciones de dinero bajo ninguna circunstancia.</li>
+                        <li style="margin-bottom: 6px;"><strong style="color: #4A4540;">Fecha específica:</strong> Este evento es válido únicamente para el 14 de febrero de 2026. No se puede reagendar.</li>
+                        <li style="margin-bottom: 6px;"><strong style="color: #4A4540;">No transferible:</strong> La inscripción es personal y no puede transferirse a otra persona.</li>
+                        <li style="margin-bottom: 6px;"><strong style="color: #4A4540;">No acumulable:</strong> No se puede combinar con otras ofertas, descuentos o promociones.</li>
+                        <li><strong style="color: #4A4540;">Puntualidad:</strong> Se requiere llegar puntual al horario del taller. No se garantiza acceso con más de 15 minutos de retraso.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div style="background: linear-gradient(135deg, #FDF2F2 0%, #FCEAEA 100%); border-top: 1px solid #F5C6C6; padding: 24px 30px; text-align: center;">
+                <p style="color: #4A4540; font-size: 14px; margin: 0 0 12px 0;">
+                    <strong>¿Preguntas? Contáctanos</strong><br/>
+                    <span style="font-size: 13px; color: #958985;">
+                        📧 cmassuh@ceramicalma.com<br/>
+                        📱 +593 98 581 3327
+                    </span>
+                </p>
+                <p style="color: #B8474B; font-size: 12px; margin: 14px 0 0 0; font-style: italic;">
+                    Con amor, el equipo de Ceramicalma 💕
+                </p>
+            </div>
+        </div>
+    `;
+
+    const result = await sendEmail(email, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(email, 'valentine-registration', 'email', status, id);
+
+    console.info('[emailService] Valentine registration email sent to', email);
+    return result;
+};
+
+/**
+ * Email de confirmación de pago (se envía cuando admin valida el pago)
+ */
+export const sendValentinePaymentConfirmedEmail = async (data: {
+    id: string;
+    fullName: string;
+    email: string;
+    workshop: string;
+    participants: 1 | 2;
+}) => {
+    const { id, fullName, email, workshop, participants } = data;
+    const workshopName = getWorkshopName(workshop);
+    const workshopTime = getWorkshopTime(workshop);
+    const participantText = participants === 2 ? 'para 2 personas' : 'individual';
+
+    const subject = `✅ Pago Confirmado - Te esperamos el 14 de Febrero - ${workshopName}`;
+
+    const html = `
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+            <!-- Header con paleta de marca + San Valentín -->
+            <div style="background: linear-gradient(135deg, #4A4540 0%, #828E98 100%); padding: 40px 30px; text-align: center; border-bottom: 3px solid #B8474B;">
+                <h1 style="color: #fff; font-size: 28px; margin: 0 0 8px 0; font-weight: 500; letter-spacing: 0.5px;">
+                    Pago Confirmado
+                </h1>
+                <p style="color: rgba(255,255,255,0.95); font-size: 16px; margin: 0; font-weight: 300;">
+                    Tu lugar está reservado 💕
+                </p>
+            </div>
+
+            <!-- Contenido -->
+            <div style="padding: 35px 30px;">
+                <p style="color: #4A4540; font-size: 17px; line-height: 1.7; margin: 0 0 24px 0;">
+                    Hola <strong>${fullName}</strong>,
+                </p>
+
+                <p style="color: #4A4540; font-size: 15px; line-height: 1.7; margin: 0 0 20px 0;">
+                    ¡Excelentes noticias! Hemos verificado tu pago y tu inscripción está <strong style="color: #28a745;">CONFIRMADA</strong>. 🎉
+                </p>
+
+                <!-- Detalles confirmados -->
+                <div style="background: linear-gradient(135deg, #D4EDDA 0%, #C3E6CB 100%); border: 1px solid #A8D5B8; border-radius: 12px; padding: 24px; margin: 20px 0;">
+                    <h3 style="color: #155724; font-size: 16px; margin: 0 0 16px 0; font-weight: 600;">
+                        ✓ Inscripción Confirmada
+                    </h3>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="padding: 8px 0; color: #155724; font-size: 14px; border-bottom: 1px solid #A8D5B8;">Código:</td>
+                            <td style="padding: 8px 0; color: #155724; font-size: 14px; font-weight: 600; border-bottom: 1px solid #A8D5B8;">${id}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; color: #155724; font-size: 14px; border-bottom: 1px solid #A8D5B8;">Taller:</td>
+                            <td style="padding: 8px 0; color: #155724; font-size: 14px; font-weight: 500; border-bottom: 1px solid #A8D5B8;">${workshopName}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; color: #155724; font-size: 14px; border-bottom: 1px solid #A8D5B8;">Horario:</td>
+                            <td style="padding: 8px 0; color: #155724; font-size: 14px; border-bottom: 1px solid #A8D5B8;">${workshopTime}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; color: #155724; font-size: 14px; border-bottom: 1px solid #A8D5B8;">Fecha:</td>
+                            <td style="padding: 8px 0; color: #B8474B; font-size: 15px; font-weight: 700; border-bottom: 1px solid #A8D5B8;">Sábado 14 de febrero, 2026</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; color: #155724; font-size: 14px;">Participantes:</td>
+                            <td style="padding: 8px 0; color: #155724; font-size: 14px;">${participantText}</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <!-- Recordatorio -->
+                <div style="background: #FDF2F2; border: 1px solid #F5C6C6; border-radius: 10px; padding: 18px 20px; margin: 24px 0;">
+                    <h4 style="color: #B8474B; font-size: 14px; margin: 0 0 10px 0; font-weight: 600;">
+                        📍 Recuerda:
+                    </h4>
+                    <ul style="color: #4A4540; font-size: 14px; margin: 0; padding-left: 20px; line-height: 1.7;">
+                        <li style="margin-bottom: 4px;">Llega 10 minutos antes de tu horario</li>
+                        <li style="margin-bottom: 4px;">Usa ropa cómoda que pueda mancharse</li>
+                        <li>Trae toda tu energía creativa ✨</li>
+                    </ul>
+                </div>
+
+                <p style="color: #B8474B; font-size: 16px; font-weight: 600; text-align: center; margin: 28px 0;">
+                    💕 ¡Nos vemos el 14 de febrero! 💕
+                </p>
+
+                <!-- Términos y Condiciones -->
+                <div style="border-top: 1px solid #F5C6C6; margin: 28px 0 0 0; padding-top: 24px;">
+                    <h3 style="color: #4A4540; font-size: 14px; margin: 0 0 12px 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                        📜 Términos y Condiciones
+                    </h3>
+                    <ul style="color: #958985; font-size: 12px; margin: 0; padding-left: 20px; line-height: 1.8;">
+                        <li style="margin-bottom: 6px;"><strong style="color: #4A4540;">No reembolsable:</strong> No se realizan devoluciones de dinero bajo ninguna circunstancia.</li>
+                        <li style="margin-bottom: 6px;"><strong style="color: #4A4540;">Fecha específica:</strong> Este evento es válido únicamente para el 14 de febrero de 2026. No se puede reagendar.</li>
+                        <li style="margin-bottom: 6px;"><strong style="color: #4A4540;">No transferible:</strong> La inscripción es personal y no puede transferirse a otra persona.</li>
+                        <li style="margin-bottom: 6px;"><strong style="color: #4A4540;">No acumulable:</strong> No se puede combinar con otras ofertas, descuentos o promociones.</li>
+                        <li><strong style="color: #4A4540;">Puntualidad:</strong> Se requiere llegar puntual al horario del taller. No se garantiza acceso con más de 15 minutos de retraso.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div style="background: linear-gradient(135deg, #FDF2F2 0%, #FCEAEA 100%); border-top: 1px solid #F5C6C6; padding: 24px 30px; text-align: center;">
+                <p style="color: #4A4540; font-size: 14px; margin: 0 0 12px 0;">
+                    <strong>¿Preguntas? Contáctanos</strong><br/>
+                    <span style="font-size: 13px; color: #958985;">
+                        📧 cmassuh@ceramicalma.com<br/>
+                        📱 +593 98 581 3327
+                    </span>
+                </p>
+                <p style="color: #B8474B; font-size: 12px; margin: 14px 0 0 0; font-style: italic;">
+                    Con amor, el equipo de Ceramicalma 💕
+                </p>
+            </div>
+        </div>
+    `;
+
+    const result = await sendEmail(email, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(email, 'valentine-payment-confirmed', 'email', status, id);
+
+    console.info('[emailService] Valentine payment confirmed email sent to', email);
+    return result;
+};
+
+// ============================================================
+// EMAIL ALIASES - Enviar desde diferentes direcciones
+// ============================================================
+
+/**
+ * Retorna el template HTML embebido para emails de alianza
+ * Sin dependencia de archivos - funciona en Vercel
+ */
+export const getAlianzaEmailTemplate = (): string => {
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alianza CERAMICALMA</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Syne:wght@700&display=swap" rel="stylesheet">
+    <style>
+        body { margin: 0; padding: 0; font-family: 'Poppins', sans-serif; background: #f9f7f3; }
+        table { border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+        p { font-size: 16px; line-height: 1.5; }
+    </style>
+</head>
+<body>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f9f7f3">
+        <tr>
+            <td align="center" style="padding: 0;">
+                <table width="480" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="border-collapse: collapse; width: 480px; margin: 0 auto;">
+                    <tr>
+                        <td width="100%" style="background: linear-gradient(135deg, #c99a6e 0%, #a0674d 100%); padding: 32px 20px; text-align: center;">
+                            <p style="background: rgba(255, 255, 255, 0.25); color: white; padding: 8px 16px; border-radius: 20px; font-size: 14px; text-transform: uppercase; font-weight: 700; margin: 0 0 14px 0; display: inline-block;">Invitación Exclusiva</p>
+                            <h1 style="font-family: 'Syne', sans-serif; font-size: 32px; font-weight: 700; color: white; margin: 0 0 8px 0; line-height: 1.2;">Alianza CERAMICALMA</h1>
+                            <p style="font-size: 16px; color: rgba(255, 255, 255, 0.95); margin: 0; font-weight: 300;">Una oportunidad para transformar tu estrategia corporativa</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td width="100%" style="padding: 32px 20px; color: #6b4423;">
+                            <p style="font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                                <strong>Estimado/a,</strong><br>
+                                Creemos que las mejores alianzas nacen cuando compartimos valores: bienestar, autenticidad y conexión genuina.
+                            </p>
+                            <p style="font-size: 16px; line-height: 1.6; color: #6b4423; margin: 0 0 28px 0;">
+                                Por eso hoy te invitamos a conocer <strong>Alianza CERAMICALMA</strong>: acceso exclusivo a un espacio premium donde cerámica, café y creatividad se transforman en experiencias que impactan realmente a tu equipo.
+                            </p>
+                            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: linear-gradient(135deg, rgba(201, 154, 110, 0.08) 0%, rgba(160, 103, 77, 0.04) 100%); border-left: 4px solid #a0674d; margin: 28px 0;">
+                                <tr>
+                                    <td style="padding: 24px 20px; text-align: center;">
+                                        <p style="font-size: 12px; color: #8b6952; text-transform: uppercase; font-weight: 700; margin: 0 0 12px 0;">Valor Invertido vs. Retorno</p>
+                                        <p style="font-family: 'Syne', sans-serif; font-size: 40px; font-weight: 700; color: #6b4423; margin: 16px 0;">$3,800</p>
+                                        <p style="font-size: 14px; color: #8b6952; margin: 0;">Diferencia anual en beneficios</p>
+                                    </td>
+                                </tr>
+                            </table>
+                            <p style="font-size: 16px; font-weight: 700; color: #6b4423; margin: 28px 0 16px 0;">Lo que incluye:</p>
+                            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                                <tr>
+                                    <td style="padding: 0 0 20px 0; border-bottom: 1px solid rgba(160, 103, 77, 0.1);">
+                                        <p style="font-weight: 700; color: #a0674d; font-size: 14px; margin: 0 0 8px 0;">12 Días Exclusivos</p>
+                                        <p style="font-size: 14px; color: #6b4423; margin: 0;">1 día mensual con estudio completamente para ti</p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 20px 0; border-bottom: 1px solid rgba(160, 103, 77, 0.1);">
+                                        <p style="font-weight: 700; color: #a0674d; font-size: 14px; margin: 0 0 8px 0;">20% Descuento Permanente</p>
+                                        <p style="font-size: 14px; color: #6b4423; margin: 0;">En clases y eventos para tu equipo</p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 20px 0;">
+                                        <p style="font-weight: 700; color: #a0674d; font-size: 14px; margin: 0 0 8px 0;">Experiencias Branded + Amplificación Digital</p>
+                                        <p style="font-size: 14px; color: #6b4423; margin: 0;">Piezas personalizadas y visibilidad en redes</p>
+                                    </td>
+                                </tr>
+                            </table>
+                            <p style="font-size: 16px; font-weight: 700; color: #6b4423; margin: 28px 0 8px 0;">Inversión Anual</p>
+                            <p style="font-family: 'Syne', sans-serif; font-size: 32px; font-weight: 700; color: #6b4423; margin: 0 0 6px 0;">USD 3,500 + IVA</p>
+                            <p style="font-size: 13px; color: #8b6952; margin: 0 0 28px 0;">Plan anual renovable | 12 meses acceso</p>
+                            <div style="background: rgba(160, 103, 77, 0.06); padding: 28px 20px; text-align: center; border-radius: 6px; margin: 28px 0;">
+                                <p style="font-size: 16px; color: #6b4423; margin: 0 0 20px 0;">¿Te interesa explorar cómo esta alianza transforma tu estrategia?<br><strong>Respondemos dentro de 24 horas.</strong></p>
+                                <p style="margin: 0;"><a href="https://ceramicalma.com/alianzas" style="background: linear-gradient(135deg, #c99a6e 0%, #a0674d 100%); color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; font-weight: 700; display: inline-block; margin-bottom: 12px;">Ver Propuesta Completa</a></p>
+                                <p style="margin: 0;"><a href="https://wa.me/593985813327" style="background: rgba(160, 103, 77, 0.12); color: #a0674d; padding: 14px 40px; text-decoration: none; border: 2px solid rgba(160, 103, 77, 0.25); border-radius: 6px; font-weight: 700; display: inline-block;">Agendar Llamada</a></p>
+                            </div>
+                            <p style="font-size: 14px; color: #8b6952; text-align: center; margin: 20px 0 0 0;">Sin compromisos. Solo conversación genuina.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td width="480" style="background: linear-gradient(135deg, #faf8f5 0%, #f5f2ed 100%); padding: 20px 20px; text-align: center; border-top: 1px solid rgba(160, 103, 77, 0.1);">
+                            <p style="font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700; color: #6b4423; margin: 0 0 6px 0;">CERAMICALMA</p>
+                            <p style="font-size: 12px; color: #8b6952; margin: 0 0 2px 0;">Sol Plaza • Av. Samborondón Km 2.5</p>
+                            <p style="font-size: 12px; color: #8b6952; margin: 0 0 10px 0;">Samborondón, Guayaquil</p>
+                            <p style="font-size: 12px; color: #a0674d; margin: 0;"><a href="mailto:ceramicalma.ec@gmail.com" style="color: #a0674d; text-decoration: none; font-weight: 600;">ceramicalma.ec@gmail.com</a> | <a href="https://wa.me/593985813327" style="color: #a0674d; text-decoration: none; font-weight: 600;">+593 98 581 3327</a></p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>`;
+};
+
+/**
+ * Envía un email usando el correo de alianzas
+ * @param to Destinatario
+ * @param subject Asunto
+ * @param html Contenido HTML
+ * @param attachments Adjuntos opcionales
+ */
+export const sendEmailAsAlianza = async (
+    to: string,
+    subject: string,
+    html: string,
+    attachments?: { filename: string; data: string; type?: string }[]
+) => {
+    return sendEmail(to, subject, html, attachments, alianzaEmail);
+};
+
+/**
+ * Envía un email personalizado desde cualquier dirección registrada
+ * @param to Destinatario
+ * @param subject Asunto
+ * @param html Contenido HTML
+ * @param fromEmail Dirección remitente (usa DEFAULT o ALIANZA)
+ * @param attachments Adjuntos opcionales
+ */
+export const sendEmailFromCustomAddress = async (
+    to: string,
+    subject: string,
+    html: string,
+    fromEmail: 'DEFAULT' | 'ALIANZA' | string,
+    attachments?: { filename: string; data: string; type?: string }[]
+) => {
+    const finalFromEmail = fromEmail === 'DEFAULT' ? AVAILABLE_FROM_EMAILS.DEFAULT : 
+                          fromEmail === 'ALIANZA' ? AVAILABLE_FROM_EMAILS.ALIANZA :
+                          fromEmail;
+    return sendEmail(to, subject, html, attachments, finalFromEmail);
 };

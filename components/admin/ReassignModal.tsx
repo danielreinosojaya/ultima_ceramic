@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import type { Instructor } from '../../types';
-import * as dataService from '../../services/dataService';
-// import { useLanguage } from '../../context/LanguageContext';
+import { useAdminData } from '../../context/AdminDataContext';
 
 interface ReassignModalProps {
   isOpen: boolean;
@@ -12,24 +11,17 @@ interface ReassignModalProps {
 }
 
 export const ReassignModal: React.FC<ReassignModalProps> = ({ isOpen, onClose, onConfirm, instructorToDelete }) => {
-  // const { t } = useLanguage();
-  const [instructors, setInstructors] = useState<Instructor[]>([]);
+  const adminData = useAdminData();
   const [replacementId, setReplacementId] = useState<number | null>(null);
 
+  // ✅ Usar instructors del context - NO fetch directo
+  const availableInstructors = adminData.instructors.filter(i => i.id !== instructorToDelete.id);
+
   useEffect(() => {
-    const fetchInstructors = async () => {
-      if (isOpen) {
-        // FIX: Await the asynchronous call to get instructors
-        const allInstructors = await dataService.getInstructors();
-        const availableReplacements = allInstructors.filter(i => i.id !== instructorToDelete.id);
-        setInstructors(availableReplacements);
-        if (availableReplacements.length > 0) {
-          setReplacementId(availableReplacements[0].id);
-        }
-      }
-    };
-    fetchInstructors();
-  }, [isOpen, instructorToDelete]);
+    if (isOpen && availableInstructors.length > 0 && !replacementId) {
+      setReplacementId(availableInstructors[0].id);
+    }
+  }, [isOpen, availableInstructors, replacementId]);
 
   const handleConfirm = () => {
     if (replacementId) {
@@ -45,7 +37,7 @@ export const ReassignModal: React.FC<ReassignModalProps> = ({ isOpen, onClose, o
         <h3 className="text-lg font-bold text-red-600 mb-2">Reasignar Instructor</h3>
         <p className="text-brand-secondary mb-4">El instructor {instructorToDelete.name} tiene clases asignadas. Selecciona un instructor de reemplazo:</p>
 
-        {instructors.length > 0 ? (
+        {availableInstructors.length > 0 ? (
           <div className="space-y-4">
             <div>
               <label htmlFor="replacement-instructor" className="block text-sm font-bold text-brand-secondary mb-1">
@@ -57,7 +49,7 @@ export const ReassignModal: React.FC<ReassignModalProps> = ({ isOpen, onClose, o
                 onChange={(e) => setReplacementId(Number(e.target.value))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary"
               >
-                {instructors.map(inst => (
+                {availableInstructors.map(inst => (
                   <option key={inst.id} value={inst.id}>{inst.name}</option>
                 ))}
               </select>

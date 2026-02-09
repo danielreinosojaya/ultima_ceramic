@@ -103,7 +103,8 @@ export const RescheduleModal: React.FC<RescheduleModalProps> = ({ isOpen, onClos
                 slotInfo.bookingId,
                 slotInfo.slot,
                 newSlot,
-                adminApproved // Pasar flag si fue aprobado por admin
+                true, // forceAdminReschedule: Admin siempre tiene control total
+                'admin_user'
             );
 
             if (result.success) {

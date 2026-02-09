@@ -1,10 +1,96 @@
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import type { Booking, FooterInfo, Product, Instructor, OpenStudioSubscription } from '../types';
+import type { Booking, FooterInfo, Product, Instructor, OpenStudioSubscription, GroupTechnique } from '../types';
 import * as dataService from './dataService';
 import { DAY_NAMES } from '@/constants';
 
 // The `import 'jspdf-autotable';` statement is sufficient to load the necessary type augmentations.
+
+// Helper para obtener nombre de técnica desde metadata
+const getTechniqueName = (technique: GroupTechnique): string => {
+  const names: Record<GroupTechnique, string> = {
+    'potters_wheel': 'Torno Alfarero',
+    'hand_modeling': 'Modelado a Mano',
+    'painting': 'Pintura de piezas'
+  };
+  return names[technique] || technique;
+};
+
+// Helper para traducir productType a nombre legible
+const getProductTypeName = (productType?: string): string => {
+  const typeNames: Record<string, string> = {
+    'SINGLE_CLASS': 'Clase Suelta',
+    'CLASS_PACKAGE': 'Paquete de Clases',
+    'INTRODUCTORY_CLASS': 'Clase Introductoria',
+    'GROUP_CLASS': 'Clase Grupal',
+    'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
+    'OPEN_STUDIO': 'Estudio Abierto'
+  };
+  return typeNames[productType || ''] || 'Clase';
+};
+
+// Helper para obtener el nombre del producto/técnica de un booking
+const getBookingDisplayName = (booking: Booking): string => {
+  // 1. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
+  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
+    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
+    const uniqueTechniques = [...new Set(techniques)];
+    
+    if (uniqueTechniques.length === 1) {
+      return getTechniqueName(uniqueTechniques[0]);
+    } else {
+      return `Clase Grupal (mixto)`;
+    }
+  }
+  
+  // 2. Prioridad: product.name (es la fuente más confiable)
+  const productName = booking.product?.name;
+  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
+    return productName;
+  }
+  
+  // 3. Fallback: technique directamente (solo si product.name no existe)
+  if (booking.technique) {
+    return getTechniqueName(booking.technique as GroupTechnique);
+  }
+  
+  // 4. Último fallback: productType
+  return getProductTypeName(booking.productType);
+};
+
+// Helper para obtener el nombre del producto/técnica de un slot
+const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): string => {
+  // 1. Si hay bookings con groupClassMetadata, usar la primera técnica encontrada
+  for (const booking of slot.bookings) {
+    if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
+      const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
+      const uniqueTechniques = [...new Set(techniques)];
+      
+      if (uniqueTechniques.length === 1) {
+        return getTechniqueName(uniqueTechniques[0]);
+      } else {
+        return `Clase Grupal (mixto)`;
+      }
+    }
+  }
+  
+  // 2. Prioridad: product.name (fuente más confiable)
+  const productName = slot.product?.name;
+  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown') {
+    return productName;
+  }
+  
+  // 3. Fallback: technique del primer booking (si product.name no existe)
+  for (const booking of slot.bookings) {
+    if (booking.technique) {
+      return getTechniqueName(booking.technique as GroupTechnique);
+    }
+  }
+  
+  // 4. Último fallback: productType
+  const firstBooking = slot.bookings[0];
+  return firstBooking ? getProductTypeName(firstBooking.productType) : 'Clase';
+};
 
 interface PdfTranslations {
   title: string;
@@ -374,7 +460,7 @@ export const generateScheduleReportPDF = (
                                             '', // Empty first column for grouping
                                             `${b.userInfo.firstName} ${b.userInfo.lastName}`,
                                             typeof b.participants === 'number' ? b.participants : 1,
-                                            b.product?.name || 'N/A',
+                                            getBookingDisplayName(b),
                                             b.isPaid ? translations.paid : translations.unpaid
                                     ]),
                   theme: 'grid',
@@ -454,7 +540,7 @@ export const generateWeeklySchedulePDF = (
             const dateStr = date.toISOString().split('T')[0];
             const slots = schedule[dateStr] || [];
             const cellText = slots.map(slot => 
-                `${slot.time}\n${slot.product.name.substring(0, 20)}\n(${slot.bookings.length}/${slot.capacity})`
+                `${slot.time}\n${getSlotDisplayName(slot).substring(0, 20)}\n(${slot.bookings.length}/${slot.capacity})`
             ).join('\n\n');
             row.push(cellText);
         });

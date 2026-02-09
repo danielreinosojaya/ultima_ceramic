@@ -3,7 +3,13 @@
   "devCommand": "vite --port $PORT",
   "functions": {
     "api/**/*.ts": {
-      "maxDuration": 60
+      "maxDuration": 30
     }
-  }
+  },
+  "rewrites": [
+    { "source": "/sanvalentin", "destination": "/" },
+    { "source": "/cuadre", "destination": "/" },
+    { "source": "/alianzas", "destination": "/api/alianzas" },
+    { "source": "/api/:path*", "destination": "/api/:path*" }
+  ]
 }

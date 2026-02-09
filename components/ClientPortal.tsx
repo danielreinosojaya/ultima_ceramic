@@ -36,7 +36,7 @@ export const ClientPortal: React.FC<ClientPortalProps> = ({
             {/* Portal Button */}
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-brand-accent text-white hover:opacity-90 transition-all"
+                className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-brand-accent text-white hover:opacity-90 transition-all text-sm min-h-10"
                 title="Abrir portal de cliente"
                 aria-label="Portal de cliente"
             >

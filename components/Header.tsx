@@ -18,7 +18,7 @@ export const Header: React.FC<HeaderProps> = ({ onGiftcardClick, onMyClassesClic
 
   return (
     <header className="bg-brand-surface/80 backdrop-blur-sm sticky top-0 z-40 border-b border-brand-border/80">
-      <div className="w-full px-3 sm:px-4 md:px-6 py-2 sm:py-3 md:py-4 flex items-center justify-between gap-2 sm:gap-3 md:gap-4">
+      <div className="w-full px-4 sm:px-6 md:px-8 py-3 sm:py-4 md:py-5 flex items-center justify-between gap-2 sm:gap-3 md:gap-4">
         
         {/* Logo - responsive sizing */}
         <div className="w-12 sm:w-16 md:w-20 flex-shrink-0">

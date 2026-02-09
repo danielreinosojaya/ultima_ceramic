@@ -15,41 +15,64 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          // Core React libs
-          vendor: ['react', 'react-dom'],
+        manualChunks(id) {
+          // Core React - siempre cargado primero
+          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) {
+            return 'vendor-react';
+          }
           
-          // Admin components (lazy loaded)
-          admin: [
-            './components/admin/AdminConsole.tsx',
-            './components/admin/ProductManager.tsx',
-            './components/admin/CalendarOverview.tsx',
-            './components/admin/CrmDashboard.tsx',
-            './components/admin/InquiryManager.tsx',
-            './components/admin/InvoiceManager.tsx'
-          ],
+          // Chart libraries - solo para admin dashboard
+          if (id.includes('node_modules/recharts') || 
+              id.includes('node_modules/chart.js') ||
+              id.includes('node_modules/d3')) {
+            return 'vendor-charts';
+          }
           
-          // PDF generation (only loaded when needed)
-          pdf: ['html2canvas', 'dompurify'],
+          // PDF generation - solo cuando genera PDFs
+          if (id.includes('node_modules/html2canvas') || 
+              id.includes('node_modules/jspdf') ||
+              id.includes('node_modules/pdfmake') ||
+              id.includes('node_modules/pdfkit')) {
+            return 'vendor-pdf';
+          }
           
-          // Data services and utilities
-          utils: ['./services/dataService.ts', './utils/formatters.ts'],
+          // Date utilities
+          if (id.includes('node_modules/date-fns') ||
+              id.includes('node_modules/dayjs') ||
+              id.includes('node_modules/moment')) {
+            return 'vendor-date';
+          }
           
-          // Chart libraries (for admin dashboard)
-          charts: ['chart.js']
+          // Icons - Heroicons y otros
+          if (id.includes('node_modules/@heroicons')) {
+            return 'vendor-icons';
+          }
+          
+          // Admin components - lazy loaded
+          if (id.includes('/components/admin/')) {
+            return 'admin';
+          }
+          
+          // GiftCard components
+          if (id.includes('/components/giftcard/')) {
+            return 'giftcard';
+          }
+          
+          // Other node_modules go to vendor
+          if (id.includes('node_modules')) {
+            return 'vendor-other';
+          }
         }
       }
     },
-    chunkSizeWarningLimit: 400, // Reduce warning limit to encourage smaller chunks
-    
-    // Enable CSS code splitting
+    chunkSizeWarningLimit: 500,
     cssCodeSplit: true
   },
   
   // Optimize dependencies
   optimizeDeps: {
     include: ['react', 'react-dom'],
-    exclude: ['html2canvas'] // Exclude heavy libs from pre-bundling
+    exclude: ['html2canvas', 'jspdf'] // Exclude heavy libs from pre-bundling
   },
   
   // Proxy para API durante desarrollo

@@ -45,57 +45,54 @@ export const CouplesExperienceModal: React.FC<CouplesExperienceModalProps> = ({ 
       technique: 'potters_wheel'
     }
   });
-  const [instructors, setInstructors] = useState<Instructor[]>([]);
+  const adminData = useAdminData();
+  const instructors = adminData.instructors; // ✅ Usar del context
   const [newRule, setNewRule] = useState({ dayOfWeek: 1, time: '', instructorId: 0, capacity: 4, technique: 'potters_wheel' as 'potters_wheel' | 'molding' });
 
+  // ✅ Set default instructor cuando estén disponibles
   useEffect(() => {
-    const initialize = async () => {
-      const currentInstructors = await dataService.getInstructors();
-      setInstructors(currentInstructors);
-      if (currentInstructors.length > 0) {
-          setNewRule(s => ({...s, instructorId: currentInstructors[0].id}));
-      }
-
-      if (experienceToEdit) {
-        setFormData({
-          name: experienceToEdit.name,
-          price: experienceToEdit.price,
-          description: experienceToEdit.description,
-          imageUrl: experienceToEdit.imageUrl || '',
-          schedulingRules: experienceToEdit.schedulingRules || [],
-          overrides: experienceToEdit.overrides || [],
-          details: experienceToEdit.details || {
-            duration: '2 horas',
-            durationHours: 2,
-            activities: [],
-            generalRecommendations: 'Llega 15 minutos antes',
-            materials: 'Incluidos',
-            technique: 'potters_wheel'
-          }
-        });
-      } else {
-        setFormData({
-          name: 'Experiencia en Pareja', 
-          price: 190, 
-          description: '', 
-          imageUrl: '', 
-          schedulingRules: [], 
-          overrides: [],
-          details: {
-            duration: '2 horas',
-            durationHours: 2,
-            activities: [],
-            generalRecommendations: 'Llega 15 minutos antes',
-            materials: 'Incluidos',
-            technique: 'potters_wheel'
-          }
-        });
-      }
-    };
-    if (isOpen) {
-      initialize();
+    if (instructors.length > 0 && newRule.instructorId === 0) {
+      setNewRule(s => ({...s, instructorId: instructors[0].id}));
     }
-  }, [experienceToEdit, isOpen]);
+  }, [instructors, newRule.instructorId]);
+
+  useEffect(() => {
+    if (experienceToEdit) {
+      setFormData({
+        name: experienceToEdit.name,
+        price: experienceToEdit.price,
+        description: experienceToEdit.description,
+        imageUrl: experienceToEdit.imageUrl || '',
+        schedulingRules: experienceToEdit.schedulingRules || [],
+        overrides: experienceToEdit.overrides || [],
+        details: experienceToEdit.details || {
+          duration: '2 horas',
+          durationHours: 2,
+          activities: [],
+          generalRecommendations: 'Llega 15 minutos antes',
+          materials: 'Incluidos',
+          technique: 'potters_wheel'
+        }
+      });
+    } else {
+      setFormData({
+        name: 'Experiencia en Pareja', 
+        price: 190, 
+        description: '', 
+        imageUrl: '', 
+        schedulingRules: [], 
+        overrides: [],
+        details: {
+          duration: '2 horas',
+          durationHours: 2,
+          activities: [],
+          generalRecommendations: 'Llega 15 minutos antes',
+          materials: 'Incluidos',
+          technique: 'potters_wheel'
+        }
+      });
+    }
+  }, [experienceToEdit, instructors]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;

@@ -293,6 +293,380 @@ const generateBookingCode = (): string => {
     return `${prefix}-${timestamp}${randomPart}`;
 };
 
+// ============ FUNCIONES HELPER COMPARTIDAS PARA DISPONIBILIDAD ============
+// Funciones reutilizables para getAvailableSlots, checkSlotAvailability y createCustomExperienceBooking
+const parseSlotAvailabilitySettings = async () => {
+    const settingsResult = await sql`SELECT * FROM settings WHERE key IN ('availability', 'scheduleOverrides', 'classCapacity')`;
+    const availability: any = settingsResult.rows.find(s => s.key === 'availability')?.value || 
+        { Sunday: [], Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [] };
+    const scheduleOverrides: any = settingsResult.rows.find(s => s.key === 'scheduleOverrides')?.value || {};
+    const classCapacity: any = settingsResult.rows.find(s => s.key === 'classCapacity')?.value || 
+        { potters_wheel: 8, molding: 22, introductory_class: 8 };
+    return { availability, scheduleOverrides, classCapacity };
+};
+
+const slotTechniqueKey = (tech: string) => {
+    if (tech === 'hand_modeling' || tech === 'painting' || tech === 'molding') return 'molding';
+    if (tech === 'potters_wheel') return 'potters_wheel';
+    return tech;
+};
+
+const getMaxCapacityMap = (classCapacity: any): Record<string, number> => ({
+    'potters_wheel': classCapacity.potters_wheel || 8,
+    'hand_modeling': classCapacity.molding || 22,
+    'painting': classCapacity.molding || 22,
+    'molding': classCapacity.molding || 22
+});
+
+const getMaxCapacityForTechnique = (tech: string, maxCapacityMap: Record<string, number>) => {
+    const key = slotTechniqueKey(tech);
+    const cap = maxCapacityMap[tech] ?? maxCapacityMap[key];
+    return Number.isFinite(cap) ? (cap as number) : 22;
+};
+
+const resolveCapacity = (dateStr: string, tech: string, maxCapacityMap: Record<string, number>, scheduleOverrides: any) => {
+    const override = scheduleOverrides[dateStr];
+    const overrideCap = override?.capacity;
+    if (typeof overrideCap === 'number' && overrideCap > 0) return overrideCap;
+    return getMaxCapacityForTechnique(tech, maxCapacityMap);
+};
+
+const normalizeTime = (t: string): string => {
+    if (!t) return '';
+    if (/^\d{2}:\d{2}$/.test(t)) return t;
+    const match = t.match(/(\d{1,2}):(\d{2})/);
+    if (match) {
+        return `${match[1].padStart(2, '0')}:${match[2]}`;
+    }
+    return t;
+};
+
+const timeToMinutes = (timeStr: string): number => {
+    const [hours, mins] = timeStr.split(':').map(Number);
+    return hours * 60 + mins;
+};
+
+const hasTimeOverlap = (start1: number, end1: number, start2: number, end2: number): boolean => {
+    return start1 < end2 && start2 < end1;
+};
+
+const normalizeDateValue = (value: any): string => {
+    if (!value) return '';
+    if (typeof value === 'string') return value.split('T')[0];
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().split('T')[0];
+    return String(value).split('T')[0];
+};
+
+const loadCourseSessionsByDate = async (startDateStr: string, endDateStr: string) => {
+    const { rows } = await sql`
+        SELECT cs.scheduled_date, cs.start_time, cs.end_time
+        FROM course_sessions cs
+        JOIN course_schedules sched ON sched.id = cs.course_schedule_id
+        WHERE cs.status != 'cancelled'
+        AND sched.is_active = true
+        AND cs.scheduled_date BETWEEN ${startDateStr} AND ${endDateStr}
+    `;
+
+    const sessionsByDate: Record<string, { startMinutes: number; endMinutes: number }[]> = {};
+
+    rows.forEach(row => {
+        const dateStr = normalizeDateValue(row.scheduled_date);
+        const startMinutes = timeToMinutes(normalizeTime(String(row.start_time)));
+        const endMinutes = timeToMinutes(normalizeTime(String(row.end_time)));
+
+        if (!dateStr || !Number.isFinite(startMinutes) || !Number.isFinite(endMinutes)) return;
+
+        if (!sessionsByDate[dateStr]) {
+            sessionsByDate[dateStr] = [];
+        }
+
+        sessionsByDate[dateStr].push({ startMinutes, endMinutes });
+    });
+
+    return sessionsByDate;
+};
+
+const hasCourseOverlap = (
+    dateStr: string,
+    startMinutes: number,
+    endMinutes: number,
+    sessionsByDate: Record<string, { startMinutes: number; endMinutes: number }[]>
+): boolean => {
+    const sessions = sessionsByDate[dateStr] || [];
+    return sessions.some(session => hasTimeOverlap(startMinutes, endMinutes, session.startMinutes, session.endMinutes));
+};
+
+const deriveBookingTechnique = (booking: any): string | undefined => {
+    const productName = (booking.product?.name || '').toLowerCase();
+
+    if (productName.includes('pintura') || productName.includes('painting')) return 'painting';
+    if (productName.includes('torno') || productName.includes('wheel') || productName.includes('potter')) return 'potters_wheel';
+    if (productName.includes('modelado') || productName.includes('molding') || productName.includes('hand')) return 'hand_modeling';
+
+    // Check technique field directly on booking
+    if (booking.technique === 'potters_wheel') return 'potters_wheel';
+    if (booking.technique === 'molding' || booking.technique === 'hand_modeling') return 'hand_modeling';
+    if (booking.technique === 'painting') return 'painting';
+
+    // Check product.details.technique
+    const detailsTechnique = booking.product?.details?.technique;
+    if (detailsTechnique === 'potters_wheel') return 'potters_wheel';
+    if (detailsTechnique === 'molding' || detailsTechnique === 'hand_modeling') return 'hand_modeling';
+    if (detailsTechnique === 'painting') return 'painting';
+
+    // Check product type for introductory classes (usually potters_wheel)
+    const productType = booking.productType || booking.product?.type;
+    if (productType === 'INTRODUCTORY_CLASS') return 'potters_wheel';
+    if (productType === 'WHEEL_COURSE') return 'potters_wheel';
+
+    return undefined;
+};
+
+const isHandWorkTechnique = (tech?: string) =>
+    tech === 'molding' || tech === 'painting' || tech === 'hand_modeling';
+
+const getGroupClassBookingCounts = (booking: any) => {
+    let potters = 0;
+    let handWork = 0;
+
+    if (booking.productType === 'GROUP_CLASS' && booking.groupClassMetadata?.techniqueAssignments?.length) {
+        booking.groupClassMetadata.techniqueAssignments.forEach((assignment: any) => {
+            if (assignment.technique === 'potters_wheel') {
+                potters += 1;
+            } else {
+                handWork += 1;
+            }
+        });
+        return { potters, handWork };
+    }
+
+    const bookingTechnique = deriveBookingTechnique(booking);
+    const participantCount = booking.participants
+        ?? booking.groupClassMetadata?.totalParticipants
+        ?? (typeof booking.product === 'object' && 'minParticipants' in booking.product
+            ? (booking.product as any).minParticipants
+            : undefined)
+        ?? 1;
+
+    if (bookingTechnique === 'potters_wheel') {
+        potters = participantCount;
+    } else if (bookingTechnique === 'painting' || bookingTechnique === 'hand_modeling' || bookingTechnique === 'molding') {
+        handWork = participantCount;
+    } else {
+        // Unknown technique - count as BOTH to be safe (conservative approach)
+        potters = participantCount;
+        handWork = participantCount;
+    }
+
+    return { potters, handWork };
+};
+
+const getFixedSlotTimesForDate = (
+    dateStr: string,
+    dayKey: string,
+    availability: any,
+    scheduleOverrides: any,
+    techniqueKey: 'potters_wheel' | 'molding'
+): string[] => {
+    const override = scheduleOverrides[dateStr];
+    if (override && override.slots === null) return [];
+
+    const baseSlots = override?.slots ?? availability[dayKey] ?? [];
+    const times = baseSlots
+        .filter((slot: any) => slot.technique === techniqueKey)
+        .map((slot: any) => normalizeTime(slot.time));
+
+    if (techniqueKey === 'potters_wheel') {
+        if (dayKey === 'Tuesday') times.push('19:00');
+        if (dayKey === 'Wednesday') times.push('11:00');
+    }
+
+    return [...new Set(times)].sort();
+};
+
+const isPottersFixedConflict = (candidateStart: number, fixedTimes: number[]) =>
+    fixedTimes.some(fixedStart => {
+        if (candidateStart === fixedStart) return false;
+        return candidateStart >= fixedStart - 120 && candidateStart < fixedStart + 120;
+    });
+
+const getBusinessHoursForDay = (dayOfWeek: number): string[] => {
+    const hours: string[] = [];
+
+    if (dayOfWeek === 1) return hours; // Lunes cerrado
+
+    if (dayOfWeek === 6) {
+        for (let hour = 9; hour <= 19; hour++) {
+            for (const min of ['00', '30']) {
+                if (hour === 19 && min === '30') break;
+                hours.push(`${String(hour).padStart(2, '0')}:${min}`);
+            }
+        }
+        return hours;
+    }
+
+    if (dayOfWeek === 0) {
+        for (let hour = 10; hour <= 16; hour++) {
+            for (const min of ['00', '30']) {
+                if (hour === 16 && min === '30') break;
+                hours.push(`${String(hour).padStart(2, '0')}:${min}`);
+            }
+        }
+        return hours;
+    }
+
+    for (let hour = 10; hour <= 19; hour++) {
+        for (const min of ['00', '30']) {
+            if (hour === 19 && min === '30') break;
+            hours.push(`${String(hour).padStart(2, '0')}:${min}`);
+        }
+    }
+
+    return hours;
+};
+
+const computeSlotAvailability = async (
+    requestedDate: string,
+    requestedTime: string,
+    requestedTechnique: string,
+    requestedParticipants: number
+) => {
+    // ⚡ CRÍTICO: Buscar bookings que TENGAN SLOTS en la fecha solicitada
+    const bookingsResult = await sql`
+        SELECT * FROM bookings 
+        WHERE status != 'expired'
+        ORDER BY created_at DESC
+    `;
+
+    // Filtrar en memoria: solo bookings que tengan slots en la fecha solicitada
+    const allBookings = bookingsResult.rows.map(parseBookingFromDB);
+    const bookings = allBookings.filter(booking => {
+        if (!booking.slots || !Array.isArray(booking.slots)) return false;
+        return booking.slots.some((s: any) => s.date === requestedDate);
+    });
+
+    const { scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
+    const maxCapacityMap = getMaxCapacityMap(classCapacity);
+
+    const normalizedTime = normalizeTime(requestedTime);
+    const requestedStartMinutes = timeToMinutes(normalizedTime);
+    const requestedEndMinutes = requestedStartMinutes + (2 * 60); // 2 horas
+
+    const courseSessionsByDate = await loadCourseSessionsByDate(requestedDate, requestedDate);
+    if (hasCourseOverlap(requestedDate, requestedStartMinutes, requestedEndMinutes, courseSessionsByDate)) {
+        const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
+        return {
+            available: false,
+            normalizedTime,
+            capacity: {
+                max: maxCapacity,
+                booked: maxCapacity,
+                available: 0
+            },
+            bookingsCount: 0,
+            message: 'Horario no disponible por curso'
+        };
+    }
+
+    let exactMatchParticipants = 0;
+    let overlappingParticipants = 0;
+    const bookingsInSlot: any[] = [];
+
+    for (const booking of bookings) {
+        if (!booking.slots || !Array.isArray(booking.slots)) continue;
+
+        let bookingTechnique: string | undefined;
+        const productName = booking.product?.name?.toLowerCase() || '';
+
+        if (productName.includes('pintura')) {
+            bookingTechnique = 'painting';
+        } else if (productName.includes('torno')) {
+            bookingTechnique = 'potters_wheel';
+        } else if (productName.includes('modelado')) {
+            bookingTechnique = 'hand_modeling';
+        } else {
+            bookingTechnique = booking.technique || (booking.product?.details as any)?.technique;
+        }
+
+        const isHandWork = (tech: string | undefined) => 
+            tech === 'molding' || tech === 'painting' || tech === 'hand_modeling';
+        const isHandWorkGroup = isHandWork(requestedTechnique);
+        const isBookingHandWorkGroup = isHandWork(bookingTechnique);
+
+        let techniquesMatch = false;
+        if (isHandWorkGroup && isBookingHandWorkGroup) {
+            techniquesMatch = true;
+        } else if (isHandWorkGroup && !bookingTechnique) {
+            techniquesMatch = true;
+        } else if (!isHandWorkGroup && bookingTechnique === requestedTechnique) {
+            techniquesMatch = true;
+        } else if (!isHandWorkGroup && !bookingTechnique) {
+            techniquesMatch = true;
+        }
+
+        if (!techniquesMatch) {
+            continue;
+        }
+
+        const overlapInfo = booking.slots.find((s: any) => {
+            if (s.date !== requestedDate) return false;
+
+            const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
+            const bookingEndMinutes = bookingStartMinutes + (2 * 60);
+
+            const hasOverlap = hasTimeOverlap(requestedStartMinutes, requestedEndMinutes, bookingStartMinutes, bookingEndMinutes);
+            const isSameExactTime = bookingStartMinutes === requestedStartMinutes && 
+                                   bookingEndMinutes === requestedEndMinutes;
+
+            if (hasOverlap) {
+                const participantCount = booking.participants || 1;
+                overlappingParticipants += participantCount;
+
+                if (isSameExactTime) {
+                    exactMatchParticipants += participantCount;
+                }
+            }
+
+            return isSameExactTime;
+        });
+
+        if (overlapInfo) {
+            const participantCount = booking.participants || 1;
+            bookingsInSlot.push({
+                id: booking.id,
+                participants: participantCount,
+                userInfo: { 
+                    name: booking.userInfo?.firstName 
+                        ? `${booking.userInfo.firstName} ${booking.userInfo.lastName || ''}`.trim()
+                        : 'Unknown'
+                },
+                isPaid: booking.isPaid,
+                bookingTechnique: bookingTechnique || 'unknown',
+                requestedTechnique: requestedTechnique
+            });
+        }
+    }
+
+    const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
+    const availableCapacity = maxCapacity - overlappingParticipants;
+    const canBook = availableCapacity >= requestedParticipants;
+
+    return {
+        available: canBook,
+        normalizedTime,
+        capacity: {
+            max: maxCapacity,
+            booked: exactMatchParticipants,
+            available: availableCapacity
+        },
+        bookingsCount: bookingsInSlot.length,
+        message: canBook 
+            ? `¡Disponible! ${availableCapacity} cupos libres` 
+            : `Solo hay ${availableCapacity} cupos disponibles, necesitas ${requestedParticipants}`
+    };
+};
+// ============ FIN FUNCIONES HELPER ============
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
@@ -387,7 +761,41 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json(info);
     }
 
-    // 🚨 MIGRATION ENDPOINT: Forzar creación de columnas
+
+    // � FIX CAPACITY: Resetear classCapacity a valores correctos
+    if (action === 'fixClassCapacity') {
+        console.log('🔧 [FIX] Reseteando classCapacity a valores correctos...');
+        try {
+            const correctCapacity = {
+                potters_wheel: 8,
+                molding: 22,
+                introductory_class: 8
+            };
+            
+            await sql`
+                INSERT INTO settings (key, value) 
+                VALUES ('classCapacity', ${JSON.stringify(correctCapacity)})
+                ON CONFLICT (key) 
+                DO UPDATE SET value = EXCLUDED.value
+            `;
+            
+            console.log('✅ classCapacity actualizado:', correctCapacity);
+            
+            return res.status(200).json({
+                success: true,
+                message: 'classCapacity actualizado correctamente',
+                classCapacity: correctCapacity
+            });
+        } catch (error) {
+            console.error('❌ [FIX] Error:', error);
+            return res.status(500).json({
+                success: false,
+                error: error instanceof Error ? error.message : String(error)
+            });
+        }
+    }
+
+    // �🚨 MIGRATION ENDPOINT: Forzar creación de columnas
     if (action === 'migrateGiftcardColumns') {
         console.log('🔧 [MIGRATION] Iniciando migración de columnas giftcard_requests...');
         try {
@@ -592,8 +1000,56 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     break;
                 }
                 case 'deliveries': {
-                    const { rows: deliveries } = await sql`SELECT * FROM deliveries ORDER BY scheduled_date ASC, created_at DESC`;
-                    data = deliveries.map(toCamelCase);
+                    // ⚡ OPTIMIZACIÓN: Excluir fotos por defecto (muy pesadas - base64)
+                    // Las fotos se cargan bajo demanda con getDeliveryPhotos
+                    const includePhotos = req.query.includePhotos === 'true';
+                    const limit = req.query.limit ? parseInt(req.query.limit as string) : 2000;
+                    
+                    if (includePhotos) {
+                        // Carga completa (solo cuando explícitamente se pide)
+                        const { rows: deliveries } = await sql`
+                            SELECT * FROM deliveries 
+                            ORDER BY scheduled_date ASC, created_at DESC 
+                            LIMIT ${limit}
+                        `;
+                        data = deliveries.map(toCamelCase);
+                    } else {
+                        // Carga ligera: excluir columna photos pero INCLUIR campos de pintura
+                        const { rows: deliveries } = await sql`
+                            SELECT id, customer_email, description, scheduled_date, status, 
+                                   created_at, completed_at, delivered_at, ready_at, notes,
+                                   wants_painting, painting_price, painting_status, 
+                                   painting_booking_date, painting_paid_at, painting_completed_at,
+                                   CASE WHEN photos IS NOT NULL AND photos != '[]' AND photos != 'null' 
+                                        THEN true ELSE false END as has_photos
+                            FROM deliveries 
+                            ORDER BY scheduled_date ASC, created_at DESC 
+                            LIMIT ${limit}
+                        `;
+                        data = deliveries.map((d: any) => ({
+                            ...toCamelCase(d),
+                            photos: [] // Array vacío, se cargan bajo demanda
+                        }));
+                    }
+                    // ⚡ Cache 30 segundos para listado de deliveries
+                    res.setHeader('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+                    break;
+                }
+                case 'getDeliveryPhotos': {
+                    // ⚡ Endpoint para cargar fotos de una delivery específica
+                    const deliveryId = req.query.deliveryId as string;
+                    if (!deliveryId) {
+                        return res.status(400).json({ error: 'deliveryId required' });
+                    }
+                    const { rows } = await sql`
+                        SELECT photos FROM deliveries WHERE id = ${deliveryId}
+                    `;
+                    if (rows.length === 0) {
+                        return res.status(404).json({ error: 'Delivery not found' });
+                    }
+                    // ⚡ Cache 5 minutos para fotos (raramente cambian)
+                    res.setHeader('Cache-Control', 'private, max-age=300, stale-while-revalidate=600');
+                    data = { photos: rows[0].photos || [] };
                     break;
                 }
                 case 'standaloneCustomers': {
@@ -626,8 +1082,15 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     break;
                 }
                 case 'getCustomers': {
+                    // ⚡ OPTIMIZACIÓN: Usar pagination y caché agresivo (10 minutos)
+                    const page = req.query.page ? parseInt(req.query.page as string) : 1;
+                    const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+                    const offset = (page - 1) * limit;
+                    
+                    console.log(`[getCustomers] Page ${page}, Limit ${limit}`);
+                    
                     // Get all unique customers from bookings first
-                    const { rows: bookings } = await sql`SELECT * FROM bookings ORDER BY created_at DESC`;
+                    const { rows: bookings } = await sql`SELECT * FROM bookings WHERE status != 'expired' ORDER BY created_at DESC LIMIT 1000`;
                     const validBookings = bookings.filter(booking => booking && typeof booking === 'object');
                     const parsedBookings = validBookings.map(parseBookingFromDB).filter(Boolean);
                     const customerMap = new Map<string, Customer>();
@@ -658,12 +1121,11 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         }
                     });
 
-                    // Also get standalone customers from customers table (e.g., delivery-only customers)
-                    const { rows: standaloneCustomers } = await sql`SELECT * FROM customers`;
+                    // Also get standalone customers from customers table
+                    const { rows: standaloneCustomers } = await sql`SELECT * FROM customers ORDER BY first_name ASC LIMIT 500`;
                     standaloneCustomers.forEach(customerRow => {
                         const email = customerRow.email;
                         if (!customerMap.has(email)) {
-                            // Create customer from customers table data
                             customerMap.set(email, {
                                 email,
                                 userInfo: {
@@ -680,9 +1142,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                 lastBookingDate: new Date(0),
                                 deliveries: []
                             });
-                        }
-                        // If customer exists from bookings but has additional phone data from customers table, merge it
-                        else {
+                        } else {
                             const existing = customerMap.get(email)!;
                             if (customerRow.phone && !existing.userInfo.phone) {
                                 existing.userInfo.phone = customerRow.phone;
@@ -692,11 +1152,606 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             }
                         }
                     });
-                    data = Array.from(customerMap.values());
-                    console.log(`[API] Generated ${data.length} customers from ${parsedBookings.length} bookings`);
-                    // ✅ OPTIMIZACIÓN: Cache CDN 5 minutos (datos dinámicos)
-                    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+                    
+                    const allCustomers = Array.from(customerMap.values());
+                    const paginatedCustomers = allCustomers.slice(offset, offset + limit);
+                    
+                    console.log(`[API] Generated ${allCustomers.length} customers, returning ${paginatedCustomers.length} for page ${page}`);
+                    
+                    // ✅ CACHE STRATEGY: 30 segundos para permitir updates rápidos después de pagos/bookings
+                    res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
+                    data = {
+                        customers: paginatedCustomers,
+                        total: allCustomers.length,
+                        page,
+                        limit,
+                        pages: Math.ceil(allCustomers.length / limit)
+                    };
                     break;
+                }
+
+                case 'getAvailableSlots': {
+                    // Endpoint inteligente para experiencias personalizadas
+                    const { technique, participants, startDate, daysAhead } = req.query;
+                    
+                    if (!technique || !participants) {
+                        return res.status(400).json({ 
+                            success: false, 
+                            error: 'Missing required parameters: technique and participants' 
+                        });
+                    }
+
+                    const requestedParticipants = parseInt(participants as string);
+                    const requestedTechnique = technique as string;
+                    const searchStartDate = startDate ? new Date(startDate as string) : new Date();
+                    const searchDays = daysAhead ? parseInt(daysAhead as string) : 60;
+
+                    console.log(`[getAvailableSlots] Searching: technique=${requestedTechnique}, participants=${requestedParticipants}, from=${searchStartDate.toISOString().split('T')[0]}, days=${searchDays}`);
+
+                    // ⚡ CRÍTICO: No filtrar por created_at - debemos cargar todos los bookings activos
+                    // y luego filtrar por fecha de slots en memoria
+                    // Una reserva creada hace 3 meses para una fecha futura DEBE considerarse
+                    
+                    // Obtener datos necesarios
+                    const [bookingsResult, instructorsResult] = await Promise.all([
+                        sql`
+                            SELECT * FROM bookings 
+                            WHERE status != 'expired'
+                            ORDER BY created_at DESC
+                        `,
+                        sql`SELECT * FROM instructors ORDER BY name ASC`
+                    ]);
+
+                    const allBookings = bookingsResult.rows.map(parseBookingFromDB);
+                    const instructors = instructorsResult.rows.map(toCamelCase);
+                    
+                    // Filtrar bookings que tengan slots dentro del rango de búsqueda
+                    const rangeStart = new Date(searchStartDate);
+                    rangeStart.setDate(rangeStart.getDate() - 1); // 1 día buffer antes
+                    const rangeEnd = new Date(searchStartDate);
+                    rangeEnd.setDate(rangeEnd.getDate() + searchDays + 1); // 1 día buffer después
+                    
+                    const rangeStartStr = rangeStart.toISOString().split('T')[0];
+                    const rangeEndStr = rangeEnd.toISOString().split('T')[0];
+                    
+                    const bookings = allBookings.filter(booking => {
+                        if (!booking.slots || !Array.isArray(booking.slots)) return false;
+                        return booking.slots.some((s: any) => {
+                            const slotDate = s.date;
+                            return slotDate >= rangeStartStr && slotDate <= rangeEndStr;
+                        });
+                    });
+                    
+                    console.log(`[getAvailableSlots] Filtered ${bookings.length} bookings with slots in range (out of ${allBookings.length} total)`);
+
+                    const courseSessionsByDate = await loadCourseSessionsByDate(rangeStartStr, rangeEndStr);
+                    
+                    // Parse settings reutilizando función helper
+                    const { availability, scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
+                    const maxCapacityMap = getMaxCapacityMap(classCapacity);
+
+                    const allSlots: any[] = []; // TODOS los slots (disponibles e indisponibles)
+                    const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+                    // Iterar sobre cada día
+                    for (let i = 0; i < searchDays; i++) {
+                        const currentDate = new Date(searchStartDate);
+                        currentDate.setDate(currentDate.getDate() + i);
+                        const dateStr = currentDate.toISOString().split('T')[0];
+                        const dayKey = DAY_NAMES[currentDate.getDay()];
+                        
+                        // AGREGAR CLASES DE INTRODUCCIÓN DE TORNO PARA GRUPOS
+                        // Martes 19:00 y Miércoles 11:00 para grupos de 2+ personas
+                        if (requestedTechnique === 'potters_wheel' && requestedParticipants >= 2) {
+                            if ((dayKey === 'Tuesday' && currentDate >= searchStartDate) || 
+                                (dayKey === 'Wednesday' && currentDate >= searchStartDate)) {
+                                
+                                const introTime = dayKey === 'Tuesday' ? '19:00' : '11:00';
+                                const slotStartMinutes = timeToMinutes(introTime);
+                                const slotEndMinutes = slotStartMinutes + (2 * 60); // 2 horas
+
+                                const hasCourseBlock = hasCourseOverlap(dateStr, slotStartMinutes, slotEndMinutes, courseSessionsByDate);
+                                
+                                if (!hasCourseBlock) {
+                                    // Contar participantes que se solapan con este slot de introducción
+                                    const bookingsOverlappingIntro = bookings.filter((b: any) => {
+                                        if (!b.slots || !Array.isArray(b.slots)) return false;
+                                        
+                                        const bookingTechnique = b.technique || (b.product?.details as any)?.technique;
+                                        if (bookingTechnique !== 'potters_wheel') return false;
+                                        
+                                        return b.slots.some((s: any) => {
+                                            if (s.date !== dateStr) return false;
+                                            
+                                            const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
+                                            const bookingEndMinutes = bookingStartMinutes + (2 * 60);
+                                            
+                                            return hasTimeOverlap(slotStartMinutes, slotEndMinutes, bookingStartMinutes, bookingEndMinutes);
+                                        });
+                                    });
+                                    
+                                    let bookedParticipantsIntro = bookingsOverlappingIntro.reduce((sum: number, b: any) => {
+                                        return sum + (b.participants || 1);
+                                    }, 0);
+                                    
+                                    // 🔒 REGLA CRÍTICA: Clases de introducción de torno son pre-establecidas, asumir MÍNIMO 1 persona
+                                    if (bookedParticipantsIntro === 0) {
+                                        bookedParticipantsIntro = 1;
+                                        console.log(`🔒 [getAvailableSlots] Torno introducción ${introTime}: asumiendo 1 persona mínimo (clase pre-establecida)`);
+                                    }
+                                    
+                                    const maxCapacityIntro = resolveCapacity(dateStr, 'potters_wheel', maxCapacityMap, scheduleOverrides);
+                                    const availableCapacityIntro = maxCapacityIntro - bookedParticipantsIntro;
+                                    const canBookIntro = availableCapacityIntro >= requestedParticipants;
+                                    
+                                    allSlots.push({
+                                        date: dateStr,
+                                        time: introTime,
+                                        available: Math.max(0, availableCapacityIntro),
+                                        total: maxCapacityIntro,
+                                        canBook: canBookIntro,
+                                        instructor: 'Instructor',
+                                        instructorId: 0,
+                                        technique: 'potters_wheel',
+                                        blockedReason: null
+                                    });
+                                } else {
+                                    // Slot bloqueado por curso
+                                    allSlots.push({
+                                        date: dateStr,
+                                        time: introTime,
+                                        available: 0,
+                                        total: 0,
+                                        canBook: false,
+                                        instructor: 'Instructor',
+                                        instructorId: 0,
+                                        technique: 'potters_wheel',
+                                        blockedReason: 'course_conflict'
+                                    });
+                                }
+                            }
+                        }
+                        
+                        // Obtener slots del día (availability o override)
+                        const override = scheduleOverrides[dateStr];
+                        const hasOverride = override !== undefined;
+                        
+                        if (hasOverride && override.slots === null) {
+                            // Día cerrado por override
+                            continue;
+                        }
+
+                        const baseSlots = hasOverride ? override.slots : availability[dayKey];
+                        if (!baseSlots || baseSlots.length === 0) continue;
+
+                        baseSlots.forEach((slot: any) => {
+                            // Verificar si el slot es de la técnica solicitada
+                            // IMPORTANTE: Solo contar overlaps de LA MISMA TÉCNICA, no de otras técnicas
+                            const normalizedSlotTechnique = slotTechniqueKey(requestedTechnique);
+                            if (slot.technique !== normalizedSlotTechnique) return;
+
+                            const slotTime = normalizeTime(slot.time);
+                            
+                            // Calcular rango horario de este slot (2 horas de duración)
+                            const slotStartMinutes = timeToMinutes(slotTime);
+                            const slotEndMinutes = slotStartMinutes + (2 * 60); // 2 horas
+
+                            const hasCourseBlock = hasCourseOverlap(dateStr, slotStartMinutes, slotEndMinutes, courseSessionsByDate);
+
+                            if (!hasCourseBlock) {
+                                // Contar participantes que se solapan temporalmente con este slot
+                                // IMPORTANTE: Solo contar bookings de LA MISMA TÉCNICA, no de otras
+                                const bookingsOverlapingSlot = bookings.filter((b: any) => {
+                                    if (!b.slots || !Array.isArray(b.slots)) return false;
+                                    
+                                    // ===== DERIVAR TÉCNICA REAL DEL BOOKING =====
+                                    // Priorizar product.name para derivar técnica (datos más confiables)
+                                    let bookingTechnique: string | undefined;
+                                    const productName = b.product?.name?.toLowerCase() || '';
+                                    
+                                    if (productName.includes('pintura')) {
+                                        bookingTechnique = 'painting';
+                                    } else if (productName.includes('torno')) {
+                                        bookingTechnique = 'potters_wheel';
+                                    } else if (productName.includes('modelado')) {
+                                        bookingTechnique = 'hand_modeling';
+                                    } else {
+                                        bookingTechnique = b.technique || (b.product?.details as any)?.technique;
+                                    }
+                                    
+                                    // Para handwork (painting, modeling), verificar si comparten capacidad
+                                    const isHandWork = (tech: string | undefined) => 
+                                        tech === 'molding' || tech === 'painting' || tech === 'hand_modeling';
+                                    
+                                    if (isHandWork(requestedTechnique) && isHandWork(bookingTechnique)) {
+                                        // Handwork comparte capacidad entre sí
+                                    } else if (bookingTechnique !== requestedTechnique) {
+                                        return false; // Técnicas diferentes, no contar
+                                    }
+                                    
+                                    return b.slots.some((s: any) => {
+                                        if (s.date !== dateStr) return false;
+                                        
+                                        // Calcular rango horario del booking (también 2 horas)
+                                        const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
+                                        const bookingEndMinutes = bookingStartMinutes + (2 * 60); // 2 horas
+                                        
+                                        // Verificar si hay overlap temporal
+                                        return hasTimeOverlap(slotStartMinutes, slotEndMinutes, bookingStartMinutes, bookingEndMinutes);
+                                    });
+                                });
+
+                                // Sumar participantes que solapan
+                                let bookedParticipants = bookingsOverlapingSlot.reduce((sum: number, b: any) => {
+                                    return sum + (b.participants || 1);
+                                }, 0);
+
+                                // 🔒 REGLA CRÍTICA: Para torno en horarios pre-establecidos, asumir MÍNIMO 1 persona
+                                // Esto previene que se reserve en slots intermedios (9:30) cuando hay clase fija a las 9:00
+                                // incluso si esa clase aún no tiene estudiantes registrados en la base de datos
+                                if (requestedTechnique === 'potters_wheel' && bookedParticipants === 0) {
+                                    bookedParticipants = 1; // Asumir siempre 1 persona mínimo
+                                    console.log(`🔒 [getAvailableSlots] Torno ${slotTime}: asumiendo 1 persona mínimo (clase pre-establecida)`);
+                                }
+
+                                // Capacidad máxima del slot (override válido o fallback por técnica)
+                                const maxCapacity = resolveCapacity(dateStr, requestedTechnique, maxCapacityMap, scheduleOverrides);
+                                const availableCapacity = maxCapacity - bookedParticipants;
+                                const canBook = availableCapacity >= requestedParticipants;
+
+                                const instructor = instructors.find((inst: any) => inst.id === slot.instructorId);
+                                
+                                allSlots.push({
+                                    date: dateStr,
+                                    time: slotTime,
+                                    available: Math.max(0, availableCapacity),
+                                    total: maxCapacity,
+                                    canBook,
+                                    instructor: instructor?.name || 'Instructor',
+                                    instructorId: slot.instructorId,
+                                    technique: requestedTechnique,
+                                    blockedReason: null
+                                });
+                            } else {
+                                // Slot bloqueado por curso
+                                const maxCapacity = resolveCapacity(dateStr, requestedTechnique, maxCapacityMap, scheduleOverrides);
+                                const instructor = instructors.find((inst: any) => inst.id === slot.instructorId);
+                                
+                                allSlots.push({
+                                    date: dateStr,
+                                    time: slotTime,
+                                    available: 0,
+                                    total: maxCapacity,
+                                    canBook: false,
+                                    instructor: instructor?.name || 'Instructor',
+                                    instructorId: slot.instructorId,
+                                    technique: requestedTechnique,
+                                    blockedReason: 'course_conflict'
+                                });
+                            }
+                        });
+                    }
+
+                    console.log(`[getAvailableSlots] Found ${allSlots.filter((s:any) => s.canBook).length} bookable slots (${allSlots.length} total)`);
+                    
+                    data = {
+                        success: true,
+                        slots: allSlots,
+                        searchParams: {
+                            technique: requestedTechnique,
+                            participants: requestedParticipants,
+                            startDate: searchStartDate.toISOString().split('T')[0],
+                            daysAhead: searchDays
+                        }
+                    };
+
+                    // Cache de 2 minutos (datos dinámicos que cambian con reservas)
+                    res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=300');
+                    break;
+                }
+                case 'getGroupClassSlots': {
+                    const { pottersWheel, handModeling, painting, startDate, daysAhead } = req.query;
+
+                    const pottersCount = Math.max(0, parseInt(String(pottersWheel || 0), 10) || 0);
+                    const handModelingCount = Math.max(0, parseInt(String(handModeling || 0), 10) || 0);
+                    const paintingCount = Math.max(0, parseInt(String(painting || 0), 10) || 0);
+                    const handWorkCount = handModelingCount + paintingCount;
+                    const totalParticipants = pottersCount + handWorkCount;
+
+                    if (totalParticipants < 2) {
+                        return res.status(400).json({
+                            success: false,
+                            error: 'Las experiencias grupales requieren minimo 2 personas'
+                        });
+                    }
+
+                    const searchStartDate = startDate ? new Date(startDate as string) : new Date();
+                    const searchDays = daysAhead ? parseInt(daysAhead as string, 10) : 60;
+
+                    const [bookingsResult, instructorsResult] = await Promise.all([
+                        sql`
+                            SELECT * FROM bookings
+                            WHERE status != 'expired'
+                            ORDER BY created_at DESC
+                        `,
+                        sql`SELECT * FROM instructors ORDER BY name ASC`
+                    ]);
+
+                    const allBookings = bookingsResult.rows.map(parseBookingFromDB);
+                    const instructors = instructorsResult.rows.map(toCamelCase);
+
+                    const rangeStart = new Date(searchStartDate);
+                    rangeStart.setDate(rangeStart.getDate() - 1);
+                    const rangeEnd = new Date(searchStartDate);
+                    rangeEnd.setDate(rangeEnd.getDate() + searchDays + 1);
+
+                    const rangeStartStr = rangeStart.toISOString().split('T')[0];
+                    const rangeEndStr = rangeEnd.toISOString().split('T')[0];
+
+                    const bookings = allBookings.filter(booking => {
+                        if (!booking.slots || !Array.isArray(booking.slots)) return false;
+                        return booking.slots.some((s: any) => {
+                            const slotDate = s.date;
+                            return slotDate >= rangeStartStr && slotDate <= rangeEndStr;
+                        });
+                    });
+
+                    const courseSessionsByDate = await loadCourseSessionsByDate(rangeStartStr, rangeEndStr);
+                    const { availability, scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
+                    const maxCapacityMap = getMaxCapacityMap(classCapacity);
+
+                    const allSlots: any[] = [];
+                    const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+                    for (let i = 0; i < searchDays; i++) {
+                        const currentDate = new Date(searchStartDate);
+                        currentDate.setDate(currentDate.getDate() + i);
+                        const dateStr = currentDate.toISOString().split('T')[0];
+                        const dayKey = DAY_NAMES[currentDate.getDay()];
+
+                        const override = scheduleOverrides[dateStr];
+                        if (override && override.slots === null) {
+                            continue;
+                        }
+
+                        const fixedPottersTimes = getFixedSlotTimesForDate(dateStr, dayKey, availability, scheduleOverrides, 'potters_wheel');
+                        const fixedPottersMinutes = fixedPottersTimes.map(timeToMinutes);
+                        const fixedHandTimes = getFixedSlotTimesForDate(dateStr, dayKey, availability, scheduleOverrides, 'molding');
+
+                        // ALWAYS generate ALL candidate times - block individually per rule
+                        const candidateTimes: string[] = getBusinessHoursForDay(currentDate.getDay());
+
+                        if (candidateTimes.length === 0) continue;
+
+                        candidateTimes.forEach(slotTime => {
+                            const normalizedTime = normalizeTime(slotTime);
+                            const slotStartMinutes = timeToMinutes(normalizedTime);
+                            const slotEndMinutes = slotStartMinutes + (2 * 60);
+
+                            const courseBlocked = hasCourseOverlap(dateStr, slotStartMinutes, slotEndMinutes, courseSessionsByDate);
+                            let blockedReason: string | null = courseBlocked ? 'course_conflict' : null;
+
+                            let pottersAvailable = 0;
+                            let pottersTotal = 0;
+                            let pottersBooked = 0;
+                            let pottersBlocked = false;
+
+                            if (pottersCount > 0) {
+                                pottersTotal = resolveCapacity(dateStr, 'potters_wheel', maxCapacityMap, scheduleOverrides);
+
+                                if (totalParticipants < 3 && !fixedPottersTimes.includes(normalizedTime)) {
+                                    pottersBlocked = true;
+                                    blockedReason = blockedReason || 'fixed_class_conflict';
+                                }
+
+                                if (totalParticipants >= 3 && isPottersFixedConflict(slotStartMinutes, fixedPottersMinutes)) {
+                                    pottersBlocked = true;
+                                    blockedReason = blockedReason || 'fixed_class_conflict';
+                                }
+
+                                // ALWAYS check booking overlaps (regardless of other blocked reasons)
+                                bookings.forEach(booking => {
+                                    const { potters: bookingPotters } = getGroupClassBookingCounts(booking);
+                                    if (bookingPotters <= 0) return;
+
+                                    // Check slots array (group bookings)
+                                    if (booking.slots && Array.isArray(booking.slots)) {
+                                        booking.slots.forEach((s: any) => {
+                                            if (s.date !== dateStr) return;
+
+                                            const bookingStart = timeToMinutes(normalizeTime(s.time));
+                                            if (Number.isNaN(bookingStart)) return;
+
+                                            if (bookingStart === slotStartMinutes) {
+                                                pottersBooked += bookingPotters;
+                                            } else if (slotStartMinutes >= bookingStart - 120 && slotStartMinutes < bookingStart + 120) {
+                                                pottersBlocked = true;
+                                            }
+                                        });
+                                    }
+
+                                    // Also check direct booking date/time (individual bookings without slots array)
+                                    if (!booking.slots && (booking.date || booking.bookingDate) && booking.time) {
+                                        const bookingDate = normalizeDateValue(booking.date || booking.bookingDate);
+                                        if (bookingDate === dateStr) {
+                                            const bookingStart = timeToMinutes(normalizeTime(String(booking.time)));
+                                            if (!Number.isNaN(bookingStart)) {
+                                                if (bookingStart === slotStartMinutes) {
+                                                    pottersBooked += bookingPotters;
+                                                } else if (slotStartMinutes >= bookingStart - 120 && slotStartMinutes < bookingStart + 120) {
+                                                    pottersBlocked = true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                });
+
+                                pottersAvailable = Math.max(0, pottersTotal - pottersBooked);
+
+                                if (pottersBlocked) {
+                                    blockedReason = blockedReason || 'fixed_class_conflict';
+                                }
+
+                                if (pottersAvailable < pottersCount) {
+                                    blockedReason = blockedReason || 'capacity';
+                                }
+                            }
+
+                            let handWorkAvailable = 0;
+                            let handWorkTotal = 0;
+                            let handWorkBooked = 0;
+
+                            if (handWorkCount > 0) {
+                                handWorkTotal = resolveCapacity(dateStr, 'hand_modeling', maxCapacityMap, scheduleOverrides);
+
+                                if (totalParticipants < 3 && pottersCount === 0 && !fixedHandTimes.includes(normalizedTime)) {
+                                    blockedReason = blockedReason || 'fixed_class_conflict';
+                                }
+
+                                bookings.forEach(booking => {
+                                    const { handWork: bookingHandWork } = getGroupClassBookingCounts(booking);
+                                    if (bookingHandWork <= 0) return;
+
+                                    if (booking.slots && Array.isArray(booking.slots)) {
+                                        booking.slots.forEach((s: any) => {
+                                            if (s.date !== dateStr) return;
+
+                                            const bookingStart = timeToMinutes(normalizeTime(s.time));
+                                            if (Number.isNaN(bookingStart)) return;
+
+                                            const bookingEnd = bookingStart + (2 * 60);
+                                            if (hasTimeOverlap(slotStartMinutes, slotEndMinutes, bookingStart, bookingEnd)) {
+                                                handWorkBooked += bookingHandWork;
+                                            }
+                                        });
+                                    }
+
+                                    // Also check direct booking date/time (individual bookings without slots array)
+                                    if (!booking.slots && (booking.date || booking.bookingDate) && booking.time) {
+                                        const bookingDate = normalizeDateValue(booking.date || booking.bookingDate);
+                                        if (bookingDate === dateStr) {
+                                            const bookingStart = timeToMinutes(normalizeTime(String(booking.time)));
+                                            if (!Number.isNaN(bookingStart)) {
+                                                const bookingEnd = bookingStart + (2 * 60);
+                                                if (hasTimeOverlap(slotStartMinutes, slotEndMinutes, bookingStart, bookingEnd)) {
+                                                    handWorkBooked += bookingHandWork;
+                                                }
+                                            }
+                                        }
+                                    }
+                                });
+
+                                handWorkAvailable = Math.max(0, handWorkTotal - handWorkBooked);
+
+                                if (handWorkAvailable < handWorkCount) {
+                                    blockedReason = blockedReason || 'capacity';
+                                }
+                            }
+
+                            const displayAvailable = pottersCount > 0 && handWorkCount > 0
+                                ? Math.min(pottersAvailable, handWorkAvailable)
+                                : pottersCount > 0
+                                ? pottersAvailable
+                                : handWorkAvailable;
+
+                            const displayTotal = pottersCount > 0 && handWorkCount > 0
+                                ? Math.min(pottersTotal, handWorkTotal)
+                                : pottersCount > 0
+                                ? pottersTotal
+                                : handWorkTotal;
+
+                            const canBook = !blockedReason
+                                && (pottersCount === 0 || pottersAvailable >= pottersCount)
+                                && (handWorkCount === 0 || handWorkAvailable >= handWorkCount);
+
+                            const instructor = instructors.find((inst: any) => inst.id === 0);
+
+                            allSlots.push({
+                                date: dateStr,
+                                time: normalizedTime,
+                                available: displayAvailable,
+                                total: displayTotal,
+                                canBook,
+                                instructor: instructor?.name || 'Instructor',
+                                instructorId: 0,
+                                technique: 'group_class',
+                                blockedReason,
+                                capacityDetails: {
+                                    pottersWheel: pottersCount > 0 ? {
+                                        available: pottersAvailable,
+                                        total: pottersTotal,
+                                        requested: pottersCount
+                                    } : undefined,
+                                    handWork: handWorkCount > 0 ? {
+                                        available: handWorkAvailable,
+                                        total: handWorkTotal,
+                                        requested: handWorkCount
+                                    } : undefined
+                                }
+                            });
+                        });
+                    }
+
+                    data = {
+                        success: true,
+                        slots: allSlots,
+                        searchParams: {
+                            pottersWheel: pottersCount,
+                            handModeling: handModelingCount,
+                            painting: paintingCount,
+                            startDate: searchStartDate.toISOString().split('T')[0],
+                            daysAhead: searchDays
+                        }
+                    };
+
+                    res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
+                    break;
+                }
+                case 'checkSlotAvailability': {
+                    // Endpoint para validar disponibilidad de un slot específico en tiempo real
+                    const { date, time, technique, participants } = req.query;
+                    
+                    if (!date || !time || !technique || !participants) {
+                        return res.status(400).json({ 
+                            success: false, 
+                            error: 'Missing required parameters: date, time, technique, participants' 
+                        });
+                    }
+
+                    const requestedDate = date as string;
+                    const requestedTime = time as string;
+                    const requestedTechnique = technique as string;
+                    const requestedParticipants = parseInt(participants as string);
+
+                    try {
+                        const availability = await computeSlotAvailability(
+                            requestedDate,
+                            requestedTime,
+                            requestedTechnique,
+                            requestedParticipants
+                        );
+
+                        const responseData = {
+                            success: true,
+                            available: availability.available,
+                            date: requestedDate,
+                            time: availability.normalizedTime,
+                            technique: requestedTechnique,
+                            requestedParticipants,
+                            capacity: availability.capacity,
+                            bookingsCount: availability.bookingsCount,
+                            message: availability.message
+                        };
+
+                        res.setHeader('Cache-Control', 'no-store');
+                        return res.status(200).json(responseData);
+                    } catch (error) {
+                        console.error('[checkSlotAvailability] Error:', error);
+                        return res.status(500).json({ 
+                            success: false, 
+                            error: error instanceof Error ? error.message : 'Unknown error checking availability' 
+                        });
+                    }
                 }
                 case 'listPieces': {
                     try {
@@ -737,9 +1792,32 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     console.error('Error fetching products:', error);
                     data = [];
                 }
-            } else if (key === 'bookings') {
-                const { rows: bookings } = await sql`SELECT * FROM bookings ORDER BY created_at DESC`;
-                console.log(`API: Raw database query returned ${bookings.length} rows`);
+                        } else if (key === 'bookings') {
+                                // ⚡ OPTIMIZACIÓN: Cargar solo bookings recientes (últimos 90 días) por defecto
+                                // ⚠️ CRÍTICO: Incluir TODAS las reservas con slots futuros aunque fueron creadas hace meses
+                                const daysLimit = parseInt(req.query.daysLimit as string) || 90;
+                                const limitDate = new Date();
+                                limitDate.setDate(limitDate.getDate() - daysLimit);
+                                const todayStr = new Date().toISOString().split('T')[0];
+                
+                                const { rows: bookings } = await sql`
+                                        SELECT * FROM bookings 
+                                        WHERE status != 'expired'
+                                            AND (
+                                                created_at >= ${limitDate.toISOString()}
+                                                OR (
+                                                    slots IS NOT NULL
+                                                    AND EXISTS (
+                                                        SELECT 1
+                                                        FROM jsonb_array_elements(slots::jsonb) AS s
+                                                        WHERE (s->>'date')::date >= ${todayStr}::date
+                                                    )
+                                                )
+                                            )
+                                        ORDER BY created_at DESC
+                                        LIMIT 1500
+                                `;
+                                console.log(`API: Loaded ${bookings.length} bookings from last ${daysLimit} days + future slots`);
                 
                 if (bookings.length === 0) {
                     console.warn('API: No bookings found in database');
@@ -753,11 +1831,22 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     console.log(`API: Successfully processed ${processedBookings.length} bookings out of ${bookings.length} raw bookings`);
                     data = processedBookings;
                 }
-                // ✅ OPTIMIZACIÓN: Cache CDN 5 minutos (datos dinámicos)
-                res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+                // ✅ CACHE STRATEGY: Cache CDN 30 segundos para balance entre performance y freshness
+                // Permite updates rápidos después de mutations sin sacrificar totalmente CDN
+                res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
             } else if (key === 'customers') {
-                // Get all unique customers from bookings
-                const { rows: bookings } = await sql`SELECT * FROM bookings ORDER BY created_at DESC`;
+                // ⚡ OPTIMIZACIÓN: Cargar solo bookings recientes para generar lista de customers activos
+                const daysLimit = 90;
+                const limitDate = new Date();
+                limitDate.setDate(limitDate.getDate() - daysLimit);
+                
+                const { rows: bookings } = await sql`
+                    SELECT * FROM bookings 
+                    WHERE created_at >= ${limitDate.toISOString()}
+                    ORDER BY created_at DESC
+                    LIMIT 1000
+                `;
+                console.log(`API: Loading customers from ${bookings.length} recent bookings`);
                 const validBookings = bookings.filter(booking => booking && typeof booking === 'object');
                 const parsedBookings = validBookings.map(parseBookingFromDB).filter(Boolean);
                 
@@ -2684,15 +3773,15 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     }
                 }
                 
-                // 3. Validar si tiene política acceptedNoRefund
-                if (booking.acceptedNoRefund === true) {
+                // 3. Validar si tiene política acceptedNoRefund (SKIP SI ES ADMIN)
+                if (booking.acceptedNoRefund === true && !forceAdminReschedule) {
                     return res.status(400).json({
                         success: false,
                         error: 'Esta clase no es reagendable (política de no reembolso)'
                     });
                 }
                 
-                // 4. Validar límite de reagendamientos
+                // 4. Calcular allowance y rescheduleUsed ANTES de validaciones
                 const product = booking.product as any;
                 const classCount = product?.classes || 1;
                 
@@ -2705,14 +3794,19 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 
                 const rescheduleUsed = booking.rescheduleUsed || 0;
                 
-                if (rescheduleUsed >= allowance && !isRetroactive) {
-                    return res.status(400).json({
-                        success: false,
-                        error: `Agotaste tus ${allowance} reagendamientos disponibles para este paquete`
-                    });
+                // 5. Validar límite de reagendamientos (SKIP SI ES ADMIN)
+                if (!forceAdminReschedule) {
+                    if (rescheduleUsed >= allowance && !isRetroactive) {
+                        return res.status(400).json({
+                            success: false,
+                            error: `Agotaste tus ${allowance} reagendamientos disponibles para este paquete`
+                        });
+                    }
+                } else {
+                    console.log(`[RESCHEDULE] Admin override: Saltando validación de límite de reagendamientos`);
                 }
                 
-                // 5. Validar capacidad del nuevo slot
+                // 6. Validar capacidad del nuevo slot
                 const { rows: products } = await sql`SELECT * FROM products WHERE id = ${bookingToReschedule.product_id}`;
                 if (products.length > 0) {
                     const classCapacityStr = process.env.CLASS_CAPACITY || '8,8,8';
@@ -2790,6 +3884,18 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 );
                 const updatedSlots = [...otherSlots, newSlot];
                 
+                // Deduplicar slots por seguridad (evitar duplicados si ya existían)
+                const uniqueSlotsMap = new Map<string, any>();
+                updatedSlots.forEach(slot => {
+                    const key = `${slot.date}|${slot.time}`;
+                    uniqueSlotsMap.set(key, slot);
+                });
+                const finalSlots = Array.from(uniqueSlotsMap.values());
+                
+                if (finalSlots.length !== updatedSlots.length) {
+                    console.warn(`[RESCHEDULE] Removed ${updatedSlots.length - finalSlots.length} duplicate slots`);
+                }
+                
                 // Crear entrada de historia
                 const rescheduleHistoryEntry = {
                     id: `reschedule_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
@@ -2820,7 +3926,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 // Actualizar booking
                 await sql`
                     UPDATE bookings SET 
-                        slots = ${JSON.stringify(updatedSlots)},
+                        slots = ${JSON.stringify(finalSlots)},
                         reschedule_used = ${rescheduleUsed + 1},
                         reschedule_history = ${JSON.stringify(updatedHistory)},
                         last_reschedule_at = NOW()
@@ -3042,8 +4148,235 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             }
             return res.status(200).json(bookingResult);
         }
+        case 'createCustomExperienceBooking': {
+            try {
+                const { experienceType, technique, date, time, participants, config, userInfo, totalPrice, menuSelections, childrenPieces } = req.body;
+
+                // Validar campos requeridos
+                if (!experienceType || !technique || !date || !time || !participants || !userInfo || !totalPrice) {
+                    return res.status(400).json({ 
+                        success: false, 
+                        error: 'Faltan campos requeridos para la experiencia personalizada' 
+                    });
+                }
+
+                // ===== VALIDACIÓN DE CAPACIDAD Y SOLAPAMIENTO =====
+                // CRÍTICO: Verificar disponibilidad ANTES de crear la reserva
+                
+                const requestedTechnique = technique as string;
+                const requestedParticipants = parseInt(participants as string);
+                const requestedDate = date as string;
+                const requestedTime = time as string;
+
+                const requestedStartMinutes = timeToMinutes(normalizeTime(requestedTime));
+                const requestedEndMinutes = requestedStartMinutes + (2 * 60);
+
+                const courseSessionsByDate = await loadCourseSessionsByDate(requestedDate, requestedDate);
+                if (hasCourseOverlap(requestedDate, requestedStartMinutes, requestedEndMinutes, courseSessionsByDate)) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Lo sentimos, ${requestedDate} a las ${requestedTime} está reservado por un curso.`
+                    });
+                }
+                
+                // Obtener todos los bookings activos que tengan slots en esa fecha
+                const { rows: allBookingsRows } = await sql`
+                    SELECT * FROM bookings 
+                    WHERE status != 'expired'
+                    ORDER BY created_at DESC
+                `;
+                const allBookings = allBookingsRows.map(parseBookingFromDB);
+                const bookingsOnDate = allBookings.filter(b => {
+                    if (!b.slots || !Array.isArray(b.slots)) return false;
+                    return b.slots.some((s: any) => s.date === requestedDate);
+                });
+                
+                // Obtener capacidades configuradas
+                const { scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
+                const maxCapacityMap = getMaxCapacityMap(classCapacity);
+                const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
+                
+                // Contar participantes que solapan temporalmente
+                let overlappingParticipants = 0;
+                
+                for (const booking of bookingsOnDate) {
+                    if (!booking.slots || !Array.isArray(booking.slots)) continue;
+                    
+                    // ===== DERIVAR TÉCNICA REAL DEL BOOKING =====
+                    // Priorizar product.name para derivar técnica (datos más confiables)
+                    let bookingTechnique: string | undefined;
+                    const productName = booking.product?.name?.toLowerCase() || '';
+                    
+                    if (productName.includes('pintura')) {
+                        bookingTechnique = 'painting';
+                    } else if (productName.includes('torno')) {
+                        bookingTechnique = 'potters_wheel';
+                    } else if (productName.includes('modelado')) {
+                        bookingTechnique = 'hand_modeling';
+                    } else {
+                        bookingTechnique = booking.technique || (booking.product?.details as any)?.technique;
+                    }
+                    
+                    // Definir grupos de técnicas que comparten capacidad
+                    const isHandWork = (tech: string | undefined) => 
+                        tech === 'molding' || tech === 'painting' || tech === 'hand_modeling';
+                    const isHandWorkGroup = isHandWork(requestedTechnique);
+                    const isBookingHandWorkGroup = isHandWork(bookingTechnique);
+                    
+                    // Determinar si la técnica del booking compite por capacidad
+                    let techniquesMatch = false;
+                    if (isHandWorkGroup && isBookingHandWorkGroup) {
+                        techniquesMatch = true;
+                    } else if (isHandWorkGroup && !bookingTechnique) {
+                        techniquesMatch = true;
+                    } else if (!isHandWorkGroup && bookingTechnique === requestedTechnique) {
+                        techniquesMatch = true;
+                    } else if (!isHandWorkGroup && !bookingTechnique) {
+                        techniquesMatch = true;
+                    }
+                    
+                    if (!techniquesMatch) continue;
+                    
+                    // Verificar si hay overlap temporal en la misma fecha
+                    for (const s of booking.slots) {
+                        if (s.date !== requestedDate) continue;
+                        
+                        const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
+                        const bookingEndMinutes = bookingStartMinutes + (2 * 60);
+                        
+                        const hasOverlap = hasTimeOverlap(requestedStartMinutes, requestedEndMinutes, bookingStartMinutes, bookingEndMinutes);
+                        
+                        if (hasOverlap) {
+                            const participantCount = booking.participants || 1;
+                            overlappingParticipants += participantCount;
+                            console.log(`[createCustomExperienceBooking] OVERLAP: ${s.time} with ${participantCount} participants`);
+                        }
+                    }
+                }
+                
+                const availableCapacity = maxCapacity - overlappingParticipants;
+                const canBook = availableCapacity >= requestedParticipants;
+                
+                console.log(`[createCustomExperienceBooking] Capacity check: max=${maxCapacity}, overlapping=${overlappingParticipants}, available=${availableCapacity}, requested=${requestedParticipants}, canBook=${canBook}`);
+                
+                if (!canBook) {
+                    return res.status(400).json({
+                        success: false,
+                        error: availableCapacity <= 0
+                            ? `Lo sentimos, no hay cupos disponibles para ${requestedDate} a las ${requestedTime}. El horario está lleno.`
+                            : `Solo hay ${availableCapacity} cupos disponibles, pero necesitas ${requestedParticipants}.`
+                    });
+                }
+                // ===== FIN VALIDACIÓN DE CAPACIDAD =====
+
+                // Generar código de reserva
+                const bookingCode = generateBookingCode();
+
+                // Preparar slot
+                const slot = { date, time };
+
+                // Preparar product object
+                const productDetails = {
+                    type: 'CUSTOM_GROUP_EXPERIENCE',
+                    experienceType,
+                    technique,
+                    config,
+                    menuSelections: menuSelections || [],
+                    childrenPieces: childrenPieces || []
+                };
+
+                // Insertar booking en la base de datos
+                const { rows: [newBooking] } = await sql`
+                    INSERT INTO bookings (
+                        booking_code,
+                        product_type,
+                        technique,
+                        slots,
+                        participants,
+                        user_info,
+                        price,
+                        is_paid,
+                        status,
+                        created_at,
+                        expires_at,
+                        booking_mode,
+                        product,
+                        group_metadata
+                    ) VALUES (
+                        ${bookingCode},
+                        'CUSTOM_GROUP_EXPERIENCE',
+                        ${technique},
+                        ${JSON.stringify([slot])},
+                        ${participants},
+                        ${JSON.stringify(userInfo)},
+                        ${totalPrice},
+                        false,
+                        'pending',
+                        NOW(),
+                        NOW() + INTERVAL '2 hours',
+                        'online',
+                        ${JSON.stringify(productDetails)},
+                        ${JSON.stringify({ experienceType, config, menuSelections, childrenPieces })}
+                    )
+                    RETURNING *
+                `;
+
+                console.log('[createCustomExperienceBooking] Booking created:', bookingCode);
+
+                // Obtener detalles bancarios
+                const { rows: settingsRows } = await sql`SELECT key, value FROM settings WHERE key = 'bankDetails'`;
+                const bankDetailsArray = (settingsRows.find(r => r.key === 'bankDetails')?.value as BankDetails[]) || [];
+                const bankDetails = bankDetailsArray[0] || {} as BankDetails;
+
+                // Enviar correo de pre-reserva
+                try {
+                    await emailService.sendCustomExperiencePreBookingEmail({
+                        userInfo,
+                        bookingCode,
+                        experienceType,
+                        technique,
+                        date,
+                        time,
+                        participants,
+                        totalPrice,
+                        config
+                    }, bankDetails);
+                    console.log('[createCustomExperienceBooking] Email sent successfully');
+                } catch (emailError) {
+                    console.error('[createCustomExperienceBooking] Email send failed:', emailError);
+                    // No fallar la reserva si el email falla
+                }
+
+                return res.status(200).json({
+                    success: true,
+                    bookingCode,
+                    booking: toCamelCase(newBooking),
+                    message: 'Pre-reserva creada exitosamente. Revisa tu correo para instrucciones de pago.'
+                });
+            } catch (error) {
+                console.error('[createCustomExperienceBooking] Error:', error);
+                return res.status(500).json({
+                    success: false,
+                    error: error instanceof Error ? error.message : 'Error al crear la pre-reserva'
+                });
+            }
+        }
         case 'createDelivery': {
-            const { customerEmail, customerName, description, scheduledDate, status = 'pending', notes, photos } = req.body;
+            const { 
+                customerEmail, 
+                customerName, 
+                description, 
+                scheduledDate, 
+                status = 'pending', 
+                notes, 
+                photos,
+                wantsPainting,
+                paintingPrice,
+                paintingStatus,
+                paintingBookingDate,
+                paintingPaidAt,
+                paintingCompletedAt
+            } = req.body;
             
             // description ahora es opcional
             if (!customerEmail || !scheduledDate) {
@@ -3054,8 +4387,34 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             const photosJson = photos && Array.isArray(photos) ? JSON.stringify(photos) : null;
             
             const { rows: [newDelivery] } = await sql`
-                INSERT INTO deliveries (customer_email, description, scheduled_date, status, notes, photos)
-                VALUES (${customerEmail}, ${description || null}, ${scheduledDate}, ${status}, ${notes || null}, ${photosJson})
+                INSERT INTO deliveries (
+                    customer_email, 
+                    description, 
+                    scheduled_date, 
+                    status, 
+                    notes, 
+                    photos,
+                    wants_painting,
+                    painting_price,
+                    painting_status,
+                    painting_booking_date,
+                    painting_paid_at,
+                    painting_completed_at
+                )
+                VALUES (
+                    ${customerEmail}, 
+                    ${description || null}, 
+                    ${scheduledDate}, 
+                    ${status}, 
+                    ${notes || null}, 
+                    ${photosJson},
+                    ${typeof wantsPainting === 'boolean' ? wantsPainting : null},
+                    ${typeof paintingPrice === 'number' ? paintingPrice : null},
+                    ${paintingStatus || null},
+                    ${paintingBookingDate || null},
+                    ${paintingPaidAt || null},
+                    ${paintingCompletedAt || null}
+                )
                 RETURNING *;
             `;
             
@@ -3097,7 +4456,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             return res.status(200).json({ success: true, delivery: toCamelCase(newDelivery) });
         }
         case 'createDeliveryFromClient': {
-            const { email, userInfo, description, scheduledDate, photos } = req.body;
+            const { email, userInfo, description, scheduledDate, photos, wantsPainting, paintingPrice } = req.body;
             
             if (!email || !scheduledDate) {
                 return res.status(400).json({ 
@@ -3151,8 +4510,9 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     }
                 }
 
-                // 3️⃣ Crear entrega con created_by_client = true
+                // 3️⃣ Crear entrega con created_by_client = true y campos de pintura
                 const photosJson = photos && Array.isArray(photos) ? JSON.stringify(photos) : null;
+                const paintingStatus = wantsPainting ? 'pending_payment' : null;
                 
                 const { rows: [newDelivery] } = await sql`
                     INSERT INTO deliveries (
@@ -3161,7 +4521,10 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         scheduled_date, 
                         status, 
                         photos,
-                        created_by_client
+                        created_by_client,
+                        wants_painting,
+                        painting_price,
+                        painting_status
                     )
                     VALUES (
                         ${email}, 
@@ -3169,28 +4532,46 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         ${scheduledDate}, 
                         'pending', 
                         ${photosJson},
-                        true
+                        true,
+                        ${wantsPainting || false},
+                        ${paintingPrice || null},
+                        ${paintingStatus}
                     )
                     RETURNING *
                 `;
 
-                console.log('[createDeliveryFromClient] ✅ Delivery created:', newDelivery.id);
+                console.log('[createDeliveryFromClient] ✅ Delivery created:', newDelivery.id, 'wantsPainting:', wantsPainting);
 
-                // 4️⃣ Enviar email de confirmación
+                // 4️⃣ Enviar email de confirmación (diferenciado según servicio de pintura)
                 try {
                     const customerName = userInfo?.firstName || 'Cliente';
                     const emailServiceModule = await import('./emailService.js');
                     
                     try {
-                        await emailServiceModule.sendDeliveryCreatedByClientEmail(
-                            email, 
-                            customerName, 
-                            {
-                                description: description || null,
-                                scheduledDate,
-                                photos: photos?.length || 0
-                            }
-                        );
+                        if (wantsPainting) {
+                            // Email especial para clientes que quieren pintura
+                            await emailServiceModule.sendDeliveryWithPaintingServiceEmail(
+                                email, 
+                                customerName, 
+                                {
+                                    description: description || null,
+                                    scheduledDate,
+                                    photos: photos?.length || 0,
+                                    paintingPrice: paintingPrice || 0
+                                }
+                            );
+                        } else {
+                            // Email estándar sin pintura
+                            await emailServiceModule.sendDeliveryCreatedByClientEmail(
+                                email, 
+                                customerName, 
+                                {
+                                    description: description || null,
+                                    scheduledDate,
+                                    photos: photos?.length || 0
+                                }
+                            );
+                        }
                         console.log('[createDeliveryFromClient] ✅ Confirmation email sent to:', email);
                     } catch (err) {
                         console.error('[createDeliveryFromClient] ⚠️ Email send failed:', err);
@@ -3220,11 +4601,11 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             if (!deliveryId || !updates) {
                 return res.status(400).json({ error: 'deliveryId and updates are required.' });
             }
-            const setClause = Object.entries(updates)
-                .filter(([key, value]) => value !== undefined)
-                .map(([key, value]) => {
+            const definedEntries = Object.entries(updates).filter(([, value]) => value !== undefined);
+            const setClause = definedEntries
+                .map(([key], idx) => {
                     const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
-                    return `${snakeKey} = $${Object.keys(updates).indexOf(key) + 2}`;
+                    return `${snakeKey} = $${idx + 2}`;
                 })
                 .join(', ');
             
@@ -3232,7 +4613,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 return res.status(400).json({ error: 'No valid updates provided.' });
             }
             
-            const values = [deliveryId, ...Object.values(updates).filter(v => v !== undefined)];
+            const values = [deliveryId, ...definedEntries.map(([, value]) => value)];
             const { rows: [updatedDelivery] } = await sql.query(
                 `UPDATE deliveries SET ${setClause} WHERE id = $1 RETURNING *`,
                 values
@@ -3285,6 +4666,252 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             }
             
             return res.status(200).json({ success: true, delivery: toCamelCase(completedDelivery) });
+        }
+        case 'updatePaintingStatus': {
+            // Endpoint específico para actualizar estado del servicio de pintura
+            const { deliveryId, paintingStatus, paintingBookingDate, paintingPaidAt, paintingCompletedAt } = req.body;
+            
+            if (!deliveryId) {
+                return res.status(400).json({ error: 'deliveryId is required' });
+            }
+            
+            if (!paintingStatus) {
+                return res.status(400).json({ error: 'paintingStatus is required' });
+            }
+            
+            // Validar estados permitidos
+            const validStatuses = ['pending_payment', 'paid', 'scheduled', 'completed'];
+            if (!validStatuses.includes(paintingStatus)) {
+                return res.status(400).json({ error: 'Invalid paintingStatus' });
+            }
+            
+            try {
+                // Construir query dinámico basado en los campos provistos
+                let updateFields = [`painting_status = '${paintingStatus}'`];
+                
+                // Auto-setear timestamps según el estado
+                if (paintingStatus === 'paid' && !paintingPaidAt) {
+                    updateFields.push(`painting_paid_at = NOW()`);
+                } else if (paintingPaidAt) {
+                    updateFields.push(`painting_paid_at = '${paintingPaidAt}'`);
+                }
+                
+                if (paintingStatus === 'completed' && !paintingCompletedAt) {
+                    updateFields.push(`painting_completed_at = NOW()`);
+                } else if (paintingCompletedAt) {
+                    updateFields.push(`painting_completed_at = '${paintingCompletedAt}'`);
+                }
+                
+                if (paintingStatus === 'scheduled' && paintingBookingDate) {
+                    updateFields.push(`painting_booking_date = '${paintingBookingDate}'`);
+                } else if (paintingBookingDate) {
+                    updateFields.push(`painting_booking_date = '${paintingBookingDate}'`);
+                }
+                
+                const { rows: [updatedDelivery] } = await sql.query(
+                    `UPDATE deliveries 
+                     SET ${updateFields.join(', ')} 
+                     WHERE id = $1 
+                     RETURNING *`,
+                    [deliveryId]
+                );
+                
+                if (!updatedDelivery) {
+                    return res.status(404).json({ error: 'Delivery not found' });
+                }
+                
+                console.log(`[updatePaintingStatus] Updated delivery ${deliveryId} to status: ${paintingStatus}`);
+                
+                return res.status(200).json({ 
+                    success: true, 
+                    delivery: toCamelCase(updatedDelivery) 
+                });
+                
+            } catch (error: any) {
+                console.error('[updatePaintingStatus] Error:', error);
+                return res.status(500).json({ 
+                    success: false, 
+                    error: error.message || 'Error updating painting status' 
+                });
+            }
+        }
+        case 'schedulePaintingBooking': {
+            const { deliveryId, date, time, participants } = req.body;
+
+            if (!deliveryId || !date || !time || participants === undefined || participants === null) {
+                return res.status(400).json({ error: 'deliveryId, date, time, participants are required' });
+            }
+
+            const requestedParticipants = Math.max(1, Math.min(22, parseInt(String(participants), 10)));
+            if (!Number.isFinite(requestedParticipants)) {
+                return res.status(400).json({ error: 'Invalid participants' });
+            }
+
+            try {
+                const availability = await computeSlotAvailability(date, time, 'painting', requestedParticipants);
+                if (!availability.available) {
+                    return res.status(409).json({
+                        success: false,
+                        error: availability.message,
+                        capacity: availability.capacity
+                    });
+                }
+
+                const { rows: [delivery] } = await sql`
+                    SELECT * FROM deliveries WHERE id = ${deliveryId}
+                `;
+
+                if (!delivery) {
+                    return res.status(404).json({ error: 'Delivery not found' });
+                }
+
+                const wantsPainting = Boolean((delivery as any).wants_painting ?? (delivery as any).wantsPainting);
+                if (!wantsPainting) {
+                    return res.status(400).json({ error: 'Delivery does not have painting service enabled' });
+                }
+
+                const currentPaintingStatus = (delivery as any).painting_status ?? (delivery as any).paintingStatus ?? null;
+                const existingBookingDate = (delivery as any).painting_booking_date ?? (delivery as any).paintingBookingDate ?? null;
+                if (currentPaintingStatus === 'scheduled' && existingBookingDate) {
+                    return res.status(409).json({ error: 'Painting session already scheduled for this delivery' });
+                }
+                if (currentPaintingStatus && currentPaintingStatus !== 'paid' && currentPaintingStatus !== 'scheduled') {
+                    return res.status(400).json({ error: 'Painting service is not marked as paid' });
+                }
+
+                let userInfo: any = null;
+                const { rows: [bookingData] } = await sql`
+                    SELECT user_info FROM bookings 
+                    WHERE user_info->>'email' = ${delivery.customer_email}
+                    ORDER BY created_at DESC LIMIT 1
+                `;
+
+                if (bookingData?.user_info) {
+                    userInfo = typeof bookingData.user_info === 'string'
+                        ? JSON.parse(bookingData.user_info)
+                        : bookingData.user_info;
+                }
+
+                if (!userInfo) {
+                    const { rows: [customerData] } = await sql`
+                        SELECT first_name, last_name, phone, country_code FROM customers
+                        WHERE email = ${delivery.customer_email} LIMIT 1
+                    `;
+
+                    userInfo = {
+                        firstName: customerData?.first_name || 'Cliente',
+                        lastName: customerData?.last_name || '',
+                        email: delivery.customer_email,
+                        phone: customerData?.phone || '',
+                        countryCode: customerData?.country_code || '+593'
+                    };
+                }
+
+                userInfo = {
+                    firstName: userInfo?.firstName || 'Cliente',
+                    lastName: userInfo?.lastName || '',
+                    email: userInfo?.email || delivery.customer_email,
+                    phone: userInfo?.phone || '',
+                    countryCode: userInfo?.countryCode || '+593'
+                };
+
+                const { rows: productRows } = await sql`
+                    SELECT * FROM products 
+                    WHERE LOWER(name) LIKE '%pintura%' AND is_active = true
+                    ORDER BY sort_order NULLS LAST, created_at DESC
+                    LIMIT 1
+                `;
+
+                const product = productRows[0]
+                    ? toCamelCase(productRows[0])
+                    : {
+                        id: 'painting_service',
+                        type: 'GROUP_EXPERIENCE',
+                        name: 'Pintura de piezas',
+                        description: 'Reserva de pintura (servicio prepagado)',
+                        isActive: true,
+                        price: 0,
+                        details: {
+                            technique: 'painting',
+                            duration: '2 horas',
+                            durationHours: 2,
+                            activities: [],
+                            generalRecommendations: '',
+                            materials: ''
+                        }
+                    } as any;
+
+                const bookingPayload: any = {
+                    productId: product.id || 'painting_service',
+                    productType: product.type || 'GROUP_EXPERIENCE',
+                    product,
+                    slots: [{ date, time: availability.normalizedTime, instructorId: 0 }],
+                    userInfo,
+                    isPaid: true,
+                    price: 0,
+                    bookingMode: 'flexible',
+                    bookingDate: date,
+                    participants: requestedParticipants,
+                    technique: 'painting'
+                };
+
+                const bookingResult = await addBookingAction(bookingPayload, { suppressPreBookingEmail: true });
+                if (!bookingResult?.success) {
+                    return res.status(500).json({
+                        success: false,
+                        error: bookingResult?.message || 'Failed to create booking'
+                    });
+                }
+
+                const bookingDateTimeLocal = new Date(`${date}T${availability.normalizedTime}:00`);
+                const bookingDateIso = bookingDateTimeLocal.toISOString();
+
+                const { rows: [updatedDelivery] } = await sql`
+                    UPDATE deliveries
+                    SET painting_status = 'scheduled',
+                        painting_booking_date = ${bookingDateIso}
+                    WHERE id = ${deliveryId}
+                    RETURNING *
+                `;
+
+                if (!updatedDelivery) {
+                    if (bookingResult.booking?.bookingCode) {
+                        await sql`
+                            UPDATE bookings SET status = 'expired'
+                            WHERE booking_code = ${bookingResult.booking.bookingCode}
+                        `;
+                    }
+                    return res.status(500).json({ success: false, error: 'Failed to update delivery' });
+                }
+
+                try {
+                    const emailServiceModule = await import('./emailService.js');
+                    const customerName = userInfo?.firstName || 'Cliente';
+                    await emailServiceModule.sendPaintingBookingScheduledEmail(
+                        delivery.customer_email,
+                        customerName,
+                        {
+                            description: delivery.description,
+                            bookingDate: date,
+                            bookingTime: availability.normalizedTime,
+                            participants: requestedParticipants
+                        }
+                    );
+                } catch (emailErr) {
+                    console.warn('[schedulePaintingBooking] Email failed:', emailErr);
+                }
+
+                return res.status(200).json({
+                    success: true,
+                    delivery: toCamelCase(updatedDelivery)
+                });
+            } catch (error: any) {
+                console.error('[schedulePaintingBooking] Error:', error);
+                return res.status(500).json({
+                    success: false,
+                    error: error.message || 'Error scheduling painting booking'
+                });
+            }
         }
         case 'markDeliveryAsReady': {
             const { deliveryId, resend = false } = req.body;
@@ -3357,19 +4984,27 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 
                 const emailServiceModule = await import('./emailService.js');
                 
+                const wantsPainting = Boolean((readyDelivery as any).wants_painting ?? (readyDelivery as any).wantsPainting);
+                const paintingPrice = (readyDelivery as any).painting_price ?? (readyDelivery as any).paintingPrice ?? null;
                 console.log('[markDeliveryAsReady] 🔍 Step 4: Calling sendDeliveryReadyEmail with:', {
+                    id: readyDelivery.id,
                     email: readyDelivery.customer_email,
                     name: customerName,
                     description: readyDelivery.description,
-                    readyAt: readyAt
+                    readyAt: readyAt,
+                    wantsPainting,
+                    paintingPrice
                 });
                 
                 const emailResult = await emailServiceModule.sendDeliveryReadyEmail(
                     readyDelivery.customer_email, 
                     customerName, 
                     {
+                        id: readyDelivery.id,
                         description: readyDelivery.description,
-                        readyAt: readyAt
+                        readyAt: readyAt,
+                        wantsPainting,
+                        paintingPrice
                     }
                 );
                 
@@ -3408,6 +5043,239 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             }
             
             return res.status(200).json({ success: true });
+        }
+        case 'bulkUpdateDeliveryStatus': {
+            console.log('[bulkUpdateDeliveryStatus] ✅ ENDPOINT RECEIVED');
+            const { deliveryIds, action, metadata } = req.body;
+            console.log('[bulkUpdateDeliveryStatus] Parameters:', { deliveryIds, action, metadata });
+            
+            // Validations
+            if (!deliveryIds || !Array.isArray(deliveryIds) || deliveryIds.length === 0) {
+                console.warn('[bulkUpdateDeliveryStatus] ❌ Invalid deliveryIds:', deliveryIds);
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'deliveryIds array is required and must not be empty' 
+                });
+            }
+            
+            if (!['markReady', 'markCompleted', 'delete'].includes(action)) {
+                console.warn('[bulkUpdateDeliveryStatus] ❌ Invalid action:', action);
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'Invalid action. Must be: markReady, markCompleted, or delete' 
+                });
+            }
+            
+            console.log(`[bulkUpdateDeliveryStatus] 🔄 Processing ${deliveryIds.length} deliveries with action: ${action}`);
+            
+            // Process bulk operation
+            try {
+                const results = [];
+                const errors = [];
+                
+                for (const deliveryId of deliveryIds) {
+                    try {
+                        switch(action) {
+                            case 'markReady': {
+                                console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Checking if exists...`);
+                                const { rows: [existingDelivery] } = await sql`
+                                    SELECT * FROM deliveries WHERE id = ${deliveryId}
+                                `;
+                                
+                                if (!existingDelivery) {
+                                    console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Not found`);
+                                    errors.push({ id: deliveryId, error: 'Delivery not found' });
+                                    break;
+                                }
+                                
+                                if (existingDelivery.status === 'completed') {
+                                    console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Already completed`);
+                                    errors.push({ id: deliveryId, error: 'Delivery already completed' });
+                                    break;
+                                }
+                                
+                                // Mark as ready
+                                const readyAt = existingDelivery.ready_at || new Date().toISOString();
+                                console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Updating status to 'ready'...`);
+                                const { rows: [readyDelivery] } = await sql`
+                                    UPDATE deliveries 
+                                    SET status = 'ready', ready_at = ${readyAt}
+                                    WHERE id = ${deliveryId}
+                                    RETURNING *
+                                `;
+                                console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] ✅ Updated successfully`);
+                                
+                                // Send email synchronously (wait for it)
+                                let emailSent = false as boolean;
+                                let emailError: string | undefined = undefined;
+                                let emailDryRunPath: string | undefined = undefined;
+                                try {
+                                    console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Fetching customer data...`);
+                                    const { rows: [customerData] } = await sql`
+                                        SELECT first_name, last_name FROM customers WHERE email = ${readyDelivery.customer_email} LIMIT 1
+                                    `;
+                                    if (customerData) {
+                                        const customerName = customerData.first_name || 'Cliente';
+                                        
+                                        console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Sending email to ${customerName} (${readyDelivery.customer_email})...`);
+                                        const emailServiceModule = await import('./emailService.js');
+                                        const wantsPainting = Boolean((readyDelivery as any).wants_painting ?? (readyDelivery as any).wantsPainting);
+                                        const paintingPrice = (readyDelivery as any).painting_price ?? (readyDelivery as any).paintingPrice ?? null;
+                                        const emailResult = await emailServiceModule.sendDeliveryReadyEmail(
+                                            readyDelivery.customer_email, 
+                                            customerName, 
+                                            {
+                                                id: readyDelivery.id,
+                                                description: readyDelivery.description,
+                                                readyAt: readyDelivery.ready_at,
+                                                wantsPainting,
+                                                paintingPrice
+                                            }
+                                        );
+                                        emailSent = !!(emailResult && emailResult.sent);
+                                        emailError = (emailResult && !emailResult.sent) ? emailResult.error : undefined;
+                                        emailDryRunPath = (emailResult && !emailResult.sent) ? emailResult.dryRunPath : undefined;
+                                        console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] 📧 Email sent successfully:`, emailResult);
+                                    } else {
+                                        console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Customer data not found for email`);
+                                    }
+                                } catch (emailErr) {
+                                    console.error(`[bulkUpdateDeliveryStatus] [${deliveryId}] ❌ Email failed:`, emailErr);
+                                    emailSent = false;
+                                    emailError = emailErr instanceof Error ? emailErr.message : String(emailErr);
+                                }
+                                
+                                results.push({ 
+                                    id: deliveryId, 
+                                    success: true, 
+                                    delivery: toCamelCase(readyDelivery),
+                                    emailSent,
+                                    emailError,
+                                    emailDryRunPath
+                                });
+                                break;
+                            }
+                            
+                            case 'markCompleted': {
+                                console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Checking if exists...`);
+                                const { rows: [existingDelivery] } = await sql`
+                                    SELECT * FROM deliveries WHERE id = ${deliveryId}
+                                `;
+                                
+                                if (!existingDelivery) {
+                                    console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Not found`);
+                                    errors.push({ id: deliveryId, error: 'Delivery not found' });
+                                    break;
+                                }
+                                
+                                if (existingDelivery.status === 'completed') {
+                                    console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Already completed`);
+                                    errors.push({ id: deliveryId, error: 'Delivery already completed' });
+                                    break;
+                                }
+                                
+                                console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Updating status to 'completed'...`);
+                                const { rows: [completedDelivery] } = await sql`
+                                    UPDATE deliveries 
+                                    SET status = 'completed', 
+                                        completed_at = NOW(),
+                                        delivered_at = NOW()
+                                    WHERE id = ${deliveryId}
+                                    RETURNING *
+                                `;
+                                console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] ✅ Updated successfully`);
+                                
+                                // Send email synchronously (wait for it)
+                                let emailSent = false as boolean;
+                                let emailError: string | undefined = undefined;
+                                let emailDryRunPath: string | undefined = undefined;
+                                try {
+                                    console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Fetching customer data...`);
+                                    const { rows: [customerData] } = await sql`
+                                        SELECT first_name, last_name FROM customers WHERE email = ${completedDelivery.customer_email} LIMIT 1
+                                    `;
+                                    if (customerData) {
+                                        const customerName = customerData.first_name || 'Cliente';
+                                        
+                                        console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Sending email to ${customerName} (${completedDelivery.customer_email})...`);
+                                        const emailServiceModule = await import('./emailService.js');
+                                        const emailResult = await emailServiceModule.sendDeliveryCompletedEmail(
+                                            completedDelivery.customer_email,
+                                            customerName,
+                                            {
+                                                description: completedDelivery.description,
+                                                deliveredAt: completedDelivery.delivered_at || completedDelivery.completed_at
+                                            }
+                                        );
+                                        emailSent = !!(emailResult && emailResult.sent);
+                                        emailError = (emailResult && !emailResult.sent) ? emailResult.error : undefined;
+                                        emailDryRunPath = (emailResult && !emailResult.sent) ? emailResult.dryRunPath : undefined;
+                                        console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] 📧 Email sent successfully:`, emailResult);
+                                    } else {
+                                        console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Customer data not found for email`);
+                                    }
+                                } catch (emailErr) {
+                                    console.error(`[bulkUpdateDeliveryStatus] [${deliveryId}] ❌ Email failed:`, emailErr);
+                                    emailSent = false;
+                                    emailError = emailErr instanceof Error ? emailErr.message : String(emailErr);
+                                }
+                                
+                                results.push({ 
+                                    id: deliveryId, 
+                                    success: true, 
+                                    delivery: toCamelCase(completedDelivery),
+                                    emailSent,
+                                    emailError,
+                                    emailDryRunPath
+                                });
+                                break;
+                            }
+                            
+                            case 'delete': {
+                                console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] Deleting...`);
+                                const { rowCount } = await sql`
+                                    DELETE FROM deliveries WHERE id = ${deliveryId}
+                                `;
+                                
+                                if (rowCount === 0) {
+                                    console.warn(`[bulkUpdateDeliveryStatus] [${deliveryId}] Not found`);
+                                    errors.push({ id: deliveryId, error: 'Delivery not found' });
+                                } else {
+                                    console.log(`[bulkUpdateDeliveryStatus] [${deliveryId}] ✅ Deleted successfully`);
+                                    results.push({ id: deliveryId, success: true });
+                                }
+                                break;
+                            }
+                        }
+                    } catch (err) {
+                        console.error(`[bulkUpdateDeliveryStatus] [${deliveryId}] ❌ Error:`, err);
+                        errors.push({ 
+                            id: deliveryId, 
+                            error: err instanceof Error ? err.message : 'Unknown error' 
+                        });
+                    }
+                }
+                
+                console.log('[bulkUpdateDeliveryStatus] ✅ COMPLETED', { succeeded: results.length, failed: errors.length });
+                return res.status(200).json({
+                    success: true,
+                    results,
+                    errors,
+                    summary: {
+                        total: deliveryIds.length,
+                        succeeded: results.length,
+                        failed: errors.length
+                    }
+                });
+                
+            } catch (err) {
+                console.error('[bulkUpdateDeliveryStatus] ❌ FATAL ERROR:', err);
+                return res.status(500).json({
+                    success: false,
+                    error: 'Bulk operation failed',
+                    details: err instanceof Error ? err.message : 'Unknown error'
+                });
+            }
         }
         case 'updateDeliveryStatuses': {
             // Update overdue deliveries
@@ -3867,7 +5735,10 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 }
 
 
-async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookingCode'> & { invoiceData?: Omit<InvoiceRequest, 'id' | 'bookingId' | 'status' | 'requestedAt' | 'processedAt'> }): Promise<AddBookingResult> {
+async function addBookingAction(
+    body: Omit<Booking, 'id' | 'createdAt' | 'bookingCode'> & { invoiceData?: Omit<InvoiceRequest, 'id' | 'bookingId' | 'status' | 'requestedAt' | 'processedAt'> },
+    options?: { suppressPreBookingEmail?: boolean }
+): Promise<AddBookingResult> {
   const bookingCodeCheck = (body as any).bookingCode;
   if (bookingCodeCheck) {
     const { rows: existingByCode } = await sql`SELECT * FROM bookings WHERE booking_code = ${bookingCodeCheck}`;
@@ -3897,7 +5768,46 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
 
     // COUPLES_EXPERIENCE VALIDATION
     const isCouplesExperience = body.productType === 'COUPLES_EXPERIENCE';
-    const technique = (body as any).technique;
+    
+    // Extract technique: first from direct field, then from product.details
+    let technique = (body as any).technique;
+    if (!technique && body.product && (body.product as any).details) {
+      technique = (body.product as any).details.technique;
+    }
+    
+    console.log(`[addBookingAction] productType=${body.productType}, technique=${technique} (from body.technique=${(body as any).technique}, from product.details=${body.product && (body.product as any).details ? (body.product as any).details.technique : 'N/A'})`);
+
+    // FIX: Derivar technique desde product.name para garantizar consistencia
+    const productName = body.product?.name || '';
+    const normalizedProductName = productName.toLowerCase();
+    
+    // Mapeo de nombres de producto -> técnica válida
+    const productToTechnique: Record<string, string> = {
+      'pintura de piezas': 'painting',
+      'torno alfarero': 'potters_wheel',
+      'modelado a mano': 'hand_modeling',
+      'clase grupal': 'potters_wheel',
+      'clase grupal (mixto)': 'potters_wheel', // fallback para mixto
+    };
+    
+    // Encontrar técnica correcta basada en product.name
+    let correctTechnique: string | null = null;
+    for (const [name, tech] of Object.entries(productToTechnique)) {
+      if (normalizedProductName.includes(name)) {
+        correctTechnique = tech;
+        break;
+      }
+    }
+    
+    // Validar y corregir técnica si hay inconsistencia
+    if (correctTechnique && technique !== correctTechnique) {
+      console.log(`[addBookingAction] CORRECCIÓN: technique "${technique}" → "${correctTechnique}" basado en product.name="${productName}"`);
+      technique = correctTechnique;
+    } else if (!technique) {
+      // Si no hay técnica y no se puede derivar, usar fallback
+      technique = 'potters_wheel';
+      console.log(`[addBookingAction] ADVERTENCIA: technique null, usando fallback "potters_wheel"`);
+    }
 
     if (isCouplesExperience) {
       // Must have exactly 1 slot
@@ -3954,6 +5864,115 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
         }
       }
     }
+
+        if (body.productType === 'GROUP_CLASS') {
+            if (!body.slots || body.slots.length !== 1) {
+                throw new Error('GROUP_CLASS must have exactly 1 slot');
+            }
+
+            const groupMetadata = (body as any).groupClassMetadata;
+            if (!groupMetadata || !Array.isArray(groupMetadata.techniqueAssignments)) {
+                throw new Error('GROUP_CLASS requires technique assignments');
+            }
+
+            const pottersCount = groupMetadata.techniqueAssignments.filter((a: any) => a.technique === 'potters_wheel').length;
+            const handModelingCount = groupMetadata.techniqueAssignments.filter((a: any) => a.technique === 'hand_modeling').length;
+            const paintingCount = groupMetadata.techniqueAssignments.filter((a: any) => a.technique === 'painting').length;
+            const handWorkCount = handModelingCount + paintingCount;
+            const totalParticipants = groupMetadata.totalParticipants || groupMetadata.techniqueAssignments.length;
+
+            if (totalParticipants < 2) {
+                throw new Error('Las experiencias grupales requieren minimo 2 personas');
+            }
+
+            const slot = body.slots[0];
+            const normalizedTime = normalizeTime(slot.time);
+            const slotStartMinutes = timeToMinutes(normalizedTime);
+            const slotEndMinutes = slotStartMinutes + (2 * 60);
+            const dayKey = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date(`${slot.date}T00:00:00`).getDay()];
+
+            const { availability, scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
+            const maxCapacityMap = getMaxCapacityMap(classCapacity);
+
+            const fixedPottersTimes = getFixedSlotTimesForDate(slot.date, dayKey, availability, scheduleOverrides, 'potters_wheel');
+            const fixedPottersMinutes = fixedPottersTimes.map(timeToMinutes);
+            const fixedHandTimes = getFixedSlotTimesForDate(slot.date, dayKey, availability, scheduleOverrides, 'molding');
+
+            if (totalParticipants < 3) {
+                if (pottersCount > 0 && !fixedPottersTimes.includes(normalizedTime)) {
+                    throw new Error('Para 2 personas solo se permiten horarios fijos de torno');
+                }
+                if (pottersCount === 0 && !fixedHandTimes.includes(normalizedTime)) {
+                    throw new Error('Para 2 personas solo se permiten horarios fijos de modelado');
+                }
+            }
+
+            const courseSessionsByDate = await loadCourseSessionsByDate(slot.date, slot.date);
+            if (hasCourseOverlap(slot.date, slotStartMinutes, slotEndMinutes, courseSessionsByDate)) {
+                throw new Error('Horario no disponible por curso');
+            }
+
+            if (pottersCount > 0 && totalParticipants >= 3 && isPottersFixedConflict(slotStartMinutes, fixedPottersMinutes)) {
+                throw new Error('Horario no disponible por clase fija de torno');
+            }
+
+            const { rows: bookingsRows } = await sql`
+                SELECT * FROM bookings
+                WHERE status != 'expired'
+                ORDER BY created_at DESC
+            `;
+            const allBookings = bookingsRows.map(parseBookingFromDB);
+            const bookingsOnDate = allBookings.filter(b => b.slots?.some((s: any) => s.date === slot.date));
+
+            let pottersBooked = 0;
+            let pottersBlocked = false;
+            let handWorkBooked = 0;
+
+            bookingsOnDate.forEach(booking => {
+                if (!booking.slots || !Array.isArray(booking.slots)) return;
+                const { potters: bookingPotters, handWork: bookingHandWork } = getGroupClassBookingCounts(booking);
+
+                booking.slots.forEach((s: any) => {
+                    if (s.date !== slot.date) return;
+
+                    const bookingStart = timeToMinutes(normalizeTime(s.time));
+                    if (Number.isNaN(bookingStart)) return;
+                    const bookingEnd = bookingStart + (2 * 60);
+
+                    if (bookingPotters > 0) {
+                        if (bookingStart === slotStartMinutes) {
+                            pottersBooked += bookingPotters;
+                        } else if (slotStartMinutes >= bookingStart - 120 && slotStartMinutes < bookingStart + 120) {
+                            pottersBlocked = true;
+                        }
+                    }
+
+                    if (bookingHandWork > 0 && hasTimeOverlap(slotStartMinutes, slotEndMinutes, bookingStart, bookingEnd)) {
+                        handWorkBooked += bookingHandWork;
+                    }
+                });
+            });
+
+            if (pottersBlocked) {
+                throw new Error('Horario no disponible por solapamiento de torno');
+            }
+
+            if (pottersCount > 0) {
+                const pottersMax = resolveCapacity(slot.date, 'potters_wheel', maxCapacityMap, scheduleOverrides);
+                const pottersAvailable = Math.max(0, pottersMax - pottersBooked);
+                if (pottersAvailable < pottersCount) {
+                    throw new Error('No hay cupos suficientes en torno para este horario');
+                }
+            }
+
+            if (handWorkCount > 0) {
+                const handWorkMax = resolveCapacity(slot.date, 'hand_modeling', maxCapacityMap, scheduleOverrides);
+                const handWorkAvailable = Math.max(0, handWorkMax - handWorkBooked);
+                if (handWorkAvailable < handWorkCount) {
+                    throw new Error('No hay cupos suficientes en modelado/pintura para este horario');
+                }
+            }
+        }
     
     // Calcular reschedule allowance basado en tipo de paquete
     let rescheduleAllowance = 0;
@@ -3970,11 +5989,38 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
 
     const groupMetadata = (body as any).groupClassMetadata || null;
 
+    // FIX: Para GROUP_CLASS, actualizar product.name con la técnica específica
+    let finalProduct = body.product;
+    if (body.productType === 'GROUP_CLASS' && groupMetadata && groupMetadata.techniqueAssignments && groupMetadata.techniqueAssignments.length > 0) {
+      const techniques = groupMetadata.techniqueAssignments.map((a: any) => a.technique);
+      const uniqueTechniques = [...new Set(techniques)];
+      
+      // Nombres legibles de técnicas
+      const techniqueNames: Record<string, string> = {
+        'potters_wheel': 'Torno Alfarero',
+        'hand_modeling': 'Modelado a Mano',
+        'painting': 'Pintura de piezas'
+      };
+      
+      let productName: string;
+      if (uniqueTechniques.length === 1) {
+        // Todos usan la misma técnica - nombre específico
+        productName = techniqueNames[uniqueTechniques[0] as string] || 'Clase Grupal';
+      } else {
+        // Técnicas mixtas
+        productName = 'Clase Grupal (mixto)';
+      }
+      
+      // Clonar producto y actualizar name
+      finalProduct = { ...body.product, name: productName };
+      console.log(`[addBooking] GROUP_CLASS: Updated product.name from "${body.product.name}" to "${productName}"`);
+    }
+
     const { rows: created } = await sql`
       INSERT INTO bookings (
         booking_code, product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_date, accepted_no_refund, expires_at, status, technique, reschedule_allowance, reschedule_used, reschedule_history, participants, group_metadata
       ) VALUES (
-        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(body.product)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}, NOW() + INTERVAL '2 hours', 'active', ${technique || null}, ${rescheduleAllowance}, 0, '[]'::jsonb, ${(body as any).participants || 1}, ${groupMetadata ? JSON.stringify(groupMetadata) : null}
+        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(finalProduct)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}, NOW() + INTERVAL '2 hours', 'active', ${technique || null}, ${rescheduleAllowance}, 0, '[]'::jsonb, ${(body as any).participants || 1}, ${groupMetadata ? JSON.stringify(groupMetadata) : null}
       ) RETURNING *;
     `;
 
@@ -4168,9 +6214,11 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
       }
     }
 
-    // Send pre-booking confirmation email
-    try {
-      console.log('[ADD BOOKING] Sending pre-booking confirmation email to:', booking.userInfo.email);
+        // Send pre-booking confirmation email
+        const suppressPreBookingEmail = Boolean(options?.suppressPreBookingEmail) || technique === 'painting';
+        if (!suppressPreBookingEmail) {
+            try {
+                console.log('[ADD BOOKING] Sending pre-booking confirmation email to:', booking.userInfo.email);
       
       // CRÍTICO: Re-fetch booking ANTES de enviar email para obtener payment_details actualizados
       let bookingForEmail = booking;
@@ -4202,12 +6250,13 @@ async function addBookingAction(body: Omit<Booking, 'id' | 'createdAt' | 'bookin
       } else {
         await emailService.sendPreBookingConfirmationEmail(bookingForEmail, bankDetails);
       }
-      console.log('[ADD BOOKING] Confirmation email sent successfully');
-    } catch (emailError) {
-      console.error('[ADD BOOKING] Error sending confirmation email:', emailError);
-      // Don't fail the booking creation if email fails
-      // The booking is already created, just log the error
-    }
+                console.log('[ADD BOOKING] Confirmation email sent successfully');
+            } catch (emailError) {
+                console.error('[ADD BOOKING] Error sending confirmation email:', emailError);
+                // Don't fail the booking creation if email fails
+                // The booking is already created, just log the error
+            }
+        }
 
     // Re-fetch booking para obtener datos actualizados después de payment_details
     try {

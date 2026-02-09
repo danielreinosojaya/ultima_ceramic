@@ -428,74 +428,101 @@ const clearCache = (key?: string): void => {
 // ===== OPTIMIZACIÓN: Invalidación granular de cache =====
 // Reemplazar invalidación binaria con invalidación selectiva
 
+// Timestamp de última mutation para cache-busting
+let lastMutationTimestamp = 0;
+
 export const invalidateBookingsCache = (): void => {
     console.log('[Cache] Invalidating bookings cache only');
     clearCache('bookings');
+    lastMutationTimestamp = Date.now(); // Update timestamp para cache-busting
     // ✅ NO invalida: customers, products, instructors, giftcards
 };
 
 export const invalidateCustomersCache = (): void => {
     console.log('[Cache] Invalidating customers cache only');
     clearCache('customers');
+    lastMutationTimestamp = Date.now();
 };
 
 export const invalidatePaymentsCache = (): void => {
     console.log('[Cache] Invalidating payments cache only');
     clearCache('payments');
+    lastMutationTimestamp = Date.now();
 };
 
 export const invalidateGiftcardsCache = (): void => {
     console.log('[Cache] Invalidating giftcards cache only');
     clearCache('giftcards');
+    lastMutationTimestamp = Date.now();
 };
 
 export const invalidateProductsCache = (): void => {
     console.log('[Cache] Invalidating products cache only');
     clearCache('products');
+    lastMutationTimestamp = Date.now();
+};
+
+export const invalidateDeliveriesCache = (): void => {
+    console.log('[Cache] Invalidating deliveries cache only');
+    clearCache('deliveries');
+    lastMutationTimestamp = Date.now();
 };
 
 // Para operaciones que afectan múltiples recursos
 export const invalidateMultiple = (keys: string[]): void => {
     console.log('[Cache] Invalidating multiple:', keys);
     keys.forEach(key => clearCache(key));
+    lastMutationTimestamp = Date.now(); // Update timestamp
 };
 
 const getData = async <T>(key: string): Promise<T> => {
-    // Intentar obtener de cache primero con prioridad alta
-    const cached = getCachedData<T>(key);
-    if (cached) {
-        console.log(`Cache hit for ${key}`);
-        return cached;
+    // Parse key para extract cache-busting timestamp si existe
+    const [actualKey, cacheBuster] = key.includes('&_t=') ? key.split('&') : [key, null];
+    
+    // Check si hay datos en cache válidos (solo si NO hay cache-buster)
+    if (!cacheBuster) {
+        const cached = getCachedData<T>(actualKey);
+        if (cached) {
+            console.log(`Cache hit for ${actualKey}`);
+            return cached;
+        }
+    } else {
+        // Si hay cache-buster, forzar bypass de cache
+        console.log(`Cache-busting fetch for ${actualKey} with ${cacheBuster}`);
+        clearCache(actualKey); // Limpiar cache viejo
     }
     
     // Verificar si ya hay un request pendiente para evitar duplicados
-    const requestKey = `get_${key}`;
+    const requestKey = `get_${actualKey}${cacheBuster || ''}`;
     if (pendingRequests.has(requestKey)) {
-        console.log(`Request already pending for ${key}, waiting...`);
+        console.log(`Request already pending for ${actualKey}, waiting...`);
         return pendingRequests.get(requestKey) as Promise<T>;
     }
     
-    console.log(`Cache miss for ${key}, fetching from API`);
-    const requestPromise = fetchData(`/api/data?key=${key}`)
+    // Construir URL con cache-buster si existe
+    const url = `/api/data?key=${actualKey}${cacheBuster ? `&${cacheBuster.substring(1)}` : ''}`;
+    console.log(`Cache miss for ${actualKey}, fetching from API: ${url}`);
+    
+    const requestPromise = fetchData(url)
         .then(data => {
-            setCachedData(key, data);
+            setCachedData(actualKey, data);
             pendingRequests.delete(requestKey);
             return data;
         })
         .catch(error => {
             pendingRequests.delete(requestKey);
-            console.error(`Failed to fetch ${key}:`, error);
+            console.error(`Failed to fetch ${actualKey}:`, error);
             
             // En caso de error, intentar devolver datos del cache aunque estén expirados
-            const expiredCache = cache.get(key);
+            const expiredCache = cache.get(actualKey);
             if (expiredCache) {
-                console.warn(`Using expired cache for ${key} due to fetch error`);
+                console.warn(`Using expired cache for ${actualKey} due to fetch error`);
                 return expiredCache.data as T;
             }
             
             // Si no hay cache, devolver datos por defecto según el tipo
-            console.warn(`No cache available for ${key}, returning default data`);
-            return getDefaultData<T>(key);
+            console.warn(`No cache available for ${actualKey}, returning default data`);
+            return getDefaultData<T>(actualKey);
         });
     
     pendingRequests.set(requestKey, requestPromise);
@@ -515,7 +542,9 @@ const getDefaultData = <T>(key: string): T => {
         announcements: [],
         invoiceRequests: [],
         notifications: [],
-        uiLabels: { taxIdLabel: 'RUC' }
+        uiLabels: { taxIdLabel: 'RUC' },
+        footerInfo: { whatsapp: '', email: '', instagramHandle: '', address: '', googleMapsLink: '#' },
+        policies: { cancellation: '', general: '', noRefund: '' }
     };
     
     return defaults[key] || [] as T;
@@ -850,8 +879,9 @@ export const getCustomers = async (): Promise<Customer[]> => {
 
 export const getBookings = async (): Promise<Booking[]> => {
     try {
-        // Usar cache normal sin forzar limpieza
-        const rawBookings = await getData<any[]>('bookings');
+        // Agregar cache-busting timestamp si hubo mutation reciente
+        const cacheBuster = lastMutationTimestamp > 0 ? `&_t=${lastMutationTimestamp}` : '';
+        const rawBookings = await getData<any[]>(`bookings${cacheBuster}`);
         
         if (!rawBookings || !Array.isArray(rawBookings)) {
             console.warn('getBookings: No bookings data received, returning empty array');
@@ -1205,14 +1235,70 @@ export const updateAvailability = (availability: Record<DayKey, AvailableSlot[]>
 export const getScheduleOverrides = (): Promise<ScheduleOverrides> => getData('scheduleOverrides');
 export const updateScheduleOverrides = (overrides: ScheduleOverrides): Promise<{ success: boolean }> => setData('scheduleOverrides', overrides);
 
-// Instructors
+// Instructors - ✅ Usar cache para evitar requests múltiples
+let instructorsCache: { data: Instructor[] | null; timestamp: number } = { data: null, timestamp: 0 };
+const INSTRUCTORS_CACHE_DURATION = 60 * 60 * 1000; // 1 hora cache para instructors
+let instructorsFetchPromise: Promise<Instructor[]> | null = null;
+
 export const getInstructors = async (): Promise<Instructor[]> => {
-    const rawInstructors = await fetchData('/api/data?action=instructors');
-    return rawInstructors.map(parseInstructor);
+    // ✅ Check cache primero
+    const now = Date.now();
+    if (instructorsCache.data && (now - instructorsCache.timestamp) < INSTRUCTORS_CACHE_DURATION) {
+        console.log('[getInstructors] Cache hit');
+        return instructorsCache.data;
+    }
+    
+    // ✅ Deduplicar requests concurrentes
+    if (instructorsFetchPromise) {
+        console.log('[getInstructors] Reusing pending request');
+        return instructorsFetchPromise;
+    }
+    
+    console.log('[getInstructors] Cache miss, fetching...');
+    instructorsFetchPromise = fetchData('/api/data?action=instructors')
+        .then(rawInstructors => {
+            const parsed = rawInstructors.map(parseInstructor);
+            instructorsCache = { data: parsed, timestamp: Date.now() };
+            instructorsFetchPromise = null;
+            return parsed;
+        })
+        .catch(error => {
+            instructorsFetchPromise = null;
+            console.error('[getInstructors] Error:', error);
+            // Retornar cache expirado si existe
+            if (instructorsCache.data) {
+                console.warn('[getInstructors] Using expired cache');
+                return instructorsCache.data;
+            }
+            return [];
+        });
+    
+    return instructorsFetchPromise;
 };
-export const updateInstructors = (instructors: Instructor[]): Promise<{ success: boolean }> => setData('instructors', instructors);
-export const reassignAnddeleteInstructor = (instructorIdToDelete: number, replacementInstructorId: number): Promise<{ success: boolean }> => postAction('reassignAndDeleteInstructor', { instructorIdToDelete, replacementInstructorId });
-export const deleteInstructor = (id: number): Promise<{ success: boolean }> => postAction('deleteInstructor', { id });
+
+// ✅ Invalidar cache de instructors cuando se actualizan
+export const invalidateInstructorsCache = (): void => {
+    console.log('[Cache] Invalidating instructors cache');
+    instructorsCache = { data: null, timestamp: 0 };
+    instructorsFetchPromise = null;
+};
+
+export const updateInstructors = async (instructors: Instructor[]): Promise<{ success: boolean }> => {
+    const result = await setData('instructors', instructors);
+    // Invalidar cache después de actualizar
+    invalidateInstructorsCache();
+    return result;
+};
+export const reassignAnddeleteInstructor = async (instructorIdToDelete: number, replacementInstructorId: number): Promise<{ success: boolean }> => {
+    const result = await postAction('reassignAndDeleteInstructor', { instructorIdToDelete, replacementInstructorId });
+    invalidateInstructorsCache();
+    return result;
+};
+export const deleteInstructor = async (id: number): Promise<{ success: boolean }> => {
+    const result = await postAction('deleteInstructor', { id });
+    invalidateInstructorsCache();
+    return result;
+};
 export const checkInstructorUsage = (instructorId: number): Promise<{ hasUsage: boolean }> => postAction('checkInstructorUsage', { instructorId });
 
 
@@ -1280,6 +1366,134 @@ export const triggerScheduledNotifications = (): Promise<{ success: boolean }> =
 export const getBackgroundSettings = (): Promise<BackgroundSettings> => getData('backgroundSettings');
 export const updateBackgroundSettings = (settings: BackgroundSettings): Promise<{ success: boolean }> => setData('backgroundSettings', settings);
 export const getBankDetails = (): Promise<BankDetails[]> => getData('bankDetails');
+
+// Custom Experiences - Available Slots
+export interface AvailableSlotSearchParams {
+    technique: string;          // 'potters_wheel' | 'hand_modeling' | 'painting'
+    participants: number;       // Cantidad de participantes
+    startDate?: string;         // YYYY-MM-DD, default: hoy
+    daysAhead?: number;         // default: 60 días
+}
+
+export interface AvailableSlotResult {
+    date: string;               // YYYY-MM-DD
+    time: string;               // HH:mm
+    available: number;          // Cupos disponibles
+    total: number;              // Capacidad total
+    canBook: boolean;           // true si tiene espacio suficiente
+    instructor: string;         // Nombre del instructor
+    instructorId: number;       // ID del instructor
+    technique: string;          // Técnica del slot
+    blockedReason?: string | null;  // 'course_conflict' si está bloqueado por curso
+}
+
+export interface GroupClassSlotResult extends AvailableSlotResult {
+    capacityDetails?: {
+        pottersWheel?: { available: number; total: number; requested: number };
+        handWork?: { available: number; total: number; requested: number };
+    };
+}
+
+export interface GroupClassSlotsParams {
+    pottersWheel: number;
+    handModeling: number;
+    painting: number;
+    startDate?: string;
+    daysAhead?: number;
+}
+
+export const getAvailableSlotsForExperience = async (params: AvailableSlotSearchParams): Promise<AvailableSlotResult[]> => {
+    const { technique, participants, startDate, daysAhead } = params;
+    
+    const queryParams = new URLSearchParams({
+        technique,
+        participants: participants.toString(),
+        ...(startDate && { startDate }),
+        ...(daysAhead && { daysAhead: daysAhead.toString() })
+    });
+
+    const response = await fetchData(`/api/data?action=getAvailableSlots&${queryParams.toString()}`);
+    
+    if (response && response.success) {
+        return response.slots || [];
+    }
+    
+    console.error('Error fetching available slots:', response);
+    return [];
+};
+
+export const getGroupClassSlots = async (params: GroupClassSlotsParams): Promise<GroupClassSlotResult[]> => {
+    const { pottersWheel, handModeling, painting, startDate, daysAhead } = params;
+
+    const queryParams = new URLSearchParams({
+        pottersWheel: pottersWheel.toString(),
+        handModeling: handModeling.toString(),
+        painting: painting.toString(),
+        ...(startDate && { startDate }),
+        ...(daysAhead && { daysAhead: daysAhead.toString() })
+    });
+
+    const response = await fetchData(`/api/data?action=getGroupClassSlots&${queryParams.toString()}`);
+
+    if (response && response.success) {
+        return response.slots || [];
+    }
+
+    console.error('Error fetching group class slots:', response);
+    return [];
+};
+
+// Tipo para resultado de checkSlotAvailability
+export interface SlotAvailabilityResult {
+    success: boolean;
+    available: boolean;
+    date: string;
+    time: string;
+    technique: string;
+    requestedParticipants: number;
+    capacity: {
+        max: number;
+        booked: number;
+        available: number;
+    };
+    bookingsCount: number;
+    message: string;
+}
+
+// Validar disponibilidad de un slot específico en tiempo real
+export const checkSlotAvailability = async (
+    date: string, 
+    time: string, 
+    technique: string, 
+    participants: number
+): Promise<SlotAvailabilityResult> => {
+    const queryParams = new URLSearchParams({
+        action: 'checkSlotAvailability',
+        date,
+        time,
+        technique,
+        participants: participants.toString()
+    });
+
+    try {
+        const response = await fetch(`/api/data?${queryParams.toString()}`);
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Error checking slot availability:', error);
+        return {
+            success: false,
+            available: false,
+            date,
+            time,
+            technique,
+            requestedParticipants: participants,
+            capacity: { max: 0, booked: 0, available: 0 },
+            bookingsCount: 0,
+            message: 'Error al verificar disponibilidad'
+        };
+    }
+};
 
 // Función optimizada para cargar múltiples datos en batch
 export const getBatchedData = async (keys: string[]): Promise<Record<string, any>> => {
@@ -1349,8 +1563,9 @@ export const getEssentialAppData = async () => {
 // Función específica para datos de scheduling
 export const getSchedulingData = async () => {
     // Cargar datos críticos para disponibilidad (instructores y availability)
+    // ✅ Usar getInstructors() que tiene cache dedicado de 1 hora
     const [instructors, availability] = await Promise.all([
-        getData('instructors'),
+        getInstructors(),
         getData('availability')
     ]);
     
@@ -1385,8 +1600,22 @@ export const generateCustomersFromBookings = (bookings: Booking[]): Customer[] =
         return [];
     }
     
-    const customerMap: Map<string, { userInfo: UserInfo; bookings: Booking[] }> = new Map();
+    // PASO 1: Deduplicar bookings por ID
+    const uniqueBookingsMap = new Map<string, Booking>();
     for (const booking of bookings) {
+        if (booking && booking.id) {
+            uniqueBookingsMap.set(booking.id, booking);
+        }
+    }
+    const uniqueBookings = Array.from(uniqueBookingsMap.values());
+    
+    if (uniqueBookings.length !== bookings.length) {
+        console.warn(`[generateCustomersFromBookings] Removed ${bookings.length - uniqueBookings.length} duplicate bookings`);
+    }
+    
+    // PASO 2: Agrupar por email
+    const customerMap: Map<string, { userInfo: UserInfo; bookings: Booking[] }> = new Map();
+    for (const booking of uniqueBookings) {
         console.log('generateCustomersFromBookings: Processing booking', booking?.id, 'with userInfo:', !!booking?.userInfo);
         
         if (!booking.userInfo || !booking.userInfo.email) {
@@ -1474,15 +1703,11 @@ export const getStandaloneCustomers = async (): Promise<Customer[]> => {
 };
 
 export const getCustomersWithDeliveries = async (bookings: Booking[]): Promise<Customer[]> => {
-    // Eliminado debug
-    
     // Get customers from bookings first
-            const customersFromBookings = generateCustomersFromBookings(bookings);
-    // Eliminado debug
+    const customersFromBookings = generateCustomersFromBookings(bookings);
     
     // Get standalone customers from the customers table
     const standaloneCustomers = await getStandaloneCustomers();
-    // Eliminado debug
     
     // Merge customers, avoiding duplicates (booking-based customers take priority)
     const customerEmailsFromBookings = new Set(customersFromBookings.map(c => c.email.toLowerCase()));
@@ -1491,11 +1716,9 @@ export const getCustomersWithDeliveries = async (bookings: Booking[]): Promise<C
     );
     
     const allCustomers = [...customersFromBookings, ...uniqueStandaloneCustomers];
-    // Eliminado debug
     
-    // Get all deliveries
+    // ⚡ Get all deliveries (now lightweight - no photos loaded)
     const allDeliveries = await getDeliveries();
-    // Eliminado debug
     
     // Add deliveries to each customer
     const customersWithDeliveries = allCustomers.map(customer => {
@@ -1503,24 +1726,11 @@ export const getCustomersWithDeliveries = async (bookings: Booking[]): Promise<C
             d.customerEmail.toLowerCase() === customer.email.toLowerCase()
         );
         
-    // Eliminado debug
-        
         return {
             ...customer,
             deliveries: customerDeliveries
         };
     });
-    
-    console.log('DEBUG getCustomersWithDeliveries - Final customers with deliveries:', customersWithDeliveries);
-    console.log('DEBUG getCustomersWithDeliveries - Final count:', customersWithDeliveries.length);
-    
-    // Check specifically for Daniel Reinoso
-    const danielCustomer = customersWithDeliveries.find(c => 
-        (c.userInfo?.firstName?.toLowerCase() === 'daniel' && c.userInfo?.lastName?.toLowerCase() === 'reinoso') ||
-        c.email?.toLowerCase().includes('daniel') ||
-        c.email?.toLowerCase().includes('reinoso')
-    );
-    console.log('DEBUG getCustomersWithDeliveries - Daniel Reinoso found:', danielCustomer);
     
     return customersWithDeliveries;
 };
@@ -1605,8 +1815,22 @@ const getBookingsForSlot = (date: Date, slot: AvailableSlot, appData: Pick<AppDa
     // Esto permite acumular cupos de paquetes + clases sueltas + introducción
     // para la misma técnica a la misma hora
     return appData.bookings.filter(b => {
-        // Obtener técnica del booking (puede estar en b.technique o b.product.details.technique)
-        const bookingTechnique = b.technique || (b.product?.details as any)?.technique;
+        // ===== DERIVAR TÉCNICA REAL DEL BOOKING =====
+        // Priorizar product.name para derivar técnica (datos más confiables)
+        let bookingTechnique: string | undefined;
+        const productName = b.product?.name?.toLowerCase() || '';
+        
+        if (productName.includes('pintura')) {
+            bookingTechnique = 'painting';
+        } else if (productName.includes('torno')) {
+            bookingTechnique = 'potters_wheel';
+        } else if (productName.includes('modelado')) {
+            bookingTechnique = 'hand_modeling';
+        } else {
+            // Fallback: usar campo technique si product.name no es informativo
+            bookingTechnique = b.technique || (b.product?.details as any)?.technique;
+        }
+        
         if (!bookingTechnique) return false; // Si no tiene técnica, ignorar
         
         // Verificar que coincidan técnica, fecha y hora
@@ -1799,6 +2023,13 @@ const parseDelivery = (d: any): Delivery => {
         }
     }
     
+    const rawWantsPainting = d.wantsPainting ?? d.wants_painting ?? false;
+    const normalizedWantsPainting = rawWantsPainting === true
+        || rawWantsPainting === 'true'
+        || rawWantsPainting === 't'
+        || rawWantsPainting === 1
+        || rawWantsPainting === '1';
+
     return {
         id: d.id,
         customerEmail: d.customerEmail || d.customer_email,
@@ -1810,13 +2041,51 @@ const parseDelivery = (d: any): Delivery => {
         deliveredAt: d.deliveredAt || d.delivered_at || null,
         readyAt: d.readyAt || d.ready_at || null,
         notes: d.notes || null,
-        photos: parsedPhotos
+        photos: parsedPhotos,
+        hasPhotos: d.hasPhotos || false, // ⚡ Flag para lazy loading
+        // ⚡ Campos de servicio de pintura
+        wantsPainting: normalizedWantsPainting,
+        paintingPrice: d.paintingPrice ?? d.painting_price ?? null,
+        paintingStatus: d.paintingStatus ?? d.painting_status ?? null,
+        paintingBookingDate: d.paintingBookingDate ?? d.painting_booking_date ?? null,
+        paintingPaidAt: d.paintingPaidAt ?? d.painting_paid_at ?? null,
+        paintingCompletedAt: d.paintingCompletedAt ?? d.painting_completed_at ?? null
     };
 };
 
+// ⚡ Carga ligera de deliveries (sin fotos - para listados)
 export const getDeliveries = async (): Promise<Delivery[]> => {
-    const rawDeliveries = await fetchData('/api/data?action=deliveries');
+    const rawDeliveries = await fetchData('/api/data?action=deliveries&limit=2000');
     return rawDeliveries ? rawDeliveries.map(parseDelivery) : [];
+};
+
+// ⚡ Carga de fotos bajo demanda para una delivery específica
+export const getDeliveryPhotos = async (deliveryId: string): Promise<string[]> => {
+    try {
+        const result = await fetchData(`/api/data?action=getDeliveryPhotos&deliveryId=${deliveryId}`);
+        if (!result || !result.photos) return [];
+        
+        let photos = result.photos;
+        if (typeof photos === 'string') {
+            try {
+                photos = JSON.parse(photos);
+            } catch {
+                return [];
+            }
+        }
+        
+        if (!Array.isArray(photos)) return [];
+        
+        return photos.filter((photo: any) => {
+            if (typeof photo === 'string' && photo.trim()) {
+                return photo.startsWith('data:') || photo.startsWith('http://') || photo.startsWith('https://');
+            }
+            return false;
+        });
+    } catch (error) {
+        console.error('[getDeliveryPhotos] Error:', error);
+        return [];
+    }
 };
 
 export const getDeliveriesByCustomer = async (customerEmail: string): Promise<Delivery[]> => {
@@ -1827,6 +2096,8 @@ export const getDeliveriesByCustomer = async (customerEmail: string): Promise<De
 export const createDelivery = async (deliveryData: Omit<Delivery, 'id' | 'createdAt'>): Promise<{ success: boolean; delivery?: Delivery }> => {
     const result = await postAction('createDelivery', deliveryData);
     if (result.success && result.delivery) {
+        invalidateDeliveriesCache();
+        invalidateCustomersCache();
         return { ...result, delivery: parseDelivery(result.delivery) };
     }
     return result;
@@ -1838,9 +2109,11 @@ export const createDeliveryFromClient = async (data: {
     description: string | null;
     scheduledDate: string;
     photos: string[] | null;
+    wantsPainting?: boolean;
+    paintingPrice?: number | null;
 }): Promise<{ success: boolean; delivery?: Delivery; isNewCustomer?: boolean; error?: string; message?: string }> => {
     try {
-        console.log('[dataService] createDeliveryFromClient called');
+        console.log('[dataService] createDeliveryFromClient called with painting:', data.wantsPainting);
         
         // Add 60-second timeout protection (increased for mobile connections)
         const controller = new AbortController();
@@ -1859,6 +2132,9 @@ export const createDeliveryFromClient = async (data: {
             console.log('[dataService] createDeliveryFromClient response:', result);
             
             if (result.success && result.delivery) {
+                // Invalidar cache después de crear delivery
+                invalidateCustomersCache();
+                
                 return { 
                     ...result, 
                     delivery: parseDelivery(result.delivery),
@@ -1894,6 +2170,9 @@ export const createDeliveryFromClient = async (data: {
 export const updateDelivery = async (deliveryId: string, updates: Partial<Omit<Delivery, 'id' | 'customerEmail' | 'createdAt'>>): Promise<{ success: boolean; delivery?: Delivery }> => {
     const result = await postAction('updateDelivery', { deliveryId, updates });
     if (result.success && result.delivery) {
+        // Mantener caches consistentes para otras vistas/flows
+        invalidateDeliveriesCache();
+        invalidateCustomersCache();
         return { ...result, delivery: parseDelivery(result.delivery) };
     }
     return result;
@@ -1923,8 +2202,119 @@ export const deleteDelivery = async (deliveryId: string): Promise<{ success: boo
     return postAction('deleteDelivery', { deliveryId });
 };
 
+export const bulkUpdateDeliveryStatus = async (
+    deliveryIds: string[],
+    action: 'markReady' | 'markCompleted' | 'delete',
+    metadata?: any
+): Promise<{
+    success: boolean;
+    results: Array<{ id: string; success: boolean; delivery?: Delivery }>;
+    errors: Array<{ id: string; error: string }>;
+    summary: { total: number; succeeded: number; failed: number };
+    error?: string;
+}> => {
+    try {
+        const result = await postAction('bulkUpdateDeliveryStatus', {
+            deliveryIds,
+            action,
+            metadata
+        });
+        
+        if (!result || !result.success) {
+            return {
+                success: false,
+                results: [],
+                errors: deliveryIds.map(id => ({ id, error: result?.error || 'Unknown error' })),
+                summary: { total: deliveryIds.length, succeeded: 0, failed: deliveryIds.length },
+                error: result?.error || 'Bulk operation failed'
+            };
+        }
+        
+        // Parse deliveries in results
+        const parsedResults = (result.results || []).map((r: any) => ({
+            ...r,
+            delivery: r.delivery ? parseDelivery(r.delivery) : undefined
+        }));
+        
+        return {
+            success: true,
+            results: parsedResults,
+            errors: result.errors || [],
+            summary: result.summary || { total: deliveryIds.length, succeeded: parsedResults.length, failed: (result.errors || []).length }
+        };
+    } catch (error) {
+        console.error('[bulkUpdateDeliveryStatus] Error:', error);
+        return {
+            success: false,
+            results: [],
+            errors: deliveryIds.map(id => ({ 
+                id, 
+                error: error instanceof Error ? error.message : 'Network error' 
+            })),
+            summary: { total: deliveryIds.length, succeeded: 0, failed: deliveryIds.length },
+            error: error instanceof Error ? error.message : 'Network error'
+        };
+    }
+};
+
 export const updateDeliveryStatuses = async (): Promise<{ success: boolean; updated: number }> => {
     return postAction('updateDeliveryStatuses', {});
+};
+
+// ⚡ Actualizar estado del servicio de pintura
+export const updatePaintingStatus = async (
+    deliveryId: string,
+    paintingStatus: 'pending_payment' | 'paid' | 'scheduled' | 'completed',
+    options?: {
+        paintingBookingDate?: string;
+        paintingPaidAt?: string;
+        paintingCompletedAt?: string;
+    }
+): Promise<{ success: boolean; delivery?: Delivery; error?: string }> => {
+    try {
+        const result = await postAction('updatePaintingStatus', {
+            deliveryId,
+            paintingStatus,
+            ...options
+        });
+        
+        if (result.success && result.delivery) {
+            // Invalidar cache de deliveries
+            invalidateDeliveriesCache();
+            return { ...result, delivery: parseDelivery(result.delivery) };
+        }
+        
+        return result;
+    } catch (error) {
+        console.error('[updatePaintingStatus] Error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error updating painting status'
+        };
+    }
+};
+
+// ⚡ Agendar reserva de pintura (cliente) - ya pagada
+export const schedulePaintingBooking = async (payload: {
+    deliveryId: string;
+    date: string; // YYYY-MM-DD
+    time: string; // HH:mm
+    participants: number;
+}): Promise<{ success: boolean; delivery?: Delivery; error?: string }> => {
+    try {
+        const result = await postAction('schedulePaintingBooking', payload);
+        if (result.success && result.delivery) {
+            invalidateDeliveriesCache();
+            return { ...result, delivery: parseDelivery(result.delivery) };
+        }
+        return result;
+    } catch (error) {
+        console.error('[schedulePaintingBooking] Error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error scheduling painting booking'
+        };
+    }
 };
 
 // Función para migrar productos existentes y asignar sort_order
@@ -2248,11 +2638,12 @@ export const calculateSlotAvailability = (
   const slotEnd = new Date(slotStart.getTime() + 2 * 60 * 60 * 1000); // +2 horas
   
   // FIX: Usar capacidad de appData en lugar de valores hardcodeados
-  const capacity = {
-    potters_wheel: { max: appData.classCapacity?.potters_wheel || 8, bookedInWindow: 0 },
-    hand_modeling: { max: appData.classCapacity?.molding || 14, bookedInWindow: 0 },
-    painting: { max: Infinity, bookedInWindow: 0 }
-  };
+    const pottersWheelMax = appData.classCapacity?.potters_wheel || 8;
+    const handWorkMax = appData.classCapacity?.molding || 22;
+    const capacity = {
+        potters_wheel: { max: pottersWheelMax, bookedInWindow: 0 },
+        hand_work: { max: handWorkMax, bookedInWindow: 0 }
+    };
 
   const overlappingDetails: string[] = [];
 
@@ -2268,18 +2659,19 @@ export const calculateSlotAvailability = (
     return t.trim().toLowerCase();
   };
   
-  // Bookings que se solapan - agrupados por técnica
-  const bookingsByTechnique: Record<string, Booking[]> = {
-    potters_wheel: [],
-    hand_modeling: [],
-    painting: []
-  };
-  
   appData.bookings.forEach(booking => {
-    // Determinar técnica del booking
+    // ===== DERIVAR TÉCNICA REAL DEL BOOKING =====
+    // Priorizar product.name para derivar técnica (datos más confiables)
     let bookingTechnique: 'potters_wheel' | 'hand_modeling' | 'painting' | undefined;
+    const productName = booking.product?.name?.toLowerCase() || '';
     
-    if (booking.technique) {
+    if (productName.includes('pintura')) {
+      bookingTechnique = 'painting';
+    } else if (productName.includes('torno')) {
+      bookingTechnique = 'potters_wheel';
+    } else if (productName.includes('modelado')) {
+      bookingTechnique = 'hand_modeling';
+    } else if (booking.technique) {
       bookingTechnique = booking.technique as any;
     } else if (booking.product && 'details' in booking.product) {
       const details = (booking.product as any).details;
@@ -2288,21 +2680,49 @@ export const calculateSlotAvailability = (
       }
     }
     
-    if (!bookingTechnique) {
-      bookingTechnique = 'hand_modeling';
-    }
-    
-    // Verificar si este booking coincide con la fecha/hora exacta (no ventana)
-    const hasMatchingSlot = booking.slots.some(slot => {
-      return slot.date === date && normalizeTime(slot.time) === normalizeTime(startTime);
-    });
-    
-    if (hasMatchingSlot) {
-      bookingsByTechnique[bookingTechnique].push(booking);
-      const participantCount = booking.participants ?? 1;
-      capacity[bookingTechnique].bookedInWindow += participantCount;
-      overlappingDetails.push(`${booking.productType}: ${participantCount} personas (${bookingTechnique})`);
-    }
+        if (!bookingTechnique) bookingTechnique = 'hand_modeling';
+
+        const isHandWork = (tech: string) => tech === 'hand_modeling' || tech === 'painting' || tech === 'molding';
+
+        const toMinutes = (t: string) => {
+            const normalized = normalizeTime(t);
+            const [h, m] = normalized.split(':').map(Number);
+            if (Number.isNaN(h) || Number.isNaN(m)) return NaN;
+            return (h * 60) + m;
+        };
+
+        const requestedStartMinutes = toMinutes(startTime);
+        const requestedEndMinutes = requestedStartMinutes + (2 * 60);
+
+        if (Number.isNaN(requestedStartMinutes)) return;
+
+        booking.slots.forEach(slot => {
+            if (slot.date !== date) return;
+
+            const bookingStartMinutes = toMinutes(slot.time);
+            if (Number.isNaN(bookingStartMinutes)) return;
+            const bookingEndMinutes = bookingStartMinutes + (2 * 60);
+
+            const hasOverlap = requestedStartMinutes < bookingEndMinutes && requestedEndMinutes > bookingStartMinutes;
+            if (!hasOverlap) return;
+
+            const participantCount =
+                booking.participants
+                ?? booking.groupClassMetadata?.totalParticipants
+                ?? (typeof booking.product === 'object' && 'minParticipants' in booking.product
+                    ? (booking.product as any).minParticipants
+                    : undefined)
+                ?? 1;
+            if (isHandWork(bookingTechnique)) {
+                capacity.hand_work.bookedInWindow += participantCount;
+            } else if (bookingTechnique === 'potters_wheel') {
+                capacity.potters_wheel.bookedInWindow += participantCount;
+            } else {
+                capacity.hand_work.bookedInWindow += participantCount;
+            }
+
+            overlappingDetails.push(`${booking.productType}: ${participantCount} personas (${bookingTechnique})`);
+        });
   });
 
   const endTimeFormatted = new Date(slotEnd).toLocaleTimeString('es-ES', {
@@ -2311,30 +2731,33 @@ export const calculateSlotAvailability = (
   });
 
   // Calcular disponibilidad
-  return {
+    const handWorkAvailable = Math.max(0, capacity.hand_work.max - capacity.hand_work.bookedInWindow);
+    const pottersWheelAvailable = Math.max(0, capacity.potters_wheel.max - capacity.potters_wheel.bookedInWindow);
+
+    return {
     date,
     startTime,
     endTime: endTimeFormatted,
     techniques: {
       potters_wheel: {
-        available: Math.max(0, capacity.potters_wheel.max - capacity.potters_wheel.bookedInWindow),
-        total: capacity.potters_wheel.max,
+                available: pottersWheelAvailable,
+                total: capacity.potters_wheel.max,
         bookedInWindow: capacity.potters_wheel.bookedInWindow,
         isAvailable: capacity.potters_wheel.bookedInWindow < capacity.potters_wheel.max,
         overlappingClasses: overlappingDetails.length > 0 ? overlappingDetails : undefined
       },
       hand_modeling: {
-        available: Math.max(0, capacity.hand_modeling.max - capacity.hand_modeling.bookedInWindow),
-        total: capacity.hand_modeling.max,
-        bookedInWindow: capacity.hand_modeling.bookedInWindow,
-        isAvailable: capacity.hand_modeling.bookedInWindow < capacity.hand_modeling.max,
+                available: handWorkAvailable,
+                total: capacity.hand_work.max,
+                bookedInWindow: capacity.hand_work.bookedInWindow,
+                isAvailable: capacity.hand_work.bookedInWindow < capacity.hand_work.max,
         overlappingClasses: overlappingDetails.length > 0 ? overlappingDetails : undefined
       },
       painting: {
-        available: Infinity,
-        total: Infinity,
-        bookedInWindow: capacity.painting.bookedInWindow,
-        isAvailable: true
+                available: handWorkAvailable,
+                total: capacity.hand_work.max,
+                bookedInWindow: capacity.hand_work.bookedInWindow,
+                isAvailable: capacity.hand_work.bookedInWindow < capacity.hand_work.max
       }
     }
   };
@@ -2389,8 +2812,8 @@ export const generateTimeSlots = (
           professorId: null,
           capacity: {
             potters_wheel: { max: 8, bookedInWindow: 0, available: 8, isAvailable: true },
-            hand_modeling: { max: 14, bookedInWindow: 0, available: 14, isAvailable: true },
-            painting: { max: Infinity, bookedInWindow: 0, available: Infinity, isAvailable: true }
+                        hand_modeling: { max: 22, bookedInWindow: 0, available: 22, isAvailable: true },
+                        painting: { max: 22, bookedInWindow: 0, available: 22, isAvailable: true }
           }
         });
       }

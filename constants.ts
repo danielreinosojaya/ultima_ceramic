@@ -3,6 +3,9 @@ import type { Product, AvailableSlot, Instructor, ConfirmationMessage, ClassCapa
 export const SINGLE_CLASS_PRICE = 55;
 export const VAT_RATE = 0.15;
 
+// Servicio de Pintura de Piezas (Upsell)
+export const PAINTING_SERVICE_PRICE = 20; // Precio base del servicio de pintura por pieza
+
 export const PALETTE_COLORS = [
     { name: 'sky', bg: 'bg-sky-200', text: 'text-sky-800' },
     { name: 'teal', bg: 'bg-teal-200', text: 'text-teal-800' },
@@ -214,7 +217,7 @@ export const DEFAULT_PRODUCTS: Product[] = [
       durationHours: 2,
       activities: ["Cada participante elige su técnica", "Amasado y preparación", "Creación de piezas personalizadas", "Técnicas de acabado"],
       generalRecommendations: "Ideal para grupos de 2-30 personas. Traer ropa cómoda. Perfecto para celebraciones, eventos corporativos o reuniones creativas.",
-      materials: "Incluye arcilla, herramientas y quema de una pieza por participante. Capacidades: Torno (máx 8), Modelado (máx 14), Pintura (sin límite)."
+      materials: "Incluye arcilla, herramientas y quema de una pieza por participante. Capacidades: Torno (máx 8), Modelado (máx 22), Pintura (máx 22)."
     },
     isActive: true,
     sortOrder: 5
@@ -280,10 +283,19 @@ export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
     incentiveRenewal: { enabled: false, value: 1, unit: 'classes' }
 };
 
-export const DEFAULT_BANK_DETAILS: BankDetails = {
-    bankName: "",
-    accountHolder: "",
-    accountNumber: "",
-    accountType: "",
-    taxId: ""
-};
+export const DEFAULT_BANK_DETAILS: BankDetails[] = [
+    {
+        bankName: "Banco Pichincha",
+        accountHolder: "Carolina Massuh Morán",
+        accountNumber: "2100334248",
+        accountType: "Cuenta Corriente",
+        taxId: "0921343935"
+    },
+    {
+        bankName: "Banco Bolivariano",
+        accountHolder: "Carolina Isabel Massuh Moran",
+        accountNumber: "0004381834",
+        accountType: "Ahorros",
+        taxId: "0921343935"
+    }
+];

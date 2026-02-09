@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { Booking, InvoiceRequest, ClassPackage, Delivery, PaymentDetails, Customer, AppData, Product } from '../../types';
+import type { Booking, InvoiceRequest, ClassPackage, Delivery, PaymentDetails, Customer, AppData, Product, GroupTechnique } from '../../types';
 import { ActivePackagesDisplay } from './ActivePackagesDisplay';
 import { AcceptPaymentModal } from './AcceptPaymentModal';
 import { InvoiceReminderModal } from './InvoiceReminderModal';
@@ -28,6 +28,56 @@ import {
     TagIcon
 } from '@heroicons/react/24/outline';
 import * as dataService from '../../services/dataService';
+
+// Helper para obtener nombre de técnica desde metadata
+const getTechniqueName = (technique: GroupTechnique): string => {
+  const names: Record<GroupTechnique, string> = {
+    'potters_wheel': 'Torno Alfarero',
+    'hand_modeling': 'Modelado a Mano',
+    'painting': 'Pintura de piezas'
+  };
+  return names[technique] || technique;
+};
+
+// Helper para traducir productType a nombre legible
+const getProductTypeName = (productType?: string): string => {
+  const typeNames: Record<string, string> = {
+    'SINGLE_CLASS': 'Clase Suelta',
+    'CLASS_PACKAGE': 'Paquete de Clases',
+    'INTRODUCTORY_CLASS': 'Clase Introductoria',
+    'GROUP_CLASS': 'Clase Grupal',
+    'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
+    'OPEN_STUDIO': 'Estudio Abierto'
+  };
+  return typeNames[productType || ''] || 'Clase';
+};
+
+// Helper para obtener el nombre del producto/técnica de un booking
+const getBookingDisplayName = (booking: Booking): string => {
+  // 1. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
+  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
+    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
+    const uniqueTechniques = [...new Set(techniques)];
+    if (uniqueTechniques.length === 1) {
+      return getTechniqueName(uniqueTechniques[0]);
+    }
+    return 'Clase Grupal (mixto)';
+  }
+  
+  // 2. Prioridad: product.name (es la fuente más confiable)
+  const productName = booking.product?.name;
+  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
+    return productName;
+  }
+  
+  // 3. Fallback: technique directamente (solo si product.name no existe)
+  if (booking.technique) {
+    return getTechniqueName(booking.technique);
+  }
+  
+  // 4. Último fallback: productType
+  return getProductTypeName(booking.productType);
+};
 import { formatDate, formatCurrency, normalizeHour } from '../../utils/formatters';
 
 interface CustomerDetailViewProps {
@@ -144,7 +194,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
             if (deleteResult.success) {
                 setFeedbackMsg('Cliente eliminado exitosamente');
                 setFeedbackType('success');
-                onDataChange(); // Refresh data
+                adminData.optimisticRemoveCustomer(customer.email);
                 onBack(); // Redirigir a la lista de clientes
             } else {
                 throw new Error(deleteResult.error || 'Cliente no encontrado');
@@ -198,7 +248,10 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                 });
             }
             setDeleteModal({ open: false, bookingId: null, slot: null });
-            onDataChange();
+            adminData.optimisticRemoveBookingSlot(deleteModal.bookingId, {
+                date: deleteModal.slot.date,
+                time: deleteModal.slot.time
+            });
         } catch (e) {
             console.error('Error deleting slot:', e);
         }
@@ -220,7 +273,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                     }));
                     setCompleteModal({ open: false, deliveryId: null });
                     setCompleteDate("");
-                    onDataChange();
+                    adminData.optimisticUpsertDelivery(updateRes.delivery);
                 }
             }
         } catch (e) {
@@ -261,7 +314,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                     ...prev,
                     deliveries: prev.deliveries.map(d => d.id === result.delivery.id ? result.delivery : d)
                 }));
-                onDataChange();
+                adminData.optimisticUpsertDelivery(result.delivery);
                 
                 if (isResend) {
                     alert('✅ Email reenviado al cliente.');
@@ -321,11 +374,12 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                         const bookingCreatedAt = new Date(booking.createdAt);
                         const hoursDiff = (slotDate.getTime() - bookingCreatedAt.getTime()) / (1000 * 60 * 60);
                         const isNoRefund = hoursDiff < 48;
+                        const uniqueKey = `${booking.id}-${slot.date}-${slot.time}`;
                         return (
-                            <div key={idx} className={`p-6 border-b last:border-b-0 flex justify-between items-center gap-4 ${isPaid ? '' : 'bg-yellow-50'}`}>
+                            <div key={uniqueKey} className={`p-6 border-b last:border-b-0 flex justify-between items-center gap-4 ${isPaid ? '' : 'bg-yellow-50'}`}>
                                 <div>
                                     <p className="font-bold text-lg text-brand-text mb-1 flex items-center gap-2">
-                                        {booking.product?.name || 'Clase individual'}
+                                        {getBookingDisplayName(booking)}
                                         {!isPaid && (
                                             <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800 ml-2">
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 20h.01" /></svg>
@@ -386,7 +440,9 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                             const result = await dataService.rescheduleBookingSlot(
                                 state.selectedBookingToReschedule.booking.id, 
                                 state.selectedBookingToReschedule.slot, 
-                                newSlot
+                                newSlot,
+                                true, // forceAdminReschedule: Admin puede reagendar sin restricciones
+                                'admin_user'
                             );
                             
                             console.log('[CustomerDetailView-PastClasses] Reschedule result:', result);
@@ -443,11 +499,12 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                         const bookingCreatedAt = new Date(booking.createdAt);
                         const hoursDiff = (slotDate.getTime() - bookingCreatedAt.getTime()) / (1000 * 60 * 60);
                         const isNoRefund = hoursDiff < 48;
+                        const uniqueKey = `${booking.id}-${slot.date}-${slot.time}`;
                         return (
-                        <div key={idx} className="p-6 border-b last:border-b-0 flex justify-between items-center gap-4">
+                        <div key={uniqueKey} className="p-6 border-b last:border-b-0 flex justify-between items-center gap-4">
                             <div>
                                 <p className="font-bold text-lg text-brand-text mb-1 flex items-center gap-2">
-                                    {booking.product?.name || 'Clase individual'}
+                                    {getBookingDisplayName(booking)}
                                     {!booking.isPaid && (
                                         <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800 ml-2">
                                             <ExclamationTriangleIcon className="h-4 w-4 text-orange-500" />
@@ -508,7 +565,9 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                             const result = await dataService.rescheduleBookingSlot(
                                 state.selectedBookingToReschedule.booking.id, 
                                 state.selectedBookingToReschedule.slot, 
-                                newSlot
+                                newSlot,
+                                true, // forceAdminReschedule: Admin puede reagendar sin restricciones
+                                'admin_user'
                             );
                             
                             console.log('[CustomerDetailView-Scheduled] Reschedule result:', result);
@@ -570,14 +629,16 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                     Pagos Realizados
                 </h3>
                 <div className="bg-white shadow overflow-hidden sm:rounded-md">
-                    {payments.length > 0 ? payments.map(({ payment, booking, idx }) => (
-                        <div key={idx} className="p-6 border-b last:border-b-0 flex items-center gap-6">
+                    {payments.length > 0 ? payments.map(({ payment, booking, idx }) => {
+                        const uniqueKey = `${payment.paymentId || payment.id || idx}-${booking.id}`;
+                        return (
+                        <div key={uniqueKey} className="p-6 border-b last:border-b-0 flex items-center gap-6">
                             <div className="flex-shrink-0 flex items-center justify-center h-16 w-16 rounded-full bg-green-100">
                                 <CurrencyDollarIcon className="h-8 w-8 text-green-500" />
                             </div>
                             <div className="flex-1">
                                 <p className="font-bold text-xl text-brand-text mb-1 flex items-center gap-2">
-                                    {booking.product?.name || 'Clase individual'}
+                                    {getBookingDisplayName(booking)}
                                     <span className="inline-flex items-center px-2 py-1 text-sm font-semibold rounded bg-green-50 text-green-700 ml-2">
                                         ${formatCurrency(payment.amount).replace('€', '')}
                                     </span>
@@ -608,7 +669,8 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                 )}
                             </div>
                         </div>
-                    )) : (
+                        );
+                    }) : (
                         <div className="p-8 flex flex-col items-center justify-center text-brand-secondary">
                             <CurrencyDollarIcon className="h-10 w-10 text-gray-300 mb-2" />
                             <span className="text-lg font-semibold">No hay pagos registrados.</span>
@@ -658,6 +720,11 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                         onComplete={(deliveryId) => setCompleteModal({ open: true, deliveryId })}
                         onMarkReady={handleMarkDeliveryAsReady}
                         formatDate={formatDate}
+                        onDataChange={onDataChange}
+                        onDeliveryUpdated={(updatedDelivery) => setState(prev => ({
+                            ...prev,
+                            deliveries: prev.deliveries.map(d => d.id === updatedDelivery.id ? updatedDelivery : d)
+                        }))}
                     />
                 </div>
 
@@ -678,7 +745,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                     deliveries: [...prev.deliveries, result.delivery],
                                     isNewDeliveryModalOpen: false
                                 }));
-                                onDataChange();
+                                adminData.optimisticUpsertDelivery(result.delivery);
                             } else {
                                 setState(prev => ({ ...prev, isNewDeliveryModalOpen: false }));
                             }
@@ -708,7 +775,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                         ),
                                         deliveryToEdit: null
                                     }));
-                                    onDataChange();
+                                    adminData.optimisticUpsertDelivery(result.delivery);
                                 } else {
                                     setState(prev => ({ ...prev, deliveryToEdit: null }));
                                 }
@@ -791,7 +858,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                     onClick={async () => {
                                         await handleDeleteDelivery(state.deliveryToDelete.id);
                                         setState(prev => ({ ...prev, deliveryToDelete: null }));
-                                        onDataChange();
+                                        adminData.optimisticRemoveDelivery(state.deliveryToDelete.id);
                                     }}
                                 >Eliminar</button>
                             </div>
@@ -845,6 +912,19 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                     birthday: state.editInfo.birthday || undefined
                                 }
                             );
+
+                            adminData.optimisticPatchCustomer(customer.email, {
+                                email: state.editInfo.email,
+                                userInfo: {
+                                    ...(customer.userInfo || {}),
+                                    email: state.editInfo.email,
+                                    firstName: state.editInfo.firstName,
+                                    lastName: state.editInfo.lastName,
+                                    phone: state.editInfo.phone,
+                                    countryCode: state.editInfo.countryCode,
+                                    birthday: state.editInfo.birthday || null,
+                                } as any,
+                            } as any);
                             setState(prev => ({
                                 ...prev,
                                 editMode: false,
@@ -852,7 +932,6 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                     ...prev.editInfo
                                 }
                             }));
-                            onDataChange();
                         }}
                     >
                         {/* Nombre y Apellido - responsive grid */}

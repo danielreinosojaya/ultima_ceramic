@@ -1,8 +1,58 @@
 import React, { useState } from 'react';
-import type { Booking, AppData, TimeSlot } from '../types';
+import type { Booking, AppData, TimeSlot, GroupTechnique } from '../types';
 import { RescheduleClientFlow } from './RescheduleClientFlow';
 import { formatDate } from '../utils/formatters';
 import { CalendarIcon, ClockIcon } from '@heroicons/react/24/outline';
+
+// Helper para obtener nombre de técnica desde metadata
+const getTechniqueName = (technique: GroupTechnique): string => {
+  const names: Record<GroupTechnique, string> = {
+    'potters_wheel': 'Torno Alfarero',
+    'hand_modeling': 'Modelado a Mano',
+    'painting': 'Pintura de piezas'
+  };
+  return names[technique] || technique;
+};
+
+// Helper para traducir productType a nombre legible
+const getProductTypeName = (productType?: string): string => {
+  const typeNames: Record<string, string> = {
+    'SINGLE_CLASS': 'Clase Suelta',
+    'CLASS_PACKAGE': 'Paquete de Clases',
+    'INTRODUCTORY_CLASS': 'Clase Introductoria',
+    'GROUP_CLASS': 'Clase Grupal',
+    'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
+    'OPEN_STUDIO': 'Estudio Abierto'
+  };
+  return typeNames[productType || ''] || 'Clase';
+};
+
+// Helper para obtener el nombre del producto/técnica de un booking
+const getBookingDisplayName = (booking: Booking): string => {
+  // 1. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
+  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
+    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
+    const uniqueTechniques = [...new Set(techniques)];
+    if (uniqueTechniques.length === 1) {
+      return getTechniqueName(uniqueTechniques[0]);
+    }
+    return 'Clase Grupal (mixto)';
+  }
+  
+  // 2. Prioridad: product.name (es la fuente más confiable)
+  const productName = booking.product?.name;
+  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
+    return productName;
+  }
+  
+  // 3. Fallback: technique directamente (solo si product.name no existe)
+  if (booking.technique) {
+    return getTechniqueName(booking.technique);
+  }
+  
+  // 4. Último fallback: productType
+  return getProductTypeName(booking.productType);
+};
 
 interface ClientBookingsViewProps {
     bookings: Booking[];
@@ -83,7 +133,7 @@ export const ClientBookingsView: React.FC<ClientBookingsViewProps> = ({ bookings
                                 <div className="flex items-start justify-between mb-4">
                                     <div>
                                         <h3 className="text-lg font-bold text-brand-text">
-                                            {classCard.booking.product?.name || 'Clase'}
+                                            {getBookingDisplayName(classCard.booking)}
                                         </h3>
                                         <p className="text-sm text-brand-secondary mt-1">
                                             Código: {classCard.booking.bookingCode}
@@ -135,7 +185,7 @@ export const ClientBookingsView: React.FC<ClientBookingsViewProps> = ({ bookings
                             <div key={`${classCard.booking.id}-${classCard.index}`} className="bg-gray-50 border border-gray-200 rounded-lg p-6">
                                 <div className="flex items-start justify-between mb-2">
                                     <h3 className="text-lg font-bold text-brand-text">
-                                        {classCard.booking.product?.name || 'Clase'}
+                                        {getBookingDisplayName(classCard.booking)}
                                     </h3>
                                     <span className="inline-block bg-gray-200 text-gray-700 px-3 py-1 rounded-full text-sm font-semibold">
                                         Completada

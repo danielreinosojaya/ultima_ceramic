@@ -1,11 +1,61 @@
 import React, { useState, useEffect } from 'react';
-import type { Booking } from '../types';
+import type { Booking, GroupTechnique } from '../types';
 import * as dataService from '../services/dataService';
 import { ClientBookingsView } from './ClientBookingsView';
 import { ClientLogin } from './ClientLogin';
 import { ClientSessionOptions } from './ClientSessionOptions';
 import { CreateSessionForm } from './CreateSessionForm';
 import { useAuth } from '../context/AuthContext';
+
+// Helper para obtener nombre de técnica desde metadata
+const getTechniqueName = (technique: GroupTechnique): string => {
+  const names: Record<GroupTechnique, string> = {
+    'potters_wheel': 'Torno Alfarero',
+    'hand_modeling': 'Modelado a Mano',
+    'painting': 'Pintura de piezas'
+  };
+  return names[technique] || technique;
+};
+
+// Helper para traducir productType a nombre legible
+const getProductTypeName = (productType?: string): string => {
+  const typeNames: Record<string, string> = {
+    'SINGLE_CLASS': 'Clase Suelta',
+    'CLASS_PACKAGE': 'Paquete de Clases',
+    'INTRODUCTORY_CLASS': 'Clase Introductoria',
+    'GROUP_CLASS': 'Clase Grupal',
+    'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
+    'OPEN_STUDIO': 'Estudio Abierto'
+  };
+  return typeNames[productType || ''] || 'Clase';
+};
+
+// Helper para obtener el nombre del producto/técnica de un booking
+const getBookingDisplayName = (booking: Booking): string => {
+  // 1. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
+  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
+    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
+    const uniqueTechniques = [...new Set(techniques)];
+    if (uniqueTechniques.length === 1) {
+      return getTechniqueName(uniqueTechniques[0]);
+    }
+    return 'Clase Grupal (mixto)';
+  }
+  
+  // 2. Prioridad: product.name (es la fuente más confiable)
+  const productName = booking.product?.name;
+  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
+    return productName;
+  }
+  
+  // 3. Fallback: technique directamente (solo si product.name no existe)
+  if (booking.technique) {
+    return getTechniqueName(booking.technique);
+  }
+  
+  // 4. Último fallback: productType
+  return getProductTypeName(booking.productType);
+};
 
 interface ClientDashboardProps {
     onClose?: () => void;
@@ -167,7 +217,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onClose }) => 
                                 className="w-full p-4 border-2 border-brand-border rounded-lg hover:border-brand-primary hover:bg-blue-50 text-left transition-colors"
                             >
                                 <p className="font-semibold text-brand-text">
-                                    {booking.product?.name || 'Experiencia'}
+                                    {getBookingDisplayName(booking)}
                                 </p>
                                 {booking.bookingDate && (
                                     <p className="text-sm text-brand-secondary mt-1">
@@ -229,8 +279,8 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onClose }) => 
                 />
             ) : (
                 <div className="text-center py-12 bg-gray-50 rounded-lg">
-                    <p className="text-brand-secondary text-lg">No tienes clases programadas aún</p>
-                    <p className="text-brand-secondary text-sm mt-2">
+                    <p className="text-brand-secondary text-sm sm:text-base md:text-lg">No tienes clases programadas aún</p>
+                    <p className="text-brand-secondary text-xs sm:text-sm mt-2">
                         {onClose ? (
                             <>
                                 <button

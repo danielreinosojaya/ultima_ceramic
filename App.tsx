@@ -1,5 +1,4 @@
-import { GiftcardPersonalization } from './components/giftcard/GiftcardPersonalization';
-import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense, ReactNode } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense, ReactNode } from 'react';
 import type { BankDetails } from './types';
 import { Header } from './components/Header';
 import { WelcomeSelector } from './components/WelcomeSelector';
@@ -8,7 +7,6 @@ import { PackageSelector } from './components/PackageSelector';
 import { IntroClassSelector } from './components/IntroClassSelector';
 import { ScheduleSelector } from './components/ScheduleSelector';
 import { BookingSummary } from './components/BookingSummary';
-import { GroupInquiryForm } from './components/GroupInquiryForm';
 import { CouplesTourModal } from './components/CouplesTourModal';
 import { CouplesTechniqueSelector } from './components/CouplesTechniqueSelector';
 import { CouplesExperienceScheduler } from './components/CouplesExperienceScheduler';
@@ -18,41 +16,50 @@ import { BookingTypeModal } from './components/BookingTypeModal';
 import { ClassInfoModal } from './components/ClassInfoModal';
 import { PrerequisiteModal } from './components/PrerequisiteModal';
 import { AnnouncementsBoard } from './components/AnnouncementsBoard';
-import { ClientDeliveryForm } from './components/ClientDeliveryForm';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ModuloMarcacionSimple } from './components/ModuloMarcacionSimple';
 import { AdminTimecardPanelSimple } from './components/admin/AdminTimecardPanelSimple';
-import { CashierDashboard } from './components/CashierDashboard';
 // New Experience Components
 import { ExperienceTypeSelector } from './components/experiences/ExperienceTypeSelector';
-import { GroupClassWizard } from './components/experiences/GroupClassWizard';
-import { PieceExperienceWizard } from './components/experiences/PieceExperienceWizard';
-import { SingleClassWizard } from './components/experiences/SingleClassWizard';
 // Wheel Course Components
-import { CourseWheelLanding } from './components/courses/CourseWheelLanding';
-import { CourseScheduleSelector } from './components/courses/CourseScheduleSelector';
-import { CourseRegistrationForm } from './components/courses/CourseRegistrationForm';
-import { CourseConfirmation } from './components/courses/CourseConfirmation';
-// Lazy load AdminConsole to reduce initial bundle size
+// Valentine Components
+// Lazy load heavy components to reduce initial bundle
 const AdminConsole = lazy(() => import('./components/admin/AdminConsole').then(module => ({ default: module.AdminConsole })));
+const GiftcardPersonalization = lazy(() => import('./components/giftcard/GiftcardPersonalization').then(m => ({ default: m.GiftcardPersonalization })));
+const GroupInquiryForm = lazy(() => import('./components/GroupInquiryForm').then(m => ({ default: m.GroupInquiryForm })));
+const ClientDeliveryForm = lazy(() => import('./components/ClientDeliveryForm').then(m => ({ default: m.ClientDeliveryForm })));
+const CashierDashboard = lazy(() => import('./components/CashierDashboard').then(m => ({ default: m.CashierDashboard })));
+const GroupClassWizard = lazy(() => import('./components/experiences/GroupClassWizard').then(m => ({ default: m.GroupClassWizard })));
+const PieceExperienceWizard = lazy(() => import('./components/experiences/PieceExperienceWizard').then(m => ({ default: m.PieceExperienceWizard })));
+const SingleClassWizard = lazy(() => import('./components/experiences/SingleClassWizard').then(m => ({ default: m.SingleClassWizard })));
+const PaintingBookingFlow = lazy(() => import('./components/experiences/PaintingBookingFlow').then(m => ({ default: m.PaintingBookingFlow })));
+const CustomExperienceWizard = lazy(() => import('./components/experiences/CustomExperienceWizard').then(m => ({ default: m.CustomExperienceWizard })));
+const CourseWheelLanding = lazy(() => import('./components/courses/CourseWheelLanding').then(m => ({ default: m.CourseWheelLanding })));
+const CourseScheduleSelector = lazy(() => import('./components/courses/CourseScheduleSelector').then(m => ({ default: m.CourseScheduleSelector })));
+const CourseRegistrationForm = lazy(() => import('./components/courses/CourseRegistrationForm').then(m => ({ default: m.CourseRegistrationForm })));
+const CourseConfirmation = lazy(() => import('./components/courses/CourseConfirmation').then(m => ({ default: m.CourseConfirmation })));
+const ValentineLanding = lazy(() => import('./components/valentine/ValentineLanding').then(m => ({ default: m.ValentineLanding })));
+const ValentineRegistrationForm = lazy(() => import('./components/valentine/ValentineRegistrationForm').then(m => ({ default: m.ValentineRegistrationForm })));
+const ValentineSuccess = lazy(() => import('./components/valentine/ValentineSuccess').then(m => ({ default: m.ValentineSuccess })));
 import { NotificationProvider } from './context/NotificationContext';
 import { AdminDataProvider } from './context/AdminDataContext';
 import { AuthProvider } from './context/AuthContext';
 import { ConfirmationPage } from './components/ConfirmationPage';
 import { OpenStudioModal } from './components/admin/OpenStudioModal';
-import { ClientDashboard } from './components/ClientDashboard';
 import { MyClassesPrompt } from './components/MyClassesPrompt';
+const ClientDashboard = lazy(() => import('./components/ClientDashboard').then(m => ({ default: m.ClientDashboard })));
 
-import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession, DeliveryMethod, GiftcardHold, Piece, ExperiencePricing, ExperienceUIState, CourseSchedule, CourseEnrollment } from './types';
+import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession, DeliveryMethod, GiftcardHold, Piece, ExperiencePricing, ExperienceUIState, CourseSchedule, CourseEnrollment, ParticipantTechniqueAssignment, GroupTechnique } from './types';
 import * as dataService from './services/dataService';
+import { DEFAULT_POLICIES_TEXT } from './constants';
 import { slotsRequireNoRefund } from './utils/bookingPolicy';
 import { InstagramIcon } from './components/icons/InstagramIcon';
 import { WhatsAppIcon } from './components/icons/WhatsAppIcon';
 import { MailIcon } from './components/icons/MailIcon';
 import { LocationPinIcon } from './components/icons/LocationPinIcon';
-import { LandingGiftcard } from './components/giftcard/LandingGiftcard';
-import { GiftcardAmountSelector } from './components/giftcard/GiftcardAmountSelector';
 import { GiftcardInviteModal } from './components/giftcard/GiftcardInviteModal';
+const LandingGiftcard = lazy(() => import('./components/giftcard/LandingGiftcard').then(m => ({ default: m.LandingGiftcard })));
+const GiftcardAmountSelector = lazy(() => import('./components/giftcard/GiftcardAmountSelector').then(m => ({ default: m.GiftcardAmountSelector })));
 import { GiftcardBanner } from './components/giftcard/GiftcardBanner';
 import { GiftcardDeliveryOptions } from './components/giftcard/GiftcardDeliveryOptions';
 import { GiftcardPayment } from './components/giftcard/GiftcardPayment';
@@ -68,6 +75,7 @@ const App: React.FC = () => {
     const [selectedDelivery, setSelectedDelivery] = useState<DeliveryMethod | null>(null);
     const [giftcardBuyerEmail, setGiftcardBuyerEmail] = useState<string>('');
     const [showGiftcardBanner, setShowGiftcardBanner] = useState(true);
+    const [prefillTechnique, setPrefillTechnique] = useState<GroupTechnique | null>(null);
     // Modal informativo de Open Studio usando ClassInfoModal
     const handleOpenStudioInfoModalClose = () => {
         setIsOpenStudioModalOpen(false);
@@ -133,6 +141,10 @@ const App: React.FC = () => {
     const [selectedCourseSchedule, setSelectedCourseSchedule] = useState<CourseSchedule | null>(null);
     const [confirmedEnrollment, setConfirmedEnrollment] = useState<CourseEnrollment | null>(null);
     
+    // VALENTINE 2026 states
+    const [valentineRegistrationId, setValentineRegistrationId] = useState<string | null>(null);
+    const [paintingDeliveryId, setPaintingDeliveryId] = useState<string | null>(null);
+    
     const [appData, setAppData] = useState<AppData | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -141,9 +153,24 @@ const App: React.FC = () => {
         const pathname = window.location.pathname;
         const href = window.location.href;
 
+        // Check for Valentine registration page - /sanvalentin or ?sanvalentin=true
+        if (pathname.includes('/sanvalentin') || href.includes('/sanvalentin') || urlParams.get('sanvalentin') === 'true') {
+            setView('valentine_landing');
+            return;
+        }
+
         // Check for cashier mode - supports both /cuadre and ?cuadre=true
         if (pathname.includes('/cuadre') || href.includes('/cuadre') || urlParams.get('cuadre') === 'true') {
             setIsCashierMode(true);
+            return;
+        }
+
+        const bookingParam = urlParams.get('booking') || urlParams.get('product');
+        const techniqueParam = urlParams.get('technique');
+        if (bookingParam === 'painting' || techniqueParam === 'painting') {
+            setPrefillTechnique('painting');
+            setPaintingDeliveryId(urlParams.get('deliveryId'));
+            setView('painting_booking');
             return;
         }
 
@@ -187,7 +214,7 @@ const App: React.FC = () => {
                 setAppData({
                     products: essentialData.products || [], 
                     announcements: essentialData.announcements || [], 
-                    policies: essentialData.policies || '', 
+                    policies: essentialData.policies || DEFAULT_POLICIES_TEXT, 
                     footerInfo: safeFooter,
                     // Initialize empty data structures for lazy loading
                     instructors: [],
@@ -279,7 +306,8 @@ const App: React.FC = () => {
         }
     }, [loading, hasCheckedMyClasses, view]);
 
-    const handleWelcomeSelect = (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio' | 'group_class_wizard' | 'single_class_wizard' | 'wheel_course') => {
+    const handleWelcomeSelect = (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio' | 'group_class_wizard' | 'single_class_wizard' | 'wheel_course' | 'custom_experience') => {
+        setPrefillTechnique(null);
         if (userType === 'new') {
             setView('intro_classes');
         } else if (userType === 'returning') {
@@ -306,6 +334,9 @@ const App: React.FC = () => {
             setView('single_class_wizard');
         } else if (userType === 'wheel_course') {
             setView('wheel_course_landing');
+        } else if (userType === 'custom_experience') {
+            // New: Custom Experience Wizard
+            setView('custom_experience_wizard');
         }
     };
     
@@ -454,8 +485,25 @@ const App: React.FC = () => {
             bookingData.technique = finalDetails.technique;
         }
 
+        // Add groupClassMetadata for GROUP_CLASS bookings
+        if (finalDetails.product!.type === 'GROUP_CLASS') {
+            const assignments = (window as any).__groupClassAssignments as ParticipantTechniqueAssignment[] | undefined;
+            if (assignments && assignments.length > 0) {
+                const totalPrice = 'price' in finalDetails.product! ? finalDetails.product.price : 0;
+                const pricePerPerson = assignments.length > 0 ? totalPrice / assignments.length : 0;
+                
+                bookingData.groupClassMetadata = {
+                    totalParticipants: assignments.length,
+                    techniqueAssignments: assignments,
+                    pricePerPerson,
+                    totalPrice
+                };
+                bookingData.participants = assignments.length;
+            }
+        }
+
         try {
-            // Attach giftcard info if the user applied a giftcard (supports holdId or immediate consume)
+            // Attach giftcard info if the user applied a giftcard
             if (activeGiftcardHold) {
                 if (activeGiftcardHold.holdId) {
                     (bookingData as any).holdId = activeGiftcardHold.holdId;
@@ -489,20 +537,32 @@ const App: React.FC = () => {
             } else {
                 console.error('[App] Booking failed:', result.message);
                 setBookingInProgress(false);
-                // NOTE: Using alert() is not recommended in immersive. Please use a custom modal instead.
                 alert(`Error: ${result.message}`);
             }
         } catch (error) {
             console.error("[App] Failed to add booking", error);
             setBookingInProgress(false);
-            // NOTE: Using alert() is not recommended in immersive. Please use a custom modal instead.
             alert("An error occurred while creating your booking.");
         }
     };
     
+    // ✅ Ref para prevenir calls duplicados de datos adicionales
+    const loadingDataRef = useRef<Record<string, boolean>>({
+        scheduling: false,
+        bookings: false,
+        admin: false
+    });
+    
     // Función para cargar datos adicionales bajo demanda
     const loadAdditionalData = useCallback(async (dataType: 'scheduling' | 'bookings' | 'admin', currentAppData: AppData) => {
         if (!currentAppData) return;
+        
+        // ✅ Prevenir calls duplicados usando ref
+        if (loadingDataRef.current[dataType]) {
+            console.log(`[App] Already loading ${dataType}, skipping`);
+            return;
+        }
+        loadingDataRef.current[dataType] = true;
         
         try {
             let updates: Partial<AppData> = {};
@@ -531,7 +591,11 @@ const App: React.FC = () => {
                         dataService.getConfirmationMessage(),
                         dataService.getBankDetails()
                     ]);
-                    console.log('App.tsx: bankDetails recibidos del backend:', bankDetails);
+                    console.log('🔍 App.tsx loadAdditionalData:', {
+                        bankDetailsRaw: bankDetails,
+                        isArray: Array.isArray(bankDetails),
+                        length: Array.isArray(bankDetails) ? bankDetails.length : 0
+                    });
                     updates = { confirmationMessage, bankDetails: Array.isArray(bankDetails) ? bankDetails : bankDetails ? [bankDetails] : [] };
                     break;
             }
@@ -547,15 +611,18 @@ const App: React.FC = () => {
             }
         } catch (error) {
             console.error(`Failed to load ${dataType} data:`, error);
+        } finally {
+            // ✅ Siempre resetear el flag para permitir recargas futuras
+            loadingDataRef.current[dataType] = false;
         }
     }, []);
 
     // Load scheduling data when needed for schedule view
     useEffect(() => {
-        if ((view === 'schedule' || view === 'group_class_wizard' || view === 'single_class_wizard') && appData && appData.instructors.length === 0) {
+        if ((view === 'schedule' || view === 'group_class_wizard' || view === 'single_class_wizard' || view === 'painting_booking') && appData && appData.instructors.length === 0) {
             loadAdditionalData('scheduling', appData);
         }
-        if ((view === 'schedule' || view === 'group_class_wizard' || view === 'single_class_wizard') && appData && appData.bookings.length === 0) {
+        if ((view === 'schedule' || view === 'group_class_wizard' || view === 'single_class_wizard' || view === 'painting_booking') && appData && appData.bookings.length === 0) {
             loadAdditionalData('bookings', appData);
         }
     }, [view, appData, loadAdditionalData]);
@@ -852,15 +919,8 @@ const App: React.FC = () => {
             case 'group_class_wizard':
                 return (
                     <GroupClassWizard
+                        initialTechnique={prefillTechnique || undefined}
                         config={groupClassConfig}
-                        availableSlots={appData?.availability ? 
-                            dataService.generateTimeSlots(new Date(), 180).map(slot => ({
-                              date: slot.date,
-                              time: slot.startTime,
-                              instructorId: 0
-                            }))
-                            : []
-                        }
                         pieces={pieces}
                         appData={appData}
                         onConfirm={(totalParticipants, assignments, selectedSlot) => {
@@ -904,6 +964,7 @@ const App: React.FC = () => {
             case 'single_class_wizard':
                 return (
                     <SingleClassWizard
+                        initialTechnique={prefillTechnique || undefined}
                         pieces={pieces}
                         availableSlots={appData?.availability ? 
                             dataService.generateTimeSlots(new Date(), 180).map(slot => ({
@@ -933,6 +994,15 @@ const App: React.FC = () => {
                     />
                 );
 
+            case 'painting_booking':
+                return (
+                    <PaintingBookingFlow
+                        deliveryId={paintingDeliveryId}
+                        onBack={() => setView('welcome')}
+                        isLoading={experienceUIState.isLoading}
+                    />
+                );
+
             case 'experience_confirmation':
                 if (!confirmedBooking) return <WelcomeSelector onSelect={handleWelcomeSelect} />;
                 return (
@@ -943,6 +1013,53 @@ const App: React.FC = () => {
                         policies={appData.policies}
                         onFinish={resetFlow}
                         onNavigateToMyClasses={() => setView('my-classes')}
+                    />
+                );
+            
+            case 'custom_experience_wizard':
+                return (
+                    <CustomExperienceWizard
+                        pieces={pieces}
+                        onConfirm={(booking) => {
+                            // El booking ya fue guardado y el email ya fue enviado
+                            // Guardar booking y navegar a ConfirmationPage para UX de clase mundial
+                            setConfirmedBooking(booking);
+                            setView('confirmation');
+                        }}
+                        onBack={() => setView('welcome')}
+                        isLoading={false}
+                        onShowPolicies={() => setIsPolicyModalOpen(true)}
+                    />
+                );
+
+            // ==================== VALENTINE 2026 VIEWS ====================
+            case 'valentine_landing':
+                return (
+                    <ValentineLanding
+                        onStart={() => setView('valentine_form')}
+                        onBack={() => setView('welcome')}
+                    />
+                );
+            
+            case 'valentine_form':
+                return (
+                    <ValentineRegistrationForm
+                        onSuccess={(registrationId) => {
+                            setValentineRegistrationId(registrationId);
+                            setView('valentine_success');
+                        }}
+                        onBack={() => setView('valentine_landing')}
+                    />
+                );
+            
+            case 'valentine_success':
+                return (
+                    <ValentineSuccess
+                        registrationId={valentineRegistrationId || ''}
+                        onDone={() => {
+                            setValentineRegistrationId(null);
+                            setView('welcome');
+                        }}
                     />
                 );
 
@@ -1038,7 +1155,7 @@ const App: React.FC = () => {
                             />
                         </div>
                     )}
-                    <div className={appData?.announcements && appData.announcements.length > 0 ? "mt-6" : ""}>
+                    <div className={`w-full ${appData?.announcements && appData.announcements.length > 0 ? "mt-6" : ""}`}>
                         {renderView()}
                     {isOpenStudioModalOpen && openStudioProduct && (
                         <ClassInfoModal

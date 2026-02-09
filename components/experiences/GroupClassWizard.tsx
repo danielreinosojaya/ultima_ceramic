@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { GroupClassConfig, TimeSlot, ParticipantTechniqueAssignment, GroupTechnique, Piece, AppData } from '../../types';
 import { GROUP_CLASS_CAPACITY } from '../../types';
 import * as dataService from '../../services/dataService';
 
 export interface GroupClassWizardProps {
   config: GroupClassConfig;
-  availableSlots: TimeSlot[];
   pieces: Piece[];
   appData?: AppData;
+  initialTechnique?: GroupTechnique;
   onConfirm: (totalParticipants: number, assignments: ParticipantTechniqueAssignment[], selectedSlot: TimeSlot) => void;
   onBack: () => void;
   isLoading?: boolean;
@@ -15,9 +15,9 @@ export interface GroupClassWizardProps {
 
 export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
   config,
-  availableSlots,
   pieces,
   appData,
+  initialTechnique,
   onConfirm,
   onBack,
   isLoading = false
@@ -30,28 +30,87 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
   const [error, setError] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
+  const [availableSlots, setAvailableSlots] = useState<dataService.GroupClassSlotResult[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+
+  const techniqueCounts = useMemo(() => {
+    const counts = participantAssignments.reduce(
+      (acc, assignment) => {
+        if (assignment.technique === 'potters_wheel') {
+          acc.pottersWheel += 1;
+        } else if (assignment.technique === 'painting') {
+          acc.painting += 1;
+        } else {
+          acc.handModeling += 1;
+        }
+        return acc;
+      },
+      { pottersWheel: 0, handModeling: 0, painting: 0 }
+    );
+
+    return {
+      pottersWheel: counts.pottersWheel,
+      handModeling: counts.handModeling,
+      painting: counts.painting,
+      handWork: counts.handModeling + counts.painting
+    };
+  }, [participantAssignments]);
 
   // Initialize participant assignments when total changes
   useEffect(() => {
+    const defaultTechnique: GroupTechnique = initialTechnique || 'hand_modeling';
     const newAssignments: ParticipantTechniqueAssignment[] = Array.from(
       { length: totalParticipants },
       (_, idx) => ({
         participantNumber: idx + 1,
-        technique: 'hand_modeling'
+        technique: defaultTechnique
       })
     );
     setParticipantAssignments(newAssignments);
-  }, [totalParticipants]);
+  }, [totalParticipants, initialTechnique]);
 
-  // Initialize selected date with first available date
   useEffect(() => {
-    if (availableSlots.length > 0 && !selectedDate) {
-      const uniqueDates = [...new Set(availableSlots.map(s => s.date))].sort();
-      if (uniqueDates.length > 0) {
-        setSelectedDate(uniqueDates[0]);
+    const loadSlots = async () => {
+      if (step !== 4) return;
+
+      const total = techniqueCounts.pottersWheel + techniqueCounts.handWork;
+      if (total < 2) {
+        setAvailableSlots([]);
+        return;
       }
-    }
-  }, [availableSlots, selectedDate]);
+
+      setLoadingSlots(true);
+      setError('');
+
+      try {
+        const slots = await dataService.getGroupClassSlots({
+          pottersWheel: techniqueCounts.pottersWheel,
+          handModeling: techniqueCounts.handModeling,
+          painting: techniqueCounts.painting,
+          startDate: new Date().toISOString().split('T')[0],
+          daysAhead: 90
+        });
+
+        setAvailableSlots(slots);
+
+        const uniqueDates = [...new Set(slots.map(s => s.date))].sort();
+        if (uniqueDates.length > 0) {
+          if (!selectedDate || !uniqueDates.includes(selectedDate)) {
+            setSelectedDate(uniqueDates[0]);
+          }
+        } else {
+          setSelectedDate('');
+        }
+      } catch (err) {
+        console.error('Error loading group class slots:', err);
+        setError('Error al cargar horarios disponibles');
+      } finally {
+        setLoadingSlots(false);
+      }
+    };
+
+    loadSlots();
+  }, [step, techniqueCounts]);
 
   const handleUpdateTechnique = (participantNumber: number, technique: GroupTechnique) => {
     setParticipantAssignments(prev =>
@@ -79,9 +138,9 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
     
     switch (preset) {
       case 'balanced':
-        // Distribuir: 8 torno, 14 modelado, resto pintura
+        // Distribuir: 8 torno, 22 modelado, resto pintura
         const wheelCount = Math.min(8, totalParticipants);
-        const modelingCount = Math.min(14, totalParticipants - wheelCount);
+        const modelingCount = Math.min(22, totalParticipants - wheelCount);
         const paintingCount = totalParticipants - wheelCount - modelingCount;
         
         newAssignments = Array.from({ length: totalParticipants }, (_, i) => ({
@@ -113,6 +172,11 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
 
   const handleNext = () => {
     if (step === 1) {
+      // Validación estricta: debe ser mínimo 2 personas para experiencias grupales
+      if (totalParticipants < 2) {
+        setError('❌ Las experiencias grupales requieren mínimo 2 personas');
+        return;
+      }
       if (totalParticipants < config.minParticipants || totalParticipants > config.maxParticipants) {
         setError(`El grupo debe tener entre ${config.minParticipants} y ${config.maxParticipants} personas`);
         return;
@@ -230,6 +294,19 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
             <p className="text-gray-600">Entre {config.minParticipants} y {config.maxParticipants} personas</p>
           </div>
 
+          {/* Advertencia: Mínimo 2 personas */}
+          <div className="bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-4">
+            <div className="flex items-start gap-3">
+              <span className="text-xl">👥</span>
+              <div>
+                <p className="font-semibold text-blue-900">Experiencia Grupal</p>
+                <p className="text-sm text-blue-700 mt-1">
+                  ⚠️ <strong>Mínimo 2 personas</strong> - Las experiencias grupales no pueden realizarse con 1 persona. Si vienes solo, elige una experiencia individual.
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="bg-white p-6 rounded-lg border border-gray-200">
             <input
               type="range"
@@ -241,7 +318,7 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
             />
             <div className="text-center mt-4">
               <div className="text-5xl font-bold text-blue-600 mb-2">{totalParticipants}</div>
-              <div className="text-gray-600">personas</div>
+              <div className="text-gray-600">{totalParticipants === 1 ? 'persona' : 'personas'}</div>
             </div>
           </div>
 
@@ -256,7 +333,7 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
             </div>
           </div>
 
-          {error && <div className="text-red-600 text-sm">{error}</div>}
+          {error && <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg border border-red-300">{error}</div>}
         </div>
       )}
 
@@ -425,7 +502,11 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
             <p className="text-gray-600">Disponible de 9 AM a 7 PM en intervalos de 30 minutos</p>
           </div>
 
-          {availableSlots.length > 0 ? (
+          {loadingSlots ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
+            </div>
+          ) : availableSlots.length > 0 ? (
             <div className="space-y-6">
               {/* Calendar Month Navigation */}
               {(() => {
@@ -552,11 +633,11 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
                   </div>
                   
                   {(() => {
-                    // Get ONLY the actual available times for this specific date
+                    // Obtener TODOS los slots para la fecha (disponibles e indisponibles)
                     const slotsForDate = availableSlots.filter(s => s.date === selectedDate);
-                    const availableTimes = [...new Set(slotsForDate.map(s => s.time))].sort();
+                    const allTimes = [...new Set(slotsForDate.map(s => s.time))].sort();
 
-                    if (availableTimes.length === 0) {
+                    if (allTimes.length === 0) {
                       return (
                         <div className="text-center py-6 bg-gray-50 rounded-lg">
                           <p className="text-gray-600">No hay horarios disponibles para este día</p>
@@ -566,46 +647,74 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
 
                     return (
                       <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 p-2 bg-gray-50 rounded-lg">
-                        {availableTimes.map(time => {
-                          const slotInfo = appData ? dataService.calculateSlotAvailability(selectedDate, time, appData) : null;
+                        {allTimes.map(time => {
+                          const slot = slotsForDate.find(s => s.time === time);
                           const isSelected = selectedSlot?.time === time && selectedSlot?.date === selectedDate;
-                          
-                          // Determinar si el slot está disponible para cualquier técnica
-                          const hasAnyCapacity = slotInfo?.techniques.potters_wheel.isAvailable || 
-                                               slotInfo?.techniques.hand_modeling.isAvailable ||
-                                               slotInfo?.techniques.painting.isAvailable;
+                          const canBook = slot?.canBook ?? false;
+                          const blockedReason = slot?.blockedReason || null;
+                          const isBlocked = Boolean(blockedReason);
+                          const available = slot?.available ?? 0;
+                          const total = slot?.total ?? 0;
+                          const capacityDetails = slot?.capacityDetails;
+
+                          const blockedLabel = blockedReason === 'course_conflict'
+                            ? 'Bloqueado por curso'
+                            : blockedReason === 'fixed_class_conflict'
+                            ? 'Bloqueado por clase fija'
+                            : blockedReason === 'potters_overlap'
+                            ? 'Solapamiento torno'
+                            : blockedReason === 'capacity'
+                            ? 'Sin cupos'
+                            : 'No disponible';
                           
                           return (
                             <div key={time} className="flex flex-col gap-1">
                               <button
                                 onClick={() => {
-                                  setSelectedSlot({
-                                    date: selectedDate,
-                                    time: time,
-                                    instructorId: 0
-                                  });
+                                  if (canBook) {
+                                    setSelectedSlot({
+                                      date: selectedDate,
+                                      time: time,
+                                      instructorId: 0
+                                    });
+                                  }
                                 }}
-                                disabled={!hasAnyCapacity}
+                                disabled={!canBook}
+                                title={isBlocked ? blockedLabel : canBook ? 'Disponible' : 'Sin cupos'}
                                 className={`p-2 rounded-lg border-2 transition-all text-center font-bold text-xs ${
                                   isSelected
                                     ? 'border-blue-500 bg-blue-500 text-white ring-2 ring-blue-300'
-                                    : hasAnyCapacity
+                                    : canBook
                                     ? 'border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:bg-blue-50 cursor-pointer'
-                                    : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-40'
+                                    : 'border-gray-300 bg-gray-200 text-gray-500 cursor-not-allowed opacity-60'
                                 }`}
                               >
                                 {time}
                               </button>
                               
-                              {/* Mostrar cupos disponibles */}
-                              {slotInfo && (
-                                <div className="text-xs text-gray-600 space-y-0.5">
-                                  <div className={slotInfo.techniques.potters_wheel.isAvailable ? 'text-green-600' : 'text-red-500'}>
-                                    🎡 {slotInfo.techniques.potters_wheel.available}/{slotInfo.techniques.potters_wheel.total}
-                                  </div>
-                                  <div className={slotInfo.techniques.hand_modeling.isAvailable ? 'text-green-600' : 'text-red-500'}>
-                                    🤚 {slotInfo.techniques.hand_modeling.available}/{slotInfo.techniques.hand_modeling.total}
-                                  </div>
+                              {/* Mostrar cupos o razón bloqueo */}
+                              {slot && (
+                                <div className="text-xs text-center">
+                                  {isBlocked ? (
+                                    <div className="text-red-600 font-semibold">🔒 {blockedLabel}</div>
+                                  ) : capacityDetails?.pottersWheel || capacityDetails?.handWork ? (
+                                    <div className="space-y-0.5">
+                                      {capacityDetails?.pottersWheel && (
+                                        <div className={canBook ? 'text-green-600' : 'text-orange-600'}>
+                                          🎡 {capacityDetails.pottersWheel.available}/{capacityDetails.pottersWheel.total}
+                                        </div>
+                                      )}
+                                      {capacityDetails?.handWork && (
+                                        <div className={canBook ? 'text-green-600' : 'text-orange-600'}>
+                                          🤚🎨 {capacityDetails.handWork.available}/{capacityDetails.handWork.total}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className={canBook ? 'text-green-600' : 'text-orange-600'}>
+                                      {available}/{total}
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>

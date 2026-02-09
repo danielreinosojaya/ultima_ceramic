@@ -1,0 +1,222 @@
+╔════════════════════════════════════════════════════════════════════╗
+║          REPORTE DE TESTS DE RENDIMIENTO - DELIVERY PHOTOS        ║
+╚════════════════════════════════════════════════════════════════════╝
+
+Fecha: Tue Feb  3 12:35:50 -05 2026
+Sistema: Darwin Daniels-MacBook-Air.local 25.2.0 Darwin Kernel Version 25.2.0: Tue Nov 18 21:09:34 PST 2025; root:xnu-12377.61.12~1/RELEASE_ARM64_T8112 arm64
+Node Version: v22.18.0
+
+════════════════════════════════════════════════════════════════════
+
+🧪 INICIANDO TESTS UNITARIOS DE API
+======================================================================
+🌐 API Base: http://localhost:3000
+
+❌ GET /api/data?action=getDeliveries - Error: Status 400
+❌ Validate getDeliveries response structure - Error: Missing success field
+❌ Filter deliveries by status - Error: Failed for status pending
+❌ Search deliveries by text - Error: Search failed
+⚠️  Skipping test: No deliveries with photos found
+❌ GET /api/data?action=getDeliveryPhotos (invalid ID) - Error: Expected 404, got 500
+   → Correctly returned 400
+✅ GET /api/data?action=getDeliveryPhotos (missing ID) (7005ms)
+⚠️  Skipping test: No deliveries with photos found
+⚠️  Skipping test: No deliveries with photos found
+   → Skipped: No delivery with photos
+✅ No memory leaks in repeated requests (8263ms)
+
+======================================================================
+📊 RESUMEN DE TESTS UNITARIOS
+======================================================================
+✅ Passed: 2
+❌ Failed: 5
+⏱️  Total Time: 46268ms
+📈 Success Rate: 28.6%
+
+❌ TESTS FALLIDOS:
+   • GET /api/data?action=getDeliveries: Status 400
+   • Validate getDeliveries response structure: Missing success field
+   • Filter deliveries by status: Failed for status pending
+   • Search deliveries by text: Search failed
+   • GET /api/data?action=getDeliveryPhotos (invalid ID): Expected 404, got 500
+======================================================================
+
+
+🔬 INICIANDO SUITE DE TESTS DE RENDIMIENTO
+======================================================================
+🚀 Performance Monitor iniciado
+
+🧪 TEST 1: Carga inicial de deliveries
+   📦 0 deliveries cargadas
+   📷 0 deliveries con fotos
+   🎯 Cargando fotos para primeras 0 deliveries...
+
+======================================================================
+📊 REPORTE DE RENDIMIENTO: Carga Inicial
+======================================================================
+⏱️  Tiempo Total: 7481ms
+📡 Total Requests: 1
+✅ Requests Únicos: 1
+❌ Requests Duplicados: 0
+⚡ Requests/segundo: 0.13
+⏰ Tiempo Promedio por Request: 7479.00ms
+🔼 Tiempo Máximo: 7479.00ms
+🔽 Tiempo Mínimo: 7479.00ms
+📦 Datos Transferidos: 0.04 KB
+
+🚨 ERRORES (1):
+   1. Request failed: http://localhost:3000/api/data?action=getDeliveries - Status 400
+
+----------------------------------------------------------------------
+🔍 ANÁLISIS DE PROBLEMAS:
+----------------------------------------------------------------------
+⚠️  WARNING: Tiempo promedio alto (7479ms)
+   → Considerar compresión de imágenes o CDN
+======================================================================
+
+🚀 Performance Monitor iniciado
+
+🧪 TEST 2: Scroll y lazy loading de fotos
+   📜 Simulando 0 batches de scroll...
+
+======================================================================
+📊 REPORTE DE RENDIMIENTO: Scroll y Lazy Loading
+======================================================================
+⏱️  Tiempo Total: 6420ms
+📡 Total Requests: 1
+✅ Requests Únicos: 1
+❌ Requests Duplicados: 0
+⚡ Requests/segundo: 0.16
+⏰ Tiempo Promedio por Request: 6419.00ms
+🔼 Tiempo Máximo: 6419.00ms
+🔽 Tiempo Mínimo: 6419.00ms
+📦 Datos Transferidos: 0.04 KB
+
+🚨 ERRORES (1):
+   1. Request failed: http://localhost:3000/api/data?action=getDeliveries - Status 400
+
+----------------------------------------------------------------------
+🔍 ANÁLISIS DE PROBLEMAS:
+----------------------------------------------------------------------
+⚠️  WARNING: Tiempo promedio alto (6419ms)
+   → Considerar compresión de imágenes o CDN
+======================================================================
+
+🚀 Performance Monitor iniciado
+
+🧪 TEST 3: Búsqueda y filtros
+   🔍 Aplicando filtro: {"status":"pending"}
+   🔍 Aplicando filtro: {"status":"ready"}
+   🔍 Aplicando filtro: {"search":"test"}
+   🔍 Aplicando filtro: {"dateFrom":"2026-01-01","dateTo":"2026-02-03"}
+
+======================================================================
+📊 REPORTE DE RENDIMIENTO: Búsqueda y Filtros
+======================================================================
+⏱️  Tiempo Total: 23232ms
+📡 Total Requests: 4
+✅ Requests Únicos: 4
+❌ Requests Duplicados: 0
+⚡ Requests/segundo: 0.17
+⏰ Tiempo Promedio por Request: 5506.00ms
+🔼 Tiempo Máximo: 6658.00ms
+🔽 Tiempo Mínimo: 4912.00ms
+📦 Datos Transferidos: 0.16 KB
+
+🚨 ERRORES (4):
+   1. Request failed: http://localhost:3000/api/data?action=getDeliveries&status=pending - Status 400
+   2. Request failed: http://localhost:3000/api/data?action=getDeliveries&status=ready - Status 400
+   3. Request failed: http://localhost:3000/api/data?action=getDeliveries&search=test - Status 400
+   4. Request failed: http://localhost:3000/api/data?action=getDeliveries&dateFrom=2026-01-01&dateTo=2026-02-03 - Status 400
+
+----------------------------------------------------------------------
+🔍 ANÁLISIS DE PROBLEMAS:
+----------------------------------------------------------------------
+⚠️  WARNING: Tiempo promedio alto (5506ms)
+   → Considerar compresión de imágenes o CDN
+======================================================================
+
+🚀 Performance Monitor iniciado
+
+🧪 TEST 4: Paginación
+   📄 Probando 0 páginas (15 items/página)
+
+======================================================================
+📊 REPORTE DE RENDIMIENTO: Paginación
+======================================================================
+⏱️  Tiempo Total: 6524ms
+📡 Total Requests: 1
+✅ Requests Únicos: 1
+❌ Requests Duplicados: 0
+⚡ Requests/segundo: 0.15
+⏰ Tiempo Promedio por Request: 6523.00ms
+🔼 Tiempo Máximo: 6523.00ms
+🔽 Tiempo Mínimo: 6523.00ms
+📦 Datos Transferidos: 0.04 KB
+
+🚨 ERRORES (1):
+   1. Request failed: http://localhost:3000/api/data?action=getDeliveries - Status 400
+
+----------------------------------------------------------------------
+🔍 ANÁLISIS DE PROBLEMAS:
+----------------------------------------------------------------------
+⚠️  WARNING: Tiempo promedio alto (6523ms)
+   → Considerar compresión de imágenes o CDN
+======================================================================
+
+🚀 Performance Monitor iniciado
+
+🧪 TEST 5: Re-renders y re-fetching (stress test)
+   🔄 Simulando 3 re-renders con las mismas 0 deliveries
+   → Re-render 1
+   → Re-render 2
+   → Re-render 3
+
+======================================================================
+📊 REPORTE DE RENDIMIENTO: Re-renders y Cache
+======================================================================
+⏱️  Tiempo Total: 6686ms
+📡 Total Requests: 1
+✅ Requests Únicos: 1
+❌ Requests Duplicados: 0
+⚡ Requests/segundo: 0.15
+⏰ Tiempo Promedio por Request: 5670.00ms
+🔼 Tiempo Máximo: 5670.00ms
+🔽 Tiempo Mínimo: 5670.00ms
+📦 Datos Transferidos: 0.04 KB
+
+🚨 ERRORES (1):
+   1. Request failed: http://localhost:3000/api/data?action=getDeliveries - Status 400
+
+----------------------------------------------------------------------
+🔍 ANÁLISIS DE PROBLEMAS:
+----------------------------------------------------------------------
+⚠️  WARNING: Tiempo promedio alto (5670ms)
+   → Considerar compresión de imágenes o CDN
+======================================================================
+
+
+██████████████████████████████████████████████████████████████████████
+📋 RESUMEN EJECUTIVO - TODOS LOS TESTS
+██████████████████████████████████████████████████████████████████████
+
+📊 ESTADÍSTICAS GLOBALES:
+   • Total Requests: 8
+   • Total Duplicados: 0 (0.0%)
+   • Total Datos: 0.00 MB
+   • Tiempo Total: 50.34 segundos
+   • Total Errores: 8
+
+🎯 PROBLEMAS CRÍTICOS IDENTIFICADOS:
+   ⚠️  Tiempo promedio 6319ms - MEJORAR PERFORMANCE
+
+██████████████████████████████████████████████████████████████████████
+
+✅ Suite de tests completada - 1 problemas encontrados
+
+
+
+════════════════════════════════════════════════════════════════════
+
+Tests completados: Tue Feb  3 12:37:50 -05 2026
+

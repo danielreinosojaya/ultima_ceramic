@@ -26,3 +26,12 @@ dist-ssr
 !/constants.ts
 .vercel
 .env*.local
+
+# Test & script files (pueden contener credenciales hardcodeadas)
+/test-*.ts
+/fix-*.ts
+/diagnostic-*.ts
+/verify-*.ts
+/cleanup-*.ts
+/create-table.ts
+/test-*.js

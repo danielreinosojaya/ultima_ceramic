@@ -160,8 +160,9 @@ const SCHEMA_SQL = `
         customer_email VARCHAR(255) NOT NULL,
         description TEXT NOT NULL,
         scheduled_date DATE NOT NULL,
-        status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'overdue')),
+        status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'ready', 'completed', 'overdue')),
         created_at TIMESTAMPTZ DEFAULT NOW(),
+        ready_at TIMESTAMPTZ,
         completed_at TIMESTAMPTZ,
         delivered_at TIMESTAMPTZ,
         notes TEXT,
@@ -303,13 +304,30 @@ export async function ensureTablesExist() {
     // Quick column checks only - skip heavy migrations for now
     try {
         console.log('Checking essential columns...');
+        // Some legacy DBs were created without timestamps. Several endpoints rely on these columns in ORDER BY.
+        await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();`;
+        await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();`;
         await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS min_participants INT;`;
         await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS price_per_person NUMERIC(10, 2);`;
         await sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS sort_order INT DEFAULT 0;`;
+
+        await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();`;
         await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS participants INT DEFAULT 1;`;
         
         // Migration: Add created_by_client column to deliveries table
         await sql`ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS created_by_client BOOLEAN DEFAULT false;`;
+        
+        // Migration: Add ready_at column to deliveries table
+        await sql`ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS ready_at TIMESTAMPTZ;`;
+        
+        // Migration: Fix deliveries status check constraint to include 'ready'
+        try {
+            await sql`ALTER TABLE deliveries DROP CONSTRAINT IF EXISTS deliveries_status_check;`;
+            await sql`ALTER TABLE deliveries ADD CONSTRAINT deliveries_status_check CHECK (status IN ('pending', 'ready', 'completed', 'overdue'));`;
+            console.log('✅ Fixed deliveries status check constraint');
+        } catch (err) {
+            console.warn('⚠️ Could not update deliveries status constraint:', err);
+        }
         
         // New columns for Experiences
         await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS booking_type VARCHAR(50) DEFAULT 'individual';`;
@@ -334,7 +352,7 @@ const seedSetting = async (key: string, value: any) => {
   await sql`
     INSERT INTO settings (key, value) 
     VALUES (${key}, ${JSON.stringify(value)}) 
-    ON CONFLICT (key) DO NOTHING;
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
   `;
 };
 

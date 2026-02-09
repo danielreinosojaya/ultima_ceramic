@@ -145,7 +145,7 @@ export const CreateSessionForm: React.FC<CreateSessionFormProps> = ({ onSuccess,
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             placeholder="tu@email.com"
-                            className="w-full px-4 py-2 border border-brand-border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                            className="w-full px-4 py-3 border border-brand-border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-base"
                             disabled={isLoading}
                             autoFocus
                         />
@@ -167,7 +167,7 @@ export const CreateSessionForm: React.FC<CreateSessionFormProps> = ({ onSuccess,
                             value={fullName}
                             onChange={(e) => setFullName(e.target.value)}
                             placeholder="Juan García"
-                            className="w-full px-4 py-2 border border-brand-border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                            className="w-full px-4 py-3 border border-brand-border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-base"
                             disabled={isLoading}
                         />
                         <p className="text-xs text-gray-500 mt-1">
@@ -188,7 +188,7 @@ export const CreateSessionForm: React.FC<CreateSessionFormProps> = ({ onSuccess,
                             type="button"
                             onClick={onBack}
                             disabled={isLoading}
-                            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 text-base h-12"
                         >
                             <ArrowLeftIcon className="w-4 h-4" />
                             Cambiar opción
@@ -196,7 +196,7 @@ export const CreateSessionForm: React.FC<CreateSessionFormProps> = ({ onSuccess,
                         <button
                             type="submit"
                             disabled={isLoading}
-                            className="flex-1 px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-300"
+                            className="flex-1 px-4 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-300 text-base h-12"
                         >
                             {isLoading ? 'Creando...' : 'Crear Sesión'}
                         </button>

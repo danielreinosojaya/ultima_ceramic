@@ -25,11 +25,16 @@ export type AppView =
   | 'group_class_wizard'
   | 'piece_experience_wizard'
   | 'single_class_wizard'
+  | 'painting_booking'
   | 'experience_confirmation'
+  | 'custom_experience_wizard'
   | 'wheel_course_landing'
   | 'wheel_course_schedule'
   | 'wheel_course_registration'
-  | 'wheel_course_confirmation';
+  | 'wheel_course_confirmation'
+  | 'valentine_landing'
+  | 'valentine_form'
+  | 'valentine_success';
 export type BookingMode = 'flexible' | 'monthly';
 export type Technique = 'potters_wheel' | 'molding';
 
@@ -46,6 +51,7 @@ export interface UserInfo {
 
 // Delivery System Types
 export type DeliveryStatus = 'pending' | 'ready' | 'completed' | 'overdue';
+export type PaintingStatus = 'pending_payment' | 'paid' | 'scheduled' | 'completed';
 
 export interface Delivery {
     id: string;
@@ -59,7 +65,15 @@ export interface Delivery {
     deliveredAt?: string | null; // ISO date string - DEPRECATED: usar completedAt
     notes?: string | null;
     photos?: string[] | null; // Array de URLs de fotos
+    hasPhotos?: boolean; // ⚡ Flag para lazy loading - indica si hay fotos sin cargarlas
     createdByClient?: boolean; // true si el cliente subió las fotos directamente
+    // 🎨 Servicio de Pintura (Upsell)
+    wantsPainting?: boolean; // Cliente manifestó intención de pintar pieza
+    paintingPrice?: number | null; // Precio del servicio de pintura
+    paintingStatus?: PaintingStatus | null; // Estado: pending_payment, paid, scheduled, completed
+    paintingBookingDate?: string | null; // Fecha agendada para pintura
+    paintingPaidAt?: string | null; // Timestamp cuando pagó servicio
+    paintingCompletedAt?: string | null; // Timestamp cuando completó pintura
 }
 
 export interface Customer {
@@ -737,8 +751,8 @@ export interface GroupClassState {
 // Group Class Capacity Limits
 export const GROUP_CLASS_CAPACITY = {
   potters_wheel: 8,      // Máximo 8 para torno
-  hand_modeling: 14,     // Máximo 14 para modelado
-  painting: Infinity     // Sin límite para pintura
+  hand_modeling: 22,     // Máximo 22 para modelado
+  painting: 22           // Máximo 22 para pintura
 } as const;
 
 // 8. Experience Pricing
@@ -834,3 +848,299 @@ export const CASH_DENOMINATIONS: { key: CashDenomination; label: string; value: 
   { key: '0_05_COIN', label: 'Moneda $0.05', value: 0.05 },
   { key: '0_01_COIN', label: 'Moneda $0.01', value: 0.01 },
 ];
+
+// ==================== CUSTOM EXPERIENCE TYPES (NEW v2.0) ====================
+
+/**
+ * Tipo de actividad personalizada
+ * - ceramic_only: Solo actividad de cerámica (técnica + personas)
+ * - celebration: Incluye invitados, decoración, torta, menú
+ */
+export type CustomExperienceType = 'ceramic_only' | 'celebration';
+
+/**
+ * Técnicas disponibles para experiencia personalizada
+ * Mismo que GroupTechnique pero con límites explícitos
+ */
+export interface CustomExperienceTechnique {
+  id: GroupTechnique;
+  name: string;
+  description: string;
+  maxCapacity: number;
+  icon: string;
+  tooltipInfo: string;
+}
+
+export const CUSTOM_EXPERIENCE_TECHNIQUES: CustomExperienceTechnique[] = [
+  {
+    id: 'potters_wheel',
+    name: 'Torno Alfarero',
+    description: 'Técnica tradicional que requiere coordinación y precisión',
+    maxCapacity: 8,
+    icon: '🎯',
+    tooltipInfo: 'El torno alfarero permite crear formas simétricas giratorias como tazas, platos y vasijas. Requiere práctica pero es muy gratificante.'
+  },
+  {
+    id: 'hand_modeling',
+    name: 'Modelado a Mano',
+    description: 'Crea formas libres usando solo tus manos',
+    maxCapacity: 22,
+    icon: '✋',
+    tooltipInfo: 'El modelado a mano es más intuitivo y permite mayor libertad creativa. Ideal para esculturas, platos decorativos y piezas únicas.'
+  },
+  {
+    id: 'painting',
+    name: 'Pintado a Mano',
+    description: 'Pinta piezas de cerámica pre-hechas con diseños personalizados',
+    maxCapacity: 22,
+    icon: '🎨',
+    tooltipInfo: 'Pinta piezas de cerámica ya moldeadas con colores vibrantes. Perfecto para niños y quienes prefieren enfocarse en el diseño visual.'
+  }
+];
+
+/**
+ * Precios de técnicas por persona (YA INCLUYEN IVA)
+ */
+export const TECHNIQUE_PRICES = {
+  potters_wheel: 55,    // $55 por persona (incluye IVA)
+  hand_modeling: 45,    // $45 por persona (incluye IVA)
+  painting: 18          // Mínimo $18 por pieza (incluye IVA)
+} as const;
+
+/**
+ * Items del menú disponibles
+ */
+export interface MenuItem {
+  id: string;
+  name: string;
+  description?: string;
+  price: number;
+  category: 'bebidas' | 'snacks' | 'comidas';
+  isAvailable: boolean;
+}
+
+/**
+ * Selección de items del menú
+ */
+export interface MenuSelection {
+  itemId: string;
+  quantity: number;
+  totalPrice: number;
+}
+
+/**
+ * Pieza seleccionada para un niño
+ */
+export interface ChildPieceSelection {
+  childNumber: number; // 1, 2, 3...
+  pieceId: string;
+  pieceName: string;
+  piecePrice: number;
+}
+
+/**
+ * Configuración de celebración
+ */
+export interface CelebrationConfig {
+  // Participantes
+  activeParticipants: number; // Personas que harán cerámica (pagan técnica)
+  guests: number; // Invitados (no hacen cerámica, solo ocupan espacio)
+  
+  // Espacio (se cobra por hora + IVA)
+  hours: number; // Horas de alquiler del espacio
+  
+  // Opciones extras
+  bringDecoration?: boolean;
+  bringCake?: boolean;
+  
+  // Niños (si aplica)
+  hasChildren?: boolean;
+  childrenCount?: number;
+  
+  // DEPRECATED: menuSelections ya no se usa (se puede traer comida propia)
+  menuSelections?: string[];
+}
+
+/**
+ * Configuración solo cerámica (sin celebración)
+ * Precio por persona según técnica (ya incluye IVA)
+ */
+export interface CeramicOnlyConfig {
+  participants: number; // Total de personas
+  pieceSelections?: ChildPieceSelection[]; // Solo si technique = 'painting'
+}
+
+/**
+ * Precios de espacio por hora
+ */
+export interface SpaceHourlyPricing {
+  weekday: number; // Mar-Jue
+  weekend: number; // Vie-Dom
+  vatRate: number; // IVA Ecuador (0.15)
+}
+
+export const SPACE_HOURLY_PRICING: SpaceHourlyPricing = {
+  weekday: 75,
+  weekend: 100,
+  vatRate: 0.15
+};
+
+/**
+ * Resumen de precios calculado
+ * 
+ * LÓGICA:
+ * - Solo Cerámica: técnica x personas (sin espacio, sin IVA adicional)
+ * - Celebración: (espacio x horas + IVA) + (técnica x activos) + menú + piezas niños
+ */
+export interface CustomExperiencePricing {
+  // Solo Cerámica
+  techniquePrice?: number; // Precio unitario de la técnica ($55, $45, o pieza)
+  techniqueTotal?: number; // techniquePrice x participants (YA incluye IVA)
+  piecesTotal?: number; // Total de piezas seleccionadas si es painting
+  
+  // Celebración (espacio)
+  spaceHours?: number; // Horas reservadas
+  spaceRate?: number; // Tarifa por hora ($65 o $100)
+  spaceSubtotal?: number; // spaceHours * spaceRate (sin IVA)
+  spaceVat?: number; // IVA solo del espacio
+  spaceTotalWithVat?: number; // spaceSubtotal + spaceVat
+  
+  // Celebración (técnicas para activos)
+  activeTechniqueTotal?: number; // Técnica x activeParticipants (YA incluye IVA)
+  
+  // Extras
+  menuTotal?: number; // Total de menú
+  childrenPiecesTotal?: number; // Total de piezas para niños
+  
+  // Total Final
+  total: number; // Gran total
+  
+  // Información adicional
+  spaceIncludes?: string[]; // ["A/C", "wifi", "mesas", "sillas", "menaje", "servicio"]
+}
+
+/**
+ * Slot de fecha/hora para experiencia personalizada
+ */
+export interface CustomExperienceTimeSlot {
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:mm
+  endTime: string; // HH:mm
+  hours: number; // Duración en horas
+  isWeekend: boolean; // Determina precio
+  hourlyRate: number; // Tarifa aplicable
+}
+
+/**
+ * Estado del wizard de experiencia personalizada
+ */
+export interface CustomExperienceWizardState {
+  // Step 1: Tipo de actividad
+  experienceType: CustomExperienceType | null;
+  
+  // Step 2: Configuración
+  technique: GroupTechnique | null;
+  config: CeramicOnlyConfig | CelebrationConfig | null;
+  
+  // Step 2.5: Menú (si es celebración)
+  menuItems?: MenuItem[];
+  
+  // Step 3: Fecha y hora
+  selectedTimeSlot: CustomExperienceTimeSlot | null;
+  
+  // Step 4: Precios calculados
+  pricing: CustomExperiencePricing | null;
+  
+  // UI State
+  currentStep: 1 | 2 | 3 | 4 | 5;
+  isLoading: boolean;
+  error: string | null;
+}
+
+/**
+ * Booking de experiencia personalizada (para enviar al backend)
+ */
+export interface CustomExperienceBooking {
+  experienceType: CustomExperienceType;
+  technique: GroupTechnique;
+  config: CeramicOnlyConfig | CelebrationConfig;
+  timeSlot: CustomExperienceTimeSlot;
+  pricing: CustomExperiencePricing;
+  userInfo: UserInfo;
+  
+  // Metadata
+  createdAt?: string;
+  bookingCode?: string;
+}
+
+// ============================================
+// San Valentín 2026 - Inscripciones
+// ============================================
+
+export type ValentineWorkshopType = 
+  | 'florero_arreglo_floral'
+  | 'modelado_san_valentin'
+  | 'torno_san_valentin';
+
+export type ValentineRegistrationStatus = 
+  | 'pending'      // Esperando validación de pago
+  | 'confirmed'    // Pago verificado
+  | 'cancelled'    // Cancelado
+  | 'attended';    // Asistió al taller
+
+export interface ValentineWorkshopInfo {
+  type: ValentineWorkshopType;
+  name: string;
+  time: string;
+  priceIndividual: number;
+  pricePair: number;
+  description: string;
+  maxCapacity: number; // Cupos máximos (cuenta participantes, no inscripciones)
+}
+
+export const VALENTINE_WORKSHOPS: ValentineWorkshopInfo[] = [
+  {
+    type: 'florero_arreglo_floral',
+    name: 'Decoración de florero de cerámica + Arreglo Floral',
+    time: '10h00 a 12h00',
+    priceIndividual: 75,
+    pricePair: 140,
+    description: 'Ideal para compartir con amigas, familia o para ti mismo',
+    maxCapacity: 15
+  },
+  {
+    type: 'modelado_san_valentin',
+    name: 'Modelado a mano + Colores San Valentín',
+    time: '14h00 a 16h00',
+    priceIndividual: 65,
+    pricePair: 120,
+    description: 'Para mentes creativas que deseen explorar diversas formas',
+    maxCapacity: 20
+  },
+  {
+    type: 'torno_san_valentin',
+    name: 'Torno Alfarero San Valentín',
+    time: '17h00 a 19h00',
+    priceIndividual: 70,
+    pricePair: 130,
+    description: 'Conectaremos con los sentidos y daremos forma a una pieza única',
+    maxCapacity: 8
+  }
+];
+
+export interface ValentineRegistration {
+  id: string;
+  fullName: string;
+  birthDate: string; // YYYY-MM-DD
+  phone: string;
+  email: string;
+  workshop: ValentineWorkshopType;
+  participants: 1 | 2; // Individual o pareja
+  paymentProofUrl: string; // URL de la foto/screenshot del comprobante
+  status: ValentineRegistrationStatus;
+  createdAt: string;
+  updatedAt?: string;
+  adminNotes?: string;
+  confirmedBy?: string; // Admin que confirmó
+  confirmedAt?: string;
+}

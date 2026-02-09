@@ -283,7 +283,6 @@ export const CashierDashboard: React.FC = () => {
                     onChange={e => setFormData({ ...formData, initialBalance: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
                     className="w-full px-4 py-2 border border-brand-border rounded-lg focus:outline-none focus:border-brand-primary"
                     placeholder="0.00"
-                    required
                   />
                 </div>
 
@@ -297,7 +296,6 @@ export const CashierDashboard: React.FC = () => {
                     onChange={e => setFormData({ ...formData, cashSales: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0 })}
                     className="w-full px-4 py-2 border border-brand-border rounded-lg focus:outline-none focus:border-brand-primary"
                     placeholder="0.00"
-                    required
                   />
                 </div>
 
