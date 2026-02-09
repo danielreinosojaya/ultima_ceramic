@@ -2225,7 +2225,7 @@ export const getAlianzaEmailTemplate = (): string => {
                             <p style="font-size: 16px; line-height: 1.6; color: #6b4423; margin: 0 0 28px 0;">
                                 Por eso hoy te invitamos a conocer <strong>Alianza CERAMICALMA</strong>: acceso exclusivo a un espacio premium donde cerámica, café y creatividad se transforman en experiencias que impactan realmente a tu equipo.
                             </p>
-                            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: linear-gradient(135deg, rgba(201, 154, 110, 0.08) 0%, rgba(160, 103, 77, 0.04) 100%)); border-left: 4px solid #a0674d; margin: 28px 0;">
+                            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: linear-gradient(135deg, rgba(201, 154, 110, 0.08) 0%, rgba(160, 103, 77, 0.04) 100%); border-left: 4px solid #a0674d; margin: 28px 0;">
                                 <tr>
                                     <td style="padding: 24px 20px; text-align: center;">
                                         <p style="font-size: 12px; color: #8b6952; text-transform: uppercase; font-weight: 700; margin: 0 0 12px 0;">Valor Invertido vs. Retorno</p>
