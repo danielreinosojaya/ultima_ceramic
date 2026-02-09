@@ -44,8 +44,10 @@ const ALIANZA_HTML = `<!DOCTYPE html>
         .blob {
             position: absolute;
             border-radius: 50%;
-            filter: blur(60px);
-            opacity: 0.3;
+            filter: blur(40px);
+            opacity: 0.25;
+            will-change: transform;
+            backface-visibility: hidden;
         }
         
         .blob-1 {
@@ -70,15 +72,15 @@ const ALIANZA_HTML = `<!DOCTYPE html>
             .blob-1 {
                 width: 400px;
                 height: 400px;
-                filter: blur(70px);
-                opacity: 0.35;
+                filter: blur(50px);
+                opacity: 0.3;
             }
             
             .blob-2 {
                 width: 350px;
                 height: 350px;
-                filter: blur(70px);
-                opacity: 0.3;
+                filter: blur(50px);
+                opacity: 0.25;
             }
         }
         
@@ -86,15 +88,15 @@ const ALIANZA_HTML = `<!DOCTYPE html>
             .blob-1 {
                 width: 700px;
                 height: 700px;
-                filter: blur(80px);
-                opacity: 0.4;
+                filter: blur(60px);
+                opacity: 0.35;
             }
             
             .blob-2 {
                 width: 600px;
                 height: 600px;
-                filter: blur(80px);
-                opacity: 0.4;
+                filter: blur(60px);
+                opacity: 0.35;
             }
         }
         
@@ -182,9 +184,17 @@ const ALIANZA_HTML = `<!DOCTYPE html>
         /* Glassmorphism Elements */
         .glass {
             background: rgba(255, 255, 255, 0.88);
-            backdrop-filter: blur(24px) saturate(180%);
-            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            backdrop-filter: blur(12px) saturate(120%);
+            -webkit-backdrop-filter: blur(12px) saturate(120%);
             border: 1px solid rgba(255, 255, 255, 0.7);
+            will-change: backdrop-filter;
+        }
+        
+        @media (max-width: 768px) {
+            .glass {
+                backdrop-filter: blur(8px) saturate(110%);
+                -webkit-backdrop-filter: blur(8px) saturate(110%);
+            }
         }
         
         /* Shadow System */
@@ -256,7 +266,7 @@ const ALIANZA_HTML = `<!DOCTYPE html>
         /* Highlight Card */
         .highlight-card {
             background: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(20px) saturate(170%);
+            backdrop-filter: blur(10px) saturate(130%);
             border: 1px solid rgba(255, 255, 255, 0.7);
             border-radius: clamp(16px, 4vw, 24px);
             padding: clamp(32px, 6vw, 48px);
@@ -267,6 +277,13 @@ const ALIANZA_HTML = `<!DOCTYPE html>
             position: relative;
             overflow: hidden;
             box-sizing: border-box;
+            will-change: backdrop-filter;
+        }
+        
+        @media (max-width: 768px) {
+            .highlight-card {
+                backdrop-filter: blur(6px) saturate(115%);
+            }
         }
         
         @media (min-width: 640px) {
@@ -361,11 +378,12 @@ const ALIANZA_HTML = `<!DOCTYPE html>
         }
         
         @media (hover: hover) {
+            .service-card {
+                transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.3s ease;
+            }
+            
             .service-card:hover {
-                transform: translateY(-8px);
-                box-shadow: 
-                    0 20px 50px rgba(107, 68, 35, 0.1),
-                    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+                transform: translateY(-6px);
             }
             
             .service-card:hover::before {
@@ -709,7 +727,8 @@ const ALIANZA_HTML = `<!DOCTYPE html>
         /* CTA Section */
         .cta-section {
             background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(24px) saturate(180%);
+            backdrop-filter: blur(10px) saturate(130%);
+            -webkit-backdrop-filter: blur(10px) saturate(130%);
             border: 1px solid rgba(255, 255, 255, 0.8);
             border-radius: clamp(16px, 4vw, 28px);
             padding: clamp(32px, 6vw, 64px) clamp(20px, 5vw, 56px);
@@ -718,6 +737,14 @@ const ALIANZA_HTML = `<!DOCTYPE html>
             position: relative;
             overflow: hidden;
             box-sizing: border-box;
+            will-change: backdrop-filter;
+        }
+        
+        @media (max-width: 768px) {
+            .cta-section {
+                backdrop-filter: blur(6px) saturate(115%);
+                -webkit-backdrop-filter: blur(6px) saturate(115%);
+            }
         }
         
         .cta-section::before {
@@ -727,9 +754,10 @@ const ALIANZA_HTML = `<!DOCTYPE html>
             right: -30%;
             width: 100%;
             height: 100%;
-            background: radial-gradient(circle, rgba(160, 103, 77, 0.1), transparent);
+            background: radial-gradient(circle, rgba(160, 103, 77, 0.05), transparent);
             opacity: 0;
-            transition: opacity 0.6s ease-out;
+            transition: opacity 0.4s ease;
+            will-change: opacity;
         }
         
         @media (hover: hover) {
@@ -792,18 +820,17 @@ const ALIANZA_HTML = `<!DOCTYPE html>
             font-size: clamp(14px, 2.2vw, 15px);
             border: none;
             cursor: pointer;
-            box-shadow: 
-                0 12px 32px rgba(160, 103, 77, 0.28),
-                inset 0 1px 0 rgba(255, 255, 255, 0.4);
+            box-shadow: 0 12px 32px rgba(160, 103, 77, 0.28);
             position: relative;
             overflow: hidden;
-            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.3s ease;
             min-width: clamp(140px, 80vw, 200px);
             max-width: 100%;
             white-space: nowrap;
             text-overflow: ellipsis;
             touch-action: manipulation;
             -webkit-tap-highlight-color: transparent;
+            will-change: transform, opacity;
         }
         
         .btn-primary::before {
@@ -815,15 +842,13 @@ const ALIANZA_HTML = `<!DOCTYPE html>
             height: 100%;
             background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
             transition: left 0.6s ease;
+            pointer-events: none;
         }
         
         @media (hover: hover) {
             .btn-primary:hover {
-                box-shadow: 
-                    0 16px 48px rgba(160, 103, 77, 0.35),
-                    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+                opacity: 0.95;
                 transform: translateY(-2px);
-                background: linear-gradient(135deg, #d2a86f 0%, #ab6f53 100%);
             }
             
             .btn-primary:hover::before {
@@ -833,9 +858,7 @@ const ALIANZA_HTML = `<!DOCTYPE html>
         
         .btn-primary:active {
             transform: translateY(0);
-            box-shadow: 
-                0 8px 24px rgba(160, 103, 77, 0.2),
-                inset 0 1px 0 rgba(255, 255, 255, 0.3);
+            opacity: 0.9;
         }
         
         .btn-secondary {
@@ -1291,9 +1314,11 @@ const ALIANZA_HTML = `<!DOCTYPE html>
     
     <script>
         AOS.init({
-            offset: 150,
-            duration: 800,
+            offset: 200,
+            duration: 700,
             once: true,
+            easing: 'ease-in-out',
+            disable: window.innerWidth < 640 ? 'mobile' : false
         });
     <\/script>
 </body>
