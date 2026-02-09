@@ -15,7 +15,7 @@ export default async (req: VercelRequest, res: VercelResponse) => {
       return res.status(400).json({ error: 'Email inválido' });
     }
 
-    const { sendEmailAsAlianza, getAlianzaEmailTemplate } = await import('./emailService');
+    const { sendEmailAsAlianza, getAlianzaEmailTemplate } = await import('./emailService.js');
     const html = htmlOverride || getAlianzaEmailTemplate();
     const result = await sendEmailAsAlianza(to, subject, html);
 
