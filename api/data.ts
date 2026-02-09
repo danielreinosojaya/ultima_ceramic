@@ -350,6 +350,181 @@ const hasTimeOverlap = (start1: number, end1: number, start2: number, end2: numb
     return start1 < end2 && start2 < end1;
 };
 
+const normalizeDateValue = (value: any): string => {
+    if (!value) return '';
+    if (typeof value === 'string') return value.split('T')[0];
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().split('T')[0];
+    return String(value).split('T')[0];
+};
+
+const loadCourseSessionsByDate = async (startDateStr: string, endDateStr: string) => {
+    const { rows } = await sql`
+        SELECT cs.scheduled_date, cs.start_time, cs.end_time
+        FROM course_sessions cs
+        JOIN course_schedules sched ON sched.id = cs.course_schedule_id
+        WHERE cs.status != 'cancelled'
+        AND sched.is_active = true
+        AND cs.scheduled_date BETWEEN ${startDateStr} AND ${endDateStr}
+    `;
+
+    const sessionsByDate: Record<string, { startMinutes: number; endMinutes: number }[]> = {};
+
+    rows.forEach(row => {
+        const dateStr = normalizeDateValue(row.scheduled_date);
+        const startMinutes = timeToMinutes(normalizeTime(String(row.start_time)));
+        const endMinutes = timeToMinutes(normalizeTime(String(row.end_time)));
+
+        if (!dateStr || !Number.isFinite(startMinutes) || !Number.isFinite(endMinutes)) return;
+
+        if (!sessionsByDate[dateStr]) {
+            sessionsByDate[dateStr] = [];
+        }
+
+        sessionsByDate[dateStr].push({ startMinutes, endMinutes });
+    });
+
+    return sessionsByDate;
+};
+
+const hasCourseOverlap = (
+    dateStr: string,
+    startMinutes: number,
+    endMinutes: number,
+    sessionsByDate: Record<string, { startMinutes: number; endMinutes: number }[]>
+): boolean => {
+    const sessions = sessionsByDate[dateStr] || [];
+    return sessions.some(session => hasTimeOverlap(startMinutes, endMinutes, session.startMinutes, session.endMinutes));
+};
+
+const deriveBookingTechnique = (booking: any): string | undefined => {
+    const productName = (booking.product?.name || '').toLowerCase();
+
+    if (productName.includes('pintura') || productName.includes('painting')) return 'painting';
+    if (productName.includes('torno') || productName.includes('wheel') || productName.includes('potter')) return 'potters_wheel';
+    if (productName.includes('modelado') || productName.includes('molding') || productName.includes('hand')) return 'hand_modeling';
+
+    // Check technique field directly on booking
+    if (booking.technique === 'potters_wheel') return 'potters_wheel';
+    if (booking.technique === 'molding' || booking.technique === 'hand_modeling') return 'hand_modeling';
+    if (booking.technique === 'painting') return 'painting';
+
+    // Check product.details.technique
+    const detailsTechnique = booking.product?.details?.technique;
+    if (detailsTechnique === 'potters_wheel') return 'potters_wheel';
+    if (detailsTechnique === 'molding' || detailsTechnique === 'hand_modeling') return 'hand_modeling';
+    if (detailsTechnique === 'painting') return 'painting';
+
+    // Check product type for introductory classes (usually potters_wheel)
+    const productType = booking.productType || booking.product?.type;
+    if (productType === 'INTRODUCTORY_CLASS') return 'potters_wheel';
+    if (productType === 'WHEEL_COURSE') return 'potters_wheel';
+
+    return undefined;
+};
+
+const isHandWorkTechnique = (tech?: string) =>
+    tech === 'molding' || tech === 'painting' || tech === 'hand_modeling';
+
+const getGroupClassBookingCounts = (booking: any) => {
+    let potters = 0;
+    let handWork = 0;
+
+    if (booking.productType === 'GROUP_CLASS' && booking.groupClassMetadata?.techniqueAssignments?.length) {
+        booking.groupClassMetadata.techniqueAssignments.forEach((assignment: any) => {
+            if (assignment.technique === 'potters_wheel') {
+                potters += 1;
+            } else {
+                handWork += 1;
+            }
+        });
+        return { potters, handWork };
+    }
+
+    const bookingTechnique = deriveBookingTechnique(booking);
+    const participantCount = booking.participants
+        ?? booking.groupClassMetadata?.totalParticipants
+        ?? (typeof booking.product === 'object' && 'minParticipants' in booking.product
+            ? (booking.product as any).minParticipants
+            : undefined)
+        ?? 1;
+
+    if (bookingTechnique === 'potters_wheel') {
+        potters = participantCount;
+    } else if (bookingTechnique === 'painting' || bookingTechnique === 'hand_modeling' || bookingTechnique === 'molding') {
+        handWork = participantCount;
+    } else {
+        // Unknown technique - count as BOTH to be safe (conservative approach)
+        potters = participantCount;
+        handWork = participantCount;
+    }
+
+    return { potters, handWork };
+};
+
+const getFixedSlotTimesForDate = (
+    dateStr: string,
+    dayKey: string,
+    availability: any,
+    scheduleOverrides: any,
+    techniqueKey: 'potters_wheel' | 'molding'
+): string[] => {
+    const override = scheduleOverrides[dateStr];
+    if (override && override.slots === null) return [];
+
+    const baseSlots = override?.slots ?? availability[dayKey] ?? [];
+    const times = baseSlots
+        .filter((slot: any) => slot.technique === techniqueKey)
+        .map((slot: any) => normalizeTime(slot.time));
+
+    if (techniqueKey === 'potters_wheel') {
+        if (dayKey === 'Tuesday') times.push('19:00');
+        if (dayKey === 'Wednesday') times.push('11:00');
+    }
+
+    return [...new Set(times)].sort();
+};
+
+const isPottersFixedConflict = (candidateStart: number, fixedTimes: number[]) =>
+    fixedTimes.some(fixedStart => {
+        if (candidateStart === fixedStart) return false;
+        return candidateStart >= fixedStart - 120 && candidateStart < fixedStart + 120;
+    });
+
+const getBusinessHoursForDay = (dayOfWeek: number): string[] => {
+    const hours: string[] = [];
+
+    if (dayOfWeek === 1) return hours; // Lunes cerrado
+
+    if (dayOfWeek === 6) {
+        for (let hour = 9; hour <= 19; hour++) {
+            for (const min of ['00', '30']) {
+                if (hour === 19 && min === '30') break;
+                hours.push(`${String(hour).padStart(2, '0')}:${min}`);
+            }
+        }
+        return hours;
+    }
+
+    if (dayOfWeek === 0) {
+        for (let hour = 10; hour <= 16; hour++) {
+            for (const min of ['00', '30']) {
+                if (hour === 16 && min === '30') break;
+                hours.push(`${String(hour).padStart(2, '0')}:${min}`);
+            }
+        }
+        return hours;
+    }
+
+    for (let hour = 10; hour <= 19; hour++) {
+        for (const min of ['00', '30']) {
+            if (hour === 19 && min === '30') break;
+            hours.push(`${String(hour).padStart(2, '0')}:${min}`);
+        }
+    }
+
+    return hours;
+};
+
 const computeSlotAvailability = async (
     requestedDate: string,
     requestedTime: string,
@@ -376,6 +551,22 @@ const computeSlotAvailability = async (
     const normalizedTime = normalizeTime(requestedTime);
     const requestedStartMinutes = timeToMinutes(normalizedTime);
     const requestedEndMinutes = requestedStartMinutes + (2 * 60); // 2 horas
+
+    const courseSessionsByDate = await loadCourseSessionsByDate(requestedDate, requestedDate);
+    if (hasCourseOverlap(requestedDate, requestedStartMinutes, requestedEndMinutes, courseSessionsByDate)) {
+        const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
+        return {
+            available: false,
+            normalizedTime,
+            capacity: {
+                max: maxCapacity,
+                booked: maxCapacity,
+                available: 0
+            },
+            bookingsCount: 0,
+            message: 'Horario no disponible por curso'
+        };
+    }
 
     let exactMatchParticipants = 0;
     let overlappingParticipants = 0;
@@ -1032,12 +1223,14 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     });
                     
                     console.log(`[getAvailableSlots] Filtered ${bookings.length} bookings with slots in range (out of ${allBookings.length} total)`);
+
+                    const courseSessionsByDate = await loadCourseSessionsByDate(rangeStartStr, rangeEndStr);
                     
                     // Parse settings reutilizando función helper
                     const { availability, scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
                     const maxCapacityMap = getMaxCapacityMap(classCapacity);
 
-                    const availableSlots: any[] = [];
+                    const allSlots: any[] = []; // TODOS los slots (disponibles e indisponibles)
                     const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
                     // Iterar sobre cada día
@@ -1056,47 +1249,64 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                 const introTime = dayKey === 'Tuesday' ? '19:00' : '11:00';
                                 const slotStartMinutes = timeToMinutes(introTime);
                                 const slotEndMinutes = slotStartMinutes + (2 * 60); // 2 horas
+
+                                const hasCourseBlock = hasCourseOverlap(dateStr, slotStartMinutes, slotEndMinutes, courseSessionsByDate);
                                 
-                                // Contar participantes que se solapan con este slot de introducción
-                                const bookingsOverlappingIntro = bookings.filter((b: any) => {
-                                    if (!b.slots || !Array.isArray(b.slots)) return false;
-                                    
-                                    const bookingTechnique = b.technique || (b.product?.details as any)?.technique;
-                                    if (bookingTechnique !== 'potters_wheel') return false;
-                                    
-                                    return b.slots.some((s: any) => {
-                                        if (s.date !== dateStr) return false;
+                                if (!hasCourseBlock) {
+                                    // Contar participantes que se solapan con este slot de introducción
+                                    const bookingsOverlappingIntro = bookings.filter((b: any) => {
+                                        if (!b.slots || !Array.isArray(b.slots)) return false;
                                         
-                                        const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
-                                        const bookingEndMinutes = bookingStartMinutes + (2 * 60);
+                                        const bookingTechnique = b.technique || (b.product?.details as any)?.technique;
+                                        if (bookingTechnique !== 'potters_wheel') return false;
                                         
-                                        return hasTimeOverlap(slotStartMinutes, slotEndMinutes, bookingStartMinutes, bookingEndMinutes);
+                                        return b.slots.some((s: any) => {
+                                            if (s.date !== dateStr) return false;
+                                            
+                                            const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
+                                            const bookingEndMinutes = bookingStartMinutes + (2 * 60);
+                                            
+                                            return hasTimeOverlap(slotStartMinutes, slotEndMinutes, bookingStartMinutes, bookingEndMinutes);
+                                        });
                                     });
-                                });
-                                
-                                let bookedParticipantsIntro = bookingsOverlappingIntro.reduce((sum: number, b: any) => {
-                                    return sum + (b.participants || 1);
-                                }, 0);
-                                
-                                // 🔒 REGLA CRÍTICA: Clases de introducción de torno son pre-establecidas, asumir MÍNIMO 1 persona
-                                if (bookedParticipantsIntro === 0) {
-                                    bookedParticipantsIntro = 1;
-                                    console.log(`🔒 [getAvailableSlots] Torno introducción ${introTime}: asumiendo 1 persona mínimo (clase pre-establecida)`);
-                                }
-                                
-                                const maxCapacityIntro = resolveCapacity(dateStr, 'potters_wheel', maxCapacityMap, scheduleOverrides);
-                                const availableCapacityIntro = maxCapacityIntro - bookedParticipantsIntro;
-                                
-                                if (availableCapacityIntro >= requestedParticipants) {
-                                    availableSlots.push({
+                                    
+                                    let bookedParticipantsIntro = bookingsOverlappingIntro.reduce((sum: number, b: any) => {
+                                        return sum + (b.participants || 1);
+                                    }, 0);
+                                    
+                                    // 🔒 REGLA CRÍTICA: Clases de introducción de torno son pre-establecidas, asumir MÍNIMO 1 persona
+                                    if (bookedParticipantsIntro === 0) {
+                                        bookedParticipantsIntro = 1;
+                                        console.log(`🔒 [getAvailableSlots] Torno introducción ${introTime}: asumiendo 1 persona mínimo (clase pre-establecida)`);
+                                    }
+                                    
+                                    const maxCapacityIntro = resolveCapacity(dateStr, 'potters_wheel', maxCapacityMap, scheduleOverrides);
+                                    const availableCapacityIntro = maxCapacityIntro - bookedParticipantsIntro;
+                                    const canBookIntro = availableCapacityIntro >= requestedParticipants;
+                                    
+                                    allSlots.push({
                                         date: dateStr,
                                         time: introTime,
-                                        available: availableCapacityIntro,
+                                        available: Math.max(0, availableCapacityIntro),
                                         total: maxCapacityIntro,
-                                        canBook: true,
+                                        canBook: canBookIntro,
                                         instructor: 'Instructor',
                                         instructorId: 0,
-                                        technique: 'potters_wheel'
+                                        technique: 'potters_wheel',
+                                        blockedReason: null
+                                    });
+                                } else {
+                                    // Slot bloqueado por curso
+                                    allSlots.push({
+                                        date: dateStr,
+                                        time: introTime,
+                                        available: 0,
+                                        total: 0,
+                                        canBook: false,
+                                        instructor: 'Instructor',
+                                        instructorId: 0,
+                                        technique: 'potters_wheel',
+                                        blockedReason: 'course_conflict'
                                     });
                                 }
                             }
@@ -1126,88 +1336,107 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             const slotStartMinutes = timeToMinutes(slotTime);
                             const slotEndMinutes = slotStartMinutes + (2 * 60); // 2 horas
 
-                            // Contar participantes que se solapan temporalmente con este slot
-                            // IMPORTANTE: Solo contar bookings de LA MISMA TÉCNICA, no de otras
-                            const bookingsOverlapingSlot = bookings.filter((b: any) => {
-                                if (!b.slots || !Array.isArray(b.slots)) return false;
-                                
-                                // ===== DERIVAR TÉCNICA REAL DEL BOOKING =====
-                                // Priorizar product.name para derivar técnica (datos más confiables)
-                                let bookingTechnique: string | undefined;
-                                const productName = b.product?.name?.toLowerCase() || '';
-                                
-                                if (productName.includes('pintura')) {
-                                    bookingTechnique = 'painting';
-                                } else if (productName.includes('torno')) {
-                                    bookingTechnique = 'potters_wheel';
-                                } else if (productName.includes('modelado')) {
-                                    bookingTechnique = 'hand_modeling';
-                                } else {
-                                    bookingTechnique = b.technique || (b.product?.details as any)?.technique;
-                                }
-                                
-                                // Para handwork (painting, modeling), verificar si comparten capacidad
-                                const isHandWork = (tech: string | undefined) => 
-                                    tech === 'molding' || tech === 'painting' || tech === 'hand_modeling';
-                                
-                                if (isHandWork(requestedTechnique) && isHandWork(bookingTechnique)) {
-                                    // Handwork comparte capacidad entre sí
-                                } else if (bookingTechnique !== requestedTechnique) {
-                                    return false; // Técnicas diferentes, no contar
-                                }
-                                
-                                return b.slots.some((s: any) => {
-                                    if (s.date !== dateStr) return false;
+                            const hasCourseBlock = hasCourseOverlap(dateStr, slotStartMinutes, slotEndMinutes, courseSessionsByDate);
+
+                            if (!hasCourseBlock) {
+                                // Contar participantes que se solapan temporalmente con este slot
+                                // IMPORTANTE: Solo contar bookings de LA MISMA TÉCNICA, no de otras
+                                const bookingsOverlapingSlot = bookings.filter((b: any) => {
+                                    if (!b.slots || !Array.isArray(b.slots)) return false;
                                     
-                                    // Calcular rango horario del booking (también 2 horas)
-                                    const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
-                                    const bookingEndMinutes = bookingStartMinutes + (2 * 60); // 2 horas
+                                    // ===== DERIVAR TÉCNICA REAL DEL BOOKING =====
+                                    // Priorizar product.name para derivar técnica (datos más confiables)
+                                    let bookingTechnique: string | undefined;
+                                    const productName = b.product?.name?.toLowerCase() || '';
                                     
-                                    // Verificar si hay overlap temporal
-                                    return hasTimeOverlap(slotStartMinutes, slotEndMinutes, bookingStartMinutes, bookingEndMinutes);
+                                    if (productName.includes('pintura')) {
+                                        bookingTechnique = 'painting';
+                                    } else if (productName.includes('torno')) {
+                                        bookingTechnique = 'potters_wheel';
+                                    } else if (productName.includes('modelado')) {
+                                        bookingTechnique = 'hand_modeling';
+                                    } else {
+                                        bookingTechnique = b.technique || (b.product?.details as any)?.technique;
+                                    }
+                                    
+                                    // Para handwork (painting, modeling), verificar si comparten capacidad
+                                    const isHandWork = (tech: string | undefined) => 
+                                        tech === 'molding' || tech === 'painting' || tech === 'hand_modeling';
+                                    
+                                    if (isHandWork(requestedTechnique) && isHandWork(bookingTechnique)) {
+                                        // Handwork comparte capacidad entre sí
+                                    } else if (bookingTechnique !== requestedTechnique) {
+                                        return false; // Técnicas diferentes, no contar
+                                    }
+                                    
+                                    return b.slots.some((s: any) => {
+                                        if (s.date !== dateStr) return false;
+                                        
+                                        // Calcular rango horario del booking (también 2 horas)
+                                        const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
+                                        const bookingEndMinutes = bookingStartMinutes + (2 * 60); // 2 horas
+                                        
+                                        // Verificar si hay overlap temporal
+                                        return hasTimeOverlap(slotStartMinutes, slotEndMinutes, bookingStartMinutes, bookingEndMinutes);
+                                    });
                                 });
-                            });
 
-                            // Sumar participantes que solapan
-                            let bookedParticipants = bookingsOverlapingSlot.reduce((sum: number, b: any) => {
-                                return sum + (b.participants || 1);
-                            }, 0);
+                                // Sumar participantes que solapan
+                                let bookedParticipants = bookingsOverlapingSlot.reduce((sum: number, b: any) => {
+                                    return sum + (b.participants || 1);
+                                }, 0);
 
-                            // 🔒 REGLA CRÍTICA: Para torno en horarios pre-establecidos, asumir MÍNIMO 1 persona
-                            // Esto previene que se reserve en slots intermedios (9:30) cuando hay clase fija a las 9:00
-                            // incluso si esa clase aún no tiene estudiantes registrados en la base de datos
-                            if (requestedTechnique === 'potters_wheel' && bookedParticipants === 0) {
-                                bookedParticipants = 1; // Asumir siempre 1 persona mínimo
-                                console.log(`🔒 [getAvailableSlots] Torno ${slotTime}: asumiendo 1 persona mínimo (clase pre-establecida)`);
-                            }
+                                // 🔒 REGLA CRÍTICA: Para torno en horarios pre-establecidos, asumir MÍNIMO 1 persona
+                                // Esto previene que se reserve en slots intermedios (9:30) cuando hay clase fija a las 9:00
+                                // incluso si esa clase aún no tiene estudiantes registrados en la base de datos
+                                if (requestedTechnique === 'potters_wheel' && bookedParticipants === 0) {
+                                    bookedParticipants = 1; // Asumir siempre 1 persona mínimo
+                                    console.log(`🔒 [getAvailableSlots] Torno ${slotTime}: asumiendo 1 persona mínimo (clase pre-establecida)`);
+                                }
 
-                            // Capacidad máxima del slot (override válido o fallback por técnica)
-                            const maxCapacity = resolveCapacity(dateStr, requestedTechnique, maxCapacityMap, scheduleOverrides);
-                            const availableCapacity = maxCapacity - bookedParticipants;
+                                // Capacidad máxima del slot (override válido o fallback por técnica)
+                                const maxCapacity = resolveCapacity(dateStr, requestedTechnique, maxCapacityMap, scheduleOverrides);
+                                const availableCapacity = maxCapacity - bookedParticipants;
+                                const canBook = availableCapacity >= requestedParticipants;
 
-                            // Solo incluir si hay capacidad suficiente
-                            if (availableCapacity >= requestedParticipants) {
                                 const instructor = instructors.find((inst: any) => inst.id === slot.instructorId);
                                 
-                                availableSlots.push({
+                                allSlots.push({
                                     date: dateStr,
                                     time: slotTime,
-                                    available: availableCapacity,
+                                    available: Math.max(0, availableCapacity),
                                     total: maxCapacity,
-                                    canBook: true,
+                                    canBook,
                                     instructor: instructor?.name || 'Instructor',
                                     instructorId: slot.instructorId,
-                                    technique: requestedTechnique
+                                    technique: requestedTechnique,
+                                    blockedReason: null
+                                });
+                            } else {
+                                // Slot bloqueado por curso
+                                const maxCapacity = resolveCapacity(dateStr, requestedTechnique, maxCapacityMap, scheduleOverrides);
+                                const instructor = instructors.find((inst: any) => inst.id === slot.instructorId);
+                                
+                                allSlots.push({
+                                    date: dateStr,
+                                    time: slotTime,
+                                    available: 0,
+                                    total: maxCapacity,
+                                    canBook: false,
+                                    instructor: instructor?.name || 'Instructor',
+                                    instructorId: slot.instructorId,
+                                    technique: requestedTechnique,
+                                    blockedReason: 'course_conflict'
                                 });
                             }
                         });
                     }
 
-                    console.log(`[getAvailableSlots] Found ${availableSlots.length} available slots`);
+                    console.log(`[getAvailableSlots] Found ${allSlots.filter((s:any) => s.canBook).length} bookable slots (${allSlots.length} total)`);
                     
                     data = {
                         success: true,
-                        slots: availableSlots,
+                        slots: allSlots,
                         searchParams: {
                             technique: requestedTechnique,
                             participants: requestedParticipants,
@@ -1218,6 +1447,264 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
 
                     // Cache de 2 minutos (datos dinámicos que cambian con reservas)
                     res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=300');
+                    break;
+                }
+                case 'getGroupClassSlots': {
+                    const { pottersWheel, handModeling, painting, startDate, daysAhead } = req.query;
+
+                    const pottersCount = Math.max(0, parseInt(String(pottersWheel || 0), 10) || 0);
+                    const handModelingCount = Math.max(0, parseInt(String(handModeling || 0), 10) || 0);
+                    const paintingCount = Math.max(0, parseInt(String(painting || 0), 10) || 0);
+                    const handWorkCount = handModelingCount + paintingCount;
+                    const totalParticipants = pottersCount + handWorkCount;
+
+                    if (totalParticipants < 2) {
+                        return res.status(400).json({
+                            success: false,
+                            error: 'Las experiencias grupales requieren minimo 2 personas'
+                        });
+                    }
+
+                    const searchStartDate = startDate ? new Date(startDate as string) : new Date();
+                    const searchDays = daysAhead ? parseInt(daysAhead as string, 10) : 60;
+
+                    const [bookingsResult, instructorsResult] = await Promise.all([
+                        sql`
+                            SELECT * FROM bookings
+                            WHERE status != 'expired'
+                            ORDER BY created_at DESC
+                        `,
+                        sql`SELECT * FROM instructors ORDER BY name ASC`
+                    ]);
+
+                    const allBookings = bookingsResult.rows.map(parseBookingFromDB);
+                    const instructors = instructorsResult.rows.map(toCamelCase);
+
+                    const rangeStart = new Date(searchStartDate);
+                    rangeStart.setDate(rangeStart.getDate() - 1);
+                    const rangeEnd = new Date(searchStartDate);
+                    rangeEnd.setDate(rangeEnd.getDate() + searchDays + 1);
+
+                    const rangeStartStr = rangeStart.toISOString().split('T')[0];
+                    const rangeEndStr = rangeEnd.toISOString().split('T')[0];
+
+                    const bookings = allBookings.filter(booking => {
+                        if (!booking.slots || !Array.isArray(booking.slots)) return false;
+                        return booking.slots.some((s: any) => {
+                            const slotDate = s.date;
+                            return slotDate >= rangeStartStr && slotDate <= rangeEndStr;
+                        });
+                    });
+
+                    const courseSessionsByDate = await loadCourseSessionsByDate(rangeStartStr, rangeEndStr);
+                    const { availability, scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
+                    const maxCapacityMap = getMaxCapacityMap(classCapacity);
+
+                    const allSlots: any[] = [];
+                    const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+                    for (let i = 0; i < searchDays; i++) {
+                        const currentDate = new Date(searchStartDate);
+                        currentDate.setDate(currentDate.getDate() + i);
+                        const dateStr = currentDate.toISOString().split('T')[0];
+                        const dayKey = DAY_NAMES[currentDate.getDay()];
+
+                        const override = scheduleOverrides[dateStr];
+                        if (override && override.slots === null) {
+                            continue;
+                        }
+
+                        const fixedPottersTimes = getFixedSlotTimesForDate(dateStr, dayKey, availability, scheduleOverrides, 'potters_wheel');
+                        const fixedPottersMinutes = fixedPottersTimes.map(timeToMinutes);
+                        const fixedHandTimes = getFixedSlotTimesForDate(dateStr, dayKey, availability, scheduleOverrides, 'molding');
+
+                        // ALWAYS generate ALL candidate times - block individually per rule
+                        const candidateTimes: string[] = getBusinessHoursForDay(currentDate.getDay());
+
+                        if (candidateTimes.length === 0) continue;
+
+                        candidateTimes.forEach(slotTime => {
+                            const normalizedTime = normalizeTime(slotTime);
+                            const slotStartMinutes = timeToMinutes(normalizedTime);
+                            const slotEndMinutes = slotStartMinutes + (2 * 60);
+
+                            const courseBlocked = hasCourseOverlap(dateStr, slotStartMinutes, slotEndMinutes, courseSessionsByDate);
+                            let blockedReason: string | null = courseBlocked ? 'course_conflict' : null;
+
+                            let pottersAvailable = 0;
+                            let pottersTotal = 0;
+                            let pottersBooked = 0;
+                            let pottersBlocked = false;
+
+                            if (pottersCount > 0) {
+                                pottersTotal = resolveCapacity(dateStr, 'potters_wheel', maxCapacityMap, scheduleOverrides);
+
+                                if (totalParticipants < 3 && !fixedPottersTimes.includes(normalizedTime)) {
+                                    pottersBlocked = true;
+                                    blockedReason = blockedReason || 'fixed_class_conflict';
+                                }
+
+                                if (totalParticipants >= 3 && isPottersFixedConflict(slotStartMinutes, fixedPottersMinutes)) {
+                                    pottersBlocked = true;
+                                    blockedReason = blockedReason || 'fixed_class_conflict';
+                                }
+
+                                // ALWAYS check booking overlaps (regardless of other blocked reasons)
+                                bookings.forEach(booking => {
+                                    const { potters: bookingPotters } = getGroupClassBookingCounts(booking);
+                                    if (bookingPotters <= 0) return;
+
+                                    // Check slots array (group bookings)
+                                    if (booking.slots && Array.isArray(booking.slots)) {
+                                        booking.slots.forEach((s: any) => {
+                                            if (s.date !== dateStr) return;
+
+                                            const bookingStart = timeToMinutes(normalizeTime(s.time));
+                                            if (Number.isNaN(bookingStart)) return;
+
+                                            if (bookingStart === slotStartMinutes) {
+                                                pottersBooked += bookingPotters;
+                                            } else if (slotStartMinutes >= bookingStart - 120 && slotStartMinutes < bookingStart + 120) {
+                                                pottersBlocked = true;
+                                            }
+                                        });
+                                    }
+
+                                    // Also check direct booking date/time (individual bookings without slots array)
+                                    if (!booking.slots && (booking.date || booking.bookingDate) && booking.time) {
+                                        const bookingDate = normalizeDateValue(booking.date || booking.bookingDate);
+                                        if (bookingDate === dateStr) {
+                                            const bookingStart = timeToMinutes(normalizeTime(String(booking.time)));
+                                            if (!Number.isNaN(bookingStart)) {
+                                                if (bookingStart === slotStartMinutes) {
+                                                    pottersBooked += bookingPotters;
+                                                } else if (slotStartMinutes >= bookingStart - 120 && slotStartMinutes < bookingStart + 120) {
+                                                    pottersBlocked = true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                });
+
+                                pottersAvailable = Math.max(0, pottersTotal - pottersBooked);
+
+                                if (pottersBlocked) {
+                                    blockedReason = blockedReason || 'fixed_class_conflict';
+                                }
+
+                                if (pottersAvailable < pottersCount) {
+                                    blockedReason = blockedReason || 'capacity';
+                                }
+                            }
+
+                            let handWorkAvailable = 0;
+                            let handWorkTotal = 0;
+                            let handWorkBooked = 0;
+
+                            if (handWorkCount > 0) {
+                                handWorkTotal = resolveCapacity(dateStr, 'hand_modeling', maxCapacityMap, scheduleOverrides);
+
+                                if (totalParticipants < 3 && pottersCount === 0 && !fixedHandTimes.includes(normalizedTime)) {
+                                    blockedReason = blockedReason || 'fixed_class_conflict';
+                                }
+
+                                bookings.forEach(booking => {
+                                    const { handWork: bookingHandWork } = getGroupClassBookingCounts(booking);
+                                    if (bookingHandWork <= 0) return;
+
+                                    if (booking.slots && Array.isArray(booking.slots)) {
+                                        booking.slots.forEach((s: any) => {
+                                            if (s.date !== dateStr) return;
+
+                                            const bookingStart = timeToMinutes(normalizeTime(s.time));
+                                            if (Number.isNaN(bookingStart)) return;
+
+                                            const bookingEnd = bookingStart + (2 * 60);
+                                            if (hasTimeOverlap(slotStartMinutes, slotEndMinutes, bookingStart, bookingEnd)) {
+                                                handWorkBooked += bookingHandWork;
+                                            }
+                                        });
+                                    }
+
+                                    // Also check direct booking date/time (individual bookings without slots array)
+                                    if (!booking.slots && (booking.date || booking.bookingDate) && booking.time) {
+                                        const bookingDate = normalizeDateValue(booking.date || booking.bookingDate);
+                                        if (bookingDate === dateStr) {
+                                            const bookingStart = timeToMinutes(normalizeTime(String(booking.time)));
+                                            if (!Number.isNaN(bookingStart)) {
+                                                const bookingEnd = bookingStart + (2 * 60);
+                                                if (hasTimeOverlap(slotStartMinutes, slotEndMinutes, bookingStart, bookingEnd)) {
+                                                    handWorkBooked += bookingHandWork;
+                                                }
+                                            }
+                                        }
+                                    }
+                                });
+
+                                handWorkAvailable = Math.max(0, handWorkTotal - handWorkBooked);
+
+                                if (handWorkAvailable < handWorkCount) {
+                                    blockedReason = blockedReason || 'capacity';
+                                }
+                            }
+
+                            const displayAvailable = pottersCount > 0 && handWorkCount > 0
+                                ? Math.min(pottersAvailable, handWorkAvailable)
+                                : pottersCount > 0
+                                ? pottersAvailable
+                                : handWorkAvailable;
+
+                            const displayTotal = pottersCount > 0 && handWorkCount > 0
+                                ? Math.min(pottersTotal, handWorkTotal)
+                                : pottersCount > 0
+                                ? pottersTotal
+                                : handWorkTotal;
+
+                            const canBook = !blockedReason
+                                && (pottersCount === 0 || pottersAvailable >= pottersCount)
+                                && (handWorkCount === 0 || handWorkAvailable >= handWorkCount);
+
+                            const instructor = instructors.find((inst: any) => inst.id === 0);
+
+                            allSlots.push({
+                                date: dateStr,
+                                time: normalizedTime,
+                                available: displayAvailable,
+                                total: displayTotal,
+                                canBook,
+                                instructor: instructor?.name || 'Instructor',
+                                instructorId: 0,
+                                technique: 'group_class',
+                                blockedReason,
+                                capacityDetails: {
+                                    pottersWheel: pottersCount > 0 ? {
+                                        available: pottersAvailable,
+                                        total: pottersTotal,
+                                        requested: pottersCount
+                                    } : undefined,
+                                    handWork: handWorkCount > 0 ? {
+                                        available: handWorkAvailable,
+                                        total: handWorkTotal,
+                                        requested: handWorkCount
+                                    } : undefined
+                                }
+                            });
+                        });
+                    }
+
+                    data = {
+                        success: true,
+                        slots: allSlots,
+                        searchParams: {
+                            pottersWheel: pottersCount,
+                            handModeling: handModelingCount,
+                            painting: paintingCount,
+                            startDate: searchStartDate.toISOString().split('T')[0],
+                            daysAhead: searchDays
+                        }
+                    };
+
+                    res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
                     break;
                 }
                 case 'checkSlotAvailability': {
@@ -3680,6 +4167,17 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 const requestedParticipants = parseInt(participants as string);
                 const requestedDate = date as string;
                 const requestedTime = time as string;
+
+                const requestedStartMinutes = timeToMinutes(normalizeTime(requestedTime));
+                const requestedEndMinutes = requestedStartMinutes + (2 * 60);
+
+                const courseSessionsByDate = await loadCourseSessionsByDate(requestedDate, requestedDate);
+                if (hasCourseOverlap(requestedDate, requestedStartMinutes, requestedEndMinutes, courseSessionsByDate)) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Lo sentimos, ${requestedDate} a las ${requestedTime} está reservado por un curso.`
+                    });
+                }
                 
                 // Obtener todos los bookings activos que tengan slots en esa fecha
                 const { rows: allBookingsRows } = await sql`
@@ -3697,10 +4195,6 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 const { scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
                 const maxCapacityMap = getMaxCapacityMap(classCapacity);
                 const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
-                
-                // Calcular rango horario del slot solicitado (2 horas de duración)
-                const requestedStartMinutes = timeToMinutes(normalizeTime(requestedTime));
-                const requestedEndMinutes = requestedStartMinutes + (2 * 60); // 2 horas
                 
                 // Contar participantes que solapan temporalmente
                 let overlappingParticipants = 0;
@@ -5370,6 +5864,115 @@ async function addBookingAction(
         }
       }
     }
+
+        if (body.productType === 'GROUP_CLASS') {
+            if (!body.slots || body.slots.length !== 1) {
+                throw new Error('GROUP_CLASS must have exactly 1 slot');
+            }
+
+            const groupMetadata = (body as any).groupClassMetadata;
+            if (!groupMetadata || !Array.isArray(groupMetadata.techniqueAssignments)) {
+                throw new Error('GROUP_CLASS requires technique assignments');
+            }
+
+            const pottersCount = groupMetadata.techniqueAssignments.filter((a: any) => a.technique === 'potters_wheel').length;
+            const handModelingCount = groupMetadata.techniqueAssignments.filter((a: any) => a.technique === 'hand_modeling').length;
+            const paintingCount = groupMetadata.techniqueAssignments.filter((a: any) => a.technique === 'painting').length;
+            const handWorkCount = handModelingCount + paintingCount;
+            const totalParticipants = groupMetadata.totalParticipants || groupMetadata.techniqueAssignments.length;
+
+            if (totalParticipants < 2) {
+                throw new Error('Las experiencias grupales requieren minimo 2 personas');
+            }
+
+            const slot = body.slots[0];
+            const normalizedTime = normalizeTime(slot.time);
+            const slotStartMinutes = timeToMinutes(normalizedTime);
+            const slotEndMinutes = slotStartMinutes + (2 * 60);
+            const dayKey = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date(`${slot.date}T00:00:00`).getDay()];
+
+            const { availability, scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
+            const maxCapacityMap = getMaxCapacityMap(classCapacity);
+
+            const fixedPottersTimes = getFixedSlotTimesForDate(slot.date, dayKey, availability, scheduleOverrides, 'potters_wheel');
+            const fixedPottersMinutes = fixedPottersTimes.map(timeToMinutes);
+            const fixedHandTimes = getFixedSlotTimesForDate(slot.date, dayKey, availability, scheduleOverrides, 'molding');
+
+            if (totalParticipants < 3) {
+                if (pottersCount > 0 && !fixedPottersTimes.includes(normalizedTime)) {
+                    throw new Error('Para 2 personas solo se permiten horarios fijos de torno');
+                }
+                if (pottersCount === 0 && !fixedHandTimes.includes(normalizedTime)) {
+                    throw new Error('Para 2 personas solo se permiten horarios fijos de modelado');
+                }
+            }
+
+            const courseSessionsByDate = await loadCourseSessionsByDate(slot.date, slot.date);
+            if (hasCourseOverlap(slot.date, slotStartMinutes, slotEndMinutes, courseSessionsByDate)) {
+                throw new Error('Horario no disponible por curso');
+            }
+
+            if (pottersCount > 0 && totalParticipants >= 3 && isPottersFixedConflict(slotStartMinutes, fixedPottersMinutes)) {
+                throw new Error('Horario no disponible por clase fija de torno');
+            }
+
+            const { rows: bookingsRows } = await sql`
+                SELECT * FROM bookings
+                WHERE status != 'expired'
+                ORDER BY created_at DESC
+            `;
+            const allBookings = bookingsRows.map(parseBookingFromDB);
+            const bookingsOnDate = allBookings.filter(b => b.slots?.some((s: any) => s.date === slot.date));
+
+            let pottersBooked = 0;
+            let pottersBlocked = false;
+            let handWorkBooked = 0;
+
+            bookingsOnDate.forEach(booking => {
+                if (!booking.slots || !Array.isArray(booking.slots)) return;
+                const { potters: bookingPotters, handWork: bookingHandWork } = getGroupClassBookingCounts(booking);
+
+                booking.slots.forEach((s: any) => {
+                    if (s.date !== slot.date) return;
+
+                    const bookingStart = timeToMinutes(normalizeTime(s.time));
+                    if (Number.isNaN(bookingStart)) return;
+                    const bookingEnd = bookingStart + (2 * 60);
+
+                    if (bookingPotters > 0) {
+                        if (bookingStart === slotStartMinutes) {
+                            pottersBooked += bookingPotters;
+                        } else if (slotStartMinutes >= bookingStart - 120 && slotStartMinutes < bookingStart + 120) {
+                            pottersBlocked = true;
+                        }
+                    }
+
+                    if (bookingHandWork > 0 && hasTimeOverlap(slotStartMinutes, slotEndMinutes, bookingStart, bookingEnd)) {
+                        handWorkBooked += bookingHandWork;
+                    }
+                });
+            });
+
+            if (pottersBlocked) {
+                throw new Error('Horario no disponible por solapamiento de torno');
+            }
+
+            if (pottersCount > 0) {
+                const pottersMax = resolveCapacity(slot.date, 'potters_wheel', maxCapacityMap, scheduleOverrides);
+                const pottersAvailable = Math.max(0, pottersMax - pottersBooked);
+                if (pottersAvailable < pottersCount) {
+                    throw new Error('No hay cupos suficientes en torno para este horario');
+                }
+            }
+
+            if (handWorkCount > 0) {
+                const handWorkMax = resolveCapacity(slot.date, 'hand_modeling', maxCapacityMap, scheduleOverrides);
+                const handWorkAvailable = Math.max(0, handWorkMax - handWorkBooked);
+                if (handWorkAvailable < handWorkCount) {
+                    throw new Error('No hay cupos suficientes en modelado/pintura para este horario');
+                }
+            }
+        }
     
     // Calcular reschedule allowance basado en tipo de paquete
     let rescheduleAllowance = 0;
