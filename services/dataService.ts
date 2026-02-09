@@ -1986,6 +1986,13 @@ const parseDelivery = (d: any): Delivery => {
         }
     }
     
+    const rawWantsPainting = d.wantsPainting ?? d.wants_painting ?? false;
+    const normalizedWantsPainting = rawWantsPainting === true
+        || rawWantsPainting === 'true'
+        || rawWantsPainting === 't'
+        || rawWantsPainting === 1
+        || rawWantsPainting === '1';
+
     return {
         id: d.id,
         customerEmail: d.customerEmail || d.customer_email,
@@ -2000,7 +2007,7 @@ const parseDelivery = (d: any): Delivery => {
         photos: parsedPhotos,
         hasPhotos: d.hasPhotos || false, // ⚡ Flag para lazy loading
         // ⚡ Campos de servicio de pintura
-        wantsPainting: d.wantsPainting ?? d.wants_painting ?? false,
+        wantsPainting: normalizedWantsPainting,
         paintingPrice: d.paintingPrice ?? d.painting_price ?? null,
         paintingStatus: d.paintingStatus ?? d.painting_status ?? null,
         paintingBookingDate: d.paintingBookingDate ?? d.painting_booking_date ?? null,
@@ -2011,7 +2018,7 @@ const parseDelivery = (d: any): Delivery => {
 
 // ⚡ Carga ligera de deliveries (sin fotos - para listados)
 export const getDeliveries = async (): Promise<Delivery[]> => {
-    const rawDeliveries = await fetchData('/api/data?action=deliveries');
+    const rawDeliveries = await fetchData('/api/data?action=deliveries&limit=2000');
     return rawDeliveries ? rawDeliveries.map(parseDelivery) : [];
 };
 
