@@ -1,29 +1,7 @@
-import { VercelRequest, VercelResponse } from '@vercel/node';
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-export default async (req: VercelRequest, res: VercelResponse) => {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'POST only' });
-  }
-
-  try {
-    const { email = 'test@test.com', subject = 'Test' } = req.body || {};
-    
-    // Test response to verify endpoint is working
-    return res.status(200).json({
-      success: true,
-      message: 'Email endpoint is alive',
-      recevedEmail: email,
-      receivedSubject: subject,
-      timestamp: new Date().toISOString(),
-      apiKeyConfigured: !!process.env.RESEND_API_KEY
-    });
-
-  } catch (error: any) {
-    return res.status(500).json({
-      error: 'Error',
-      details: String(error)
-    });
-  }
+export default (req: VercelRequest, res: VercelResponse) => {
+  return res.json({ ok: true, msg: 'Endpoint working' });
 };
 <html lang="es">
 <head>
