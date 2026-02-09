@@ -1,5 +1,7 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { sendEmailAsAlianza } from './emailService.js';
+import { Resend } from 'resend';
+
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 const TEMPLATE = `<!DOCTYPE html>
 <html>
@@ -25,30 +27,47 @@ const TEMPLATE = `<!DOCTYPE html>
 </html>`;
 
 export default async (req: VercelRequest, res: VercelResponse) => {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'POST only' });
+  }
 
   try {
-    const { email = 'danielreinosojaya@gmail.com', subject = 'Propuesta de Alianza Ceramicalma' } = req.body;
+    const { 
+      email = 'danielreinosojaya@gmail.com', 
+      subject = 'Propuesta de Alianza Ceramicalma' 
+    } = req.body;
     
     if (!email || !email.includes('@')) {
       return res.status(400).json({ error: 'Email inválido' });
     }
 
-    const result = await sendEmailAsAlianza(email, subject, TEMPLATE);
-
-    if (result?.sent === true) {
-      return res.status(200).json({
-        success: true,
-        message: '✅ Email enviado desde alianza@ceramicalma.com',
-        email,
-        subject
+    if (!resend) {
+      return res.status(500).json({ 
+        error: 'Email service not configured',
+        message: 'RESEND_API_KEY not set'
       });
     }
 
-    return res.status(400).json({
-      success: false,
-      message: 'Error al enviar email',
-      details: result?.error || 'Desconocido'
+    const result = await resend.emails.send({
+      from: 'alianza@ceramicalma.com',
+      to: email,
+      subject: subject,
+      html: TEMPLATE
+    });
+
+    if (result.error) {
+      return res.status(400).json({
+        success: false,
+        error: result.error.message
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: '✅ Email enviado desde alianza@ceramicalma.com',
+      email,
+      subject,
+      emailId: result.data?.id
     });
 
   } catch (error: any) {
