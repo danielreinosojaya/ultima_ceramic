@@ -1,30 +1,4 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { Resend } from 'resend';
-
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-
-const TEMPLATE = `<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="font-family:Arial,sans-serif;background:#f9f7f3;margin:0;padding:20px">
-<div style="max-width:480px;margin:0 auto;background:#fff;padding:20px;border-radius:8px">
-<h2 style="color:#a0674d">Alianza CERAMICALMA</h2>
-<p>Estimado/a,</p>
-<p>Te invitamos a conocer <strong>Alianza CERAMICALMA</strong>: acceso exclusivo a un espacio premium.</p>
-<p><strong>Incluye:</strong></p>
-<ul>
-<li>12 Días Exclusivos (1 día mensual)</li>
-<li>20% Descuento Permanente</li>
-<li>Experiencias Branded + Amplificación Digital</li>
-</ul>
-<p><strong>Inversión Anual:</strong> USD 3,500 + IVA</p>
-<p><a href="https://ceramicalma.com/alianzas" style="background:#a0674d;color:white;padding:10px 20px;text-decoration:none;border-radius:4px">Ver Propuesta</a></p>
-<p>Sin compromisos. Solo conversación genuina.</p>
-<hr>
-<p style="font-size:12px;color:#888">CERAMICALMA | Samborondón, Guayaquil<br><a href="mailto:ceramicalma.ec@gmail.com">ceramicalma.ec@gmail.com</a> | <a href="https://wa.me/593985813327">WhatsApp</a></p>
-</div>
-</body>
-</html>`;
 
 export default async (req: VercelRequest, res: VercelResponse) => {
   if (req.method !== 'POST') {
@@ -32,49 +6,22 @@ export default async (req: VercelRequest, res: VercelResponse) => {
   }
 
   try {
-    const { 
-      email = 'danielreinosojaya@gmail.com', 
-      subject = 'Propuesta de Alianza Ceramicalma' 
-    } = req.body;
+    const { email = 'test@test.com', subject = 'Test' } = req.body || {};
     
-    if (!email || !email.includes('@')) {
-      return res.status(400).json({ error: 'Email inválido' });
-    }
-
-    if (!resend) {
-      return res.status(500).json({ 
-        error: 'Email service not configured',
-        message: 'RESEND_API_KEY not set'
-      });
-    }
-
-    const result = await resend.emails.send({
-      from: 'alianza@ceramicalma.com',
-      to: email,
-      subject: subject,
-      html: TEMPLATE
-    });
-
-    if (result.error) {
-      return res.status(400).json({
-        success: false,
-        error: result.error.message
-      });
-    }
-
+    // Test response to verify endpoint is working
     return res.status(200).json({
       success: true,
-      message: '✅ Email enviado desde alianza@ceramicalma.com',
-      email,
-      subject,
-      emailId: result.data?.id
+      message: 'Email endpoint is alive',
+      recevedEmail: email,
+      receivedSubject: subject,
+      timestamp: new Date().toISOString(),
+      apiKeyConfigured: !!process.env.RESEND_API_KEY
     });
 
   } catch (error: any) {
-    console.error('[sendAlianzaEmail]', error);
     return res.status(500).json({
-      error: 'Error interno',
-      details: error?.message || String(error)
+      error: 'Error',
+      details: String(error)
     });
   }
 };
