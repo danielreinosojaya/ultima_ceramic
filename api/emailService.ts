@@ -6,6 +6,13 @@ import { generateAllGiftcardVersions } from './utils/giftcardImageGenerator.js';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_FROM_ADDRESS || 'no-reply@ceramicalma.com';
+const alianzaEmail = process.env.EMAIL_ALIANZA || 'alianza@ceramicalma.com';
+
+// Emails disponibles
+export const AVAILABLE_FROM_EMAILS = {
+  DEFAULT: fromEmail,
+  ALIANZA: alianzaEmail
+} as const;
 
 // Helper para obtener nombre de técnica desde metadata
 const getTechniqueName = (technique: GroupTechnique): string => {
@@ -110,8 +117,10 @@ const wrapHtmlEmail = (maybeHtml: string) => {
     return `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Email</title><style>body{font-family: Arial, Helvetica, sans-serif; color:#333; margin:0; padding:12px;} a{color:#1d4ed8;}</style></head><body>${maybeHtml}</body></html>`;
 };
 
-const sendEmail = async (to: string, subject: string, html: string, attachments?: { filename: string; data: string; type?: string }[]): Promise<SendEmailResult | void> => {
+const sendEmail = async (to: string, subject: string, html: string, attachments?: { filename: string; data: string; type?: string }[], fromOverride?: string): Promise<SendEmailResult | void> => {
     const cfg = isEmailServiceConfigured();
+    const finalFromEmail = fromOverride || fromEmail;
+    
     // Dry-run when not configured
     if (!cfg.configured) {
         console.warn(`Email service not configured (${cfg.reason}). Performing dry-run and saving email to disk.`);
@@ -120,11 +129,11 @@ const sendEmail = async (to: string, subject: string, html: string, attachments?
             const path = await import('path');
             const outDir = process.env.EMAIL_DRYRUN_DIR || path.join('/tmp', 'ceramicalma-emails');
             try { fs.mkdirSync(outDir, { recursive: true }); } catch {}
-            const safeTo = to.replace(/[@<>\\/\\s]/g, '_').slice(0, 64);
+            const safeTo = to.replace(/[@<>\/\s]/g, '_').slice(0, 64);
             const safeSubject = subject.replace(/[^a-zA-Z0-9-_ ]/g, '').slice(0, 48).replace(/\s+/g, '_');
             const filename = `${Date.now()}_${safeTo}_${safeSubject}.html`;
             const filePath = path.join(outDir, filename);
-            let content = `To: ${to}\nSubject: ${subject}\n\n${html}\n\n`;
+            let content = `From: ${finalFromEmail}\nTo: ${to}\nSubject: ${subject}\n\n${html}\n\n`;
             if (attachments && attachments.length > 0) {
                 content += '\nAttachments:\n';
                     for (const a of attachments) {
@@ -143,7 +152,7 @@ const sendEmail = async (to: string, subject: string, html: string, attachments?
     // Generate a conservative plain-text fallback from the wrapped HTML
     const textFallback = typeof wrappedHtml === 'string' ? wrappedHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : undefined;
     const payload: any = {
-        from: fromEmail,
+        from: finalFromEmail,
         to,
         subject,
         html: wrappedHtml,
@@ -2169,4 +2178,45 @@ export const sendValentinePaymentConfirmedEmail = async (data: {
 
     console.info('[emailService] Valentine payment confirmed email sent to', email);
     return result;
+};
+
+// ============================================================
+// EMAIL ALIASES - Enviar desde diferentes direcciones
+// ============================================================
+
+/**
+ * Envía un email usando el correo de alianzas
+ * @param to Destinatario
+ * @param subject Asunto
+ * @param html Contenido HTML
+ * @param attachments Adjuntos opcionales
+ */
+export const sendEmailAsAlianza = async (
+    to: string,
+    subject: string,
+    html: string,
+    attachments?: { filename: string; data: string; type?: string }[]
+) => {
+    return sendEmail(to, subject, html, attachments, alianzaEmail);
+};
+
+/**
+ * Envía un email personalizado desde cualquier dirección registrada
+ * @param to Destinatario
+ * @param subject Asunto
+ * @param html Contenido HTML
+ * @param fromEmail Dirección remitente (usa DEFAULT o ALIANZA)
+ * @param attachments Adjuntos opcionales
+ */
+export const sendEmailFromCustomAddress = async (
+    to: string,
+    subject: string,
+    html: string,
+    fromEmail: 'DEFAULT' | 'ALIANZA' | string,
+    attachments?: { filename: string; data: string; type?: string }[]
+) => {
+    const finalFromEmail = fromEmail === 'DEFAULT' ? AVAILABLE_FROM_EMAILS.DEFAULT : 
+                          fromEmail === 'ALIANZA' ? AVAILABLE_FROM_EMAILS.ALIANZA :
+                          fromEmail;
+    return sendEmail(to, subject, html, attachments, finalFromEmail);
 };
