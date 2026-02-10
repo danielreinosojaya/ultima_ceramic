@@ -2789,11 +2789,12 @@ export const generateTimeSlots = (
     { start: 9, end: 16, days: [6] }      // Sábado: últimas clases 9:00-16:00
   ];
 
-  for (let d = 0; d < daysCount; d++) {
-    const date = new Date(startDate);
-    date.setDate(date.getDate() + d);
-    const dayOfWeek = date.getDay();
-    const dateStr = date.toISOString().split('T')[0];
+    for (let d = 0; d < daysCount; d++) {
+        const date = new Date(startDate);
+        date.setHours(0, 0, 0, 0);
+        date.setDate(date.getDate() + d);
+        const dayOfWeek = date.getDay();
+        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
     const dayConfig = hoursPerDay.find(h => h.days.includes(dayOfWeek));
     if (!dayConfig) continue; // Día cerrado (Lunes)

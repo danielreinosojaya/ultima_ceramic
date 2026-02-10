@@ -155,12 +155,15 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
       return hours;
     };
 
-    // Pintura: horarios fijos por dia y lunes cerrado
+    if (dayOfWeek === 1) return [];
+    const baseHours = dayOfWeek === 0
+      ? buildSlots(10, 14)
+      : dayOfWeek === 6
+      ? buildSlots(9, 16)
+      : buildSlots(10, 17);
+
     if (technique === 'painting') {
-      if (dayOfWeek === 1) return [];
-      if (dayOfWeek === 0) return buildSlots(10, 14); // Domingo 10am-4pm → última clase 14:00 (14+2=16)
-      if (dayOfWeek === 6) return buildSlots(9, 16);  // Sabado 9am-6pm → última clase 16:00 (16+2=18)
-      return buildSlots(10, 17); // Martes a Viernes 10am-7pm → última clase 17:00 (17+2=19)
+      return baseHours;
     }
     
     const fixedTornoSlots = getFixedTornoSlots(dateStr);
@@ -173,40 +176,8 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
       return fixedHours;
     }
     
-    // CASO 2: Grupos grandes o otras técnicas → MOSTRAR TODOS los horarios, sin filtrar
-    const hours: string[] = [];
-
-    if (dayOfWeek === 6) {
-      // Sábado: 9am a 7pm (cierre 9pm) - slots cada 30 min hasta 19:00
-      for (let hour = 9; hour <= 19; hour++) {
-        for (const min of ['00', '30']) {
-          if (hour === 19 && min === '30') break;
-          const timeSlot = `${String(hour).padStart(2, '0')}:${min}`;
-          hours.push(timeSlot);
-        }
-      }
-    } else if (dayOfWeek === 0) {
-      // Domingo: 10am a 4pm (cierre 6pm) - slots cada 30 min hasta 16:00
-      for (let hour = 10; hour <= 16; hour++) {
-        for (const min of ['00', '30']) {
-          if (hour === 16 && min === '30') break;
-          const timeSlot = `${String(hour).padStart(2, '0')}:${min}`;
-          hours.push(timeSlot);
-        }
-      }
-    } else {
-      // Martes a Viernes: 10am a 7pm (cierre 9pm) - slots cada 30 min hasta 19:00
-      for (let hour = 10; hour <= 19; hour++) {
-        for (const min of ['00', '30']) {
-          if (hour === 19 && min === '30') break;
-          const timeSlot = `${String(hour).padStart(2, '0')}:${min}`;
-          hours.push(timeSlot);
-        }
-      }
-    }
-    
-    console.log(`🆓 [${technique}] Horarios totales: ${hours.length} slots`);
-    return hours;
+    console.log(`🆓 [${technique}] Horarios totales: ${baseHours.length} slots`);
+    return baseHours;
   };
   }, [availability, technique, participants, getFixedTornoSlots]);
 
