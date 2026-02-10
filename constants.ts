@@ -209,13 +209,47 @@ export const DEFAULT_INSTRUCTORS: Instructor[] = [
 ];
 
 export const DEFAULT_AVAILABLE_SLOTS_BY_DAY: Record<DayKey, AvailableSlot[]> = {
-  Sunday: [],
-  Monday: [{ time: '18:00', instructorId: 1, technique: 'potters_wheel' }, { time: '20:30', instructorId: 2, technique: 'molding' }],
-  Tuesday: [{ time: '10:00', instructorId: 1, technique: 'molding' }, { time: '18:00', instructorId: 2, technique: 'potters_wheel' }],
-  Wednesday: [{ time: '18:00', instructorId: 1, technique: 'potters_wheel' }, { time: '20:30', instructorId: 3, technique: 'potters_wheel' }],
-  Thursday: [{ time: '10:00', instructorId: 2, technique: 'molding' }, { time: '18:00', instructorId: 3, technique: 'molding' }],
-  Friday: [{ time: '17:00', instructorId: 1, technique: 'potters_wheel' }],
-  Saturday: [{ time: '10:00', instructorId: 3, technique: 'potters_wheel' }, { time: '12:30', instructorId: 1, technique: 'molding' }],
+  Sunday: [
+    { time: '10:00', instructorId: 1, technique: 'molding' },
+    { time: '12:00', instructorId: 2, technique: 'molding' },
+    { time: '14:00', instructorId: 3, technique: 'molding' }
+  ],
+  Monday: [], // ❌ CERRADO - Sin clases de pintura los lunes
+  Tuesday: [
+    { time: '10:00', instructorId: 1, technique: 'molding' },
+    { time: '12:00', instructorId: 2, technique: 'molding' },
+    { time: '14:00', instructorId: 3, technique: 'molding' },
+    { time: '16:00', instructorId: 1, technique: 'molding' },
+    { time: '18:00', instructorId: 2, technique: 'molding' }
+  ],
+  Wednesday: [
+    { time: '10:00', instructorId: 1, technique: 'molding' },
+    { time: '12:00', instructorId: 2, technique: 'molding' },
+    { time: '14:00', instructorId: 3, technique: 'molding' },
+    { time: '16:00', instructorId: 1, technique: 'molding' },
+    { time: '18:00', instructorId: 2, technique: 'molding' }
+  ],
+  Thursday: [
+    { time: '10:00', instructorId: 2, technique: 'molding' },
+    { time: '12:00', instructorId: 3, technique: 'molding' },
+    { time: '14:00', instructorId: 1, technique: 'molding' },
+    { time: '16:00', instructorId: 2, technique: 'molding' },
+    { time: '18:00', instructorId: 3, technique: 'molding' }
+  ],
+  Friday: [
+    { time: '10:00', instructorId: 1, technique: 'molding' },
+    { time: '12:00', instructorId: 2, technique: 'molding' },
+    { time: '14:00', instructorId: 3, technique: 'molding' },
+    { time: '16:00', instructorId: 1, technique: 'molding' },
+    { time: '18:00', instructorId: 2, technique: 'molding' }
+  ],
+  Saturday: [
+    { time: '09:00', instructorId: 3, technique: 'molding' },
+    { time: '11:00', instructorId: 1, technique: 'molding' },
+    { time: '13:00', instructorId: 2, technique: 'molding' },
+    { time: '15:00', instructorId: 3, technique: 'molding' },
+    { time: '17:00', instructorId: 1, technique: 'molding' }
+  ]
 };
 
 export const DEFAULT_POLICIES_TEXT = `Políticas de Cancelación y Reprogramación:

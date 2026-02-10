@@ -2776,12 +2776,16 @@ export const generateTimeSlots = (
 ): DynamicTimeSlot[] => {
   const slots: DynamicTimeSlot[] = [];
   
-  // Configuración: qué horas abren cada día
-  // CRÍTICO: Lunes (1) EXCLUIDO para Pintura (regla de negocio)
+  // Configuración correcta de horarios por día:
+  // - Martes a Viernes: 10am - 7pm (10:00-19:00)
+  // - Sábado: 9am - 6pm (09:00-18:00)
+  // - Domingo: 10am - 4pm (10:00-16:00)
+  // - Lunes: CERRADO (no aparecer)
   const hoursPerDay = [
-    { start: 9, end: 19, days: [2, 3, 4, 5] }, // Martes-Viernes: 9 AM a 7 PM (LUNES EXCLUIDO)
-    { start: 9, end: 17, days: [6] } // Sábado: 9 AM a 5 PM
-    // Domingo (0) no aparece, así que cerrado
+    { start: 10, end: 16, days: [0] },    // Domingo: 10am-4pm
+    // Lunes (1) EXCLUIDO - NO APARECER
+    { start: 10, end: 19, days: [2, 3, 4, 5] }, // Martes-Viernes: 10am-7pm
+    { start: 9, end: 18, days: [6] }      // Sábado: 9am-6pm
   ];
 
   for (let d = 0; d < daysCount; d++) {
@@ -2791,7 +2795,7 @@ export const generateTimeSlots = (
     const dateStr = date.toISOString().split('T')[0];
 
     const dayConfig = hoursPerDay.find(h => h.days.includes(dayOfWeek));
-    if (!dayConfig) continue; // Día cerrado (domingo)
+    if (!dayConfig) continue; // Día cerrado (Lunes)
 
     // Generar slots cada 30 minutos
     for (let hour = dayConfig.start; hour < dayConfig.end; hour++) {
