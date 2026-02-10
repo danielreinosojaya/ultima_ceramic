@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { checkSlotAvailability, SlotAvailabilityResult, getAvailability } from '../../services/dataService';
+import { checkSlotAvailability, SlotAvailabilityResult, getAvailability, getFreeDateTimeOverrides } from '../../services/dataService';
 import type { AvailableSlot, DayKey } from '../../types';
 import { SocialBadge } from '../SocialBadge';
 
@@ -36,6 +36,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   
   // Estado para availability cargada desde el servidor (si no se proporciona como prop)
   const [loadedAvailability, setLoadedAvailability] = useState<Record<DayKey, AvailableSlot[]> | null>(null);
+  const [freeDateTimeOverrides, setFreeDateTimeOverrides] = useState<Record<string, { disabledTimes: string[] }>>({});
   
   // Usar availability de prop o la cargada del servidor
   const availability = propAvailability || loadedAvailability;
@@ -48,6 +49,12 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
       });
     }
   }, [propAvailability]);
+
+  useEffect(() => {
+    getFreeDateTimeOverrides().then(setFreeDateTimeOverrides).catch(err => {
+      console.error('[FreeDateTimePicker] Error loading freeDateTimeOverrides:', err);
+    });
+  }, []);
 
   // Parsear fecha ISO a fecha local (evitar problema UTC)
   const parseLocalDate = (dateStr: string): Date => {
@@ -120,6 +127,11 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     const fixedSlots = getFixedTornoSlots(dateStr);
     return slotOverlapsWithFixedClass(time, fixedSlots);
   }, [technique, getFixedTornoSlots, slotOverlapsWithFixedClass]);
+
+  const isSlotBlockedBySpecialEvent = useCallback((dateStr: string, time: string): boolean => {
+    const disabledTimes = freeDateTimeOverrides?.[dateStr]?.disabledTimes || [];
+    return disabledTimes.includes(time);
+  }, [freeDateTimeOverrides]);
 
   // Memoizar getAvailableHours para evitar recálculos innecesarios
   const getAvailableHours = useMemo(() => {
@@ -446,15 +458,20 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
               const isSelected = selectedTime === hour;
               const hourState = hourAvailability[hour];
               const isBlockedByFixedClass = isSlotBlockedByFixedClass(selectedDate, hour);
+              const isBlockedBySpecialEvent = isSlotBlockedBySpecialEvent(selectedDate, hour);
               const isUnavailableByCapacity = hourState ? hourState.available === false : false;
-              const isUnavailable = isBlockedByFixedClass || isUnavailableByCapacity;
+              const isUnavailable = isBlockedByFixedClass || isBlockedBySpecialEvent || isUnavailableByCapacity;
               
               return (
                 <button
                   key={hour}
                   onClick={() => handleTimeClick(hour)}
                   disabled={checkingAvailability || loadingDayAvailability || isUnavailable}
-                  title={isBlockedByFixedClass ? 'Bloqueado por clase fija de torno' : (isUnavailableByCapacity ? 'Sin cupos disponibles' : 'Click para seleccionar')}
+                  title={isBlockedByFixedClass
+                    ? 'Bloqueado por clase fija de torno'
+                    : isBlockedBySpecialEvent
+                    ? 'Bloqueado por evento'
+                    : (isUnavailableByCapacity ? 'Sin cupos disponibles' : 'Click para seleccionar')}
                   className={`relative p-3.5 rounded-xl border-2 font-bold text-sm transition-all ${
                     isSelected
                       ? 'border-brand-primary bg-gradient-to-br from-brand-primary to-brand-accent text-white shadow-lg scale-105'
@@ -465,7 +482,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
                 >
                   <div className="flex flex-col items-center gap-1">
                     <span>{hour}</span>
-                    {isBlockedByFixedClass ? (
+                    {isBlockedByFixedClass || isBlockedBySpecialEvent ? (
                       <span className="text-xs font-bold text-red-600">🔒</span>
                     ) : hourState && hourState.capacity && (
                       <SocialBadge 

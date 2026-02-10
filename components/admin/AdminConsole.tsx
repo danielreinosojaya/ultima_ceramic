@@ -185,6 +185,7 @@ export const AdminConsole: React.FC = () => {
         return <ScheduleSettingsManager 
             availability={adminData.availability}
             overrides={adminData.scheduleOverrides}
+            freeDateTimeOverrides={adminData.freeDateTimeOverrides || {}}
             instructors={adminData.instructors}
             classCapacity={adminData.classCapacity}
             onDataChange={handleSync}

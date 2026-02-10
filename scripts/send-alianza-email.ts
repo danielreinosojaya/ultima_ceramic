@@ -1,9 +1,16 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { sendEmailAsAlianza } from '../api/emailService.js';
+type EmailServiceModule = typeof import('../api/emailService.js');
 
 const sendAlianzaTestEmail = async () => {
   try {
+    let emailService: EmailServiceModule;
+    try {
+      emailService = await import('../api/emailService.js');
+    } catch {
+      emailService = await import('../api/emailService.ts');
+    }
+
     // Leer el template HTML
     const templatePath = path.join(process.cwd(), 'templates', 'email_alianza_conciso.html');
     const html = fs.readFileSync(templatePath, 'utf-8');
@@ -18,7 +25,7 @@ const sendAlianzaTestEmail = async () => {
     console.log('');
 
     // Enviar email
-    const result = await sendEmailAsAlianza(to, subject, html);
+    const result = await emailService.sendEmailAsAlianza(to, subject, html);
 
     if (result && 'sent' in result) {
       if (result.sent) {

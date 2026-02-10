@@ -1234,6 +1234,8 @@ export const getAvailability = (): Promise<Record<DayKey, AvailableSlot[]>> => g
 export const updateAvailability = (availability: Record<DayKey, AvailableSlot[]>): Promise<{ success: boolean }> => setData('availability', availability);
 export const getScheduleOverrides = (): Promise<ScheduleOverrides> => getData('scheduleOverrides');
 export const updateScheduleOverrides = (overrides: ScheduleOverrides): Promise<{ success: boolean }> => setData('scheduleOverrides', overrides);
+export const getFreeDateTimeOverrides = (): Promise<Record<string, { disabledTimes: string[] }>> => getData('freeDateTimeOverrides');
+export const updateFreeDateTimeOverrides = (overrides: Record<string, { disabledTimes: string[] }>): Promise<{ success: boolean }> => setData('freeDateTimeOverrides', overrides);
 
 // Instructors - ✅ Usar cache para evitar requests múltiples
 let instructorsCache: { data: Instructor[] | null; timestamp: number } = { data: null, timestamp: 0 };
@@ -1570,19 +1572,21 @@ export const getSchedulingData = async () => {
     ]);
     
     // Cargar datos complementarios (NO en background - necesarios para la UI)
-    const [scheduleOverrides, classCapacity, capacityMessages] = await Promise.all([
+    const [scheduleOverrides, classCapacity, capacityMessages, freeDateTimeOverrides] = await Promise.all([
         getData('scheduleOverrides'),
         getData('classCapacity'),
-        getData('capacityMessages')
+        getData('capacityMessages'),
+        getData('freeDateTimeOverrides')
     ]).catch(err => {
         console.error('Background scheduling load error:', err);
-        return [{}, { potters_wheel: 0, molding: 0, introductory_class: 0 }, { thresholds: [] }];
+        return [{}, { potters_wheel: 0, molding: 0, introductory_class: 0 }, { thresholds: [] }, {}];
     });
     
     return {
         instructors: instructors || [],
         availability: availability || { Sunday: [], Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [] },
         scheduleOverrides: scheduleOverrides || {},
+        freeDateTimeOverrides: freeDateTimeOverrides || {},
         classCapacity: classCapacity || { potters_wheel: 0, molding: 0, introductory_class: 0 },
         capacityMessages: capacityMessages || { thresholds: [] }
     };
