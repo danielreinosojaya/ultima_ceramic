@@ -938,7 +938,11 @@ const App: React.FC = () => {
                             dataService.generateTimeSlots(new Date(), 180).map(slot => ({
                               date: slot.date,
                               time: slot.startTime,
-                              instructorId: 0
+                              instructorId: 0,
+                              // Incluir capacidad para pintura o técnica seleccionada
+                              available: slot.capacity.painting?.available ?? slot.capacity[prefillTechnique || 'painting']?.available ?? 22,
+                              total: slot.capacity.painting?.max ?? slot.capacity[prefillTechnique || 'painting']?.max ?? 22,
+                              canBook: (slot.capacity.painting?.available ?? slot.capacity[prefillTechnique || 'painting']?.available ?? 22) > 0
                             }))
                             : []
                         }

@@ -40,6 +40,8 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
   const [error, setError] = useState<string>('');
   const [loadingPricing, setLoadingPricing] = useState(false);
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
+  const [slotAvailabilityCache, setSlotAvailabilityCache] = useState<Record<string, any>>({});
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
 
   useEffect(() => {
     if (initialTechnique) {
@@ -74,6 +76,47 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
       }
     }
   }, [availableSlots, selectedDate]);
+
+  // Verificar disponibilidad dinámicamente cuando fecha o técnica cambian
+  useEffect(() => {
+    const verifySlotAvailability = async () => {
+      if (!selectedDate) return;
+      
+      setCheckingAvailability(true);
+      const slotsForDate = availableSlots.filter(s => s.date === selectedDate);
+      const allTimes = [...new Set(slotsForDate.map(s => s.time))].sort();
+      const cacheKey = `${selectedDate}-${technique}`;
+      
+      // Verificar cada horario para esta fecha
+      const newCache: Record<string, any> = {};
+      
+      for (const time of allTimes) {
+        const slotKey = `${selectedDate}-${time}`;
+        try {
+          const result = await dataService.checkSlotAvailability(selectedDate, time, technique, participants);
+          newCache[slotKey] = {
+            available: result.capacity?.available ?? 0,
+            total: result.capacity?.max ?? 22,
+            canBook: result.available,
+            message: result.message
+          };
+        } catch (err) {
+          console.warn(`Error checking ${slotKey}:`, err);
+          newCache[slotKey] = {
+            available: 0,
+            total: 22,
+            canBook: false,
+            message: 'Error verificando disponibilidad'
+          };
+        }
+      }
+      
+      setSlotAvailabilityCache(newCache);
+      setCheckingAvailability(false);
+    };
+    
+    verifySlotAvailability();
+  }, [selectedDate, technique]);
 
   // Calculate pricing when technique changes
   useEffect(() => {
@@ -354,12 +397,14 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                     return (
                       <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 p-3 bg-gray-50 rounded-lg">
                         {allTimes.map(time => {
-                          const slot = slotsForDate.find(s => s.time === time);
+                          const slotKey = `${selectedDate}-${time}`;
+                          const slotInfo = slotAvailabilityCache[slotKey];
                           const isSelected = selectedSlot?.time === time && selectedSlot?.date === selectedDate;
-                          const canBook = slot?.canBook ?? false;
-                          const isBlocked = slot?.blockedReason === 'course_conflict';
-                          const available = slot?.available ?? 0;
-                          const total = slot?.total ?? 0;
+                          
+                          // Usar valores del cache de verificación dinámica
+                          const available = slotInfo?.available ?? 22;
+                          const total = slotInfo?.total ?? 22;
+                          const canBook = slotInfo?.canBook ?? (available > 0);
                           
                           return (
                             <div key={time} className="flex flex-col gap-1">
@@ -374,7 +419,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                                   }
                                 }}
                                 disabled={!canBook}
-                                title={isBlocked ? 'Bloqueado por curso' : canBook ? 'Disponible' : 'Sin cupos'}
+                                title={canBook ? 'Disponible' : 'Sin cupos'}
                                 className={`p-2 rounded-lg border-2 transition-all text-center font-bold text-xs ${
                                   isSelected
                                     ? 'border-brand-primary bg-brand-primary text-white ring-2 ring-brand-primary/30'
@@ -386,18 +431,16 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                                 {time}
                               </button>
                               
-                              {/* Mostrar cupos o razón bloqueo */}
-                              {slot && (
-                                <div className="text-xs text-center">
-                                  {isBlocked ? (
-                                    <div className="text-red-600 font-semibold">🔒 Curso</div>
-                                  ) : (
-                                    <div className={canBook ? 'text-green-600' : 'text-orange-600'}>
-                                      {available}/{total}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
+                              {/* Mostrar cupos disponibles */}
+                              <div className="text-xs text-center">
+                                {checkingAvailability ? (
+                                  <div className="text-gray-400">⏳</div>
+                                ) : (
+                                  <div className={canBook ? 'text-green-600 font-medium' : 'text-orange-600'}>
+                                    {available}/{total}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           );
                         })}
