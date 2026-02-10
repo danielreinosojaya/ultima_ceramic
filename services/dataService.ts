@@ -2777,15 +2777,16 @@ export const generateTimeSlots = (
   const slots: DynamicTimeSlot[] = [];
   
   // Configuración correcta de horarios por día:
-  // - Martes a Viernes: 10am - 7pm (10:00-19:00)
-  // - Sábado: 9am - 6pm (09:00-18:00)
-  // - Domingo: 10am - 4pm (10:00-16:00)
+  // (El 'end' representa la ÚLTIMA HORA QUE PUEDE EMPEZAR UNA CLASE de 2 horas)
+  // - Domingo: 10am-4pm (10:00-16:00) → última clase empieza 14:00
+  // - Martes a Viernes: 10am-7pm (10:00-19:00) → última clase empieza 17:00
+  // - Sábado: 9am-6pm (09:00-18:00) → última clase empieza 16:00
   // - Lunes: CERRADO (no aparecer)
   const hoursPerDay = [
-    { start: 10, end: 16, days: [0] },    // Domingo: 10am-4pm
+    { start: 10, end: 14, days: [0] },    // Domingo: últimas clases 10:00-14:00
     // Lunes (1) EXCLUIDO - NO APARECER
-    { start: 10, end: 19, days: [2, 3, 4, 5] }, // Martes-Viernes: 10am-7pm
-    { start: 9, end: 18, days: [6] }      // Sábado: 9am-6pm
+    { start: 10, end: 17, days: [2, 3, 4, 5] }, // Martes-Viernes: últimas clases 10:00-17:00
+    { start: 9, end: 16, days: [6] }      // Sábado: últimas clases 9:00-16:00
   ];
 
   for (let d = 0; d < daysCount; d++) {
@@ -2798,17 +2799,18 @@ export const generateTimeSlots = (
     if (!dayConfig) continue; // Día cerrado (Lunes)
 
     // Generar slots cada 30 minutos
-    for (let hour = dayConfig.start; hour < dayConfig.end; hour++) {
-      for (let minute of [0, 30]) {
+    // IMPORTANTE: no generar :30 de la última hora (excedería cierre)
+    for (let hour = dayConfig.start; hour <= dayConfig.end; hour++) {
+      const isLastHour = hour === dayConfig.end;
+      const minutesToAdd = isLastHour ? [0] : [0, 30]; // Última hora solo :00
+      
+      for (let minute of minutesToAdd) {
         const startTime = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
         
         // End time: siempre +2 horas
         let endHour = hour;
         let endMin = minute;
         endHour += 2;
-        
-        // Si superamos el límite del día, no crear slot
-        if (endHour > dayConfig.end) continue;
         
         const endTime = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
 

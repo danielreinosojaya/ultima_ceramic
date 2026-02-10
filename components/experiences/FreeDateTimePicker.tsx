@@ -138,10 +138,29 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     return (dateStr: string): string[] => {
     const date = parseLocalDate(dateStr);
     const dayOfWeek = date.getDay();
-    
-    // Lunes: cerrado
-    if (dayOfWeek === 1) {
-      return [];
+
+    const buildSlots = (openStart: number, lastStartHour: number) => {
+      // lastStartHour = última hora que puede empezar una clase (respetando 2 horas de duración)
+      const hours: string[] = [];
+      // Todas las horas ANTES de la última, con :00 y :30
+      for (let hour = openStart; hour < lastStartHour; hour++) {
+        for (const min of ['00', '30']) {
+          const timeSlot = `${String(hour).padStart(2, '0')}:${min}`;
+          hours.push(timeSlot);
+        }
+      }
+      // La última hora SOLO con :00 (no :30, porque :30 excedería cierre)
+      const lastSlot = `${String(lastStartHour).padStart(2, '0')}:00`;
+      hours.push(lastSlot);
+      return hours;
+    };
+
+    // Pintura: horarios fijos por dia y lunes cerrado
+    if (technique === 'painting') {
+      if (dayOfWeek === 1) return [];
+      if (dayOfWeek === 0) return buildSlots(10, 14); // Domingo 10am-4pm → última clase 14:00 (14+2=16)
+      if (dayOfWeek === 6) return buildSlots(9, 16);  // Sabado 9am-6pm → última clase 16:00 (16+2=18)
+      return buildSlots(10, 17); // Martes a Viernes 10am-7pm → última clase 17:00 (17+2=19)
     }
     
     const fixedTornoSlots = getFixedTornoSlots(dateStr);
@@ -288,6 +307,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   const monthName = currentMonth.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
 
   const isMonday = (day: number) => {
+    if (technique !== 'painting') return false;
     const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
     return date.getDay() === 1;
   };

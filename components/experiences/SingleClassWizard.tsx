@@ -209,6 +209,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
           <div>
             <h3 className="text-2xl font-bold mb-2">¿Qué técnica te interesa?</h3>
             <p className="text-gray-600">Elige la técnica que quieres practicar en tu clase</p>
+            <p className="mt-2 text-sm font-semibold text-brand-primary">Solo 1 persona por reserva</p>
           </div>
 
           <div className="space-y-3">

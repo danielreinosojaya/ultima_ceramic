@@ -36,7 +36,7 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
     },
     {
       title: 'Clases Sueltas',
-      subtitle: 'Una sola clase para probar cualquier técnica sin compromiso.',
+      subtitle: 'Una sola clase para 1 persona. Prueba cualquier técnica sin compromiso.',
       buttonText: FEATURE_FLAGS.CLASES_SUELTAS ? 'Reservar Clase' : 'Proximamente',
       onClick: () => onSelect('single_class_wizard'),
       disabled: !FEATURE_FLAGS.CLASES_SUELTAS

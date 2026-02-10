@@ -553,6 +553,22 @@ const computeSlotAvailability = async (
     const requestedStartMinutes = timeToMinutes(normalizedTime);
     const requestedEndMinutes = requestedStartMinutes + (2 * 60); // 2 horas
 
+    const requestedDayOfWeek = new Date(`${requestedDate}T00:00:00`).getDay();
+    if (requestedTechnique === 'painting' && requestedDayOfWeek === 1) {
+        const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
+        return {
+            available: false,
+            normalizedTime,
+            capacity: {
+                max: maxCapacity,
+                booked: maxCapacity,
+                available: 0
+            },
+            bookingsCount: 0,
+            message: 'Pintura no está disponible los lunes'
+        };
+    }
+
     const disabledTimes = freeDateTimeOverrides?.[requestedDate]?.disabledTimes || [];
     if (disabledTimes.includes(normalizedTime)) {
         const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
