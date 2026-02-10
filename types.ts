@@ -457,6 +457,12 @@ export interface ScheduleOverrides {
   }
 }
 
+export interface FreeDateTimeOverrides {
+  [date: string]: { // YYYY-MM-DD
+    disabledTimes: string[];
+  };
+}
+
 export interface RescheduleSlotInfo {
     bookingId: string;
     slot: TimeSlot;
@@ -585,6 +591,7 @@ export interface AppData {
   instructors: Instructor[];
   availability: Record<DayKey, AvailableSlot[]>;
   scheduleOverrides: ScheduleOverrides;
+  freeDateTimeOverrides?: FreeDateTimeOverrides;
   classCapacity: ClassCapacity;
   capacityMessages: CapacityMessageSettings;
   announcements: Announcement[];

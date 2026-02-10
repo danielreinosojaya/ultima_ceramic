@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import * as dataService from '../../services/dataService';
 // Eliminado useLanguage, la app ahora es monolingüe en español
-import type { AvailableSlot, Instructor, ScheduleOverrides, DayKey, ClassCapacity, Technique } from '../../types';
+import type { AvailableSlot, Instructor, ScheduleOverrides, DayKey, ClassCapacity, Technique, FreeDateTimeOverrides } from '../../types';
 import { DAY_NAMES } from '@/constants';
 import { PlusIcon } from '../icons/PlusIcon';
 import { TrashIcon } from '../icons/TrashIcon';
@@ -12,12 +12,13 @@ const formatDateToYYYYMMDD = (d: Date): string => d.toISOString().split('T')[0];
 interface ScheduleSettingsManagerProps {
     availability: Record<DayKey, AvailableSlot[]>;
     overrides: ScheduleOverrides;
+    freeDateTimeOverrides: FreeDateTimeOverrides;
     instructors: Instructor[];
     classCapacity: ClassCapacity;
     onDataChange: () => void;
 }
 
-export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = ({ availability, overrides, instructors, classCapacity, onDataChange }) => {
+export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = ({ availability, overrides, freeDateTimeOverrides, instructors, classCapacity, onDataChange }) => {
     // Monolingüe español, textos hardcodeados
     const language = 'es-ES';
     
@@ -26,6 +27,8 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
     const [newExceptionSlot, setNewExceptionSlot] = useState<{ time: string, instructorId: number, technique: Technique }>({ time: '', instructorId: instructors[0]?.id || 0, technique: 'potters_wheel' });
     const [defaultCapacity, setDefaultCapacity] = useState<ClassCapacity>(classCapacity);
     const [isCapacitySaved, setIsCapacitySaved] = useState(false);
+    const [selectedBlockedDate, setSelectedBlockedDate] = useState<Date | null>(null);
+    const [newBlockedTime, setNewBlockedTime] = useState('');
     
     const handleAddSlot = async (day: DayKey) => {
         if (!newSlot.time || !newSlot.instructorId) {
@@ -106,6 +109,42 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
         setTimeout(() => setIsCapacitySaved(false), 3000);
         onDataChange();
     };
+
+    const handleAddBlockedTime = async () => {
+        if (!selectedBlockedDate || !newBlockedTime) return;
+        const dateStr = formatDateToYYYYMMDD(selectedBlockedDate);
+        const updatedOverrides: FreeDateTimeOverrides = { ...freeDateTimeOverrides };
+        const existing = updatedOverrides[dateStr]?.disabledTimes || [];
+        if (!existing.includes(newBlockedTime)) {
+            updatedOverrides[dateStr] = { disabledTimes: [...existing, newBlockedTime].sort() };
+            await dataService.updateFreeDateTimeOverrides(updatedOverrides);
+            onDataChange();
+        }
+        setNewBlockedTime('');
+    };
+
+    const handleRemoveBlockedTime = async (time: string) => {
+        if (!selectedBlockedDate) return;
+        const dateStr = formatDateToYYYYMMDD(selectedBlockedDate);
+        const updatedOverrides: FreeDateTimeOverrides = { ...freeDateTimeOverrides };
+        const nextTimes = (updatedOverrides[dateStr]?.disabledTimes || []).filter(t => t !== time);
+        if (nextTimes.length === 0) {
+            delete updatedOverrides[dateStr];
+        } else {
+            updatedOverrides[dateStr] = { disabledTimes: nextTimes };
+        }
+        await dataService.updateFreeDateTimeOverrides(updatedOverrides);
+        onDataChange();
+    };
+
+    const handleClearBlockedDay = async () => {
+        if (!selectedBlockedDate) return;
+        const dateStr = formatDateToYYYYMMDD(selectedBlockedDate);
+        const updatedOverrides: FreeDateTimeOverrides = { ...freeDateTimeOverrides };
+        delete updatedOverrides[dateStr];
+        await dataService.updateFreeDateTimeOverrides(updatedOverrides);
+        onDataChange();
+    };
     
     const exceptionDaySlots = useMemo(() => {
         if (!selectedExceptionDate) return [];
@@ -122,6 +161,12 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
         const dateStr = formatDateToYYYYMMDD(selectedExceptionDate);
         return overrides[dateStr]?.capacity;
     }, [selectedExceptionDate, overrides]);
+
+    const blockedTimesForDate = useMemo(() => {
+        if (!selectedBlockedDate) return [];
+        const dateStr = formatDateToYYYYMMDD(selectedBlockedDate);
+        return freeDateTimeOverrides?.[dateStr]?.disabledTimes || [];
+    }, [selectedBlockedDate, freeDateTimeOverrides]);
 
     return (
         <div className="space-y-8">
@@ -265,6 +310,45 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
                         </div>
                     )}
                  </div>
+            </div>
+
+            <div>
+                <h2 className="text-xl font-serif text-brand-text mb-2">Bloqueos FreeDateTimePicker</h2>
+                <p className="text-brand-secondary text-sm mb-4">Deshabilita horarios por eventos o disponibilidad especial.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label htmlFor="blocked-date" className="block text-sm font-bold text-brand-secondary mb-1">Selecciona una fecha</label>
+                        <input
+                            id="blocked-date"
+                            type="date"
+                            onChange={e => setSelectedBlockedDate(e.target.value ? new Date(e.target.value + 'T00:00:00') : null)}
+                            className="w-full p-2 border rounded-lg"
+                        />
+                    </div>
+                    {selectedBlockedDate && (
+                        <div className="bg-brand-background p-3 rounded-lg animate-fade-in-fast">
+                            <div className="flex justify-between items-center mb-2">
+                                <h4 className="font-bold text-brand-text">Bloqueos para {selectedBlockedDate.toLocaleDateString(language)}</h4>
+                                <button onClick={handleClearBlockedDay} className="text-xs font-semibold text-brand-accent hover:underline">Limpiar bloqueos</button>
+                            </div>
+                            <div className="space-y-2">
+                                {blockedTimesForDate.map(time => (
+                                    <div key={time} className="flex items-center justify-between bg-white p-2 rounded-md text-sm">
+                                        <span>{time}</span>
+                                        <button onClick={() => handleRemoveBlockedTime(time)} className="text-red-500 hover:text-red-700"><TrashIcon className="w-4 h-4" /></button>
+                                    </div>
+                                ))}
+                                {blockedTimesForDate.length === 0 && (
+                                    <p className="text-xs text-brand-secondary text-center">No hay horarios bloqueados.</p>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-200">
+                                <input type="time" value={newBlockedTime} onChange={e => setNewBlockedTime(e.target.value)} className="p-1 border rounded-md text-sm" />
+                                <button onClick={handleAddBlockedTime} className="p-2 bg-brand-primary text-white rounded-md"><PlusIcon className="w-4 h-4"/></button>
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );
