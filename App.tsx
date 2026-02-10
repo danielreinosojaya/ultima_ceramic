@@ -4,7 +4,6 @@ import { Header } from './components/Header';
 import { WelcomeSelector } from './components/WelcomeSelector';
 import { TechniqueSelector } from './components/TechniqueSelector';
 import { PackageSelector } from './components/PackageSelector';
-import { IntroClassSelector } from './components/IntroClassSelector';
 import { ScheduleSelector } from './components/ScheduleSelector';
 import { BookingSummary } from './components/BookingSummary';
 import { CouplesTourModal } from './components/CouplesTourModal';
@@ -14,7 +13,6 @@ import { UserInfoModal } from './components/UserInfoModal';
 import { PolicyModal } from './components/PolicyModal';
 import { BookingTypeModal } from './components/BookingTypeModal';
 import { ClassInfoModal } from './components/ClassInfoModal';
-import { PrerequisiteModal } from './components/PrerequisiteModal';
 import { AnnouncementsBoard } from './components/AnnouncementsBoard';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ModuloMarcacionSimple } from './components/ModuloMarcacionSimple';
@@ -49,7 +47,7 @@ import { OpenStudioModal } from './components/admin/OpenStudioModal';
 import { MyClassesPrompt } from './components/MyClassesPrompt';
 const ClientDashboard = lazy(() => import('./components/ClientDashboard').then(m => ({ default: m.ClientDashboard })));
 
-import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession, DeliveryMethod, GiftcardHold, Piece, ExperiencePricing, ExperienceUIState, CourseSchedule, CourseEnrollment, ParticipantTechniqueAssignment, GroupTechnique } from './types';
+import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, DeliveryMethod, GiftcardHold, Piece, ExperiencePricing, ExperienceUIState, CourseSchedule, CourseEnrollment, ParticipantTechniqueAssignment, GroupTechnique } from './types';
 import * as dataService from './services/dataService';
 import { DEFAULT_POLICIES_TEXT } from './constants';
 import { slotsRequireNoRefund } from './utils/bookingPolicy';
@@ -108,7 +106,6 @@ const App: React.FC = () => {
     const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
     const [isBookingTypeModalOpen, setIsBookingTypeModalOpen] = useState(false);
     const [isClassInfoModalOpen, setIsClassInfoModalOpen] = useState(false);
-    const [isPrerequisiteModalOpen, setIsPrerequisiteModalOpen] = useState(false);
     const [showMyClassesPrompt, setShowMyClassesPrompt] = useState(false);
     const [hasCheckedMyClasses, setHasCheckedMyClasses] = useState(false);
     const [clientEmail, setClientEmail] = useState<string | null>(null);
@@ -306,12 +303,10 @@ const App: React.FC = () => {
         }
     }, [loading, hasCheckedMyClasses, view]);
 
-    const handleWelcomeSelect = (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio' | 'group_class_wizard' | 'single_class_wizard' | 'wheel_course' | 'custom_experience') => {
+    const handleWelcomeSelect = (userType: 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio' | 'group_class_wizard' | 'single_class_wizard' | 'wheel_course' | 'custom_experience') => {
         setPrefillTechnique(null);
-        if (userType === 'new') {
-            setView('intro_classes');
-        } else if (userType === 'returning') {
-            setIsPrerequisiteModalOpen(true);
+        if (userType === 'returning') {
+            setView('techniques');
         } else if (userType === 'group_experience') {
             setView('group_experience');
         } else if (userType === 'couples_experience') {
@@ -340,10 +335,6 @@ const App: React.FC = () => {
         }
     };
     
-    const handlePrerequisiteConfirm = () => {
-        setIsPrerequisiteModalOpen(false);
-        setView('techniques');
-    };
     
     const handleCourseScheduleSelect = (schedule: CourseSchedule) => {
         setSelectedCourseSchedule(schedule);
@@ -431,17 +422,6 @@ const App: React.FC = () => {
         }
     };
     
-    const handleIntroClassConfirm = (product: Product, session: IntroClassSession & { technique?: any }) => {
-        if (session.technique) {
-            // Es couples experience
-            setBookingDetails({ product, slots: [session], userInfo: null, technique: session.technique });
-        } else {
-            // Es intro class
-            setBookingDetails({ product, slots: [session], userInfo: null });
-        }
-        setView('summary');
-    };
-
     const handleScheduleConfirm = (slots: TimeSlot[]) => {
         setBookingDetails(prev => ({ ...prev, slots }));
         setView('summary');
@@ -627,12 +607,6 @@ const App: React.FC = () => {
         }
     }, [view, appData, loadAdditionalData]);
 
-    // Load bookings data when needed for intro classes view
-    useEffect(() => {
-        if (view === 'intro_classes' && appData && appData.bookings.length === 0) {
-            loadAdditionalData('bookings', appData);
-        }
-    }, [view, appData, loadAdditionalData]);
 
     // Load admin data when needed for confirmation view
     // Carga bankDetails y confirmationMessage al entrar a la vista de confirmación si faltan
@@ -769,8 +743,6 @@ const App: React.FC = () => {
                 // Si la técnica es open_studio, nunca mostrar PackageSelector
                 if (technique === 'open_studio') return null;
                 return <PackageSelector onSelect={handlePackageSelect} technique={technique} products={appData.products} />;
-            case 'intro_classes':
-                return <IntroClassSelector onConfirm={handleIntroClassConfirm} appData={appData} onBack={() => setView('welcome')} onAppDataUpdate={(updates) => setAppData(prev => prev ? { ...prev, ...updates } : null)} />;
             case 'schedule':
                 if (!bookingDetails.product || bookingDetails.product.type !== 'CLASS_PACKAGE' || !bookingMode) return <WelcomeSelector onSelect={handleWelcomeSelect} />;
                 return <ScheduleSelector 
@@ -785,11 +757,7 @@ const App: React.FC = () => {
             case 'summary':
                 if (!bookingDetails.product) return <WelcomeSelector onSelect={handleWelcomeSelect} />;
                 const handleBackFromSummary = () => {
-                    if (bookingDetails.product?.type === 'INTRODUCTORY_CLASS') {
-                        setView('intro_classes');
-                    } else {
-                        setView('schedule');
-                    }
+                    setView('schedule');
                 };
                 return <BookingSummary 
                     bookingDetails={bookingDetails} 
@@ -1210,13 +1178,6 @@ const App: React.FC = () => {
             )}
             {isClassInfoModalOpen && bookingDetails.product && (
                 <ClassInfoModal product={bookingDetails.product} onConfirm={handleClassInfoConfirm} onClose={() => setIsClassInfoModalOpen(false)} />
-            )}
-            {isPrerequisiteModalOpen && (
-                <PrerequisiteModal 
-                    onClose={() => setIsPrerequisiteModalOpen(false)}
-                    onConfirm={handlePrerequisiteConfirm}
-                    onGoToIntro={() => { setIsPrerequisiteModalOpen(false); setView('intro_classes'); }}
-                />
             )}
             {isCouplesTourModalOpen && (
                 <CouplesTourModal

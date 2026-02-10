@@ -20,7 +20,7 @@ export const FEATURE_FLAGS = {
    * Clases Sueltas
    * Permite reservar clases individuales o grupales (Torno, Modelado, Pintura)
    */
-  CLASES_SUELTAS: false,
+  CLASES_SUELTAS: true,
   
   /**
    * Curso de Torno desde Cero

@@ -12,9 +12,16 @@ export interface SingleClassWizardProps {
   isLoading?: boolean;
 }
 
-type ClassType = 'individual' | 'group' | null;
-type Step = 'class-type' | 'technique' | 'participants' | 'date' | 'confirmation';
+type Step = 'technique' | 'date' | 'confirmation';
 
+/**
+ * SingleClassWizard - Flujo para reservar UNA SOLA CLASE
+ * No permite grupos - es para 1 persona únicamente
+ * Pasos: Técnica → Fecha/Hora → Confirmación
+ * 
+ * IMPORTANTE: Las piezas se eligen en el taller, no en la reserva.
+ * Para pintura, se muestra costo mínimo de $25.
+ */
 export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
   pieces: initialPieces,
   availableSlots = [],
@@ -24,11 +31,9 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
   onBack,
   isLoading = false
 }) => {
-  const [classType, setClassType] = useState<ClassType>(null);
-  const [step, setStep] = useState<Step>('class-type');
+  const participants = 1; // SIEMPRE 1 persona para Clase Suelta
+  const [step, setStep] = useState<Step>('technique');
   const [technique, setTechnique] = useState<GroupTechnique>(initialTechnique || 'hand_modeling');
-  const [participants, setParticipants] = useState<number>(1);
-  const [selectedPiece, setSelectedPiece] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [pricing, setPricing] = useState<ExperiencePricing | null>(null);
@@ -46,30 +51,19 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
     hand_modeling: {
       label: '🤚 Modelado a Mano',
       desc: 'Crea con tus manos usando arcilla',
-      price: 45,
-      maxParticipants: 22
+      price: 45
     },
     potters_wheel: {
       label: '🎡 Torno Alfarero',
       desc: 'Trabaja en la rueda de alfarero',
-      price: 55,
-      maxParticipants: 8
+      price: 55
     },
     painting: {
       label: '🎨 Pintura de Piezas',
-      desc: 'Pinta piezas pre-moldeadas',
-      price: 0,  // Depende de la pieza
-      maxParticipants: 22
+      desc: 'Pinta piezas pre-moldeadas. La pieza se elige en el taller.',
+      price: 25  // Precio mínimo - las piezas se eligen en el taller
     }
   };
-
-  // Validate participants on technique change
-  useEffect(() => {
-    const maxForTechnique = TECHNIQUE_INFO[technique].maxParticipants;
-    if (participants > maxForTechnique) {
-      setParticipants(maxForTechnique);
-    }
-  }, [technique]);
 
   // Initialize selected date with first available date
   useEffect(() => {
@@ -81,67 +75,32 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
     }
   }, [availableSlots, selectedDate]);
 
-  // Calculate pricing when technique or participants change
+  // Calculate pricing when technique changes
   useEffect(() => {
-    if (step === 'participants' || step === 'confirmation') {
-      calculatePricing();
-    }
-  }, [technique, participants, selectedPiece, step]);
+    calculatePricing();
+  }, [technique]);
 
   const calculatePricing = async () => {
     setLoadingPricing(true);
     try {
-      let basePricePerPerson = TECHNIQUE_INFO[technique].price;
-      
-      // Si es pintura, usar el precio de la pieza seleccionada
-      if (technique === 'painting' && selectedPiece) {
-        const piece = initialPieces.find(p => p.id === selectedPiece);
-        if (piece) {
-          basePricePerPerson = piece.basePrice;
-        }
-      }
-      
+      const basePricePerPerson = TECHNIQUE_INFO[technique].price;
       const total = basePricePerPerson * participants;
       
       setPricing({
-        pieces: selectedPiece ? [{
-          pieceId: selectedPiece,
-          pieceName: initialPieces.find(p => p.id === selectedPiece)?.name || 'Pieza seleccionada',
-          basePrice: basePricePerPerson,
-          quantity: participants
-        }] : [],
+        pieces: [],
         guidedOption: 'none',
         subtotalPieces: total,
         total
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error calculating pricing');
+      setError(err instanceof Error ? err.message : 'Error calculando precio');
     } finally {
       setLoadingPricing(false);
     }
   };
 
-  const handleClassTypeSelect = (type: ClassType) => {
-    setClassType(type);
-    if (type === 'individual') {
-      setParticipants(1);
-    } else {
-      setParticipants(2);
-    }
-    setStep('technique');
-    setError('');
-  };
-
   const handleNext = () => {
     if (step === 'technique') {
-      setError('');
-      setStep('participants');
-    } else if (step === 'participants') {
-      // Validate painting piece selection if needed
-      if (technique === 'painting' && !selectedPiece) {
-        setError('Por favor selecciona una pieza para pintar');
-        return;
-      }
       setError('');
       setStep('date');
     } else if (step === 'date') {
@@ -151,17 +110,14 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
   };
 
   const handleBack = () => {
-    if (step === 'class-type') {
+    const stepOrder: Step[] = ['technique', 'date', 'confirmation'];
+    const currentIdx = stepOrder.indexOf(step);
+    
+    // Si es el primer paso, regresar al welcome
+    if (currentIdx === 0) {
       onBack();
-    } else if (step === 'technique') {
-      setStep('class-type');
-      setClassType(null);
-    } else {
-      const stepsOrder: Step[] = ['class-type', 'technique', 'participants', 'date', 'confirmation'];
-      const currentIdx = stepsOrder.indexOf(step);
-      if (currentIdx > 0) {
-        setStep(stepsOrder[currentIdx - 1]);
-      }
+    } else if (currentIdx > 0) {
+      setStep(stepOrder[currentIdx - 1]);
     }
   };
 
@@ -181,54 +137,26 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
     }
   };
 
-  const progressSteps: Step[] = ['class-type', 'technique', 'participants', 'date', 'confirmation'];
-  const currentStepIndex = progressSteps.indexOf(step);
+  // Pasos: Técnica → Fecha → Confirmación (3 pasos)
+  const validSteps: Step[] = ['technique', 'date', 'confirmation'];
+  const currentStepIndex = validSteps.indexOf(step);
+  const progressPercent = (currentStepIndex / (validSteps.length - 1)) * 100;
 
   return (
     <div className="w-full max-w-2xl mx-auto px-4 py-8">
       {/* Progress Bar */}
-      {step !== 'class-type' && (
+      {step !== 'technique' && (
         <div className="mb-8">
           <div className="flex justify-between text-sm text-gray-600 mb-2">
-            <span>Paso {currentStepIndex} de {progressSteps.length - 1}</span>
-            <span>{Math.round((currentStepIndex / (progressSteps.length - 1)) * 100)}%</span>
+            <span>Paso {currentStepIndex + 1} de {validSteps.length}</span>
+            <span>{Math.round(progressPercent)}%</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div
-              className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${(currentStepIndex / (progressSteps.length - 1)) * 100}%` }}
+              className="bg-brand-primary h-2 rounded-full transition-all duration-300"
+              style={{ width: `${progressPercent}%` }}
             ></div>
           </div>
-        </div>
-      )}
-
-      {/* Step: Select Class Type */}
-      {step === 'class-type' && (
-        <div className="space-y-6">
-          <div>
-            <h3 className="text-2xl font-bold mb-2">¿Qué tipo de clase prefieres?</h3>
-            <p className="text-gray-600">Elige si deseas una clase para una persona o para un grupo</p>
-          </div>
-
-          <div className="space-y-3">
-            <button
-              onClick={() => handleClassTypeSelect('individual')}
-              className="w-full p-6 rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all text-left"
-            >
-              <div className="text-2xl font-bold mb-2">👤 Clase Individual</div>
-              <p className="text-gray-600">Solo para mí - Experiencia personalizada de 1 persona</p>
-            </button>
-
-            <button
-              onClick={() => handleClassTypeSelect('group')}
-              className="w-full p-6 rounded-lg border-2 border-gray-200 hover:border-green-500 hover:bg-green-50 transition-all text-left"
-            >
-              <div className="text-2xl font-bold mb-2">👥 Clase Grupal</div>
-              <p className="text-gray-600">Con amigos o familia - Elige cuántas personas y la técnica</p>
-            </button>
-          </div>
-
-          {error && <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg">{error}</div>}
         </div>
       )}
 
@@ -237,9 +165,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
         <div className="space-y-6">
           <div>
             <h3 className="text-2xl font-bold mb-2">¿Qué técnica te interesa?</h3>
-            <p className="text-gray-600">
-              {classType === 'individual' ? 'Elige tu técnica favorita' : 'Todos practicarán la misma técnica'}
-            </p>
+            <p className="text-gray-600">Elige la técnica que quieres practicar en tu clase</p>
           </div>
 
           <div className="space-y-3">
@@ -249,7 +175,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                 onClick={() => setTechnique(tech)}
                 className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
                   technique === tech
-                    ? 'border-blue-500 bg-blue-50'
+                    ? 'border-brand-primary bg-brand-primary/5'
                     : 'border-gray-200 hover:border-gray-300'
                 }`}
               >
@@ -257,16 +183,9 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                   <div>
                     <div className="font-bold text-lg">{TECHNIQUE_INFO[tech].label}</div>
                     <div className="text-sm text-gray-600">{TECHNIQUE_INFO[tech].desc}</div>
-                    <div className="text-xs text-blue-600 mt-1">
-                      Máx: {TECHNIQUE_INFO[tech].maxParticipants} {classType === 'individual' ? 'persona' : 'personas'}
-                    </div>
                   </div>
                   <div className="text-right">
-                    {tech === 'painting' ? (
-                      <div className="text-sm text-blue-600 font-bold">Depende<br />de pieza</div>
-                    ) : (
-                      <div className="text-2xl font-bold text-blue-600">${TECHNIQUE_INFO[tech].price}</div>
-                    )}
+                    <div className="text-2xl font-bold text-brand-primary">${TECHNIQUE_INFO[tech].price}</div>
                   </div>
                 </div>
               </button>
@@ -274,8 +193,9 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
           </div>
 
           {technique === 'painting' && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-              Precio: Desde $18 por la pieza básica; en el taller puedes elegir otras piezas y pagar solo la diferencia.
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              <p className="font-semibold mb-2">💡 Costo de la Pieza</p>
+              <p>El precio mostrado ($25) es el costo mínimo de la pieza. En el taller podrás elegir entre diferentes piezas con sus respectivos precios.</p>
             </div>
           )}
 
@@ -283,103 +203,14 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
         </div>
       )}
 
-      {/* Step: Number of Participants & Piece Selection */}
-      {step === 'participants' && (
-        <div className="space-y-6">
-          <div>
-            <h3 className="text-2xl font-bold mb-2">
-              {classType === 'individual' ? 'Confirma 1 Persona' : 'Cantidad de Personas'}
-            </h3>
-            <p className="text-gray-600">
-              {classType === 'individual' 
-                ? 'Esta es una experiencia para ti' 
-                : `¿Cuántas personas participarán? (Máx: ${TECHNIQUE_INFO[technique].maxParticipants})`
-              }
-            </p>
-          </div>
 
-          <div className="bg-white p-6 rounded-lg border border-gray-200">
-            {classType === 'individual' ? (
-              <div className="text-center">
-                <div className="text-5xl font-bold text-blue-600 mb-2">1</div>
-                <div className="text-gray-600">Persona</div>
-              </div>
-            ) : (
-              <>
-                <input
-                  type="range"
-                  min="2"
-                  max={TECHNIQUE_INFO[technique].maxParticipants}
-                  value={participants}
-                  onChange={(e) => setParticipants(parseInt(e.target.value))}
-                  className="w-full"
-                />
-                <div className="text-center mt-4">
-                  <div className="text-5xl font-bold text-blue-600 mb-2">{participants}</div>
-                  <div className="text-gray-600">{participants === 1 ? 'persona' : 'personas'}</div>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Piece Selection for Painting */}
-          {technique === 'painting' && (
-            <div className="space-y-3">
-              <label className="block text-sm font-bold">Elige pieza para pintar:</label>
-              <div className="grid grid-cols-2 gap-3 max-h-48 overflow-y-auto">
-                {initialPieces.filter((p) => p.isActive).map((piece) => (
-                  <button
-                    key={piece.id}
-                    onClick={() => setSelectedPiece(piece.id)}
-                    className={`p-3 rounded-lg border-2 transition-all text-left text-sm ${
-                      selectedPiece === piece.id
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    {piece.imageUrl && (
-                      <img
-                        src={piece.imageUrl}
-                        alt={piece.name}
-                        className="w-full h-20 object-cover rounded mb-1"
-                      />
-                    )}
-                    <div className="font-bold">{piece.name}</div>
-                    <div className="text-blue-600 font-bold">${piece.basePrice}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Pricing Preview */}
-          {pricing && (
-            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-              <div className="flex justify-between mb-2">
-                <span>{TECHNIQUE_INFO[technique].label}</span>
-                {technique === 'painting' && selectedPiece ? (
-                  <span className="font-bold">${pricing.subtotalPieces / participants} x {participants}</span>
-                ) : (
-                  <span className="font-bold">${TECHNIQUE_INFO[technique].price} x {participants}</span>
-                )}
-              </div>
-              <div className="flex justify-between text-lg font-bold pt-2 border-t border-blue-300 text-blue-600">
-                <span>Total:</span>
-                <span>${pricing.total}</span>
-              </div>
-            </div>
-          )}
-
-          {error && <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg">{error}</div>}
-        </div>
-      )}
 
       {/* Step: Date & Time Selection */}
       {step === 'date' && (
         <div className="space-y-6">
           <div>
             <h3 className="text-2xl font-bold mb-2">🕐 Elige tu Horario</h3>
-            <p className="text-gray-600">Disponible de 9 AM a 7 PM en intervalos de 30 minutos</p>
+            <p className="text-gray-600">Selecciona la fecha y hora de tu clase</p>
           </div>
 
           {availableSlots.length > 0 ? (
@@ -479,8 +310,8 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                                   }}
                                   className={`p-2 rounded-lg border-2 transition-all text-center font-bold text-sm ${
                                     isSelected
-                                      ? 'border-blue-500 bg-blue-100 text-blue-700 ring-2 ring-blue-300'
-                                      : 'border-gray-200 bg-white text-gray-700 hover:border-blue-400 hover:bg-blue-50'
+                                      ? 'border-brand-primary bg-brand-primary/10 text-brand-primary ring-2 ring-brand-primary/30'
+                                      : 'border-gray-200 bg-white text-gray-700 hover:border-brand-primary hover:bg-brand-primary/5'
                                   }`}
                                 >
                                   {dayNum}
@@ -509,7 +340,6 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                   </div>
                   
                   {(() => {
-                    // Obtener TODOS los slots para la fecha (disponibles e indisponibles)
                     const slotsForDate = availableSlots.filter(s => s.date === selectedDate);
                     const allTimes = [...new Set(slotsForDate.map(s => s.time))].sort();
 
@@ -522,7 +352,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                     }
 
                     return (
-                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 p-2 bg-gray-50 rounded-lg">
+                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 p-3 bg-gray-50 rounded-lg">
                         {allTimes.map(time => {
                           const slot = slotsForDate.find(s => s.time === time);
                           const isSelected = selectedSlot?.time === time && selectedSlot?.date === selectedDate;
@@ -547,9 +377,9 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                                 title={isBlocked ? 'Bloqueado por curso' : canBook ? 'Disponible' : 'Sin cupos'}
                                 className={`p-2 rounded-lg border-2 transition-all text-center font-bold text-xs ${
                                   isSelected
-                                    ? 'border-blue-500 bg-blue-500 text-white ring-2 ring-blue-300'
+                                    ? 'border-brand-primary bg-brand-primary text-white ring-2 ring-brand-primary/30'
                                     : canBook
-                                    ? 'border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:bg-blue-50 cursor-pointer'
+                                    ? 'border-gray-300 bg-white text-gray-700 hover:border-brand-primary hover:bg-brand-primary/5 cursor-pointer'
                                     : 'border-gray-300 bg-gray-200 text-gray-500 cursor-not-allowed opacity-60'
                                 }`}
                               >
@@ -603,44 +433,41 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
       {step === 'confirmation' && pricing && (
         <div className="space-y-6">
           <div>
-            <h3 className="text-2xl font-bold mb-2">Confirma tu Clase</h3>
-            <p className="text-gray-600">Revisa los detalles antes de continuar</p>
+            <h3 className="text-2xl font-bold mb-2">✓ Confirma tu Clase Suelta</h3>
+            <p className="text-gray-600">Revisa los detalles de tu reserva</p>
           </div>
 
           <div className="bg-white p-6 rounded-lg border border-gray-200 space-y-4">
             <div className="flex justify-between pb-4 border-b">
-              <span>Tipo de Clase:</span>
-              <span className="font-bold">{classType === 'individual' ? 'Individual' : 'Grupal'}</span>
-            </div>
-            <div className="flex justify-between pb-4 border-b">
-              <span>Técnica:</span>
+              <span className="text-gray-600">Técnica:</span>
               <span className="font-bold">{TECHNIQUE_INFO[technique].label}</span>
             </div>
+
             <div className="flex justify-between pb-4 border-b">
-              <span>Cantidad de Personas:</span>
-              <span className="font-bold">{participants}</span>
+              <span className="text-gray-600">Cantidad de Personas:</span>
+              <span className="font-bold">1 (Clase Suelta)</span>
             </div>
+
             <div className="flex justify-between pb-4 border-b">
-              <span>Precio por Persona:</span>
-              {technique === 'painting' && selectedPiece ? (
-                <span className="font-bold">${pricing.subtotalPieces / participants}</span>
-              ) : (
-                <span className="font-bold">${TECHNIQUE_INFO[technique].price}</span>
-              )}
+              <span className="text-gray-600">Precio:</span>
+              <span className="font-bold">${TECHNIQUE_INFO[technique].price}</span>
             </div>
-            {selectedPiece && (
-              <div className="flex justify-between pb-4 border-b">
-                <span>Pieza:</span>
-                <span className="font-bold">{initialPieces.find(p => p.id === selectedPiece)?.name}</span>
+
+            {technique === 'painting' && (
+              <div className="flex justify-between pb-4 border-b text-sm text-amber-700 bg-amber-50 p-3 rounded">
+                <span>Nota:</span>
+                <span className="text-right">La pieza final se elige en el taller</span>
               </div>
             )}
+
             <div className="flex justify-between pb-4 border-b">
-              <span>Horario:</span>
-              <span className="font-bold">{selectedSlot?.date} {selectedSlot?.time}</span>
+              <span className="text-gray-600">Horario:</span>
+              <span className="font-bold">{selectedSlot?.time} • {new Date(selectedSlot?.date || '').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
             </div>
-            <div className="flex justify-between text-lg font-bold pt-4 text-blue-600">
+
+            <div className="flex justify-between text-lg font-bold pt-4 text-brand-primary">
               <span>Total a Pagar:</span>
-              <span>${pricing.total}</span>
+              <span className="text-2xl">${pricing.total}</span>
             </div>
           </div>
         </div>
@@ -651,23 +478,23 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
         <button
           onClick={handleBack}
           disabled={isLoading}
-          className="px-6 py-3 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+          className="px-6 py-3 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 font-medium transition-colors"
         >
           ← Atrás
         </button>
         {step !== 'confirmation' ? (
           <button
             onClick={handleNext}
-            disabled={isLoading}
-            className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            disabled={isLoading || (step === 'date' && !selectedSlot)}
+            className="flex-1 px-6 py-3 bg-brand-primary text-white rounded-lg hover:bg-brand-primary/90 disabled:opacity-50 font-medium transition-colors"
           >
             Siguiente →
           </button>
         ) : (
           <button
             onClick={handleConfirm}
-            disabled={isLoading}
-            className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+            disabled={isLoading || !selectedSlot}
+            className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium transition-colors"
           >
             {isLoading ? 'Procesando...' : 'Confirmar Clase'}
           </button>

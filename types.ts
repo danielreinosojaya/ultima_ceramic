@@ -4,7 +4,6 @@ export type AppView =
   | 'welcome'
   | 'techniques'
   | 'packages'
-  | 'intro_classes'
   | 'schedule'
   | 'summary'
   | 'group_experience'

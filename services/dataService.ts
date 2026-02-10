@@ -2777,8 +2777,9 @@ export const generateTimeSlots = (
   const slots: DynamicTimeSlot[] = [];
   
   // Configuración: qué horas abren cada día
+  // CRÍTICO: Lunes (1) EXCLUIDO para Pintura (regla de negocio)
   const hoursPerDay = [
-    { start: 9, end: 19, days: [1, 2, 3, 4, 5] }, // Lunes-Viernes: 9 AM a 7 PM
+    { start: 9, end: 19, days: [2, 3, 4, 5] }, // Martes-Viernes: 9 AM a 7 PM (LUNES EXCLUIDO)
     { start: 9, end: 17, days: [6] } // Sábado: 9 AM a 5 PM
     // Domingo (0) no aparece, así que cerrado
   ];

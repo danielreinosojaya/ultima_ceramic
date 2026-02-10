@@ -154,28 +154,6 @@ export const DEFAULT_PRODUCTS: Product[] = [
     isActive: true
   },
   {
-    id: "4",
-    type: 'INTRODUCTORY_CLASS',
-    name: "Clase Introductoria al Torno",
-    price: 75,
-    description: "Una experiencia única para un primer contacto con la arcilla y el torno. ¡Ideal para principiantes!",
-    imageUrl: "https://images.unsplash.com/photo-1578701925695-8a0327f495e0?q=80&w=1968&auto=format&fit=crop",
-    details: {
-      technique: 'potters_wheel',
-      duration: "2.5 horas",
-      durationHours: 2.5,
-      activities: ["Demostración de amasado y centrado.", "Práctica guiada para crear tu primera pieza.", "Decoración básica con engobes.", "La pieza será esmaltada por el taller y estará lista en 3 semanas."],
-      generalRecommendations: "¡Solo trae tu curiosidad! Nosotros nos encargamos del resto.",
-      materials: "Todo incluido: arcilla, herramientas, delantal y la quema de una pieza."
-    },
-    isActive: true,
-    schedulingRules: [
-        { id: '6-1000-1', dayOfWeek: 6, time: '10:00', instructorId: 1, capacity: 6 },
-        { id: '6-1500-2', dayOfWeek: 6, time: '15:00', instructorId: 2, capacity: 6 }
-    ],
-    overrides: []
-  },
-  {
    id: "5",
     type: 'GROUP_EXPERIENCE',
     name: "Experiencia Grupal en Cerámica",
