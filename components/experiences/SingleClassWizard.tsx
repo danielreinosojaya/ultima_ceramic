@@ -51,9 +51,9 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
     }
   }, [initialTechnique]);
 
-  // Cargar horarios fijos del calendario
+  // Cargar horarios fijos del calendario Y verificar disponibilidad en PARALELO
   useEffect(() => {
-    const loadAvailability = async () => {
+    const loadData = async () => {
       try {
         const result = await dataService.getAvailability();
         setAvailability(result);
@@ -61,7 +61,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
         console.error('[SingleClassWizard] Error loading availability:', err);
       }
     };
-    loadAvailability();
+    loadData();
   }, []);
 
   const TECHNIQUE_INFO = {
@@ -100,24 +100,29 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
       setCheckingAvailability(true);
       const slotsForDate = availableSlots.filter(s => s.date === selectedDate);
       const allTimes = [...new Set(slotsForDate.map(s => s.time))].sort();
-      const cacheKey = `${selectedDate}-${technique}`;
       
-      // Verificar cada horario para esta fecha
+      // Verificar cada horario en PARALELO en lugar de secuencial
+      const results = await Promise.allSettled(
+        allTimes.map(time =>
+          dataService.checkSlotAvailability(selectedDate, time, technique, participants)
+        )
+      );
+      
       const newCache: Record<string, any> = {};
-      
-      for (const time of allTimes) {
+      results.forEach((result, index) => {
+        const time = allTimes[index];
         const slotKey = `${selectedDate}-${time}`;
-        try {
-          const result = await dataService.checkSlotAvailability(selectedDate, time, technique, participants);
+        
+        if (result.status === 'fulfilled') {
           newCache[slotKey] = {
-            available: result.capacity?.available ?? 0,
-            total: result.capacity?.max ?? 22,
-            canBook: result.available,
-            message: result.message,
-            openedByLargeGroup: result.openedByLargeGroup ?? false
+            available: result.value.capacity?.available ?? 0,
+            total: result.value.capacity?.max ?? 22,
+            canBook: result.value.available,
+            message: result.value.message,
+            openedByLargeGroup: result.value.openedByLargeGroup ?? false
           };
-        } catch (err) {
-          console.warn(`Error checking ${slotKey}:`, err);
+        } else {
+          console.warn(`Error checking ${slotKey}:`, result.reason);
           newCache[slotKey] = {
             available: 0,
             total: 22,
@@ -126,14 +131,14 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
             openedByLargeGroup: false
           };
         }
-      }
+      });
       
       setSlotAvailabilityCache(newCache);
       setCheckingAvailability(false);
     };
     
     verifySlotAvailability();
-  }, [selectedDate, technique]);
+  }, [selectedDate, technique, availableSlots, participants]);
 
   // Calculate pricing when technique changes
   useEffect(() => {
@@ -435,12 +440,20 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
               {/* Time Grid for Selected Date */}
               {selectedDate && (
                 <div>
-                  <div className="text-sm font-bold text-gray-700 mb-3 uppercase tracking-wide">
-                    ⏰ {(() => {
-                      const [year, month, day] = selectedDate.split('-').map(Number);
-                      const date = new Date(year, month - 1, day);
-                      return date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
-                    })()}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="text-sm font-bold text-gray-700 uppercase tracking-wide">
+                      ⏰ {(() => {
+                        const [year, month, day] = selectedDate.split('-').map(Number);
+                        const date = new Date(year, month - 1, day);
+                        return date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+                      })()}
+                    </div>
+                    {checkingAvailability && (
+                      <div className="text-xs text-gray-500 flex items-center gap-1">
+                        <div className="w-3 h-3 rounded-full bg-brand-primary animate-pulse"></div>
+                        Verificando disponibilidad...
+                      </div>
+                    )}
                   </div>
                   
                   {(() => {
@@ -449,7 +462,8 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                     // ===== VALIDACIÓN SINGLE_CLASS =====
                     // Modelado (hand_modeling) y Torno (potters_wheel) con 1 persona:
                     // Solo mostrar horarios fijos del calendario o slots abiertos por 3+
-                    if ((technique === 'hand_modeling' || technique === 'potters_wheel') && participants === 1 && availability) {
+                    // Guard: solo filtrar si ya tenemos availability Y no estamos cargando cache
+                    if ((technique === 'hand_modeling' || technique === 'potters_wheel') && participants === 1 && availability && !checkingAvailability) {
                       const dayOfWeek = new Date(`${selectedDate}T00:00:00`).getDay();
                       const dayKeys = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
                       const dayKey = dayKeys[dayOfWeek] as any;
