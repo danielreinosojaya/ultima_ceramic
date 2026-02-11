@@ -33,19 +33,19 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
 
   const TECHNIQUE_INFO = {
     hand_modeling: {
-      label: '🤚 Modelado a Mano',
-      desc: 'Crea con tus manos usando arcilla',
+      label: 'Modelado a Mano',
+      desc: 'Crea una pieza con tus manos',
       price: 45,
       maxCapacity: 22
     },
     potters_wheel: {
-      label: '🎡 Torno Alfarero',
-      desc: 'Trabaja en la rueda de alfarero',
+      label: 'Torno Alfarero',
+      desc: 'Tecnica tradicional que requiere coordinacion y presicion',
       price: 55,
       maxCapacity: 8
     },
     painting: {
-      label: '🎨 Pintura de Piezas',
+      label: 'Pintura de Piezas',
       desc: 'Pinta piezas pre-moldeadas',
       price: 0,  // Depende de la pieza
       maxCapacity: 22
