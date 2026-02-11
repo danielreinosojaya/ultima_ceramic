@@ -17,7 +17,13 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           // Core React - siempre cargado primero
-          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) {
+          if (
+            id.includes('node_modules/react-dom') ||
+            id.includes('node_modules/react/') ||
+            id.includes('node_modules/scheduler') ||
+            id.includes('node_modules/react-is') ||
+            id.includes('node_modules/use-sync-external-store')
+          ) {
             return 'vendor-react';
           }
           
