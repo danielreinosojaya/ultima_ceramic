@@ -365,8 +365,8 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                                   }}
                                   className={`p-2 rounded-lg border-2 transition-all text-center font-bold text-sm ${
                                     isSelected
-                                      ? 'border-brand-primary bg-brand-primary/10 text-brand-primary ring-2 ring-brand-primary/30'
-                                      : 'border-gray-200 bg-white text-gray-700 hover:border-brand-primary hover:bg-brand-primary/5'
+                                      ? 'border-blue-500 bg-blue-100 text-blue-700 ring-2 ring-blue-300'
+                                      : 'border-gray-200 bg-white text-gray-700 hover:border-blue-400 hover:bg-blue-50'
                                   }`}
                                 >
                                   {dayNum}
@@ -411,7 +411,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                     }
 
                     return (
-                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 p-3 bg-gray-50 rounded-lg">
+                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 p-2 bg-gray-50 rounded-lg">
                         {allTimes.map(time => {
                           const slotKey = `${selectedDate}-${time}`;
                           const slotInfo = slotAvailabilityCache[slotKey];
@@ -438,9 +438,9 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                                 title={canBook ? 'Disponible' : 'Sin cupos'}
                                 className={`p-2 rounded-lg border-2 transition-all text-center font-bold text-xs ${
                                   isSelected
-                                    ? 'border-brand-primary bg-brand-primary text-white ring-2 ring-brand-primary/30'
+                                    ? 'border-blue-500 bg-blue-500 text-white ring-2 ring-blue-300'
                                     : canBook
-                                    ? 'border-gray-300 bg-white text-gray-700 hover:border-brand-primary hover:bg-brand-primary/5 cursor-pointer'
+                                    ? 'border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:bg-blue-50 cursor-pointer'
                                     : 'border-gray-300 bg-gray-200 text-gray-500 cursor-not-allowed opacity-60'
                                 }`}
                               >
@@ -528,7 +528,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
               <span className="font-bold">{selectedSlot?.time} • {new Date(selectedSlot?.date || '').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
             </div>
 
-            <div className="flex justify-between text-lg font-bold pt-4 text-brand-primary">
+            <div className="flex justify-between text-lg font-bold pt-4 text-blue-600">
               <span>Total a Pagar:</span>
               <span className="text-2xl">${pricing.total}</span>
             </div>
@@ -549,7 +549,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
           <button
             onClick={handleNext}
             disabled={isLoading || (step === 'date' && !selectedSlot)}
-            className="flex-1 px-6 py-3 bg-brand-primary text-white rounded-lg hover:bg-brand-primary/90 disabled:opacity-50 font-medium transition-colors"
+            className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium transition-colors"
           >
             Siguiente →
           </button>
