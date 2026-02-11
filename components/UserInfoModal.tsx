@@ -37,7 +37,7 @@ const InputField: React.FC<{
     disabled?: boolean;
 }> = ({ id, name, label, value, onChange, placeholder, type = 'text', error, icon, required, disabled }) => (
     <div>
-        <label htmlFor={id} className="block text-sm font-semibold text-brand-secondary mb-2 px-0.5">{label}</label>
+        <label htmlFor={id} className="block text-sm font-bold text-brand-primary mb-2 px-0.5">{label}</label>
         <div className="relative">
             {icon && (
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-brand-secondary">
@@ -51,7 +51,7 @@ const InputField: React.FC<{
                 value={value}
                 onChange={onChange}
                 placeholder={placeholder}
-                className={`w-full ${icon ? 'pl-10' : 'pl-3'} pr-3 py-2 border rounded-lg shadow-subtle focus:ring-2 focus:ring-brand-primary focus:shadow-premium focus:border-brand-primary transition-colors ${error ? 'border-red-500' : 'border-brand-border'} disabled:bg-gray-100`}
+                className={`w-full ${icon ? 'pl-10' : 'pl-3'} pr-3 py-2.5 border-2 rounded-lg shadow-subtle focus:ring-2 focus:ring-brand-primary focus:shadow-premium focus:border-brand-primary transition-colors ${error ? 'border-red-500' : 'border-gray-300'} hover:border-gray-400 disabled:bg-gray-100`}
                 aria-invalid={!!error}
                 aria-describedby={error ? `${id}-error` : undefined}
                 required={required}
@@ -186,12 +186,12 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
         >
             <div className="min-h-screen flex items-center justify-center p-3 sm:p-6">
                 <div
-                    className="bg-white rounded-xl sm:rounded-2xl shadow-premium p-4 sm:p-6 w-full max-w-2xl my-4 animate-fade-in-up"
+                    className="bg-gradient-to-br from-white/95 via-gray-50 to-gray-100 rounded-2xl sm:rounded-3xl shadow-2xl border-2 border-white p-6 sm:p-8 w-full max-w-2xl my-4 animate-fade-in-up"
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <div className="text-center mb-4 sm:mb-6">
-                        <h2 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-brand-primary to-brand-accent bg-clip-text text-transparent mb-2">Información del Cliente</h2>
-                        <p className="text-brand-secondary text-sm">Completa tus datos para continuar.</p>
+                    <div className="text-center mb-6 sm:mb-8">
+                        <h2 className="text-4xl sm:text-5xl font-black bg-gradient-to-r from-brand-primary via-brand-accent to-brand-primary bg-clip-text text-transparent mb-3 drop-shadow-sm">Información del Cliente</h2>
+                        <p className="text-brand-secondary text-sm font-medium">Completa tus datos para continuar.</p>
                     </div>
                     {/* Mensaje de error general */}
                     {Object.keys(errors).length > 0 && (
@@ -200,7 +200,7 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                       </div>
                     )}
                     <form onSubmit={handleSubmit} noValidate>
-                        <div className="space-y-6">
+                        <div className="space-y-8">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                                 <InputField 
                                     id="firstName" label="Nombre" value={firstName} onChange={(e) => setFirstName(e.target.value)}
@@ -216,7 +216,7 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                                 placeholder="tu@email.com" type="email" error={errors.email} icon={<MailIcon className="w-5 h-5"/>} required
                             />
                         <div>
-                            <label htmlFor="phone" className="block text-sm font-semibold text-brand-secondary mb-2 px-0.5">Número de Teléfono</label>
+                            <label htmlFor="phone" className="block text-sm font-bold text-brand-primary mb-2 px-0.5">Número de Teléfono</label>
                             <div className={`flex items-center border-2 rounded-lg transition-colors ${isPhoneFocused ? 'ring-2 ring-brand-primary border-brand-primary' : (errors.phone ? 'border-red-500' : 'border-brand-border')}`}> 
                                 <select 
                                     value={country.name} onChange={(e) => setCountry(COUNTRIES.find(c => c.name === e.target.value) || COUNTRIES[0])}
@@ -257,11 +257,11 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
 
                     </div>
                     <div className="mt-6 pt-4 border-t border-brand-border space-y-3">
-                        <div className="flex items-start gap-2 bg-blue-50 border-l-4 border-blue-400 p-3 rounded-r-lg text-blue-800">
-                            <InfoCircleIcon className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                        <div className="flex items-start gap-2 bg-gradient-to-br from-blue-100 to-indigo-100 border-l-4 border-blue-500 p-4 rounded-r-lg text-blue-900 shadow-md">
+                            <InfoCircleIcon className="w-5 h-5 flex-shrink-0 mt-0.5 text-blue-700" />
                             <div>
-                                <h4 className="font-bold text-sm">Facturación Obligatoria</h4>
-                                <p className="text-xs mt-1">Completa los datos para emitir tu factura.</p>
+                                <h4 className="font-bold text-sm text-blue-900">Facturación Obligatoria</h4>
+                                <p className="text-xs mt-1 text-blue-800">Completa los datos para emitir tu factura.</p>
                             </div>
                         </div>
                         <div className="space-y-3 p-3 sm:p-4 border-2 border-brand-border rounded-lg bg-brand-background">
@@ -271,53 +271,53 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                             <InputField id="invoiceEmail" name="email" label="Email de Facturación (opcional)" value={invoiceData.email} onChange={handleInvoiceDataChange} type="email" placeholder="Dejar en blanco para usar el email principal" error={errors.invoiceEmail} />
                         </div>
                     </div>
-                    <div className="mt-6 pt-4 border-t border-brand-border space-y-3">
+                    <div className="mt-8 pt-6 border-t-2 border-gray-200 space-y-4">
                         {requiresNoRefundAcceptance && (
-                            <div className="bg-gradient-to-br from-yellow-50 to-amber-50 border-2 border-yellow-400 shadow-subtle rounded-lg p-3 flex items-start gap-2">
-                                <InfoCircleIcon className="w-5 h-5 flex-shrink-0 mt-0.5 text-yellow-700" />
+                            <div className="bg-gradient-to-br from-yellow-100 to-amber-100 border-2 border-yellow-500 shadow-md rounded-lg p-4 flex items-start gap-3">
+                                <InfoCircleIcon className="w-5 h-5 flex-shrink-0 mt-1 text-yellow-700" />
                                 <div className="flex-1">
                                     <h4 className="font-bold text-sm text-yellow-900">No Reembolsable</h4>
-                                    <p className="text-xs mt-1 text-yellow-800">
+                                    <p className="text-xs mt-1.5 text-yellow-800 font-medium">
                                         Esta reserva <strong>no es reembolsable ni reagendable</strong> (menos de 48h).
                                     </p>
-                                    <div className="flex items-start mt-2">
+                                    <div className="flex items-start mt-3">
                                         <input 
                                             id="accept-no-refund" 
                                             type="checkbox" 
                                             checked={acceptedNoRefund} 
                                             onChange={(e) => setAcceptedNoRefund(e.target.checked)}
-                                            className="h-4 w-4 text-brand-primary border-yellow-400 rounded focus:ring-brand-primary mt-0.5 flex-shrink-0"
+                                            className="h-4 w-4 text-brand-primary border-yellow-500 rounded focus:ring-brand-primary mt-0.5 flex-shrink-0"
                                         />
-                                        <label htmlFor="accept-no-refund" className="ml-2 text-xs text-yellow-900 font-medium">
+                                        <label htmlFor="accept-no-refund" className="ml-2.5 text-xs text-yellow-900 font-bold">
                                             Entiendo y acepto
                                         </label>
                                     </div>
-                                    {errors.acceptedNoRefund && <p className="text-red-600 text-xs mt-1 ml-6">{errors.acceptedNoRefund}</p>}
+                                    {errors.acceptedNoRefund && <p className="text-red-600 text-xs mt-2 ml-6 font-semibold">{errors.acceptedNoRefund}</p>}
                                 </div>
                             </div>
                         )}
                         
-                        <div className="flex items-start gap-2">
+                        <div className="bg-gradient-to-br from-brand-primary/5 to-brand-accent/5 border-2 border-brand-primary/30 rounded-lg p-3.5 flex items-start gap-3">
                             <input id="accept-policies" type="checkbox" checked={acceptedPolicies} onChange={(e) => setAcceptedPolicies(e.target.checked)}
-                                className="h-4 w-4 text-brand-primary border-brand-border rounded focus:ring-brand-primary mt-0.5 flex-shrink-0"
+                                className="h-4 w-4 text-brand-primary border-brand-primary rounded focus:ring-brand-primary mt-0.5 flex-shrink-0"
                             />
-                            <label htmlFor="accept-policies" className="text-xs text-brand-secondary">
-                                {'Acepto las '}<span className="font-semibold text-brand-primary">Políticas y Devoluciones</span>.
+                            <label htmlFor="accept-policies" className="text-xs text-brand-secondary font-medium">
+                                {'Acepto las '}<span className="font-bold text-brand-primary">Políticas y Devoluciones</span>.
                             </label>
                         </div>
-                        {errors.acceptedPolicies && <p className="text-red-600 text-xs mt-1 ml-6">{errors.acceptedPolicies}</p>}
+                        {errors.acceptedPolicies && <p className="text-red-600 text-xs mt-1 ml-6 font-semibold">{errors.acceptedPolicies}</p>}
                     </div>
-                    <div className="mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3">
+                    <div className="mt-8 flex flex-col sm:flex-row gap-3 sm:gap-3">
                         <button 
                             type="button"
                             onClick={onClose}
-                            className="order-2 sm:order-1 px-5 py-2.5 rounded-lg border-2 border-brand-border text-brand-text font-semibold hover:bg-gray-50 hover:border-gray-400 hover:shadow-premium transition-all duration-200 text-sm active:scale-95"
+                            className="order-2 sm:order-1 px-5 py-3 rounded-lg border-2 border-brand-primary text-brand-primary font-bold hover:bg-brand-primary/10 hover:shadow-lg hover:shadow-brand-primary/30 transition-all duration-200 text-sm active:scale-95"
                         >
                             Cancelar
                         </button>
                         <button type="submit"
                                 disabled={isSaveDisabled}
-                            className="order-1 sm:order-2 flex-1 px-6 py-2.5 bg-gradient-to-r from-brand-primary to-brand-accent text-white font-bold rounded-lg hover:shadow-premium-lg hover:scale-102 transition-all duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:shadow-none text-sm active:scale-95"
+                            className="order-1 sm:order-2 flex-1 px-6 py-3 bg-gradient-to-r from-brand-primary via-brand-accent to-brand-primary text-white font-bold rounded-lg hover:shadow-lg hover:shadow-brand-primary/50 hover:scale-105 transition-all duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:shadow-none disabled:scale-100 text-sm active:scale-95"
                         >
                             {'Guardar y Continuar'}
                         </button>
