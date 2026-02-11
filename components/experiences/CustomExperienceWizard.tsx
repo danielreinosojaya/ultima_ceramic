@@ -1149,6 +1149,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Error al crear la pre-reserva. Intenta de nuevo.'
       }));
+      throw error;
     }
   };
   

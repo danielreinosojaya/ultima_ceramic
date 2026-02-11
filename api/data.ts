@@ -4276,7 +4276,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 };
 
                 // Insertar booking en la base de datos
-                const { rows: [newBooking] } = await sql`
+                const { rows } = await sql`
                     INSERT INTO bookings (
                         booking_code,
                         product_type,
@@ -4311,12 +4311,17 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     RETURNING *
                 `;
 
-                console.log('[createCustomExperienceBooking] Booking created:', bookingCode);
+                if (!rows || rows.length === 0) {
+                    throw new Error('Failed to create booking - no data returned from database');
+                }
+
+                const newBooking = rows[0];
+                console.log('[createCustomExperienceBooking] Booking created:', bookingCode, 'ID:', newBooking.id);
 
                 // Crear invoice request si se proporcionó invoiceData
-                if (needsInvoice && invoiceData) {
+                if (needsInvoice && invoiceData && newBooking.id) {
                     try {
-                        console.log('[createCustomExperienceBooking] Creating invoice request for booking:', bookingCode);
+                        console.log('[createCustomExperienceBooking] Creating invoice request for booking:', bookingCode, 'ID:', newBooking.id);
                         await sql`
                             INSERT INTO invoice_requests (
                                 booking_id, company_name, tax_id, address, email, status, requested_at
