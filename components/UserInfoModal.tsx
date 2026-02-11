@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { motion } from 'framer-motion';
 import type { UserInfo } from '../types';
 // Eliminado useLanguage, la app ahora es monolingüe en español
 import { COUNTRIES } from '@/constants';
@@ -185,8 +186,12 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
             onClick={onClose}
         >
             <div className="min-h-screen flex items-center justify-center p-3 sm:p-6">
-                <div
-                    className="bg-brand-surface rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 w-full max-w-2xl my-4 animate-fade-in-up"
+                <motion.div
+                    className="bg-brand-surface rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 w-full max-w-2xl my-4"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.4 }}
                     onClick={(e) => e.stopPropagation()}
                 >
                     <div className="text-center mb-4 sm:mb-6">
@@ -311,19 +316,19 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                         <button 
                             type="button"
                             onClick={onClose}
-                            className="order-2 sm:order-1 px-5 py-2.5 rounded-lg border-2 border-brand-border text-brand-text font-semibold hover:bg-gray-50 transition-colors text-sm"
+                            className="order-2 sm:order-1 px-5 py-2.5 rounded-lg border-2 border-brand-border text-brand-text font-semibold hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 text-sm active:scale-95"
                         >
                             Cancelar
                         </button>
                         <button type="submit"
                                 disabled={isSaveDisabled}
-                            className="order-1 sm:order-2 flex-1 px-6 py-2.5 bg-brand-primary text-white font-bold rounded-lg hover:opacity-90 transition-opacity duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed text-sm"
+                            className="order-1 sm:order-2 flex-1 px-6 py-2.5 bg-brand-primary text-white font-bold rounded-lg hover:shadow-lg hover:opacity-95 transition-all duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:shadow-none text-sm active:scale-95"
                         >
                             {'Guardar y Continuar'}
                         </button>
                     </div>
                 </form>
-                </div>
+                </motion.div>
             </div>
         </div>
     );
