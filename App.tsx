@@ -435,11 +435,12 @@ const App: React.FC = () => {
         // Prevent double submission
         if (bookingInProgress) {
             console.warn('[App] Booking already in progress, ignoring duplicate submit');
-            return;
+            throw new Error('Ya hay una reserva en progreso. Espera unos segundos y reintenta.');
         }
 
         setBookingInProgress(true);
         console.log('[App] Starting booking submission...');
+        let bookingSucceeded = false;
 
         const finalDetails = { ...bookingDetails, userInfo: data.userInfo };
         
@@ -504,6 +505,7 @@ const App: React.FC = () => {
                 console.log('[App] Booking created successfully:', result.booking.bookingCode);
                 setBookingDetails(finalDetails);
                 setConfirmedBooking(result.booking);
+                bookingSucceeded = true;
                 
                 // CRITICAL: Preserve giftcard hold info for ConfirmationPage display
                 if (activeGiftcardHold && activeGiftcardHold.amount > 0) {
@@ -516,13 +518,15 @@ const App: React.FC = () => {
                 setTimeout(() => setBookingInProgress(false), 1000);
             } else {
                 console.error('[App] Booking failed:', result.message);
-                setBookingInProgress(false);
-                alert(`Error: ${result.message}`);
+                throw new Error(result.message || 'Error al crear la reserva.');
             }
         } catch (error) {
-            console.error("[App] Failed to add booking", error);
-            setBookingInProgress(false);
-            alert("An error occurred while creating your booking.");
+            console.error('[App] Failed to add booking', error);
+            throw error instanceof Error ? error : new Error('Error al crear la reserva.');
+        } finally {
+            if (!bookingSucceeded) {
+                setBookingInProgress(false);
+            }
         }
     };
     
