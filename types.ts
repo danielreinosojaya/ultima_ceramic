@@ -910,7 +910,7 @@ export const CUSTOM_EXPERIENCE_TECHNIQUES: CustomExperienceTechnique[] = [
 export const TECHNIQUE_PRICES = {
   potters_wheel: 55,    // $55 por persona (incluye IVA)
   hand_modeling: 45,    // $45 por persona (incluye IVA)
-  painting: 18          // Mínimo $18 por pieza (incluye IVA)
+  painting: 25          // Mínimo $25 por pieza (incluye IVA)
 } as const;
 
 /**

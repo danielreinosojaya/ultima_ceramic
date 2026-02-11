@@ -515,7 +515,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
             <div className="mt-4 bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
               <p className="text-sm text-blue-900 font-medium mb-1">💡 Precio por Pieza</p>
               <p className="text-xs text-blue-700">
-                Cada participante elegirá su pieza. El precio mínimo es de $18 por persona (incluye IVA). Hay piezas de mayor valor y se paga solo la diferencia en el taller. La reserva se confirma con el pago del 100% del mínimo por persona.
+                Cada participante elegirá su pieza. El precio mínimo es de $25 por persona (incluye IVA). Hay piezas de mayor valor y se paga solo la diferencia en el taller. La reserva se confirma con el pago del 100% del mínimo por persona.
               </p>
               <div className="mt-3 pt-3 border-t border-blue-300">
                 <p className="text-sm font-semibold text-blue-900 mb-1">Pago mínimo de reserva</p>
