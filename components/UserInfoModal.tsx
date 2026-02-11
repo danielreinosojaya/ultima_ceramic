@@ -186,11 +186,11 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
         >
             <div className="min-h-screen flex items-center justify-center p-3 sm:p-6">
                 <div
-                    className="bg-brand-surface rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 w-full max-w-2xl my-4 animate-fade-in-up"
+                    className="bg-white rounded-xl sm:rounded-2xl shadow-premium p-4 sm:p-6 w-full max-w-2xl my-4 animate-fade-in-up"
                     onClick={(e) => e.stopPropagation()}
                 >
                     <div className="text-center mb-4 sm:mb-6">
-                        <h2 className="text-xl sm:text-2xl font-bold text-brand-primary mb-1">Información del Cliente</h2>
+                        <h2 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-brand-primary to-brand-accent bg-clip-text text-transparent mb-2">Información del Cliente</h2>
                         <p className="text-brand-secondary text-sm">Completa tus datos para continuar.</p>
                     </div>
                     {/* Mensaje de error general */}
@@ -273,7 +273,7 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                     </div>
                     <div className="mt-6 pt-4 border-t border-brand-border space-y-3">
                         {requiresNoRefundAcceptance && (
-                            <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-3 flex items-start gap-2">
+                            <div className="bg-gradient-to-br from-yellow-50 to-amber-50 border-2 border-yellow-400 shadow-subtle rounded-lg p-3 flex items-start gap-2">
                                 <InfoCircleIcon className="w-5 h-5 flex-shrink-0 mt-0.5 text-yellow-700" />
                                 <div className="flex-1">
                                     <h4 className="font-bold text-sm text-yellow-900">No Reembolsable</h4>
@@ -311,13 +311,13 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                         <button 
                             type="button"
                             onClick={onClose}
-                            className="order-2 sm:order-1 px-5 py-2.5 rounded-lg border-2 border-brand-border text-brand-text font-semibold hover:bg-gray-50 hover:border-gray-300 hover:shadow-md transition-all duration-200 text-sm active:scale-95"
+                            className="order-2 sm:order-1 px-5 py-2.5 rounded-lg border-2 border-brand-border text-brand-text font-semibold hover:bg-gray-50 hover:border-gray-400 hover:shadow-premium transition-all duration-200 text-sm active:scale-95"
                         >
                             Cancelar
                         </button>
                         <button type="submit"
                                 disabled={isSaveDisabled}
-                            className="order-1 sm:order-2 flex-1 px-6 py-2.5 bg-brand-primary text-white font-bold rounded-lg hover:shadow-lg hover:opacity-95 transition-all duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:shadow-none text-sm active:scale-95"
+                            className="order-1 sm:order-2 flex-1 px-6 py-2.5 bg-gradient-to-r from-brand-primary to-brand-accent text-white font-bold rounded-lg hover:shadow-premium-lg hover:scale-102 transition-all duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:shadow-none text-sm active:scale-95"
                         >
                             {'Guardar y Continuar'}
                         </button>
