@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { FEATURE_FLAGS } from '../featureFlags.ts';
+import { FEATURE_FLAGS } from '../featureFlags';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
 
