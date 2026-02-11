@@ -38,3 +38,102 @@
 .animate-slide-up {
     animation: slide-up 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* Enterprise Grade Animations - Moderno */
+@keyframes soft-glow {
+    0%, 100% {
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    }
+    50% {
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+    }
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: -1000px 0;
+    }
+    100% {
+        background-position: 1000px 0;
+    }
+}
+
+@keyframes gradient-shift {
+    0%, 100% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+}
+
+.soft-glow {
+    animation: soft-glow 2s ease-in-out infinite;
+}
+
+.shimmer {
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    background-size: 1000px 100%;
+    animation: shimmer 2s infinite;
+}
+
+.gradient-animate {
+    background-size: 200% 200%;
+    animation: gradient-shift 3s ease infinite;
+}
+
+/* Glass Effect */
+.glass-effect {
+    backdrop-filter: blur(10px);
+    background-color: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.glass-effect-dark {
+    backdrop-filter: blur(16px);
+    background-color: rgba(31, 38, 135, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+/* Premium Shadows */
+.shadow-premium {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+.shadow-premium-lg {
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.16);
+}
+
+.shadow-glass {
+    box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+}
+
+/* Hover Effects */
+.hover-lift:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+}
+
+.hover-lift {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Smooth Transitions */
+.transition-smooth {
+    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.transition-smooth-slow {
+    transition: all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Text selections */
+::selection {
+    background-color: rgba(130, 142, 152, 0.25);
+    color: inherit;
+}
+
+::-moz-selection {
+    background-color: rgba(130, 142, 152, 0.25);
+    color: inherit;
+}

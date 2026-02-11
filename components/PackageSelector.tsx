@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import type { Product, OpenStudioSubscription } from '../types';
 // Traducción eliminada, usar texto en español directamente
 import { KeyIcon } from './icons/KeyIcon';
 import { SparklesIcon } from './icons/SparklesIcon';
+import { Card } from './ui/Card';
+import { Button } from './ui/Button';
+import { Badge } from './ui/Badge';
 
 interface PackageSelectorProps {
   onSelect: (pkg: Product) => void;
@@ -49,67 +53,154 @@ export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, tech
     }
   }, [technique, products]);
 
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+        delayChildren: 0.1,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: { duration: 0.5, ease: 'easeOut' },
+    },
+  };
+
   return (
-    <div className="text-center p-6 bg-brand-surface rounded-xl shadow-subtle max-w-5xl mx-auto">
-      <button className="text-brand-secondary hover:text-brand-text mb-4 transition-colors font-semibold text-lg" style={{ background: 'none', border: 'none' }}>
+    <motion.div 
+      className="text-center p-6 rounded-xl max-w-5xl mx-auto"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+    >
+      <motion.button 
+        className="text-brand-secondary hover:text-brand-text mb-4 transition-colors font-semibold text-lg"
+        whileHover={{ x: -5 }}
+        style={{ background: 'none', border: 'none' }}
+      >
         &larr; Editar Selección
-      </button>
-      <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-brand-text mb-2">Elige una Técnica</h2>
-      <p className="text-brand-secondary mb-8 text-sm sm:text-base md:text-xl">¿En qué te gustaría enfocarte hoy?</p>
+      </motion.button>
+
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+      >
+        <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-brand-text mb-2">Elige una Técnica</h2>
+        <p className="text-brand-secondary mb-8 text-sm sm:text-base md:text-xl">¿En qué te gustaría enfocarte hoy?</p>
+      </motion.div>
       
-      <div className="bg-brand-background/70 border border-brand-border/50 rounded-lg p-6 mb-10 text-left flex items-start gap-4 animate-fade-in">
-        <SparklesIcon className="w-8 h-8 text-brand-accent flex-shrink-0 mt-1" />
-        <div>
-          <h3 className="font-bold text-brand-text text-lg">Más Clases, Más Ahorro</h3>
-          <p className="text-sm text-brand-secondary mt-1">Comprometerse con un paquete te ayuda a crear una rutina y ofrece un descuento significativo por clase.</p>
-        </div>
-      </div>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.4, delay: 0.2 }}
+        className="mb-10"
+      >
+        <Card variant="glass" className="p-6 text-left flex items-start gap-4 border-2 border-white/30">
+          <motion.div
+            animate={{ scale: [1, 1.1, 1] }}
+            transition={{ duration: 2, repeat: Infinity }}
+          >
+            <SparklesIcon className="w-8 h-8 text-brand-accent flex-shrink-0 mt-1" />
+          </motion.div>
+          <div>
+            <h3 className="font-bold text-brand-text text-lg">Más Clases, Más Ahorro</h3>
+            <p className="text-sm text-brand-secondary mt-1">Comprometerse con un paquete te ayuda a crear una rutina y ofrece un descuento significativo por clase.</p>
+          </div>
+        </Card>
+      </motion.div>
 
-
-      <div className="grid md:grid-cols-3 gap-8">
-        {packages.map((pkg) => {
+      <motion.div 
+        className="grid md:grid-cols-3 gap-8"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        {packages.map((pkg, index) => {
           if (pkg.type === 'CLASS_PACKAGE') {
             const pricePerClass = pkg.price / pkg.classes;
             return (
-              <div 
-                key={pkg.id} 
-                className="bg-brand-surface rounded-xl overflow-hidden shadow-subtle hover:shadow-lifted transition-shadow duration-300 cursor-pointer flex flex-col transform hover:-translate-y-1"
-                onClick={() => onSelect(pkg)}
+              <motion.div
+                key={pkg.id}
+                variants={itemVariants}
+                whileHover={{ y: -8, scale: 1.02 }}
+                transition={{ duration: 0.3 }}
               >
-                <div className="aspect-[4/3] w-full bg-brand-background overflow-hidden group">
-                  {pkg.imageUrl ? (
-                    <img 
-                      src={pkg.imageUrl} 
-                      alt={pkg.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <span className="font-semibold text-brand-accent">CeramicAlma</span>
-                    </div>
-                  )}
-                </div>
-                <div className="p-4 sm:p-5 md:p-6 flex-grow flex flex-col text-left">
-                  <h3 className="text-2xl font-semibold text-brand-primary">{pkg.name}</h3>
-                   <div className="flex items-baseline gap-2 my-4">
-                        <p className="text-4xl font-bold text-brand-text">${pkg.price}</p>
-                        <p className="text-brand-secondary font-semibold text-sm">/ {pkg.classes} clases</p>
-                   </div>
-                  <div className="bg-brand-background/80 p-3 rounded-md text-center mb-4">
-                        <p className="font-bold text-brand-text">${pricePerClass.toFixed(2)} <span className="font-normal text-brand-secondary">por clase</span></p>
+                <Card 
+                  variant="elevated"
+                  interactive
+                  onClick={() => onSelect(pkg)}
+                  className="overflow-hidden flex flex-col h-full"
+                >
+                  {/* Image Section */}
+                  <div className="aspect-[4/3] w-full bg-gradient-to-br from-brand-background to-brand-background/80 overflow-hidden group relative">
+                    {pkg.imageUrl ? (
+                      <motion.img 
+                        src={pkg.imageUrl} 
+                        alt={pkg.name}
+                        className="w-full h-full object-cover"
+                        whileHover={{ scale: 1.1 }}
+                        transition={{ duration: 0.3 }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <span className="font-semibold text-brand-accent text-lg">CeramicAlma</span>
+                      </div>
+                    )}
+                    {index === 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="absolute top-3 right-3"
+                      >
+                        <Badge variant="premium">Más Popular</Badge>
+                      </motion.div>
+                    )}
                   </div>
-                  <p className="text-brand-secondary text-sm flex-grow min-h-[3.5rem]">{pkg.description}</p>
-                  <button className="mt-4 sm:mt-6 bg-brand-primary text-white font-bold py-3 px-6 rounded-lg w-full hover:opacity-90 transition-opacity duration-300 h-11 sm:h-12">
-                    Seleccionar paquete
-                  </button>
-                </div>
-              </div>
+
+                  {/* Content Section */}
+                  <div className="p-4 sm:p-5 md:p-6 flex-grow flex flex-col text-left">
+                    <h3 className="text-2xl font-semibold text-brand-primary mb-4">{pkg.name}</h3>
+                    
+                    {/* Price Section */}
+                    <div className="flex items-baseline gap-2 mb-4">
+                      <p className="text-4xl font-bold text-brand-text">${pkg.price}</p>
+                      <p className="text-brand-secondary font-semibold text-sm">/ {pkg.classes} clases</p>
+                    </div>
+
+                    {/* Price Per Class */}
+                    <Card variant="glass" className="p-3 text-center mb-4 border border-white/20">
+                      <p className="font-bold text-brand-text">${pricePerClass.toFixed(2)} <span className="font-normal text-brand-secondary text-sm">por clase</span></p>
+                    </Card>
+
+                    {/* Description */}
+                    <p className="text-brand-secondary text-sm flex-grow min-h-[3.5rem] mb-4">{pkg.description}</p>
+
+                    {/* Button */}
+                    <Button 
+                      variant="primary"
+                      size="lg"
+                      className="w-full"
+                      onClick={() => onSelect(pkg)}
+                    >
+                      Seleccionar paquete
+                    </Button>
+                  </div>
+                </Card>
+              </motion.div>
             );
           }
           return null;
         })}
-      </div>
+      </motion.div>
       {/* Bloque parejaCard eliminado: solo se muestran CLASS_PACKAGE */}
-    </div>
+    </motion.div>
   );
 };

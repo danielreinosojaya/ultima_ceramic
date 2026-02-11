@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import { Logo } from './Logo';
 import { UserIcon } from '@heroicons/react/24/outline';
 import { ClientPortal } from './ClientPortal';
@@ -17,23 +18,43 @@ export const Header: React.FC<HeaderProps> = ({ onGiftcardClick, onMyClassesClic
   const { isAuthenticated, user } = useAuth();
 
   return (
-    <header className="bg-brand-surface/80 backdrop-blur-sm sticky top-0 z-40 border-b border-brand-border/80">
+    <motion.header 
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: 'easeOut' }}
+      className="backdrop-blur-xl bg-white/[0.72] sticky top-0 z-40 border-b border-white/20 shadow-glass"
+    >
       <div className="w-full px-4 sm:px-6 md:px-8 py-3 sm:py-4 md:py-5 flex items-center justify-between gap-2 sm:gap-3 md:gap-4">
         
         {/* Logo - responsive sizing */}
-        <div className="w-12 sm:w-16 md:w-20 flex-shrink-0">
+        <motion.div 
+          className="w-12 sm:w-16 md:w-20 flex-shrink-0"
+          whileHover={{ scale: 1.05 }}
+          transition={{ duration: 0.2 }}
+        >
           <Logo />
-        </div>
+        </motion.div>
 
         {/* Title - responsive and centered */}
         <h1 className="flex-grow text-center text-lg sm:text-xl md:text-2xl lg:text-3xl font-sans font-semibold text-brand-text tracking-wider">
-          <a href="/" aria-label="Go to homepage" className="hover:opacity-80 transition-opacity">
+          <motion.a 
+            href="/" 
+            aria-label="Go to homepage"
+            whileHover={{ scale: 1.02 }}
+            transition={{ duration: 0.2 }}
+            className="block hover:opacity-80 transition-opacity"
+          >
             CeramicAlma
-          </a>
+          </motion.a>
         </h1>
 
         {/* Right section - responsive button area */}
-        <div className="flex-shrink-0 flex justify-end items-center gap-1.5 sm:gap-2 md:gap-3">
+        <motion.div 
+          className="flex-shrink-0 flex justify-end items-center gap-1.5 sm:gap-2 md:gap-3"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+        >
           {/* Client Portal - Si está autenticado (vía AuthContext) */}
           {isAuthenticated && user && onMyClassesClick ? (
             <ClientPortal
@@ -43,12 +64,14 @@ export const Header: React.FC<HeaderProps> = ({ onGiftcardClick, onMyClassesClic
             <>
               {/* Login button - Si NO está autenticado */}
               {onClientLogin && (
-                <button
+                <motion.button
                   onClick={() => FEATURE_FLAGS.CURSO_TORNO && onClientLogin()}
                   disabled={!FEATURE_FLAGS.CURSO_TORNO}
-                  className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg font-semibold text-xs sm:text-sm md:text-base transition-opacity whitespace-nowrap ${
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg font-semibold text-xs sm:text-sm md:text-base transition-all whitespace-nowrap relative overflow-hidden group ${
                     FEATURE_FLAGS.CURSO_TORNO 
-                      ? 'bg-brand-primary text-white hover:opacity-90 cursor-pointer' 
+                      ? 'bg-gradient-to-r from-brand-primary to-brand-primary/90 text-white shadow-premium hover:shadow-premium-hover cursor-pointer' 
                       : 'bg-gray-300 text-gray-600 cursor-not-allowed opacity-60'
                   }`}
                   title={FEATURE_FLAGS.CURSO_TORNO ? "Mi Cuenta" : "Próximamente"}
@@ -56,22 +79,24 @@ export const Header: React.FC<HeaderProps> = ({ onGiftcardClick, onMyClassesClic
                 >
                   <UserIcon className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
                   <span className="hidden sm:inline">{FEATURE_FLAGS.CURSO_TORNO ? 'Mi Cuenta' : 'Próximamente'}</span>
-                </button>
+                </motion.button>
               )}
               {/* Guest buttons */}
               {onGiftcardClick && (
-                <button
-                  className="border border-brand-primary bg-white text-brand-primary font-semibold py-1.5 sm:py-2 px-2.5 sm:px-4 md:px-5 rounded-full shadow-sm hover:bg-brand-primary/10 transition-colors text-xs sm:text-sm md:text-base whitespace-nowrap"
-                  style={{letterSpacing: '0.03em'}} 
+                <motion.button
                   onClick={onGiftcardClick}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="border-2 border-brand-primary bg-white text-brand-primary font-semibold py-1.5 sm:py-2 px-2.5 sm:px-4 md:px-5 rounded-full shadow-premium hover:shadow-premium-hover hover:bg-brand-primary/5 transition-all text-xs sm:text-sm md:text-base whitespace-nowrap"
+                  style={{letterSpacing: '0.03em'}} 
                 >
                   Giftcard
-                </button>
+                </motion.button>
               )}
             </>
           )}
-        </div>
+        </motion.div>
       </div>
-    </header>
+    </motion.header>
   );
 };

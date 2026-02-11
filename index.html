@@ -52,6 +52,10 @@
             boxShadow: {
               'subtle': '0 4px 12px rgba(149, 137, 133, 0.1)',
               'lifted': '0 10px 25px rgba(149, 137, 133, 0.15)',
+              'premium': '0 8px 32px rgba(0, 0, 0, 0.12)',
+              'premium-lg': '0 20px 48px rgba(0, 0, 0, 0.16)',
+              'premium-hover': '0 12px 40px rgba(0, 0, 0, 0.15)',
+              'glass': '0 8px 32px rgba(31, 38, 135, 0.37)',
             },
             animation: {
               'fade-in': 'fadeIn 0.5s ease-out forwards',
@@ -59,6 +63,8 @@
               'fade-in-fast': 'fadeIn 0.2s ease-out forwards',
               'slide-in-right': 'slideInRight 0.5s cubic-bezier(0.250, 0.460, 0.450, 0.940) both',
               'pulse-border': 'pulseBorder 2s ease-out 2',
+              'scale-in': 'scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+              'float': 'float 3s ease-in-out infinite',
             },
             keyframes: {
               fadeIn: {
@@ -69,14 +75,29 @@
                 '0%': { opacity: 0, transform: 'translateY(20px)' },
                 '100%': { opacity: 1, transform: 'translateY(0)' },
               },
-               slideInRight: {
+              slideInRight: {
                 '0%': { transform: 'translateX(100%)', opacity: 0 },
                 '100%': { transform: 'translateX(0)', opacity: 1 },
               },
               pulseBorder: {
                 '0%': { boxShadow: '0 0 0 0px rgba(130, 142, 152, 0.7)' },
                 '100%': { boxShadow: '0 0 0 10px rgba(130, 142, 152, 0)' }
+              },
+              scaleIn: {
+                '0%': { opacity: 0, transform: 'scale(0.95)' },
+                '100%': { opacity: 1, transform: 'scale(1)' },
+              },
+              float: {
+                '0%, 100%': { transform: 'translateY(0px)' },
+                '50%': { transform: 'translateY(-10px)' },
               }
+            },
+            backdropBlur: {
+              xs: '2px',
+              sm: '4px',
+              md: '12px',
+              lg: '16px',
+              xl: '24px',
             }
           }
         }

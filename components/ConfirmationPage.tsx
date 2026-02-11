@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion } from 'framer-motion';
 import { BankAccountsModal } from './BankAccountsModal';
 import type { Booking, BankDetails, FooterInfo, Product, ClassPackage } from '../types';
 // Eliminado useLanguage, la app ahora es monolingüe en español
@@ -190,16 +191,52 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
     });
 
         return (
-            <div className="max-w-2xl mx-auto p-6 sm:p-8 bg-brand-surface rounded-xl shadow-lifted animate-fade-in-up">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="max-w-2xl mx-auto p-6 sm:p-8 bg-white rounded-xl shadow-premium"
+            >
             {/* Header */}
-            <div className="text-center mb-6">
-                <CheckCircleIcon className="w-20 h-20 text-brand-success mx-auto mb-4" />
-                <h2 className="text-4xl font-bold text-brand-text mb-3">¡Pre-Reserva Confirmada!</h2>
-                <p className="text-brand-secondary text-base">Tu cupo está guardado. Sigue las instrucciones de pago para completar tu reserva.</p>
-            </div>
+            <motion.div
+              className="text-center mb-6"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.1 }}
+            >
+                <motion.div
+                  initial={{ scale: 0.8 }}
+                  animate={{ scale: 1 }}
+                  transition={{ duration: 0.5, delay: 0.2, type: 'spring' }}
+                  className="flex justify-center"
+                >
+                  <CheckCircleIcon className="w-20 h-20 text-brand-success mx-auto mb-4" />
+                </motion.div>
+                <motion.h2
+                  className="text-4xl font-bold text-brand-text mb-3"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                >
+                  ¡Pre-Reserva Confirmada!
+                </motion.h2>
+                <motion.p
+                  className="text-brand-secondary text-base"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.4 }}
+                >
+                  Tu cupo está guardado. Sigue las instrucciones de pago para completar tu reserva.
+                </motion.p>
+            </motion.div>
 
             {/* Resumen de Reserva - CLARO Y PROMINENTE */}
-            <div className="mb-6 bg-white border-2 border-brand-primary rounded-lg p-6 shadow-lg">
+            <motion.div
+              className="mb-6 bg-gradient-to-br from-white via-white to-brand-accent/5 border-2 border-brand-primary rounded-lg p-6 shadow-premium"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
                 <h3 className="text-lg font-bold text-brand-primary mb-4 flex items-center gap-2">
                     <span className="text-2xl">📋</span>
                     Resumen de tu Reserva
@@ -264,10 +301,16 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                         <p>IVA ({(VAT_RATE * 100).toFixed(0)}%): {formatPrice(vat)}</p>
                     </div>
                 </div>
-            </div>
+            </motion.div>
 
             {/* Código de Pre-Reserva */}
-            <div className="mb-6 bg-gradient-to-r from-brand-primary/10 to-brand-accent/10 border-2 border-brand-primary rounded-lg p-6 text-center">
+            <motion.div
+              className="mb-6 bg-gradient-to-r from-brand-primary/10 to-brand-accent/10 border-2 border-brand-primary rounded-lg p-6 text-center shadow-subtle"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25 }}
+              whileHover={{ scale: 1.01 }}
+            >
                 <p className="text-xs font-semibold text-brand-secondary uppercase tracking-wider mb-3">Tu Código de Pre-Reserva</p>
                 <div className="flex items-center justify-center gap-2 sm:gap-4 flex-wrap">
                     <p className="text-2xl sm:text-4xl font-bold text-brand-primary font-mono tracking-wider break-all" style={{ letterSpacing: '0.1em' }}>{booking.bookingCode}</p>
@@ -280,10 +323,15 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                     </button>
                 </div>
                 <p className="text-xs text-brand-secondary mt-3">Guarda este código. Lo necesitarás al enviar tu comprobante de pago.</p>
-            </div>
+            </motion.div>
 
             {/* Advertencia de expiración en 2 horas */}
-            <div className="mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-5 rounded-r-lg">
+            <motion.div
+              className="mb-6 bg-gradient-to-r from-yellow-50 to-yellow-50/50 border-l-4 border-yellow-400 p-5 rounded-r-lg shadow-subtle"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3 }}
+            >
                 <div className="flex items-start gap-3">
                     <span className="text-yellow-600 text-2xl font-bold">⏰</span>
                     <div>
@@ -310,7 +358,7 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                         })()}
                     </div>
                 </div>
-            </div>
+            </motion.div>
 
             {/* Advertencia de tolerancia de 15 minutos */}
             <div className="mb-6 bg-blue-50 border-l-4 border-blue-400 p-5 rounded-r-lg">
@@ -423,7 +471,12 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
             )}
 
             {/* ¿Qué sigue? - Próximos pasos */}
-            <div className="mb-6 bg-brand-background p-6 rounded-lg">
+            <motion.div
+              className="mb-6 bg-gradient-to-br from-brand-background/50 to-white/50 p-6 rounded-lg border border-brand-border/20 shadow-subtle"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.35 }}
+            >
                 <h3 className="text-lg font-bold text-brand-text mb-4">¿Qué sigue ahora?</h3>
                 <ol className="space-y-4 text-left">
                     <li className="flex items-start gap-3">
@@ -455,15 +508,22 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                         </div>
                     </li>
                 </ol>
-            </div>
+            </motion.div>
 
             {/* Botón de WhatsApp */}
-            <div className="mb-6">
+            <motion.div
+              className="mb-6"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
                 <a
                     href={whatsappLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full flex items-center justify-center gap-3 bg-green-500 text-white font-bold py-4 px-8 rounded-xl hover:bg-green-600 transition-all duration-300 shadow-lg text-lg hover:scale-105"
+                    className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-green-500 to-green-600 text-white font-bold py-4 px-8 rounded-xl hover:shadow-premium transition-all duration-300 shadow-premium text-lg"
+                    whilehover={{ scale: 1.05 }}
+                    whiletap={{ scale: 0.98 }}
                 >
                     <WhatsAppIcon className="w-7 h-7" />
                     Enviar Código y Comprobante por WhatsApp
@@ -471,12 +531,17 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                 <p className="text-xs text-brand-secondary text-center mt-2">
                     Haz click arriba para abrir WhatsApp con tu código prellenado
                 </p>
-            </div>
+            </motion.div>
 
             <BankAccountsModal open={modalOpen} onClose={() => setModalOpen(false)} accounts={bankAccounts} />
 
             {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8 pt-6 border-t border-brand-border">
+            <motion.div
+              className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8 pt-6 border-t border-brand-border"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.45 }}
+            >
                 <button
                     onClick={onFinish}
                     className="w-full sm:w-auto bg-brand-primary text-white font-bold py-3 px-10 rounded-lg hover:opacity-90 transition-opacity duration-300 shadow-md text-base"
@@ -491,7 +556,7 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                         Ver mis Clases
                     </button>
                 )}
-            </div>
-        </div>
+            </motion.div>
+            </motion.div>
     );
 };
