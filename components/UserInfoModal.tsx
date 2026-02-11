@@ -37,7 +37,7 @@ const InputField: React.FC<{
     disabled?: boolean;
 }> = ({ id, name, label, value, onChange, placeholder, type = 'text', error, icon, required, disabled }) => (
     <div>
-        <label htmlFor={id} className="block text-sm font-semibold text-brand-secondary mb-1">{label}</label>
+        <label htmlFor={id} className="block text-sm font-semibold text-brand-secondary mb-2 px-0.5">{label}</label>
         <div className="relative">
             {icon && (
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-brand-secondary">
@@ -51,7 +51,7 @@ const InputField: React.FC<{
                 value={value}
                 onChange={onChange}
                 placeholder={placeholder}
-                className={`w-full ${icon ? 'pl-10' : 'pl-3'} pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-brand-primary transition-colors ${error ? 'border-red-500' : 'border-brand-border'} disabled:bg-gray-100`}
+                className={`w-full ${icon ? 'pl-10' : 'pl-3'} pr-3 py-2 border rounded-lg shadow-subtle focus:ring-2 focus:ring-brand-primary focus:shadow-premium focus:border-brand-primary transition-colors ${error ? 'border-red-500' : 'border-brand-border'} disabled:bg-gray-100`}
                 aria-invalid={!!error}
                 aria-describedby={error ? `${id}-error` : undefined}
                 required={required}
@@ -200,7 +200,7 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                       </div>
                     )}
                     <form onSubmit={handleSubmit} noValidate>
-                        <div className="space-y-4">
+                        <div className="space-y-6">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                                 <InputField 
                                     id="firstName" label="Nombre" value={firstName} onChange={(e) => setFirstName(e.target.value)}
@@ -216,7 +216,7 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                                 placeholder="tu@email.com" type="email" error={errors.email} icon={<MailIcon className="w-5 h-5"/>} required
                             />
                         <div>
-                            <label htmlFor="phone" className="block text-sm font-semibold text-brand-secondary mb-1">Número de Teléfono</label>
+                            <label htmlFor="phone" className="block text-sm font-semibold text-brand-secondary mb-2 px-0.5">Número de Teléfono</label>
                             <div className={`flex items-center border-2 rounded-lg transition-colors ${isPhoneFocused ? 'ring-2 ring-brand-primary border-brand-primary' : (errors.phone ? 'border-red-500' : 'border-brand-border')}`}> 
                                 <select 
                                     value={country.name} onChange={(e) => setCountry(COUNTRIES.find(c => c.name === e.target.value) || COUNTRIES[0])}

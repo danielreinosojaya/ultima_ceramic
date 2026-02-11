@@ -19,10 +19,12 @@
 
         body {
             font-family: 'Lora', 'Georgia', serif;
-            background-color: #f4f2f1;
+            background: linear-gradient(135deg, #f9f8f6 0%, #f4f2f1 50%, #efe9e3 100%);
+            background-attachment: fixed;
             color: #4a4540;
             line-height: 1.8;
             padding: 0;
+            min-height: 100vh;
         }
 
         .btn-container {
@@ -35,21 +37,31 @@
         .btn-pdf {
             background-color: #8b6952;
             color: white;
-            border: none;
-            padding: 12px 24px;
-            font-size: 14px;
+            border: 1.5px solid #8b6952;
+            padding: 11px 26px;
+            font-size: 13px;
             font-weight: 600;
-            border-radius: 0;
+            border-radius: 4px;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
             font-family: 'Inter', sans-serif;
-            letter-spacing: 0.5px;
-            box-shadow: 0 4px 12px rgba(160, 103, 77, 0.2);
+            letter-spacing: 0.8px;
+            box-shadow: 0 2px 8px rgba(139, 105, 82, 0.15), 0 4px 16px rgba(139, 105, 82, 0.1);
+            text-transform: uppercase;
+            position: relative;
+            overflow: hidden;
         }
 
         .btn-pdf:hover {
             background-color: #6b4423;
-            box-shadow: 0 6px 16px rgba(160, 103, 77, 0.3);
+            border-color: #6b4423;
+            box-shadow: 0 4px 12px rgba(107, 68, 35, 0.2), 0 8px 24px rgba(107, 68, 35, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .btn-pdf:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 6px rgba(107, 68, 35, 0.15);
         }
 
         .container {
@@ -57,27 +69,46 @@
             margin: 0 auto;
             background: white;
             position: relative;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.06),
+                        0 20px 60px rgba(0, 0, 0, 0.04);
+            border-radius: 6px;
+            overflow: hidden;
         }
 
         /* HEADER DECORATIVO */
         .header {
             background: linear-gradient(135deg, #4a4540 0%, #6b4423 100%);
             color: white;
-            padding: 25px 60px;
+            padding: 35px 60px;
             text-align: center;
             position: relative;
             overflow: hidden;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
         }
 
         .header::before {
             content: '';
             position: absolute;
-            top: -50%;
-            right: -50%;
-            width: 400px;
-            height: 400px;
-            background: rgba(255, 255, 255, 0.05);
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(255, 255, 255, 0.02) 35px, rgba(255, 255, 255, 0.02) 70px),
+                repeating-linear-gradient(-45deg, transparent, transparent 35px, rgba(255, 255, 255, 0.02) 35px, rgba(255, 255, 255, 0.02) 70px);
+            pointer-events: none;
+        }
+
+        .header::after {
+            content: '';
+            position: absolute;
+            top: -30%;
+            right: -10%;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.06) 0%, transparent 70%);
             border-radius: 50%;
+            pointer-events: none;
         }
 
         .header-content {
@@ -97,18 +128,20 @@
 
         .header h1 {
             font-family: 'Playfair Display', serif;
-            font-size: 36px;
+            font-size: 38px;
             font-weight: 700;
             margin-bottom: 12px;
-            letter-spacing: -1px;
+            letter-spacing: -1.2px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .header p {
             font-family: 'Lora', serif;
             font-size: 18px;
             font-weight: 400;
-            color: rgba(255, 255, 255, 0.9);
+            color: rgba(255, 255, 255, 0.92);
             margin-bottom: 8px;
+            letter-spacing: 0.3px;
         }
 
         .header-date {
@@ -129,6 +162,13 @@
             page-break-inside: avoid;
         }
 
+        section:nth-child(even) .section-header {
+            background: linear-gradient(to right, rgba(244, 242, 241, 0.5), transparent);
+            padding: 15px 20px 15px 0;
+            margin: -15px 0 30px -60px;
+            padding-left: 60px;
+        }
+
         .section-header {
             margin-bottom: 30px;
             border-bottom: 1px solid #e8e3d6;
@@ -137,18 +177,20 @@
 
         .section-header h2 {
             font-family: 'Playfair Display', serif;
-            font-size: 32px;
+            font-size: 34px;
             font-weight: 600;
             color: #4a4540;
             margin-bottom: 8px;
-            letter-spacing: -0.5px;
+            letter-spacing: -0.8px;
+            line-height: 1.2;
         }
 
         .section-header p {
             font-family: 'Lora', serif;
-            font-size: 16px;
+            font-size: 15px;
             color: #8b6952;
             font-style: italic;
+            letter-spacing: 0.2px;
         }
 
         /* CLIENTE */
@@ -159,11 +201,19 @@
             margin-bottom: 60px;
         }
 
+        .client-detail-block {
+            padding: 25px;
+            background: linear-gradient(135deg, RGB(250, 248, 245) 0%, rgba(232, 227, 214, 0.4) 100%);
+            border-radius: 4px;
+            border-left: 2px solid #8b6952;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+        }
+
         .client-detail-block h3 {
             font-family: 'Inter', sans-serif;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 700;
-            letter-spacing: 1.5px;
+            letter-spacing: 1.8px;
             text-transform: uppercase;
             color: #8b6952;
             margin-bottom: 12px;
@@ -171,42 +221,54 @@
 
         .client-detail-block p {
             font-family: 'Lora', serif;
-            font-size: 16px;
+            font-size: 15px;
             color: #4a4540;
-            line-height: 1.6;
+            line-height: 1.7;
             margin-bottom: 6px;
         }
 
         /* DESCRIPCIÓN EVENTO */
         .event-description {
-            background: #faf8f5;
-            padding: 35px;
+            background: linear-gradient(135deg, #faf8f5 0%, #f5f1ea 100%);
+            padding: 40px;
             margin-bottom: 50px;
             border-left: 3px solid #8b6952;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(160, 103, 77, 0.08),
+                        0 4px 12px rgba(160, 103, 77, 0.04);
+            position: relative;
         }
 
         .event-description h3 {
             font-family: 'Playfair Display', serif;
-            font-size: 24px;
+            font-size: 26px;
             font-weight: 600;
             color: #4a4540;
             margin-bottom: 16px;
+            letter-spacing: -0.5px;
+        }
+
+        .event-description p {
+            font-size: 15px;
+            line-height: 1.8;
+            letter-spacing: 0.2px;
         }
 
         .event-description .price {
             font-family: 'Playfair Display', serif;
-            font-size: 36px;
+            font-size: 40px;
             font-weight: 700;
             color: #6b4423;
-            margin-top: 20px;
+            margin-top: 25px;
             margin-bottom: 8px;
+            letter-spacing: -1px;
         }
 
         .event-description .price-label {
             font-family: 'Inter', sans-serif;
-            font-size: 12px;
+            font-size: 11px;
             color: #8b6952;
-            letter-spacing: 1px;
+            letter-spacing: 1.2px;
             text-transform: uppercase;
         }
 
@@ -215,31 +277,39 @@
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 35px;
-            margin-top: 30px;
-            padding-top: 30px;
-            border-top: 1px solid rgba(160, 103, 77, 0.15);
+            margin-top: 35px;
+            padding-top: 35px;
+            border-top: 1px solid rgba(160, 103, 77, 0.2);
+        }
+
+        .detail-item {
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 3px;
+            border-left: 2px solid rgba(160, 103, 77, 0.4);
         }
 
         .detail-item h4 {
             font-family: 'Inter', sans-serif;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 700;
-            letter-spacing: 1.5px;
+            letter-spacing: 1.8px;
             text-transform: uppercase;
             color: #8b6952;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
         }
 
         .detail-item p {
             font-family: 'Lora', serif;
-            font-size: 16px;
+            font-size: 15px;
             color: #4a4540;
             margin-bottom: 4px;
+            font-weight: 500;
         }
 
         .detail-item-secondary {
             font-family: 'Inter', sans-serif;
-            font-size: 13px;
+            font-size: 12px;
             color: #8b6952;
             font-style: italic;
         }
@@ -250,12 +320,17 @@
         }
 
         .includes-list li {
-            padding-bottom: 16px;
-            padding-left: 28px;
+            padding: 16px 0 16px 32px;
             position: relative;
-            font-size: 16px;
-            line-height: 1.6;
+            font-size: 15px;
+            line-height: 1.7;
             border-bottom: 1px solid #e8e3d6;
+            transition: padding-left 0.25s ease;
+        }
+
+        .includes-list li:hover {
+            padding-left: 36px;
+            color: #6b4423;
         }
 
         .includes-list li:last-child {
@@ -268,22 +343,32 @@
             left: 0;
             color: #8b6952;
             font-weight: 700;
-            font-size: 18px;
+            font-size: 16px;
+            transition: all 0.25s ease;
+        }
+
+        .includes-list li:hover:before {
+            color: #6b4423;
+            transform: scale(1.2);
         }
 
         /* INSTRUCTOR */
         .instructor-section {
-            background: #faf8f5;
-            padding: 35px 30px;
+            background: linear-gradient(135deg, #faf8f5 0%, #f5f1ea 100%);
+            padding: 40px;
             margin-bottom: 50px;
+            border-radius: 4px;
+            border-left: 3px solid #8b6952;
+            box-shadow: 0 2px 8px rgba(160, 103, 77, 0.08);
         }
 
         .instructor-name {
             font-family: 'Playfair Display', serif;
-            font-size: 24px;
+            font-size: 26px;
             font-weight: 600;
             color: #4a4540;
             margin-bottom: 16px;
+            letter-spacing: -0.5px;
         }
 
         .instructor-credentials {
@@ -295,7 +380,8 @@
             font-size: 14px;
             color: #6b4423;
             padding-left: 0;
-            margin-bottom: 6px;
+            margin-bottom: 8px;
+            letter-spacing: 0.2px;
         }
 
         .instructor-credentials li:before {
@@ -303,10 +389,11 @@
         }
 
         .instructor-bio {
-            font-size: 16px;
+            font-size: 15px;
             color: #4a4540;
-            line-height: 1.8;
+            line-height: 1.85;
             font-style: italic;
+            letter-spacing: 0.3px;
         }
 
         /* TABLA PRECIOS */
@@ -317,33 +404,44 @@
         }
 
         .pricing-table thead {
-            border-top: 2px solid #4a4540;
+            border-top: 1px solid #e8e3d6;
             border-bottom: 2px solid #4a4540;
+            background: linear-gradient(to right, rgba(244, 242, 241, 0.8), rgba(232, 227, 214, 0.4));
         }
 
         .pricing-table th {
-            padding: 16px 0;
+            padding: 16px 16px;
             text-align: left;
             font-family: 'Inter', sans-serif;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 700;
-            letter-spacing: 1.5px;
+            letter-spacing: 1.8px;
             text-transform: uppercase;
             color: #4a4540;
         }
 
         .pricing-table td {
-            padding: 14px 0;
+            padding: 15px 16px;
             border-bottom: 1px solid #e8e3d6;
-            font-size: 15px;
+            font-size: 14px;
             color: #4a4540;
+            transition: background-color 0.2s ease;
+        }
+
+        .pricing-table tbody tr:nth-child(odd) td {
+            background-color: rgba(250, 248, 245, 0.4);
+        }
+
+        .pricing-table tbody tr:hover td {
+            background-color: rgba(244, 242, 241, 0.8);
         }
 
         .pricing-table .price {
             font-family: 'Playfair Display', serif;
             font-weight: 700;
             color: #6b4423;
-            font-size: 18px;
+            font-size: 16px;
+            letter-spacing: -0.3px;
         }
 
         /* TÉRMINOS */
@@ -354,12 +452,21 @@
             margin-bottom: 50px;
         }
 
+        .terms-block {
+            padding: 30px;
+            background: linear-gradient(135deg, rgba(250, 248, 245, 0.6), rgba(232, 227, 214, 0.3));
+            border-radius: 4px;
+            border-left: 2px solid #8b6952;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+        }
+
         .terms-block h3 {
             font-family: 'Playfair Display', serif;
-            font-size: 20px;
+            font-size: 22px;
             font-weight: 600;
             color: #4a4540;
             margin-bottom: 20px;
+            letter-spacing: -0.3px;
         }
 
         .terms-block ul {
@@ -367,11 +474,13 @@
         }
 
         .terms-block li {
-            font-size: 15px;
+            font-size: 14px;
             color: #4a4540;
             padding-bottom: 12px;
             padding-left: 24px;
             position: relative;
+            line-height: 1.6;
+            letter-spacing: 0.2px;
         }
 
         .terms-block li:before {
@@ -380,64 +489,157 @@
             left: 0;
             color: #8b6952;
             font-weight: 700;
+            transition: transform 0.25s ease;
+        }
+
+        .terms-block li:hover:before {
+            transform: translateX(3px);
         }
 
         /* CIERRE */
         .closing {
-            background: linear-gradient(135deg, #f4f2f1 0%, #e8e3d6 100%);
-            padding: 40px 30px;
+            background: linear-gradient(135deg, #f4f2f1 0%, #e8e3d6 50%, #f0ebe3 100%);
+            padding: 50px 40px;
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 0;
+            border-radius: 4px;
+            border-top: 1px solid rgba(160, 103, 77, 0.15);
+            box-shadow: 0 2px 8px rgba(160, 103, 77, 0.05);
         }
 
         .closing h2 {
             font-family: 'Playfair Display', serif;
-            font-size: 24px;
+            font-size: 28px;
             font-weight: 600;
             color: #4a4540;
-            margin-bottom: 12px;
+            margin-bottom: 16px;
+            letter-spacing: -0.8px;
         }
 
         .closing p {
-            font-size: 16px;
-            line-height: 1.8;
+            font-size: 15px;
+            line-height: 1.85;
             color: #6b4423;
+            letter-spacing: 0.3px;
         }
 
         /* FOOTER */
         .footer {
-            background: #4a4540;
+            background: linear-gradient(135deg, #4a4540 0%, #3d362f 100%);
             color: white;
-            padding: 15px 25px;
+            padding: 30px 40px;
             text-align: center;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
         }
 
         .footer-brand {
             font-family: 'Playfair Display', serif;
-            font-size: 16px;
+            font-size: 18px;
             font-weight: 600;
-            margin-bottom: 6px;
+            margin-bottom: 12px;
+            letter-spacing: 1px;
         }
 
         .footer-contact {
             font-family: 'Lora', serif;
-            font-size: 12px;
-            line-height: 1.4;
-            opacity: 0.9;
+            font-size: 11px;
+            line-height: 1.8;
+            opacity: 0.85;
+            letter-spacing: 0.3px;
+        }
+
+        .footer-contact p {
+            margin: 4px 0;
         }
 
         .footer-contact a {
             color: white;
             text-decoration: none;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.4);
-            transition: border-color 0.3s;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+            padding-bottom: 2px;
         }
 
         .footer-contact a:hover {
             border-bottom-color: white;
+            opacity: 1;
         }
 
-        /* PRINT */
+        /* TABLA DE PASOS */
+        .steps-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 30px 0;
+        }
+
+        .steps-table tr {
+            transition: background-color 0.2s ease;
+        }
+
+        .steps-table tbody tr:hover {
+            background-color: rgba(250, 248, 245, 0.8);
+        }
+
+        .step-number {
+            padding: 18px 0;
+            border-bottom: 1px solid #e8e3d6;
+            text-align: center;
+            width: 12%;
+            font-weight: 700;
+            font-size: 22px;
+            color: #8b6952;
+            font-family: 'Playfair Display', serif;
+            letter-spacing: -0.5px;
+        }
+
+        .step-content {
+            padding: 18px 0 18px 28px;
+            border-bottom: 1px solid #e8e3d6;
+            font-size: 14px;
+            color: #4a4540;
+        }
+
+        .step-content strong {
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+        }
+
+        .step-description {
+            color: #8b6952;
+            font-size: 13px;
+            display: block;
+            margin-top: 4px;
+            letter-spacing: 0.1px;
+        }
+
+        .steps-table tr:last-child .step-number,
+        .steps-table tr:last-child .step-content {
+            border-bottom: none;
+        }
+
+        /* CAJA IMPORTANTE */
+        .important-box {
+            background: linear-gradient(135deg, rgba(232, 227, 214, 0.6), rgba(250, 248, 245, 0.4));
+            padding: 28px;
+            margin-top: 30px;
+            border-radius: 4px;
+            border-left: 3px solid #8b6952;
+            box-shadow: 0 1px 3px rgba(160, 103, 77, 0.08);
+        }
+
+        .important-box p {
+            font-size: 14px;
+            line-height: 1.7;
+            color: #4a4540;
+            letter-spacing: 0.2px;
+        }
+
+        .important-box p strong {
+            color: #6b4423;
+            font-weight: 600;
+        }\n\n        /* PRINT */
         @media print {
             .btn-container {
                 display: none;
@@ -464,24 +666,38 @@
 
         @media (max-width: 768px) {
             .header {
-                padding: 60px 40px;
+                padding: 40px 30px;
             }
 
             .header h1 {
-                font-size: 28px;
+                font-size: 32px;
+            }
+
+            .header p {
+                font-size: 16px;
             }
 
             .content {
-                padding: 60px 40px;
+                padding: 40px 30px;
             }
 
             .client-details, .event-details, .terms-section {
                 grid-template-columns: 1fr;
-                gap: 40px;
+                gap: 30px;
             }
 
-            .event-description {
-                padding: 30px;
+            .event-description, .instructor-section, .closing {
+                padding: 28px 24px;
+            }
+
+            .section-header h2 {
+                font-size: 26px;
+            }
+
+            .pricing-table th,
+            .pricing-table td {
+                padding: 12px 10px;
+                font-size: 13px;
             }
         }
     </style>
@@ -518,7 +734,7 @@
                     <div class="client-detail-block">
                         <h3>Contacto Principal</h3>
                         <p>Nidia Lilibeth Silva Peralta</p>
-                        <p>+593 92 366 6945<br>+593 99 421 5337</p>
+                        <p>C.I.: 0923666945<br>Cel: +593 99 421 5337</p>
                         <p>Lisil_1992@hotmail.com</p>
                     </div>
                     <div class="client-detail-block">
@@ -574,7 +790,7 @@
                     <li>Todos los materiales de alta calidad (floreros, pinturas artísticas, pinceles)</li>
                     <li>Herramientas especializadas para trabajar cerámica</li>
                     <li>Horneado en horno profesional de las piezas</li>
-                    <li>Entrega de obras completadas en 2-3 semanas posteriores</li>
+                    <li>Entrega de obras completadas en 2 semanas</li>
                     <li>Espacio exclusivo reservado para garantizar privacidad</li>
                     <li>Experiencia holística integrando mindfulness y bienestar</li>
                 </ul>
@@ -670,7 +886,7 @@
                     </div>
                 </div>
 
-                <div style="background: #e8e3d6; padding: 20px; margin-top: 30px;">
+                <div class="important-box">
                     <p><strong>Importante:</strong> La fecha de marzo está sujeta a confirmación. Se requiere depósito del 50% para reservar disponibilidad de fecha y espacio. El balance debe pagarse 2 días antes del evento.</p>
                 </div>
             </section>
@@ -682,41 +898,33 @@
                     <p>Cómo proceder</p>
                 </div>
 
-                <table style="width: 100%; border-collapse: collapse;">
+                <table class="steps-table">
                     <tr>
-                        <td style="padding: 12px 0; border-bottom: 1px solid #e8e3d6; text-align: center; width: 10%;">
-                            <strong style="font-size: 20px; color: #8b6952;">1</strong>
-                        </td>
-                        <td style="padding: 12px 0 12px 24px; border-bottom: 1px solid #e8e3d6;">
+                        <td class="step-number">1</td>
+                        <td class="step-content">
                             <strong>Confirmación</strong><br>
-                            <span style="color: #8b6952;">Confirmar fechas preferidas en marzo</span>
+                            <span class="step-description">Confirmar fechas preferidas en marzo</span>
                         </td>
                     </tr>
                     <tr>
-                        <td style="padding: 12px 0; border-bottom: 1px solid #e8e3d6; text-align: center;">
-                            <strong style="font-size: 20px; color: #8b6952;">2</strong>
-                        </td>
-                        <td style="padding: 12px 0 12px 24px; border-bottom: 1px solid #e8e3d6;">
+                        <td class="step-number">2</td>
+                        <td class="step-content">
                             <strong>Depósito</strong><br>
-                            <span style="color: #8b6952;">50% para asegurar espacio y facilitadora</span>
+                            <span class="step-description">50% para asegurar espacio y facilitadora</span>
                         </td>
                     </tr>
                     <tr>
-                        <td style="padding: 12px 0; border-bottom: 1px solid #e8e3d6; text-align: center;">
-                            <strong style="font-size: 20px; color: #8b6952;">3</strong>
-                        </td>
-                        <td style="padding: 12px 0 12px 24px; border-bottom: 1px solid #e8e3d6;">
+                        <td class="step-number">3</td>
+                        <td class="step-content">
                             <strong>Personalización</strong><br>
-                            <span style="color: #8b6952;">Seleccionar menú y ajustar detalles</span>
+                            <span class="step-description">Seleccionar menú y ajustar detalles</span>
                         </td>
                     </tr>
                     <tr>
-                        <td style="padding: 12px 0; text-align: center;">
-                            <strong style="font-size: 20px; color: #8b6952;">4</strong>
-                        </td>
-                        <td style="padding: 12px 0 12px 24px;">
+                        <td class="step-number">4</td>
+                        <td class="step-content">
                             <strong>Experiencia</strong><br>
-                            <span style="color: #8b6952;">¡Disfrutar evento transformador!</span>
+                            <span class="step-description">¡Disfrutar evento transformador!</span>
                         </td>
                     </tr>
                 </table>

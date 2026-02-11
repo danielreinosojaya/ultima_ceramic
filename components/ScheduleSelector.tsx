@@ -196,7 +196,7 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                 </p>
                 
                 {/* Enhanced Social Proof Tip - More Visible */}
-                <div className="bg-gradient-to-r from-blue-50 via-purple-50 to-pink-50 border-2 border-blue-400 p-4 rounded-lg mb-4 shadow-md animate-fade-in-fast">
+                <div className="bg-gradient-to-r from-blue-50 via-purple-50 to-pink-50 border-2 border-blue-400 p-4 rounded-lg mb-4 shadow-premium animate-fade-in-fast">
                   <div className="flex items-start gap-3">
                     <span className="text-2xl">💡</span>
                     <div className="flex-1">
@@ -225,13 +225,13 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                   </div>
                 </div>
                 {bookingMode === 'flexible' && firstSelectionDate && bookingWindowEndDate && (
-                    <div className="text-xs text-center font-semibold bg-amber-100 text-amber-800 p-2 rounded-md mb-4 animate-fade-in-fast">
+                    <div className="text-xs text-center font-semibold bg-gradient-to-r from-amber-50 to-orange-50 text-amber-800 p-3 rounded-lg mb-4 shadow-subtle animate-fade-in-fast border border-amber-200">
                       {`Puedes seleccionar clases hasta el ${bookingWindowEndDate.toLocaleDateString(language, { month: 'long', day: 'numeric' })}.`}
                     </div>
                 )}
                 <div className="flex justify-between items-center mb-4">
-                    <button onClick={handlePrevWeek} disabled={currentDate <= today} className="p-2 rounded-full hover:bg-gray-100 disabled:opacity-50">&lt;</button>
-                    <div className="font-semibold text-brand-text text-center">
+                    <button onClick={handlePrevWeek} disabled={currentDate <= today} className="p-2 rounded-full hover:bg-gray-100 hover:shadow-subtle disabled:opacity-50 transition-all duration-200 active:scale-95">&lt;</button>
+                    <div className="font-semibold text-brand-text text-center px-4 py-2 rounded-lg bg-gradient-to-r from-brand-primary/5 to-brand-accent/5 shadow-subtle">
                         {weekStart.toLocaleDateString(language, { month: 'short', day: 'numeric' })} - {weekEnd.toLocaleDateString(language, { month: 'short', day: 'numeric', year: 'numeric' })}
                     </div>
                     <button onClick={handleNextWeek} className="p-2 rounded-full hover:bg-gray-100">&gt;</button>
