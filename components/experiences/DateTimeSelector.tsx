@@ -83,9 +83,9 @@ export const DateTimeSelector: React.FC<DateTimeSelectorProps> = ({
     };
 
     if (dayOfWeek === 1) return []; // Lunes cerrado
-    if (dayOfWeek === 0) return buildSlots(10, 14); // Domingo: ultima clase 14:00
-    if (dayOfWeek === 6) return buildSlots(9, 16);  // Sabado: ultima clase 16:00
-    return buildSlots(10, 17); // Martes a Viernes: ultima clase 17:00
+    if (dayOfWeek === 0) return buildSlots(10, 16); // Domingo: último start 16:00
+    if (dayOfWeek === 6) return buildSlots(9, 18);  // Sábado: último start 18:00
+    return buildSlots(10, 19); // Martes a Viernes: último start 19:00
   };
 
   const getDaysInMonth = (date: Date) => {

@@ -155,12 +155,12 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
       return hours;
     };
 
-    if (dayOfWeek === 1) return [];
+    if (dayOfWeek === 1) return []; // Lunes cerrado
     const baseHours = dayOfWeek === 0
-      ? buildSlots(10, 14)
+      ? buildSlots(10, 16)  // Domingo: último start 16:00
       : dayOfWeek === 6
-      ? buildSlots(9, 16)
-      : buildSlots(10, 17);
+      ? buildSlots(9, 18)   // Sábado: último start 18:00
+      : buildSlots(10, 19); // Martes-Viernes: último start 19:00
 
     if (technique === 'painting') {
       return baseHours;

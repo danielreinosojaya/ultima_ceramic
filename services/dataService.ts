@@ -2777,16 +2777,16 @@ export const generateTimeSlots = (
   const slots: DynamicTimeSlot[] = [];
   
   // Configuración correcta de horarios por día:
-  // (El 'end' representa la ÚLTIMA HORA QUE PUEDE EMPEZAR UNA CLASE de 2 horas)
-  // - Domingo: 10am-4pm (10:00-16:00) → última clase empieza 14:00
-  // - Martes a Viernes: 10am-7pm (10:00-19:00) → última clase empieza 17:00
-  // - Sábado: 9am-6pm (09:00-18:00) → última clase empieza 16:00
-  // - Lunes: CERRADO (no aparecer)
+  // (El 'end' = ÚLTIMO START permitido, NO se genera :30 en esa hora)
+  // - Domingo: 10:00-16:00 (último start)
+  // - Lunes: CERRADO
+  // - Martes-Viernes: 10:00-19:00 (último start)
+  // - Sábado: 9:00-18:00 (último start)
   const hoursPerDay = [
-    { start: 10, end: 14, days: [0] },    // Domingo: últimas clases 10:00-14:00
-    // Lunes (1) EXCLUIDO - NO APARECER
-    { start: 10, end: 17, days: [2, 3, 4, 5] }, // Martes-Viernes: últimas clases 10:00-17:00
-    { start: 9, end: 16, days: [6] }      // Sábado: últimas clases 9:00-16:00
+    { start: 10, end: 16, days: [0] },    // Domingo: último start 16:00
+    // Lunes (1) EXCLUIDO - CERRADO
+    { start: 10, end: 19, days: [2, 3, 4, 5] }, // Martes-Viernes: último start 19:00
+    { start: 9, end: 18, days: [6] }      // Sábado: último start 18:00
   ];
 
     for (let d = 0; d < daysCount; d++) {
