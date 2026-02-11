@@ -6116,7 +6116,7 @@ async function addBookingAction(
         }
 
         if (body.productType === 'SINGLE_CLASS') {
-            // ===== VALIDACIÓN DE CAPACIDAD PARA SINGLE_CLASS =====
+            // ===== VALIDACIÓN PARA SINGLE_CLASS (1 persona) =====
             if (!body.slots || body.slots.length !== 1) {
                 throw new Error('SINGLE_CLASS must have exactly 1 slot');
             }
@@ -6151,7 +6151,28 @@ async function addBookingAction(
                 throw new Error(slotAvailability.message || `No hay cupos disponibles para ${requestedTechnique} en ${slot.date} a las ${normalizedTime}`);
             }
 
-            console.log(`[addBookingAction SINGLE_CLASS] ✅ Capacity validated: ${requestedTechnique} on ${slot.date} at ${normalizedTime}, ${slotAvailability.capacity.available} slots available`);
+            // REGLA ESPECIAL: Torno (potters_wheel) y Modelado (hand_modeling) con 1 persona
+            // Solo se permite si: (a) es horario fijo del calendario, O (b) fue abierto por reserva 3+
+            if ((requestedTechnique === 'potters_wheel' || requestedTechnique === 'hand_modeling') && requestedParticipants === 1) {
+                const { availability: scheduleAvailability } = await parseSlotAvailabilitySettings();
+                const dayKey = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
+                
+                // Técnica de calendario a buscar
+                const techToCheck = requestedTechnique === 'hand_modeling' ? 'molding' : 'potters_wheel';
+                const fixedSlots = scheduleAvailability?.[dayKey]?.filter(s => s.technique === techToCheck).map(s => s.time) || [];
+                const isFixedScheduleSlot = fixedSlots.includes(normalizedTime);
+                const isOpenedByLargeGroup = slotAvailability.openedByLargeGroup === true;
+
+                if (!isFixedScheduleSlot && !isOpenedByLargeGroup) {
+                    const techName = requestedTechnique === 'hand_modeling' ? 'Modelado a Mano' : 'Torno Alfarero';
+                    throw new Error(
+                        `${techName}: Para 1 persona, solo puedes reservar horarios fijos del calendario o slots ya abiertos por un grupo de 3+ personas. ` +
+                        `El horario ${normalizedTime} no cumple estas condiciones.`
+                    );
+                }
+            }
+
+            console.log(`[addBookingAction SINGLE_CLASS] ✅ Capacity & rules validated: ${requestedTechnique} on ${slot.date} at ${normalizedTime}, ${slotAvailability.capacity.available} slots available`);
         }
 
     // Calcular reschedule allowance basado en tipo de paquete

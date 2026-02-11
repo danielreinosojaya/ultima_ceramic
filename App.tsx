@@ -466,7 +466,7 @@ const App: React.FC = () => {
             product = {
                 id: `experience-${Date.now()}`,
                 name: pieceName,
-                type: 'SINGLE_SESSION' as any,
+                type: 'SINGLE_CLASS' as any,
                 price: pricing.total,
                 classes: 1,
                 description: `Experiencia: ${pieceName}`,
