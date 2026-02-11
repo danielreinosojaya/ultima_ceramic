@@ -311,13 +311,13 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                         <button 
                             type="button"
                             onClick={onClose}
-                            className="order-2 sm:order-1 px-5 py-2.5 rounded-lg border-2 border-brand-border text-brand-text font-semibold hover:bg-gray-50 transition-colors text-sm"
+                            className="order-2 sm:order-1 px-5 py-2.5 rounded-lg border-2 border-brand-border text-brand-text font-semibold hover:bg-gray-50 hover:border-gray-300 hover:shadow-md transition-all duration-200 text-sm active:scale-95"
                         >
                             Cancelar
                         </button>
                         <button type="submit"
                                 disabled={isSaveDisabled}
-                            className="order-1 sm:order-2 flex-1 px-6 py-2.5 bg-brand-primary text-white font-bold rounded-lg hover:opacity-90 transition-opacity duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed text-sm"
+                            className="order-1 sm:order-2 flex-1 px-6 py-2.5 bg-brand-primary text-white font-bold rounded-lg hover:shadow-lg hover:opacity-95 transition-all duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:shadow-none text-sm active:scale-95"
                         >
                             {'Guardar y Continuar'}
                         </button>

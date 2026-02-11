@@ -267,9 +267,9 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                                       aria-disabled={isDisabled}
                                       aria-label={isFull ? 'Lleno' : 'Horario disponible'}
                                       className={`relative p-2 rounded-md text-left transition-all duration-200 border w-full flex flex-col gap-1.5 ${
-                                        isSelected ? 'bg-brand-primary/10 ring-2 ring-brand-primary border-transparent' : 
+                                        isSelected ? 'bg-brand-primary/10 ring-2 ring-brand-primary border-transparent shadow-md' : 
                                         isDisabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-70' :
-                                        'bg-white hover:border-brand-primary hover:shadow-sm'
+                                        'bg-white hover:border-brand-primary hover:shadow-md hover:bg-brand-primary/5 active:scale-95'
                                       }`}
                                     >
                                       <div className="flex items-center justify-between gap-1">
