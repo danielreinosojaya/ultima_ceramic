@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from 'react';
-import { motion } from 'framer-motion';
 import type { UserInfo } from '../types';
 // Eliminado useLanguage, la app ahora es monolingüe en español
 import { COUNTRIES } from '@/constants';

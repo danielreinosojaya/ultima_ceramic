@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
 import type { ClassPackage, TimeSlot, EnrichedAvailableSlot, BookingMode, AppData } from '../types.js';
 import * as dataService from '../services/dataService.js';
 // Eliminado useLanguage, la app ahora es monolingüe en español
