@@ -344,37 +344,46 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                             };
                             
                             const dates = currentMonthData.dates;
-                            const firstDate = parseLocalDate(dates[0]);
-                            const firstDay = firstDate.getDay();
+                            // Calculate firstDay based on the 1st of the month, NOT the first available date
+                            const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+                            const firstDay = firstDayOfMonth.getDay();
+                            const availableDatesSet = new Set(dates);
                             const cells = [];
                             
-                            // Empty cells before first day
+                            // Empty cells before first day of month
                             for (let i = 0; i < firstDay; i++) {
                               cells.push(<div key={`empty-${i}`} />);
                             }
                             
-                            // Date cells
-                            dates.forEach(date => {
-                              const dayNum = parseLocalDate(date).getDate();
-                              const isSelected = selectedDate === date;
+                            // All days in month grid
+                            const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
+                            for (let day = 1; day <= daysInMonth; day++) {
+                              const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                              const isAvailable = availableDatesSet.has(dateStr);
+                              const isSelected = selectedDate === dateStr;
                               
                               cells.push(
                                 <button
-                                  key={date}
+                                  key={day}
                                   onClick={() => {
-                                    setSelectedDate(date);
-                                    setSelectedSlot(null);
+                                    if (isAvailable) {
+                                      setSelectedDate(dateStr);
+                                      setSelectedSlot(null);
+                                    }
                                   }}
+                                  disabled={!isAvailable}
                                   className={`aspect-square rounded-xl font-semibold text-sm transition-all ${
-                                    isSelected
+                                    isSelected && isAvailable
                                       ? 'bg-gradient-to-br from-brand-primary to-brand-accent text-white shadow-lg scale-105'
+                                      : !isAvailable
+                                      ? 'bg-transparent text-gray-300 cursor-not-allowed'
                                       : 'bg-gray-50 text-brand-text hover:bg-brand-primary/10 hover:scale-105 border border-transparent hover:border-brand-primary/20'
                                   }`}
                                 >
-                                  {dayNum}
+                                  {day}
                                 </button>
                               );
-                            });
+                            }
                             
                             return cells;
                           })()}

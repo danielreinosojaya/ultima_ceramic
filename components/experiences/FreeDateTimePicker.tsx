@@ -361,8 +361,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
 
         <div className="grid grid-cols-7 gap-1.5">
           {monthDays.map((day, index) => {
-            if (!day) return <div key={`empty-${index}`}></div>;
-            
+                            if (day === null) return <div key={`empty-${index}`}></div>;
             const isMonday_ = isMonday(day);
             const isPast = isPastDate(day);
             const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
