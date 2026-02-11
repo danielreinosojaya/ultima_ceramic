@@ -1453,6 +1453,8 @@ export interface SlotAvailabilityResult {
     time: string;
     technique: string;
     requestedParticipants: number;
+    /** true si el slot ya fue abierto por una reserva previa de 3+ personas (mismo horario) */
+    openedByLargeGroup?: boolean;
     capacity: {
         max: number;
         booked: number;

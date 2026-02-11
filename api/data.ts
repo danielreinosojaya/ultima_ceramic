@@ -712,9 +712,12 @@ const computeSlotAvailability = async (
     const availableCapacity = maxCapacity - overlappingParticipants;
     const canBook = availableCapacity >= requestedParticipants;
 
+    const openedByLargeGroup = bookingsInSlot.some(b => (b?.participants || 0) >= 3);
+
     return {
         available: canBook,
         normalizedTime,
+        openedByLargeGroup,
         capacity: {
             max: maxCapacity,
             booked: exactMatchParticipants,
@@ -1729,7 +1732,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             requestedParticipants,
                             capacity: availability.capacity,
                             bookingsCount: availability.bookingsCount,
-                            message: availability.message
+                            message: availability.message,
+                            openedByLargeGroup: Boolean((availability as any).openedByLargeGroup)
                         };
 
                         res.setHeader('Cache-Control', 'no-store');
@@ -4275,13 +4279,14 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     return b.slots.some((s: any) => s.date === requestedDate);
                 });
                 
-                // Obtener capacidades configuradas
-                const { scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
+                // Obtener capacidades/config y horarios (para reglas de horarios fijos)
+                const { availability, scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
                 const maxCapacityMap = getMaxCapacityMap(classCapacity);
                 const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
                 
                 // Contar participantes que solapan temporalmente
                 let overlappingParticipants = 0;
+                let openedByLargeGroupExactMatch = false;
                 
                 for (const booking of bookingsOnDate) {
                     if (!booking.slots || !Array.isArray(booking.slots)) continue;
@@ -4334,7 +4339,30 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                             const participantCount = booking.participants || 1;
                             overlappingParticipants += participantCount;
                             console.log(`[createCustomExperienceBooking] OVERLAP: ${s.time} with ${participantCount} participants`);
+
+                            const isExactMatch = bookingStartMinutes === requestedStartMinutes;
+                            if (isExactMatch && participantCount >= 3) {
+                                openedByLargeGroupExactMatch = true;
+                            }
                         }
+                    }
+                }
+
+                // ===== REGLA ESPECIAL: hand_modeling con 1 persona =====
+                // No debe abrir horarios libres: solo horarios fijos del calendario (molding)
+                // o slots ya abiertos por una reserva previa de 3+ personas en el mismo horario.
+                if (requestedTechnique === 'hand_modeling' && requestedParticipants === 1) {
+                    const dayKey = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date(`${requestedDate}T00:00:00`).getDay()];
+                    const normalizedRequestedTime = normalizeTime(requestedTime);
+                    const fixedHandTimes = getFixedSlotTimesForDate(requestedDate, dayKey, availability, scheduleOverrides, 'molding')
+                        .map(t => normalizeTime(t));
+
+                    const isFixedHandSlot = fixedHandTimes.includes(normalizedRequestedTime);
+                    if (!isFixedHandSlot && !openedByLargeGroupExactMatch) {
+                        return res.status(400).json({
+                            success: false,
+                            error: 'Para Modelado a Mano con 1 persona solo se permiten horarios fijos o unirse a una reserva ya abierta (3+ personas).'
+                        });
                     }
                 }
                 

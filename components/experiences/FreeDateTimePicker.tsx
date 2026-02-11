@@ -121,6 +121,14 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     return fixedTornoSlots;
   }, [availability, technique]);
 
+  // Obtener horarios fijos de modelado (molding) para una fecha (helper)
+  const getFixedHandSlots = useCallback((dateStr: string): string[] => {
+    const date = parseLocalDate(dateStr);
+    const dayKey = DAY_KEYS[date.getDay()];
+    const fixedHandSlots = availability?.[dayKey]?.filter(slot => slot.technique === 'molding').map(slot => slot.time) || [];
+    return [...new Set(fixedHandSlots)].sort();
+  }, [availability]);
+
   // Verificar si un slot está bloqueado por clase fija
   const isSlotBlockedByFixedClass = useCallback((dateStr: string, time: string): boolean => {
     if (technique !== 'potters_wheel') return false;
@@ -180,6 +188,20 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     return baseHours;
   };
   }, [availability, technique, participants, getFixedTornoSlots]);
+
+  const visibleHoursForSelectedDate = useMemo(() => {
+    if (!selectedDate) return [] as string[];
+    const candidateHours = getAvailableHours(selectedDate);
+
+    // Regla: Modelado a Mano (hand_modeling) con 1 persona NO abre el calendario completo.
+    // Solo horarios fijos del calendario (molding) o slots ya abiertos por reserva previa 3+.
+    if (technique !== 'hand_modeling' || participants !== 1) {
+      return candidateHours;
+    }
+
+    const fixedHandSlots = getFixedHandSlots(selectedDate);
+    return candidateHours.filter(hour => fixedHandSlots.includes(hour) || Boolean(hourAvailability[hour]?.openedByLargeGroup));
+  }, [selectedDate, technique, participants, getAvailableHours, getFixedHandSlots, hourAvailability]);
 
   // Validar disponibilidad cuando se selecciona hora
   const validateSlotAvailability = useCallback(async (date: string, time: string) => {
@@ -429,22 +451,42 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
               </div>
             </div>
           )}
+
+          {/* Mensaje informativo para Modelado a Mano con 1 persona */}
+          {technique === 'hand_modeling' && participants === 1 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <span className="text-xl">ℹ️</span>
+                <div>
+                  <p className="font-semibold text-amber-900 text-sm">
+                    Modelado a Mano: horarios del calendario
+                  </p>
+                  <p className="text-amber-700 text-xs mt-1">
+                    Para 1 persona solo verás horarios fijos del calendario.
+                    También aparecerán horarios si ya existe una reserva abierta de <strong>3+ personas</strong> en ese mismo slot.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
           
           {/* Mensaje si no hay horarios disponibles */}
-          {getAvailableHours(selectedDate).length === 0 && (
+          {visibleHoursForSelectedDate.length === 0 && (
             <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 text-center">
               <span className="text-3xl mb-2 block">📭</span>
               <p className="font-semibold text-gray-700">No hay horarios disponibles este día</p>
               <p className="text-gray-500 text-sm mt-1">
                 {technique === 'potters_wheel' && participants < 3 
                   ? 'No hay clases de torno programadas para este día. Prueba otro día o agrega más personas a tu grupo (3+ para clase privada).'
-                  : 'Por favor selecciona otro día.'}
+                  : (technique === 'hand_modeling' && participants === 1
+                    ? 'No hay clases de modelado programadas para este día. Prueba otro día o revisa si aparece un slot abierto por un grupo de 3+.'
+                    : 'Por favor selecciona otro día.')}
               </p>
             </div>
           )}
           
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
-            {getAvailableHours(selectedDate).map(hour => {
+            {visibleHoursForSelectedDate.map(hour => {
               const isSelected = selectedTime === hour;
               const hourState = hourAvailability[hour];
               const isBlockedByFixedClass = isSlotBlockedByFixedClass(selectedDate, hour);
