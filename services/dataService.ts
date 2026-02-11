@@ -2790,9 +2790,11 @@ export const generateTimeSlots = (
   ];
 
     for (let d = 0; d < daysCount; d++) {
-        const date = new Date(startDate);
-        date.setHours(0, 0, 0, 0);
-        date.setDate(date.getDate() + d);
+        // Construir fecha en tiempo local sin zona horaria
+        const startYear = startDate.getFullYear();
+        const startMonth = startDate.getMonth();
+        const startDay = startDate.getDate();
+        const date = new Date(startYear, startMonth, startDay + d);
         const dayOfWeek = date.getDay();
         const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
