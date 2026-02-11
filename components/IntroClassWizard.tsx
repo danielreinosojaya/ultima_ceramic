@@ -19,7 +19,7 @@ interface IntroClassWizardProps {
 }
 
 const StepIndicator: React.FC<{ currentStep: number, totalSteps: number, stepTitles: string[] }> = ({ currentStep, totalSteps, stepTitles }) => (
-    <div className="flex items-center justify-between mb-4">
+    <div className="flex items-center justify-between mb-8 px-2">
         {stepTitles.map((title, index) => {
             const stepNumber = index + 1;
             const isActive = stepNumber === currentStep;
@@ -27,12 +27,12 @@ const StepIndicator: React.FC<{ currentStep: number, totalSteps: number, stepTit
             return (
                 <React.Fragment key={title}>
                     <div className="flex flex-col items-center">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm transition-colors duration-300 ${isActive ? 'bg-brand-primary text-white' : isCompleted ? 'bg-brand-success text-white' : 'bg-gray-200 text-gray-500'}`}>
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-base transition-all duration-300 shadow-md ${isActive ? 'bg-gradient-to-br from-brand-primary to-brand-accent text-white scale-110' : isCompleted ? 'bg-brand-success text-white' : 'bg-gray-200 text-gray-600'}`}>
                             {isCompleted ? '✓' : stepNumber}
                         </div>
-                        <p className={`mt-1 text-xs text-center font-semibold transition-colors duration-300 ${isActive || isCompleted ? 'text-brand-text' : 'text-gray-400'}`}>{title}</p>
+                        <p className={`mt-2 text-xs text-center font-bold transition-all duration-300 ${isActive ? 'text-brand-primary scale-110' : isCompleted ? 'text-brand-success' : 'text-gray-400'}`}>{title}</p>
                     </div>
-                    {stepNumber < totalSteps && <div className={`flex-1 h-0.5 mx-2 ${isCompleted ? 'bg-brand-success' : 'bg-gray-200'}`}></div>}
+                    {stepNumber < totalSteps && <div className={`flex-1 h-1 mx-3 rounded-full transition-all duration-300 ${isCompleted ? 'bg-brand-success' : isActive ? 'bg-brand-primary' : 'bg-gray-200'}`}></div>}
                 </React.Fragment>
             )
         })}
@@ -98,7 +98,7 @@ export const IntroClassWizard: React.FC<IntroClassWizardProps> = ({ product, ses
                             const mes = meses[dateObj.getMonth()];
                             const año = dateObj.getFullYear();
                             return (
-                                <button key={month} onClick={() => handleMonthSelect(month)} className="w-full text-center p-4 bg-white rounded-lg font-semibold text-brand-text shadow-sm hover:shadow-md hover:bg-brand-primary/10 border border-brand-border transition-all">
+                                <button key={month} onClick={() => handleMonthSelect(month)} className="w-full text-center p-5 bg-gradient-to-br from-white to-gray-50 rounded-lg font-bold text-brand-primary shadow-md hover:shadow-lg hover:border-brand-primary border-2 border-gray-300 transition-all duration-200 hover:scale-102">
                                     {`${mes.charAt(0).toUpperCase() + mes.slice(1)} ${año}`}
                                 </button>
                             );
@@ -129,7 +129,7 @@ export const IntroClassWizard: React.FC<IntroClassWizardProps> = ({ product, ses
                                          key={day} 
                                          onClick={() => isAvailable && handleDaySelect(`${selectedMonth}-${String(day).padStart(2, '0')}`)}
                                          disabled={!isAvailable}
-                                         className={`w-full aspect-square rounded-full font-semibold transition-all ${isAvailable ? 'bg-white text-brand-text hover:bg-brand-primary/20 ring-1 ring-brand-border' : 'bg-transparent text-gray-300'}`}
+                                         className={`w-full aspect-square rounded-full font-bold transition-all duration-200 ${isAvailable ? 'bg-gradient-to-br from-white to-gray-50 text-brand-primary border-2 border-gray-300 hover:bg-brand-primary/20 hover:border-brand-primary hover:shadow-md' : 'bg-transparent text-gray-300 border-2 border-transparent'}`}
                                      >{day}</button>
                                  )
                              })}
@@ -147,8 +147,8 @@ export const IntroClassWizard: React.FC<IntroClassWizardProps> = ({ product, ses
                                     key={session.id}
                                     onClick={() => !isFull && handleTimeSelect(session)}
                                     disabled={isFull}
-                                    className={`relative w-full p-3 rounded-lg text-left transition-all duration-200 overflow-hidden flex flex-col items-start gap-2 ${
-                                        isSelected ? 'bg-brand-primary/10 ring-2 ring-offset-1 ring-brand-primary shadow-md' : 'bg-white hover:shadow-subtle'
+                                    className={`relative w-full p-4 rounded-lg text-left transition-all duration-200 overflow-hidden flex flex-col items-start gap-3 border-2 ${
+                                        isSelected ? 'bg-gradient-to-r from-brand-primary/20 to-brand-accent/20 border-brand-primary shadow-lg scale-102' : 'bg-gradient-to-br from-white to-gray-50 border-gray-300 hover:shadow-md'
                                     } ${isFull ? 'opacity-60 cursor-not-allowed' : ''}`}
                                 >
                                      {isFull && (
@@ -156,7 +156,7 @@ export const IntroClassWizard: React.FC<IntroClassWizardProps> = ({ product, ses
                                             Agotado
                                         </div>
                                     )}
-                                    <p className={`font-semibold text-lg ${isSelected ? 'text-brand-primary' : 'text-brand-text'}`}>{session.time}</p>
+                                    <p className={`font-bold text-lg ${isSelected ? 'text-brand-primary' : 'text-brand-text'}`}>{session.time}</p>
                                     <div className="flex items-center gap-2 w-full justify-between">
                                         <InstructorTag instructorId={session.instructorId} instructors={appData.instructors} />
                                         <CapacityIndicator count={session.paidBookingsCount} max={session.capacity} capacityMessages={appData.capacityMessages} />
@@ -186,12 +186,12 @@ export const IntroClassWizard: React.FC<IntroClassWizardProps> = ({ product, ses
     }
 
     return (
-        <div className="bg-brand-background p-4 rounded-lg">
-            <h3 className="text-xl font-semibold text-brand-text text-center">{product.name}</h3>
-            <p className="text-center text-brand-secondary text-sm">${product.price}</p>
-            <p className="text-center text-brand-secondary text-sm my-4">{product.description}</p>
+        <div className="bg-gradient-to-br from-white/95 via-gray-50 to-gray-100 p-6 sm:p-8 rounded-2xl sm:rounded-3xl shadow-2xl border-2 border-white">
+            <h3 className="text-4xl sm:text-5xl font-black bg-gradient-to-r from-brand-primary to-brand-accent bg-clip-text text-transparent text-center mb-3">{product.name}</h3>
+            <p className="text-center text-brand-secondary text-lg font-semibold">${product.price}</p>
+            <p className="text-center text-brand-secondary text-base my-4 font-medium">{product.description}</p>
             
-            <div className="space-y-4 text-sm mb-6 text-left border-t border-b border-gray-200 py-4">
+            <div className="space-y-4 text-sm mb-8 text-left border-t border-b border-gray-300 py-6 bg-gradient-to-br from-brand-primary/5 to-brand-accent/5 px-4 rounded-xl">
                 <div className="flex items-start"><ClockIcon className="w-5 h-5 mr-3 mt-0.5 text-brand-primary flex-shrink-0" /> <div><span className="font-bold text-brand-text">Duración:</span> {product.details.duration}</div></div>
                  <div className="flex items-start"><SparklesIcon className="w-5 h-5 mr-3 mt-0.5 text-brand-primary flex-shrink-0" />
                     <div>
@@ -211,14 +211,14 @@ export const IntroClassWizard: React.FC<IntroClassWizardProps> = ({ product, ses
                 {renderContent()}
             </div>
 
-            <div className="mt-6 pt-4 border-t border-gray-200 flex items-center justify-between">
-                 <button onClick={goBack} className="text-brand-secondary font-semibold hover:underline">
-                    Atrás
+            <div className="mt-8 pt-6 border-t-2 border-gray-300 flex items-center justify-between">
+                 <button onClick={goBack} className="text-brand-primary font-bold hover:underline">
+                    ← Atrás
                 </button>
                  <button
                     onClick={handleConfirm}
                     disabled={!selectedTime}
-                    className="bg-brand-primary text-white font-bold py-3 px-6 rounded-lg hover:bg-brand-accent transition-colors duration-300 disabled:bg-gray-400"
+                    className="bg-gradient-to-r from-brand-primary to-brand-accent text-white font-bold py-3 px-8 rounded-lg hover:shadow-lg hover:shadow-brand-primary/50 hover:scale-105 transition-all duration-300 disabled:bg-gray-400 disabled:scale-100"
                 >
                     Continuar con la Selección
                 </button>

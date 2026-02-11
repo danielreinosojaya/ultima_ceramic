@@ -181,15 +181,15 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onClose }) => 
     if (currentView === 'select-booking') {
         return (
             <div className="max-w-2xl mx-auto p-6">
-                <div className="bg-white rounded-lg shadow-lg p-8">
+                <div className="bg-gradient-to-br from-white/95 to-gray-50 rounded-2xl shadow-2xl border-2 border-white p-8">
                     <div className="text-center mb-8">
                         <div className="flex justify-center mb-4">
-                            <svg className="w-12 h-12 text-brand-primary" fill="currentColor" viewBox="0 0 20 20">
+                            <svg className="w-16 h-16 text-brand-primary" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
                             </svg>
                         </div>
-                        <h1 className="text-2xl font-bold text-brand-text mb-2">Tus Reservas</h1>
-                        <p className="text-brand-secondary text-sm">Selecciona una para ver y reagendar tus clases</p>
+                        <h1 className="text-4xl sm:text-5xl font-black bg-gradient-to-r from-brand-primary to-brand-accent bg-clip-text text-transparent mb-3">Tus Reservas</h1>
+                        <p className="text-brand-secondary font-semibold text-base">Selecciona una para ver y reagendar tus clases</p>
                     </div>
 
                     <button
@@ -214,9 +214,9 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onClose }) => 
                                     setSelectedBookingIndex(index);
                                     setCurrentView('bookings');
                                 }}
-                                className="w-full p-4 border-2 border-brand-border rounded-lg hover:border-brand-primary hover:bg-blue-50 text-left transition-colors"
+                                className="w-full p-5 border-2 border-gray-300 rounded-lg hover:border-brand-primary hover:bg-gradient-to-r hover:from-brand-primary/10 hover:to-brand-accent/10 hover:shadow-md text-left transition-all duration-200"
                             >
-                                <p className="font-semibold text-brand-text">
+                                <p className="font-bold text-lg text-brand-primary">
                                     {getBookingDisplayName(booking)}
                                 </p>
                                 {booking.bookingDate && (
@@ -251,9 +251,9 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onClose }) => 
     return (
         <div className="max-w-4xl mx-auto p-6">
             {/* Header */}
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold text-brand-text mb-2">Mi Panel de Clases</h1>
-                <p className="text-brand-secondary">Gestiona tus reservas y reagenda cuando sea necesario</p>
+            <div className="mb-10">
+                <h1 className="text-5xl sm:text-6xl font-black bg-gradient-to-r from-brand-primary to-brand-accent bg-clip-text text-transparent mb-4">Mi Panel de Clases</h1>
+                <p className="text-brand-secondary font-semibold text-lg">Gestiona tus reservas y reagenda cuando sea necesario</p>
             </div>
 
             {/* Bookings View - Pass ONLY current booking */}
@@ -278,8 +278,8 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onClose }) => 
                     }}
                 />
             ) : (
-                <div className="text-center py-12 bg-gray-50 rounded-lg">
-                    <p className="text-brand-secondary text-sm sm:text-base md:text-lg">No tienes clases programadas aún</p>
+                <div className="text-center py-16 bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl border-2 border-gray-200">
+                    <p className="text-brand-secondary font-semibold text-base sm:text-lg md:text-xl">No tienes clases programadas aún</p>
                     <p className="text-brand-secondary text-xs sm:text-sm mt-2">
                         {onClose ? (
                             <>
@@ -307,7 +307,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onClose }) => 
                             setCurrentView('options');
                         }
                     }}
-                    className="px-6 py-2 border border-brand-border rounded-lg text-brand-text hover:bg-gray-50 font-semibold transition-colors"
+                    className="px-8 py-3 border-2 border-brand-primary text-brand-primary font-bold rounded-lg hover:bg-brand-primary/10 hover:shadow-md transition-all duration-200"
                 >
                     ← Volver
                 </button>
