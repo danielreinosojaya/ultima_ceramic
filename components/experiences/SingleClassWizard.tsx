@@ -296,7 +296,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                 return (
                   <div>
                     {/* Month Navigation */}
-                    <div className="flex justify-between items-center mb-4">
+                    <div className="flex items-center justify-between mb-5">
                       <button
                         onClick={() => {
                           const newDate = new Date(currentMonth);
@@ -304,13 +304,13 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                           setCurrentMonth(newDate);
                         }}
                         disabled={!canGoPrev}
-                        className="px-3 py-1 rounded-lg border border-gray-300 text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                        className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600 hover:text-brand-primary disabled:opacity-40 disabled:cursor-not-allowed"
                       >
-                        ← Anterior
+                        ←
                       </button>
-                      <div className="text-lg font-bold text-gray-800">
+                      <h3 className="text-xl font-bold text-brand-text capitalize">
                         {currentMonth.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}
-                      </div>
+                      </h3>
                       <button
                         onClick={() => {
                           const newDate = new Date(currentMonth);
@@ -318,21 +318,23 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                           setCurrentMonth(newDate);
                         }}
                         disabled={!canGoNext}
-                        className="px-3 py-1 rounded-lg border border-gray-300 text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                        className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600 hover:text-brand-primary disabled:opacity-40 disabled:cursor-not-allowed"
                       >
-                        Siguiente →
+                        →
                       </button>
                     </div>
 
                     {/* Calendar Grid for Current Month */}
                     {currentMonthData ? (
                       <div>
-                        <div className="grid grid-cols-7 gap-2">
+                        <div className="grid grid-cols-7 gap-1.5 mb-3">
                           {/* Day headers */}
-                          {['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa', 'Do'].map(d => (
-                            <div key={d} className="text-center text-xs font-bold text-gray-500 py-2">{d}</div>
+                          {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(d => (
+                            <div key={d} className="text-center text-xs font-bold text-gray-500 py-1">{d}</div>
                           ))}
-                          
+                        </div>
+
+                        <div className="grid grid-cols-7 gap-1.5">
                           {/* Calendar grid */}
                           {(() => {
                             const parseLocalDate = (dateStr: string): Date => {
@@ -343,11 +345,10 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                             const dates = currentMonthData.dates;
                             const firstDate = parseLocalDate(dates[0]);
                             const firstDay = firstDate.getDay();
-                            const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1;
                             const cells = [];
                             
                             // Empty cells before first day
-                            for (let i = 0; i < adjustedFirstDay; i++) {
+                            for (let i = 0; i < firstDay; i++) {
                               cells.push(<div key={`empty-${i}`} />);
                             }
                             
@@ -363,10 +364,10 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                                     setSelectedDate(date);
                                     setSelectedSlot(null);
                                   }}
-                                  className={`p-2 rounded-lg border-2 transition-all text-center font-bold text-sm ${
+                                  className={`aspect-square rounded-xl font-semibold text-sm transition-all ${
                                     isSelected
-                                      ? 'border-blue-500 bg-blue-100 text-blue-700 ring-2 ring-blue-300'
-                                      : 'border-gray-200 bg-white text-gray-700 hover:border-blue-400 hover:bg-blue-50'
+                                      ? 'bg-gradient-to-br from-brand-primary to-brand-accent text-white shadow-lg scale-105'
+                                      : 'bg-gray-50 text-brand-text hover:bg-brand-primary/10 hover:scale-105 border border-transparent hover:border-brand-primary/20'
                                   }`}
                                 >
                                   {dayNum}
