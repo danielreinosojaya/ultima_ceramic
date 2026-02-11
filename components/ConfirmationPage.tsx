@@ -83,15 +83,13 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
     const [copied, setCopied] = useState(false);
     const [modalOpen, setModalOpen] = useState(false);
 
-    // 🔴 CRÍTICO: Verificar si booking está completamente vacío
-    console.error('🔴 CRITICO ConfirmationPage mounting:', {
-        bookingExists: !!booking,
-        bookingType: typeof booking,
-        bookingKeys: booking ? Object.keys(booking) : 'NULL',
-        bookingCodeExists: !!(booking && booking.bookingCode),
-        bookingCodeValue: booking?.bookingCode,
-        bookingCodeType: typeof booking?.bookingCode,
-        fullBooking: JSON.stringify(booking, null, 2)
+    // � DEBUG: Verificar que booking llegó correctamente a ConfirmationPage
+    console.log('✅ ConfirmationPage mounted with booking:', {
+        bookingCode: booking?.bookingCode,
+        productType: booking?.productType,
+        price: booking?.price,
+        technique: booking?.technique,
+        slots: booking?.slots?.length || 0
     });
 
     const isPackage = booking.product.type === 'CLASS_PACKAGE';

@@ -515,7 +515,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
             <div className="mt-4 bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
               <p className="text-sm text-blue-900 font-medium mb-1">💡 Precio por Pieza</p>
               <p className="text-xs text-blue-700">
-                Cada participante elegirá su pieza. El precio mínimo es de $18 por persona (incluye IVA). Hay piezas de mayor valor y se paga solo la diferencia en el taller. La reserva se confirma con el pago del 100% del mínimo por persona.
+                Cada participante elegirá su pieza. El precio mínimo es de $25 por persona (incluye IVA). Hay piezas de mayor valor y se paga solo la diferencia en el taller. La reserva se confirma con el pago del 100% del mínimo por persona.
               </p>
               <div className="mt-3 pt-3 border-t border-blue-300">
                 <p className="text-sm font-semibold text-blue-900 mb-1">Pago mínimo de reserva</p>
@@ -718,9 +718,9 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
     
     // Textos explicativos por técnica
     const techniqueExplanations: Record<string, string> = {
-      'potters_wheel': '🎯 Torno Alfarero: Es una mesa circular que gira para modelar cerámica. Mientras el plato da vueltas, tú usas las manos para dar forma a piezas redondas y simétricas (como tazas o cuencos). Es una técnica que requiere tu atención y concentración para crear piezas perfectas.',
-      'hand_modeling': '✋ Modelado a Mano: Crea formas libres usando solo tus manos. Técnicas como pellizco, churros y planchas te permiten explorar tu creatividad sin restricciones, ideal para esculturas y piezas únicas.',
-      'painting': '🎨 Pintado a Mano: Pinta piezas de cerámica ya moldeadas con colores vibrantes. Perfecto para expresar tu creatividad visual en superficies preparadas sin necesidad de modelar.'
+      'potters_wheel': 'Torno Alfarero: Tecnica tradicional que requiere coordinacion y presicion. Mientras el plato da vueltas, tú usas las manos para dar forma a piezas redondas y simétricas (como tazas o cuencos).',
+      'hand_modeling': 'Modelado a Mano: Crea formas libres usando solo tus manos. Técnicas como pellizco, churros y planchas te permiten explorar tu creatividad sin restricciones, ideal para esculturas y piezas únicas.',
+      'painting': 'Pintado a Mano: Pinta piezas de cerámica ya moldeadas con colores vibrantes. Perfecto para expresar tu creatividad visual en superficies preparadas sin necesidad de modelar.'
     };
     
     return (
@@ -1112,6 +1112,8 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
           : (state.config as CeramicOnlyConfig)?.participants || 0,
         config: state.config,
         userInfo: data.userInfo,
+        invoiceData: data.needsInvoice ? data.invoiceData : undefined,
+        needsInvoice: data.needsInvoice,
         totalPrice: parseFloat(calculateTotalPricing()),
         menuSelections: state.menuSelections,
         childrenPieces: state.experienceType === 'celebration' 
@@ -1147,6 +1149,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Error al crear la pre-reserva. Intenta de nuevo.'
       }));
+      throw error;
     }
   };
   

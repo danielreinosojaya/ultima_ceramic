@@ -2776,34 +2776,44 @@ export const generateTimeSlots = (
 ): DynamicTimeSlot[] => {
   const slots: DynamicTimeSlot[] = [];
   
-  // Configuración: qué horas abren cada día
+  // Configuración correcta de horarios por día:
+  // (El 'end' = ÚLTIMO START permitido, NO se genera :30 en esa hora)
+  // - Domingo: 10:00-16:00 (último start)
+  // - Lunes: CERRADO
+  // - Martes-Viernes: 10:00-19:00 (último start)
+  // - Sábado: 9:00-18:00 (último start)
   const hoursPerDay = [
-    { start: 9, end: 19, days: [1, 2, 3, 4, 5] }, // Lunes-Viernes: 9 AM a 7 PM
-    { start: 9, end: 17, days: [6] } // Sábado: 9 AM a 5 PM
-    // Domingo (0) no aparece, así que cerrado
+    { start: 10, end: 16, days: [0] },    // Domingo: último start 16:00
+    // Lunes (1) EXCLUIDO - CERRADO
+    { start: 10, end: 19, days: [2, 3, 4, 5] }, // Martes-Viernes: último start 19:00
+    { start: 9, end: 18, days: [6] }      // Sábado: último start 18:00
   ];
 
-  for (let d = 0; d < daysCount; d++) {
-    const date = new Date(startDate);
-    date.setDate(date.getDate() + d);
-    const dayOfWeek = date.getDay();
-    const dateStr = date.toISOString().split('T')[0];
+    for (let d = 0; d < daysCount; d++) {
+        // Construir fecha en tiempo local sin zona horaria
+        const startYear = startDate.getFullYear();
+        const startMonth = startDate.getMonth();
+        const startDay = startDate.getDate();
+        const date = new Date(startYear, startMonth, startDay + d);
+        const dayOfWeek = date.getDay();
+        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
     const dayConfig = hoursPerDay.find(h => h.days.includes(dayOfWeek));
-    if (!dayConfig) continue; // Día cerrado (domingo)
+    if (!dayConfig) continue; // Día cerrado (Lunes)
 
     // Generar slots cada 30 minutos
-    for (let hour = dayConfig.start; hour < dayConfig.end; hour++) {
-      for (let minute of [0, 30]) {
+    // IMPORTANTE: no generar :30 de la última hora (excedería cierre)
+    for (let hour = dayConfig.start; hour <= dayConfig.end; hour++) {
+      const isLastHour = hour === dayConfig.end;
+      const minutesToAdd = isLastHour ? [0] : [0, 30]; // Última hora solo :00
+      
+      for (let minute of minutesToAdd) {
         const startTime = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
         
         // End time: siempre +2 horas
         let endHour = hour;
         let endMin = minute;
         endHour += 2;
-        
-        // Si superamos el límite del día, no crear slot
-        if (endHour > dayConfig.end) continue;
         
         const endTime = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
 

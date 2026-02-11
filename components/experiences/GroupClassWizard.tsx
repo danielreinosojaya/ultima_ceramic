@@ -513,9 +513,15 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
                 const uniqueDates = [...new Set(availableSlots.map(s => s.date))].sort();
                 const allMonths: { key: string; dates: string[]; date: Date }[] = [];
                 
+                // Helper para parsear fechas en zona horaria local, no UTC
+                const parseLocalDate = (dateStr: string): Date => {
+                  const [year, month, day] = dateStr.split('-').map(Number);
+                  return new Date(year, month - 1, day);
+                };
+                
                 const groupedByMonth: Record<string, string[]> = {};
                 uniqueDates.forEach(date => {
-                  const d = new Date(date);
+                  const d = parseLocalDate(date);
                   const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
                   if (!groupedByMonth[monthKey]) groupedByMonth[monthKey] = [];
                   groupedByMonth[monthKey].push(date);
@@ -578,8 +584,13 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
                           
                           {/* Calendar grid */}
                           {(() => {
+                            const parseLocalDate = (dateStr: string): Date => {
+                              const [year, month, day] = dateStr.split('-').map(Number);
+                              return new Date(year, month - 1, day);
+                            };
+                            
                             const dates = currentMonthData.dates;
-                            const firstDate = new Date(dates[0]);
+                            const firstDate = parseLocalDate(dates[0]);
                             const firstDay = firstDate.getDay();
                             const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1;
                             const cells = [];
@@ -591,7 +602,7 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
                             
                             // Date cells
                             dates.forEach(date => {
-                              const dayNum = new Date(date).getDate();
+                              const dayNum = parseLocalDate(date).getDate();
                               const isSelected = selectedDate === date;
                               
                               cells.push(
@@ -629,7 +640,11 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
               {selectedDate && (
                 <div>
                   <div className="text-sm font-bold text-gray-700 mb-3 uppercase tracking-wide">
-                    ⏰ {new Date(selectedDate).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
+                    ⏰ {(() => {
+                      const [year, month, day] = selectedDate.split('-').map(Number);
+                      const date = new Date(year, month - 1, day);
+                      return date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+                    })()}
                   </div>
                   
                   {(() => {
@@ -738,7 +753,11 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
             <div className="bg-gradient-to-r from-green-50 to-green-100 p-4 rounded-lg border-2 border-green-400">
               <div className="text-xs font-bold text-green-700 uppercase">✓ Horario Confirmado</div>
               <div className="text-xl font-bold text-gray-800 mt-2">
-                🕐 {selectedSlot.time} • {new Date(selectedSlot.date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
+                🕐 {selectedSlot.time} • {(() => {
+                  const [year, month, day] = selectedSlot.date.split('-').map(Number);
+                  const date = new Date(year, month - 1, day);
+                  return date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+                })()}
               </div>
               <div className="text-xs text-gray-600 mt-1">Duración: 2 horas</div>
             </div>

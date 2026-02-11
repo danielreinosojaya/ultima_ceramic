@@ -475,29 +475,32 @@ const getBusinessHoursForDay = (dayOfWeek: number): string[] => {
 
     if (dayOfWeek === 1) return hours; // Lunes cerrado
 
+    // Sábado: 9:00-18:00 (último start 18:00, NO 18:30)
     if (dayOfWeek === 6) {
-        for (let hour = 9; hour <= 19; hour++) {
-            for (const min of ['00', '30']) {
-                if (hour === 19 && min === '30') break;
+        for (let hour = 9; hour <= 18; hour++) {
+            const mins = hour === 18 ? ['00'] : ['00', '30'];
+            for (const min of mins) {
                 hours.push(`${String(hour).padStart(2, '0')}:${min}`);
             }
         }
         return hours;
     }
 
+    // Domingo: 10:00-16:00 (último start 16:00, NO 16:30)
     if (dayOfWeek === 0) {
         for (let hour = 10; hour <= 16; hour++) {
-            for (const min of ['00', '30']) {
-                if (hour === 16 && min === '30') break;
+            const mins = hour === 16 ? ['00'] : ['00', '30'];
+            for (const min of mins) {
                 hours.push(`${String(hour).padStart(2, '0')}:${min}`);
             }
         }
         return hours;
     }
 
+    // Martes-Viernes: 10:00-19:00 (último start 19:00, NO 19:30)
     for (let hour = 10; hour <= 19; hour++) {
-        for (const min of ['00', '30']) {
-            if (hour === 19 && min === '30') break;
+        const mins = hour === 19 ? ['00'] : ['00', '30'];
+        for (const min of mins) {
             hours.push(`${String(hour).padStart(2, '0')}:${min}`);
         }
     }
