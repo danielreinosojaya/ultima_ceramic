@@ -139,7 +139,7 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
       return;
     }
     try {
-      onConfirm(pricing);
+      onConfirm(pricing, technique);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al confirmar');
     }

@@ -451,7 +451,18 @@ const App: React.FC = () => {
         let product = finalDetails.product;
         if (!product && experienceUIState.pricing) {
             const pricing = experienceUIState.pricing;
-            const pieceName = pricing.pieces.map(p => p.name).join(', ') || 'Experiencia Cerámica';
+            const selectedTechnique = technique || prefillTechnique || 'hand_modeling';
+            
+            // Map technique to display name
+            const techniqueNames: Record<string, string> = {
+                'potters_wheel': 'Torno Alfarero',
+                'hand_modeling': 'Modelado a Mano',
+                'painting': 'Pintura de piezas'
+            };
+            
+            // Use piece names if available, otherwise use technique name
+            const pieceName = pricing.pieces.map(p => p.name).join(', ') || techniqueNames[selectedTechnique] || 'Experiencia Cerámica';
+            
             product = {
                 id: `experience-${Date.now()}`,
                 name: pieceName,
@@ -462,7 +473,7 @@ const App: React.FC = () => {
                 details: {
                     pieces: pricing.pieces,
                     guidedOption: pricing.guidedOption,
-                    technique: prefillTechnique || 'hand_modeling',
+                    technique: selectedTechnique,
                 }
             } as any;
         }
@@ -486,11 +497,10 @@ const App: React.FC = () => {
             acceptedNoRefund: requiresImmediateAcceptance ? !!data.acceptedNoRefund : false
         };
 
-        // Add technique
-        if (prefillTechnique) {
-            bookingData.technique = prefillTechnique;
-        } else if (finalDetails.technique) {
-            bookingData.technique = finalDetails.technique;
+        // Add technique (prefer technique from SingleClassWizard/PieceExperience flow)
+        const finalTechnique = technique || prefillTechnique || (product.details?.technique);
+        if (finalTechnique) {
+            bookingData.technique = finalTechnique;
         }
 
         // Add experience pricing data
@@ -947,7 +957,7 @@ const App: React.FC = () => {
                 return (
                     <PieceExperienceWizard
                         pieces={pieces}
-                        onConfirm={(pricing: ExperiencePricing) => {
+                        onConfirm={(pricing: ExperiencePricing, selectedTechnique: GroupTechnique) => {
                             setExperienceUIState(prev => ({
                                 ...prev,
                                 pricing,
@@ -957,6 +967,7 @@ const App: React.FC = () => {
                                 ...prev,
                                 userInfo: null // Will be filled by user info modal
                             }));
+                            setTechnique(selectedTechnique);
                             setExperienceType('experience');
                             setIsUserInfoModalOpen(true);
                         }}
@@ -983,7 +994,7 @@ const App: React.FC = () => {
                             : []
                         }
                         appData={appData}
-                        onConfirm={(pricing: ExperiencePricing, selectedSlot: TimeSlot | null) => {
+                        onConfirm={(pricing: ExperiencePricing, selectedSlot: TimeSlot | null, selectedTechnique: GroupTechnique) => {
                             setExperienceUIState(prev => ({
                                 ...prev,
                                 pricing,
@@ -994,6 +1005,7 @@ const App: React.FC = () => {
                                 slots: selectedSlot ? [selectedSlot] : [],
                                 userInfo: null // Will be filled by user info modal
                             }));
+                            setTechnique(selectedTechnique);
                             setExperienceType('experience');
                             setIsUserInfoModalOpen(true);
                         }}

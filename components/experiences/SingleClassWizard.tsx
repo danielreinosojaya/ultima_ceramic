@@ -175,7 +175,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
       return;
     }
     try {
-      onConfirm(pricing, selectedSlot);
+      onConfirm(pricing, selectedSlot, technique);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al confirmar');
     }
