@@ -138,10 +138,32 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     return (dateStr: string): string[] => {
     const date = parseLocalDate(dateStr);
     const dayOfWeek = date.getDay();
-    
-    // Lunes: cerrado
-    if (dayOfWeek === 1) {
-      return [];
+
+    const buildSlots = (openStart: number, lastStartHour: number) => {
+      // lastStartHour = última hora que puede empezar una clase (respetando 2 horas de duración)
+      const hours: string[] = [];
+      // Todas las horas ANTES de la última, con :00 y :30
+      for (let hour = openStart; hour < lastStartHour; hour++) {
+        for (const min of ['00', '30']) {
+          const timeSlot = `${String(hour).padStart(2, '0')}:${min}`;
+          hours.push(timeSlot);
+        }
+      }
+      // La última hora SOLO con :00 (no :30, porque :30 excedería cierre)
+      const lastSlot = `${String(lastStartHour).padStart(2, '0')}:00`;
+      hours.push(lastSlot);
+      return hours;
+    };
+
+    if (dayOfWeek === 1) return []; // Lunes cerrado
+    const baseHours = dayOfWeek === 0
+      ? buildSlots(10, 16)  // Domingo: último start 16:00
+      : dayOfWeek === 6
+      ? buildSlots(9, 18)   // Sábado: último start 18:00
+      : buildSlots(10, 19); // Martes-Viernes: último start 19:00
+
+    if (technique === 'painting') {
+      return baseHours;
     }
     
     const fixedTornoSlots = getFixedTornoSlots(dateStr);
@@ -154,40 +176,8 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
       return fixedHours;
     }
     
-    // CASO 2: Grupos grandes o otras técnicas → MOSTRAR TODOS los horarios, sin filtrar
-    const hours: string[] = [];
-
-    if (dayOfWeek === 6) {
-      // Sábado: 9am a 7pm (cierre 9pm) - slots cada 30 min hasta 19:00
-      for (let hour = 9; hour <= 19; hour++) {
-        for (const min of ['00', '30']) {
-          if (hour === 19 && min === '30') break;
-          const timeSlot = `${String(hour).padStart(2, '0')}:${min}`;
-          hours.push(timeSlot);
-        }
-      }
-    } else if (dayOfWeek === 0) {
-      // Domingo: 10am a 4pm (cierre 6pm) - slots cada 30 min hasta 16:00
-      for (let hour = 10; hour <= 16; hour++) {
-        for (const min of ['00', '30']) {
-          if (hour === 16 && min === '30') break;
-          const timeSlot = `${String(hour).padStart(2, '0')}:${min}`;
-          hours.push(timeSlot);
-        }
-      }
-    } else {
-      // Martes a Viernes: 10am a 7pm (cierre 9pm) - slots cada 30 min hasta 19:00
-      for (let hour = 10; hour <= 19; hour++) {
-        for (const min of ['00', '30']) {
-          if (hour === 19 && min === '30') break;
-          const timeSlot = `${String(hour).padStart(2, '0')}:${min}`;
-          hours.push(timeSlot);
-        }
-      }
-    }
-    
-    console.log(`🆓 [${technique}] Horarios totales: ${hours.length} slots`);
-    return hours;
+    console.log(`🆓 [${technique}] Horarios totales: ${baseHours.length} slots`);
+    return baseHours;
   };
   }, [availability, technique, participants, getFixedTornoSlots]);
 
@@ -288,6 +278,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   const monthName = currentMonth.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
 
   const isMonday = (day: number) => {
+    if (technique !== 'painting') return false;
     const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
     return date.getDay() === 1;
   };
@@ -370,8 +361,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
 
         <div className="grid grid-cols-7 gap-1.5">
           {monthDays.map((day, index) => {
-            if (!day) return <div key={`empty-${index}`}></div>;
-            
+                            if (day === null) return <div key={`empty-${index}`}></div>;
             const isMonday_ = isMonday(day);
             const isPast = isPastDate(day);
             const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;

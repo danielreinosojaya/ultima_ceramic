@@ -496,29 +496,32 @@ const getBusinessHoursForDay = (dayOfWeek: number): string[] => {
 
     if (dayOfWeek === 1) return hours; // Lunes cerrado
 
+    // Sábado: 9:00-18:00 (último start 18:00, NO 18:30)
     if (dayOfWeek === 6) {
-        for (let hour = 9; hour <= 19; hour++) {
-            for (const min of ['00', '30']) {
-                if (hour === 19 && min === '30') break;
+        for (let hour = 9; hour <= 18; hour++) {
+            const mins = hour === 18 ? ['00'] : ['00', '30'];
+            for (const min of mins) {
                 hours.push(`${String(hour).padStart(2, '0')}:${min}`);
             }
         }
         return hours;
     }
 
+    // Domingo: 10:00-16:00 (último start 16:00, NO 16:30)
     if (dayOfWeek === 0) {
         for (let hour = 10; hour <= 16; hour++) {
-            for (const min of ['00', '30']) {
-                if (hour === 16 && min === '30') break;
+            const mins = hour === 16 ? ['00'] : ['00', '30'];
+            for (const min of mins) {
                 hours.push(`${String(hour).padStart(2, '0')}:${min}`);
             }
         }
         return hours;
     }
 
+    // Martes-Viernes: 10:00-19:00 (último start 19:00, NO 19:30)
     for (let hour = 10; hour <= 19; hour++) {
-        for (const min of ['00', '30']) {
-            if (hour === 19 && min === '30') break;
+        const mins = hour === 19 ? ['00'] : ['00', '30'];
+        for (const min of mins) {
             hours.push(`${String(hour).padStart(2, '0')}:${min}`);
         }
     }
@@ -552,6 +555,22 @@ const computeSlotAvailability = async (
     const normalizedTime = normalizeTime(requestedTime);
     const requestedStartMinutes = timeToMinutes(normalizedTime);
     const requestedEndMinutes = requestedStartMinutes + (2 * 60); // 2 horas
+
+    const requestedDayOfWeek = new Date(`${requestedDate}T00:00:00`).getDay();
+    if (requestedTechnique === 'painting' && requestedDayOfWeek === 1) {
+        const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
+        return {
+            available: false,
+            normalizedTime,
+            capacity: {
+                max: maxCapacity,
+                booked: maxCapacity,
+                available: 0
+            },
+            bookingsCount: 0,
+            message: 'Pintura no está disponible los lunes'
+        };
+    }
 
     const disabledTimes = freeDateTimeOverrides?.[requestedDate]?.disabledTimes || [];
     if (disabledTimes.includes(normalizedTime)) {
@@ -1281,78 +1300,6 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         currentDate.setDate(currentDate.getDate() + i);
                         const dateStr = currentDate.toISOString().split('T')[0];
                         const dayKey = DAY_NAMES[currentDate.getDay()];
-                        
-                        // AGREGAR CLASES DE INTRODUCCIÓN DE TORNO PARA GRUPOS
-                        // Martes 19:00 y Miércoles 11:00 para grupos de 2+ personas
-                        if (requestedTechnique === 'potters_wheel' && requestedParticipants >= 2) {
-                            if ((dayKey === 'Tuesday' && currentDate >= searchStartDate) || 
-                                (dayKey === 'Wednesday' && currentDate >= searchStartDate)) {
-                                
-                                const introTime = dayKey === 'Tuesday' ? '19:00' : '11:00';
-                                const slotStartMinutes = timeToMinutes(introTime);
-                                const slotEndMinutes = slotStartMinutes + (2 * 60); // 2 horas
-
-                                const hasCourseBlock = hasCourseOverlap(dateStr, slotStartMinutes, slotEndMinutes, courseSessionsByDate);
-                                
-                                if (!hasCourseBlock) {
-                                    // Contar participantes que se solapan con este slot de introducción
-                                    const bookingsOverlappingIntro = bookings.filter((b: any) => {
-                                        if (!b.slots || !Array.isArray(b.slots)) return false;
-                                        
-                                        const bookingTechnique = b.technique || (b.product?.details as any)?.technique;
-                                        if (bookingTechnique !== 'potters_wheel') return false;
-                                        
-                                        return b.slots.some((s: any) => {
-                                            if (s.date !== dateStr) return false;
-                                            
-                                            const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
-                                            const bookingEndMinutes = bookingStartMinutes + (2 * 60);
-                                            
-                                            return hasTimeOverlap(slotStartMinutes, slotEndMinutes, bookingStartMinutes, bookingEndMinutes);
-                                        });
-                                    });
-                                    
-                                    let bookedParticipantsIntro = bookingsOverlappingIntro.reduce((sum: number, b: any) => {
-                                        return sum + (b.participants || 1);
-                                    }, 0);
-                                    
-                                    // 🔒 REGLA CRÍTICA: Clases de introducción de torno son pre-establecidas, asumir MÍNIMO 1 persona
-                                    if (bookedParticipantsIntro === 0) {
-                                        bookedParticipantsIntro = 1;
-                                        console.log(`🔒 [getAvailableSlots] Torno introducción ${introTime}: asumiendo 1 persona mínimo (clase pre-establecida)`);
-                                    }
-                                    
-                                    const maxCapacityIntro = resolveCapacity(dateStr, 'potters_wheel', maxCapacityMap, scheduleOverrides);
-                                    const availableCapacityIntro = maxCapacityIntro - bookedParticipantsIntro;
-                                    const canBookIntro = availableCapacityIntro >= requestedParticipants;
-                                    
-                                    allSlots.push({
-                                        date: dateStr,
-                                        time: introTime,
-                                        available: Math.max(0, availableCapacityIntro),
-                                        total: maxCapacityIntro,
-                                        canBook: canBookIntro,
-                                        instructor: 'Instructor',
-                                        instructorId: 0,
-                                        technique: 'potters_wheel',
-                                        blockedReason: null
-                                    });
-                                } else {
-                                    // Slot bloqueado por curso
-                                    allSlots.push({
-                                        date: dateStr,
-                                        time: introTime,
-                                        available: 0,
-                                        total: 0,
-                                        canBook: false,
-                                        instructor: 'Instructor',
-                                        instructorId: 0,
-                                        technique: 'potters_wheel',
-                                        blockedReason: 'course_conflict'
-                                    });
-                                }
-                            }
-                        }
                         
                         // Obtener slots del día (availability o override)
                         const override = scheduleOverrides[dateStr];
@@ -4055,7 +4002,101 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             const updateAttendanceBody = req.body;
             const { bookingId: attendanceId, slot, status } = updateAttendanceBody;
             const slotIdentifier = `${slot.date}_${slot.time}`;
+            
+            // 1. Actualizar attendance
             await sql`UPDATE bookings SET attendance = COALESCE(attendance, '{}'::jsonb) || ${JSON.stringify({ [slotIdentifier]: status })}::jsonb WHERE id = ${attendanceId}`;
+            
+            // 2. Obtener el booking actualizado para verificar clases restantes
+            try {
+                const { rows: [bookingData] } = await sql`SELECT * FROM bookings WHERE id = ${attendanceId}`;
+                
+                if (bookingData && bookingData.product_type === 'CLASS_PACKAGE') {
+                    const parsedBooking = parseBookingFromDB(bookingData);
+                    const product = parsedBooking.product as any;
+                    const customerEmail = parsedBooking.userInfo?.email;
+                    const firstName = parsedBooking.userInfo?.firstName || 'Cliente';
+                    const lastName = parsedBooking.userInfo?.lastName || '';
+                    
+                    if (product && customerEmail) {
+                        const totalClasses = product.classes || 0;
+                        const usedSlots = parsedBooking.slots?.length || 0;
+                        const remainingClasses = Math.max(0, totalClasses - usedSlots);
+                        
+                        // Obtener nombre de técnica
+                        let techniqueName = 'Cerámica';
+                        if (product.details?.technique) {
+                            const techniqueMap: Record<string, string> = {
+                                'potters_wheel': 'Torno Alfarero',
+                                'hand_modeling': 'Modelado a Mano',
+                                'molding': 'Modelado a Mano',
+                                'painting': 'Pintura de Piezas'
+                            };
+                            techniqueName = techniqueMap[product.details.technique] || 'Cerámica';
+                        }
+                        
+                        // 3. Disparar email automático si quedan 2 o 1 clases
+                        // Prevenir duplicados: verificar si ya se envió email de este tipo
+                        if (remainingClasses === 2) {
+                            const { rows: existingEmail } = await sql`
+                                SELECT id FROM client_notifications 
+                                WHERE client_email = ${customerEmail} 
+                                AND type = 'package-two-classes-reminder'
+                                AND booking_code = ${parsedBooking.bookingCode}
+                                LIMIT 1
+                            `;
+                            
+                            if (existingEmail.length === 0) {
+                                // Enviar email de 2 clases restantes
+                                const emailPayload = {
+                                    firstName,
+                                    lastName,
+                                    remainingClasses: 2,
+                                    totalClasses,
+                                    packageType: `${totalClasses} clases`,
+                                    packagePrice: product.price || 0,
+                                    technique: techniqueName
+                                };
+                                
+                                try {
+                                    await emailService.sendPackageTwoClassesReminderEmail(customerEmail, emailPayload);
+                                    console.info(`[attendance] Sent 2-classes reminder email to ${customerEmail} for booking ${parsedBooking.bookingCode}`);
+                                } catch (emailErr) {
+                                    console.error(`[attendance] Failed to send 2-classes reminder email:`, emailErr);
+                                }
+                            }
+                        } else if (remainingClasses === 1) {
+                            const { rows: existingEmail } = await sql`
+                                SELECT id FROM client_notifications 
+                                WHERE client_email = ${customerEmail} 
+                                AND type = 'package-last-class-warning'
+                                AND booking_code = ${parsedBooking.bookingCode}
+                                LIMIT 1
+                            `;
+                            
+                            if (existingEmail.length === 0) {
+                                // Enviar email de última clase
+                                const emailPayload = {
+                                    firstName,
+                                    lastName,
+                                    packageType: `${totalClasses} clases`,
+                                    packagePrice: product.price || 0,
+                                    technique: techniqueName
+                                };
+                                
+                                try {
+                                    await emailService.sendPackageLastClassWarningEmail(customerEmail, emailPayload);
+                                    console.info(`[attendance] Sent last-class warning email to ${customerEmail} for booking ${parsedBooking.bookingCode}`);
+                                } catch (emailErr) {
+                                    console.error(`[attendance] Failed to send last-class warning email:`, emailErr);
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('[attendance] Error processing package completion emails:', err);
+                // No lanzar error, solo loguear - el attendance se guardó correctamente
+            }
             break;
         case 'addGroupInquiry':
             const addInquiryBody = req.body;
@@ -4193,7 +4234,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         }
         case 'createCustomExperienceBooking': {
             try {
-                const { experienceType, technique, date, time, participants, config, userInfo, totalPrice, menuSelections, childrenPieces } = req.body;
+                const { experienceType, technique, date, time, participants, config, userInfo, invoiceData, needsInvoice, totalPrice, menuSelections, childrenPieces } = req.body;
 
                 // Validar campos requeridos
                 if (!experienceType || !technique || !date || !time || !participants || !userInfo || !totalPrice) {
@@ -4329,7 +4370,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 };
 
                 // Insertar booking en la base de datos
-                const { rows: [newBooking] } = await sql`
+                const { rows } = await sql`
                     INSERT INTO bookings (
                         booking_code,
                         product_type,
@@ -4364,7 +4405,36 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     RETURNING *
                 `;
 
-                console.log('[createCustomExperienceBooking] Booking created:', bookingCode);
+                if (!rows || rows.length === 0) {
+                    throw new Error('Failed to create booking - no data returned from database');
+                }
+
+                const newBooking = rows[0];
+                console.log('[createCustomExperienceBooking] Booking created:', bookingCode, 'ID:', newBooking.id);
+
+                // Crear invoice request si se proporcionó invoiceData
+                if (needsInvoice && invoiceData && newBooking.id) {
+                    try {
+                        console.log('[createCustomExperienceBooking] Creating invoice request for booking:', bookingCode, 'ID:', newBooking.id);
+                        await sql`
+                            INSERT INTO invoice_requests (
+                                booking_id, company_name, tax_id, address, email, status, requested_at
+                            ) VALUES (
+                                ${newBooking.id},
+                                ${invoiceData.companyName || ''},
+                                ${invoiceData.taxId || ''},
+                                ${invoiceData.address || ''},
+                                ${invoiceData.email || userInfo.email},
+                                'Pending',
+                                NOW()
+                            )
+                        `;
+                        console.log('[createCustomExperienceBooking] Invoice request created successfully');
+                    } catch (invoiceError) {
+                        console.error('[createCustomExperienceBooking] Error creating invoice request:', invoiceError);
+                        // No fallar la reserva si la factura falla
+                    }
+                }
 
                 // Obtener detalles bancarios
                 const { rows: settingsRows } = await sql`SELECT key, value FROM settings WHERE key = 'bankDetails'`;
@@ -6016,7 +6086,46 @@ async function addBookingAction(
                 }
             }
         }
-    
+
+        if (body.productType === 'SINGLE_CLASS') {
+            // ===== VALIDACIÓN DE CAPACIDAD PARA SINGLE_CLASS =====
+            if (!body.slots || body.slots.length !== 1) {
+                throw new Error('SINGLE_CLASS must have exactly 1 slot');
+            }
+
+            const slot = body.slots[0];
+            const requestedParticipants = (body as any).participants || 1;
+            const requestedTechnique = technique; // Derivada previamente
+            const normalizedTime = normalizeTime(slot.time);
+            const slotStartMinutes = timeToMinutes(normalizedTime);
+            const slotEndMinutes = slotStartMinutes + (2 * 60); // 2 horas
+
+            if (requestedParticipants !== 1) {
+                throw new Error('SINGLE_CLASS debe tener exactamente 1 participante');
+            }
+
+            // Validar que no sea lunes (regla de negocio para pintura)
+            const slotDate = new Date(`${slot.date}T00:00:00`);
+            const dayOfWeek = slotDate.getDay();
+            if (dayOfWeek === 1 && requestedTechnique === 'painting') {
+                throw new Error('Las clases de pintura no están disponibles los lunes');
+            }
+
+            // Verificar disponibilidad usando computeSlotAvailability
+            const slotAvailability = await computeSlotAvailability(
+                slot.date,
+                normalizedTime,
+                requestedTechnique,
+                requestedParticipants
+            );
+
+            if (!slotAvailability.available) {
+                throw new Error(slotAvailability.message || `No hay cupos disponibles para ${requestedTechnique} en ${slot.date} a las ${normalizedTime}`);
+            }
+
+            console.log(`[addBookingAction SINGLE_CLASS] ✅ Capacity validated: ${requestedTechnique} on ${slot.date} at ${normalizedTime}, ${slotAvailability.capacity.available} slots available`);
+        }
+
     // Calcular reschedule allowance basado en tipo de paquete
     let rescheduleAllowance = 0;
     if (body.productType === 'CLASS_PACKAGE' || body.productType === 'SINGLE_CLASS') {

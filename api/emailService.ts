@@ -1464,6 +1464,362 @@ export const sendPackageRenewalReminderEmail = async (
     return result;
 };
 
+// Email: Te quedan 2 clases en tu paquete
+export const sendPackageTwoClassesReminderEmail = async (
+    customerEmail: string,
+    payload: {
+        firstName: string;
+        lastName: string;
+        remainingClasses: number;
+        totalClasses: number;
+        packageType: string;
+        packagePrice: number;
+        technique: string;
+    }
+) => {
+    const subject = `✨ ${payload.firstName}, te quedan ${payload.remainingClasses} clases`;
+    const progressPercent = Math.round((payload.totalClasses - payload.remainingClasses) / payload.totalClasses * 100);
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CeramicAlma</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+    </style>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #F5F5F5 0%, #FAFAFA 100%);">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background: linear-gradient(135deg, #F5F5F5 0%, #FAFAFA 100%);">
+        <tr>
+            <td align="center" style="padding: 50px 20px;">
+                <table width="100%" max-width="620" cellpadding="0" cellspacing="0" style="background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.08);">
+                    
+                    <!-- Header elegante con degradado dual -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #1976D2 0%, #1565C0 50%, #D95F43 100%); padding: 50px 30px; text-align: center;">
+                            <div style="margin-bottom: 20px;">
+                                <p style="margin: 0; font-size: 11px; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600;">Notificación CeramicAlma</p>
+                            </div>
+                            <h1 style="margin: 0; font-size: 32px; font-weight: 700; color: white; letter-spacing: -1px;">
+                                ¡Casi lo haces!
+                            </h1>
+                            <p style="margin: 15px 0 0 0; font-size: 15px; color: rgba(255,255,255,0.85); font-weight: 500;">
+                                ${payload.technique}
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Contenido Principal -->
+                    <tr>
+                        <td style="padding: 45px 35px;">
+                            <p style="margin: 0 0 8px 0; font-size: 15px; color: #555; line-height: 1.6;">
+                                Hola <strong style="color: #1976D2;">${payload.firstName}</strong>,
+                            </p>
+                            <p style="margin: 0 0 35px 0; font-size: 15px; color: #666; line-height: 1.8;">
+                                Tu viaje creativo en <strong>${payload.packageType}</strong> está llegando a su etapa final. Quería recordarte que te quedan clases para completar esta experiencia.
+                            </p>
+
+                            <!-- Tarjeta de estado con diseño avanzado -->
+                            <div style="background: linear-gradient(135deg, #F0F4FF 0%, #F8FAFF 100%); border: 2px solid #1976D2; border-radius: 14px; padding: 32px; text-align: center; margin-bottom: 35px;">
+                                <p style="margin: 0 0 5px 0; font-size: 12px; color: #1976D2; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">
+                                    Clases Pendientes
+                                </p>
+                                <p style="margin: 8px 0 0 0; font-size: 64px; font-weight: 700; color: #D95F43; line-height: 1; text-shadow: 0 2px 8px rgba(217,95,67,0.1);">
+                                    ${payload.remainingClasses}
+                                </p>
+                                <p style="margin: 12px 0 0 0; font-size: 13px; color: #1976D2; font-weight: 600;">
+                                    de ${payload.totalClasses} clases originales
+                                </p>
+                            </div>
+
+                            <!-- Barra de progreso avanzada -->
+                            <div style="margin-bottom: 35px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                                    <span style="font-size: 12px; color: #666; font-weight: 600;">Progreso de uso</span>
+                                    <span style="font-size: 13px; font-weight: 700;">
+                                        <span style="color: #D95F43;">${progressPercent}%</span>
+                                        <span style="color: #BBB;">/</span>
+                                        <span style="color: #1976D2;">100%</span>
+                                    </span>
+                                </div>
+                                <div style="background: #E8EEFA; height: 10px; border-radius: 5px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);">
+                                    <div style="background: linear-gradient(90deg, #D95F43 0%, #E67E50 60%, #1976D2 100%); height: 100%; width: ${progressPercent}%; border-radius: 5px; transition: width 0.3s ease;"></div>
+                                </div>
+                            </div>
+
+                            <!-- Secciones de acciones con iconografía -->
+                            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 35px;">
+                                <tr>
+                                    <td style="padding-right: 15px; vertical-align: top;">
+                                        <div style="background: white; border: 2px solid #1976D2; border-radius: 12px; padding: 22px; text-align: center;">
+                                            <p style="margin: 0 0 10px 0; font-size: 24px;">📅</p>
+                                            <p style="margin: 0 0 8px 0; font-size: 13px; font-weight: 700; color: #1976D2;">Reserva</p>
+                                            <p style="margin: 0; font-size: 12px; color: #888; line-height: 1.5;">
+                                                Tus 2 últimas clases
+                                            </p>
+                                        </div>
+                                    </td>
+                                    <td style="padding: 0 7.5px; vertical-align: top;">
+                                        <div style="background: white; border: 2px solid #D95F43; border-radius: 12px; padding: 22px; text-align: center;">
+                                            <p style="margin: 0 0 10px 0; font-size: 24px;">🎯</p>
+                                            <p style="margin: 0 0 8px 0; font-size: 13px; font-weight: 700; color: #D95F43;">Planifica</p>
+                                            <p style="margin: 0; font-size: 12px; color: #888; line-height: 1.5;">
+                                                Próximo paquete
+                                            </p>
+                                        </div>
+                                    </td>
+                                    <td style="padding-left: 15px; vertical-align: top;">
+                                        <div style="background: white; border: 2px solid #25D366; border-radius: 12px; padding: 22px; text-align: center;">
+                                            <p style="margin: 0 0 10px 0; font-size: 24px;">💬</p>
+                                            <p style="margin: 0 0 8px 0; font-size: 13px; font-weight: 700; color: #25D366;">Consulta</p>
+                                            <p style="margin: 0; font-size: 12px; color: #888; line-height: 1.5;">
+                                                Dudas sobre costo
+                                            </p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- CTA Principal -->
+                            <table width="100%" cellpadding="0" cellspacing="0">
+                                <tr>
+                                    <td align="center" style="padding-bottom: 35px;">
+                                        <a href="https://www.ceramicalma.com" style="display: inline-block; background: linear-gradient(135deg, #D95F43 0%, #B8401D 100%); padding: 18px 50px; color: white; text-decoration: none; border-radius: 10px; font-weight: 700; font-size: 15px; box-shadow: 0 8px 20px rgba(217,95,67,0.3); letter-spacing: 0.3px;">
+                                            Renovar ahora
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Info destacada con gradiente sutil -->
+                            <div style="background: linear-gradient(135deg, rgba(25,118,210,0.05) 0%, rgba(217,95,67,0.05) 100%); border-left: 4px solid #1976D2; border-radius: 10px; padding: 22px; margin-bottom: 0;">
+                                <p style="margin: 0; font-size: 13px; color: #333; line-height: 1.7;">
+                                    <strong style="color: #1976D2;">Nota importante:</strong> Una vez uses tus 2 últimas clases, tu paquete expirará. Asegúrate de renovar para mantener tu acceso a nuestras técnicas.
+                                </p>
+                            </div>
+                        </td>
+                    </tr>
+
+                    <!-- Separador visual -->
+                    <tr>
+                        <td style="height: 1px; background: linear-gradient(90deg, transparent, #E0E0E0, transparent);"></td>
+                    </tr>
+
+                    <!-- Footer elegante -->
+                    <tr>
+                        <td style="background: #FAFAFA; padding: 40px 35px; text-align: center;">
+                            <p style="margin: 0 0 25px 0; font-size: 13px; color: #666;">
+                                ¿Preguntas sobre tu renovación?
+                            </p>
+                            <a href="https://wa.me/593985813327" style="display: inline-block; background: linear-gradient(135deg, #25D366 0%, #1FA855 100%); color: white; padding: 13px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px; box-shadow: 0 4px 12px rgba(37,211,102,0.3);">
+                                💬 Escribir por WhatsApp
+                            </a>
+                            <p style="margin: 25px 0 0 0; font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px;">
+                                © CeramicAlma 2026
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+
+    <style>
+        @media (max-width: 620px) {
+            table[max-width] { width: 100% !important; }
+            td { padding: 20px 15px !important; }
+            h1 { font-size: 28px !important; }
+            .prog { font-size: 48px !important; }
+        }
+    </style>
+</body>
+</html>`;
+
+    const result = await sendEmail(customerEmail, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(customerEmail, 'package-two-classes-reminder', 'email', status);
+
+    console.info('[emailService] Package 2-classes reminder sent to', customerEmail);
+    return result;
+};
+
+// Email: Te queda 1 clase - Última oportunidad
+export const sendPackageLastClassWarningEmail = async (
+    customerEmail: string,
+    payload: {
+        firstName: string;
+        lastName: string;
+        packageType: string;
+        packagePrice: number;
+        technique: string;
+    }
+) => {
+    const subject = `✨ ${payload.firstName}, 1 clase pendiente`;
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CeramicAlma</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+    </style>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #F5F5F5 0%, #FAFAFA 100%);">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background: linear-gradient(135deg, #F5F5F5 0%, #FAFAFA 100%);">
+        <tr>
+            <td align="center" style="padding: 50px 20px;">
+                <table width="100%" max-width="620" cellpadding="0" cellspacing="0" style="background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.08);">
+                    
+                    <!-- Header elegante con énfasis en blue -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #1976D2 0%, #1565C0 50%, #0D47A1 100%); padding: 50px 30px; text-align: center;">
+                            <div style="margin-bottom: 20px;">
+                                <p style="margin: 0; font-size: 11px; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600;">Última oportunidad</p>
+                            </div>
+                            <h1 style="margin: 0; font-size: 36px; font-weight: 700; color: white; letter-spacing: -1px;">
+                                Tu clase final
+                            </h1>
+                            <p style="margin: 15px 0 0 0; font-size: 15px; color: rgba(255,255,255,0.85); font-weight: 500;">
+                                En ${payload.technique}
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Contenido Principal -->
+                    <tr>
+                        <td style="padding: 45px 35px;">
+                            <p style="margin: 0 0 8px 0; font-size: 15px; color: #555; line-height: 1.6;">
+                                Hola <strong style="color: #1976D2;">${payload.firstName}</strong>,
+                            </p>
+                            <p style="margin: 0 0 35px 0; font-size: 15px; color: #666; line-height: 1.8;">
+                                TuExperiencia en <strong>${payload.packageType}</strong> está llegando a su punto final. <strong>Te queda 1 sola clase</strong> para completar este paquete.
+                            </p>
+
+                            <!-- Tarjeta prominente de la última clase -->
+                            <div style="background: linear-gradient(135deg, #F0F4FF 0%, #E3F2FD 100%); border: 3px solid #1976D2; border-radius: 14px; padding: 35px; text-align: center; margin-bottom: 35px; position: relative;">
+                                <p style="margin: 0 0 8px 0; font-size: 12px; color: #1976D2; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">
+                                    🎯 Tu última clase
+                                </p>
+                                <p style="margin: 12px 0 0 0; font-size: 72px; font-weight: 700; color: #D95F43; line-height: 1; text-shadow: 0 2px 8px rgba(217,95,67,0.15);">
+                                    1
+                                </p>
+                                <p style="margin: 15px 0 0 0; font-size: 14px; color: #555; font-weight: 600;">
+                                    Después de esta, tu paquete se completa
+                                </p>
+                            </div>
+
+                            <!-- Timeline visual -->
+                            <div style="background: #FAFAFA; border-radius: 12px; padding: 28px; margin-bottom: 35px; border: 1px solid #E8E8E8;">
+                                <p style="margin: 0 0 20px 0; font-size: 13px; font-weight: 700; color: #1976D2; text-transform: uppercase; letter-spacing: 0.8px;">
+                                    ⏱️ Lo que ocurrirá
+                                </p>
+                                <table width="100%" cellpadding="0" cellspacing="0">
+                                    <tr>
+                                        <td style="vertical-align: top; padding-bottom: 18px;">
+                                            <div style="display: inline-block; background: linear-gradient(135deg, #D95F43 0%, #E67E50 100%); color: white; width: 32px; height: 32px; border-radius: 50%; text-align: center; line-height: 32px; font-weight: 700; font-size: 14px; margin-right: 12px;">1</div>
+                                        </td>
+                                        <td style="vertical-align: top; padding-bottom: 18px;">
+                                            <p style="margin: 0 0 4px 0; font-size: 13px; font-weight: 700; color: #333;">Reserva tu clase</p>
+                                            <p style="margin: 0; font-size: 12px; color: #888;">Elige fecha y hora que funcione mejor para ti</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="vertical-align: top; padding-bottom: 18px;">
+                                            <div style="display: inline-block; background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%); color: white; width: 32px; height: 32px; border-radius: 50%; text-align: center; line-height: 32px; font-weight: 700; font-size: 14px; margin-right: 12px;">2</div>
+                                        </td>
+                                        <td style="vertical-align: top; padding-bottom: 0;">
+                                            <p style="margin: 0 0 4px 0; font-size: 13px; font-weight: 700; color: #333;">Asiste a tu sesión</p>
+                                            <p style="margin: 0; font-size: 12px; color: #888;">Disfruta de tu última experiencia creativa con nosotros</p>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <!-- CTA Principal de renovación -->
+                            <table width="100%" cellpadding="0" cellspacing="0">
+                                <tr>
+                                    <td align="center" style="padding-bottom: 25px;">
+                                        <a href="https://www.ceramicalma.com" style="display: inline-block; background: linear-gradient(135deg, #D95F43 0%, #B8401D 100%); padding: 18px 50px; color: white; text-decoration: none; border-radius: 10px; font-weight: 700; font-size: 15px; box-shadow: 0 8px 20px rgba(217,95,67,0.3); letter-spacing: 0.3px;">
+                                            Renovar ahora
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Información sobre vencimiento -->
+                            <div style="background: linear-gradient(135deg, #F0F4FF 0%, #F8FAFF 100%); border-left: 4px solid #1976D2; border-radius: 10px; padding: 22px; margin-bottom: 25px;">
+                                <p style="margin: 0; font-size: 13px; color: #0D47A1; line-height: 1.7;">
+                                    <strong>Información importante:</strong> Una vez uses esta clase, tu acceso a este paquete terminará. Los nuevos paquetes están disponibles para que continúes tu viaje creativo sin interrupciones.
+                                </p>
+                            </div>
+
+                            <!-- Razones para renovar -->
+                            <div style="background: #FAFAFA; border-radius: 12px; padding: 28px; border: 1px solid #E8E8E8;">
+                                <p style="margin: 0 0 18px 0; font-size: 13px; font-weight: 700; color: #333; text-transform: uppercase; letter-spacing: 0.8px;">
+                                    ✨ ¿Por qué renovar?
+                                </p>
+                                <ul style="margin: 0; padding-left: 0; list-style: none;">
+                                    <li style="margin-bottom: 12px; font-size: 13px; color: #666; line-height: 1.6;">
+                                        <span style="color: #D95F43; font-weight: 700; margin-right: 8px;">→</span>Continúa aprendiendo nuevas técnicas
+                                    </li>
+                                    <li style="margin-bottom: 12px; font-size: 13px; color: #666; line-height: 1.6;">
+                                        <span style="color: #D95F43; font-weight: 700; margin-right: 8px;">→</span>Sé parte de nuestra comunidad creativa
+                                    </li>
+                                    <li style="font-size: 13px; color: #666; line-height: 1.6;">
+                                        <span style="color: #D95F43; font-weight: 700; margin-right: 8px;">→</span>Acceso a instrucciones personalizadas
+                                    </li>
+                                </ul>
+                            </div>
+                        </td>
+                    </tr>
+
+                    <!-- Separador visual -->
+                    <tr>
+                        <td style="height: 1px; background: linear-gradient(90deg, transparent, #E0E0E0, transparent);"></td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background: #FAFAFA; padding: 40px 35px; text-align: center;">
+                            <p style="margin: 0 0 25px 0; font-size: 13px; color: #666;">
+                                ¿Tienes alguna pregunta sobre tu renovación?
+                            </p>
+                            <a href="https://wa.me/593985813327" style="display: inline-block; background: linear-gradient(135deg, #25D366 0%, #1FA855 100%); color: white; padding: 13px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px; box-shadow: 0 4px 12px rgba(37,211,102,0.3);">
+                                💬 Chat por WhatsApp
+                            </a>
+                            <p style="margin: 25px 0 0 0; font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px;">
+                                © CeramicAlma 2026
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+
+    <style>
+        @media (max-width: 620px) {
+            table[max-width] { width: 100% !important; }
+            td { padding: 20px 15px !important; }
+            h1 { font-size: 32px !important; }
+            .numero { font-size: 48px !important; }
+        }
+    </style>
+</body>
+</html>`;
+
+    const result = await sendEmail(customerEmail, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(customerEmail, 'package-last-class-warning', 'email', status);
+
+    console.info('[emailService] Package last class warning sent to', customerEmail);
+    return result;
+};
+
 // ==================== NEW EXPERIENCE EMAILS ====================
 
 export const sendGroupClassConfirmationEmail = async (

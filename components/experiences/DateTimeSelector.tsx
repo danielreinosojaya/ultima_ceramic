@@ -70,34 +70,22 @@ export const DateTimeSelector: React.FC<DateTimeSelectorProps> = ({
   const getAvailableHours = (dateStr: string): string[] => {
     const date = parseLocalDate(dateStr);
     const dayOfWeek = date.getDay();
-    const hours: string[] = [];
 
-    if (dayOfWeek === 6) {
-      // Sábado: 9am a 7pm
-      for (let hour = 9; hour <= 19; hour++) {
-        for (let min of ['00', '30']) {
-          if (hour === 19 && min === '30') break;
+    const buildSlots = (openStart: number, lastStartHour: number) => {
+      const hours: string[] = [];
+      for (let hour = openStart; hour < lastStartHour; hour++) {
+        for (const min of ['00', '30']) {
           hours.push(`${String(hour).padStart(2, '0')}:${min}`);
         }
       }
-    } else if (dayOfWeek === 0) {
-      // Domingo: 10am a 6pm
-      for (let hour = 10; hour <= 18; hour++) {
-        for (let min of ['00', '30']) {
-          if (hour === 18 && min === '30') break;
-          hours.push(`${String(hour).padStart(2, '0')}:${min}`);
-        }
-      }
-    } else {
-      // Otros días (excepto lunes): 10am a 7pm
-      for (let hour = 10; hour <= 19; hour++) {
-        for (let min of ['00', '30']) {
-          if (hour === 19 && min === '30') break;
-          hours.push(`${String(hour).padStart(2, '0')}:${min}`);
-        }
-      }
-    }
-    return hours;
+      hours.push(`${String(lastStartHour).padStart(2, '0')}:00`);
+      return hours;
+    };
+
+    if (dayOfWeek === 1) return []; // Lunes cerrado
+    if (dayOfWeek === 0) return buildSlots(10, 16); // Domingo: último start 16:00
+    if (dayOfWeek === 6) return buildSlots(9, 18);  // Sábado: último start 18:00
+    return buildSlots(10, 19); // Martes a Viernes: último start 19:00
   };
 
   const getDaysInMonth = (date: Date) => {

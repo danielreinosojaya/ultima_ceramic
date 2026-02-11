@@ -4,7 +4,6 @@ import { Header } from './components/Header';
 import { WelcomeSelector } from './components/WelcomeSelector';
 import { TechniqueSelector } from './components/TechniqueSelector';
 import { PackageSelector } from './components/PackageSelector';
-import { IntroClassSelector } from './components/IntroClassSelector';
 import { ScheduleSelector } from './components/ScheduleSelector';
 import { BookingSummary } from './components/BookingSummary';
 import { CouplesTourModal } from './components/CouplesTourModal';
@@ -14,7 +13,6 @@ import { UserInfoModal } from './components/UserInfoModal';
 import { PolicyModal } from './components/PolicyModal';
 import { BookingTypeModal } from './components/BookingTypeModal';
 import { ClassInfoModal } from './components/ClassInfoModal';
-import { PrerequisiteModal } from './components/PrerequisiteModal';
 import { AnnouncementsBoard } from './components/AnnouncementsBoard';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ModuloMarcacionSimple } from './components/ModuloMarcacionSimple';
@@ -49,7 +47,7 @@ import { OpenStudioModal } from './components/admin/OpenStudioModal';
 import { MyClassesPrompt } from './components/MyClassesPrompt';
 const ClientDashboard = lazy(() => import('./components/ClientDashboard').then(m => ({ default: m.ClientDashboard })));
 
-import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, IntroClassSession, DeliveryMethod, GiftcardHold, Piece, ExperiencePricing, ExperienceUIState, CourseSchedule, CourseEnrollment, ParticipantTechniqueAssignment, GroupTechnique } from './types';
+import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, DeliveryMethod, GiftcardHold, Piece, ExperiencePricing, ExperienceUIState, CourseSchedule, CourseEnrollment, ParticipantTechniqueAssignment, GroupTechnique } from './types';
 import * as dataService from './services/dataService';
 import { DEFAULT_POLICIES_TEXT } from './constants';
 import { slotsRequireNoRefund } from './utils/bookingPolicy';
@@ -108,7 +106,6 @@ const App: React.FC = () => {
     const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
     const [isBookingTypeModalOpen, setIsBookingTypeModalOpen] = useState(false);
     const [isClassInfoModalOpen, setIsClassInfoModalOpen] = useState(false);
-    const [isPrerequisiteModalOpen, setIsPrerequisiteModalOpen] = useState(false);
     const [showMyClassesPrompt, setShowMyClassesPrompt] = useState(false);
     const [hasCheckedMyClasses, setHasCheckedMyClasses] = useState(false);
     const [clientEmail, setClientEmail] = useState<string | null>(null);
@@ -306,12 +303,10 @@ const App: React.FC = () => {
         }
     }, [loading, hasCheckedMyClasses, view]);
 
-    const handleWelcomeSelect = (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio' | 'group_class_wizard' | 'single_class_wizard' | 'wheel_course' | 'custom_experience') => {
+    const handleWelcomeSelect = (userType: 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio' | 'group_class_wizard' | 'single_class_wizard' | 'wheel_course' | 'custom_experience') => {
         setPrefillTechnique(null);
-        if (userType === 'new') {
-            setView('intro_classes');
-        } else if (userType === 'returning') {
-            setIsPrerequisiteModalOpen(true);
+        if (userType === 'returning') {
+            setView('techniques');
         } else if (userType === 'group_experience') {
             setView('group_experience');
         } else if (userType === 'couples_experience') {
@@ -340,10 +335,6 @@ const App: React.FC = () => {
         }
     };
     
-    const handlePrerequisiteConfirm = () => {
-        setIsPrerequisiteModalOpen(false);
-        setView('techniques');
-    };
     
     const handleCourseScheduleSelect = (schedule: CourseSchedule) => {
         setSelectedCourseSchedule(schedule);
@@ -431,17 +422,6 @@ const App: React.FC = () => {
         }
     };
     
-    const handleIntroClassConfirm = (product: Product, session: IntroClassSession & { technique?: any }) => {
-        if (session.technique) {
-            // Es couples experience
-            setBookingDetails({ product, slots: [session], userInfo: null, technique: session.technique });
-        } else {
-            // Es intro class
-            setBookingDetails({ product, slots: [session], userInfo: null });
-        }
-        setView('summary');
-    };
-
     const handleScheduleConfirm = (slots: TimeSlot[]) => {
         setBookingDetails(prev => ({ ...prev, slots }));
         setView('summary');
@@ -455,41 +435,84 @@ const App: React.FC = () => {
         // Prevent double submission
         if (bookingInProgress) {
             console.warn('[App] Booking already in progress, ignoring duplicate submit');
-            return;
+            throw new Error('Ya hay una reserva en progreso. Espera unos segundos y reintenta.');
         }
 
         setBookingInProgress(true);
         console.log('[App] Starting booking submission...');
+        let bookingSucceeded = false;
 
         const finalDetails = { ...bookingDetails, userInfo: data.userInfo };
         
         // Determine if selected slots require acceptance of no-refund policy
         const requiresImmediateAcceptance = slotsRequireNoRefund(finalDetails.slots || [], 48);
         
+        // Build product from experienceUIState if product is null (SingleClassWizard, PieceExperienceWizard flows)
+        let product = finalDetails.product;
+        if (!product && experienceUIState.pricing) {
+            const pricing = experienceUIState.pricing;
+            const selectedTechnique = technique || prefillTechnique || 'hand_modeling';
+            
+            // Map technique to display name
+            const techniqueNames: Record<string, string> = {
+                'potters_wheel': 'Torno Alfarero',
+                'hand_modeling': 'Modelado a Mano',
+                'painting': 'Pintura de piezas'
+            };
+            
+            // Use piece names if available, otherwise use technique name
+            const pieceName = pricing.pieces.map(p => p.name).join(', ') || techniqueNames[selectedTechnique] || 'Experiencia Cerámica';
+            
+            product = {
+                id: `experience-${Date.now()}`,
+                name: pieceName,
+                type: 'SINGLE_SESSION' as any,
+                price: pricing.total,
+                classes: 1,
+                description: `Experiencia: ${pieceName}`,
+                details: {
+                    pieces: pricing.pieces,
+                    guidedOption: pricing.guidedOption,
+                    technique: selectedTechnique,
+                }
+            } as any;
+        }
+
+        if (!product) {
+            setBookingInProgress(false);
+            throw new Error('No se encontró información del producto. Selecciona una experiencia primero.');
+        }
+
         const bookingData: any = {
-            product: finalDetails.product!,
-            productId: finalDetails.product!.id,
-            productType: finalDetails.product!.type,
+            product: product,
+            productId: product.id,
+            productType: product.type,
             slots: finalDetails.slots,
             userInfo: data.userInfo,
             isPaid: false,
-            price: 'price' in finalDetails.product! ? finalDetails.product.price : 0,
+            price: 'price' in product ? product.price : 0,
             bookingMode: bookingMode || 'flexible',
             bookingDate: new Date().toISOString(),
             invoiceData: data.needsInvoice ? data.invoiceData : undefined,
             acceptedNoRefund: requiresImmediateAcceptance ? !!data.acceptedNoRefund : false
         };
 
-        // Add technique for COUPLES_EXPERIENCE
-        if (finalDetails.product!.type === 'COUPLES_EXPERIENCE' && finalDetails.technique) {
-            bookingData.technique = finalDetails.technique;
+        // Add technique (prefer technique from SingleClassWizard/PieceExperience flow)
+        const finalTechnique = technique || prefillTechnique || (product.details?.technique);
+        if (finalTechnique) {
+            bookingData.technique = finalTechnique;
+        }
+
+        // Add experience pricing data
+        if (experienceUIState.pricing) {
+            bookingData.experiencePricing = experienceUIState.pricing;
         }
 
         // Add groupClassMetadata for GROUP_CLASS bookings
-        if (finalDetails.product!.type === 'GROUP_CLASS') {
+        if (product.type === 'GROUP_CLASS') {
             const assignments = (window as any).__groupClassAssignments as ParticipantTechniqueAssignment[] | undefined;
             if (assignments && assignments.length > 0) {
-                const totalPrice = 'price' in finalDetails.product! ? finalDetails.product.price : 0;
+                const totalPrice = 'price' in product ? product.price : 0;
                 const pricePerPerson = assignments.length > 0 ? totalPrice / assignments.length : 0;
                 
                 bookingData.groupClassMetadata = {
@@ -524,6 +547,7 @@ const App: React.FC = () => {
                 console.log('[App] Booking created successfully:', result.booking.bookingCode);
                 setBookingDetails(finalDetails);
                 setConfirmedBooking(result.booking);
+                bookingSucceeded = true;
                 
                 // CRITICAL: Preserve giftcard hold info for ConfirmationPage display
                 if (activeGiftcardHold && activeGiftcardHold.amount > 0) {
@@ -536,13 +560,15 @@ const App: React.FC = () => {
                 setTimeout(() => setBookingInProgress(false), 1000);
             } else {
                 console.error('[App] Booking failed:', result.message);
-                setBookingInProgress(false);
-                alert(`Error: ${result.message}`);
+                throw new Error(result.message || 'Error al crear la reserva.');
             }
         } catch (error) {
-            console.error("[App] Failed to add booking", error);
-            setBookingInProgress(false);
-            alert("An error occurred while creating your booking.");
+            console.error('[App] Failed to add booking', error);
+            throw error instanceof Error ? error : new Error('Error al crear la reserva.');
+        } finally {
+            if (!bookingSucceeded) {
+                setBookingInProgress(false);
+            }
         }
     };
     
@@ -627,12 +653,6 @@ const App: React.FC = () => {
         }
     }, [view, appData, loadAdditionalData]);
 
-    // Load bookings data when needed for intro classes view
-    useEffect(() => {
-        if (view === 'intro_classes' && appData && appData.bookings.length === 0) {
-            loadAdditionalData('bookings', appData);
-        }
-    }, [view, appData, loadAdditionalData]);
 
     // Load admin data when needed for confirmation view
     // Carga bankDetails y confirmationMessage al entrar a la vista de confirmación si faltan
@@ -769,8 +789,6 @@ const App: React.FC = () => {
                 // Si la técnica es open_studio, nunca mostrar PackageSelector
                 if (technique === 'open_studio') return null;
                 return <PackageSelector onSelect={handlePackageSelect} technique={technique} products={appData.products} />;
-            case 'intro_classes':
-                return <IntroClassSelector onConfirm={handleIntroClassConfirm} appData={appData} onBack={() => setView('welcome')} onAppDataUpdate={(updates) => setAppData(prev => prev ? { ...prev, ...updates } : null)} />;
             case 'schedule':
                 if (!bookingDetails.product || bookingDetails.product.type !== 'CLASS_PACKAGE' || !bookingMode) return <WelcomeSelector onSelect={handleWelcomeSelect} />;
                 return <ScheduleSelector 
@@ -785,11 +803,7 @@ const App: React.FC = () => {
             case 'summary':
                 if (!bookingDetails.product) return <WelcomeSelector onSelect={handleWelcomeSelect} />;
                 const handleBackFromSummary = () => {
-                    if (bookingDetails.product?.type === 'INTRODUCTORY_CLASS') {
-                        setView('intro_classes');
-                    } else {
-                        setView('schedule');
-                    }
+                    setView('schedule');
                 };
                 return <BookingSummary 
                     bookingDetails={bookingDetails} 
@@ -943,7 +957,7 @@ const App: React.FC = () => {
                 return (
                     <PieceExperienceWizard
                         pieces={pieces}
-                        onConfirm={(pricing: ExperiencePricing) => {
+                        onConfirm={(pricing: ExperiencePricing, selectedTechnique: GroupTechnique) => {
                             setExperienceUIState(prev => ({
                                 ...prev,
                                 pricing,
@@ -953,6 +967,7 @@ const App: React.FC = () => {
                                 ...prev,
                                 userInfo: null // Will be filled by user info modal
                             }));
+                            setTechnique(selectedTechnique);
                             setExperienceType('experience');
                             setIsUserInfoModalOpen(true);
                         }}
@@ -970,12 +985,16 @@ const App: React.FC = () => {
                             dataService.generateTimeSlots(new Date(), 180).map(slot => ({
                               date: slot.date,
                               time: slot.startTime,
-                              instructorId: 0
+                              instructorId: 0,
+                              // Incluir capacidad para pintura o técnica seleccionada
+                              available: slot.capacity.painting?.available ?? slot.capacity[prefillTechnique || 'painting']?.available ?? 22,
+                              total: slot.capacity.painting?.max ?? slot.capacity[prefillTechnique || 'painting']?.max ?? 22,
+                              canBook: (slot.capacity.painting?.available ?? slot.capacity[prefillTechnique || 'painting']?.available ?? 22) > 0
                             }))
                             : []
                         }
                         appData={appData}
-                        onConfirm={(pricing: ExperiencePricing, selectedSlot: TimeSlot | null) => {
+                        onConfirm={(pricing: ExperiencePricing, selectedSlot: TimeSlot | null, selectedTechnique: GroupTechnique) => {
                             setExperienceUIState(prev => ({
                                 ...prev,
                                 pricing,
@@ -986,6 +1005,7 @@ const App: React.FC = () => {
                                 slots: selectedSlot ? [selectedSlot] : [],
                                 userInfo: null // Will be filled by user info modal
                             }));
+                            setTechnique(selectedTechnique);
                             setExperienceType('experience');
                             setIsUserInfoModalOpen(true);
                         }}
@@ -1210,13 +1230,6 @@ const App: React.FC = () => {
             )}
             {isClassInfoModalOpen && bookingDetails.product && (
                 <ClassInfoModal product={bookingDetails.product} onConfirm={handleClassInfoConfirm} onClose={() => setIsClassInfoModalOpen(false)} />
-            )}
-            {isPrerequisiteModalOpen && (
-                <PrerequisiteModal 
-                    onClose={() => setIsPrerequisiteModalOpen(false)}
-                    onConfirm={handlePrerequisiteConfirm}
-                    onGoToIntro={() => { setIsPrerequisiteModalOpen(false); setView('intro_classes'); }}
-                />
             )}
             {isCouplesTourModalOpen && (
                 <CouplesTourModal

@@ -141,24 +141,33 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
         return Object.keys(newErrors).length === 0;
     };
     
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-            if (submitDisabled) return;
-            if (validate()) {
+        if (submitDisabled) return;
+        if (validate()) {
             setSubmitDisabled(true);
-            onSubmit({
-                userInfo: { 
-                    firstName, 
-                    lastName, 
-                    email, 
-                    phone, 
-                    countryCode: country.code,
-                    birthday: optOutBirthday ? null : birthday
-                },
-                needsInvoice: true,
-                invoiceData: { ...invoiceData, email: invoiceData.email || email },
-                acceptedNoRefund: requiresNoRefundAcceptance ? acceptedNoRefund : false
-            });
+            try {
+                await Promise.resolve(onSubmit({
+                    userInfo: { 
+                        firstName, 
+                        lastName, 
+                        email, 
+                        phone, 
+                        countryCode: country.code,
+                        birthday: optOutBirthday ? null : birthday
+                    },
+                    needsInvoice: true,
+                    invoiceData: { ...invoiceData, email: invoiceData.email || email },
+                    acceptedNoRefund: requiresNoRefundAcceptance ? acceptedNoRefund : false
+                }));
+            } catch (error) {
+                console.error('Error submitting user info:', error);
+                setSubmitDisabled(false);
+                setErrors(prev => ({
+                    ...prev,
+                    submit: error instanceof Error ? error.message : 'Error al guardar. Intenta de nuevo.'
+                }));
+            }
         }
     };
 
@@ -187,7 +196,7 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                     {/* Mensaje de error general */}
                     {Object.keys(errors).length > 0 && (
                       <div className="mb-4 p-3 rounded-lg bg-red-100 text-red-800 font-semibold text-center text-sm">
-                        {'Por favor completa los campos obligatorios.'}
+                        {errors.submit || 'Por favor completa los campos obligatorios.'}
                       </div>
                     )}
                     <form onSubmit={handleSubmit} noValidate>
