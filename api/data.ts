@@ -4140,7 +4140,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         }
         case 'createCustomExperienceBooking': {
             try {
-                const { experienceType, technique, date, time, participants, config, userInfo, totalPrice, menuSelections, childrenPieces } = req.body;
+                const { experienceType, technique, date, time, participants, config, userInfo, invoiceData, needsInvoice, totalPrice, menuSelections, childrenPieces } = req.body;
 
                 // Validar campos requeridos
                 if (!experienceType || !technique || !date || !time || !participants || !userInfo || !totalPrice) {
@@ -4312,6 +4312,30 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 `;
 
                 console.log('[createCustomExperienceBooking] Booking created:', bookingCode);
+
+                // Crear invoice request si se proporcionó invoiceData
+                if (needsInvoice && invoiceData) {
+                    try {
+                        console.log('[createCustomExperienceBooking] Creating invoice request for booking:', bookingCode);
+                        await sql`
+                            INSERT INTO invoice_requests (
+                                booking_id, company_name, tax_id, address, email, status, requested_at
+                            ) VALUES (
+                                ${newBooking.id},
+                                ${invoiceData.companyName || ''},
+                                ${invoiceData.taxId || ''},
+                                ${invoiceData.address || ''},
+                                ${invoiceData.email || userInfo.email},
+                                'Pending',
+                                NOW()
+                            )
+                        `;
+                        console.log('[createCustomExperienceBooking] Invoice request created successfully');
+                    } catch (invoiceError) {
+                        console.error('[createCustomExperienceBooking] Error creating invoice request:', invoiceError);
+                        // No fallar la reserva si la factura falla
+                    }
+                }
 
                 // Obtener detalles bancarios
                 const { rows: settingsRows } = await sql`SELECT key, value FROM settings WHERE key = 'bankDetails'`;

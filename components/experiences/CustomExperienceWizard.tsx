@@ -1112,6 +1112,8 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
           : (state.config as CeramicOnlyConfig)?.participants || 0,
         config: state.config,
         userInfo: data.userInfo,
+        invoiceData: data.needsInvoice ? data.invoiceData : undefined,
+        needsInvoice: data.needsInvoice,
         totalPrice: parseFloat(calculateTotalPricing()),
         menuSelections: state.menuSelections,
         childrenPieces: state.experienceType === 'celebration' 
