@@ -4002,7 +4002,101 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             const updateAttendanceBody = req.body;
             const { bookingId: attendanceId, slot, status } = updateAttendanceBody;
             const slotIdentifier = `${slot.date}_${slot.time}`;
+            
+            // 1. Actualizar attendance
             await sql`UPDATE bookings SET attendance = COALESCE(attendance, '{}'::jsonb) || ${JSON.stringify({ [slotIdentifier]: status })}::jsonb WHERE id = ${attendanceId}`;
+            
+            // 2. Obtener el booking actualizado para verificar clases restantes
+            try {
+                const { rows: [bookingData] } = await sql`SELECT * FROM bookings WHERE id = ${attendanceId}`;
+                
+                if (bookingData && bookingData.product_type === 'CLASS_PACKAGE') {
+                    const parsedBooking = parseBookingFromDB(bookingData);
+                    const product = parsedBooking.product as any;
+                    const customerEmail = parsedBooking.userInfo?.email;
+                    const firstName = parsedBooking.userInfo?.firstName || 'Cliente';
+                    const lastName = parsedBooking.userInfo?.lastName || '';
+                    
+                    if (product && customerEmail) {
+                        const totalClasses = product.classes || 0;
+                        const usedSlots = parsedBooking.slots?.length || 0;
+                        const remainingClasses = Math.max(0, totalClasses - usedSlots);
+                        
+                        // Obtener nombre de técnica
+                        let techniqueName = 'Cerámica';
+                        if (product.details?.technique) {
+                            const techniqueMap: Record<string, string> = {
+                                'potters_wheel': 'Torno Alfarero',
+                                'hand_modeling': 'Modelado a Mano',
+                                'molding': 'Modelado a Mano',
+                                'painting': 'Pintura de Piezas'
+                            };
+                            techniqueName = techniqueMap[product.details.technique] || 'Cerámica';
+                        }
+                        
+                        // 3. Disparar email automático si quedan 2 o 1 clases
+                        // Prevenir duplicados: verificar si ya se envió email de este tipo
+                        if (remainingClasses === 2) {
+                            const { rows: existingEmail } = await sql`
+                                SELECT id FROM client_notifications 
+                                WHERE client_email = ${customerEmail} 
+                                AND type = 'package-two-classes-reminder'
+                                AND booking_code = ${parsedBooking.bookingCode}
+                                LIMIT 1
+                            `;
+                            
+                            if (existingEmail.length === 0) {
+                                // Enviar email de 2 clases restantes
+                                const emailPayload = {
+                                    firstName,
+                                    lastName,
+                                    remainingClasses: 2,
+                                    totalClasses,
+                                    packageType: `${totalClasses} clases`,
+                                    packagePrice: product.price || 0,
+                                    technique: techniqueName
+                                };
+                                
+                                try {
+                                    await emailService.sendPackageTwoClassesReminderEmail(customerEmail, emailPayload);
+                                    console.info(`[attendance] Sent 2-classes reminder email to ${customerEmail} for booking ${parsedBooking.bookingCode}`);
+                                } catch (emailErr) {
+                                    console.error(`[attendance] Failed to send 2-classes reminder email:`, emailErr);
+                                }
+                            }
+                        } else if (remainingClasses === 1) {
+                            const { rows: existingEmail } = await sql`
+                                SELECT id FROM client_notifications 
+                                WHERE client_email = ${customerEmail} 
+                                AND type = 'package-last-class-warning'
+                                AND booking_code = ${parsedBooking.bookingCode}
+                                LIMIT 1
+                            `;
+                            
+                            if (existingEmail.length === 0) {
+                                // Enviar email de última clase
+                                const emailPayload = {
+                                    firstName,
+                                    lastName,
+                                    packageType: `${totalClasses} clases`,
+                                    packagePrice: product.price || 0,
+                                    technique: techniqueName
+                                };
+                                
+                                try {
+                                    await emailService.sendPackageLastClassWarningEmail(customerEmail, emailPayload);
+                                    console.info(`[attendance] Sent last-class warning email to ${customerEmail} for booking ${parsedBooking.bookingCode}`);
+                                } catch (emailErr) {
+                                    console.error(`[attendance] Failed to send last-class warning email:`, emailErr);
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('[attendance] Error processing package completion emails:', err);
+                // No lanzar error, solo loguear - el attendance se guardó correctamente
+            }
             break;
         case 'addGroupInquiry':
             const addInquiryBody = req.body;

@@ -1464,6 +1464,164 @@ export const sendPackageRenewalReminderEmail = async (
     return result;
 };
 
+// Email: Te quedan 2 clases en tu paquete
+export const sendPackageTwoClassesReminderEmail = async (
+    customerEmail: string,
+    payload: {
+        firstName: string;
+        lastName: string;
+        remainingClasses: number;
+        totalClasses: number;
+        packageType: string; // "4 clases", "8 clases", "12 clases"
+        packagePrice: number;
+        technique: string; // "Torno Alfarero", "Modelado a Mano", etc.
+    }
+) => {
+    const subject = `⏰ Te quedan ${payload.remainingClasses} clases - ¡No las pierdas!`;
+
+    const html = `
+        <div style="font-family: Arial, sans-serif; color: #333;">
+            <h2 style="color: #D95F43;">Hola ${payload.firstName},</h2>
+            
+            <p style="font-size: 16px; line-height: 1.6;">
+                ¡Atención! Tu paquete de ${payload.packageType} en <strong>${payload.technique}</strong> está casi completado.
+            </p>
+
+            <div style="background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%); border-left: 5px solid #D95F43; padding: 20px; margin: 20px 0; border-radius: 8px; text-align: center;">
+                <p style="margin: 0; font-size: 32px; font-weight: bold; color: #D95F43;">2</p>
+                <p style="margin: 8px 0 0 0; color: #E65100; font-size: 14px;">clases restantes en tu paquete</p>
+            </div>
+
+            <div style="background-color: #F3E5F5; border-left: 4px solid #AF54B4; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #6A1B9A; font-weight: bold;">📊 Progreso</p>
+                <div style="background: white; border-radius: 6px; padding: 12px; margin: 10px 0;">
+                    <div style="background: #e0e0e0; height: 12px; border-radius: 6px; overflow: hidden;">
+                        <div style="background: #D95F43; height: 100%; width: ${((payload.totalClasses - payload.remainingClasses) / payload.totalClasses * 100)}%;"></div>
+                    </div>
+                    <p style="font-size: 13px; color: #666; margin: 8px 0 0 0; text-align: center;">
+                        ${Math.round((payload.totalClasses - payload.remainingClasses) / payload.totalClasses * 100)}% completado
+                    </p>
+                </div>
+            </div>
+
+            <div style="background-color: #E3F2FD; border-left: 4px solid #1976D2; padding: 18px; margin: 20px 0; border-radius: 8px;">
+                <h3 style="margin-top: 0; margin-bottom: 12px; color: #1565C0;">🎨 ¿Qué puedes hacer?</h3>
+                <ul style="color: #0D47A1; font-size: 14px; margin: 8px 0; padding-left: 20px;">
+                    <li style="margin-bottom: 8px;">Usa tus 2 clases restantes pronto</li>
+                    <li style="margin-bottom: 8px;">Planifica tu próximo paquete ahora</li>
+                    <li>Recuerda: no hay reembolsos después del vencimiento</li>
+                </ul>
+            </div>
+
+            <div style="background-color: #FFF3E0; border-left: 4px solid #FF6F00; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #E65100; font-weight: bold;">💡 Renovar ahora</p>
+                <p style="margin: 8px 0 0 0; color: #BF360C; font-size: 14px;">
+                    Paquete ${payload.packageType}: <strong>$${payload.packagePrice}</strong>
+                </p>
+                <a href="https://www.ceramicalma.com/packages" style="display: inline-block; background-color: #D95F43; color: white; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 12px; font-size: 14px;">
+                    🎯 Renovar Paquete
+                </a>
+            </div>
+
+            <div style="background-color: #F0FDF4; border-left: 4px solid #22C55E; padding: 12px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #166534; font-size: 13px;">
+                    <strong>✨ Nota:</strong> Una vez agotes tus clases, no podrás usar tu paquete. ¡Renueva a tiempo!
+                </p>
+            </div>
+
+            <p style="color: #6B7280; font-size: 14px; margin-top: 30px; text-align: center;">
+                ¡Que disfrutes tus últimas 2 clases!<br/>
+                <strong>El equipo de CeramicAlma</strong>
+            </p>
+        </div>
+    `;
+
+    const result = await sendEmail(customerEmail, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(customerEmail, 'package-two-classes-reminder', 'email', status);
+
+    console.info('[emailService] Package 2-classes reminder sent to', customerEmail);
+    return result;
+};
+
+// Email: Te queda 1 clase - ¡Última oportunidad!
+export const sendPackageLastClassWarningEmail = async (
+    customerEmail: string,
+    payload: {
+        firstName: string;
+        lastName: string;
+        packageType: string; // "4 clases", "8 clases", "12 clases"
+        packagePrice: number;
+        technique: string; // "Torno Alfarero", "Modelado a Mano", etc.
+    }
+) => {
+    const subject = `⚠️ ¡${payload.firstName}! Te queda tu ÚLTIMA clase en CeramicAlma`;
+
+    const html = `
+        <div style="font-family: Arial, sans-serif; color: #333;">
+            <h2 style="color: #D95F43;">¡Hola ${payload.firstName}!</h2>
+            
+            <p style="font-size: 16px; line-height: 1.6;">
+                Tenemos noticias importantes. Tu paquete de ${payload.packageType} en <strong>${payload.technique}</strong> está llegando a su fin.
+            </p>
+
+            <div style="background: linear-gradient(135deg, #FFCDD2 0%, #EF9A9A 100%); border-left: 5px solid #D32F2F; padding: 25px; margin: 20px 0; border-radius: 8px; text-align: center;">
+                <p style="margin: 0; font-size: 48px; font-weight: bold; color: #B71C1C;">1 CLASE</p>
+                <p style="margin: 10px 0 0 0; color: #C62828; font-size: 16px; font-weight: bold;">Tu última oportunidad en este paquete</p>
+            </div>
+
+            <div style="background-color: #FCE4EC; border-left: 4px solid #C2185B; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #880E4F; font-weight: bold;">🚨 ¡ATENCIÓN!</p>
+                <p style="margin: 8px 0 0 0; color: #AD1457; font-size: 14px;">
+                    Una vez uses esta clase, tu paquete expirará y <strong>no se puede reactivar tras el vencimiento</strong>.
+                </p>
+            </div>
+
+            <div style="background-color: #E3F2FD; border-left: 4px solid #1976D2; padding: 18px; margin: 20px 0; border-radius: 8px;">
+                <h3 style="margin-top: 0; margin-bottom: 12px; color: #1565C0;">📋 Lo que debes hacer:</h3>
+                <ol style="color: #0D47A1; font-size: 14px; margin: 8px 0; padding-left: 20px;">
+                    <li style="margin-bottom: 8px;">Usa tu última clase pronto</li>
+                    <li style="margin-bottom: 8px;"><strong>Renueva tu paquete ahora mismo</strong> (antes de que se venza)</li>
+                    <li>Elige dónde continuar creando con nosotros</li>
+                </ol>
+            </div>
+
+            <div style="background: linear-gradient(135deg, #FFF9C4 0%, #FFF59D 100%); border: 2px solid #F57F17; padding: 20px; margin: 20px 0; border-radius: 8px; text-align: center;">
+                <h3 style="margin-top: 0; color: #F57F17; font-size: 18px;">🎯 RENOVAR AHORA</h3>
+                <p style="color: #F57F17; font-size: 16px; font-weight: bold; margin: 10px 0;">
+                    Paquete ${payload.packageType}: <span style="font-size: 20px;">$${payload.packagePrice}</span>
+                </p>
+                <a href="https://www.ceramicalma.com/packages" style="display: inline-block; background: linear-gradient(135deg, #D95F43 0%, #BF360C 100%); color: white; padding: 15px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 15px; font-size: 16px; box-shadow: 0 4px 8px rgba(217, 95, 67, 0.3);">
+                    🎨 Renovar Mi Paquete
+                </a>
+            </div>
+
+            <div style="background-color: #E8F5E9; border-left: 4px solid #388E3C; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #1B5E20; font-size: 14px;">
+                    <strong>💡 Recuerda:</strong> Los nuevos paquetes ofrecen la misma calidad, instructores excepcionales y una comunidad creativa. ¡Sigue con nosotros!
+                </p>
+            </div>
+
+            <p style="color: #666; font-size: 13px; margin: 20px 0 0 0; text-align: center;">
+                ¿Preguntas sobre la renovación? Contáctanos por WhatsApp:<br/>
+                <a href="https://wa.me/593985813327" style="color: #D95F43; font-weight: bold; text-decoration: none;">+593 98 581 3327</a>
+            </p>
+
+            <p style="color: #6B7280; font-size: 14px; margin-top: 20px; text-align: center;">
+                ¡Nos vemos en la clase!<br/>
+                <strong>El equipo de CeramicAlma</strong>
+            </p>
+        </div>
+    `;
+
+    const result = await sendEmail(customerEmail, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(customerEmail, 'package-last-class-warning', 'email', status);
+
+    console.info('[emailService] Package last class warning sent to', customerEmail);
+    return result;
+};
+
 // ==================== NEW EXPERIENCE EMAILS ====================
 
 export const sendGroupClassConfirmationEmail = async (
