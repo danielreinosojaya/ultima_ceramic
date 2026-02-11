@@ -179,7 +179,7 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
   }, [selectedDayIndex]);
 
   return (
-    <motion.div
+    <div
       className="bg-brand-surface p-4 sm:p-6 rounded-xl shadow-subtle"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -410,6 +410,6 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
               />
             </div>
         </div>
-      </motion.div>
+      </div>
   );
 };
