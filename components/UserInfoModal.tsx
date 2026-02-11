@@ -186,12 +186,8 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
             onClick={onClose}
         >
             <div className="min-h-screen flex items-center justify-center p-3 sm:p-6">
-                <motion.div
-                    className="bg-brand-surface rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 w-full max-w-2xl my-4"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    transition={{ duration: 0.4 }}
+                <div
+                    className="bg-brand-surface rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 w-full max-w-2xl my-4 animate-fade-in-up"
                     onClick={(e) => e.stopPropagation()}
                 >
                     <div className="text-center mb-4 sm:mb-6">
@@ -328,7 +324,7 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                         </button>
                     </div>
                 </form>
-                </motion.div>
+                </div>
             </div>
         </div>
     );
