@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { GroupTechnique, TimeSlot, Piece, ExperiencePricing, AppData } from '../../types';
 import * as dataService from '../../services/dataService';
+import { SocialBadge } from '../SocialBadge';
 
 export interface SingleClassWizardProps {
   pieces: Piece[];
@@ -412,7 +413,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                     }
 
                     return (
-                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 p-2 bg-gray-50 rounded-lg">
+                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
                         {allTimes.map(time => {
                           const slotKey = `${selectedDate}-${time}`;
                           const slotInfo = slotAvailabilityCache[slotKey];
@@ -424,41 +425,38 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                           const canBook = slotInfo?.canBook ?? (available > 0);
                           
                           return (
-                            <div key={time} className="flex flex-col gap-1">
-                              <button
-                                onClick={() => {
-                                  if (canBook) {
-                                    setSelectedSlot({
-                                      date: selectedDate,
-                                      time: time,
-                                      instructorId: 0
-                                    });
-                                  }
-                                }}
-                                disabled={!canBook}
-                                title={canBook ? 'Disponible' : 'Sin cupos'}
-                                className={`p-2 rounded-lg border-2 transition-all text-center font-bold text-xs ${
-                                  isSelected
-                                    ? 'border-blue-500 bg-blue-500 text-white ring-2 ring-blue-300'
-                                    : canBook
-                                    ? 'border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:bg-blue-50 cursor-pointer'
-                                    : 'border-gray-300 bg-gray-200 text-gray-500 cursor-not-allowed opacity-60'
-                                }`}
-                              >
-                                {time}
-                              </button>
-                              
-                              {/* Mostrar cupos disponibles */}
-                              <div className="text-xs text-center">
-                                {checkingAvailability ? (
-                                  <div className="text-gray-400">⏳</div>
-                                ) : (
-                                  <div className={canBook ? 'text-green-600 font-medium' : 'text-orange-600'}>
-                                    {available}/{total}
-                                  </div>
+                            <button
+                              key={time}
+                              onClick={() => {
+                                if (canBook) {
+                                  setSelectedSlot({
+                                    date: selectedDate,
+                                    time: time,
+                                    instructorId: 0
+                                  });
+                                }
+                              }}
+                              disabled={!canBook}
+                              title={canBook ? 'Disponible' : 'Sin cupos'}
+                              className={`relative p-3.5 rounded-xl border-2 font-bold text-sm transition-all ${
+                                isSelected
+                                  ? 'border-brand-primary bg-gradient-to-br from-brand-primary to-brand-accent text-white shadow-lg scale-105'
+                                  : canBook
+                                  ? 'border-gray-200 bg-white text-gray-700 hover:border-brand-primary hover:bg-brand-primary/5 hover:scale-105'
+                                  : 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
+                              }`}
+                            >
+                              <div className="flex flex-col items-center gap-1">
+                                <span>{time}</span>
+                                {canBook && (
+                                  <SocialBadge 
+                                    currentCount={total - available}
+                                    maxCapacity={total}
+                                    variant="compact"
+                                  />
                                 )}
                               </div>
-                            </div>
+                            </button>
                           );
                         })}
                       </div>
