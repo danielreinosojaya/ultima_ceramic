@@ -1047,7 +1047,7 @@ export const sendDeliveryReadyForPaintingEmail = async (
                     <li style="margin: 5px 0;"><strong>Confirma tu reserva</strong> en el calendario</li>
                 </ol>
                 <div style="text-align: center; margin-top: 20px;">
-                    <a href="https://www.ceramicalma.com/?booking=painting${delivery.id ? `&deliveryId=${encodeURIComponent(String(delivery.id))}` : ''}" style="display: inline-block; background-color: #D95F43; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                    <a href="https://ceramicalma.com/?booking=painting${delivery.id ? `&deliveryId=${encodeURIComponent(String(delivery.id))}` : ''}" style="display: inline-block; background-color: #D95F43; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
                         📅 Reservar Horario de Pintura
                     </a>
                 </div>
