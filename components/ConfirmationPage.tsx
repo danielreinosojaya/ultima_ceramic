@@ -13,7 +13,7 @@ import { formatPrice } from '../utils/formatters';
 import { DownloadIcon } from './icons/DownloadIcon';
 import { SINGLE_CLASS_PRICE, VAT_RATE } from '../constants';
 import { useEffect } from 'react';
-import { FEATURE_FLAGS } from '../featureFlags.ts';
+import { FEATURE_FLAGS } from '../featureFlags';
 import type { GroupTechnique } from '../types';
 
 // Helper para obtener nombre de técnica desde metadata

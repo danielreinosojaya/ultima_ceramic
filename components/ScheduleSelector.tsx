@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
 import type { ClassPackage, TimeSlot, EnrichedAvailableSlot, BookingMode, AppData } from '../types.js';
 import * as dataService from '../services/dataService.js';
 // Eliminado useLanguage, la app ahora es monolingüe en español
@@ -179,8 +180,14 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
   }, [selectedDayIndex]);
 
   return (
-    <div className="bg-brand-surface p-4 sm:p-6 rounded-xl shadow-subtle animate-fade-in-up">
-    <button onClick={onBack} className="text-brand-secondary hover:text-brand-text mb-4 transition-colors font-semibold">
+    <motion.div
+      className="bg-brand-surface p-4 sm:p-6 rounded-xl shadow-subtle"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.4 }}
+    >
+    <button onClick={onBack} className="text-brand-secondary hover:text-brand-text mb-4 transition-colors font-semibold hover:opacity-80 active:scale-95">
       &larr; Atrás
     </button>
     <div className="flex flex-col lg:flex-row gap-8">
@@ -404,6 +411,6 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
               />
             </div>
         </div>
-      </div>
+      </motion.div>
   );
 };
