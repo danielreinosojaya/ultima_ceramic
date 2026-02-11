@@ -52,17 +52,17 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
 
   const TECHNIQUE_INFO = {
     hand_modeling: {
-      label: '🤚 Modelado a Mano',
-      desc: 'Crea con tus manos usando arcilla',
+      label: 'Modelado a Mano',
+      desc: 'Crea una pieza con tus manos',
       price: 45
     },
     potters_wheel: {
-      label: '🎡 Torno Alfarero',
-      desc: 'Trabaja en la rueda de alfarero',
+      label: 'Torno Alfarero',
+      desc: 'Tecnica tradicional que requiere coordinacion y presicion',
       price: 55
     },
     painting: {
-      label: '🎨 Pintura de Piezas',
+      label: 'Pintura de Piezas',
       desc: 'Pinta piezas pre-moldeadas. La pieza se elige en el taller.',
       price: 25  // Precio mínimo - las piezas se eligen en el taller
     }
