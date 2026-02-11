@@ -43,12 +43,26 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [slotAvailabilityCache, setSlotAvailabilityCache] = useState<Record<string, any>>({});
   const [checkingAvailability, setCheckingAvailability] = useState(false);
+  const [availability, setAvailability] = useState<Record<string, any> | null>(null);
 
   useEffect(() => {
     if (initialTechnique) {
       setTechnique(initialTechnique);
     }
   }, [initialTechnique]);
+
+  // Cargar horarios fijos del calendario
+  useEffect(() => {
+    const loadAvailability = async () => {
+      try {
+        const result = await dataService.getAvailability();
+        setAvailability(result);
+      } catch (err) {
+        console.error('[SingleClassWizard] Error loading availability:', err);
+      }
+    };
+    loadAvailability();
+  }, []);
 
   const TECHNIQUE_INFO = {
     hand_modeling: {
@@ -99,7 +113,8 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
             available: result.capacity?.available ?? 0,
             total: result.capacity?.max ?? 22,
             canBook: result.available,
-            message: result.message
+            message: result.message,
+            openedByLargeGroup: result.openedByLargeGroup ?? false
           };
         } catch (err) {
           console.warn(`Error checking ${slotKey}:`, err);
@@ -107,7 +122,8 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
             available: 0,
             total: 22,
             canBook: false,
-            message: 'Error verificando disponibilidad'
+            message: 'Error verificando disponibilidad',
+            openedByLargeGroup: false
           };
         }
       }
@@ -257,6 +273,24 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
             <h3 className="text-2xl font-bold mb-2">🕐 Elige tu Horario</h3>
             <p className="text-gray-600">Selecciona la fecha y hora de tu clase</p>
           </div>
+
+          {/* Mensaje informativo para Modelado y Torno con 1 persona */}
+          {(technique === 'hand_modeling' || technique === 'potters_wheel') && participants === 1 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <span className="text-xl">ℹ️</span>
+                <div>
+                  <p className="font-semibold text-amber-900 text-sm">
+                    {technique === 'hand_modeling' ? 'Modelado a Mano' : 'Torno Alfarero'}: horarios del calendario
+                  </p>
+                  <p className="text-amber-700 text-xs mt-1">
+                    Para 1 persona solo verás horarios fijos del calendario ({technique === 'hand_modeling' ? 'modelado' : 'torno'}).
+                    También aparecerán horarios si ya existe una reserva abierta de <strong>3+ personas</strong> en ese mismo slot.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {availableSlots.length > 0 ? (
             <div className="space-y-6">
@@ -411,8 +445,32 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                   
                   {(() => {
                     const slotsForDate = availableSlots.filter(s => s.date === selectedDate);
-                    const allTimes = [...new Set(slotsForDate.map(s => s.time))].sort();
-
+                    let allTimes = [...new Set(slotsForDate.map(s => s.time))].sort();
+                    // ===== VALIDACIÓN SINGLE_CLASS =====
+                    // Modelado (hand_modeling) y Torno (potters_wheel) con 1 persona:
+                    // Solo mostrar horarios fijos del calendario o slots abiertos por 3+
+                    if ((technique === 'hand_modeling' || technique === 'potters_wheel') && participants === 1 && availability) {
+                      const dayOfWeek = new Date(`${selectedDate}T00:00:00`).getDay();
+                      const dayKeys = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                      const dayKey = dayKeys[dayOfWeek] as any;
+                      
+                      // Obtener horarios fijos del calendario para esta técnica
+                      const techToCheck = technique === 'hand_modeling' ? 'molding' : 'potters_wheel';
+                      const fixedSlots = availability[dayKey]?.filter((s: any) => s.technique === techToCheck).map((s: any) => s.time) || [];
+                      
+                      console.log(`[SingleClassWizard] Filtering ${technique} on ${selectedDate}: fixedSlots=`, fixedSlots);
+                      
+                      // Filtrar: solo mostrar horarios fijos del calendario O slots abiertos por 3+
+                      allTimes = allTimes.filter(time => {
+                        const slotKey = `${selectedDate}-${time}`;
+                        const isFixedSlot = fixedSlots.includes(time);
+                        const cacheEntry = slotAvailabilityCache[slotKey];
+                        const isOpenedByLargeGroup = cacheEntry?.openedByLargeGroup === true;
+                        const shouldShow = isFixedSlot || isOpenedByLargeGroup;
+                        console.log(`  ${time}: fixed=${isFixedSlot}, openedBy3+=${isOpenedByLargeGroup}, show=${shouldShow}`);
+                        return shouldShow;
+                      });
+                    }
                     if (allTimes.length === 0) {
                       return (
                         <div className="text-center py-6 bg-gray-50 rounded-lg">
