@@ -513,9 +513,15 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
                 const uniqueDates = [...new Set(availableSlots.map(s => s.date))].sort();
                 const allMonths: { key: string; dates: string[]; date: Date }[] = [];
                 
+                // Helper para parsear fechas en zona horaria local, no UTC
+                const parseLocalDate = (dateStr: string): Date => {
+                  const [year, month, day] = dateStr.split('-').map(Number);
+                  return new Date(year, month - 1, day);
+                };
+                
                 const groupedByMonth: Record<string, string[]> = {};
                 uniqueDates.forEach(date => {
-                  const d = new Date(date);
+                  const d = parseLocalDate(date);
                   const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
                   if (!groupedByMonth[monthKey]) groupedByMonth[monthKey] = [];
                   groupedByMonth[monthKey].push(date);
