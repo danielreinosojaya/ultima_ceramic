@@ -447,30 +447,62 @@ const App: React.FC = () => {
         // Determine if selected slots require acceptance of no-refund policy
         const requiresImmediateAcceptance = slotsRequireNoRefund(finalDetails.slots || [], 48);
         
+        // Build product from experienceUIState if product is null (SingleClassWizard, PieceExperienceWizard flows)
+        let product = finalDetails.product;
+        if (!product && experienceUIState.pricing) {
+            const pricing = experienceUIState.pricing;
+            const pieceName = pricing.pieces.map(p => p.name).join(', ') || 'Experiencia Cerámica';
+            product = {
+                id: `experience-${Date.now()}`,
+                name: pieceName,
+                type: 'SINGLE_SESSION' as any,
+                price: pricing.total,
+                classes: 1,
+                description: `Experiencia: ${pieceName}`,
+                details: {
+                    pieces: pricing.pieces,
+                    guidedOption: pricing.guidedOption,
+                    technique: prefillTechnique || 'hand_modeling',
+                }
+            } as any;
+        }
+
+        if (!product) {
+            setBookingInProgress(false);
+            throw new Error('No se encontró información del producto. Selecciona una experiencia primero.');
+        }
+
         const bookingData: any = {
-            product: finalDetails.product!,
-            productId: finalDetails.product!.id,
-            productType: finalDetails.product!.type,
+            product: product,
+            productId: product.id,
+            productType: product.type,
             slots: finalDetails.slots,
             userInfo: data.userInfo,
             isPaid: false,
-            price: 'price' in finalDetails.product! ? finalDetails.product.price : 0,
+            price: 'price' in product ? product.price : 0,
             bookingMode: bookingMode || 'flexible',
             bookingDate: new Date().toISOString(),
             invoiceData: data.needsInvoice ? data.invoiceData : undefined,
             acceptedNoRefund: requiresImmediateAcceptance ? !!data.acceptedNoRefund : false
         };
 
-        // Add technique for COUPLES_EXPERIENCE
-        if (finalDetails.product!.type === 'COUPLES_EXPERIENCE' && finalDetails.technique) {
+        // Add technique
+        if (prefillTechnique) {
+            bookingData.technique = prefillTechnique;
+        } else if (finalDetails.technique) {
             bookingData.technique = finalDetails.technique;
         }
 
+        // Add experience pricing data
+        if (experienceUIState.pricing) {
+            bookingData.experiencePricing = experienceUIState.pricing;
+        }
+
         // Add groupClassMetadata for GROUP_CLASS bookings
-        if (finalDetails.product!.type === 'GROUP_CLASS') {
+        if (product.type === 'GROUP_CLASS') {
             const assignments = (window as any).__groupClassAssignments as ParticipantTechniqueAssignment[] | undefined;
             if (assignments && assignments.length > 0) {
-                const totalPrice = 'price' in finalDetails.product! ? finalDetails.product.price : 0;
+                const totalPrice = 'price' in product ? product.price : 0;
                 const pricePerPerson = assignments.length > 0 ? totalPrice / assignments.length : 0;
                 
                 bookingData.groupClassMetadata = {
