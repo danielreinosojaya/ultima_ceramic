@@ -718,7 +718,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
     
     // Textos explicativos por técnica
     const techniqueExplanations: Record<string, string> = {
-      'potters_wheel': 'Torno Alfarero: Tecnica tradicional que requiere coordinacion y presicion. Mientras el plato da vueltas, tú usas las manos para dar forma a piezas redondas y simétricas (como tazas o cuencos).',
+      'potters_wheel': 'Torno Alfarero: Técnica tradicional que requiere coordinación y precisión. Mientras el plato da vueltas, tú usas las manos para dar forma a piezas redondas y simétricas (como tazas o cuencos)',
       'hand_modeling': 'Modelado a Mano: Crea formas libres usando solo tus manos. Técnicas como pellizco, churros y planchas te permiten explorar tu creatividad sin restricciones, ideal para esculturas y piezas únicas.',
       'painting': 'Pintado a Mano: Pinta piezas de cerámica ya moldeadas con colores vibrantes. Perfecto para expresar tu creatividad visual en superficies preparadas sin necesidad de modelar.'
     };

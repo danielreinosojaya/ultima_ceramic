@@ -58,7 +58,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
     },
     potters_wheel: {
       label: 'Torno Alfarero',
-      desc: 'Tecnica tradicional que requiere coordinacion y presicion',
+      desc: 'Técnica tradicional que requiere coordinación y precisión',
       price: 55
     },
     painting: {
