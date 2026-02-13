@@ -25,6 +25,7 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
     const [newSlot, setNewSlot] = useState<{ day: DayKey, time: string, instructorId: number, technique: Technique }>({ day: 'Monday', time: '', instructorId: instructors[0]?.id || 0, technique: 'potters_wheel' });
     const [selectedExceptionDate, setSelectedExceptionDate] = useState<Date | null>(null);
     const [newExceptionSlot, setNewExceptionSlot] = useState<{ time: string, instructorId: number, technique: Technique }>({ time: '', instructorId: instructors[0]?.id || 0, technique: 'potters_wheel' });
+    const [selectedTechniques, setSelectedTechniques] = useState<Set<Technique>>(new Set(['potters_wheel'])); // Multi-select para técnicas
     const [defaultCapacity, setDefaultCapacity] = useState<ClassCapacity>(classCapacity);
     const [isCapacitySaved, setIsCapacitySaved] = useState(false);
     const [selectedBlockedDate, setSelectedBlockedDate] = useState<Date | null>(null);
@@ -50,16 +51,39 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
     };
 
     const handleAddExceptionSlot = async () => {
-        if (!selectedExceptionDate || !newExceptionSlot.time || !newExceptionSlot.instructorId) return;
+        if (!selectedExceptionDate || !newExceptionSlot.time || !newExceptionSlot.instructorId || selectedTechniques.size === 0) return;
+        
         const dateStr = formatDateToYYYYMMDD(selectedExceptionDate);
         const updatedOverrides = { ...overrides };
+        
         if (!updatedOverrides[dateStr] || !updatedOverrides[dateStr].slots) {
             const dayKey = DAY_NAMES[selectedExceptionDate.getDay()];
             updatedOverrides[dateStr] = { slots: [...availability[dayKey]] };
         }
-        updatedOverrides[dateStr].slots!.push({ time: newExceptionSlot.time, instructorId: newExceptionSlot.instructorId, technique: newExceptionSlot.technique });
-        updatedOverrides[dateStr].slots!.sort((a, b) => a.time.localeCompare(b.time));
+        
+        // Agregar UN slot para CADA técnica seleccionada
+        selectedTechniques.forEach(technique => {
+            updatedOverrides[dateStr].slots!.push({ 
+                time: newExceptionSlot.time, 
+                instructorId: newExceptionSlot.instructorId, 
+                technique 
+            });
+        });
+        
+        // Eliminar duplicados y ordenar
+        const uniqueSlots = Array.from(new Map(
+            updatedOverrides[dateStr].slots!.map(s => 
+                [`${s.time}-${s.instructorId}-${s.technique}`, s]
+            )
+        ).values());
+        
+        updatedOverrides[dateStr].slots = uniqueSlots.sort((a, b) => a.time.localeCompare(b.time));
+        
         await dataService.updateScheduleOverrides(updatedOverrides);
+        
+        // Reset input pero mantener la hora y instructor
+        setSelectedTechniques(new Set(['potters_wheel']));
+        setNewExceptionSlot({ ...newExceptionSlot, time: '' });
         onDataChange();
     };
 
@@ -291,21 +315,87 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
                              <div className="space-y-2">
                                 {exceptionDaySlots.map(slot => (
                                     <div key={`${slot.time}-${slot.instructorId}-${slot.technique}`} className="flex items-center justify-between bg-white p-2 rounded-md text-sm">
-                                        <span>{slot.time} - {instructors.find(i => i.id === slot.instructorId)?.name || 'N/A'} ({slot.technique === 'potters_wheel' ? 'Torno' : 'Modelado'})</span>
+                                        <span>{slot.time} - {instructors.find(i => i.id === slot.instructorId)?.name || 'N/A'} ({slot.technique === 'potters_wheel' ? '🎡 Torno' : slot.technique === 'molding' ? '✋ Modelado' : '🎨 Pintura'})</span>
                                         <button onClick={() => handleRemoveExceptionSlot(slot)} className="text-red-500 hover:text-red-700"><TrashIcon className="w-4 h-4" /></button>
                                     </div>
                                 ))}
                              </div>
-                             <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-200">
-                                <input type="time" onChange={e => setNewExceptionSlot({...newExceptionSlot, time: e.target.value})} className="p-1 border rounded-md text-sm"/>
-                                <select onChange={e => setNewExceptionSlot({...newExceptionSlot, instructorId: parseInt(e.target.value)})} className="p-1 border rounded-md text-sm bg-white">
-                                    {instructors.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
-                                </select>
-                                <select onChange={e => setNewExceptionSlot({...newExceptionSlot, technique: e.target.value as Technique})} className="p-1 border rounded-md text-sm bg-white">
-                                    <option value="potters_wheel">Torno</option>
-                                    <option value="molding">Modelado</option>
-                                </select>
-                                <button onClick={handleAddExceptionSlot} className="p-2 bg-brand-primary text-white rounded-md"><PlusIcon className="w-4 h-4"/></button>
+                             <div className="space-y-3 mt-4 pt-3 border-t border-gray-200">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 mb-2">Agregar nuevo horario</label>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+                                        <input 
+                                            type="time" 
+                                            value={newExceptionSlot.time}
+                                            onChange={e => setNewExceptionSlot({...newExceptionSlot, time: e.target.value})} 
+                                            className="p-2 border rounded-md text-sm"
+                                            placeholder="Hora"
+                                        />
+                                        <select 
+                                            value={newExceptionSlot.instructorId} 
+                                            onChange={e => setNewExceptionSlot({...newExceptionSlot, instructorId: parseInt(e.target.value)})} 
+                                            className="p-2 border rounded-md text-sm bg-white"
+                                        >
+                                            {instructors.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 mb-2">Técnicas disponibles (selecciona todas las que quieras)</label>
+                                    <div className="flex gap-4 flex-wrap">
+                                        <label className="flex items-center gap-2 cursor-pointer hover:bg-blue-50 p-2 rounded transition-colors">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={selectedTechniques.has('potters_wheel')}
+                                                onChange={(e) => {
+                                                    const newSet = new Set(selectedTechniques);
+                                                    if (e.target.checked) newSet.add('potters_wheel');
+                                                    else newSet.delete('potters_wheel');
+                                                    setSelectedTechniques(newSet);
+                                                }}
+                                                className="w-4 h-4 rounded border-gray-300"
+                                            />
+                                            <span className="text-sm font-medium">🎡 Torno Alfarero</span>
+                                        </label>
+                                        <label className="flex items-center gap-2 cursor-pointer hover:bg-blue-50 p-2 rounded transition-colors">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={selectedTechniques.has('molding')}
+                                                onChange={(e) => {
+                                                    const newSet = new Set(selectedTechniques);
+                                                    if (e.target.checked) newSet.add('molding');
+                                                    else newSet.delete('molding');
+                                                    setSelectedTechniques(newSet);
+                                                }}
+                                                className="w-4 h-4 rounded border-gray-300"
+                                            />
+                                            <span className="text-sm font-medium">✋ Modelado a Mano</span>
+                                        </label>
+                                        <label className="flex items-center gap-2 cursor-pointer hover:bg-blue-50 p-2 rounded transition-colors">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={selectedTechniques.has('painting')}
+                                                onChange={(e) => {
+                                                    const newSet = new Set(selectedTechniques);
+                                                    if (e.target.checked) newSet.add('painting');
+                                                    else newSet.delete('painting');
+                                                    setSelectedTechniques(newSet);
+                                                }}
+                                                className="w-4 h-4 rounded border-gray-300"
+                                            />
+                                            <span className="text-sm font-medium">🎨 Pintura</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <button 
+                                    onClick={handleAddExceptionSlot} 
+                                    disabled={!newExceptionSlot.time || selectedTechniques.size === 0}
+                                    className="w-full p-2 bg-brand-primary text-white rounded-md font-semibold hover:bg-brand-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    ✓ Agregar horario para {selectedTechniques.size > 0 ? `${selectedTechniques.size} técnica${selectedTechniques.size > 1 ? 's' : ''}` : 'las técnicas seleccionadas'}
+                                </button>
                             </div>
                         </div>
                     )}

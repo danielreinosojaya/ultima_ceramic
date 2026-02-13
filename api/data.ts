@@ -6142,11 +6142,18 @@ async function addBookingAction(
                 throw new Error('SINGLE_CLASS debe tener exactamente 1 participante');
             }
 
-            // Validar que no sea lunes (regla de negocio para pintura)
+            // Validar que no sea lunes (regla de negocio para pintura) - PERO permitir si hay override
             const slotDate = new Date(`${slot.date}T00:00:00`);
             const dayOfWeek = slotDate.getDay();
             if (dayOfWeek === 1 && requestedTechnique === 'painting') {
-                throw new Error('Las clases de pintura no están disponibles los lunes');
+                // Revisar si hay scheduleOverride para este lunes específico
+                const hasExceptionForThisDay = scheduleOverrides && scheduleOverrides[slot.date];
+                
+                // Solo bloquear si NO hay excepción
+                if (!hasExceptionForThisDay) {
+                    throw new Error('Las clases de pintura no están disponibles los lunes. Excepto en semanas especiales con excepción configurada.');
+                }
+                // Si hay excepción, permitir que continúe
             }
 
             // Verificar disponibilidad usando computeSlotAvailability

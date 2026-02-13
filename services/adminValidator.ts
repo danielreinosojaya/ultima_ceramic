@@ -51,14 +51,22 @@ export async function validateAdminBooking(
       });
     }
 
-    // 2. Validar lunes + pintura (error)
+    // 2. Validar lunes + pintura - pero PERMITIR si hay scheduleOverride
     if (dayOfWeek === 1 && (bookingData.technique === 'painting' || bookingData.product?.details?.technique === 'painting')) {
-      warnings.push({
-        rule: 'monday_painting',
-        severity: 'error',
-        message: '🎨 Pintura los lunes está bloqueada por regla de negocio. No se puede hacer override.',
-        code: 'MONDAY_PAINTING_BLOCKED'
-      });
+      // Revisar si hay excepción/override para este lunes específico
+      const scheduleOverrides = await dataService.getScheduleOverrides();
+      const hasExceptionForThisDay = scheduleOverrides && scheduleOverrides[bookingData.date];
+      
+      // Si NO hay excepción para este día, entonces bloquear pintura en lunes
+      if (!hasExceptionForThisDay) {
+        warnings.push({
+          rule: 'monday_painting',
+          severity: 'error',
+          message: '🎨 Pintura los lunes está bloqueada por defecto. Excepto en semanas especiales con excepción configurada.',
+          code: 'MONDAY_PAINTING_BLOCKED'
+        });
+      }
+      // Si SÍ hay excepción, permitir que continúe
     }
 
     // 3. Validar horario no fijo para SINGLE_CLASS (warning)
