@@ -497,8 +497,9 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
             <input type="text" value={clientNote} onChange={e => setClientNote(e.target.value)} className="w-full px-3 py-2 border rounded-lg" />
           </div>
         </div>
-        {/* Técnica selector para CUSTOM_EXPERIENCE */}
-        {selectedProduct?.type === 'CUSTOM_EXPERIENCE' && (
+        
+        {/* Técnica selector para Experiencia Personalizada (selectedProduct === null) */}
+        {(selectedProduct === null || selectedProduct?.type === 'CUSTOM_EXPERIENCE') && (
           <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
             <label className="block text-sm font-bold mb-3 text-purple-900">Seleccionar Técnica</label>
             <div className="grid grid-cols-3 gap-2">
