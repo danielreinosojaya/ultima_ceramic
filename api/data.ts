@@ -6185,6 +6185,15 @@ async function addBookingAction(
             console.log(`[addBookingAction SINGLE_CLASS] ✅ Capacity & rules validated: ${requestedTechnique} on ${slot.date} at ${normalizedTime}, ${slotAvailability.capacity.available} slots available`);
         }
 
+    // 🔒 FAILSAFE: Para SINGLE_CLASS, forzar siempre participants = 1
+    if (body.productType === 'SINGLE_CLASS') {
+      const originalParticipants = (body as any).participants;
+      if (originalParticipants && originalParticipants !== 1) {
+        console.log(`[addBookingAction] SINGLE_CLASS: Forzando participants = 1 (was: ${originalParticipants})`);
+      }
+      (body as any).participants = 1;
+    }
+
     // Calcular reschedule allowance basado en tipo de paquete
     let rescheduleAllowance = 0;
     if (body.productType === 'CLASS_PACKAGE' || body.productType === 'SINGLE_CLASS') {

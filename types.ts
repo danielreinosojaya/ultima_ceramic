@@ -35,7 +35,7 @@ export type AppView =
   | 'valentine_form'
   | 'valentine_success';
 export type BookingMode = 'flexible' | 'monthly';
-export type Technique = 'potters_wheel' | 'molding';
+export type Technique = 'potters_wheel' | 'molding' | 'hand_modeling' | 'painting';
 
 
 // User and Customer
@@ -91,7 +91,7 @@ export interface EditableBooking {
 }
 
 // Products
-export type ProductType = 'CLASS_PACKAGE' | 'OPEN_STUDIO_SUBSCRIPTION' | 'INTRODUCTORY_CLASS' | 'GROUP_EXPERIENCE' | 'COUPLES_EXPERIENCE' | 'SINGLE_CLASS' | 'GROUP_CLASS' | 'WHEEL_COURSE';
+export type ProductType = 'CLASS_PACKAGE' | 'OPEN_STUDIO_SUBSCRIPTION' | 'INTRODUCTORY_CLASS' | 'GROUP_EXPERIENCE' | 'COUPLES_EXPERIENCE' | 'SINGLE_CLASS' | 'GROUP_CLASS' | 'WHEEL_COURSE' | 'CUSTOM_EXPERIENCE';
 
 export interface ClassPackageDetails {
   duration: string;

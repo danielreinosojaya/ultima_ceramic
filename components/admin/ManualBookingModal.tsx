@@ -44,6 +44,8 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [showOverrideModal, setShowOverrideModal] = useState(false);
   const [overrideInProgress, setOverrideInProgress] = useState(false);
+  // Technique selection for CUSTOM_EXPERIENCE
+  const [selectedTechnique, setSelectedTechnique] = useState<'potters_wheel' | 'hand_modeling' | 'painting' | null>(null);
   // Horarios en intervalos de 30 minutos de 09:00 a 20:30
   const timeOptions = Array.from({ length: 24 }, (_, i) => {
     const hour = 9 + Math.floor(i / 2);
@@ -153,6 +155,13 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
     if (selectedProduct) {
       const range = getParticipantsRange(selectedProduct);
       setParticipants(range.min);
+      // Reset technique when product changes (unless it's CUSTOM_EXPERIENCE)
+      if (selectedProduct.type !== 'CUSTOM_EXPERIENCE') {
+        setSelectedTechnique(null);
+      } else {
+        // Default to potters_wheel for CUSTOM_EXPERIENCE
+        setSelectedTechnique('potters_wheel');
+      }
     }
   }, [selectedProduct]);
 
@@ -189,15 +198,9 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
         setSubmitDisabled(false);
         return;
       }
-      if (!selectedSlots.length) throw new Error('Agrega al menos un horario');
-      if (participants < 1 || participants > 100) {
-        throw new Error('Número de participantes debe estar entre 1 y 100');
+      if (selectedProduct.type === 'CUSTOM_EXPERIENCE' && !selectedTechnique) {
+        throw new Error('Selecciona una técnica para la experiencia personalizada');
       }
-
-      // Usar el PRIMER slot para validación (si hay múltiples)
-      const firstSlot = selectedSlots[0];
-
-      // Validar con el validador de admin
       console.log('[ManualBookingModal] Validando:', {
         date: firstSlot.date,
         time: firstSlot.time,
@@ -260,6 +263,8 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
         isPaid: false,
         paymentDetails: [],
         participants,
+        // Técnica para CUSTOM_EXPERIENCE
+        ...(selectedProduct.type === 'CUSTOM_EXPERIENCE' && selectedTechnique ? { technique: selectedTechnique } : {}),
         // Admin override flags
         adminOverride,
         overrideReason: adminOverride ? overrideReason : undefined,
@@ -346,8 +351,8 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
                     seenNames.add(p.name);
                     return true;
                   }
-                  // Mostrar solo productos activos de los otros tipos permitidos
-                  if (p.isActive && (p.type === 'CLASS_PACKAGE' || p.type === 'INTRODUCTORY_CLASS' || p.type === 'GROUP_CLASS')) {
+                  // Mostrar solo productos activos de los otros tipos permitidos (sin GROUP_CLASS deprecated)
+                  if (p.isActive && (p.type === 'CLASS_PACKAGE' || p.type === 'INTRODUCTORY_CLASS' || p.type === 'CUSTOM_EXPERIENCE')) {
                     return true;
                   }
                   return false;
@@ -368,11 +373,11 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
                     {p.type === 'CLASS_PACKAGE' && <span className="material-icons text-brand-primary">layers</span>}
                     {p.type === 'SINGLE_CLASS' && <span className="material-icons text-green-600">person</span>}
                     {p.type === 'INTRODUCTORY_CLASS' && <span className="material-icons text-indigo-600">star</span>}
-                    {p.type === 'GROUP_CLASS' && <span className="material-icons text-amber-600">groups</span>}
+                    {p.type === 'CUSTOM_EXPERIENCE' && <span className="material-icons text-purple-600">celebration</span>}
                   </span>
                   <div className="flex-1 text-left">
                     <div className="font-bold text-brand-text">{p.name}</div>
-                    <div className="text-xs text-brand-secondary">{p.type === 'CLASS_PACKAGE' ? 'Paquete de Clases' : p.type === 'SINGLE_CLASS' ? 'Clase Individual' : p.type === 'INTRODUCTORY_CLASS' ? 'Introductoria' : p.type === 'GROUP_CLASS' ? 'Grupal' : ''}</div>
+                    <div className="text-xs text-brand-secondary">{p.type === 'CLASS_PACKAGE' ? 'Paquete de Clases' : p.type === 'SINGLE_CLASS' ? 'Clase Individual' : p.type === 'INTRODUCTORY_CLASS' ? 'Introductoria' : p.type === 'CUSTOM_EXPERIENCE' ? 'Experiencia Personalizada' : ''}</div>
                     <div className="text-xs text-gray-500">{p.details?.duration || ''}</div>
                   </div>
                   <div className="font-bold text-brand-primary">${p.price?.toFixed(2) || ''}</div>
@@ -391,22 +396,29 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
             <label className="block text-sm font-bold mb-1">
               Participantes
               <span className="text-xs text-gray-500 ml-1">
-                (1-100 personas)
+                {selectedProduct?.type === 'SINGLE_CLASS' ? '(Siempre 1)' : '(1-100 personas)'}
               </span>
             </label>
             <input 
               type="number" 
               min={1}
-              max={100}
+              max={selectedProduct?.type === 'SINGLE_CLASS' ? 1 : 100}
               value={participants} 
               onChange={e => {
                 const value = Math.max(1, parseInt(e.target.value) || 1);
-                // Permitir cualquier valor razonable para máxima flexibilidad
-                if (value >= 1 && value <= 100) {
+                // Para SINGLE_CLASS, forzar siempre 1
+                if (selectedProduct?.type === 'SINGLE_CLASS') {
+                  setParticipants(1);
+                } else if (value >= 1 && value <= 100) {
                   setParticipants(value);
                 }
               }}
-              className={`w-full px-3 py-2 border rounded-lg ${participants < 1 || participants > 100 ? 'border-red-500' : ''}`}
+              disabled={selectedProduct?.type === 'SINGLE_CLASS'}
+              className={`w-full px-3 py-2 border rounded-lg ${
+                selectedProduct?.type === 'SINGLE_CLASS' 
+                  ? 'bg-gray-100 cursor-not-allowed' 
+                  : ''
+              } ${participants < 1 || participants > 100 ? 'border-red-500' : ''}`}
             />
           </div>
           <div>
@@ -414,6 +426,47 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
             <input type="text" value={clientNote} onChange={e => setClientNote(e.target.value)} className="w-full px-3 py-2 border rounded-lg" />
           </div>
         </div>
+        {/* Técnica selector para CUSTOM_EXPERIENCE */}
+        {selectedProduct?.type === 'CUSTOM_EXPERIENCE' && (
+          <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+            <label className="block text-sm font-bold mb-3 text-purple-900">Seleccionar Técnica</label>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedTechnique('potters_wheel')}
+                className={`p-3 rounded-lg border-2 transition-all ${
+                  selectedTechnique === 'potters_wheel'
+                    ? 'border-blue-600 bg-blue-100 text-blue-900 font-bold'
+                    : 'border-gray-300 bg-white hover:bg-gray-50'
+                }`}
+              >
+                🎡 Torno Alfarero
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedTechnique('hand_modeling')}
+                className={`p-3 rounded-lg border-2 transition-all ${
+                  selectedTechnique === 'hand_modeling'
+                    ? 'border-green-600 bg-green-100 text-green-900 font-bold'
+                    : 'border-gray-300 bg-white hover:bg-gray-50'
+                }`}
+              >
+                ✋ Modelado a Mano
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedTechnique('painting')}
+                className={`p-3 rounded-lg border-2 transition-all ${
+                  selectedTechnique === 'painting'
+                    ? 'border-red-600 bg-red-100 text-red-900 font-bold'
+                    : 'border-gray-300 bg-white hover:bg-gray-50'
+                }`}
+              >
+                🎨 Pintura de Piezas
+              </button>
+            </div>
+          </div>
+        )}
         <div className="mb-4">
           <label className="block text-sm font-bold mb-1">Seleccionar fecha y hora</label>
           <div className="flex gap-2 mb-2">
