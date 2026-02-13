@@ -2774,7 +2774,8 @@ export const calculateSlotAvailability = (
  */
 export const generateTimeSlots = (
   startDate: Date,
-  daysCount: number = 180
+    daysCount: number = 180,
+    scheduleOverrides: ScheduleOverrides = {}
 ): DynamicTimeSlot[] => {
   const slots: DynamicTimeSlot[] = [];
   
@@ -2800,40 +2801,65 @@ export const generateTimeSlots = (
         const dayOfWeek = date.getDay();
         const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
-    const dayConfig = hoursPerDay.find(h => h.days.includes(dayOfWeek));
-    if (!dayConfig) continue; // Día cerrado (Lunes)
+        const override = scheduleOverrides?.[dateStr];
 
-    // Generar slots cada 30 minutos
-    // IMPORTANTE: no generar :30 de la última hora (excedería cierre)
-    for (let hour = dayConfig.start; hour <= dayConfig.end; hour++) {
-      const isLastHour = hour === dayConfig.end;
-      const minutesToAdd = isLastHour ? [0] : [0, 30]; // Última hora solo :00
+        const pushSlot = (startTime: string) => {
+            const [hour, minute] = startTime.split(':').map(Number);
+            const endHour = hour + 2;
+            const endTime = `${String(endHour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+
+            slots.push({
+                id: `${dateStr}-${startTime}`,
+                date: dateStr,
+                startTime,
+                endTime,
+                dayOfWeek: dayOfWeek as 0 | 1 | 2 | 3 | 4 | 5 | 6,
+                professorId: null,
+                capacity: {
+                    potters_wheel: { max: 8, bookedInWindow: 0, available: 8, isAvailable: true },
+                    hand_modeling: { max: 22, bookedInWindow: 0, available: 22, isAvailable: true },
+                    painting: { max: 22, bookedInWindow: 0, available: 22, isAvailable: true }
+                }
+            });
+        };
+
+        // Override explícito de cierre
+        if (override?.slots === null) continue;
+
+        // Día especial: desactivar reglas (incluye lunes) y abrir todo el rango comercial
+        if (override?.disableRules) {
+            for (let hour = 10; hour <= 19; hour++) {
+                const isLastHour = hour === 19;
+                const minutesToAdd = isLastHour ? [0] : [0, 30];
+                for (const minute of minutesToAdd) {
+                    const startTime = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+                    pushSlot(startTime);
+                }
+            }
+            continue;
+        }
+
+        // Override de slots específicos para el día
+        if (override?.slots && override.slots.length > 0) {
+            const uniqueTimes = [...new Set(override.slots.map(s => s.time))].sort();
+            uniqueTimes.forEach(pushSlot);
+            continue;
+        }
+
+        const dayConfig = hoursPerDay.find(h => h.days.includes(dayOfWeek));
+        if (!dayConfig) continue; // Día cerrado (Lunes)
+
+        // Generar slots cada 30 minutos
+        // IMPORTANTE: no generar :30 de la última hora (excedería cierre)
+        for (let hour = dayConfig.start; hour <= dayConfig.end; hour++) {
+            const isLastHour = hour === dayConfig.end;
+            const minutesToAdd = isLastHour ? [0] : [0, 30]; // Última hora solo :00
       
-      for (let minute of minutesToAdd) {
-        const startTime = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-        
-        // End time: siempre +2 horas
-        let endHour = hour;
-        let endMin = minute;
-        endHour += 2;
-        
-        const endTime = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
-
-        slots.push({
-          id: `${dateStr}-${startTime}`,
-          date: dateStr,
-          startTime,
-          endTime,
-          dayOfWeek: dayOfWeek as 0 | 1 | 2 | 3 | 4 | 5 | 6,
-          professorId: null,
-          capacity: {
-            potters_wheel: { max: 8, bookedInWindow: 0, available: 8, isAvailable: true },
-                        hand_modeling: { max: 22, bookedInWindow: 0, available: 22, isAvailable: true },
-                        painting: { max: 22, bookedInWindow: 0, available: 22, isAvailable: true }
-          }
-        });
-      }
-    }
+            for (let minute of minutesToAdd) {
+                const startTime = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+                pushSlot(startTime);
+            }
+        }
   }
 
   return slots;

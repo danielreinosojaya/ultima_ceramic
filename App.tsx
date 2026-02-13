@@ -982,7 +982,7 @@ const App: React.FC = () => {
                         initialTechnique={prefillTechnique || undefined}
                         pieces={pieces}
                         availableSlots={appData?.availability ? 
-                            dataService.generateTimeSlots(new Date(), 180).map(slot => ({
+                                                        dataService.generateTimeSlots(new Date(), 180, appData?.scheduleOverrides || {}).map(slot => ({
                               date: slot.date,
                               time: slot.startTime,
                               instructorId: 0,
