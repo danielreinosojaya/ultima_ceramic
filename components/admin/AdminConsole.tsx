@@ -18,7 +18,6 @@ import { PiecesManager } from './PiecesManager';
 import type { AdminTab, Notification, Product, Booking, Customer, GroupInquiry, Instructor, ScheduleOverrides, DayKey, AvailableSlot, ClassCapacity, CapacityMessageSettings, Announcement, AppData, BankDetails, InvoiceRequest, NavigationState } from '../../types';
 
 type ExtendedAdminTab = AdminTab | 'giftcards' | 'expired-bookings' | 'pieces' | 'courses' | 'valentine';
-type ExtendedAdminTab = AdminTab | 'giftcards' | 'expired-bookings' | 'pieces' | 'courses';
 import { ScheduleSettingsManager } from './ScheduleSettingsManager';
 import { CalendarEditIcon } from '../icons/CalendarEditIcon';
 import { InquiryManager } from './InquiryManager';

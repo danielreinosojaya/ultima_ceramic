@@ -5877,8 +5877,18 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
 
 async function addBookingAction(
-    body: Omit<Booking, 'id' | 'createdAt' | 'bookingCode'> & { invoiceData?: Omit<InvoiceRequest, 'id' | 'bookingId' | 'status' | 'requestedAt' | 'processedAt'> },
-    options?: { suppressPreBookingEmail?: boolean }
+    body: Omit<Booking, 'id' | 'createdAt' | 'bookingCode'> & { 
+      invoiceData?: Omit<InvoiceRequest, 'id' | 'bookingId' | 'status' | 'requestedAt' | 'processedAt'>;
+      adminOverride?: boolean;
+      overrideReason?: string;
+      violatedRules?: any[];
+    },
+    options?: { 
+      suppressPreBookingEmail?: boolean;
+      adminOverride?: boolean;
+      overrideReason?: string;
+      violatedRules?: any[];
+    }
 ): Promise<AddBookingResult> {
   const bookingCodeCheck = (body as any).bookingCode;
   if (bookingCodeCheck) {
@@ -6244,6 +6254,32 @@ async function addBookingAction(
       participants: created[0].participants ? parseInt(created[0].participants, 10) : 1,
       groupClassMetadata: created[0].group_metadata || undefined,
     };
+
+    // 🔓 LOG ADMIN OVERRIDE IF PRESENT
+    const adminOverride = (body as any).adminOverride || (options?.adminOverride);
+    const overrideReason = (body as any).overrideReason || (options?.overrideReason);
+    const violatedRules = (body as any).violatedRules || (options?.violatedRules);
+    
+    if (adminOverride) {
+      console.log('[🔓 ADMIN OVERRIDE] Booking created with admin override:', {
+        bookingCode: booking.bookingCode,
+        bookingId: booking.id,
+        customer: `${booking.userInfo.firstName} ${booking.userInfo.lastName}`,
+        product: booking.product?.name,
+        date: booking.slots?.[0]?.date,
+        time: booking.slots?.[0]?.time,
+        participants: booking.participants,
+        violatedRules: violatedRules?.map((r: any) => `${r.rule}: ${r.message}`) || [],
+        reason: overrideReason || 'No reason provided',
+        timestamp: new Date().toISOString()
+      });
+
+      // TODO: Insertar en tabla admin_override_logs una vez creada
+      // await sql`
+      //   INSERT INTO admin_override_logs (booking_id, violated_rules, override_reason, created_at)
+      //   VALUES (${booking.id}, ${JSON.stringify(violatedRules)}, ${overrideReason}, NOW())
+      // `;
+    }
 
     // Process giftcard hold if provided
     const giftcardHoldId = (body as any).holdId;

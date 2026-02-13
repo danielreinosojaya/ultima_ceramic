@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import type { Product, UserInfo, Customer, TimeSlot, Booking } from '../../types';
 import * as dataService from '../../services/dataService';
+import * as adminValidator from '../../services/adminValidator';
+import type { ValidationResult, ValidationWarning } from '../../services/adminValidator';
+import { ConfirmAdminOverrideModal } from './ConfirmAdminOverrideModal';
 import { COUNTRIES } from '@/constants';
 
 interface ManualBookingModalProps {
@@ -37,6 +40,10 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [showCalendar, setShowCalendar] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  // Admin Override states
+  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
+  const [showOverrideModal, setShowOverrideModal] = useState(false);
+  const [overrideInProgress, setOverrideInProgress] = useState(false);
   // Horarios en intervalos de 30 minutos de 09:00 a 20:30
   const timeOptions = Array.from({ length: 24 }, (_, i) => {
     const hour = 9 + Math.floor(i / 2);
@@ -119,6 +126,9 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
       setProductError('');
       setSearchTerm('');
       setParticipants(1);
+      setValidationResult(null);
+      setShowOverrideModal(false);
+      setOverrideInProgress(false);
       setAllCustomers(prev => {
         console.log('[ManualBookingModal] Reset allCustomers state:', prev);
         return Array.isArray(prev) ? prev : [];
@@ -167,11 +177,12 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
     setUserInfo({ firstName: '', lastName: '', email: '', phone: '', countryCode: COUNTRIES[0].code, birthday: '' });
   };
 
-  const handleSubmitBooking = async () => {
+  // Validar y mostrar confirmación si hay warnings
+  const handleValidateAndSubmit = async () => {
     setSubmitDisabled(true);
     setProductError('');
     try {
-      // Validación profesional
+      // Validación básica
       if (!selectedCustomer) throw new Error('Selecciona un cliente');
       if (!selectedProduct) {
         setProductError('Selecciona un producto antes de continuar.');
@@ -182,6 +193,53 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
       if (participants < 1 || participants > 100) {
         throw new Error('Número de participantes debe estar entre 1 y 100');
       }
+
+      // Usar el PRIMER slot para validación (si hay múltiples)
+      const firstSlot = selectedSlots[0];
+
+      // Validar con el validador de admin
+      console.log('[ManualBookingModal] Validando:', {
+        date: firstSlot.date,
+        time: firstSlot.time,
+        technique: selectedProduct.details?.technique,
+        participants,
+        productType: selectedProduct.type
+      });
+
+      const validation = await adminValidator.validateAdminBooking({
+        date: firstSlot.date,
+        time: firstSlot.time,
+        technique: selectedProduct.details?.technique,
+        participants,
+        productType: selectedProduct.type,
+        product: selectedProduct
+      });
+
+      console.log('[ManualBookingModal] Validación resultado:', validation);
+
+      setValidationResult(validation);
+
+      // Si hay warnings o errores → mostrar modal de confirmación
+      if (!validation.isValid || validation.warnings.length > 0) {
+        setShowOverrideModal(true);
+        setSubmitDisabled(false);
+        return;
+      }
+
+      // Si es válido → crear directamente sin override
+      await performBookingSubmit(false, '');
+    } catch (err: any) {
+      if (typeof window !== 'undefined') {
+        window.alert(err.message || 'Error al validar la reserva');
+      }
+      setSubmitDisabled(false);
+    }
+  };
+
+  // Realizar el envío de la reserva (con o sin override)
+  const performBookingSubmit = async (adminOverride: boolean, overrideReason: string) => {
+    setOverrideInProgress(true);
+    try {
       // Construir datos de reserva
       const bookingData = {
         userInfo: selectedCustomer?.userInfo || {
@@ -201,15 +259,26 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
         bookingMode: 'flexible',
         isPaid: false,
         paymentDetails: [],
-        participants
+        participants,
+        // Admin override flags
+        adminOverride,
+        overrideReason: adminOverride ? overrideReason : undefined,
+        violatedRules: adminOverride ? (validationResult?.warnings || []) : undefined
       };
+
       // Llamar al servicio de agendamiento
       const result = await dataService.addBooking(bookingData);
       if (!result.success) throw new Error(result.message || 'No se pudo agendar la clase');
+
       // Feedback visual profesional
       if (typeof window !== 'undefined') {
-        window.alert('Clase agendada exitosamente');
+        window.alert(
+          adminOverride 
+            ? '✅ Clase agendada exitosamente con override admin'
+            : '✅ Clase agendada exitosamente'
+        );
       }
+
       onBookingAdded();
       onClose();
     } catch (err: any) {
@@ -217,6 +286,8 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
         window.alert(err.message || 'Error al agendar la clase');
       }
     } finally {
+      setOverrideInProgress(false);
+      setShowOverrideModal(false);
       setSubmitDisabled(false);
     }
   };
@@ -423,9 +494,30 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
         </div>
         <div className="mt-6 flex justify-end gap-3">
           <button type="button" onClick={onClose} className="bg-white border text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100">Cancelar</button>
-          <button type="button" onClick={handleSubmitBooking} disabled={submitDisabled} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent disabled:bg-gray-400">Guardar</button>
+          <button type="button" onClick={handleValidateAndSubmit} disabled={submitDisabled} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent disabled:bg-gray-400">Guardar</button>
         </div>
       </div>
+
+      {/* Modal de confirmación de override */}
+      <ConfirmAdminOverrideModal
+        isOpen={showOverrideModal}
+        onClose={() => {
+          setShowOverrideModal(false);
+          setValidationResult(null);
+        }}
+        onConfirm={(reason) => performBookingSubmit(true, reason)}
+        warnings={validationResult?.warnings || []}
+        bookingDetails={{
+          customerName: selectedCustomer 
+            ? `${selectedCustomer.userInfo?.firstName} ${selectedCustomer.userInfo?.lastName}`
+            : 'Cliente desconocido',
+          productName: selectedProduct?.name || 'Producto desconocido',
+          date: selectedSlots[0]?.date || '',
+          time: selectedSlots[0]?.time || '',
+          participants
+        }}
+        isLoading={overrideInProgress}
+      />
     </div>
   );
 };
