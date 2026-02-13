@@ -453,6 +453,7 @@ export interface ScheduleOverrides {
   [date: string]: { // YYYY-MM-DD
     slots: AvailableSlot[] | null; // null to cancel all slots
     capacity?: number;
+    disableRules?: boolean; // Día especial: desactiva reglas de horarios fijos/restricciones por técnica
   }
 }
 

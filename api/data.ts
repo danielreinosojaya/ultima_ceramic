@@ -553,13 +553,14 @@ const computeSlotAvailability = async (
 
     const { scheduleOverrides, classCapacity, freeDateTimeOverrides } = await parseSlotAvailabilitySettings();
     const maxCapacityMap = getMaxCapacityMap(classCapacity);
+    const isSpecialDayNoRules = scheduleOverrides?.[requestedDate]?.disableRules === true;
 
     const normalizedTime = normalizeTime(requestedTime);
     const requestedStartMinutes = timeToMinutes(normalizedTime);
     const requestedEndMinutes = requestedStartMinutes + (2 * 60); // 2 horas
 
     const requestedDayOfWeek = new Date(`${requestedDate}T00:00:00`).getDay();
-    if (requestedTechnique === 'painting' && requestedDayOfWeek === 1) {
+    if (!isSpecialDayNoRules && requestedTechnique === 'painting' && requestedDayOfWeek === 1) {
         const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
         return {
             available: false,
@@ -575,7 +576,7 @@ const computeSlotAvailability = async (
     }
 
     const disabledTimes = freeDateTimeOverrides?.[requestedDate]?.disabledTimes || [];
-    if (disabledTimes.includes(normalizedTime)) {
+    if (!isSpecialDayNoRules && disabledTimes.includes(normalizedTime)) {
         const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
         return {
             available: false,
@@ -689,7 +690,7 @@ const computeSlotAvailability = async (
     const { availability } = await parseSlotAvailabilitySettings();
     const dayKey = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date(`${requestedDate}T00:00:00`).getDay()];
     
-    if (requestedTechnique === 'potters_wheel') {
+    if (!isSpecialDayNoRules && requestedTechnique === 'potters_wheel') {
         const fixedPottersTimes = getFixedSlotTimesForDate(requestedDate, dayKey, availability, scheduleOverrides, 'potters_wheel');
         const fixedPottersMinutes = fixedPottersTimes.map(timeToMinutes);
         
@@ -4353,7 +4354,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 // ===== REGLA ESPECIAL: hand_modeling con 1 persona =====
                 // No debe abrir horarios libres: solo horarios fijos del calendario (molding)
                 // o slots ya abiertos por una reserva previa de 3+ personas en el mismo horario.
-                if (requestedTechnique === 'hand_modeling' && requestedParticipants === 1) {
+                const isSpecialDayNoRules = scheduleOverrides?.[requestedDate]?.disableRules === true;
+                if (!isSpecialDayNoRules && requestedTechnique === 'hand_modeling' && requestedParticipants === 1) {
                     const dayKey = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date(`${requestedDate}T00:00:00`).getDay()];
                     const normalizedRequestedTime = normalizeTime(requestedTime);
                     const fixedHandTimes = getFixedSlotTimesForDate(requestedDate, dayKey, availability, scheduleOverrides, 'molding')
@@ -6147,7 +6149,8 @@ async function addBookingAction(
             // Validar que no sea lunes (regla de negocio para pintura) - PERO permitir si hay override
             const slotDate = new Date(`${slot.date}T00:00:00`);
             const dayOfWeek = slotDate.getDay();
-            if (dayOfWeek === 1 && requestedTechnique === 'painting') {
+            const isSpecialDayNoRules = scheduleOverrides?.[slot.date]?.disableRules === true;
+            if (!isSpecialDayNoRules && dayOfWeek === 1 && requestedTechnique === 'painting') {
                 // Revisar si hay scheduleOverride para este lunes específico
                 const hasExceptionForThisDay = scheduleOverrides && scheduleOverrides[slot.date];
                 
@@ -6172,13 +6175,12 @@ async function addBookingAction(
 
             // REGLA ESPECIAL: Torno (potters_wheel) y Modelado (hand_modeling) con 1 persona
             // Solo se permite si: (a) es horario fijo del calendario, O (b) fue abierto por reserva 3+
-            if ((requestedTechnique === 'potters_wheel' || requestedTechnique === 'hand_modeling') && requestedParticipants === 1) {
-                const { availability: scheduleAvailability } = await parseSlotAvailabilitySettings();
+            if (!isSpecialDayNoRules && (requestedTechnique === 'potters_wheel' || requestedTechnique === 'hand_modeling') && requestedParticipants === 1) {
                 const dayKey = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
                 
                 // Técnica de calendario a buscar
                 const techToCheck = requestedTechnique === 'hand_modeling' ? 'molding' : 'potters_wheel';
-                const fixedSlots = scheduleAvailability?.[dayKey]?.filter(s => s.technique === techToCheck).map(s => s.time) || [];
+                const fixedSlots = getFixedSlotTimesForDate(slot.date, dayKey, availability, scheduleOverrides, techToCheck as 'potters_wheel' | 'molding');
                 const isFixedScheduleSlot = fixedSlots.includes(normalizedTime);
                 const isOpenedByLargeGroup = slotAvailability.openedByLargeGroup === true;
 

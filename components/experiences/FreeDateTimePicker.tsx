@@ -153,15 +153,17 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
 
   // Verificar si un slot está bloqueado por clase fija
   const isSlotBlockedByFixedClass = useCallback((dateStr: string, time: string): boolean => {
+    if (scheduleOverrides?.[dateStr]?.disableRules) return false;
     if (technique !== 'potters_wheel') return false;
     const fixedSlots = getFixedTornoSlots(dateStr);
     return slotOverlapsWithFixedClass(time, fixedSlots);
-  }, [technique, getFixedTornoSlots, slotOverlapsWithFixedClass]);
+  }, [scheduleOverrides, technique, getFixedTornoSlots, slotOverlapsWithFixedClass]);
 
   const isSlotBlockedBySpecialEvent = useCallback((dateStr: string, time: string): boolean => {
+    if (scheduleOverrides?.[dateStr]?.disableRules) return false;
     const disabledTimes = freeDateTimeOverrides?.[dateStr]?.disabledTimes || [];
     return disabledTimes.includes(time);
-  }, [freeDateTimeOverrides]);
+  }, [scheduleOverrides, freeDateTimeOverrides]);
 
   // Memoizar getAvailableHours para evitar recálculos innecesarios
   const getAvailableHours = useMemo(() => {
@@ -169,6 +171,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     const date = parseLocalDate(dateStr);
     const dayOfWeek = date.getDay();
     const hasOverrideForDate = scheduleOverrides?.[dateStr] !== undefined;
+    const isSpecialDayNoRules = scheduleOverrides?.[dateStr]?.disableRules === true;
 
     const buildSlots = (openStart: number, lastStartHour: number) => {
       // lastStartHour = última hora que puede empezar una clase (respetando 2 horas de duración)
@@ -187,6 +190,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     };
 
     if (dayOfWeek === 1 && !hasOverrideForDate) return []; // Lunes cerrado por defecto, excepto en semanas especiales
+    if (dayOfWeek === 1 && isSpecialDayNoRules) return buildSlots(10, 19);
     const baseHours = dayOfWeek === 0
       ? buildSlots(10, 16)  // Domingo: último start 16:00
       : dayOfWeek === 6
@@ -201,7 +205,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     console.log(`🔍 [${dateStr}] Horarios fijos de torno:`, fixedTornoSlots);
     
     // CASO 1: Grupos pequeños de torno (<3) → solo horarios fijos
-    if (technique === 'potters_wheel' && participants < 3) {
+    if (!isSpecialDayNoRules && technique === 'potters_wheel' && participants < 3) {
       const fixedHours = [...new Set(fixedTornoSlots)].sort();
       console.log(`🔒 [Torno ${participants} personas] Solo horarios FIJOS:`, fixedHours);
       return fixedHours;
@@ -215,6 +219,11 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   const visibleHoursForSelectedDate = useMemo(() => {
     if (!selectedDate) return [] as string[];
     const candidateHours = getAvailableHours(selectedDate);
+    const isSpecialDayNoRules = scheduleOverrides?.[selectedDate]?.disableRules === true;
+
+    if (isSpecialDayNoRules) {
+      return candidateHours;
+    }
 
     // Regla: Modelado a Mano (hand_modeling) O Torno (potters_wheel) con 1 persona NO abren el calendario completo.
     // Solo muestran: horarios fijos del calendario O slots ya abiertos por reserva previa de 3+.
@@ -224,7 +233,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     }
 
     return candidateHours;
-  }, [selectedDate, technique, participants, getAvailableHours, getFixedSlotsByType, hourAvailability]);
+  }, [selectedDate, technique, participants, getAvailableHours, getFixedSlotsByType, hourAvailability, scheduleOverrides]);
 
   // Validar disponibilidad cuando se selecciona hora
   const validateSlotAvailability = useCallback(async (date: string, time: string) => {
@@ -330,6 +339,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const override = scheduleOverrides?.[dateStr];
 
+    if (override?.disableRules) return false;
     if (override?.slots === null) return true;
     if (override?.slots && override.slots.some(slot => slot.technique === 'painting')) {
       return false;

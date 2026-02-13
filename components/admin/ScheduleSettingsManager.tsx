@@ -30,6 +30,36 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
     const [isCapacitySaved, setIsCapacitySaved] = useState(false);
     const [selectedBlockedDate, setSelectedBlockedDate] = useState<Date | null>(null);
     const [newBlockedTime, setNewBlockedTime] = useState('');
+
+    const buildSpecialDaySlots = useCallback((instructorId: number): AvailableSlot[] => {
+        const slots: AvailableSlot[] = [];
+
+        for (let hour = 10; hour <= 19; hour++) {
+            const minutes = hour === 19 ? ['00'] : ['00', '30'];
+            for (const min of minutes) {
+                const time = `${String(hour).padStart(2, '0')}:${min}`;
+                slots.push({ time, instructorId, technique: 'potters_wheel' });
+                slots.push({ time, instructorId, technique: 'molding' });
+                slots.push({ time, instructorId, technique: 'painting' });
+            }
+        }
+
+        return slots;
+    }, []);
+
+    const dedupeAndSortSlots = useCallback((slots: AvailableSlot[]): AvailableSlot[] => {
+        const uniqueSlots = Array.from(new Map(
+            slots.map(slot => [`${slot.time}-${slot.instructorId}-${slot.technique}`, slot])
+        ).values());
+
+        return uniqueSlots.sort((a, b) => {
+            const byTime = a.time.localeCompare(b.time);
+            if (byTime !== 0) return byTime;
+            const byTechnique = a.technique.localeCompare(b.technique);
+            if (byTechnique !== 0) return byTechnique;
+            return a.instructorId - b.instructorId;
+        });
+    }, []);
     
     const handleAddSlot = async (day: DayKey) => {
         if (!newSlot.time || !newSlot.instructorId) {
@@ -127,6 +157,33 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
         onDataChange();
     };
 
+    const handleToggleDisableRules = async (enabled: boolean) => {
+        if (!selectedExceptionDate) return;
+
+        const dateStr = formatDateToYYYYMMDD(selectedExceptionDate);
+        const updatedOverrides = { ...overrides };
+        const dayKey = DAY_NAMES[selectedExceptionDate.getDay()];
+
+        if (!updatedOverrides[dateStr]) {
+            updatedOverrides[dateStr] = { slots: [...(availability[dayKey] || [])] };
+        }
+
+        updatedOverrides[dateStr].disableRules = enabled;
+
+        if (enabled) {
+            const defaultInstructorId = newExceptionSlot.instructorId || instructors[0]?.id || 0;
+            const currentSlots = updatedOverrides[dateStr].slots ?? [];
+            const specialSlots = buildSpecialDaySlots(defaultInstructorId);
+            updatedOverrides[dateStr].slots = dedupeAndSortSlots([...currentSlots, ...specialSlots]);
+        } else {
+            // Al desactivar modo especial, restaurar horarios base del día
+            updatedOverrides[dateStr].slots = [...(availability[dayKey] || [])];
+        }
+
+        await dataService.updateScheduleOverrides(updatedOverrides);
+        onDataChange();
+    };
+
     const handleSaveDefaultCapacity = async () => {
         await dataService.updateClassCapacity(defaultCapacity);
         setIsCapacitySaved(true);
@@ -184,6 +241,12 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
         if (!selectedExceptionDate) return undefined;
         const dateStr = formatDateToYYYYMMDD(selectedExceptionDate);
         return overrides[dateStr]?.capacity;
+    }, [selectedExceptionDate, overrides]);
+
+    const isRulesDisabledForExceptionDay = useMemo(() => {
+        if (!selectedExceptionDate) return false;
+        const dateStr = formatDateToYYYYMMDD(selectedExceptionDate);
+        return overrides[dateStr]?.disableRules === true;
     }, [selectedExceptionDate, overrides]);
 
     const blockedTimesForDate = useMemo(() => {
@@ -301,6 +364,23 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
                             <div className="flex justify-between items-center mb-2">
                                 <h4 className="font-bold text-brand-text">Editando para {selectedExceptionDate.toLocaleDateString(language)}</h4>
                                 <button onClick={handleResetExceptionDay} className="text-xs font-semibold text-brand-accent hover:underline">Restablecer a horario por defecto</button>
+                            </div>
+                            <div className="mb-3 p-3 rounded-lg border border-amber-300 bg-amber-50">
+                                <label className="flex items-start gap-3 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={isRulesDisabledForExceptionDay}
+                                        onChange={(e) => handleToggleDisableRules(e.target.checked)}
+                                        className="mt-1 w-4 h-4"
+                                    />
+                                    <div>
+                                        <p className="text-sm font-bold text-amber-900">Día especial (desactivar reglas)</p>
+                                        <p className="text-xs text-amber-800">
+                                            Permite cualquier técnica y horario este día en Single Class y Custom Experience.
+                                            Al activarlo se agregan horarios de 10:00 a 19:00 (cada 30 min) para Torno, Modelado y Pintura.
+                                        </p>
+                                    </div>
+                                </label>
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 mb-1">Capacidad máxima para este día</label>
