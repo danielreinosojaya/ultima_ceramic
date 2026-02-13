@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { checkSlotAvailability, SlotAvailabilityResult, getAvailability, getFreeDateTimeOverrides } from '../../services/dataService';
-import type { AvailableSlot, DayKey } from '../../types';
+import { checkSlotAvailability, SlotAvailabilityResult, getAvailability, getFreeDateTimeOverrides, getScheduleOverrides } from '../../services/dataService';
+import type { AvailableSlot, DayKey, ScheduleOverrides } from '../../types';
 import { SocialBadge } from '../SocialBadge';
 
 // Nombres de días para mapear Date.getDay() a DayKey
@@ -37,6 +37,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   // Estado para availability cargada desde el servidor (si no se proporciona como prop)
   const [loadedAvailability, setLoadedAvailability] = useState<Record<DayKey, AvailableSlot[]> | null>(null);
   const [freeDateTimeOverrides, setFreeDateTimeOverrides] = useState<Record<string, { disabledTimes: string[] }>>({});
+  const [scheduleOverrides, setScheduleOverrides] = useState<ScheduleOverrides>({});
   
   // Usar availability de prop o la cargada del servidor
   const availability = propAvailability || loadedAvailability;
@@ -56,11 +57,27 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     });
   }, []);
 
+  useEffect(() => {
+    getScheduleOverrides().then(setScheduleOverrides).catch(err => {
+      console.error('[FreeDateTimePicker] Error loading scheduleOverrides:', err);
+    });
+  }, []);
+
   // Parsear fecha ISO a fecha local (evitar problema UTC)
   const parseLocalDate = (dateStr: string): Date => {
     const [year, month, day] = dateStr.split('-').map(Number);
     return new Date(year, month - 1, day);
   };
+
+  const getSlotsForDate = useCallback((dateStr: string): AvailableSlot[] => {
+    const override = scheduleOverrides?.[dateStr];
+    if (override?.slots === null) return [];
+    if (override?.slots) return override.slots;
+
+    const date = parseLocalDate(dateStr);
+    const dayKey = DAY_KEYS[date.getDay()];
+    return availability?.[dayKey] || [];
+  }, [availability, scheduleOverrides]);
 
   /**
    * REGLA DE NEGOCIO - HORARIOS FIJOS:
@@ -110,8 +127,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   const getFixedTornoSlots = useCallback((dateStr: string): string[] => {
     const date = parseLocalDate(dateStr);
     const dayOfWeek = date.getDay();
-    const dayKey = DAY_KEYS[dayOfWeek];
-    const fixedTornoSlots = availability?.[dayKey]?.filter(slot => 
+    const fixedTornoSlots = getSlotsForDate(dateStr).filter(slot => 
       slot.technique === 'potters_wheel'
     ).map(slot => slot.time) || [];
     if (technique === 'potters_wheel') {
@@ -119,22 +135,21 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
       if (dayOfWeek === 3) fixedTornoSlots.push('11:00'); // Miércoles
     }
     return fixedTornoSlots;
-  }, [availability, technique]);
+  }, [getSlotsForDate, technique]);
 
   // Obtener horarios fijos de una técnica para una fecha
   // Para ModeladoAMano (hand_modeling): técnica 'molding' en el calendario
   // Para Torno (potters_wheel): técnica 'potters_wheel' en el calendario
   const getFixedSlotsByType = useCallback((dateStr: string, tech: string): string[] => {
-    const date = parseLocalDate(dateStr);
-    const dayKey = DAY_KEYS[date.getDay()];
     let techniqueToMatch = '';
     if (tech === 'hand_modeling') techniqueToMatch = 'molding';
     else if (tech === 'potters_wheel') techniqueToMatch = 'potters_wheel';
+    else if (tech === 'painting') techniqueToMatch = 'painting';
     else return [];
     
-    const fixedSlots = availability?.[dayKey]?.filter(slot => slot.technique === techniqueToMatch).map(slot => slot.time) || [];
+    const fixedSlots = getSlotsForDate(dateStr).filter(slot => slot.technique === techniqueToMatch).map(slot => slot.time) || [];
     return [...new Set(fixedSlots)].sort();
-  }, [availability]);
+  }, [getSlotsForDate]);
 
   // Verificar si un slot está bloqueado por clase fija
   const isSlotBlockedByFixedClass = useCallback((dateStr: string, time: string): boolean => {
@@ -153,6 +168,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     return (dateStr: string): string[] => {
     const date = parseLocalDate(dateStr);
     const dayOfWeek = date.getDay();
+    const hasOverrideForDate = scheduleOverrides?.[dateStr] !== undefined;
 
     const buildSlots = (openStart: number, lastStartHour: number) => {
       // lastStartHour = última hora que puede empezar una clase (respetando 2 horas de duración)
@@ -170,7 +186,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
       return hours;
     };
 
-    if (dayOfWeek === 1) return []; // Lunes cerrado
+    if (dayOfWeek === 1 && !hasOverrideForDate) return []; // Lunes cerrado por defecto, excepto en semanas especiales
     const baseHours = dayOfWeek === 0
       ? buildSlots(10, 16)  // Domingo: último start 16:00
       : dayOfWeek === 6
@@ -194,7 +210,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     console.log(`🆓 [${technique}] Horarios totales: ${baseHours.length} slots`);
     return baseHours;
   };
-  }, [availability, technique, participants, getFixedTornoSlots]);
+  }, [scheduleOverrides, technique, participants, getFixedTornoSlots]);
 
   const visibleHoursForSelectedDate = useMemo(() => {
     if (!selectedDate) return [] as string[];
@@ -309,7 +325,17 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   const isMonday = (day: number) => {
     if (technique !== 'painting') return false;
     const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
-    return date.getDay() === 1;
+    if (date.getDay() !== 1) return false;
+
+    const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const override = scheduleOverrides?.[dateStr];
+
+    if (override?.slots === null) return true;
+    if (override?.slots && override.slots.some(slot => slot.technique === 'painting')) {
+      return false;
+    }
+
+    return !override;
   };
 
   const isPastDate = (day: number) => {
