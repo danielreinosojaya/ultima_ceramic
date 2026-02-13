@@ -44,6 +44,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
   const [slotAvailabilityCache, setSlotAvailabilityCache] = useState<Record<string, any>>({});
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [availability, setAvailability] = useState<Record<string, any> | null>(null);
+  const [scheduleOverrides, setScheduleOverrides] = useState<Record<string, any>>({});
 
   useEffect(() => {
     if (initialTechnique) {
@@ -55,8 +56,12 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
   useEffect(() => {
     const loadData = async () => {
       try {
-        const result = await dataService.getAvailability();
-        setAvailability(result);
+        const [availabilityResult, scheduleOverridesResult] = await Promise.all([
+          dataService.getAvailability(),
+          dataService.getScheduleOverrides()
+        ]);
+        setAvailability(availabilityResult);
+        setScheduleOverrides(scheduleOverridesResult || {});
       } catch (err) {
         console.error('[SingleClassWizard] Error loading availability:', err);
       }
@@ -280,7 +285,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
           </div>
 
           {/* Mensaje informativo para Modelado y Torno con 1 persona */}
-          {(technique === 'hand_modeling' || technique === 'potters_wheel') && participants === 1 && (
+          {(technique === 'hand_modeling' || technique === 'potters_wheel') && participants === 1 && !(selectedDate && scheduleOverrides?.[selectedDate]?.disableRules === true) && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
               <div className="flex items-start gap-3">
                 <span className="text-xl">ℹ️</span>
@@ -459,18 +464,23 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                   {(() => {
                     const slotsForDate = availableSlots.filter(s => s.date === selectedDate);
                     let allTimes = [...new Set(slotsForDate.map(s => s.time))].sort();
+
+                    const overrideForDate = scheduleOverrides?.[selectedDate];
+                    const isSpecialDayNoRules = overrideForDate?.disableRules === true;
+
                     // ===== VALIDACIÓN SINGLE_CLASS =====
                     // Modelado (hand_modeling) y Torno (potters_wheel) con 1 persona:
                     // Solo mostrar horarios fijos del calendario o slots abiertos por 3+
                     // Guard: solo filtrar si ya tenemos availability Y no estamos cargando cache
-                    if ((technique === 'hand_modeling' || technique === 'potters_wheel') && participants === 1 && availability && !checkingAvailability) {
+                    if (!isSpecialDayNoRules && (technique === 'hand_modeling' || technique === 'potters_wheel') && participants === 1 && availability && !checkingAvailability) {
                       const dayOfWeek = new Date(`${selectedDate}T00:00:00`).getDay();
                       const dayKeys = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
                       const dayKey = dayKeys[dayOfWeek] as any;
                       
                       // Obtener horarios fijos del calendario para esta técnica
                       const techToCheck = technique === 'hand_modeling' ? 'molding' : 'potters_wheel';
-                      const fixedSlots = availability[dayKey]?.filter((s: any) => s.technique === techToCheck).map((s: any) => s.time) || [];
+                      const slotsForRules = overrideForDate?.slots ?? availability[dayKey] ?? [];
+                      const fixedSlots = slotsForRules.filter((s: any) => s.technique === techToCheck).map((s: any) => s.time) || [];
                       
                       console.log(`[SingleClassWizard] Filtering ${technique} on ${selectedDate}: fixedSlots=`, fixedSlots);
                       
