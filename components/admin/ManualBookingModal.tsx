@@ -193,40 +193,62 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
     try {
       // Validación básica
       if (!selectedCustomer) throw new Error('Selecciona un cliente');
-      if (!selectedProduct) {
-        setProductError('Selecciona un producto antes de continuar.');
+      
+      // Determinar si es Experiencia Personalizada (selectedProduct === null) o producto de catálogo
+      const isCustomExperience = selectedProduct === null;
+      
+      if (!isCustomExperience && !selectedProduct) {
+        setProductError('Selecciona un producto o experiencia antes de continuar.');
         setSubmitDisabled(false);
         return;
       }
-      if (selectedProduct.type === 'CUSTOM_EXPERIENCE' && !selectedTechnique) {
+      
+      if (isCustomExperience && !selectedTechnique) {
         throw new Error('Selecciona una técnica para la experiencia personalizada');
       }
-      console.log('[ManualBookingModal] Validando:', {
-        date: firstSlot.date,
-        time: firstSlot.time,
-        technique: selectedProduct.details?.technique,
-        participants,
-        productType: selectedProduct.type
-      });
+      
+      if (!selectedSlots.length) throw new Error('Agrega al menos un horario');
+      if (participants < 1 || participants > 100) {
+        throw new Error('Número de participantes debe estar entre 1 y 100');
+      }
 
-      const validation = await adminValidator.validateAdminBooking({
-        date: firstSlot.date,
-        time: firstSlot.time,
-        technique: selectedProduct.details?.technique,
-        participants,
-        productType: selectedProduct.type,
-        product: selectedProduct
-      });
+      // Para Experiencia Personalizada, no hay validación de reglas (es más flexible)
+      if (isCustomExperience) {
+        // Validación simple para availability
+        const validation = await adminValidator.validateAdminBooking({
+          date: selectedSlots[0].date,
+          time: selectedSlots[0].time,
+          technique: selectedTechnique,
+          participants,
+          productType: 'CUSTOM_EXPERIENCE',
+          product: null
+        });
 
-      console.log('[ManualBookingModal] Validación resultado:', validation);
+        setValidationResult(validation);
 
-      setValidationResult(validation);
+        if (!validation.isValid || validation.warnings.length > 0) {
+          setShowOverrideModal(true);
+          setSubmitDisabled(false);
+          return;
+        }
+      } else {
+        // Para productos de catálogo, validar reglas completas
+        const validation = await adminValidator.validateAdminBooking({
+          date: selectedSlots[0].date,
+          time: selectedSlots[0].time,
+          technique: selectedProduct.details?.technique,
+          participants,
+          productType: selectedProduct.type,
+          product: selectedProduct
+        });
 
-      // Si hay warnings o errores → mostrar modal de confirmación
-      if (!validation.isValid || validation.warnings.length > 0) {
-        setShowOverrideModal(true);
-        setSubmitDisabled(false);
-        return;
+        setValidationResult(validation);
+
+        if (!validation.isValid || validation.warnings.length > 0) {
+          setShowOverrideModal(true);
+          setSubmitDisabled(false);
+          return;
+        }
       }
 
       // Si es válido → crear directamente sin override
@@ -243,44 +265,85 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
   const performBookingSubmit = async (adminOverride: boolean, overrideReason: string) => {
     setOverrideInProgress(true);
     try {
-      // Construir datos de reserva
-      const bookingData = {
-        userInfo: selectedCustomer?.userInfo || {
-          firstName: selectedCustomer?.userInfo?.firstName || '',
-          lastName: selectedCustomer?.userInfo?.lastName || '',
-          email: selectedCustomer?.userInfo?.email || '',
-          phone: selectedCustomer?.userInfo?.phone || '',
-          countryCode: selectedCustomer?.userInfo?.countryCode || '',
-          birthday: selectedCustomer?.userInfo?.birthday || null
-        },
-        productId: selectedProduct.id,
-        price: Number(price) || selectedProduct.price,
-        clientNote,
-        slots: selectedSlots,
-        product: selectedProduct,
-        productType: selectedProduct.type,
-        bookingMode: 'flexible',
-        isPaid: false,
-        paymentDetails: [],
-        participants,
-        // Técnica para CUSTOM_EXPERIENCE
-        ...(selectedProduct.type === 'CUSTOM_EXPERIENCE' && selectedTechnique ? { technique: selectedTechnique } : {}),
-        // Admin override flags
-        adminOverride,
-        overrideReason: adminOverride ? overrideReason : undefined,
-        violatedRules: adminOverride ? (validationResult?.warnings || []) : undefined
-      };
+      const isCustomExperience = selectedProduct === null;
+      const firstSlot = selectedSlots[0];
 
-      // Llamar al servicio de agendamiento
-      const result = await dataService.addBooking(bookingData);
-      if (!result.success) throw new Error(result.message || 'No se pudo agendar la clase');
+      if (isCustomExperience) {
+        // Para Experiencia Personalizada: usar createCustomExperienceBooking
+        const customExperiencePayload = {
+          experienceType: 'ceramic_only',
+          technique: selectedTechnique,
+          date: firstSlot.date,
+          time: firstSlot.time,
+          participants,
+          config: {
+            participants
+          },
+          userInfo: selectedCustomer?.userInfo || {
+            firstName: selectedCustomer?.userInfo?.firstName || '',
+            lastName: selectedCustomer?.userInfo?.lastName || '',
+            email: selectedCustomer?.userInfo?.email || '',
+            phone: selectedCustomer?.userInfo?.phone || '',
+            countryCode: selectedCustomer?.userInfo?.countryCode || '',
+            birthday: selectedCustomer?.userInfo?.birthday || null
+          },
+          totalPrice: Number(price) || 0,
+          menuSelections: [],
+          adminOverride,
+          overrideReason: adminOverride ? overrideReason : undefined,
+          violatedRules: adminOverride ? (validationResult?.warnings || []) : undefined,
+          clientNote
+        };
+
+        const response = await fetch('/api/data?action=createCustomExperienceBooking', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(customExperiencePayload)
+        });
+
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || 'No se pudo crear la experiencia personalizada');
+        }
+      } else {
+        // Para productos de catálogo: usar addBooking
+        const bookingData = {
+          userInfo: selectedCustomer?.userInfo || {
+            firstName: selectedCustomer?.userInfo?.firstName || '',
+            lastName: selectedCustomer?.userInfo?.lastName || '',
+            email: selectedCustomer?.userInfo?.email || '',
+            phone: selectedCustomer?.userInfo?.phone || '',
+            countryCode: selectedCustomer?.userInfo?.countryCode || '',
+            birthday: selectedCustomer?.userInfo?.birthday || null
+          },
+          productId: selectedProduct.id,
+          price: Number(price) || selectedProduct.price,
+          clientNote,
+          slots: selectedSlots,
+          product: selectedProduct,
+          productType: selectedProduct.type,
+          bookingMode: 'flexible',
+          isPaid: false,
+          paymentDetails: [],
+          participants,
+          // Técnica para CUSTOM_EXPERIENCE
+          ...(selectedProduct.type === 'CUSTOM_EXPERIENCE' && selectedTechnique ? { technique: selectedTechnique } : {}),
+          // Admin override flags
+          adminOverride,
+          overrideReason: adminOverride ? overrideReason : undefined,
+          violatedRules: adminOverride ? (validationResult?.warnings || []) : undefined
+        };
+
+        const result = await dataService.addBooking(bookingData);
+        if (!result.success) throw new Error(result.message || 'No se pudo agendar la clase');
+      }
 
       // Feedback visual profesional
       if (typeof window !== 'undefined') {
         window.alert(
           adminOverride 
-            ? '✅ Clase agendada exitosamente con override admin'
-            : '✅ Clase agendada exitosamente'
+            ? '✅ Experiencia/Clase agendada exitosamente con override admin'
+            : '✅ Experiencia/Clase agendada exitosamente'
         );
       }
 
@@ -334,50 +397,58 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
           </div>
         )}
         <div className="mb-4">
-          <label className="block text-sm font-bold mb-1">Producto</label>
+          <label className="block text-sm font-bold mb-1">Producto o Experiencia</label>
           <div className="space-y-2">
+            {/* Opción de Experiencia Personalizada (sin producto de catálogo) */}
+            <button
+              type="button"
+              className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors duration-200 ${selectedProduct === null && (selectedTechnique !== null) ? 'border-brand-primary bg-purple-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
+              onClick={() => { 
+                setSelectedProduct(null); 
+                setSelectedTechnique('potters_wheel');
+                setProductError(''); 
+              }}
+              aria-label="Crear experiencia personalizada"
+            >
+              <span className="material-icons text-purple-600">celebration</span>
+              <div className="flex-1 text-left">
+                <div className="font-bold text-brand-text">Experiencia Personalizada</div>
+                <div className="text-xs text-brand-secondary">Crear una experiencia única (sin producto de catálogo)</div>
+              </div>
+            </button>
+
+            {/* Productos de catálogo */}
             {(() => {
-              // Mostrar todos los productos activos, y los dos SINGLE_CLASS flexibles aunque estén inactivos (solo para admin)
               const seenNames = new Set<string>();
-              const FLEXIBLE_SINGLE_CLASSES = [
-                'Clase Individual de Torno',
-                'Clase Individual de Modelado a Mano'
-              ];
               const filtered = products
                 .filter(p => {
-                  // Mostrar todas las SINGLE_CLASS (activas o inactivas), deduplicadas por nombre
                   if (p.type === 'SINGLE_CLASS') {
                     if (seenNames.has(p.name)) return false;
                     seenNames.add(p.name);
                     return true;
                   }
-                  // Mostrar solo productos activos de los otros tipos permitidos (sin GROUP_CLASS deprecated)
-                  if (p.isActive && (p.type === 'CLASS_PACKAGE' || p.type === 'INTRODUCTORY_CLASS' || p.type === 'CUSTOM_EXPERIENCE')) {
+                  if (p.isActive && (p.type === 'CLASS_PACKAGE' || p.type === 'INTRODUCTORY_CLASS')) {
                     return true;
                   }
                   return false;
                 });
-              if (!filtered.length) {
-                return <div className="text-red-500">No hay productos activos disponibles.</div>;
-              }
+              
               return filtered.map(p => (
                 <button
                   key={p.id}
                   type="button"
                   className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors duration-200 ${selectedProduct?.id === p.id ? 'border-brand-primary bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
-                  onClick={() => { setSelectedProduct(p); setProductError(''); }}
+                  onClick={() => { setSelectedProduct(p); setSelectedTechnique(null); setProductError(''); }}
                   aria-label={`Seleccionar ${p.name}`}
                 >
-                  {/* Icono por tipo */}
                   <span className="inline-block">
                     {p.type === 'CLASS_PACKAGE' && <span className="material-icons text-brand-primary">layers</span>}
                     {p.type === 'SINGLE_CLASS' && <span className="material-icons text-green-600">person</span>}
                     {p.type === 'INTRODUCTORY_CLASS' && <span className="material-icons text-indigo-600">star</span>}
-                    {p.type === 'CUSTOM_EXPERIENCE' && <span className="material-icons text-purple-600">celebration</span>}
                   </span>
                   <div className="flex-1 text-left">
                     <div className="font-bold text-brand-text">{p.name}</div>
-                    <div className="text-xs text-brand-secondary">{p.type === 'CLASS_PACKAGE' ? 'Paquete de Clases' : p.type === 'SINGLE_CLASS' ? 'Clase Individual' : p.type === 'INTRODUCTORY_CLASS' ? 'Introductoria' : p.type === 'CUSTOM_EXPERIENCE' ? 'Experiencia Personalizada' : ''}</div>
+                    <div className="text-xs text-brand-secondary">{p.type === 'CLASS_PACKAGE' ? 'Paquete de Clases' : p.type === 'SINGLE_CLASS' ? 'Clase Individual' : 'Introductoria'}</div>
                     <div className="text-xs text-gray-500">{p.details?.duration || ''}</div>
                   </div>
                   <div className="font-bold text-brand-primary">${p.price?.toFixed(2) || ''}</div>
