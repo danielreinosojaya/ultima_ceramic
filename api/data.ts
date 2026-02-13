@@ -485,11 +485,13 @@ const getFixedSlotTimesForDate = (
     return [...new Set(times)].sort();
 };
 
-const isPottersFixedConflict = (candidateStart: number, fixedTimes: number[]) =>
-    fixedTimes.some(fixedStart => {
-        if (candidateStart === fixedStart) return false;
-        return candidateStart >= fixedStart - 120 && candidateStart < fixedStart + 120;
-    });
+const isPottersFixedConflict = (candidateStart: number, fixedTimes: number[]) => {
+    // Si coincide exactamente con un inicio fijo, SIEMPRE permitir
+    if (fixedTimes.includes(candidateStart)) return false;
+
+    // Bloquear únicamente horarios intermedios que inician DURANTE una clase fija (2h)
+    return fixedTimes.some(fixedStart => candidateStart > fixedStart && candidateStart < fixedStart + 120);
+};
 
 const getBusinessHoursForDay = (dayOfWeek: number): string[] => {
     const hours: string[] = [];
