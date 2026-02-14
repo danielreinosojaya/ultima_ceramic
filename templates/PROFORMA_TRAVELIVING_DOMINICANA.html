@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cotización - República Dominicana | Ceramicalma</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Lora:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+        }
+
+        body {
+            font-family: 'Lora', 'Georgia', serif;
+            background-color: #f4f2f1;
+            color: #4a4540;
+            line-height: 1.8;
+            padding: 0;
+        }
+
+        .btn-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+        }
+
+        .btn-pdf {
+            background-color: #8b6952;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: 'Inter', sans-serif;
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 12px rgba(160, 103, 77, 0.2);
+        }
+
+        .btn-pdf:hover {
+            background-color: #6b4423;
+            box-shadow: 0 6px 16px rgba(160, 103, 77, 0.3);
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            position: relative;
+        }
+
+        /* HEADER DECORATIVO */
+        .header {
+            background: linear-gradient(135deg, #4a4540 0%, #6b4423 100%);
+            color: white;
+            padding: 25px 60px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 400px;
+            height: 400px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 50%;
+        }
+
+        .header-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .header-badge {
+            font-size: 12px;
+            font-family: 'Inter', sans-serif;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .header h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            letter-spacing: -1px;
+        }
+
+        .header p {
+            font-family: 'Lora', serif;
+            font-size: 18px;
+            font-weight: 400;
+            color: rgba(255, 255, 255, 0.95);
+            margin-bottom: 8px;
+        }
+
+        .header-date {
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.85);
+            margin-top: 12px;
+        }
+
+        /* CONTENIDO PRINCIPAL */
+        .content {
+            padding: 60px 60px;
+        }
+
+        /* SECCIÓN */
+        section {
+            margin-bottom: 60px;
+            page-break-inside: avoid;
+        }
+
+        .section-header {
+            margin-bottom: 30px;
+            border-bottom: 1px solid #e8e3d6;
+            padding-bottom: 15px;
+        }
+
+        .section-header h2 {
+            font-family: 'Playfair Display', serif;
+            font-size: 32px;
+            font-weight: 600;
+            color: #4a4540;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .section-header p {
+            font-family: 'Lora', serif;
+            font-size: 16px;
+            color: #8b6952;
+            font-style: italic;
+        }
+
+        /* CLIENTE */
+        .client-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 50px;
+            margin-bottom: 60px;
+        }
+
+        .client-detail-block h3 {
+            font-family: 'Inter', sans-serif;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: #8b6952;
+            margin-bottom: 12px;
+        }
+
+        .client-detail-block p {
+            font-family: 'Lora', serif;
+            font-size: 16px;
+            color: #4a4540;
+            line-height: 1.6;
+            margin-bottom: 6px;
+        }
+
+        /* DESCRIPCIÓN EVENTO */
+        .event-description {
+            background: #faf8f5;
+            padding: 35px;
+            margin-bottom: 50px;
+            border-left: 3px solid #8b6952;
+        }
+
+        .event-description h3 {
+            font-family: 'Playfair Display', serif;
+            font-size: 24px;
+            font-weight: 600;
+            color: #4a4540;
+            margin-bottom: 16px;
+        }
+
+        .event-description .price {
+            font-family: 'Playfair Display', serif;
+            font-size: 36px;
+            font-weight: 700;
+            color: #6b4423;
+            margin-top: 20px;
+            margin-bottom: 8px;
+        }
+
+        .event-description .price-label {
+            font-family: 'Inter', sans-serif;
+            font-size: 12px;
+            color: #8b6952;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        /* DETALLES EVENTO */
+        .event-details {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 35px;
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 1px solid rgba(160, 103, 77, 0.15);
+        }
+
+        .detail-item h4 {
+            font-family: 'Inter', sans-serif;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: #8b6952;
+            margin-bottom: 8px;
+        }
+
+        .detail-item p {
+            font-family: 'Lora', serif;
+            font-size: 16px;
+            color: #4a4540;
+            margin-bottom: 4px;
+        }
+
+        .detail-item-secondary {
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            color: #8b6952;
+            font-style: italic;
+        }
+
+        /* LISTA CONTENIDOS */
+        .includes-list {
+            list-style: none;
+        }
+
+        .includes-list li {
+            padding-bottom: 16px;
+            padding-left: 28px;
+            position: relative;
+            font-size: 16px;
+            line-height: 1.6;
+            border-bottom: 1px solid #e8e3d6;
+        }
+
+        .includes-list li:last-child {
+            border-bottom: none;
+        }
+
+        .includes-list li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #8b6952;
+            font-weight: 700;
+            font-size: 18px;
+        }
+
+        /* FACILITADORA */
+        .instructor-section {
+            background: #faf8f5;
+            padding: 35px 30px;
+            margin-bottom: 50px;
+        }
+
+        .instructor-name {
+            font-family: 'Playfair Display', serif;
+            font-size: 24px;
+            font-weight: 600;
+            color: #4a4540;
+            margin-bottom: 16px;
+        }
+
+        .instructor-credentials {
+            list-style: none;
+            margin-bottom: 24px;
+        }
+
+        .instructor-credentials li {
+            font-size: 14px;
+            color: #6b4423;
+            padding-left: 0;
+            margin-bottom: 6px;
+        }
+
+        .instructor-credentials li:before {
+            content: none;
+        }
+
+        .instructor-bio {
+            font-size: 16px;
+            color: #4a4540;
+            line-height: 1.8;
+        }
+
+        /* TABLA PRECIOS */
+        .pricing-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 30px 0;
+        }
+
+        .pricing-table thead {
+            border-top: 2px solid #4a4540;
+            border-bottom: 2px solid #4a4540;
+        }
+
+        .pricing-table th {
+            padding: 16px 0;
+            text-align: left;
+            font-family: 'Inter', sans-serif;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: #4a4540;
+        }
+
+        .pricing-table td {
+            padding: 14px 0;
+            border-bottom: 1px solid #e8e3d6;
+            font-size: 15px;
+            color: #4a4540;
+        }
+
+        .pricing-table .price {
+            font-family: 'Playfair Display', serif;
+            font-weight: 700;
+            color: #6b4423;
+            font-size: 18px;
+        }
+
+        /* TÉRMINOS */
+        .terms-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 50px;
+            margin-bottom: 50px;
+        }
+
+        .terms-block h3 {
+            font-family: 'Playfair Display', serif;
+            font-size: 20px;
+            font-weight: 600;
+            color: #4a4540;
+            margin-bottom: 20px;
+        }
+
+        .terms-block ul {
+            list-style: none;
+        }
+
+        .terms-block li {
+            font-size: 15px;
+            color: #4a4540;
+            padding-bottom: 12px;
+            padding-left: 24px;
+            position: relative;
+        }
+
+        .terms-block li:before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #8b6952;
+            font-weight: 700;
+        }
+
+        /* CIERRE */
+        .closing {
+            background: linear-gradient(135deg, #faf8f5 0%, #e8e3d6 100%);
+            padding: 40px 30px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .closing h2 {
+            font-family: 'Playfair Display', serif;
+            font-size: 24px;
+            font-weight: 600;
+            color: #4a4540;
+            margin-bottom: 12px;
+        }
+
+        .closing p {
+            font-size: 16px;
+            line-height: 1.8;
+            color: #6b4423;
+        }
+
+        /* FOOTER */
+        .footer {
+            background: #4a4540;
+            color: white;
+            padding: 15px 25px;
+            text-align: center;
+            page-break-inside: avoid;
+        }
+
+        .footer-brand {
+            font-family: 'Playfair Display', serif;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .footer-contact {
+            font-family: 'Lora', serif;
+            font-size: 12px;
+            line-height: 1.4;
+            opacity: 0.9;
+        }
+
+        .footer-contact a {
+            color: white;
+            text-decoration: none;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+            transition: border-color 0.3s;
+        }
+
+        .footer-contact a:hover {
+            border-bottom-color: white;
+        }
+
+        /* Evitar page breaks en elementos interiores */
+        @media print {
+            div[style*="background: #faf8f5"],
+            div[style*="border-left: 3px"] {
+                page-break-inside: avoid;
+            }
+        }
+
+        /* PRINT */
+        @media print {
+            .btn-container {
+                display: none;
+            }
+
+            body {
+                padding: 0;
+                background: white;
+            }
+
+            .container {
+                box-shadow: none;
+                max-width: 100%;
+            }
+
+            section, .event-description, .instructor-section, .closing, .pricing-table {
+                page-break-inside: avoid;
+            }
+
+            .section-header {
+                page-break-after: avoid;
+            }
+
+            a {
+                color: #4a4540;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                padding: 60px 40px;
+            }
+
+            .header h1 {
+                font-size: 28px;
+            }
+
+            .content {
+                padding: 60px 40px;
+            }
+
+            .client-details, .event-details, .terms-section {
+                grid-template-columns: 1fr;
+                gap: 40px;
+            }
+
+            .event-description {
+                padding: 30px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="btn-container">
+        <button class="btn-pdf" onclick="descargarPDF()">📄 Descargar PDF</button>
+    </div>
+
+    <div class="container" id="content">
+        <!-- HEADER -->
+        <div class="header">
+            <div class="header-content">
+                <div class="header-badge">Propuesta de Experiencia Turística 2026</div>
+                <h1>Taller de Cerámica</h1>
+                <p>República Dominicana: Destino, Creatividad y Conexión</p>
+                <div class="header-date">Guayaquil, 13 de febrero de 2026</div>
+            </div>
+        </div>
+
+        <!-- CONTENIDO -->
+        <div class="content">
+            <!-- CLIENTE -->
+            <section>
+                <div class="section-header">
+                    <h2>Para</h2>
+                    <p>Información del cliente</p>
+                </div>
+                <div class="client-details">
+                    <div class="client-detail-block">
+                        <h3>Empresa</h3>
+                        <p>Traveliving Group</p>
+                        <p style="font-size: 14px; color: #8b6952; margin-top: 6px;">Grupo Empresarial Golden Vacations</p>
+                    </div>
+                    <div class="client-detail-block">
+                        <h3>Contacto Principal</h3>
+                        <p>Estefanía Espinosa</p>
+                        <p>Gerente Comercial</p>
+                    </div>
+                    <div class="client-detail-block">
+                        <h3>Propósito</h3>
+                        <p>Actividad de promoción turística en cooperación con Oficina de Turismo de República Dominicana</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- PROPUESTA EVENTO -->
+            <section>
+                <div class="section-header">
+                    <h2>La Propuesta</h2>
+                    <p>Experiencia inmersiva caribeña</p>
+                </div>
+
+                <div class="event-description">
+                    <h3>Taller de Cerámica: Destinos de República Dominicana</h3>
+                    <p>Una experiencia única donde cada participante pintará su propia obra cerámica inspirada en los destinos icónicos de República Dominicana: Punta Cana, Santiago de los Caballeros y Puerto Plata. Combinamos técnicas artísticas con la narrativa del destino, permitiendo que tus clientes y partners se lleven una pieza auténtica que represente la riqueza cultural y las bellezas del Caribe dominicano.</p>
+                    
+                    <div class="price">$35 ó $45 USD</div>
+                    <div class="price-label">Por Persona (A Elegir)</div>
+
+                    <div class="event-details">
+                        <div class="detail-item">
+                            <h4>Fecha</h4>
+                            <p>Semana del 16 de febrero</p>
+                            <p class="detail-item-secondary">Flexible según disponibilidad</p>
+                        </div>
+                        <div class="detail-item">
+                            <h4>Duración</h4>
+                            <p>2 Horas</p>
+                            <p class="detail-item-secondary">Experiencia completa</p>
+                        </div>
+                        <div class="detail-item">
+                            <h4>Capacidad</h4>
+                            <p>12 - 15 Personas</p>
+                            <p class="detail-item-secondary">Grupo exclusivo</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- QUÉ INCLUYE -->
+            <section>
+                <div class="section-header">
+                    <h2>El Taller Incluye</h2>
+                    <p>Experiencia completa y profesional</p>
+                </div>
+
+                <ul class="includes-list">
+                    <li>Instrucción profesional de técnicas de cerámica y pintura</li>
+                    <li>Piezas de cerámica de alta calidad (opción $35 o $45 USD por persona)</li>
+                    <li>Todos los materiales artísticos (pinturas profesionales, pinceles especializados)</li>
+                    <li>Espacio exclusivo y cómodo para el grupo</li>
+                    <li>Horneado profesional en horno especializado</li>
+                    <li>Entrega de obras completadas en 2 semanas</li>
+                </ul>
+            </section>
+
+            <!-- FACILITADORA -->
+            <section>
+                <div class="instructor-section">
+                    <div class="instructor-name">Carolina Massuh Morán</div>
+                    
+                    <ul class="instructor-credentials">
+                        <li><strong>Psicóloga Clínica</strong></li>
+                        <li><strong>Terapeuta Holística</strong></li>
+                        <li><strong>Máster en Psicoterapia del Bienestar Integral</strong></li>
+                        <li><strong>Ceramista Especializada</strong></li>
+                    </ul>
+
+                    <p class="instructor-bio">
+                        Carolina combina su formación académica en psicología clínica con su expertise en cerámica terapéutica para ofrecer experiencias profundamente transformadoras. Con más de 15 años facilitando talleres en Ecuador y el extranjero, ha desarrollado metodologías originales que integran mindfulness, meditación y conexión sensorial en cada proceso creativo. Su capacitación más reciente en Michigan (USA, 2024) la posiciona como referente en cerámica holística y bienestar corporativo.
+                    </p>
+                </div>
+            </section>
+
+            <!-- OPCIONES DE BEBIDAS Y SNACKS -->
+            <section>
+                <div class="section-header">
+                    <h2>Bebidas y Alimentos</h2>
+                    <p>Selecciona con anticipación</p>
+                </div>
+
+                <p style="margin-bottom: 20px;">Para complementar la experiencia, se envía menú adjunto con opciones de bebidas y alimentos para que tu grupo pueda elegir con anticipación según sus preferencias.</p>
+
+                <div style="background: #faf8f5; padding: 20px; border-left: 3px solid #8b6952;">
+                    <p style="font-size: 15px; color: #4a4540; margin-bottom: 10px;"><strong>¿Cómo funciona?</strong></p>
+                    <ul style="list-style: none; padding-left: 0; font-size: 14px;">
+                        <li style="padding-bottom: 8px;">✦ Se envía menú personalizado con opciones</li>
+                        <li style="padding-bottom: 8px;">✦ Tu grupo elige bebidas y snacks preferidos</li>
+                        <li>✦ Confirmamos selecciones 48 horas antes del evento</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- PRECIOS -->
+            <section>
+                <div class="section-header">
+                    <h2>Inversión</h2>
+                    <p>Desglose de costos</p>
+                </div>
+
+                <table class="pricing-table">
+                    <thead>
+                        <tr>
+                            <th>Concepto</th>
+                            <th>Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Opción 1: Pieza de Cerámica Clásica</strong></td>
+                            <td class="price">$35 USD/Persona</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Opción 2: Pieza de Cerámica Premium</strong></td>
+                            <td class="price">$45 USD/Persona</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Entrega de Piezas Completadas</strong></td>
+                            <td class="price">Incluido</td>
+                        </tr>
+                        <tr style="border-top: 2px solid #c99a6e;">
+                            <td colspan="2" style="padding: 16px 0; text-align: center; color: #8b6952; font-style: italic; font-size: 13px;"><strong>Adicionales (Si deseas Espacio Exclusivo)</strong></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Alquiler de Espacio Exclusivo (Entre semana)</strong></td>
+                            <td class="price">$75 USD + IVA/hora</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Alquiler de Espacio Exclusivo (Fin de semana)</strong></td>
+                            <td class="price">$100 USD + IVA/hora</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div style="background: #f5fbfb; padding: 16px; border-left: 2px solid #1a8080; margin-top: 20px;">
+                    <p style="font-size: 14px;"><em>Detalles a confirmar tras aceptación de propuesta.</em></p>
+                </div>
+            </section>
+
+            <!-- LOGÍSTICA -->
+            <section>
+                <div class="section-header">
+                    <h2>Detalles Operativos</h2>
+                    <p>Lo que necesitamos para ejecutar perfectamente</p>
+                </div>
+
+                <div class="terms-section">
+                    <div class="terms-block">
+                        <h3>Necesitamos de Ti</h3>
+                        <ul>
+                            <li>Proyector (si deseas presentación previa)</li>
+                            <li>Confirmación de participantes exacta</li>
+                            <li>Selección de opción de pieza ($35 o $45)</li>
+                            <li>Preferencias de bebidas y alimentos del menú</li>
+                        </ul>
+                    </div>
+                    <div class="terms-block">
+                        <h3>Nosotros Aportamos</h3>
+                        <ul>
+                            <li>Facilitadora especializada y experimentada</li>
+                            <li>Todos los materiales artísticos</li>
+                            <li>Piezas de cerámica de calidad</li>
+                            <li>Horneado y entrega de obras</li>
+                            <li>Coordinación profesional completa</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TÉRMINOS -->
+            <section style="page-break-inside: avoid;">
+                <div class="section-header">
+                    <h2>Condiciones Generales</h2>
+                    <p>Términos de la cotización</p>
+                </div>
+
+                <div style="background: #faf8f5; padding: 20px; margin-bottom: 20px; page-break-inside: avoid;">
+                    <h4 style="color: #6b4423; margin-bottom: 12px; font-weight: 700;">Incluido</h4>
+                    <ul style="list-style: none; padding-left: 0;">
+                        <li style="padding-bottom: 8px;"><strong>✓</strong> Instrucción profesional completa (2 horas)</li>
+                        <li style="padding-bottom: 8px;"><strong>✓</strong> Piezas de cerámica de calidad ($35 o $45)</li>
+                        <li style="padding-bottom: 8px;"><strong>✓</strong> Todos los materiales artísticos</li>
+                        <li style="padding-bottom: 8px;"><strong>✓</strong> Horneado profesional</li>
+                        <li style="padding-bottom: 8px;"><strong>✓</strong> Entrega de obras completadas</li>
+                        <li><strong>✓</strong> Envío de piezas terminadas</li>
+                    </ul>
+                </div>
+
+                <div style="background: #faf8f5; padding: 20px; margin-bottom: 20px; page-break-inside: avoid;">
+                    <h4 style="color: #6b4423; margin-bottom: 12px; font-weight: 700;">Política de Cancelación y Cambios</h4>
+                    <ul style="list-style: none; padding-left: 0; font-size: 14px;">
+                        <li style="padding-bottom: 8px;">✦ <strong>50% depósito</strong> para asegurar fecha y facilitadora</li>
+                        <li style="padding-bottom: 8px;">✦ <strong>Balance 48 horas antes</strong> del evento</li>
+                        <li style="padding-bottom: 8px;">✦ Cambios de fecha: máximo 7 días antes, sin penalidad</li>
+                        <li>✦ Cancelación con menos de 7 días: pierde deposito</li>
+                    </ul>
+                </div>
+
+                <div style="background: #faf8f5; padding: 20px; margin-bottom: 20px; page-break-inside: avoid;">
+                    <h4 style="color: #6b4423; margin-bottom: 12px; font-weight: 700;">Sobre el Espacio</h4>
+                    <p style="font-size: 15px; color: #4a4540; margin-bottom: 14px;">Para hacer tu experiencia verdaderamente especial, ofrecemos dos opciones:</p>
+                    <ul style="list-style: none; padding-left: 0; font-size: 14px;">
+                        <li style="padding-bottom: 10px;"><strong>Opción 1 - Espacio Compartido:</strong> El taller se realiza en nuestro espacio en Samborondón. Ideal si buscas comodidad sin costo adicional.</li>
+                        <li><strong>Opción 2 - Espacio Exclusivo:</strong> Si prefieres que el espacio sea cerrado solo para tu grupo (total privacidad y exclusividad), aplica un costo de alquiler por hora según el día: <strong>$75 USD + IVA</strong> (entre semana) o <strong>$100 USD + IVA</strong> (sábados y domingos). Esto te otorga el lugar completamente para ustedes.</li>
+                    </ul>
+                </div>
+
+                <div style="background: #faf8f5; padding: 16px; border-left: 3px solid #8b6952; page-break-inside: avoid;">
+                    <p style="font-size: 14px; color: #4a4540; margin-bottom: 10px;"><strong>Notas Importantes:</strong></p>
+                    <ul style="font-size: 14px; color: #4a4540; list-style: none; padding-left: 0;">
+                        <li style="padding-bottom: 6px;">• Cotización válida por 15 días desde la fecha de emisión</li>
+                        <li style="padding-bottom: 6px;">• Tiempo de taller: 2 horas completas</li>
+                        <li style="padding-bottom: 6px;">• Envío de piezas terminadas incluido en el precio del taller</li>
+                        <li>• Alquiler de espacio exclusivo: $75 USD + IVA/hora (entre semana) / $100 USD + IVA/hora (fin de semana)</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- PRÓXIMOS PASOS -->
+            <section>
+                <div class="section-header">
+                    <h2>Próximos Pasos</h2>
+                    <p>Cómo proceder</p>
+                </div>
+
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #e8e3d6; text-align: center; width: 10%;">
+                            <strong style="font-size: 20px; color: #8b6952;">1</strong>
+                        </td>
+                        <td style="padding: 12px 0 12px 24px; border-bottom: 1px solid #e8e3d6;">
+                            <strong>Confirmación de Interés</strong><br>
+                            <span style="color: #8b6952;">Responder si la propuesta te parece adecuada</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #e8e3d6; text-align: center;">
+                            <strong style="font-size: 20px; color: #8b6952;">2</strong>
+                        </td>
+                        <td style="padding: 12px 0 12px 24px; border-bottom: 1px solid #e8e3d6;">
+                            <strong>Afinación de Detalles</strong><br>
+                            <span style="color: #8b6952;">Confirmar fecha exacta, opción de pieza y preferencias de bebidas/alimentos</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 12px 0; border-bottom: 1px solid #e8e3d6; text-align: center;">
+                            <strong style="font-size: 20px; color: #8b6952;">3</strong>
+                        </td>
+                        <td style="padding: 12px 0 12px 24px; border-bottom: 1px solid #e8e3d6;">
+                            <strong>Depósito & Confirmación</strong><br>
+                            <span style="color: #8b6952;">50% para asegurar facilitadora y disponibilidad</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 12px 0; text-align: center;">
+                            <strong style="font-size: 20px; color: #8b6952;">4</strong>
+                        </td>
+                        <td style="padding: 12px 0 12px 24px;">
+                            <strong>Experiencia Transformadora</strong><br>
+                            <span style="color: #8b6952;">¡Creatividad, conexión y arte en República Dominicana!</span>
+                        </td>
+                    </tr>
+                </table>
+            </section>
+
+            <!-- CIERRE -->
+            <div class="closing">
+                <h2>¡Promover Destinos a Través de la Creatividad!</h2>
+                <p>Creemos que las mejores maneras de conectar con un destino son a través de experiencias auténticas y significativas. Este taller es una oportunidad única para que tus clientes y partners experimenten República Dominicana de una forma memorable, creando una pieza de arte que llevará consigo la esencia del Caribe dominicano.</p>
+            </div>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer">
+            <div class="footer-brand">CERAMICALMA</div>
+            <div class="footer-contact">
+                <p>📧 ceramicalma.ec@gmail.com</p>
+                <p>📱 +593 98 123 4567</p>
+                <p>📍 Samborondón, Guayaquil - Ecuador</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function descargarPDF() {
+            const element = document.getElementById('content');
+            const opt = {
+                margin: [8, 8, 8, 8],
+                filename: 'Cotizacion_Traveliving_Group_RD.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: {
+                    scale: 2,
+                    useCORS: true,
+                    logging: false,
+                    letterRendering: true,
+                    backgroundColor: '#ffffff',
+                    scrollY: 0
+                },
+                jsPDF: {
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4',
+                    compress: true
+                },
+                pagebreak: {
+                    mode: ['css', 'legacy']
+                }
+            };
+            html2pdf().set(opt).from(element).save();
+        }
+    </script>
+</body>
+</html>

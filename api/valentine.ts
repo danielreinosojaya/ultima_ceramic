@@ -10,6 +10,16 @@ const WORKSHOP_CAPACITY: Record<string, number> = {
     'torno_san_valentin': 8
 };
 
+type ValentineProspect = {
+    email: string;
+    firstName: string;
+    bookingCount: number;
+    paidBookings: number;
+    recentBookings: number;
+    lastBookingAt: string | null;
+    engagementScore: number;
+};
+
 // Convierte claves snake_case a camelCase
 function toCamelCase(obj: any): any {
     if (Array.isArray(obj)) {
@@ -88,6 +98,86 @@ async function ensureTableExists() {
     } catch (error) {
         console.error('[valentine] Error ensuring table:', error);
     }
+}
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+function normalizeFirstName(name: unknown, email: string): string {
+    if (typeof name === 'string') {
+        const cleanName = name.trim();
+        if (cleanName) {
+            return cleanName.split(' ')[0];
+        }
+    }
+
+    const localPart = email.split('@')[0] || '';
+    const localClean = localPart.replace(/[._-]+/g, ' ').trim();
+    if (!localClean) {
+        return 'Hola';
+    }
+
+    const firstToken = localClean.split(' ')[0] || 'Hola';
+    return firstToken.charAt(0).toUpperCase() + firstToken.slice(1);
+}
+
+async function getTopValentineProspects(limit: number): Promise<ValentineProspect[]> {
+    const safeLimit = Math.max(1, Math.min(200, Math.floor(limit || 50)));
+
+    const result = await sql`
+        WITH booking_activity AS (
+            SELECT
+                LOWER(TRIM(user_info->>'email')) AS email,
+                COALESCE(
+                    NULLIF(TRIM(user_info->>'firstName'), ''),
+                    NULLIF(TRIM(user_info->>'first_name'), ''),
+                    NULLIF(TRIM(user_info->>'name'), '')
+                ) AS first_name,
+                COUNT(*)::INT AS booking_count,
+                SUM(CASE WHEN is_paid THEN 1 ELSE 0 END)::INT AS paid_bookings,
+                SUM(CASE WHEN created_at >= NOW() - INTERVAL '120 days' THEN 1 ELSE 0 END)::INT AS recent_bookings,
+                MAX(created_at) AS last_booking_at,
+                (
+                    COUNT(*) * 3 +
+                    SUM(CASE WHEN is_paid THEN 1 ELSE 0 END) * 5 +
+                    SUM(CASE WHEN created_at >= NOW() - INTERVAL '120 days' THEN 1 ELSE 0 END) * 4 +
+                    SUM(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN 1 ELSE 0 END) * 6
+                )::INT AS engagement_score
+            FROM bookings
+            WHERE COALESCE(NULLIF(TRIM(user_info->>'email'), ''), '') <> ''
+            GROUP BY 1, 2
+        ),
+        already_registered AS (
+            SELECT DISTINCT LOWER(TRIM(email)) AS email
+            FROM valentine_registrations
+            WHERE status IN ('pending', 'confirmed', 'attended')
+        )
+        SELECT
+            ba.email,
+            ba.first_name,
+            ba.booking_count,
+            ba.paid_bookings,
+            ba.recent_bookings,
+            ba.last_booking_at,
+            ba.engagement_score
+        FROM booking_activity ba
+        LEFT JOIN already_registered ar ON ar.email = ba.email
+        WHERE ar.email IS NULL
+        ORDER BY ba.engagement_score DESC, ba.last_booking_at DESC
+        LIMIT ${safeLimit}
+    `;
+
+    return result.rows.map((row) => {
+        const email = String(row.email || '').toLowerCase();
+        return {
+            email,
+            firstName: normalizeFirstName(row.first_name, email),
+            bookingCount: parseInt(String(row.booking_count || 0), 10) || 0,
+            paidBookings: parseInt(String(row.paid_bookings || 0), 10) || 0,
+            recentBookings: parseInt(String(row.recent_bookings || 0), 10) || 0,
+            lastBookingAt: row.last_booking_at ? new Date(row.last_booking_at).toISOString() : null,
+            engagementScore: parseInt(String(row.engagement_score || 0), 10) || 0
+        };
+    }).filter((prospect) => !!prospect.email);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -181,6 +271,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(200).json({
                 success: true,
                 data: availability
+            });
+        }
+
+        // ========================================
+        // GET: Top prospectos para campaña San Valentín
+        // ========================================
+        if (req.method === 'GET' && action === 'topProspects') {
+            const limit = parseInt(String(req.query.limit || '50'), 10);
+            const prospects = await getTopValentineProspects(limit);
+
+            return res.status(200).json({
+                success: true,
+                data: {
+                    count: prospects.length,
+                    prospects: toCamelCase(prospects)
+                }
             });
         }
 
@@ -308,6 +414,78 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 data: {
                     id,
                     message: '¡Inscripción recibida! Te enviaremos un email cuando validemos tu pago.'
+                }
+            });
+        }
+
+        // ========================================
+        // POST: Enviar campaña última oportunidad
+        // ========================================
+        if (req.method === 'POST' && action === 'sendLastChanceCampaign') {
+            const requestedLimit = parseInt(String(req.body?.limit || '50'), 10);
+            const limit = Math.max(1, Math.min(200, Number.isNaN(requestedLimit) ? 50 : requestedLimit));
+            const dryRun = !!req.body?.dryRun;
+
+            const prospects = await getTopValentineProspects(limit);
+            const usedCapacity = await getUsedCapacity();
+            const availableSpots = Object.keys(WORKSHOP_CAPACITY).reduce((sum, workshop) => {
+                return sum + Math.max(0, WORKSHOP_CAPACITY[workshop] - (usedCapacity[workshop] || 0));
+            }, 0);
+
+            if (dryRun) {
+                return res.status(200).json({
+                    success: true,
+                    data: {
+                        dryRun: true,
+                        selected: prospects.length,
+                        availableSpots,
+                        recipients: toCamelCase(prospects)
+                    }
+                });
+            }
+
+            let sent = 0;
+            let failed = 0;
+            const results: Array<{ email: string; status: 'sent' | 'failed'; error?: string }> = [];
+
+            for (const prospect of prospects) {
+                try {
+                    const emailResult = await emailService.sendValentineLastChanceEmail({
+                        email: prospect.email,
+                        firstName: prospect.firstName,
+                        availableSpots
+                    });
+
+                    const wasSent = !!(emailResult && 'sent' in emailResult && emailResult.sent);
+                    if (wasSent) {
+                        sent++;
+                        results.push({ email: prospect.email, status: 'sent' });
+                    } else {
+                        failed++;
+                        const error = emailResult && 'error' in emailResult ? emailResult.error : 'No provider confirmation';
+                        results.push({ email: prospect.email, status: 'failed', error });
+                    }
+                } catch (error) {
+                    failed++;
+                    results.push({
+                        email: prospect.email,
+                        status: 'failed',
+                        error: error instanceof Error ? error.message : 'Unknown error'
+                    });
+                }
+
+                await sleep(120);
+            }
+
+            return res.status(200).json({
+                success: true,
+                data: {
+                    requestedLimit: limit,
+                    selected: prospects.length,
+                    availableSpots,
+                    sent,
+                    failed,
+                    results: toCamelCase(results)
                 }
             });
         }

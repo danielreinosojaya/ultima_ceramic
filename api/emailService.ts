@@ -2536,6 +2536,72 @@ export const sendValentinePaymentConfirmedEmail = async (data: {
     return result;
 };
 
+/**
+ * Email de campaña: última oportunidad para reservar talleres de San Valentín
+ */
+export const sendValentineLastChanceEmail = async (data: {
+    email: string;
+    firstName?: string;
+    availableSpots?: number;
+}) => {
+    const { email, firstName, availableSpots } = data;
+    const safeName = (firstName || '').trim() || 'Hola';
+    const spotsText = typeof availableSpots === 'number'
+        ? `Quedan aproximadamente <strong>${availableSpots} cupos</strong> entre los talleres disponibles.`
+        : 'Los cupos son limitados y se asignan por orden de confirmación.';
+
+    const subject = 'Última oportunidad: Talleres especiales de San Valentín en CeramicAlma';
+
+    const html = `
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 14px; overflow: hidden; border: 1px solid #F3E5E7;">
+            <div style="background: linear-gradient(135deg, #4A4540 0%, #828E98 100%); padding: 28px 24px; text-align: center; border-bottom: 3px solid #B8474B;">
+                <h1 style="color: #FFFFFF; margin: 0; font-size: 24px; font-weight: 600; letter-spacing: 0.2px;">San Valentín en CeramicAlma</h1>
+                <p style="color: rgba(255,255,255,0.92); margin: 8px 0 0 0; font-size: 14px;">🔴 Nos quedan los últimos cupos</p>
+            </div>
+
+            <div style="padding: 28px 24px; color: #4A4540;">
+                <p style="margin: 0 0 14px 0; font-size: 16px; line-height: 1.6;">${safeName},</p>
+                <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.7;">
+                    <strong>Nos quedan los últimos cupos</strong> para nuestros talleres especiales de San Valentín del <strong>14 de febrero</strong>.
+                </p>
+
+                <div style="background: #FDF2F2; border: 2px solid #B8474B; border-radius: 10px; padding: 18px 16px; margin: 16px 0;">
+                    <p style="margin: 0 0 12px 0; color: #B8474B; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+                        ⏰ Cierre de reservas
+                    </p>
+                    <p style="margin: 0; color: #B8474B; font-size: 16px; font-weight: 700; line-height: 1.6;">
+                        Hoy a las 9:00 PM
+                    </p>
+                    <p style="margin: 8px 0 0 0; color: #B8474B; font-size: 13px; line-height: 1.5;">
+                        Después de esta hora, no seremos capaces de procesar más registros.
+                    </p>
+                </div>
+
+                <p style="margin: 0 0 20px 0; font-size: 15px; line-height: 1.7;">
+                    Si quieres asegurar tu lugar en los últimos cupos disponibles, <strong>completa tu inscripción ahora</strong> antes del cierre.
+                </p>
+
+                <div style="text-align: center; margin: 24px 0 18px 0;">
+                    <a href="https://ceramicalma.com/sanvalentin" style="display: inline-block; background: #B8474B; color: #FFFFFF; text-decoration: none; padding: 13px 24px; border-radius: 8px; font-weight: 600; font-size: 15px;">
+                        Reservar ahora antes de las 9 PM
+                    </a>
+                </div>
+
+                <p style="margin: 0; color: #958985; font-size: 13px; line-height: 1.7; text-align: center;">
+                    Si ya reservaste, ignora este mensaje. Gracias por ser parte de CeramicAlma.
+                </p>
+            </div>
+        </div>
+    `;
+
+    const result = await sendEmail(email, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(email, 'valentine-last-chance', 'email', status);
+
+    console.info('[emailService] Valentine last chance email sent to', email, status);
+    return result;
+};
+
 // ============================================================
 // EMAIL ALIASES - Enviar desde diferentes direcciones
 // ============================================================
