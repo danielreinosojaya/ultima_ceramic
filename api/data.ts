@@ -6020,6 +6020,10 @@ async function addBookingAction(
       }
     }
 
+    // Load schedule settings once for all product types
+    const { availability, scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
+    const maxCapacityMap = getMaxCapacityMap(classCapacity);
+
         if (body.productType === 'GROUP_CLASS') {
             if (!body.slots || body.slots.length !== 1) {
                 throw new Error('GROUP_CLASS must have exactly 1 slot');
@@ -6045,9 +6049,6 @@ async function addBookingAction(
             const slotStartMinutes = timeToMinutes(normalizedTime);
             const slotEndMinutes = slotStartMinutes + (2 * 60);
             const dayKey = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date(`${slot.date}T00:00:00`).getDay()];
-
-            const { availability, scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
-            const maxCapacityMap = getMaxCapacityMap(classCapacity);
 
             const fixedPottersTimes = getFixedSlotTimesForDate(slot.date, dayKey, availability, scheduleOverrides, 'potters_wheel');
             const fixedPottersMinutes = fixedPottersTimes.map(timeToMinutes);
