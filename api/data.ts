@@ -1869,7 +1869,12 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     ORDER BY created_at DESC
                     LIMIT 1000
                 `;
-                console.log(`API: Loading customers (AGGREGATE ONLY, no booking details) from ${bookings.length} recent bookings`);
+                console.log(`API: Loading customers (AGGREGATE ONLY, no booking details) from ${bookings.length} recent bookings - PHASE 6b v2`);
+                
+                // Disable client-side caching for this endpoint
+                res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+                res.setHeader('Pragma', 'no-cache');
+                res.setHeader('Expires', '0');
                 
                 const customerMap = new Map<string, Customer>();
                 
