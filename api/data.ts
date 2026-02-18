@@ -473,7 +473,7 @@ const getFixedSlotTimesForDate = (
     if (override && override.slots === null) return [];
 
     const baseSlots = override?.slots ?? availability[dayKey] ?? [];
-    const times = baseSlots
+    const times: string[] = baseSlots
         .filter((slot: any) => slot.technique === techniqueKey)
         .map((slot: any) => normalizeTime(slot.time));
 
@@ -482,7 +482,7 @@ const getFixedSlotTimesForDate = (
         if (dayKey === 'Wednesday') times.push('11:00');
     }
 
-    return [...new Set(times)].sort();
+    return Array.from(new Set(times)).sort();
 };
 
 const isPottersFixedConflict = (candidateStart: number, fixedTimes: number[]) => {
