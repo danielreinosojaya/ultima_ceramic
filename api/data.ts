@@ -1794,9 +1794,10 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     data = [];
                 }
                         } else if (key === 'bookings') {
-                                // ⚡ OPTIMIZACIÓN: Cargar solo bookings recientes (últimos 90 días) por defecto
-                                // ⚠️ CRÍTICO: Incluir TODAS las reservas con slots futuros aunque fueron creadas hace meses
-                                const daysLimit = parseInt(req.query.daysLimit as string) || 90;
+                                // ⚡ PHASE 4 OPTIMIZATION: Cargar solo bookings recientes (últimos 30 días) por defecto
+                                // Reducir LIMIT 1500 → 500 (33% payload reduction)
+                                // Reducir daysLimit 90 → 30 (más agresivo, bookings activos recientes)
+                                const daysLimit = parseInt(req.query.daysLimit as string) || 30;
                                 const limitDate = new Date();
                                 limitDate.setDate(limitDate.getDate() - daysLimit);
                                 const todayStr = new Date().toISOString().split('T')[0];
@@ -1816,7 +1817,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                                 )
                                             )
                                         ORDER BY created_at DESC
-                                        LIMIT 1500
+                                        LIMIT 500
                                 `;
                                 console.log(`API: Loaded ${bookings.length} bookings from last ${daysLimit} days + future slots`);
                 
