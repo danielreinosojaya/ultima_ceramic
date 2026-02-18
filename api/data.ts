@@ -983,10 +983,11 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
             }
             case 'notifications': {
                 // ⚡ FIX #6: LIMIT 1000 para evitar cargar toda la tabla de notificaciones históricas
-                // Reduce ~15-20% payload, típicamente < 30 KB en lugar de 49 KB
+                // Reduce de cargar 10000+ registros a 1000 (típicamente ~30-40% reduction en payload)
                 const { rows: notifications } = await sql`
-                    SELECT id, message, type, timestamp, read AT TIME ZONE 'UTC' FROM notifications 
-                    ORDER BY timestamp DESC LIMIT 1000
+                    SELECT * FROM notifications 
+                    ORDER BY timestamp DESC 
+                    LIMIT 1000
                 `;
                 data = notifications.map(parseNotificationFromDB);
                 break;
@@ -1026,7 +1027,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     // ⚡ OPTIMIZACIÓN: Excluir fotos por defecto (muy pesadas - base64)
                     // Las fotos se cargan bajo demanda con getDeliveryPhotos
                     const includePhotos = req.query.includePhotos === 'true';
-                    // ⚡ FIX #9: Reduce default limit from 2000 to 500 (reduce payload 44.8 KB → 11 KB)
+                    // ⚡ FIX #9: Reduce default limit from 2000 to 500 (safe default for UI pagination)
                     const limit = req.query.limit ? parseInt(req.query.limit as string) : 500;
                     
                     if (includePhotos) {
@@ -1077,11 +1078,10 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     break;
                 }
                 case 'standaloneCustomers': {
-                    // ⚡ FIX #7: Partial SELECT + LIMIT 500 para reducir payload ~35 KB → 8 KB
-                    // Mismo patrón que getCustomers: solo campos esenciales para la UI
+                    // ⚡ FIX #7: LIMIT 500 para limitar resultado a primeros 500 clientes
+                    // Reduce payload al limitar rowset, no mediante partial SELECT
                     const { rows: customers } = await sql`
-                        SELECT id, email, first_name, last_name, phone, country_code, birthday, price, created_at 
-                        FROM customers 
+                        SELECT * FROM customers 
                         ORDER BY first_name ASC, last_name ASC 
                         LIMIT 500
                     `;
@@ -1090,10 +1090,9 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                 }
                 case 'getStandaloneCustomers': {
                     // Get all customers from customers table (standalone customers without necessarily having bookings)
-                    // ⚡ FIX #8: Apply same optimization as FIX #7 - partial SELECT + LIMIT 500
+                    // ⚡ FIX #8: Apply LIMIT 500 to prevent loading all customers
                     const { rows: standaloneCustomers } = await sql`
-                        SELECT id, email, first_name, last_name, phone, country_code, birthday, price, created_at 
-                        FROM customers 
+                        SELECT * FROM customers 
                         ORDER BY first_name ASC, last_name ASC 
                         LIMIT 500
                     `;
