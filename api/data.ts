@@ -79,15 +79,26 @@ const parseBookingFromDB = (dbRow: any): Booking => {
             }
         }
         
+        const productTypeFallbackNames: Record<string, string> = {
+            SINGLE_CLASS: 'Clase Suelta',
+            CLASS_PACKAGE: 'Paquete de Clases',
+            INTRODUCTORY_CLASS: 'Clase Introductoria',
+            GROUP_CLASS: 'Clase Grupal',
+            COUPLES_EXPERIENCE: 'Experiencia de Parejas',
+            OPEN_STUDIO: 'Estudio Abierto',
+            CUSTOM_GROUP_EXPERIENCE: 'Experiencia Grupal Personalizada'
+        };
+
         // ⚡ PHASE 5: `product` field omitted from SELECT for performance
         // Either NULL or missing - assign minimal fallback, never expect full object
         if (!camelCased.product) {
             // Usar productType para crear fallback mínimo
             const productType = camelCased.productType || 'SINGLE_CLASS';
+            const fallbackName = dbRow.product_name || productTypeFallbackNames[productType] || productType.replace(/_/g, ' ');
             camelCased.product = {
                 id: `${productType}-fallback`,
                 type: productType,
-                name: productType.replace(/_/g, ' '),
+                name: fallbackName,
                 description: 'Product details available on demand',
                 isActive: true,
                 classes: 1,
@@ -188,8 +199,17 @@ const parseBookingFromDB = (dbRow: any): Booking => {
 
         // Calculate isPaid and pendingBalance robustly
         const totalPaid = camelCased.paymentDetails.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
-        camelCased.isPaid = totalPaid >= (camelCased.price || 0);
-        camelCased.pendingBalance = Math.max(0, (camelCased.price || 0) - totalPaid);
+        if (dbRow.is_paid !== undefined && dbRow.is_paid !== null) {
+            camelCased.isPaid = Boolean(dbRow.is_paid);
+        } else {
+            camelCased.isPaid = totalPaid >= (camelCased.price || 0);
+        }
+
+        if (camelCased.isPaid && totalPaid === 0 && camelCased.paymentDetails.length === 0) {
+            camelCased.pendingBalance = 0;
+        } else {
+            camelCased.pendingBalance = Math.max(0, (camelCased.price || 0) - totalPaid);
+        }
 
         // Debug log for giftcard bookings
         const giftcardPayments = camelCased.paymentDetails.filter((p: any) => p.method === 'Giftcard');
@@ -1771,6 +1791,40 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     }
                     break;
                 }
+                case 'expireOldBookings': {
+                    try {
+                        const { rows: expiredBookings } = await sql`
+                            UPDATE bookings 
+                            SET status = 'expired'
+                            WHERE status = 'active' 
+                              AND is_paid = false 
+                              AND expires_at < NOW()
+                            RETURNING id, booking_code, user_info
+                        `;
+
+                        try {
+                            await sql`
+                                UPDATE admin_tasks 
+                                SET last_executed_at = NOW(), updated_at = NOW()
+                                WHERE task_name = 'expire_old_bookings'
+                            `;
+                        } catch (taskErr) {
+                            console.warn('[EXPIRE BOOKINGS][GET] Could not update admin_tasks:', taskErr);
+                        }
+
+                        return res.status(200).json({
+                            success: true,
+                            message: 'Pre-reservas expiradas marcadas',
+                            expired: expiredBookings.length
+                        });
+                    } catch (error) {
+                        console.error('[expireOldBookings][GET] Error:', error);
+                        return res.status(500).json({
+                            success: false,
+                            error: error instanceof Error ? error.message : String(error)
+                        });
+                    }
+                }
             default:
                 return res.status(400).json({ error: `Unknown action: ${action}` });
         }
@@ -1813,22 +1867,26 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                 // If you need future slots from old bookings, increase daysLimit query param
                                 const { rows: bookings } = await sql`
                                         SELECT 
-                                            id,
-                                            product_id,
-                                            product_type,
-                                            slots,
-                                            user_info,
-                                            created_at,
-                                            is_paid,
-                                            price,
-                                            booking_mode,
-                                            booking_code,
-                                            booking_date,
-                                            attendance
-                                        FROM bookings 
-                                        WHERE status != 'expired'
-                                            AND created_at >= ${limitDate.toISOString()}
-                                        ORDER BY created_at DESC
+                                            b.id,
+                                            b.product_id,
+                                            b.product_type,
+                                            p.name AS product_name,
+                                            b.slots,
+                                            b.user_info,
+                                            b.created_at,
+                                            b.is_paid,
+                                            b.price,
+                                            b.booking_mode,
+                                            b.booking_code,
+                                            b.booking_date,
+                                            b.attendance,
+                                            b.status,
+                                            b.expires_at
+                                        FROM bookings b
+                                        LEFT JOIN products p ON p.id = b.product_id
+                                        WHERE b.status != 'expired'
+                                            AND b.created_at >= ${limitDate.toISOString()}
+                                        ORDER BY b.created_at DESC
                                         LIMIT 500
                                 `;
                                 console.log(`API: Loaded ${bookings.length} bookings from last ${daysLimit} days (OMITTED: product, payment_details)`);
