@@ -3621,6 +3621,11 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 }
             } catch (error) {
                 console.error('[addPaymentToBooking] Error:', error);
+                // If it's a UUID format error, treat as booking not found (404)
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                if (errorMsg.includes('invalid') || errorMsg.includes('uuid')) {
+                    return res.status(404).json({ error: 'Booking not found' });
+                }
                 return res.status(500).json({ error: 'Error processing payment' });
             }
             break;
@@ -4057,6 +4062,11 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 return res.status(200).json({ success: true, message: 'Booking deleted successfully' });
             } catch (error) {
                 console.error('[deleteBooking] Error:', error);
+                // If it's a UUID format error, return 404; otherwise 400
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                if (errorMsg.includes('invalid') || errorMsg.includes('uuid')) {
+                    return res.status(404).json({ error: 'Booking not found' });
+                }
                 return res.status(400).json({ error: 'Invalid bookingId format or database error' });
             }
         }
