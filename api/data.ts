@@ -1849,8 +1849,10 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                 // Permite updates rápidos después de mutations sin sacrificar totalmente CDN
                 res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
             } else if (key === 'customers') {
-                // ⚡ PHASE 5 OPTIMIZATION: Partial SELECT sin campos JSONB pesados
-                // Omitir: product (10-20KB), payment_details (2-5KB) → ~85% payload reduction
+                // ⚡ PHASE 6 EXTREME OPTIMIZATION: Aggregate-only, no full booking objects
+                //  Don't load booking details at all - just aggregate stats
+                // Previous: Customer.bookings = [full booking objects] = 4MB payload
+                // New: Customer.bookings = [] (empty), only totalBookings/totalSpent
                 const daysLimit = 90;
                 const limitDate = new Date();
                 limitDate.setDate(limitDate.getDate() - daysLimit);
@@ -1858,57 +1860,62 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                 const { rows: bookings } = await sql`
                     SELECT 
                         id,
-                        product_id,
-                        product_type,
-                        slots,
                         user_info,
-                        created_at,
                         is_paid,
                         price,
-                        booking_mode,
-                        booking_code,
-                        booking_date,
-                        attendance
+                        created_at
                     FROM bookings 
                     WHERE created_at >= ${limitDate.toISOString()}
                     ORDER BY created_at DESC
                     LIMIT 1000
                 `;
-                console.log(`API: Loading customers from ${bookings.length} recent bookings (OMITTED: product, payment_details)`);
-                const validBookings = bookings.filter(booking => booking && typeof booking === 'object');
-                const parsedBookings = validBookings.map(parseBookingFromDB).filter(Boolean);
+                console.log(`API: Loading customers (AGGREGATE ONLY, no booking details) from ${bookings.length} recent bookings`);
                 
                 const customerMap = new Map<string, Customer>();
                 
-                parsedBookings.forEach((booking: Booking) => {
-                    if (!booking || !booking.userInfo || !booking.userInfo.email) return;
+                // Process bookings for aggregation ONLY - don't include booking details
+                bookings.forEach((row: any) => {
+                    if (!row || !row.user_info) return;
                     
-                    const email = booking.userInfo.email;
+                    let userInfo;
+                    if (typeof row.user_info === 'string') {
+                        try {
+                            userInfo = JSON.parse(row.user_info);
+                        } catch (e) {
+                            return;
+                        }
+                    } else {
+                        userInfo = row.user_info;
+                    }
+                    
+                    if (!userInfo.email) return;
+                    
+                    const email = userInfo.email;
+                    const price = typeof row.price === 'number' ? row.price : (row.price ? parseFloat(row.price) : 0);
+                    const createdAt = new Date(row.created_at);
+                    
                     const existing = customerMap.get(email);
-                    
                     if (existing) {
-                        existing.bookings.push(booking);
                         existing.totalBookings += 1;
-                        existing.totalSpent += booking.price || 0;
-                        const bookingDate = new Date(booking.createdAt);
-                        if (bookingDate > existing.lastBookingDate) {
-                            existing.lastBookingDate = bookingDate;
+                        existing.totalSpent += price;
+                        if (createdAt > existing.lastBookingDate) {
+                            existing.lastBookingDate = createdAt;
                         }
                     } else {
                         customerMap.set(email, {
                             email,
-                            userInfo: booking.userInfo,
-                            bookings: [booking],
+                            userInfo,
+                            bookings: [], // EMPTY - don't load full booking objects
                             totalBookings: 1,
-                            totalSpent: booking.price || 0,
-                            lastBookingDate: new Date(booking.createdAt),
+                            totalSpent: price,
+                            lastBookingDate: createdAt,
                             deliveries: []
                         });
                     }
                 });
                 
                 data = Array.from(customerMap.values());
-                console.log(`Generated ${data.length} customers from ${parsedBookings.length} bookings`);
+                console.log(`Generated ${data.length} customers from ${bookings.length} bookings (AGGREGATE ONLY)`);
             } else {
                 const { rows: settings } = await sql`SELECT value FROM settings WHERE key = ${key}`;
                 if (settings.length > 0) {
