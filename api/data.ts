@@ -3524,84 +3524,104 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         // Only one switch block should exist here. All cases including updateCustomerInfo are already present above.
         case 'addPaymentToBooking': {
             const { bookingId, payment } = req.body;
-            const { rows: [bookingRow] } = await sql`SELECT payment_details, price FROM bookings WHERE id = ${bookingId}`;
-            if (!bookingRow) {
-                return res.status(404).json({ error: 'Booking not found.' });
+            
+            // Validate required inputs
+            if (!bookingId || typeof bookingId !== 'string') {
+                return res.status(400).json({ error: 'bookingId is required and must be a string' });
             }
-            const currentPayments = (bookingRow.payment_details && Array.isArray(bookingRow.payment_details))
-                ? bookingRow.payment_details
-                : [];
+            if (!payment || typeof payment !== 'object') {
+                return res.status(400).json({ error: 'payment object is required' });
+            }
+            if (typeof payment.amount !== 'number' || payment.amount <= 0) {
+                return res.status(400).json({ error: 'payment.amount is required and must be a positive number' });
+            }
+            if (!payment.method || typeof payment.method !== 'string') {
+                return res.status(400).json({ error: 'payment.method is required and must be a string' });
+            }
             
-            // Generate unique ID for the new payment if not present
-            const paymentWithId = {
-                ...payment,
-                id: payment.id || generatePaymentId()
-            };
-            
-            const updatedPayments = [...currentPayments, paymentWithId];
-            const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
-            const isPaid = totalPaid >= bookingRow.price;
-
-            // If payment is via Giftcard, update giftcard balance
-            if (payment.method === 'Giftcard' && payment.metadata?.giftcardCode) {
-                const giftcardCode = payment.metadata.giftcardCode;
-                const redemptionAmount = payment.amount;
+            try {
+                const { rows: [bookingRow] } = await sql`SELECT payment_details, price FROM bookings WHERE id = ${bookingId}`;
+                if (!bookingRow) {
+                    return res.status(404).json({ error: 'Booking not found.' });
+                }
+                const currentPayments = (bookingRow.payment_details && Array.isArray(bookingRow.payment_details))
+                    ? bookingRow.payment_details
+                    : [];
                 
-                try {
-                    // Find giftcard by code and update balance
-                    const { rows: [giftcard] } = await sql`
-                        SELECT id, balance, giftcard_request_id FROM giftcards WHERE code = ${giftcardCode}
-                    `;
+                // Generate unique ID for the new payment if not present
+                const paymentWithId = {
+                    ...payment,
+                    id: payment.id || generatePaymentId()
+                };
+                
+                const updatedPayments = [...currentPayments, paymentWithId];
+                const totalPaid = updatedPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+                const isPaid = totalPaid >= bookingRow.price;
+
+                // If payment is via Giftcard, update giftcard balance
+                if (payment.method === 'Giftcard' && payment.metadata?.giftcardCode) {
+                    const giftcardCode = payment.metadata.giftcardCode;
+                    const redemptionAmount = payment.amount;
                     
-                    if (giftcard) {
-                        const newBalance = Math.max(0, giftcard.balance - redemptionAmount);
-                        
-                        await sql`
-                            UPDATE giftcards 
-                            SET balance = ${newBalance}
-                            WHERE id = ${giftcard.id}
+                    try {
+                        // Find giftcard by code and update balance
+                        const { rows: [giftcard] } = await sql`
+                            SELECT id, balance, giftcard_request_id FROM giftcards WHERE code = ${giftcardCode}
                         `;
                         
-                        // Log the redemption in giftcard_events (using giftcard_request_id if available)
-                        if (giftcard.giftcard_request_id) {
+                        if (giftcard) {
+                            const newBalance = Math.max(0, giftcard.balance - redemptionAmount);
+                            
                             await sql`
-                                INSERT INTO giftcard_events (giftcard_request_id, event_type, admin_user, note, metadata)
-                                VALUES (
-                                    ${giftcard.giftcard_request_id},
-                                    'redemption_payment',
-                                    'admin_console',
-                                    'Used as payment for booking ' || ${String(bookingId)},
-                                    ${JSON.stringify({
-                                        bookingId,
-                                        giftcardCode: giftcardCode,
-                                        redeemedAmount: redemptionAmount,
-                                        newBalance: newBalance,
-                                        previousBalance: giftcard.balance
-                                    })}
-                                )
+                                UPDATE giftcards 
+                                SET balance = ${newBalance}
+                                WHERE id = ${giftcard.id}
                             `;
+                            
+                            // Log the redemption in giftcard_events (using giftcard_request_id if available)
+                            if (giftcard.giftcard_request_id) {
+                                await sql`
+                                    INSERT INTO giftcard_events (giftcard_request_id, event_type, admin_user, note, metadata)
+                                    VALUES (
+                                        ${giftcard.giftcard_request_id},
+                                        'redemption_payment',
+                                        'admin_console',
+                                        'Used as payment for booking ' || ${String(bookingId)},
+                                        ${JSON.stringify({
+                                            bookingId,
+                                            giftcardCode: giftcardCode,
+                                            redeemedAmount: redemptionAmount,
+                                            newBalance: newBalance,
+                                            previousBalance: giftcard.balance
+                                        })}
+                                    )
+                                `;
+                            }
                         }
+                    } catch (giftcardError) {
+                        console.error('[addPaymentToBooking] Error updating giftcard:', giftcardError);
+                        // Continue anyway - payment should still be recorded even if giftcard update fails
                     }
-                } catch (giftcardError) {
-                    console.error('[addPaymentToBooking] Error updating giftcard:', giftcardError);
-                    // Continue anyway - payment should still be recorded even if giftcard update fails
                 }
-            }
 
-            const { rows: [updatedBookingRow] } = await sql`
-                UPDATE bookings
-                SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
-                WHERE id = ${bookingId}
-                RETURNING *;
-            `;
+                const { rows: [updatedBookingRow] } = await sql`
+                    UPDATE bookings
+                    SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
+                    WHERE id = ${bookingId}
+                    RETURNING *;
+                `;
 
-            const updatedBooking = parseBookingFromDB(updatedBookingRow);
-            result = { success: true, booking: updatedBooking };
+                const updatedBooking = parseBookingFromDB(updatedBookingRow);
+                result = { success: true, booking: updatedBooking };
 
-            try {
-                await emailService.sendPaymentReceiptEmail(updatedBooking, paymentWithId);
-            } catch (emailError) {
-                console.warn(`Payment receipt email for booking ${updatedBooking.bookingCode} failed to send:`, emailError);
+                try {
+                    await emailService.sendPaymentReceiptEmail(updatedBooking, paymentWithId);
+                } catch (emailError) {
+                    console.warn(`Payment receipt email for booking ${updatedBooking.bookingCode} failed to send:`, emailError);
+                }
+            } catch (error) {
+                console.error('[addPaymentToBooking] Error:', error);
+                return res.status(500).json({ error: 'Error processing payment' });
             }
             break;
         }
@@ -4026,11 +4046,19 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         }
         case 'deleteBooking': {
             const { bookingId } = req.body;
-            if (!bookingId) {
-                return res.status(400).json({ error: 'bookingId is required' });
+            if (!bookingId || typeof bookingId !== 'string') {
+                return res.status(400).json({ error: 'bookingId is required and must be a string' });
             }
-            await sql`DELETE FROM bookings WHERE id = ${bookingId}`;
-            return res.status(200).json({ success: true });
+            try {
+                const { rowCount } = await sql`DELETE FROM bookings WHERE id = ${bookingId}`;
+                if (rowCount === 0) {
+                    return res.status(404).json({ error: 'Booking not found' });
+                }
+                return res.status(200).json({ success: true, message: 'Booking deleted successfully' });
+            } catch (error) {
+                console.error('[deleteBooking] Error:', error);
+                return res.status(400).json({ error: 'Invalid bookingId format or database error' });
+            }
         }
         case 'deleteBookingsInDateRange':
             const deleteRangeBody = req.body;
