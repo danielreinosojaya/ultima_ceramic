@@ -1790,7 +1790,9 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
             // Special handling for products - fetch from products table
             if (key === 'products') {
                 try {
-                    const { rows: products } = await sql`SELECT * FROM products ORDER BY name ASC`;
+                    // ⚡ PHASE 5: Added LIMIT 1000 to prevent loading all product jSONB data
+                    // Products table stores: details, scheduling_rules, overrides (all JSONB)
+                    const { rows: products } = await sql`SELECT * FROM products ORDER BY name ASC LIMIT 1000`;
                     data = products.map(toCamelCase);
                     // ✅ OPTIMIZACIÓN: Cache CDN 1 hora (datos muy estables)
                     res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
@@ -1805,8 +1807,10 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                 const daysLimit = parseInt(req.query.daysLimit as string) || 30;
                                 const limitDate = new Date();
                                 limitDate.setDate(limitDate.getDate() - daysLimit);
-                                const todayStr = new Date().toISOString().split('T')[0];
                 
+                                // ⚡ PERFORMANCE FIX: Removed expensive EXISTS subquery that was checking every booking's slots
+                                // Now relies on daysLimit to filter recent bookings (most active bookings are recent)
+                                // If you need future slots from old bookings, increase daysLimit query param
                                 const { rows: bookings } = await sql`
                                         SELECT 
                                             id,
@@ -1823,21 +1827,11 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                             attendance
                                         FROM bookings 
                                         WHERE status != 'expired'
-                                            AND (
-                                                created_at >= ${limitDate.toISOString()}
-                                                OR (
-                                                    slots IS NOT NULL
-                                                    AND EXISTS (
-                                                        SELECT 1
-                                                        FROM jsonb_array_elements(slots::jsonb) AS s
-                                                        WHERE (s->>'date')::date >= ${todayStr}::date
-                                                    )
-                                                )
-                                            )
+                                            AND created_at >= ${limitDate.toISOString()}
                                         ORDER BY created_at DESC
                                         LIMIT 500
                                 `;
-                                console.log(`API: Loaded ${bookings.length} bookings from last ${daysLimit} days + future slots (OMITTED: product, payment_details)`);
+                                console.log(`API: Loaded ${bookings.length} bookings from last ${daysLimit} days (OMITTED: product, payment_details)`);
                 
                 if (bookings.length === 0) {
                     console.warn('API: No bookings found in database');
@@ -1855,18 +1849,32 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                 // Permite updates rápidos después de mutations sin sacrificar totalmente CDN
                 res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
             } else if (key === 'customers') {
-                // ⚡ OPTIMIZACIÓN: Cargar solo bookings recientes para generar lista de customers activos
+                // ⚡ PHASE 5 OPTIMIZATION: Partial SELECT sin campos JSONB pesados
+                // Omitir: product (10-20KB), payment_details (2-5KB) → ~85% payload reduction
                 const daysLimit = 90;
                 const limitDate = new Date();
                 limitDate.setDate(limitDate.getDate() - daysLimit);
                 
                 const { rows: bookings } = await sql`
-                    SELECT * FROM bookings 
+                    SELECT 
+                        id,
+                        product_id,
+                        product_type,
+                        slots,
+                        user_info,
+                        created_at,
+                        is_paid,
+                        price,
+                        booking_mode,
+                        booking_code,
+                        booking_date,
+                        attendance
+                    FROM bookings 
                     WHERE created_at >= ${limitDate.toISOString()}
                     ORDER BY created_at DESC
                     LIMIT 1000
                 `;
-                console.log(`API: Loading customers from ${bookings.length} recent bookings`);
+                console.log(`API: Loading customers from ${bookings.length} recent bookings (OMITTED: product, payment_details)`);
                 const validBookings = bookings.filter(booking => booking && typeof booking === 'object');
                 const parsedBookings = validBookings.map(parseBookingFromDB).filter(Boolean);
                 
