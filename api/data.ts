@@ -1849,7 +1849,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                 // Permite updates rápidos después de mutations sin sacrificar totalmente CDN
                 res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
             } else if (key === 'customers') {
-                // ⚡ PHASE 6 EXTREME OPTIMIZATION: Aggregate-only, no full booking objects
+                // ⚡ PHASE 6b EXTREME OPTIMIZATION: Aggregate-only, no full booking objects
+                //  VERCEL DEPLOYMENT TEST: 2026-02-18T22:16:00Z - Should see change immediately
                 //  Don't load booking details at all - just aggregate stats
                 // Previous: Customer.bookings = [full booking objects] = 4MB payload
                 // New: Customer.bookings = [] (empty), only totalBookings/totalSpent
