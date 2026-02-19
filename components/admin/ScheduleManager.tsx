@@ -107,13 +107,18 @@ const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): st
 
   const firstBooking = slot.bookings[0];
   
-    // FIX #0: Si el producto es una experiencia personalizada (nombre genérico), usar la técnica
-    if (firstBooking.product?.name === 'Experiencia Grupal Personalizada' && firstBooking.technique) {
+  // FIX #0: Si el producto es una experiencia personalizada (nombre genérico), usar la técnica
+  if (firstBooking.product?.name === 'Experiencia Grupal Personalizada' && firstBooking.technique) {
     return getTechniqueName(firstBooking.technique);
   }
   
   // FIX #0b: También chequear el productType en caso que esté poblado
   if (firstBooking.productType === 'CUSTOM_GROUP_EXPERIENCE' && firstBooking.technique) {
+    return getTechniqueName(firstBooking.technique);
+  }
+  
+  // FIX #0c: Para clase suelta (SINGLE_CLASS), priorizar técnica sobre nombre genérico
+  if (firstBooking.productType === 'SINGLE_CLASS' && firstBooking.technique) {
     return getTechniqueName(firstBooking.technique);
   }
   

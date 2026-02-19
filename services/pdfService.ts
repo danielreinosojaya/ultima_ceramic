@@ -82,6 +82,14 @@ const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): st
     return getTechniqueName(customBookingWithTechnique.technique as GroupTechnique);
   }
 
+  // 0.5. Para clase suelta (SINGLE_CLASS), priorizar técnica sobre nombre genérico
+  const singleClassWithTechnique = slot.bookings.find(
+    b => b.technique && b.productType === 'SINGLE_CLASS'
+  );
+  if (singleClassWithTechnique?.technique) {
+    return getTechniqueName(singleClassWithTechnique.technique as GroupTechnique);
+  }
+
   // 1. Si hay bookings con groupClassMetadata, usar la primera técnica encontrada
   for (const booking of slot.bookings) {
     if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
