@@ -29,6 +29,7 @@ import * as emailService from './emailService.js';
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { generatePaymentId, generateGiftcardCode } from '../utils/formatters.js';
 import { checkRateLimit } from './rateLimiter.js';
+import { uploadPhotoToBunny } from './bunnyUpload.js';
 import type {
     Booking,
     ClientNotification,
@@ -1097,7 +1098,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     break;
                 }
                 case 'getDeliveryPhotos': {
-                    // ⚡ Endpoint para cargar fotos de una delivery específica
+                    // ⚡ Endpoint para cargar fotos de una delivery específica (compatible base64 y URLs CDN)
                     const deliveryId = req.query.deliveryId as string;
                     if (!deliveryId) {
                         return res.status(400).json({ error: 'deliveryId required' });
@@ -2275,6 +2276,40 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
 async function handleAction(action: string, req: VercelRequest, res: VercelResponse) {
     let result: any = { success: true };
     switch (action) {  // Corregido: Se agregó el paréntesis faltante
+        case 'uploadDeliveryPhoto': {
+            // 🚀 Upload seguro a Bunny CDN (server-side, sin exponer credentials)
+            const { base64Data, deliveryId, fileName } = req.body;
+            
+            if (!base64Data || !deliveryId) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'Missing base64Data or deliveryId' 
+                });
+            }
+
+            // Feature flag: permitir uploads solo si Bunny CDN está configurado
+            const bunnyEnabled = Boolean(process.env.BUNNY_API_KEY && process.env.BUNNY_STORAGE_ZONE);
+            if (!bunnyEnabled) {
+                return res.status(503).json({
+                    success: false,
+                    error: 'Photo upload service not available'
+                });
+            }
+
+            // Upload a Bunny
+            const uploadResult = await uploadPhotoToBunny({
+                base64Data,
+                deliveryId,
+                fileName: fileName || `photo-${Date.now()}.jpg`,
+                mimeType: 'image/jpeg'
+            });
+
+            if (!uploadResult.success) {
+                return res.status(500).json(uploadResult);
+            }
+
+            return res.status(200).json(uploadResult);
+        }
         case 'addGiftcardRequest': {
             // Inserta una nueva solicitud de giftcard en la base de datos
             const body = req.body;

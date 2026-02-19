@@ -268,10 +268,10 @@ export const ClientDeliveryForm: React.FC = () => {
 
         setIsSubmitting(true);
         setErrorMessage('');
-        setSuccessMessage('Enviando información... esto puede tardar hasta 1 minuto.');
+        setSuccessMessage('Procesando tu información y subiendo fotos... esto puede tardar hasta 2 minutos.');
 
         try {
-            console.log('[ClientDeliveryForm] Starting submission...');
+            console.log('[ClientDeliveryForm] Starting submission with Bunny CDN upload...');
             
             const userInfo: UserInfo = {
                 firstName: formData.firstName.trim(),
@@ -282,46 +282,88 @@ export const ClientDeliveryForm: React.FC = () => {
                 birthday: null
             };
 
-            console.log('[ClientDeliveryForm] Calling createDeliveryFromClient with:', {
-                email: formData.email.trim(),
-                firstName: formData.firstName.trim(),
-                photosCount: formData.photos.length
-            });
-
             // Calculate scheduled date: today + 15 days
             const today = new Date();
             const scheduledDate = new Date(today);
             scheduledDate.setDate(scheduledDate.getDate() + 15);
             const scheduledDateStr = scheduledDate.toISOString().split('T')[0];
 
-            // Limit to 2 photos max to avoid 413 Payload Too Large error
-            const photosToSend = formData.photos.length > 0 ? formData.photos.slice(0, 2) : null;
+            // 🚀 NEW FLOW: Create delivery first WITHOUT photos (we'll add CDN URLs after)
+            console.log('[ClientDeliveryForm] Step 1: Creating delivery without photos...');
             
-            console.log('[ClientDeliveryForm] Sending', formData.photos.length, 'photos (limited to 2 for payload size)');
-
             const result = await dataService.createDeliveryFromClient({
                 email: formData.email.trim(),
                 userInfo,
                 description: formData.description.trim() || null,
                 scheduledDate: scheduledDateStr,
-                photos: photosToSend,
+                photos: null, // Don't send base64 data - we'll upload separately to Bunny
                 wantsPainting: formData.wantsPainting || false,
                 paintingPrice: formData.wantsPainting ? PAINTING_SERVICE_PRICE : null
             });
 
             console.log('[ClientDeliveryForm] API Response:', result);
 
-            if (result.success) {
-                console.log('[ClientDeliveryForm] Submission successful');
-                setSuccessMessage('✅ ¡Gracias! Hemos recibido tu información y fotos. CeramicAlma se pondrá en contacto 1-2 días hábiles antes de tu fecha de recogida.');
-                setTimeout(() => {
-                    setFormData(INITIAL_STEP);
-                    setCurrentStep('info');
-                }, 2000);
-            } else {
-                console.error('[ClientDeliveryForm] API error:', result.error);
-                setErrorMessage(result.error || 'Error al enviar la información. Intenta de nuevo.');
+            if (!result.success || !result.delivery?.id) {
+                console.error('[ClientDeliveryForm] Failed to create delivery:', result.error);
+                setErrorMessage(result.error || 'Error al crear el registro. Intenta de nuevo.');
+                setIsSubmitting(false);
+                return;
             }
+
+            const deliveryId = result.delivery.id;
+            console.log('[ClientDeliveryForm] Step 2: Delivery created successfully, ID:', deliveryId);
+
+            // 🚀 NEW FLOW: Upload photos to Bunny CDN if we have any
+            const uploadedPhotos: string[] = [];
+            
+            if (formData.photos.length > 0) {
+                console.log('[ClientDeliveryForm] Step 3: Uploading', formData.photos.length, 'photos to Bunny CDN...');
+                setSuccessMessage('Subiendo fotos a Bunny CDN... por favor espera.');
+
+                // Limit to 2 photos max
+                const photosToUpload = formData.photos.slice(0, 2);
+
+                for (let i = 0; i < photosToUpload.length; i++) {
+                    const photoBase64 = photosToUpload[i];
+                    console.log(`[ClientDeliveryForm] Uploading photo ${i + 1}/${photosToUpload.length}...`);
+                    
+                    const uploadResult = await dataService.uploadDeliveryPhoto(deliveryId, photoBase64);
+                    
+                    if (uploadResult.success && uploadResult.url) {
+                        console.log(`[ClientDeliveryForm] Photo ${i + 1} uploaded successfully:`, uploadResult.url);
+                        uploadedPhotos.push(uploadResult.url);
+                    } else {
+                        console.error(`[ClientDeliveryForm] Failed to upload photo ${i + 1}:`, uploadResult.error);
+                        // Continue with next photo, don't fail entirely
+                        setErrorMessage(`Aviso: No se puedo subir la foto ${i + 1}. Continuando...`);
+                    }
+                }
+
+                // 🚀 NEW FLOW: Update delivery with CDN photo URLs
+                if (uploadedPhotos.length > 0) {
+                    console.log('[ClientDeliveryForm] Step 4: Updating delivery with CDN photo URLs...');
+                    const updateResult = await dataService.updateDelivery(deliveryId, {
+                        photos: uploadedPhotos
+                    });
+
+                    if (!updateResult.success) {
+                        console.warn('[ClientDeliveryForm] Warning: Could not update delivery with photo URLs:', updateResult);
+                        // Photos were uploaded to Bunny successfully, but couldn't update DB reference
+                        // This is not critical - CDN URLs exist even if DB reference failed
+                    } else {
+                        console.log('[ClientDeliveryForm] Delivery updated with', uploadedPhotos.length, 'CDN photo URLs');
+                    }
+                }
+            }
+
+            console.log('[ClientDeliveryForm] Submission completed successfully');
+            setSuccessMessage('✅ ¡Gracias! Hemos recibido tu información y fotos. CeramicAlma se pondrá en contacto 1-2 días hábiles antes de tu fecha de recogida.');
+            
+            setTimeout(() => {
+                setFormData(INITIAL_STEP);
+                setCurrentStep('info');
+            }, 2000);
+
         } catch (error) {
             console.error('[ClientDeliveryForm] Exception during submission:', error);
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';

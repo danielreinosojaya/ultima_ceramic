@@ -2109,6 +2109,31 @@ export const createDelivery = async (deliveryData: Omit<Delivery, 'id' | 'create
     return result;
 };
 
+export const uploadDeliveryPhoto = async (deliveryId: string, base64Data: string): Promise<{ success: boolean; url?: string; error?: string }> => {
+    try {
+        const result = await postAction('uploadDeliveryPhoto', {
+            deliveryId,
+            base64Data,
+            fileName: `delivery-${deliveryId}-${Date.now()}.jpg`
+        });
+        
+        if (result.success && result.url) {
+            return { success: true, url: result.url };
+        }
+        
+        return { 
+            success: false, 
+            error: result.error || 'Error uploading photo'
+        };
+    } catch (error) {
+        console.error('[dataService] uploadDeliveryPhoto error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error uploading photo'
+        };
+    }
+};
+
 export const createDeliveryFromClient = async (data: {
     email: string;
     userInfo: UserInfo;
