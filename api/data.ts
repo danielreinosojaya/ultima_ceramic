@@ -2280,7 +2280,14 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             // 🚀 Upload seguro a Bunny CDN (server-side, sin exponer credentials)
             const { base64Data, deliveryId, fileName } = req.body;
             
+            console.log('[uploadDeliveryPhoto] Request received:', { 
+                deliveryId, 
+                base64DataSize: base64Data?.length,
+                fileName 
+            });
+            
             if (!base64Data || !deliveryId) {
+                console.error('[uploadDeliveryPhoto] Validation failed: missing fields');
                 return res.status(400).json({ 
                     success: false, 
                     error: 'Missing base64Data or deliveryId' 
@@ -2289,7 +2296,13 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
             // Feature flag: permitir uploads solo si Bunny CDN está configurado
             const bunnyEnabled = Boolean(process.env.BUNNY_API_KEY && process.env.BUNNY_STORAGE_ZONE);
+            console.log('[uploadDeliveryPhoto] Bunny enabled:', bunnyEnabled, {
+                hasKey: !!process.env.BUNNY_API_KEY,
+                hasZone: !!process.env.BUNNY_STORAGE_ZONE
+            });
+            
             if (!bunnyEnabled) {
+                console.error('[uploadDeliveryPhoto] Bunny CDN not configured');
                 return res.status(503).json({
                     success: false,
                     error: 'Photo upload service not available'
@@ -2297,6 +2310,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             }
 
             // Upload a Bunny
+            console.log('[uploadDeliveryPhoto] Calling uploadPhotoToBunny...');
             const uploadResult = await uploadPhotoToBunny({
                 base64Data,
                 deliveryId,
@@ -2304,10 +2318,14 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 mimeType: 'image/jpeg'
             });
 
+            console.log('[uploadDeliveryPhoto] Upload result:', uploadResult);
+
             if (!uploadResult.success) {
+                console.error('[uploadDeliveryPhoto] Upload failed:', uploadResult.error);
                 return res.status(500).json(uploadResult);
             }
 
+            console.log('[uploadDeliveryPhoto] Success! URL:', uploadResult.url);
             return res.status(200).json(uploadResult);
         }
         case 'addGiftcardRequest': {

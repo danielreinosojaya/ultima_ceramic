@@ -326,16 +326,19 @@ export const ClientDeliveryForm: React.FC = () => {
                 for (let i = 0; i < photosToUpload.length; i++) {
                     const photoBase64 = photosToUpload[i];
                     console.log(`[ClientDeliveryForm] Uploading photo ${i + 1}/${photosToUpload.length}...`);
+                    console.log(`[ClientDeliveryForm] Base64 size: ${photoBase64.length} bytes`);
                     
                     const uploadResult = await dataService.uploadDeliveryPhoto(deliveryId, photoBase64);
                     
-                    if (uploadResult.success && uploadResult.url) {
-                        console.log(`[ClientDeliveryForm] Photo ${i + 1} uploaded successfully:`, uploadResult.url);
+                    console.log(`[ClientDeliveryForm] Upload result for photo ${i + 1}:`, JSON.stringify(uploadResult));
+                    
+                    if (uploadResult && uploadResult.success && uploadResult.url) {
+                        console.log(`[ClientDeliveryForm] ✅ Photo ${i + 1} uploaded successfully:`, uploadResult.url);
                         uploadedPhotos.push(uploadResult.url);
                     } else {
-                        console.error(`[ClientDeliveryForm] Failed to upload photo ${i + 1}:`, uploadResult.error);
+                        console.error(`[ClientDeliveryForm] ❌ Failed to upload photo ${i + 1}:`, uploadResult?.error || 'Unknown error');
                         // Continue with next photo, don't fail entirely
-                        setErrorMessage(`Aviso: No se puedo subir la foto ${i + 1}. Continuando...`);
+                        setErrorMessage(`Aviso: No se puedo subir la foto ${i + 1}. Error: ${uploadResult?.error || 'desconocido'}. Continuando...`);
                     }
                 }
 

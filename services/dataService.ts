@@ -2111,22 +2111,28 @@ export const createDelivery = async (deliveryData: Omit<Delivery, 'id' | 'create
 
 export const uploadDeliveryPhoto = async (deliveryId: string, base64Data: string): Promise<{ success: boolean; url?: string; error?: string }> => {
     try {
+        console.log('[uploadDeliveryPhoto] Starting upload:', { deliveryId, base64Size: base64Data?.length });
+        
         const result = await postAction('uploadDeliveryPhoto', {
             deliveryId,
             base64Data,
             fileName: `delivery-${deliveryId}-${Date.now()}.jpg`
         });
         
-        if (result.success && result.url) {
+        console.log('[uploadDeliveryPhoto] Response from API:', result);
+        
+        if (result && result.success && result.url) {
+            console.log('[uploadDeliveryPhoto] ✅ Success, returning URL:', result.url);
             return { success: true, url: result.url };
         }
         
+        console.error('[uploadDeliveryPhoto] Failed:', result?.error || 'Unknown error');
         return { 
             success: false, 
-            error: result.error || 'Error uploading photo'
+            error: result?.error || 'Error uploading photo'
         };
     } catch (error) {
-        console.error('[dataService] uploadDeliveryPhoto error:', error);
+        console.error('[uploadDeliveryPhoto] Exception:', error);
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error uploading photo'
