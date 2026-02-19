@@ -76,7 +76,7 @@ export const CustomerAttendanceHistory: React.FC<CustomerAttendanceHistoryProps>
                 &larr; Back
             </button>
             <h2 className="text-2xl font-bold text-brand-text mb-1">Attendance History</h2>
-            <p className="text-brand-secondary mb-6">Attendance history for {customer.userInfo.firstName} {customer.userInfo.lastName}</p>
+            <p className="text-brand-secondary mb-6">Attendance history for {customer.userInfo?.firstName || 'Cliente'} {customer.userInfo?.lastName || ''}</p>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div className="bg-brand-background p-4 rounded-lg">

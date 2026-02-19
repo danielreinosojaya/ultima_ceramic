@@ -95,7 +95,7 @@ export const CustomerSearchResultsPanel: React.FC<CustomerSearchResultsPanelProp
             >
                 <div className="flex items-center justify-between p-4 border-b border-brand-border">
                     <h3 className="text-lg font-bold text-brand-text">
-                        {customer ? `Resultados para ${customer.userInfo.firstName} ${customer.userInfo.lastName}` : 'Sin resultados'}
+                        {customer ? `Resultados para ${customer.userInfo?.firstName || 'Cliente'} ${customer.userInfo?.lastName || ''}` : 'Sin resultados'}
                     </h3>
                     <button onClick={onClose} className="p-2 rounded-full hover:bg-brand-background">
                         <XIcon className="w-6 h-6 text-brand-secondary" />

@@ -149,6 +149,15 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
         );
     }
 
+    // Guard: Verificar que customer existe y tiene userInfo
+    if (!customer || !customer.userInfo) {
+        return (
+            <div className="p-8 text-center text-red-500 font-bold">
+                Error: Datos del cliente incompletos. Por favor recarga la página.
+            </div>
+        );
+    }
+
     const [state, setState] = useState({
         editMode: false,
         activeTab: 'info',
@@ -474,7 +483,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                             
                             console.log('[CustomerDetailView-PastClasses] Reschedule complete and modal closed');
                         }}
-                        slotInfo={{ slot: state.selectedBookingToReschedule.slot, attendeeName: customer.userInfo.firstName + ' ' + customer.userInfo.lastName, bookingId: state.selectedBookingToReschedule.booking.id }}
+                        slotInfo={{ slot: state.selectedBookingToReschedule.slot, attendeeName: (customer.userInfo?.firstName || 'Cliente') + ' ' + (customer.userInfo?.lastName || ''), bookingId: state.selectedBookingToReschedule.booking.id }}
                         appData={appData}
                     />
                 )}
@@ -599,7 +608,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                             
                             console.log('[CustomerDetailView-Scheduled] Reschedule complete and modal closed');
                         }}
-                        slotInfo={{ slot: state.selectedBookingToReschedule.slot, attendeeName: customer.userInfo.firstName + ' ' + customer.userInfo.lastName, bookingId: state.selectedBookingToReschedule.booking.id }}
+                        slotInfo={{ slot: state.selectedBookingToReschedule.slot, attendeeName: (customer.userInfo?.firstName || 'Cliente') + ' ' + (customer.userInfo?.lastName || ''), bookingId: state.selectedBookingToReschedule.booking.id }}
                         appData={appData}
                     />
                 )}
@@ -745,8 +754,8 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                         try {
                             const result = await dataService.createDelivery({
                                 ...deliveryData,
-                                customerEmail: customer.userInfo.email,
-                                customerName: customer.userInfo.firstName
+                                customerEmail: customer.userInfo?.email,
+                                customerName: customer.userInfo?.firstName
                             } as any);
                             if (result.success && result.delivery) {
                                 setState(prev => ({
@@ -762,8 +771,8 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                             setState(prev => ({ ...prev, isNewDeliveryModalOpen: false }));
                         }
                     }}
-                    customerEmail={customer.userInfo.email}
-                    customerName={customer.userInfo.firstName}
+                    customerEmail={customer.userInfo?.email}
+                    customerName={customer.userInfo?.firstName}
                 />
 
                 {/* Edit Delivery Modal */}
@@ -1031,11 +1040,11 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                             <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200">
                                 <p className="text-xs text-gray-600 mb-1">Nombre</p>
-                                <p className="font-semibold text-sm sm:text-base text-gray-900">{customer.userInfo.firstName} {customer.userInfo.lastName}</p>
+                                <p className="font-semibold text-sm sm:text-base text-gray-900">{customer.userInfo?.firstName || 'N/A'} {customer.userInfo?.lastName || ''}</p>
                             </div>
                             <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200">
                                 <p className="text-xs text-gray-600 mb-1">Email</p>
-                                <p className="font-semibold text-sm sm:text-base text-gray-900 break-all">{customer.userInfo.email}</p>
+                                <p className="font-semibold text-sm sm:text-base text-gray-900 break-all">{customer.userInfo?.email || 'No especificado'}</p>
                             </div>
                             <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200">
                                 <p className="text-xs text-gray-600 mb-1">Teléfono</p>
@@ -1086,7 +1095,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                     {/* Customer name - centered on mobile, left on sm+ */}
                     <div className="text-center sm:text-left flex-grow">
                         <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-brand-primary">
-                            {customer.userInfo.firstName} {customer.userInfo.lastName}
+                            {customer.userInfo?.firstName || 'Cliente'} {customer.userInfo?.lastName || ''}
                         </h2>
                     </div>
                 </div>
@@ -1163,7 +1172,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                             <TrashIcon className="h-5 w-5 sm:h-6 sm:w-6 flex-shrink-0" />
                             Eliminar cliente
                         </h4>
-                        <p className="mb-4 sm:mb-6 text-sm sm:text-base text-gray-700">¿Eliminar a <span className="font-semibold">{customer.userInfo.firstName} {customer.userInfo.lastName}</span>? Esta acción no se puede deshacer.</p>
+                        <p className="mb-4 sm:mb-6 text-sm sm:text-base text-gray-700">¿Eliminar a <span className="font-semibold">{customer.userInfo?.firstName || 'Cliente'} {customer.userInfo?.lastName || ''}</span>? Esta acción no se puede deshacer.</p>
                         <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-4 justify-end">
                             <button
                                 className="px-3 sm:px-4 py-2 sm:py-2 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-sm sm:text-base transition"
