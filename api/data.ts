@@ -1876,7 +1876,9 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                 // ⚡ PERFORMANCE FIX: Removed expensive EXISTS subquery that was checking every booking's slots
                                 // Now relies on daysLimit to filter recent bookings (most active bookings are recent)
                                 // If you need future slots from old bookings, increase daysLimit query param
-                                const { rows: bookings } = await sql`
+                                let bookings: any[] = [];
+                                try {
+                                    const { rows } = await sql`
                                         SELECT 
                                             b.id,
                                             b.product_id,
@@ -1902,7 +1904,93 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                             AND b.created_at >= ${limitDate.toISOString()}
                                         ORDER BY b.created_at DESC
                                         LIMIT 500
-                                `;
+                                    `;
+                                    bookings = rows;
+                                } catch (bookingsQueryError: any) {
+                                    const queryErrorMessage = String(bookingsQueryError?.message || '');
+                                    const missingOptionalColumn =
+                                        queryErrorMessage.includes('group_class_metadata') ||
+                                        queryErrorMessage.includes('technique') ||
+                                        queryErrorMessage.includes('participants');
+
+                                    if (!missingOptionalColumn) {
+                                        throw bookingsQueryError;
+                                    }
+
+                                    console.warn('API: bookings query fallback due to missing optional column(s):', queryErrorMessage);
+
+                                    try {
+                                        const { rows } = await sql`
+                                            SELECT 
+                                                b.id,
+                                                b.product_id,
+                                                b.product_type,
+                                                p.name AS product_name,
+                                                b.slots,
+                                                b.user_info,
+                                                b.created_at,
+                                                b.is_paid,
+                                                b.price,
+                                                b.booking_mode,
+                                                b.booking_code,
+                                                b.booking_date,
+                                                b.attendance,
+                                                b.status,
+                                                b.expires_at,
+                                                b.participants
+                                            FROM bookings b
+                                            LEFT JOIN products p ON p.id = b.product_id
+                                            WHERE b.status != 'expired'
+                                                AND b.created_at >= ${limitDate.toISOString()}
+                                            ORDER BY b.created_at DESC
+                                            LIMIT 500
+                                        `;
+                                        bookings = rows.map((row: any) => ({
+                                            ...row,
+                                            group_class_metadata: null,
+                                            technique: null
+                                        }));
+                                    } catch (participantsFallbackError: any) {
+                                        const participantsFallbackErrorMessage = String(participantsFallbackError?.message || '');
+
+                                        if (!participantsFallbackErrorMessage.includes('participants')) {
+                                            throw participantsFallbackError;
+                                        }
+
+                                        console.warn('API: bookings fallback without participants due to missing participants column:', participantsFallbackErrorMessage);
+
+                                        const { rows } = await sql`
+                                            SELECT 
+                                                b.id,
+                                                b.product_id,
+                                                b.product_type,
+                                                p.name AS product_name,
+                                                b.slots,
+                                                b.user_info,
+                                                b.created_at,
+                                                b.is_paid,
+                                                b.price,
+                                                b.booking_mode,
+                                                b.booking_code,
+                                                b.booking_date,
+                                                b.attendance,
+                                                b.status,
+                                                b.expires_at
+                                            FROM bookings b
+                                            LEFT JOIN products p ON p.id = b.product_id
+                                            WHERE b.status != 'expired'
+                                                AND b.created_at >= ${limitDate.toISOString()}
+                                            ORDER BY b.created_at DESC
+                                            LIMIT 500
+                                        `;
+                                        bookings = rows.map((row: any) => ({
+                                            ...row,
+                                            participants: 1,
+                                            group_class_metadata: null,
+                                            technique: null
+                                        }));
+                                    }
+                                }
                                 console.log(`API: Loaded ${bookings.length} bookings from last ${daysLimit} days (OMITTED: product, payment_details)`);
                 
                 if (bookings.length === 0) {
