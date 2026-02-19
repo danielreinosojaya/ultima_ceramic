@@ -1664,10 +1664,10 @@ export const generateCustomersFromBookings = (bookings: Booking[]): Customer[] =
             userInfo: safeUserInfo,
             bookings: sortedBookings,
             totalBookings: data.bookings.length,
-            // CORRECCIÓN: Sumar todos los montos de pago del historial en lugar de solo el precio de la reserva
             totalSpent: data.bookings.reduce((sum, b) => {
                 const totalPaidForBooking = (b.paymentDetails || []).reduce((paymentSum, p) => paymentSum + (p.amount || 0), 0);
-                return sum + totalPaidForBooking;
+                const paidAmount = totalPaidForBooking > 0 ? totalPaidForBooking : (b.isPaid ? (b.price || 0) : 0);
+                return sum + paidAmount;
             }, 0),
             lastBookingDate: sortedBookings.length > 0 ? sortedBookings[0].createdAt : new Date(0),
         };

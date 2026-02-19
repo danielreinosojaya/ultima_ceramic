@@ -95,7 +95,21 @@ const parseBookingFromDB = (dbRow: any): Booking => {
         if (!camelCased.product) {
             // Usar productType para crear fallback mínimo
             const productType = camelCased.productType || 'SINGLE_CLASS';
-            const fallbackName = dbRow.product_name || productTypeFallbackNames[productType] || productType.replace(/_/g, ' ');
+            let fallbackName = dbRow.product_name || productTypeFallbackNames[productType] || productType.replace(/_/g, ' ');
+            
+            // CRÍTICO: Para SINGLE_CLASS, derivar técnica del product_name
+            let fallbackTechnique = productType.includes('WHEEL') ? 'potters_wheel' : 'molding';
+            if (productType === 'SINGLE_CLASS' && dbRow.product_name) {
+                const productNameLower = (dbRow.product_name || '').toLowerCase();
+                if (productNameLower.includes('torno')) {
+                    fallbackTechnique = 'potters_wheel';
+                } else if (productNameLower.includes('modelado')) {
+                    fallbackTechnique = 'hand_modeling';
+                } else if (productNameLower.includes('pintura')) {
+                    fallbackTechnique = 'painting';
+                }
+            }
+            
             camelCased.product = {
                 id: `${productType}-fallback`,
                 type: productType,
@@ -111,7 +125,7 @@ const parseBookingFromDB = (dbRow: any): Booking => {
                     activities: ['Pottery activity'],
                     generalRecommendations: 'Class available',
                     materials: 'Clay and tools provided',
-                    technique: productType.includes('WHEEL') ? 'potters_wheel' : 'molding'
+                    technique: fallbackTechnique
                 }
             };
         } else if (typeof camelCased.product === 'string') {
@@ -148,12 +162,36 @@ const parseBookingFromDB = (dbRow: any): Booking => {
             dbRow.product_technique ||
             (camelCased.product && typeof camelCased.product === 'object' ? (camelCased.product.technique || camelCased.product?.details?.technique) : undefined);
 
+        // CRÍTICO: Para SINGLE_CLASS, derivar técnica agresivamente desde product.name si technique es NULL
+        let derivedTechnique: string | undefined = dbRow.technique || inferredTechniqueFromProduct;
+        if (!derivedTechnique && camelCased.productType === 'SINGLE_CLASS' && camelCased.product) {
+            const productNameLower = (camelCased.product.name || '').toLowerCase();
+            if (productNameLower.includes('torno')) {
+                derivedTechnique = 'potters_wheel';
+            } else if (productNameLower.includes('modelado')) {
+                derivedTechnique = 'hand_modeling';
+            } else if (productNameLower.includes('pintura')) {
+                derivedTechnique = 'painting';
+            }
+        }
+        // Fallback para product_name del campo original db
+        if (!derivedTechnique && camelCased.productType === 'SINGLE_CLASS' && dbRow.product_name) {
+            const productNameLower = (dbRow.product_name || '').toLowerCase();
+            if (productNameLower.includes('torno')) {
+                derivedTechnique = 'potters_wheel';
+            } else if (productNameLower.includes('modelado')) {
+                derivedTechnique = 'hand_modeling';
+            } else if (productNameLower.includes('pintura')) {
+                derivedTechnique = 'painting';
+            }
+        }
+
         // Incluir client_note, participants y technique explícitamente
         camelCased.clientNote = dbRow.client_note || null;
         camelCased.participants = dbRow.participants !== undefined && dbRow.participants !== null 
             ? parseInt(dbRow.participants, 10) 
             : 1;
-        camelCased.technique = dbRow.technique || inferredTechniqueFromProduct || undefined;
+        camelCased.technique = derivedTechnique || undefined;
         
         if (camelCased.price && typeof camelCased.price === 'string') {
             camelCased.price = parseFloat(camelCased.price);
@@ -584,7 +622,6 @@ const computeSlotAvailability = async (
     // Filtramos en memoria: solo bookings que tengan slots en la fecha solicitada
     const bookingsResult = await sql`
         SELECT * FROM bookings 
-        WHERE status != 'expired'
         ORDER BY created_at DESC
         LIMIT 1000
     `;
@@ -1193,10 +1230,11 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         SELECT 
                             id,
                             user_info,
+                            is_paid,
+                            payment_details,
                             price,
                             created_at
                         FROM bookings 
-                        WHERE status != 'expired'
                         ORDER BY created_at DESC 
                         LIMIT 500
                     `;
@@ -1223,12 +1261,33 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         
                         const email = userInfo.email;
                         const price = typeof row.price === 'number' ? row.price : (row.price ? parseFloat(row.price) : 0);
+                        let totalPaid = 0;
+                        const rawPaymentDetails = row.payment_details;
+                        if (Array.isArray(rawPaymentDetails)) {
+                            totalPaid = rawPaymentDetails.reduce((sum: number, payment: any) => {
+                                const amount = typeof payment?.amount === 'number' ? payment.amount : parseFloat(payment?.amount || '0');
+                                return sum + (Number.isFinite(amount) ? amount : 0);
+                            }, 0);
+                        } else if (typeof rawPaymentDetails === 'string') {
+                            try {
+                                const parsedPayments = JSON.parse(rawPaymentDetails);
+                                if (Array.isArray(parsedPayments)) {
+                                    totalPaid = parsedPayments.reduce((sum: number, payment: any) => {
+                                        const amount = typeof payment?.amount === 'number' ? payment.amount : parseFloat(payment?.amount || '0');
+                                        return sum + (Number.isFinite(amount) ? amount : 0);
+                                    }, 0);
+                                }
+                            } catch {
+                                totalPaid = 0;
+                            }
+                        }
+                        const paidAmount = totalPaid > 0 ? totalPaid : (row.is_paid ? price : 0);
                         const createdAt = new Date(row.created_at);
                         
                         const existing = customerMap.get(email);
                         if (existing) {
                             existing.totalBookings += 1;
-                            existing.totalSpent += price;
+                            existing.totalSpent += paidAmount;
                             if (createdAt > existing.lastBookingDate) {
                                 existing.lastBookingDate = createdAt;
                             }
@@ -1238,7 +1297,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                 userInfo,
                                 bookings: [], // Don't load full booking details - aggregate only
                                 totalBookings: 1,
-                                totalSpent: price,
+                                totalSpent: paidAmount,
                                 lastBookingDate: createdAt,
                                 deliveries: []
                             });
@@ -1317,7 +1376,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     // Una reserva creada hace 3 meses para una fecha futura DEBE considerarse (pero con limit)
                     
                     const totalBookingsCheck = await sql`
-                        SELECT COUNT(*) as count FROM bookings WHERE status != 'expired'
+                        SELECT COUNT(*) as count FROM bookings
                     `;
                     const totalCount = totalBookingsCheck.rows[0]?.count || 0;
                     if (totalCount > 2000) {
@@ -1328,7 +1387,6 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     const [bookingsResult, instructorsResult] = await Promise.all([
                         sql`
                             SELECT * FROM bookings 
-                            WHERE status != 'expired'
                             ORDER BY created_at DESC
                             LIMIT 2000
                         `,
@@ -1532,7 +1590,6 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     const [bookingsResult, instructorsResult] = await Promise.all([
                         sql`
                             SELECT * FROM bookings
-                            WHERE status != 'expired'
                             ORDER BY created_at DESC
                         `,
                         sql`SELECT * FROM instructors ORDER BY name ASC`
@@ -1927,8 +1984,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                             b.technique
                                         FROM bookings b
                                         LEFT JOIN products p ON p.id = b.product_id
-                                        WHERE b.status != 'expired'
-                                            AND b.created_at >= ${limitDate.toISOString()}
+                                        WHERE b.created_at >= ${limitDate.toISOString()}
                                         ORDER BY b.created_at DESC
                                         LIMIT 500
                                     `;
@@ -2052,6 +2108,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         id,
                         user_info,
                         is_paid,
+                        payment_details,
                         price,
                         created_at
                     FROM bookings 
@@ -2087,12 +2144,33 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     
                     const email = userInfo.email;
                     const price = typeof row.price === 'number' ? row.price : (row.price ? parseFloat(row.price) : 0);
+                    let totalPaid = 0;
+                    const rawPaymentDetails = row.payment_details;
+                    if (Array.isArray(rawPaymentDetails)) {
+                        totalPaid = rawPaymentDetails.reduce((sum: number, payment: any) => {
+                            const amount = typeof payment?.amount === 'number' ? payment.amount : parseFloat(payment?.amount || '0');
+                            return sum + (Number.isFinite(amount) ? amount : 0);
+                        }, 0);
+                    } else if (typeof rawPaymentDetails === 'string') {
+                        try {
+                            const parsedPayments = JSON.parse(rawPaymentDetails);
+                            if (Array.isArray(parsedPayments)) {
+                                totalPaid = parsedPayments.reduce((sum: number, payment: any) => {
+                                    const amount = typeof payment?.amount === 'number' ? payment.amount : parseFloat(payment?.amount || '0');
+                                    return sum + (Number.isFinite(amount) ? amount : 0);
+                                }, 0);
+                            }
+                        } catch {
+                            totalPaid = 0;
+                        }
+                    }
+                    const paidAmount = totalPaid > 0 ? totalPaid : (row.is_paid ? price : 0);
                     const createdAt = new Date(row.created_at);
                     
                     const existing = customerMap.get(email);
                     if (existing) {
                         existing.totalBookings += 1;
-                        existing.totalSpent += price;
+                        existing.totalSpent += paidAmount;
                         if (createdAt > existing.lastBookingDate) {
                             existing.lastBookingDate = createdAt;
                         }
@@ -2102,7 +2180,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             userInfo,
                             bookings: [], // EMPTY - don't load full booking objects
                             totalBookings: 1,
-                            totalSpent: price,
+                            totalSpent: paidAmount,
                             lastBookingDate: createdAt,
                             deliveries: []
                         });
@@ -4776,7 +4854,6 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 // Obtener todos los bookings activos que tengan slots en esa fecha
                 const { rows: allBookingsRows } = await sql`
                     SELECT * FROM bookings 
-                    WHERE status != 'expired'
                     ORDER BY created_at DESC
                 `;
                 const allBookings = allBookingsRows.map(parseBookingFromDB);
@@ -6060,6 +6137,64 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 });
             }
         }
+        case 'restorePaidBookings': {
+            // 🔧 EMERGENCY FIX: Restaurar reservas pagadas que fueron marcadas como 'expired'
+            // Problema: Bug donde reservas con is_paid=true eran marcadas como 'expired'
+            try {
+                console.log('[RESTORE PAID BOOKINGS] Starting restoration process...');
+                
+                // 1. Restaurar todas las reservas pagadas marcadas como 'expired'
+                const { rows: restoredBookings } = await sql`
+                    UPDATE bookings 
+                    SET status = 'confirmed'
+                    WHERE status = 'expired' 
+                      AND is_paid = true
+                    RETURNING 
+                        booking_code, 
+                        user_info->>'firstName' as customer_name,
+                        user_info->>'email' as customer_email,
+                        price,
+                        slots[0]->>'date' as booking_date
+                `;
+                
+                // 2. Log restoration
+                if (restoredBookings.length > 0) {
+                    console.log(`[RESTORE PAID BOOKINGS] ✅ Restored ${restoredBookings.length} paid bookings from expired status`);
+                    restoredBookings.forEach((booking: any) => {
+                        console.log(`   - ${booking.booking_code}: ${booking.customer_name} ($${booking.price})`);
+                    });
+                }
+                
+                // 3. Verify specific booking if provided
+                const { bookingCode } = req.body;
+                let specificBooking = null;
+                if (bookingCode) {
+                    const { rows: [booking] } = await sql`
+                        SELECT 
+                            booking_code, status, is_paid, price,
+                            user_info->>'firstName' as customer_name,
+                            slots[0]->>'date' as booking_date
+                        FROM bookings 
+                        WHERE booking_code = ${bookingCode}
+                    `;
+                    specificBooking = booking;
+                }
+                
+                return res.status(200).json({ 
+                    success: true, 
+                    message: `Restored ${restoredBookings.length} paid bookings from expired status`,
+                    restoredCount: restoredBookings.length,
+                    restored: restoredBookings,
+                    specific: specificBooking || null
+                });
+            } catch (error) {
+                console.error('[RESTORE PAID BOOKINGS] Error:', error);
+                return res.status(500).json({ 
+                    success: false, 
+                    error: error instanceof Error ? error.message : String(error) 
+                });
+            }
+        }
         case 'getClientBooking': {
             try {
                 const { email, bookingCode } = req.body;
@@ -6587,7 +6722,6 @@ async function addBookingAction(
 
             const { rows: bookingsRows } = await sql`
                 SELECT * FROM bookings
-                WHERE status != 'expired'
                 ORDER BY created_at DESC
             `;
             const allBookings = bookingsRows.map(parseBookingFromDB);
@@ -6898,12 +7032,15 @@ async function addBookingAction(
         const isPaid = actualAmountToConsume >= expectedPrice;
 
         // Update booking record to reflect giftcard usage AND payment
+        // CRÍTICO: Cambiar TAMBIÉN status a 'confirmed' cuando se pague
+        // Esto previene que expireOldBookings marque la reserva pagada como 'expired'
         await sql`
           UPDATE bookings 
           SET giftcard_redeemed_amount = ${actualAmountToConsume},
               giftcard_id = ${String(giftcardId)},
               payment_details = ${JSON.stringify(paymentDetails)}::jsonb,
-              is_paid = ${isPaid}
+              is_paid = ${isPaid},
+              status = ${isPaid ? 'confirmed' : 'active'}
           WHERE booking_code = ${newBookingCode}
         `;
 

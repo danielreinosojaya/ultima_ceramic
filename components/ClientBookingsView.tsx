@@ -5,11 +5,12 @@ import { formatDate } from '../utils/formatters';
 import { CalendarIcon, ClockIcon } from '@heroicons/react/24/outline';
 
 // Helper para obtener nombre de técnica desde metadata
-const getTechniqueName = (technique: GroupTechnique): string => {
-  const names: Record<GroupTechnique, string> = {
+const getTechniqueName = (technique: GroupTechnique | string): string => {
+    const names: Record<string, string> = {
     'potters_wheel': 'Torno Alfarero',
     'hand_modeling': 'Modelado a Mano',
-    'painting': 'Pintura de piezas'
+        'painting': 'Pintura de piezas',
+        'molding': 'Modelado a Mano'
   };
   return names[technique] || technique;
 };
@@ -29,8 +30,22 @@ const getProductTypeName = (productType?: string): string => {
 };
 
 // Helper para obtener el nombre del producto/técnica de un booking
+// CRÍTICO: Para SINGLE_CLASS, SIEMPRE mostrar técnica, nunca "Clase Suelta"
 const getBookingDisplayName = (booking: Booking): string => {
-    // 0. Para experiencia grupal personalizada, priorizar técnica sobre nombre genérico
+    // 0. Para SINGLE_CLASS, SIEMPRE mostrar técnica
+    if (booking.productType === 'SINGLE_CLASS') {
+        if (booking.technique) {
+            return getTechniqueName(booking.technique as any);
+        }
+        // Fallback: derivar de product.name
+        const productName = booking.product?.name?.toLowerCase() || '';
+        if (productName.includes('torno')) return 'Torno Alfarero';
+        if (productName.includes('modelado')) return 'Modelado a Mano';
+        if (productName.includes('pintura')) return 'Pintura de piezas';
+        return 'Clase';
+    }
+
+    // 1. Para experiencia grupal personalizada, priorizar técnica sobre nombre genérico
     if (
         booking.technique &&
         (booking.productType === 'CUSTOM_GROUP_EXPERIENCE' || booking.product?.name === 'Experiencia Grupal Personalizada')
@@ -38,7 +53,7 @@ const getBookingDisplayName = (booking: Booking): string => {
         return getTechniqueName(booking.technique);
     }
 
-  // 1. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
+  // 2. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
   if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
     const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
     const uniqueTechniques = [...new Set(techniques)];
@@ -48,18 +63,18 @@ const getBookingDisplayName = (booking: Booking): string => {
     return 'Clase Grupal (mixto)';
   }
   
-  // 2. Prioridad: product.name (es la fuente más confiable)
+  // 3. Prioridad: product.name (es la fuente más confiable)
   const productName = booking.product?.name;
   if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
     return productName;
   }
   
-  // 3. Fallback: technique directamente (solo si product.name no existe)
+  // 4. Fallback: technique directamente (solo si product.name no existe)
   if (booking.technique) {
     return getTechniqueName(booking.technique);
   }
   
-  // 4. Último fallback: productType
+  // 5. Último fallback: productType
   return getProductTypeName(booking.productType);
 };
 

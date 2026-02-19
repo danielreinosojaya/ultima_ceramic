@@ -9,7 +9,7 @@ const getTechniqueName = (technique: GroupTechnique | Technique | string): strin
     'potters_wheel': 'Torno Alfarero',
     'hand_modeling': 'Modelado a Mano',
     'painting': 'Pintura de piezas',
-    'molding': 'Modelado'
+        'molding': 'Modelado a Mano'
   };
   return names[technique] || technique;
 };
@@ -94,7 +94,7 @@ const getBookingDisplayName = (booking: Booking): string => {
 };
 
 // Helper para obtener el nombre display de un slot
-// FIX: Prioriza product.name sobre techniqueAssignments para evitar inconsistencias
+// CRÍTICO: Para SINGLE_CLASS, SIEMPRE mostrar técnica, nunca "Clase Suelta"
 const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): string => {
   if (slot.bookings.length === 0) {
     // Slot vacío, usar producto del slot
@@ -107,23 +107,26 @@ const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): st
 
   const firstBooking = slot.bookings[0];
   
-  // FIX #0: Si el producto es una experiencia personalizada (nombre genérico), usar la técnica
-  if (firstBooking.product?.name === 'Experiencia Grupal Personalizada' && firstBooking.technique) {
+  // CRÍTICO: Para SINGLE_CLASS, SIEMPRE mostrar técnica (nunca "Clase Suelta")
+  if (firstBooking.productType === 'SINGLE_CLASS') {
+    if (firstBooking.technique) {
+      return getTechniqueName(firstBooking.technique);
+    }
+    // Fallback: derivar de product.name
+    const productName = firstBooking.product?.name?.toLowerCase() || '';
+    if (productName.includes('torno')) return 'Torno Alfarero';
+    if (productName.includes('modelado')) return 'Modelado a Mano';
+    if (productName.includes('pintura')) return 'Pintura de piezas';
+    // Último fallback para SINGLE_CLASS sin identificador
+    return 'Clase';
+  }
+  
+  // Para experiencias personalizadas, usar técnica
+  if ((firstBooking.productType === 'CUSTOM_GROUP_EXPERIENCE' || firstBooking.product?.name === 'Experiencia Grupal Personalizada') && firstBooking.technique) {
     return getTechniqueName(firstBooking.technique);
   }
   
-  // FIX #0b: También chequear el productType en caso que esté poblado
-  if (firstBooking.productType === 'CUSTOM_GROUP_EXPERIENCE' && firstBooking.technique) {
-    return getTechniqueName(firstBooking.technique);
-  }
-  
-  // FIX #0c: Para clase suelta (SINGLE_CLASS), priorizar técnica sobre nombre genérico
-  if (firstBooking.productType === 'SINGLE_CLASS' && firstBooking.technique) {
-    return getTechniqueName(firstBooking.technique);
-  }
-  
-  // FIX #1: Prioridad máxima a product.name (fuente más confiable)
-  // Esto evita que techniqueAssignments incorrecto sobrescriba el nombre correcto
+  // Para otros tipos, priorizar product.name
   const productName = firstBooking.product?.name;
   if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
     return productName;
@@ -219,6 +222,38 @@ const normalizeTime = (timeStr: string): string => {
     return '00:00';
   }
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+};
+
+const normalizeTechniqueForGrouping = (technique?: string): string => {
+    if (!technique) return 'unknown';
+    if (technique === 'molding' || technique === 'hand_modeling') return 'hand_modeling';
+    if (technique === 'painting') return 'painting';
+    if (technique === 'potters_wheel') return 'potters_wheel';
+    return technique;
+};
+
+const deriveBookingTechniqueForSchedule = (booking: Booking): string => {
+    const productName = booking.product?.name?.toLowerCase() || '';
+
+    if (productName.includes('torno') || productName.includes('wheel') || productName.includes('potter')) {
+        return 'potters_wheel';
+    }
+    if (productName.includes('modelado') || productName.includes('mano') || productName.includes('molding')) {
+        return 'hand_modeling';
+    }
+    if (productName.includes('pintura') || productName.includes('painting')) {
+        return 'painting';
+    }
+
+    if (booking.technique) {
+        return normalizeTechniqueForGrouping(booking.technique);
+    }
+
+    if ('details' in booking.product && 'technique' in booking.product.details) {
+        return normalizeTechniqueForGrouping(booking.product.details.technique);
+    }
+
+    return normalizeTechniqueForGrouping(getUnderlyingTechnique(booking));
 };
 
 interface ScheduleManagerProps extends AppData {
@@ -401,24 +436,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                     const dateStr = slot.date;
                     const normalizedTime = normalizeTime(slot.time);
                     
-                    // CRÍTICO: Derivar técnica real del booking (priorizar technique field si existe)
-                    let bookingTechnique: string;
-                    if (booking.technique) {
-                        // Usar technique del booking (ya corregido en DB)
-                        bookingTechnique = booking.technique;
-                    } else {
-                        // Fallback: derivar de product.name
-                        const productName = booking.product?.name?.toLowerCase() || '';
-                        if (productName.includes('pintura')) {
-                            bookingTechnique = 'painting';
-                        } else if (productName.includes('torno')) {
-                            bookingTechnique = 'potters_wheel';
-                        } else if (productName.includes('modelado')) {
-                            bookingTechnique = 'hand_modeling';
-                        } else {
-                            bookingTechnique = getUnderlyingTechnique(booking);
-                        }
-                    }
+                    // CRÍTICO: Derivar técnica priorizando product.name (más confiable para históricos)
+                    const bookingTechnique = deriveBookingTechniqueForSchedule(booking);
                     
                     // Agrupar slots por fecha + hora + técnica específica
                     const slotId = `${dateStr}-${normalizedTime}-${bookingTechnique}`;
@@ -427,11 +446,11 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                         let slotCapacity = 0;
                         let technique: Technique | undefined;
                         
-                        // Determine technique from booking technique field
-                        if (booking.technique) {
-                            technique = booking.technique as Technique;
-                        } else if ('details' in booking.product && 'technique' in booking.product.details) {
-                            technique = booking.product.details.technique;
+                        // Determine technique from normalized derived technique
+                        if (bookingTechnique === 'potters_wheel') {
+                            technique = 'potters_wheel';
+                        } else if (bookingTechnique === 'hand_modeling' || bookingTechnique === 'painting' || bookingTechnique === 'molding') {
+                            technique = 'molding';
                         } else if (booking.productType === 'INTRODUCTORY_CLASS') {
                             technique = 'molding'; // Valor válido según type Technique
                         }
@@ -481,8 +500,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             
             if (slotsSource) {
                 slotsSource.forEach(s => {
-                    // FIX: Usar mismo formato de slotId sin instructorId
-                    const slotId = `${dateStr}-${normalizeTime(s.time)}`;
+                    // FIX: Incluir TÉCNICA en slotId para separar Torno de Modelado/Pintura
+                    const slotId = `${dateStr}-${normalizeTime(s.time)}-${s.technique}`;
                     if (!allSlots.has(slotId)) {
                         const productForSlot = products.find(p => p.type === 'CLASS_PACKAGE' && p.details.technique === s.technique);
                         if (!productForSlot) return;
@@ -507,8 +526,10 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 const introSessions = dataService.generateIntroClassSessions(p, { bookings: [] }, { includeFull: true });
                 const sessionsForDay = introSessions.filter(s => s.date === dateStr);
                 sessionsForDay.forEach(s => {
-                    // FIX: Usar mismo formato de slotId sin instructorId
-                    const slotId = `${dateStr}-${normalizeTime(s.time)}`;
+                    // CRÍTICO: Derivar técnica del producto intro class
+                    const introTechnique = p.details.technique || 'molding';
+                    // FIX: Incluir TÉCNICA en slotId para separar Torno de Modelado
+                    const slotId = `${dateStr}-${normalizeTime(s.time)}-${introTechnique}`;
                     if (!allSlots.has(slotId)) {
                          allSlots.set(slotId, {
                             date: dateStr,

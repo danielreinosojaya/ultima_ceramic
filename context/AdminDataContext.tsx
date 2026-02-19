@@ -114,7 +114,9 @@ const recomputeCustomerSummary = (customer: Customer): Customer => {
   const totalBookings = bookings.length;
   const totalSpent = bookings.reduce((sum, booking) => {
     const bookingPayments = Array.isArray(booking.paymentDetails) ? booking.paymentDetails : [];
-    return sum + bookingPayments.reduce((s, p) => s + (typeof p.amount === 'number' ? p.amount : 0), 0);
+    const totalPaidForBooking = bookingPayments.reduce((s, p) => s + (typeof p.amount === 'number' ? p.amount : 0), 0);
+    const paidAmount = totalPaidForBooking > 0 ? totalPaidForBooking : (booking.isPaid ? (booking.price || 0) : 0);
+    return sum + paidAmount;
   }, 0);
 
   let lastBookingDate = customer.lastBookingDate instanceof Date ? customer.lastBookingDate : new Date(0);
