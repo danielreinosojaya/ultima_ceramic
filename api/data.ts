@@ -5046,7 +5046,17 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 return res.status(400).json({ error: 'No valid updates provided.' });
             }
             
-            const values = [deliveryId, ...definedEntries.map(([, value]) => value)];
+            // Convert arrays/objects to JSON strings for JSONB columns
+            const values = [
+                deliveryId, 
+                ...definedEntries.map(([, value]) => {
+                    // If the value is an array or object (but not null), JSON.stringify it for JSONB columns
+                    if (value !== null && (Array.isArray(value) || typeof value === 'object')) {
+                        return JSON.stringify(value);
+                    }
+                    return value;
+                })
+            ];
             const { rows: [updatedDelivery] } = await sql.query(
                 `UPDATE deliveries SET ${setClause} WHERE id = $1 RETURNING *`,
                 values
