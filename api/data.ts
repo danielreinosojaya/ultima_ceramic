@@ -3968,7 +3968,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             }
             
             try {
-                const { rows: [bookingRow] } = await sql`SELECT payment_details, price FROM bookings WHERE id = ${bookingId}`;
+                const { rows: [bookingRow] } = await sql`SELECT payment_details, price, status FROM bookings WHERE id = ${bookingId}`;
                 if (!bookingRow) {
                     return res.status(404).json({ error: 'Booking not found.' });
                 }
@@ -3985,6 +3985,9 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 const updatedPayments = [...currentPayments, paymentWithId];
                 const totalPaid = updatedPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
                 const isPaid = totalPaid >= bookingRow.price;
+                const nextStatus = isPaid
+                    ? 'confirmed'
+                    : (bookingRow.status === 'expired' ? 'active' : bookingRow.status);
 
                 // If payment is via Giftcard, update giftcard balance
                 if (payment.method === 'Giftcard' && payment.metadata?.giftcardCode) {
@@ -4034,7 +4037,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
                 const { rows: [updatedBookingRow] } = await sql`
                     UPDATE bookings
-                    SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
+                    SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}, status = ${nextStatus}
                     WHERE id = ${bookingId}
                     RETURNING *;
                 `;
@@ -4070,7 +4073,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             }
             
             // CRÍTICO: Verificar si el booking existe primero
-            const { rows: bookingRows } = await sql`SELECT payment_details, price FROM bookings WHERE id = ${bookingId}`;
+            const { rows: bookingRows } = await sql`SELECT payment_details, price, status FROM bookings WHERE id = ${bookingId}`;
 
             if (!bookingRows || bookingRows.length === 0) {
                 console.warn('[API][deletePaymentFromBooking] Booking not found (may have been deleted):', bookingId);
@@ -4117,10 +4120,13 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
             const totalPaid = updatedPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
             const isPaid = totalPaid >= bookingRow.price;
+            const nextStatus = isPaid
+                ? 'confirmed'
+                : (bookingRow.status === 'expired' ? 'active' : bookingRow.status);
             
             const { rows: [updatedBookingRow] } = await sql`
                 UPDATE bookings
-                SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
+                SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}, status = ${nextStatus}
                 WHERE id = ${bookingId}
                 RETURNING *;
             `;
@@ -4155,7 +4161,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 return res.status(400).json({ error: 'Either paymentId or valid paymentIndex (>= 0) is required' });
             }
             
-            const { rows: [bookingRow] } = await sql`SELECT payment_details, price FROM bookings WHERE id = ${bookingId}`;
+            const { rows: [bookingRow] } = await sql`SELECT payment_details, price, status FROM bookings WHERE id = ${bookingId}`;
 
             if (!bookingRow) {
                 return res.status(404).json({ error: 'Booking not found.' });
@@ -4197,10 +4203,13 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
             const totalPaid = updatedPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
             const isPaid = totalPaid >= bookingRow.price;
+            const nextStatus = isPaid
+                ? 'confirmed'
+                : (bookingRow.status === 'expired' ? 'active' : bookingRow.status);
 
             const { rows: [updatedBookingRow] } = await sql`
                 UPDATE bookings
-                SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
+                SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}, status = ${nextStatus}
                 WHERE id = ${bookingId}
                 RETURNING *;
             `;

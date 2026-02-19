@@ -221,6 +221,14 @@ const normalizeTime = (timeStr: string): string => {
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
 };
 
+const normalizeSearchText = (value: string): string =>
+    value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim();
+
 interface ScheduleManagerProps extends AppData {
     initialDate: Date;
     onBackToMonth: () => void;
@@ -717,16 +725,24 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             setSearchCustomer(null);
             return;
         }
-        const lowercasedTerm = searchTerm.toLowerCase();
+        const normalizedTerm = normalizeSearchText(searchTerm);
         const customers = dataService.generateCustomersFromBookings(appData.bookings);
         
         const foundCustomer = customers.find(customer => {
             const userInfo = customer.userInfo;
+            const firstName = normalizeSearchText(userInfo.firstName || '');
+            const lastName = normalizeSearchText(userInfo.lastName || '');
+            const fullName = normalizeSearchText(`${userInfo.firstName || ''} ${userInfo.lastName || ''}`);
+            const reverseFullName = normalizeSearchText(`${userInfo.lastName || ''} ${userInfo.firstName || ''}`);
+            const email = normalizeSearchText(userInfo.email || '');
+
             return (
-                userInfo.firstName.toLowerCase().includes(lowercasedTerm) ||
-                userInfo.lastName.toLowerCase().includes(lowercasedTerm) ||
-                userInfo.email.toLowerCase().includes(lowercasedTerm) ||
-                customer.bookings.some(b => b.bookingCode?.toLowerCase().includes(lowercasedTerm))
+                firstName.includes(normalizedTerm) ||
+                lastName.includes(normalizedTerm) ||
+                fullName.includes(normalizedTerm) ||
+                reverseFullName.includes(normalizedTerm) ||
+                email.includes(normalizedTerm) ||
+                customer.bookings.some(b => normalizeSearchText(b.bookingCode || '').includes(normalizedTerm))
             );
         });
 

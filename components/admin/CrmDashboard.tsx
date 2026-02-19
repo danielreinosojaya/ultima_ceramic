@@ -38,6 +38,14 @@ export interface AugmentedCustomer extends Customer {
     isBirthdayUpcoming: boolean;
 }
 
+const normalizeSearchText = (value: string): string =>
+    value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim();
+
 const getSlotDateTime = (slot: TimeSlot) => {
     const [time, modifier] = slot.time.split(' ');
     let [hours, minutes] = time.split(':').map(Number);
@@ -430,13 +438,24 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
         }
         
         if (searchTerm) {
-            const beforeFilter = filtered.length;
-            const lowercasedTerm = searchTerm.toLowerCase();
+            const normalizedTerm = normalizeSearchText(searchTerm);
             filtered = filtered.filter(c => 
-                (c.userInfo?.firstName?.toLowerCase().includes(lowercasedTerm) ?? false) ||
-                (c.userInfo?.lastName?.toLowerCase().includes(lowercasedTerm) ?? false) ||
-                (c.userInfo?.email?.toLowerCase().includes(lowercasedTerm) ?? false) ||
-                (Array.isArray(c.bookings) && c.bookings.some(b => b?.bookingCode?.toLowerCase?.().includes(lowercasedTerm)))
+                (() => {
+                    const firstName = normalizeSearchText(c.userInfo?.firstName || '');
+                    const lastName = normalizeSearchText(c.userInfo?.lastName || '');
+                    const fullName = normalizeSearchText(`${c.userInfo?.firstName || ''} ${c.userInfo?.lastName || ''}`);
+                    const reverseFullName = normalizeSearchText(`${c.userInfo?.lastName || ''} ${c.userInfo?.firstName || ''}`);
+                    const email = normalizeSearchText(c.userInfo?.email || c.email || '');
+
+                    return (
+                        firstName.includes(normalizedTerm) ||
+                        lastName.includes(normalizedTerm) ||
+                        fullName.includes(normalizedTerm) ||
+                        reverseFullName.includes(normalizedTerm) ||
+                        email.includes(normalizedTerm) ||
+                        (Array.isArray(c.bookings) && c.bookings.some(b => normalizeSearchText(b?.bookingCode || '').includes(normalizedTerm)))
+                    );
+                })()
             );
         }
 
