@@ -1183,7 +1183,21 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         ORDER BY first_name ASC, last_name ASC 
                         LIMIT 500
                     `;
-                    data = customers.map(toCamelCase);
+                    data = customers.map(customer => ({
+                        email: customer.email,
+                        userInfo: {
+                            firstName: customer.first_name || '',
+                            lastName: customer.last_name || '',
+                            email: customer.email,
+                            phone: customer.phone || '',
+                            countryCode: customer.country_code || '',
+                            birthday: customer.birthday || null
+                        },
+                        bookings: [],
+                        totalBookings: 0,
+                        totalSpent: 0,
+                        lastBookingDate: new Date(0)
+                    }));
                     break;
                 }
                 case 'getStandaloneCustomers': {
@@ -2259,7 +2273,22 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
             case 'customer': {
                 // Crear o actualizar cliente
                 try {
-                    const customer = await createCustomer(value);
+                    const rawCustomer = await createCustomer(value);
+                    const customer = {
+                        email: rawCustomer.email,
+                        userInfo: {
+                            firstName: rawCustomer.first_name || '',
+                            lastName: rawCustomer.last_name || '',
+                            email: rawCustomer.email,
+                            phone: rawCustomer.phone || '',
+                            countryCode: rawCustomer.country_code || '',
+                            birthday: rawCustomer.birthday || null
+                        },
+                        bookings: [],
+                        totalBookings: 0,
+                        totalSpent: 0,
+                        lastBookingDate: new Date(0)
+                    };
                     return res.status(200).json({ success: true, customer });
                 } catch (error) {
                     const errorMsg = error instanceof Error ? error.message : String(error);
