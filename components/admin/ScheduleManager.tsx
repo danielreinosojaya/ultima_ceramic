@@ -99,6 +99,11 @@ const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): st
 
   const firstBooking = slot.bookings[0];
   
+  // FIX #0: Si es CUSTOM_GROUP_EXPERIENCE, mostrar la técnica directamente
+  if (firstBooking.productType === 'CUSTOM_GROUP_EXPERIENCE' && firstBooking.technique) {
+    return getTechniqueName(firstBooking.technique);
+  }
+  
   // FIX #1: Prioridad máxima a product.name (fuente más confiable)
   // Esto evita que techniqueAssignments incorrecto sobrescriba el nombre correcto
   const productName = firstBooking.product?.name;
