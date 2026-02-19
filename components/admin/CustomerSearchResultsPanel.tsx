@@ -30,6 +30,14 @@ const getProductTypeName = (productType?: string): string => {
 
 // Helper para obtener el nombre del producto/técnica de un booking
 const getBookingDisplayName = (booking: Booking): string => {
+    // 0. Para experiencia grupal personalizada, priorizar técnica sobre nombre genérico
+    if (
+        booking.technique &&
+        (booking.productType === 'CUSTOM_GROUP_EXPERIENCE' || booking.product?.name === 'Experiencia Grupal Personalizada')
+    ) {
+        return getTechniqueName(booking.technique);
+    }
+
   // 1. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
   if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
     const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);

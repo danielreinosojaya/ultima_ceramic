@@ -40,8 +40,11 @@ const getProductTypeName = (productType?: string): string => {
 
 // Helper para obtener el nombre del producto/técnica de un booking
 const getBookingDisplayName = (booking: Booking): string => {
-  // 0. Si es CUSTOM_GROUP_EXPERIENCE, mostrar la técnica
-  if (booking.productType === 'CUSTOM_GROUP_EXPERIENCE' && booking.technique) {
+    // 0. Para experiencia grupal personalizada, priorizar técnica sobre nombre genérico
+    if (
+        booking.technique &&
+        (booking.productType === 'CUSTOM_GROUP_EXPERIENCE' || booking.product?.name === 'Experiencia Grupal Personalizada')
+    ) {
     return getTechniqueName(booking.technique);
   }
   

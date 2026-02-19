@@ -32,6 +32,14 @@ const getProductTypeName = (productType?: string): string => {
 
 // Helper para obtener el nombre del producto/técnica de un booking
 const getBookingDisplayName = (booking: Booking): string => {
+  // 0. Para experiencia grupal personalizada, priorizar técnica sobre nombre genérico
+  if (
+    booking.technique &&
+    (booking.productType === 'CUSTOM_GROUP_EXPERIENCE' || booking.product?.name === 'Experiencia Grupal Personalizada')
+  ) {
+    return getTechniqueName(booking.technique as GroupTechnique);
+  }
+
   // 1. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
   if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
     const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
@@ -44,7 +52,7 @@ const getBookingDisplayName = (booking: Booking): string => {
     }
   }
   
-  // 2. Prioridad: product.name (es la fuente más confiable)
+  // 2. Prioridad: product.name (es la fuente más confiable, excepto nombre genérico ya manejado arriba)
   const productName = booking.product?.name;
   if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
     return productName;
@@ -66,6 +74,14 @@ const getBookingDisplayName = (booking: Booking): string => {
 
 // Helper para obtener el nombre del producto/técnica de un slot
 const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): string => {
+  // 0. Para experiencia grupal personalizada, priorizar técnica
+  const customBookingWithTechnique = slot.bookings.find(
+    b => b.technique && (b.productType === 'CUSTOM_GROUP_EXPERIENCE' || b.product?.name === 'Experiencia Grupal Personalizada')
+  );
+  if (customBookingWithTechnique?.technique) {
+    return getTechniqueName(customBookingWithTechnique.technique as GroupTechnique);
+  }
+
   // 1. Si hay bookings con groupClassMetadata, usar la primera técnica encontrada
   for (const booking of slot.bookings) {
     if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {

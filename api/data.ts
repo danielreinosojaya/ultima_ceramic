@@ -144,12 +144,16 @@ const parseBookingFromDB = (dbRow: any): Booking => {
             }
         }
         
+        const inferredTechniqueFromProduct =
+            dbRow.product_technique ||
+            (camelCased.product && typeof camelCased.product === 'object' ? (camelCased.product.technique || camelCased.product?.details?.technique) : undefined);
+
         // Incluir client_note, participants y technique explícitamente
         camelCased.clientNote = dbRow.client_note || null;
         camelCased.participants = dbRow.participants !== undefined && dbRow.participants !== null 
             ? parseInt(dbRow.participants, 10) 
             : 1;
-        camelCased.technique = dbRow.technique || undefined;
+        camelCased.technique = dbRow.technique || inferredTechniqueFromProduct || undefined;
         
         if (camelCased.price && typeof camelCased.price === 'string') {
             camelCased.price = parseFloat(camelCased.price);
@@ -1906,6 +1910,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                             b.product_id,
                                             b.product_type,
                                             p.name AS product_name,
+                                            b.product->>'technique' AS product_technique,
                                             b.slots,
                                             b.user_info,
                                             b.created_at,
@@ -1948,6 +1953,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                                 b.product_id,
                                                 b.product_type,
                                                 p.name AS product_name,
+                                                b.product->>'technique' AS product_technique,
                                                 b.slots,
                                                 b.user_info,
                                                 b.created_at,
@@ -1987,6 +1993,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                                 b.product_id,
                                                 b.product_type,
                                                 p.name AS product_name,
+                                                b.product->>'technique' AS product_technique,
                                                 b.slots,
                                                 b.user_info,
                                                 b.created_at,
