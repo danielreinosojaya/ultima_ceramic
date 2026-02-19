@@ -24,7 +24,8 @@ const getProductTypeName = (productType?: string): string => {
     'INTRODUCTORY_CLASS': 'Clase Introductoria',
     'GROUP_CLASS': 'Clase Grupal',
     'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
-    'OPEN_STUDIO': 'Estudio Abierto'
+    'OPEN_STUDIO': 'Estudio Abierto',
+    'CUSTOM_GROUP_EXPERIENCE': 'Experiencia Grupal Personalizada'
   };
   return typeNames[productType || ''] || 'Clase';
 };
@@ -49,12 +50,17 @@ const getBookingDisplayName = (booking: Booking): string => {
     return productName;
   }
   
-  // 3. Fallback: technique directamente (solo si product.name no existe)
+  // 3. Para CUSTOM_GROUP_EXPERIENCE, intentar obtener la técnica
+  if (booking.productType === 'CUSTOM_GROUP_EXPERIENCE' && booking.technique) {
+    return getTechniqueName(booking.technique as GroupTechnique);
+  }
+  
+  // 4. Fallback: technique directamente (solo si product.name no existe)
   if (booking.technique) {
     return getTechniqueName(booking.technique as GroupTechnique);
   }
   
-  // 4. Último fallback: productType
+  // 5. Último fallback: productType
   return getProductTypeName(booking.productType);
 };
 

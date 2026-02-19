@@ -133,11 +133,22 @@ const parseBookingFromDB = (dbRow: any): Booking => {
             }
         }
         
-        // Incluir client_note y participants explícitamente
+        // Parse groupClassMetadata from JSON string
+        if (camelCased.groupClassMetadata && typeof camelCased.groupClassMetadata === 'string') {
+            try {
+                camelCased.groupClassMetadata = JSON.parse(camelCased.groupClassMetadata);
+            } catch (e) {
+                console.error('Error parsing groupClassMetadata JSON:', e);
+                camelCased.groupClassMetadata = undefined;
+            }
+        }
+        
+        // Incluir client_note, participants y technique explícitamente
         camelCased.clientNote = dbRow.client_note || null;
         camelCased.participants = dbRow.participants !== undefined && dbRow.participants !== null 
             ? parseInt(dbRow.participants, 10) 
             : 1;
+        camelCased.technique = dbRow.technique || undefined;
         
         if (camelCased.price && typeof camelCased.price === 'string') {
             camelCased.price = parseFloat(camelCased.price);
@@ -1881,7 +1892,10 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                             b.booking_date,
                                             b.attendance,
                                             b.status,
-                                            b.expires_at
+                                            b.expires_at,
+                                            b.participants,
+                                            b.group_class_metadata,
+                                            b.technique
                                         FROM bookings b
                                         LEFT JOIN products p ON p.id = b.product_id
                                         WHERE b.status != 'expired'
