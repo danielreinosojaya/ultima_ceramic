@@ -624,6 +624,7 @@ const computeSlotAvailability = async (
         return {
             available: false,
             normalizedTime,
+            blockedReason: 'technique_restriction',
             capacity: {
                 max: maxCapacity,
                 booked: maxCapacity,
@@ -1797,6 +1798,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             capacity: availability.capacity,
                             bookingsCount: availability.bookingsCount,
                             message: availability.message,
+                            blockedReason: (availability as any).blockedReason || null,
                             openedByLargeGroup: Boolean((availability as any).openedByLargeGroup)
                         };
 

@@ -1457,6 +1457,8 @@ export interface SlotAvailabilityResult {
     requestedParticipants: number;
     /** true si el slot ya fue abierto por una reserva previa de 3+ personas (mismo horario) */
     openedByLargeGroup?: boolean;
+    /** Razón del bloqueo si available=false: 'technique_restriction', 'fixed_class', 'event', etc */
+    blockedReason?: string | null;
     capacity: {
         max: number;
         booked: number;

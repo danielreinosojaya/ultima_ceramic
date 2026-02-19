@@ -534,8 +534,9 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
               const hourState = hourAvailability[hour];
               const isBlockedByFixedClass = isSlotBlockedByFixedClass(selectedDate, hour);
               const isBlockedBySpecialEvent = isSlotBlockedBySpecialEvent(selectedDate, hour);
-              const isUnavailableByCapacity = hourState ? hourState.available === false : false;
-              const isUnavailable = isBlockedByFixedClass || isBlockedBySpecialEvent || isUnavailableByCapacity;
+              const isBlockedByTechniqueRestriction = hourState?.available === false && (hourState as any)?.blockedReason === 'technique_restriction';
+              const isUnavailableByCapacity = hourState ? (hourState.available === false && !isBlockedByTechniqueRestriction) : false;
+              const isUnavailable = isBlockedByFixedClass || isBlockedBySpecialEvent || isUnavailableByCapacity || isBlockedByTechniqueRestriction;
               
               return (
                 <button
@@ -546,6 +547,8 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
                     ? 'Bloqueado por clase fija de torno'
                     : isBlockedBySpecialEvent
                     ? 'Bloqueado por evento'
+                    : isBlockedByTechniqueRestriction
+                    ? 'Bloqueado - Restricción de técnica'
                     : (isUnavailableByCapacity ? 'Sin cupos disponibles' : 'Click para seleccionar')}
                   className={`relative p-3.5 rounded-xl border-2 font-bold text-sm transition-all ${
                     isSelected
@@ -557,7 +560,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
                 >
                   <div className="flex flex-col items-center gap-1">
                     <span>{hour}</span>
-                    {isBlockedByFixedClass || isBlockedBySpecialEvent ? (
+                    {isBlockedByFixedClass || isBlockedBySpecialEvent || isBlockedByTechniqueRestriction ? (
                       <span className="text-xs font-bold text-red-600">🔒</span>
                     ) : hourState && hourState.capacity && (
                       <SocialBadge 
