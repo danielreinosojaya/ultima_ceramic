@@ -463,6 +463,34 @@ export interface FreeDateTimeOverrides {
   };
 }
 
+/**
+ * Control granular de disponibilidad por técnica y hora
+ * 
+ * Ejemplo - 21 enero: Solo torno 9 AM permitido:
+ * "2025-01-21": {
+ *   "potters_wheel": {
+ *     "allowedTimes": ["09:00"],
+ *     "reason": "Solo clase fija de torno a las 9 AM. De 9:30 al cierre bloqueado."
+ *   }
+ * }
+ * 
+ * Result:
+ * - Torno 9 AM: ✅ Single Class, Custom Experience, Package, todo permitido
+ * - Torno 9:30+ : ❌ Bloqueado completamente
+ * - Modelado, Pintura, etc: ✅ Sin cambios
+ */
+export interface ExperienceTypeOverrides {
+  [date: string]: { // YYYY-MM-DD
+    [technique: string]: { // 'potters_wheel' | 'hand_modeling' | 'molding' | 'painting'
+      // Lista blanca: solo estas horas se permiten para esta técnica ese día
+      // Si está definido, SOLO estos horarios estarán disponibles
+      allowedTimes?: string[]; // ej: ["09:00"]
+      
+      reason?: string; // Motivo del control (para logs/debugging)
+    };
+  };
+}
+
 export interface RescheduleSlotInfo {
     bookingId: string;
     slot: TimeSlot;
@@ -592,6 +620,7 @@ export interface AppData {
   availability: Record<DayKey, AvailableSlot[]>;
   scheduleOverrides: ScheduleOverrides;
   freeDateTimeOverrides?: FreeDateTimeOverrides;
+  experienceTypeOverrides?: ExperienceTypeOverrides; // Control granular: qué técnicas/horas están permitidas
   classCapacity: ClassCapacity;
   capacityMessages: CapacityMessageSettings;
   announcements: Announcement[];

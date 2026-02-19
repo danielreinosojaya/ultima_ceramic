@@ -333,14 +333,15 @@ const generateBookingCode = (): string => {
 // ============ FUNCIONES HELPER COMPARTIDAS PARA DISPONIBILIDAD ============
 // Funciones reutilizables para getAvailableSlots, checkSlotAvailability y createCustomExperienceBooking
 const parseSlotAvailabilitySettings = async () => {
-    const settingsResult = await sql`SELECT * FROM settings WHERE key IN ('availability', 'scheduleOverrides', 'classCapacity', 'freeDateTimeOverrides')`;
+    const settingsResult = await sql`SELECT * FROM settings WHERE key IN ('availability', 'scheduleOverrides', 'classCapacity', 'freeDateTimeOverrides', 'experienceTypeOverrides')`;
     const availability: any = settingsResult.rows.find(s => s.key === 'availability')?.value || 
         { Sunday: [], Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [] };
     const scheduleOverrides: any = settingsResult.rows.find(s => s.key === 'scheduleOverrides')?.value || {};
     const freeDateTimeOverrides: any = settingsResult.rows.find(s => s.key === 'freeDateTimeOverrides')?.value || {};
+    const experienceTypeOverrides: any = settingsResult.rows.find(s => s.key === 'experienceTypeOverrides')?.value || {};
     const classCapacity: any = settingsResult.rows.find(s => s.key === 'classCapacity')?.value || 
         { potters_wheel: 8, molding: 22, introductory_class: 8 };
-    return { availability, scheduleOverrides, freeDateTimeOverrides, classCapacity };
+    return { availability, scheduleOverrides, freeDateTimeOverrides, experienceTypeOverrides, classCapacity };
 };
 
 const slotTechniqueKey = (tech: string) => {
@@ -591,7 +592,7 @@ const computeSlotAvailability = async (
         return booking.slots.some((s: any) => s.date === requestedDate);
     });
 
-    const { scheduleOverrides, classCapacity, freeDateTimeOverrides } = await parseSlotAvailabilitySettings();
+    const { scheduleOverrides, classCapacity, freeDateTimeOverrides, experienceTypeOverrides } = await parseSlotAvailabilitySettings();
     const maxCapacityMap = getMaxCapacityMap(classCapacity);
     const isSpecialDayNoRules = scheduleOverrides?.[requestedDate]?.disableRules === true;
 
@@ -612,6 +613,24 @@ const computeSlotAvailability = async (
             },
             bookingsCount: 0,
             message: 'Pintura no está disponible los lunes'
+        };
+    }
+
+    // ✅ VALIDACIÓN: ExperienceTypeOverrides - Control granular por técnica
+    // Si una técnica tiene restricción de allowedTimes, solo esos horarios están permitidos
+    const techOverride = experienceTypeOverrides?.[requestedDate]?.[requestedTechnique];
+    if (techOverride?.allowedTimes && !techOverride.allowedTimes.includes(normalizedTime)) {
+        const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
+        return {
+            available: false,
+            normalizedTime,
+            capacity: {
+                max: maxCapacity,
+                booked: maxCapacity,
+                available: 0
+            },
+            bookingsCount: 0,
+            message: techOverride.reason || `${requestedTechnique} no disponible en este horario`
         };
     }
 
@@ -2088,7 +2107,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                 if (settings.length > 0) {
                     // Si es bankDetails y el valor es string, parsear JSON
                     // Parse JSON fields that are stored as strings
-                    const jsonFields = ['bankDetails', 'classCapacity', 'availability', 'scheduleOverrides', 'capacityMessages', 'freeDateTimeOverrides'];
+                    const jsonFields = ['bankDetails', 'classCapacity', 'availability', 'scheduleOverrides', 'capacityMessages', 'freeDateTimeOverrides', 'experienceTypeOverrides'];
                     if (jsonFields.includes(key) && typeof settings[0].value === 'string') {
                         try {
                             data = JSON.parse(settings[0].value);
@@ -2113,6 +2132,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         case 'footerInfo':
                         case 'backgroundSettings':
                         case 'freeDateTimeOverrides':
+                        case 'experienceTypeOverrides':
                             data = {};
                             break;
                         case 'classCapacity':

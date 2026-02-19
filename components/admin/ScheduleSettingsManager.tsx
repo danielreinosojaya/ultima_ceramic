@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import * as dataService from '../../services/dataService';
 // Eliminado useLanguage, la app ahora es monolingüe en español
-import type { AvailableSlot, Instructor, ScheduleOverrides, DayKey, ClassCapacity, Technique, FreeDateTimeOverrides } from '../../types';
+import type { AvailableSlot, Instructor, ScheduleOverrides, DayKey, ClassCapacity, Technique, FreeDateTimeOverrides, ExperienceTypeOverrides } from '../../types';
 import { DAY_NAMES } from '@/constants';
 import { PlusIcon } from '../icons/PlusIcon';
 import { TrashIcon } from '../icons/TrashIcon';
@@ -13,12 +13,13 @@ interface ScheduleSettingsManagerProps {
     availability: Record<DayKey, AvailableSlot[]>;
     overrides: ScheduleOverrides;
     freeDateTimeOverrides: FreeDateTimeOverrides;
+    experienceTypeOverrides?: ExperienceTypeOverrides;
     instructors: Instructor[];
     classCapacity: ClassCapacity;
     onDataChange: () => void;
 }
 
-export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = ({ availability, overrides, freeDateTimeOverrides, instructors, classCapacity, onDataChange }) => {
+export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = ({ availability, overrides, freeDateTimeOverrides, experienceTypeOverrides = {}, instructors, classCapacity, onDataChange }) => {
     // Monolingüe español, textos hardcodeados
     const language = 'es-ES';
     
@@ -30,6 +31,13 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
     const [isCapacitySaved, setIsCapacitySaved] = useState(false);
     const [selectedBlockedDate, setSelectedBlockedDate] = useState<Date | null>(null);
     const [newBlockedTime, setNewBlockedTime] = useState('');
+    
+    // Estado para ExperienceTypeOverrides
+    const [selectedTechRestrictDate, setSelectedTechRestrictDate] = useState<Date | null>(null);
+    const [selectedTechForRestrict, setSelectedTechForRestrict] = useState<Technique>('potters_wheel');
+    const [allowedTimes, setAllowedTimes] = useState<string[]>([]);
+    const [newAllowedTime, setNewAllowedTime] = useState('');
+    const [restrictionReason, setRestrictionReason] = useState('');
 
     const buildSpecialDaySlots = useCallback((instructorId: number): AvailableSlot[] => {
         const slots: AvailableSlot[] = [];
@@ -226,6 +234,79 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
         await dataService.updateFreeDateTimeOverrides(updatedOverrides);
         onDataChange();
     };
+
+    // ===== HANDLERS PARA EXPERIENCETYPENOVERRIDES =====
+    const handleAddTechRestriction = async () => {
+        if (!selectedTechRestrictDate || allowedTimes.length === 0) {
+            alert('Selecciona una fecha y al menos un horario permitido');
+            return;
+        }
+        
+        const dateStr = formatDateToYYYYMMDD(selectedTechRestrictDate);
+        const updatedOverrides: ExperienceTypeOverrides = { ...experienceTypeOverrides };
+        
+        if (!updatedOverrides[dateStr]) {
+            updatedOverrides[dateStr] = {};
+        }
+        
+        updatedOverrides[dateStr][selectedTechForRestrict] = {
+            allowedTimes: allowedTimes.sort(),
+            reason: restrictionReason || undefined
+        };
+        
+        await dataService.updateExperienceTypeOverrides(updatedOverrides);
+        
+        // Reset
+        setAllowedTimes([]);
+        setNewAllowedTime('');
+        setRestrictionReason('');
+        onDataChange();
+    };
+
+    const handleRemoveTechRestriction = async () => {
+        if (!selectedTechRestrictDate) return;
+        
+        const dateStr = formatDateToYYYYMMDD(selectedTechRestrictDate);
+        const updatedOverrides: ExperienceTypeOverrides = { ...experienceTypeOverrides };
+        
+        if (updatedOverrides[dateStr]) {
+            delete updatedOverrides[dateStr][selectedTechForRestrict];
+            if (Object.keys(updatedOverrides[dateStr]).length === 0) {
+                delete updatedOverrides[dateStr];
+            }
+        }
+        
+        await dataService.updateExperienceTypeOverrides(updatedOverrides);
+        onDataChange();
+    };
+
+    const handleAddAllowedTime = () => {
+        if (!newAllowedTime || allowedTimes.includes(newAllowedTime)) return;
+        setAllowedTimes([...allowedTimes, newAllowedTime].sort());
+        setNewAllowedTime('');
+    };
+
+    const handleRemoveAllowedTime = (time: string) => {
+        setAllowedTimes(allowedTimes.filter(t => t !== time));
+    };
+
+    // Cargar horarios permitidos cuando se selecciona fecha/técnica
+    const currentTechRestriction = useMemo(() => {
+        if (!selectedTechRestrictDate) return null;
+        const dateStr = formatDateToYYYYMMDD(selectedTechRestrictDate);
+        return experienceTypeOverrides?.[dateStr]?.[selectedTechForRestrict];
+    }, [selectedTechRestrictDate, selectedTechForRestrict, experienceTypeOverrides]);
+
+    // Actualizar allowedTimes cuando cambia el override actual
+    useMemo(() => {
+        if (currentTechRestriction?.allowedTimes) {
+            setAllowedTimes(currentTechRestriction.allowedTimes);
+            setRestrictionReason(currentTechRestriction.reason || '');
+        } else {
+            setAllowedTimes([]);
+            setRestrictionReason('');
+        }
+    }, [currentTechRestriction]);
     
     const exceptionDaySlots = useMemo(() => {
         if (!selectedExceptionDate) return [];
@@ -519,6 +600,119 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
                         </div>
                     )}
                 </div>
+            </div>
+
+            {/* RESTRICCIONES POR TÉCNICA - CONTROL GRANULAR */}
+            <div>
+                <h2 className="text-xl font-serif text-brand-text mb-2">🔒 Restricciones por Técnica</h2>
+                <p className="text-brand-secondary text-sm mb-4">Limita qué horarios están disponibles para una técnica específica en un día. Ejemplo: Sábado 21 enero, solo Torno a las 9 AM.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label htmlFor="tech-restrict-date" className="block text-sm font-bold text-brand-secondary mb-1">Fecha</label>
+                        <input
+                            id="tech-restrict-date"
+                            type="date"
+                            onChange={e => setSelectedTechRestrictDate(e.target.value ? new Date(e.target.value + 'T00:00:00') : null)}
+                            className="w-full p-2 border rounded-lg"
+                        />
+                    </div>
+                    {selectedTechRestrictDate && (
+                        <div>
+                            <label htmlFor="tech-select" className="block text-sm font-bold text-brand-secondary mb-1">Técnica</label>
+                            <select 
+                                id="tech-select"
+                                value={selectedTechForRestrict}
+                                onChange={e => setSelectedTechForRestrict(e.target.value as Technique)}
+                                className="w-full p-2 border rounded-lg bg-white"
+                            >
+                                <option value="potters_wheel">🎡 Torno Alfarero</option>
+                                <option value="molding">✋ Modelado a Mano</option>
+                                <option value="painting">🎨 Pintura</option>
+                                <option value="hand_modeling">✋ Hand Modeling</option>
+                            </select>
+                        </div>
+                    )}
+                </div>
+
+                {selectedTechRestrictDate && (
+                    <div className="mt-4 p-4 bg-brand-background rounded-lg">
+                        <div className="flex justify-between items-center mb-3">
+                            <h4 className="font-bold text-brand-text">
+                                Restricción: {selectedTechForRestrict === 'potters_wheel' ? '🎡 Torno' : selectedTechForRestrict === 'molding' ? '✋ Modelado' : selectedTechForRestrict === 'painting' ? '🎨 Pintura' : 'Técnica'} 
+                                <span className="text-sm text-brand-secondary ml-2">({selectedTechRestrictDate.toLocaleDateString(language)})</span>
+                            </h4>
+                            {allowedTimes.length > 0 && (
+                                <button 
+                                    onClick={handleRemoveTechRestriction}
+                                    className="text-xs font-semibold text-red-600 hover:text-red-700 hover:underline"
+                                >
+                                    Eliminar restricción
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="mb-3">
+                            <label className="block text-xs font-bold text-gray-500 mb-2">Horarios permitidos para esta técnica</label>
+                            {allowedTimes.length === 0 ? (
+                                <p className="text-xs text-brand-secondary italic">Esta técnica no tiene restricciones (todos los horarios están disponibles)</p>
+                            ) : (
+                                <div className="space-y-1 mb-3 p-2 bg-white rounded border border-green-200">
+                                    {allowedTimes.map(time => (
+                                        <div key={time} className="flex items-center justify-between text-sm bg-green-50 p-2 rounded">
+                                            <span className="font-semibold text-green-700">✓ {time}</span>
+                                            <button 
+                                                onClick={() => handleRemoveAllowedTime(time)}
+                                                className="text-red-500 hover:text-red-700"
+                                            >
+                                                <TrashIcon className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="space-y-2 border-t border-gray-200 pt-3">
+                            <label className="block text-xs font-bold text-gray-500">Agregar horario permitido</label>
+                            <div className="flex items-center gap-2">
+                                <input 
+                                    type="time"
+                                    value={newAllowedTime}
+                                    onChange={e => setNewAllowedTime(e.target.value)}
+                                    className="p-2 border rounded-md text-sm flex-1"
+                                    placeholder="HH:mm"
+                                />
+                                <button 
+                                    onClick={handleAddAllowedTime}
+                                    disabled={!newAllowedTime}
+                                    className="p-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+                                >
+                                    <PlusIcon className="w-4 h-4"/>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2 border-t border-gray-200 pt-3 mt-3">
+                            <label htmlFor="reason" className="block text-xs font-bold text-gray-500">Motivo (opcional)</label>
+                            <input 
+                                id="reason"
+                                type="text"
+                                value={restrictionReason}
+                                onChange={e => setRestrictionReason(e.target.value)}
+                                placeholder="Ej: Solo clase fija de torno a las 9 AM"
+                                className="w-full p-2 border rounded-md text-sm"
+                            />
+                        </div>
+
+                        <button 
+                            onClick={handleAddTechRestriction}
+                            disabled={allowedTimes.length === 0}
+                            className="w-full mt-3 p-2 bg-brand-primary text-white rounded-md font-semibold hover:bg-brand-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            {allowedTimes.length > 0 ? `Guardar restricción (${allowedTimes.length} horario${allowedTimes.length !== 1 ? 's' : ''})` : 'Define al menos un horario permitido'}
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );

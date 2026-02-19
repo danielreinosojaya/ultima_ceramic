@@ -301,7 +301,7 @@ import type {
     PaymentDetails, AttendanceStatus, ClientNotification, AutomationSettings, ClassPackage, 
     IntroductoryClass, OpenStudioSubscription, UserInfo, Customer, EnrichedIntroClassSession, 
     BackgroundSettings, AppData, BankDetails, InvoiceRequest, Technique, GroupClass, SingleClass,
-    Delivery, DeliveryStatus, UILabels, RecurringClassSlot, DynamicTimeSlot, SlotDisplayInfo, GroupTechnique, TimeSlot
+    Delivery, DeliveryStatus, UILabels, RecurringClassSlot, DynamicTimeSlot, SlotDisplayInfo, GroupTechnique, TimeSlot, ExperienceTypeOverrides
 } from '../types';
 import { DAY_NAMES, DEFAULT_PRODUCTS } from '../constants';
 
@@ -1236,6 +1236,8 @@ export const getScheduleOverrides = (): Promise<ScheduleOverrides> => getData('s
 export const updateScheduleOverrides = (overrides: ScheduleOverrides): Promise<{ success: boolean }> => setData('scheduleOverrides', overrides);
 export const getFreeDateTimeOverrides = (): Promise<Record<string, { disabledTimes: string[] }>> => getData('freeDateTimeOverrides');
 export const updateFreeDateTimeOverrides = (overrides: Record<string, { disabledTimes: string[] }>): Promise<{ success: boolean }> => setData('freeDateTimeOverrides', overrides);
+export const getExperienceTypeOverrides = (): Promise<ExperienceTypeOverrides> => getData('experienceTypeOverrides');
+export const updateExperienceTypeOverrides = (overrides: ExperienceTypeOverrides): Promise<{ success: boolean }> => setData('experienceTypeOverrides', overrides);
 
 // Instructors - ✅ Usar cache para evitar requests múltiples
 let instructorsCache: { data: Instructor[] | null; timestamp: number } = { data: null, timestamp: 0 };
@@ -1574,14 +1576,15 @@ export const getSchedulingData = async () => {
     ]);
     
     // Cargar datos complementarios (NO en background - necesarios para la UI)
-    const [scheduleOverrides, classCapacity, capacityMessages, freeDateTimeOverrides] = await Promise.all([
+    const [scheduleOverrides, classCapacity, capacityMessages, freeDateTimeOverrides, experienceTypeOverrides] = await Promise.all([
         getData('scheduleOverrides'),
         getData('classCapacity'),
         getData('capacityMessages'),
-        getData('freeDateTimeOverrides')
+        getData('freeDateTimeOverrides'),
+        getData('experienceTypeOverrides')
     ]).catch(err => {
         console.error('Background scheduling load error:', err);
-        return [{}, { potters_wheel: 0, molding: 0, introductory_class: 0 }, { thresholds: [] }, {}];
+        return [{}, { potters_wheel: 0, molding: 0, introductory_class: 0 }, { thresholds: [] }, {}, {}];
     });
     
     return {
@@ -1589,6 +1592,7 @@ export const getSchedulingData = async () => {
         availability: availability || { Sunday: [], Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [] },
         scheduleOverrides: scheduleOverrides || {},
         freeDateTimeOverrides: freeDateTimeOverrides || {},
+        experienceTypeOverrides: experienceTypeOverrides || {},
         classCapacity: classCapacity || { potters_wheel: 0, molding: 0, introductory_class: 0 },
         capacityMessages: capacityMessages || { thresholds: [] }
     };

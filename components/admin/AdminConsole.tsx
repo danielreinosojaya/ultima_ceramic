@@ -185,6 +185,7 @@ export const AdminConsole: React.FC = () => {
             availability={adminData.availability}
             overrides={adminData.scheduleOverrides}
             freeDateTimeOverrides={adminData.freeDateTimeOverrides || {}}
+            experienceTypeOverrides={adminData.experienceTypeOverrides || {}}
             instructors={adminData.instructors}
             classCapacity={adminData.classCapacity}
             onDataChange={handleSync}
