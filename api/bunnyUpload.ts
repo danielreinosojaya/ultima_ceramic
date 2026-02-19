@@ -12,8 +12,13 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 const BUNNY_API_KEY = process.env.BUNNY_API_KEY || '';
 const BUNNY_STORAGE_ZONE = process.env.BUNNY_STORAGE_ZONE || '';
-const BUNNY_CDN_HOSTNAME = process.env.BUNNY_CDN_HOSTNAME || '';
-const BUNNY_API_BASE = `https://ny.storage.bunnycdn.com/${BUNNY_STORAGE_ZONE}`;
+const BUNNY_STORAGE_HOSTNAME = (process.env.BUNNY_STORAGE_HOSTNAME || 'ny.storage.bunnycdn.com')
+    .replace(/^https?:\/\//, '')
+    .replace(/\/$/, '');
+const BUNNY_CDN_HOSTNAME = (process.env.BUNNY_CDN_HOSTNAME || '')
+    .replace(/^https?:\/\//, '')
+    .replace(/\/$/, '');
+const BUNNY_API_BASE = `https://${BUNNY_STORAGE_HOSTNAME}/${BUNNY_STORAGE_ZONE}`;
 
 // Validar que tenemos credenciales
 if (!BUNNY_API_KEY || !BUNNY_STORAGE_ZONE) {
@@ -145,6 +150,10 @@ export async function uploadPhotoToBunny(request: UploadPhotoRequest): Promise<U
             const error = await uploadResponse.text();
             console.error('[uploadPhotoToBunny] Upload failed:', uploadResponse.status, error);
             return { success: false, error: `Upload failed: ${uploadResponse.statusText}` };
+        }
+
+        if (!BUNNY_CDN_HOSTNAME) {
+            return { success: false, error: 'BUNNY_CDN_HOSTNAME not configured' };
         }
 
         // Construir URL pública del CDN
