@@ -1685,8 +1685,8 @@ export const generateCustomersFromBookings = (bookings: Booking[]): Customer[] =
 // Get standalone customers from the customers table
 export const getStandaloneCustomers = async (): Promise<Customer[]> => {
     try {
-        // Cargar set completo para CRM admin (evita excluir clientes como "Pilar De Ycaza")
-        const rawCustomers = await fetchData('/api/data?action=standaloneCustomers&limit=1000');
+        // Cargar set completo para CRM admin (evita excluir clientes en búsqueda global)
+        const rawCustomers = await fetchData('/api/data?action=standaloneCustomers&all=true');
         if (!rawCustomers || !Array.isArray(rawCustomers)) return [];
         
         return rawCustomers.map((customerRow: any) => {
@@ -2076,10 +2076,17 @@ const parseDelivery = (d: any): Delivery => {
     
     if (d.photos) {
         try {
-            if (Array.isArray(d.photos)) {
-                parsedPhotos = d.photos;
-            } else if (typeof d.photos === 'string') {
-                parsedPhotos = JSON.parse(d.photos || '[]');
+            let rawPhotos: any = d.photos;
+            for (let i = 0; i < 3; i++) {
+                if (Array.isArray(rawPhotos)) break;
+                if (typeof rawPhotos === 'string') {
+                    rawPhotos = JSON.parse(rawPhotos || '[]');
+                } else {
+                    break;
+                }
+            }
+            if (Array.isArray(rawPhotos)) {
+                parsedPhotos = rawPhotos;
             }
             // Filter out invalid/empty photos
             parsedPhotos = parsedPhotos.filter((photo: any) => {
@@ -2113,7 +2120,7 @@ const parseDelivery = (d: any): Delivery => {
         readyAt: d.readyAt || d.ready_at || null,
         notes: d.notes || null,
         photos: parsedPhotos,
-        hasPhotos: d.hasPhotos || false, // ⚡ Flag para lazy loading
+        hasPhotos: d.hasPhotos || d.has_photos || false, // ⚡ Flag para lazy loading
         // ⚡ Campos de servicio de pintura
         wantsPainting: normalizedWantsPainting,
         paintingPrice: d.paintingPrice ?? d.painting_price ?? null,
@@ -2136,11 +2143,16 @@ export const getDeliveryPhotos = async (deliveryId: string): Promise<string[]> =
         const result = await fetchData(`/api/data?action=getDeliveryPhotos&deliveryId=${deliveryId}`);
         if (!result || !result.photos) return [];
         
-        let photos = result.photos;
-        if (typeof photos === 'string') {
-            try {
-                photos = JSON.parse(photos);
-            } catch {
+        let photos: any = result.photos;
+        for (let i = 0; i < 3; i++) {
+            if (Array.isArray(photos)) break;
+            if (typeof photos === 'string') {
+                try {
+                    photos = JSON.parse(photos);
+                } catch {
+                    return [];
+                }
+            } else {
                 return [];
             }
         }

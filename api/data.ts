@@ -1173,13 +1173,40 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     if (rows.length === 0) {
                         return res.status(404).json({ error: 'Delivery not found' });
                     }
+
+                    const normalizePhotos = (rawPhotos: any): string[] => {
+                        if (!rawPhotos) return [];
+                        let parsed = rawPhotos;
+
+                        for (let i = 0; i < 3; i++) {
+                            if (Array.isArray(parsed)) break;
+                            if (typeof parsed === 'string') {
+                                try {
+                                    parsed = JSON.parse(parsed);
+                                } catch {
+                                    break;
+                                }
+                            } else {
+                                break;
+                            }
+                        }
+
+                        if (!Array.isArray(parsed)) return [];
+
+                        return parsed
+                            .filter((photo: any) => typeof photo === 'string' && photo.trim())
+                            .map((photo: string) => photo.trim())
+                            .filter((photo: string) => photo.startsWith('http://') || photo.startsWith('https://') || photo.startsWith('data:'));
+                    };
+
                     // ⚡ Cache 5 minutos para fotos (raramente cambian)
                     res.setHeader('Cache-Control', 'private, max-age=300, stale-while-revalidate=600');
-                    data = { photos: rows[0].photos || [] };
+                    data = { photos: normalizePhotos(rows[0].photos) };
                     break;
                 }
                 case 'standaloneCustomers': {
                     const emailQuery = typeof req.query.email === 'string' ? req.query.email.trim() : '';
+                    const fetchAll = req.query.all === 'true';
                     const requestedLimit = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
                     const limit = Number.isFinite(requestedLimit)
                         ? Math.min(Math.max(requestedLimit, 1), 300)
@@ -1192,12 +1219,18 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             WHERE LOWER(email) = LOWER(${emailQuery})
                             LIMIT 1
                         `
-                        : await sql`
-                            SELECT id, email, first_name, last_name, phone, country_code, birthday
-                            FROM customers
-                            ORDER BY first_name ASC, last_name ASC
-                            LIMIT ${limit}
-                        `;
+                        : fetchAll
+                            ? await sql`
+                                SELECT id, email, first_name, last_name, phone, country_code, birthday
+                                FROM customers
+                                ORDER BY first_name ASC, last_name ASC
+                            `
+                            : await sql`
+                                SELECT id, email, first_name, last_name, phone, country_code, birthday
+                                FROM customers
+                                ORDER BY first_name ASC, last_name ASC
+                                LIMIT ${limit}
+                            `;
                     data = customers.map(customer => ({
                         email: customer.email,
                         userInfo: {
@@ -1217,16 +1250,23 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                 }
                 case 'getStandaloneCustomers': {
                     // Get all customers from customers table (standalone customers without necessarily having bookings)
+                    const fetchAll = req.query.all === 'true';
                     const requestedLimit = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
                     const limit = Number.isFinite(requestedLimit)
                         ? Math.min(Math.max(requestedLimit, 1), 300)
                         : 100;
-                    const { rows: standaloneCustomers } = await sql`
-                        SELECT id, email, first_name, last_name, phone, country_code, birthday
-                        FROM customers 
-                        ORDER BY first_name ASC, last_name ASC 
-                        LIMIT ${limit}
-                    `;
+                    const { rows: standaloneCustomers } = fetchAll
+                        ? await sql`
+                            SELECT id, email, first_name, last_name, phone, country_code, birthday
+                            FROM customers
+                            ORDER BY first_name ASC, last_name ASC
+                        `
+                        : await sql`
+                            SELECT id, email, first_name, last_name, phone, country_code, birthday
+                            FROM customers 
+                            ORDER BY first_name ASC, last_name ASC 
+                            LIMIT ${limit}
+                        `;
                     
                     // Convert to Customer format
                     const formattedCustomers = standaloneCustomers.map(customer => ({
@@ -5321,29 +5361,32 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     const emailServiceModule = await import('./emailService.js');
                     
                     try {
-                        if (wantsPainting) {
-                            // Email especial para clientes que quieren pintura
-                            await emailServiceModule.sendDeliveryWithPaintingServiceEmail(
-                                email, 
-                                customerName, 
-                                {
-                                    description: description || null,
-                                    scheduledDate,
-                                    photos: photos?.length || 0,
-                                    paintingPrice: paintingPrice || 0
-                                }
-                            );
-                        } else {
-                            // Email estándar sin pintura
-                            await emailServiceModule.sendDeliveryCreatedByClientEmail(
-                                email, 
-                                customerName, 
-                                {
-                                    description: description || null,
-                                    scheduledDate,
-                                    photos: photos?.length || 0
-                                }
-                            );
+                        // En flujo CDN, createDeliveryFromClient recibe photos=null y el upload ocurre después.
+                        // Evitar email prematuro con "0 fotos"; se enviará cuando updateDelivery persista URLs.
+                        const initialPhotoCount = Array.isArray(photos) ? photos.length : 0;
+                        if (initialPhotoCount > 0) {
+                            if (wantsPainting) {
+                                await emailServiceModule.sendDeliveryWithPaintingServiceEmail(
+                                    email,
+                                    customerName,
+                                    {
+                                        description: description || null,
+                                        scheduledDate,
+                                        photos: initialPhotoCount,
+                                        paintingPrice: paintingPrice || 0
+                                    }
+                                );
+                            } else {
+                                await emailServiceModule.sendDeliveryCreatedByClientEmail(
+                                    email,
+                                    customerName,
+                                    {
+                                        description: description || null,
+                                        scheduledDate,
+                                        photos: initialPhotoCount
+                                    }
+                                );
+                            }
                         }
                         console.log('[createDeliveryFromClient] ✅ Confirmation email sent to:', email);
                     } catch (err) {
@@ -5374,6 +5417,36 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             if (!deliveryId || !updates) {
                 return res.status(400).json({ error: 'deliveryId and updates are required.' });
             }
+
+            const parsePhotosCount = (value: any): number => {
+                if (!value) return 0;
+                let parsed = value;
+                for (let i = 0; i < 3; i++) {
+                    if (Array.isArray(parsed)) break;
+                    if (typeof parsed === 'string') {
+                        try {
+                            parsed = JSON.parse(parsed);
+                        } catch {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                return Array.isArray(parsed) ? parsed.filter((photo: any) => typeof photo === 'string' && photo.trim()).length : 0;
+            };
+
+            const { rows: [existingDelivery] } = await sql`
+                SELECT id, customer_email, description, scheduled_date, created_by_client, wants_painting, painting_price, photos
+                FROM deliveries
+                WHERE id = ${deliveryId}
+                LIMIT 1
+            `;
+
+            if (!existingDelivery) {
+                return res.status(404).json({ error: 'Delivery not found.' });
+            }
+
             const definedEntries = Object.entries(updates).filter(([, value]) => value !== undefined);
             const setClause = definedEntries
                 .map(([key], idx) => {
@@ -5404,6 +5477,50 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             
             if (!updatedDelivery) {
                 return res.status(404).json({ error: 'Delivery not found.' });
+            }
+
+            // Si cliente subió fotos vía CDN (flujo 2 pasos), enviar email con conteo real
+            try {
+                const previousCount = parsePhotosCount(existingDelivery.photos);
+                const nextCount = parsePhotosCount(updatedDelivery.photos);
+                const shouldSendClientPhotoEmail = Boolean(existingDelivery.created_by_client)
+                    && previousCount === 0
+                    && nextCount > 0;
+
+                if (shouldSendClientPhotoEmail) {
+                    const { rows: [customerData] } = await sql`
+                        SELECT first_name, last_name FROM customers WHERE email = ${updatedDelivery.customer_email} LIMIT 1
+                    `;
+                    const customerName = customerData?.first_name || 'Cliente';
+
+                    const emailServiceModule = await import('./emailService.js');
+                    const wantsPainting = Boolean(updatedDelivery.wants_painting);
+
+                    if (wantsPainting) {
+                        await emailServiceModule.sendDeliveryWithPaintingServiceEmail(
+                            updatedDelivery.customer_email,
+                            customerName,
+                            {
+                                description: updatedDelivery.description || null,
+                                scheduledDate: updatedDelivery.scheduled_date,
+                                photos: nextCount,
+                                paintingPrice: Number(updatedDelivery.painting_price || 0)
+                            }
+                        );
+                    } else {
+                        await emailServiceModule.sendDeliveryCreatedByClientEmail(
+                            updatedDelivery.customer_email,
+                            customerName,
+                            {
+                                description: updatedDelivery.description || null,
+                                scheduledDate: updatedDelivery.scheduled_date,
+                                photos: nextCount
+                            }
+                        );
+                    }
+                }
+            } catch (emailError) {
+                console.warn('[updateDelivery] Could not send post-upload client email:', emailError);
             }
             
             return res.status(200).json({ success: true, delivery: toCamelCase(updatedDelivery) });
