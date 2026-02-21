@@ -1684,12 +1684,14 @@ export const generateCustomersFromBookings = (bookings: Booking[]): Customer[] =
 
 // Get standalone customers from the customers table
 // Si searchTerm se proporciona, busca en toda la DB sin límite
+// Si NO hay searchTerm, trae TODOS los clientes (necesarios para enriquecer con entregas/deliveries)
 export const getStandaloneCustomers = async (searchTerm?: string): Promise<Customer[]> => {
     try {
-        // ⚡ Cargar set inicial optimizado (100 registros), o completo si hay búsqueda
+        // ⚡ CORRECCIÓN: Siempre traer TODOS los clientes (no limitados)
+        // La búsqueda server-side solo aplica cuando el user escribe en la barra
         const url = searchTerm 
             ? `/api/data?action=standaloneCustomers&search=${encodeURIComponent(searchTerm)}`
-            : `/api/data?action=standaloneCustomers&limit=100`;
+            : `/api/data?action=standaloneCustomers&all=true`;
         
         const rawCustomers = await fetchData(url);
         if (!rawCustomers || !Array.isArray(rawCustomers)) return [];
