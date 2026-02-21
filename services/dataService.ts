@@ -1683,10 +1683,15 @@ export const generateCustomersFromBookings = (bookings: Booking[]): Customer[] =
 };
 
 // Get standalone customers from the customers table
-export const getStandaloneCustomers = async (): Promise<Customer[]> => {
+// Si searchTerm se proporciona, busca en toda la DB sin límite
+export const getStandaloneCustomers = async (searchTerm?: string): Promise<Customer[]> => {
     try {
-        // Cargar set completo para CRM admin (evita excluir clientes en búsqueda global)
-        const rawCustomers = await fetchData('/api/data?action=standaloneCustomers&all=true');
+        // ⚡ Cargar set inicial optimizado (100 registros), o completo si hay búsqueda
+        const url = searchTerm 
+            ? `/api/data?action=standaloneCustomers&search=${encodeURIComponent(searchTerm)}`
+            : `/api/data?action=standaloneCustomers&limit=100`;
+        
+        const rawCustomers = await fetchData(url);
         if (!rawCustomers || !Array.isArray(rawCustomers)) return [];
         
         return rawCustomers.map((customerRow: any) => {
@@ -2150,7 +2155,7 @@ const parseDelivery = (d: any): Delivery => {
 
 // ⚡ Carga ligera de deliveries (sin fotos - para listados)
 export const getDeliveries = async (): Promise<Delivery[]> => {
-    const rawDeliveries = await fetchData('/api/data?action=deliveries&limit=2000');
+    const rawDeliveries = await fetchData('/api/data?action=deliveries&limit=500');
     return rawDeliveries ? rawDeliveries.map(parseDelivery) : [];
 };
 
@@ -2441,6 +2446,28 @@ export const updatePaintingStatus = async (
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Error updating painting status'
+        };
+    }
+};
+
+// 🔴 Validar que el cliente haya pagado el servicio de pintura
+export const checkPaintingPaymentStatus = async (deliveryId: string): Promise<{ success: boolean; isPaid: boolean; error?: string }> => {
+    try {
+        const result = await postAction('checkPaintingPaymentStatus', { deliveryId });
+        if (result.success) {
+            return { success: true, isPaid: result.isPaid ?? false };
+        }
+        return {
+            success: false,
+            isPaid: false,
+            error: result.error || 'Could not verify payment status'
+        };
+    } catch (error) {
+        console.error('[checkPaintingPaymentStatus] Error:', error);
+        return {
+            success: false,
+            isPaid: false,
+            error: error instanceof Error ? error.message : 'Error checking painting payment status'
         };
     }
 };

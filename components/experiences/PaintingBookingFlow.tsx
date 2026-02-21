@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import type { SlotAvailabilityResult } from '../../services/dataService';
+import type { SlotAvailabilityResult, Delivery } from '../../services/dataService';
 import { FreeDateTimePicker } from './FreeDateTimePicker';
 import * as dataService from '../../services/dataService';
 
@@ -22,13 +22,14 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string>('');
+  const [isValidatingPayment, setIsValidatingPayment] = useState(false);
 
   useEffect(() => {
     setSelectedTime(null);
     setSelectedAvailability(null);
   }, [participants, selectedDate]);
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!selectedDate || !selectedTime) {
       setError('Por favor selecciona un horario disponible');
       return;
@@ -42,8 +43,28 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
       return;
     }
 
+    // 🔴 Validar que el cliente haya pagado el servicio de pintura ANTES de permitir continuar
+    setIsValidatingPayment(true);
     setError('');
-    setShowConfirmModal(true);
+    
+    try {
+      const result = await dataService.checkPaintingPaymentStatus(deliveryId);
+      
+      if (!result.success || !result.isPaid) {
+        setError(result.error || 'No se pudo verificar el estado de pago. Intenta nuevamente.');
+        setIsValidatingPayment(false);
+        return;
+      }
+
+      // ✅ Pago confirmado, mostrar modal
+      setError('');
+      setShowConfirmModal(true);
+    } catch (err) {
+      console.error('[PaintingBookingFlow] Error checking payment:', err);
+      setError('Error al verificar el estado de pago. Intenta nuevamente.');
+    } finally {
+      setIsValidatingPayment(false);
+    }
   };
 
   const handleSchedule = async () => {
@@ -168,10 +189,10 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
             <button
               type="button"
               onClick={handleConfirm}
-              disabled={isLoading || isSubmitting}
+              disabled={isLoading || isSubmitting || isValidatingPayment}
               className="flex-1 px-6 py-3 rounded-lg bg-brand-primary text-white font-semibold hover:bg-brand-primary/90 disabled:opacity-60"
             >
-              Siguiente →
+              {isValidatingPayment ? 'Validando pago...' : 'Siguiente →'}
             </button>
           )}
         </div>
@@ -182,7 +203,7 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
             <h3 className="text-lg font-bold text-brand-text mb-2">Confirmar reserva de pintura</h3>
             <p className="text-sm text-brand-secondary mb-4">
-              Esta reserva ya está pagada. Solo confirmaremos tu horario.
+              ✨ Al confirmar, reservaremos tu horario de pintura.
             </p>
             <div className="bg-gray-50 rounded-lg p-3 text-sm text-brand-text space-y-1">
               <div><strong>Fecha:</strong> {new Date(selectedDate).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>

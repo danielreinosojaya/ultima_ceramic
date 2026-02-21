@@ -276,8 +276,8 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
     // CORRECCIÓN: El hook de efecto que causa el bucle infinito en CrmDashboard.tsx:162 se debe
     // a una actualización de estado sin dependencias adecuadas. La lógica de carga de datos
     // se ha movido a una función `useCallback` que se ejecutará solo cuando `bookings` cambie.
-    const loadCustomers = useCallback(async () => {
-        console.log('CrmDashboard: Loading customers...');
+    const loadCustomers = useCallback(async (searchTerm?: string) => {
+        console.log('CrmDashboard: Loading customers...', searchTerm ? `(search: "${searchTerm}")` : '');
         console.log('PropCustomers available:', propCustomers?.length || 0);
         console.log('Bookings available:', bookings?.length || 0);
         
@@ -292,8 +292,9 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
         try {
             console.log('CrmDashboard: Loading standalone customers and merging with booking customers');
             
-            // Get standalone customers from customers table
-            const standaloneCustomers = await dataService.getStandaloneCustomers();
+            // ⚡ Si hay búsqueda, hacer fetch server-side en TODA la DB
+            // Caso contrario, cargar inicial optimizada (100)
+            const standaloneCustomers = await dataService.getStandaloneCustomers(searchTerm);
             console.log('CrmDashboard: Standalone customers loaded:', standaloneCustomers.length);
             
             // Get customers from bookings
@@ -370,6 +371,24 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
     useEffect(() => {
         loadCustomers();
     }, [loadCustomers]);
+    
+    // ⚡ NUEVO: Búsqueda server-side cuando el user tipea
+    // Si hay searchTerm, hace fetch en TODA la DB sin limitar a 100
+    useEffect(() => {
+        if (searchTerm.trim().length === 0) {
+            // Si el search está vacío, cargar inicial (100)
+            loadCustomers();
+            return;
+        }
+
+        // Debounce: esperar 500ms antes de hacer el fetch
+        const timer = setTimeout(() => {
+            console.log('CrmDashboard: Executing server-side search for:', searchTerm);
+            loadCustomers(searchTerm);
+        }, 500);
+
+        return () => clearTimeout(timer);
+    }, [searchTerm, loadCustomers]);
     
     // CORRECCIÓN: Este hook también puede causar un bucle si no se maneja correctamente.
     // La dependencia `customers` ya no causa un bucle porque su estado se actualiza de forma controlada.

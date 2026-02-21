@@ -1125,41 +1125,84 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     // ⚡ OPTIMIZACIÓN: Excluir fotos por defecto (muy pesadas - base64)
                     // Las fotos se cargan bajo demanda con getDeliveryPhotos
                     const includePhotos = req.query.includePhotos === 'true';
-                    // ⚡ Protección: clamp de límite para evitar payloads excesivos (aumentado a 5000 para servicios de pintura)
-                    const requestedLimit = req.query.limit ? parseInt(req.query.limit as string, 10) : 300;
+                    const searchQuery = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+                    // ⚡ Protección: clamp de límite - Default 500 (últimas 12 meses), max 5000 si hay búsqueda
+                    const requestedLimit = req.query.limit ? parseInt(req.query.limit as string, 10) : 500;
                     const limit = Number.isFinite(requestedLimit)
                         ? Math.min(Math.max(requestedLimit, 1), 5000)
-                        : 300;
+                        : 500;
+                    
+                    // ⚡ Si hay búsqueda, ignorar límite y buscar en toda la DB
+                    const hasSearch = searchQuery.length > 0;
                     
                     if (includePhotos) {
                         // Carga completa (solo cuando explícitamente se pide)
-                        const { rows: deliveries } = await sql`
-                            SELECT * FROM deliveries 
-                            ORDER BY scheduled_date ASC, created_at DESC 
-                            LIMIT ${limit}
-                        `;
-                        data = deliveries.map(toCamelCase);
+                        if (hasSearch) {
+                            const { rows: deliveries } = await sql`
+                                SELECT * FROM deliveries 
+                                WHERE id ILIKE ${`%${searchQuery}%`} 
+                                   OR customer_email ILIKE ${`%${searchQuery}%`}
+                                   OR description ILIKE ${`%${searchQuery}%`}
+                                   OR notes ILIKE ${`%${searchQuery}%`}
+                                ORDER BY created_at DESC
+                            `;
+                            data = deliveries.map(toCamelCase);
+                        } else {
+                            const { rows: deliveries } = await sql`
+                                SELECT * FROM deliveries 
+                                WHERE scheduled_date >= NOW() - INTERVAL '12 months'
+                                ORDER BY scheduled_date ASC, created_at DESC 
+                                LIMIT ${limit}
+                            `;
+                            data = deliveries.map(toCamelCase);
+                        }
                     } else {
                         // Carga ligera: excluir columna photos pero INCLUIR campos de pintura
-                        const { rows: deliveries } = await sql`
-                            SELECT id, customer_email, description, scheduled_date, status, 
-                                   created_at, completed_at, delivered_at, ready_at, notes,
-                                   wants_painting, painting_price, painting_status, 
-                                   painting_booking_date, painting_paid_at, painting_completed_at,
-                                   CASE WHEN photos IS NOT NULL AND photos != '[]' AND photos != 'null' 
-                                        THEN true ELSE false END as has_photos
-                            FROM deliveries 
-                            ORDER BY scheduled_date ASC, created_at DESC 
-                            LIMIT ${limit}
-                        `;
-                        data = deliveries.map((d: any) => {
-                            const camelized = toCamelCase(d);
-                            return {
-                                ...camelized,
-                                customerEmail: (d.customer_email || '').trim().toLowerCase(),
-                                photos: [] // Array vacío, se cargan bajo demanda
-                            };
-                        });
+                        if (hasSearch) {
+                            const { rows: deliveries } = await sql`
+                                SELECT id, customer_email, description, scheduled_date, status, 
+                                       created_at, completed_at, delivered_at, ready_at, notes,
+                                       wants_painting, painting_price, painting_status, 
+                                       painting_booking_date, painting_paid_at, painting_completed_at,
+                                       CASE WHEN photos IS NOT NULL AND photos != '[]' AND photos != 'null' 
+                                            THEN true ELSE false END as has_photos
+                                FROM deliveries 
+                                WHERE id ILIKE ${`%${searchQuery}%`} 
+                                   OR customer_email ILIKE ${`%${searchQuery}%`}
+                                   OR description ILIKE ${`%${searchQuery}%`}
+                                   OR notes ILIKE ${`%${searchQuery}%`}
+                                ORDER BY created_at DESC
+                            `;
+                            data = deliveries.map((d: any) => {
+                                const camelized = toCamelCase(d);
+                                return {
+                                    ...camelized,
+                                    customerEmail: (d.customer_email || '').trim().toLowerCase(),
+                                    photos: []
+                                };
+                            });
+                        } else {
+                            const { rows: deliveries } = await sql`
+                                SELECT id, customer_email, description, scheduled_date, status, 
+                                       created_at, completed_at, delivered_at, ready_at, notes,
+                                       wants_painting, painting_price, painting_status, 
+                                       painting_booking_date, painting_paid_at, painting_completed_at,
+                                       CASE WHEN photos IS NOT NULL AND photos != '[]' AND photos != 'null' 
+                                            THEN true ELSE false END as has_photos
+                                FROM deliveries 
+                                WHERE scheduled_date >= NOW() - INTERVAL '12 months'
+                                ORDER BY scheduled_date ASC, created_at DESC 
+                                LIMIT ${limit}
+                            `;
+                            data = deliveries.map((d: any) => {
+                                const camelized = toCamelCase(d);
+                                return {
+                                    ...camelized,
+                                    customerEmail: (d.customer_email || '').trim().toLowerCase(),
+                                    photos: []
+                                };
+                            });
+                        }
                     }
                     // ⚡ Cache 30 segundos para listado de deliveries
                     res.setHeader('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
@@ -1272,40 +1315,50 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                 }
                 case 'standaloneCustomers': {
                     const emailQuery = typeof req.query.email === 'string' ? req.query.email.trim() : '';
+                    const searchQuery = typeof req.query.search === 'string' ? req.query.search.trim() : '';
                     const fetchAll = req.query.all === 'true';
                     const requestedLimit = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
                     const limit = Number.isFinite(requestedLimit)
-                        ? Math.min(Math.max(requestedLimit, 1), 300)
+                        ? Math.min(Math.max(requestedLimit, 1), 500)
                         : 100;
 
+                    // ⚡ Búsqueda server-side: si hay search/email, ignorar límite
                     const { rows: customers } = emailQuery
                         ? await sql`
-                            SELECT id, email, first_name, last_name, phone, country_code, birthday
+                            SELECT id, email, first_name, last_name, phone
                             FROM customers
                             WHERE LOWER(email) = LOWER(${emailQuery})
                             LIMIT 1
                         `
-                        : fetchAll
+                        : searchQuery
                             ? await sql`
-                                SELECT id, email, first_name, last_name, phone, country_code, birthday
+                                SELECT id, email, first_name, last_name, phone
                                 FROM customers
+                                WHERE LOWER(first_name) ILIKE LOWER(${`%${searchQuery}%`})
+                                   OR LOWER(last_name) ILIKE LOWER(${`%${searchQuery}%`})
+                                   OR LOWER(email) ILIKE LOWER(${`%${searchQuery}%`})
                                 ORDER BY first_name ASC, last_name ASC
                             `
-                            : await sql`
-                                SELECT id, email, first_name, last_name, phone, country_code, birthday
-                                FROM customers
-                                ORDER BY first_name ASC, last_name ASC
-                                LIMIT ${limit}
-                            `;
+                            : fetchAll
+                                ? await sql`
+                                    SELECT id, email, first_name, last_name, phone
+                                    FROM customers
+                                    ORDER BY first_name ASC, last_name ASC
+                                `
+                                : await sql`
+                                    SELECT id, email, first_name, last_name, phone
+                                    FROM customers
+                                    ORDER BY first_name ASC, last_name ASC
+                                    LIMIT ${limit}
+                                `;
                     data = customers.map(customer => ({
                         email: customer.email,
                         userInfo: {
                             firstName: customer.first_name || '',
                             lastName: customer.last_name || '',
                             email: customer.email,
-                            phone: customer.phone || '',
-                            countryCode: customer.country_code || '',
-                            birthday: customer.birthday || null
+                            phone: customer.phone || ''
+                            // ⚡ Excluir countryCode y birthday en carga inicial (ahorran bytes, cargar on-demand si se necesitan)
                         },
                         bookings: [],
                         totalBookings: 0,
@@ -1316,23 +1369,35 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                 }
                 case 'getStandaloneCustomers': {
                     // Get all customers from customers table (standalone customers without necessarily having bookings)
+                    const searchQuery = typeof req.query.search === 'string' ? req.query.search.trim() : '';
                     const fetchAll = req.query.all === 'true';
                     const requestedLimit = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
                     const limit = Number.isFinite(requestedLimit)
-                        ? Math.min(Math.max(requestedLimit, 1), 300)
+                        ? Math.min(Math.max(requestedLimit, 1), 500)
                         : 100;
-                    const { rows: standaloneCustomers } = fetchAll
+                    
+                    // ⚡ Búsqueda server-side: si hay search, ignorar límite
+                    const { rows: standaloneCustomers } = searchQuery
                         ? await sql`
-                            SELECT id, email, first_name, last_name, phone, country_code, birthday
+                            SELECT id, email, first_name, last_name, phone
                             FROM customers
+                            WHERE LOWER(first_name) ILIKE LOWER(${`%${searchQuery}%`})
+                               OR LOWER(last_name) ILIKE LOWER(${`%${searchQuery}%`})
+                               OR LOWER(email) ILIKE LOWER(${`%${searchQuery}%`})
                             ORDER BY first_name ASC, last_name ASC
                         `
-                        : await sql`
-                            SELECT id, email, first_name, last_name, phone, country_code, birthday
-                            FROM customers 
-                            ORDER BY first_name ASC, last_name ASC 
-                            LIMIT ${limit}
-                        `;
+                        : fetchAll
+                            ? await sql`
+                                SELECT id, email, first_name, last_name, phone
+                                FROM customers
+                                ORDER BY first_name ASC, last_name ASC
+                            `
+                            : await sql`
+                                SELECT id, email, first_name, last_name, phone
+                                FROM customers 
+                                ORDER BY first_name ASC, last_name ASC 
+                                LIMIT ${limit}
+                            `;
                     
                     // Convert to Customer format
                     const formattedCustomers = standaloneCustomers.map(customer => ({
@@ -1341,9 +1406,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             firstName: customer.first_name || '',
                             lastName: customer.last_name || '',
                             email: customer.email,
-                            phone: customer.phone || '',
-                            countryCode: customer.country_code || '',
-                            birthday: customer.birthday || null
+                            phone: customer.phone || ''
+                            // ⚡ Excluir countryCode y birthday en carga inicial (ahorran bytes, cargar on-demand si se necesitan)
                         },
                         bookings: [], // Start with empty bookings, will be populated if needed
                         totalBookings: 0,
@@ -5704,6 +5768,77 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 });
             }
         }
+
+        case 'checkPaintingPaymentStatus': {
+            // 🔴 Validar que el cliente haya pagado el servicio de pintura ANTES de permitir reservar
+            const { deliveryId } = req.body;
+
+            if (!deliveryId) {
+                return res.status(400).json({ error: 'deliveryId is required' });
+            }
+
+            try {
+                const { rows: [delivery] } = await sql`
+                    SELECT wants_painting, painting_status FROM deliveries WHERE id = ${deliveryId}
+                `;
+
+                if (!delivery) {
+                    return res.status(404).json({ success: false, error: 'Delivery not found' });
+                }
+
+                const wantsPainting = Boolean((delivery as any).wants_painting);
+                const paintingStatus = (delivery as any).painting_status;
+
+                // Verificar que el cliente tiene painting habilitado
+                if (!wantsPainting) {
+                    return res.status(400).json({ 
+                        success: false, 
+                        isPaid: false,
+                        error: 'This delivery does not have painting service enabled' 
+                    });
+                }
+
+                // Verificar que está pagado
+                if (paintingStatus === 'pending_payment') {
+                    return res.status(402).json({ 
+                        success: false, 
+                        isPaid: false,
+                        error: 'Painting service has not been paid yet. Please coordinate payment with our team before scheduling.' 
+                    });
+                }
+
+                if (paintingStatus === 'completed') {
+                    return res.status(400).json({ 
+                        success: false, 
+                        isPaid: false,
+                        error: 'Painting service is already completed' 
+                    });
+                }
+
+                if (paintingStatus !== 'paid' && paintingStatus !== 'scheduled') {
+                    return res.status(400).json({ 
+                        success: false, 
+                        isPaid: false,
+                        error: 'Invalid painting service status. Please contact support.' 
+                    });
+                }
+
+                // ✅ Está pagado
+                return res.status(200).json({ 
+                    success: true, 
+                    isPaid: true 
+                });
+
+            } catch (error: any) {
+                console.error('[checkPaintingPaymentStatus] Error:', error);
+                return res.status(500).json({
+                    success: false,
+                    isPaid: false,
+                    error: error.message || 'Error checking painting payment status'
+                });
+            }
+        }
+
         case 'schedulePaintingBooking': {
             const { deliveryId, date, time, participants } = req.body;
 
@@ -5741,11 +5876,28 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
                 const currentPaintingStatus = (delivery as any).painting_status ?? (delivery as any).paintingStatus ?? null;
                 const existingBookingDate = (delivery as any).painting_booking_date ?? (delivery as any).paintingBookingDate ?? null;
+                
+                // 🔴 Validación exhaustiva del painting_status
+                if (!currentPaintingStatus) {
+                    return res.status(400).json({ error: 'Painting service status not found. Please contact support.' });
+                }
+                
                 if (currentPaintingStatus === 'scheduled' && existingBookingDate) {
                     return res.status(409).json({ error: 'Painting session already scheduled for this delivery' });
                 }
-                if (currentPaintingStatus && currentPaintingStatus !== 'paid' && currentPaintingStatus !== 'scheduled') {
-                    return res.status(400).json({ error: 'Painting service is not marked as paid' });
+                
+                if (currentPaintingStatus === 'pending_payment') {
+                    return res.status(402).json({ 
+                        error: 'Painting service has not been paid yet. Please coordinate payment with our team before scheduling.' 
+                    });
+                }
+                
+                if (currentPaintingStatus === 'completed') {
+                    return res.status(400).json({ error: 'Painting service is already completed' });
+                }
+                
+                if (currentPaintingStatus !== 'paid') {
+                    return res.status(400).json({ error: 'Invalid painting service status. Please contact support.' });
                 }
 
                 let userInfo: any = null;
