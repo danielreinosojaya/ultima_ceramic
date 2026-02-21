@@ -1125,10 +1125,10 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     // ⚡ OPTIMIZACIÓN: Excluir fotos por defecto (muy pesadas - base64)
                     // Las fotos se cargan bajo demanda con getDeliveryPhotos
                     const includePhotos = req.query.includePhotos === 'true';
-                    // ⚡ Protección: clamp de límite para evitar payloads excesivos
+                    // ⚡ Protección: clamp de límite para evitar payloads excesivos (aumentado a 5000 para servicios de pintura)
                     const requestedLimit = req.query.limit ? parseInt(req.query.limit as string, 10) : 300;
                     const limit = Number.isFinite(requestedLimit)
-                        ? Math.min(Math.max(requestedLimit, 1), 500)
+                        ? Math.min(Math.max(requestedLimit, 1), 5000)
                         : 300;
                     
                     if (includePhotos) {

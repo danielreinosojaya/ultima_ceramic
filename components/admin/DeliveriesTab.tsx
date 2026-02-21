@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import type { Delivery, Customer } from '../../types';
 import { DeliveryDashboard } from './DeliveryDashboard';
 import { DeliveryListWithFilters } from './DeliveryListWithFilters';
@@ -13,10 +13,6 @@ interface DeliveriesTabProps {
     onDataChange: () => void;
 }
 
-/**
- * DeliveriesTab - Main module for delivery management
- * Displays all deliveries across all customers without needing to navigate to individual customer views
- */
 export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataChange }) => {
     const adminData = useAdminData();
     const [loading, setLoading] = useState(false);
@@ -24,15 +20,31 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataC
     const [editModal, setEditModal] = useState(false);
     const [legacyModalOpen, setLegacyModalOpen] = useState(false);
     const [legacyPaintingModalOpen, setLegacyPaintingModalOpen] = useState(false);
+    const [allStandaloneDeliveries, setAllStandaloneDeliveries] = useState<Delivery[]>([]);
 
-    // Combine all deliveries from all customers
+    // Load standalone deliveries on component mount and when data changes
+    useEffect(() => {
+        const loadStandaloneDeliveries = async () => {
+            try {
+                const deliveries = await dataService.getDeliveries();
+                setAllStandaloneDeliveries(deliveries);
+                console.log('[DeliveriesTab] Loaded standalone deliveries:', deliveries.length);
+            } catch (error) {
+                console.error('[DeliveriesTab] Error loading standalone deliveries:', error);
+            }
+        };
+        loadStandaloneDeliveries();
+    }, [onDataChange]);
+
+    // Combine all deliveries from all customers AND standalone deliveries
     const allDeliveries = useMemo((): (Delivery & { customerEmail: string; customerName: string })[] => {
-        const combined: (Delivery & { customerEmail: string; customerName: string })[] = [];
+        const combined: Map<string, Delivery & { customerEmail: string; customerName: string }> = new Map();
         
+        // Add deliveries from customers
         customers.forEach(customer => {
             if (customer.deliveries && Array.isArray(customer.deliveries)) {
                 customer.deliveries.forEach(delivery => {
-                    combined.push({
+                    combined.set(delivery.id, {
                         ...delivery,
                         customerEmail: customer.email || customer.userInfo?.email || '',
                         customerName: `${customer.userInfo?.firstName || ''} ${customer.userInfo?.lastName || ''}`.trim()
@@ -41,8 +53,33 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataC
             }
         });
 
-        return combined;
-    }, [customers]);
+        // Add standalone deliveries that aren't already included
+        allStandaloneDeliveries.forEach(delivery => {
+            if (!combined.has(delivery.id)) {
+                const customerEmail = (delivery.customerEmail || '').trim().toLowerCase();
+                // Try to find customer by email for name enrichment
+                const customer = customers.find(c => 
+                    ((c.email || '').trim().toLowerCase() === customerEmail) ||
+                    ((c.userInfo?.email || '').trim().toLowerCase() === customerEmail)
+                );
+                
+                combined.set(delivery.id, {
+                    ...delivery,
+                    customerEmail: customerEmail,
+                    customerName: customer 
+                        ? `${customer.userInfo?.firstName || ''} ${customer.userInfo?.lastName || ''}`.trim()
+                        : ''
+                });
+            }
+        });
+
+        // Return as array, sorted by scheduled_date DESC (most recent first)
+        return Array.from(combined.values()).sort((a, b) => {
+            const dateA = new Date(a.scheduledDate).getTime();
+            const dateB = new Date(b.scheduledDate).getTime();
+            return dateB - dateA;
+        });
+    }, [customers, allStandaloneDeliveries]);
 
     // Handle mark as ready
     const handleMarkReady = useCallback(async (deliveryId: string) => {
@@ -55,6 +92,7 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataC
                 } else {
                     adminData.refreshCritical();
                 }
+                onDataChange?.();
             } else {
                 alert(`Error: ${result.error}`);
             }
@@ -64,7 +102,7 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataC
         } finally {
             setLoading(false);
         }
-    }, [onDataChange]);
+    }, [onDataChange, adminData]);
 
     // Handle complete delivery
     const handleComplete = useCallback(async (deliveryId: string) => {
@@ -77,6 +115,7 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataC
                 } else {
                     adminData.refreshCritical();
                 }
+                onDataChange?.();
             } else {
                 alert('Error al completar entrega');
             }
@@ -86,7 +125,7 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataC
         } finally {
             setLoading(false);
         }
-    }, [onDataChange]);
+    }, [onDataChange, adminData]);
 
     // Handle delete delivery
     const handleDelete = useCallback(async (delivery: Delivery) => {
@@ -99,6 +138,7 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataC
             const result = await dataService.deleteDelivery(delivery.id);
             if (result.success) {
                 adminData.optimisticRemoveDelivery(delivery.id);
+                onDataChange?.();
             } else {
                 alert('Error al eliminar entrega');
             }
@@ -108,7 +148,7 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataC
         } finally {
             setLoading(false);
         }
-    }, [onDataChange]);
+    }, [onDataChange, adminData]);
 
     // Handle edit (open modal)
     const handleEdit = useCallback((delivery: Delivery) => {
