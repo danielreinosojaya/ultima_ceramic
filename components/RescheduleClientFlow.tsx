@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { Booking, AppData } from '../types';
 import * as dataService from '../services/dataService';
-import { formatDate } from '../utils/formatters';
+import { formatDate, parseLocalDate } from '../utils/formatters';
 import { XMarkIcon, CalendarIcon, ClockIcon } from '@heroicons/react/24/outline';
 
 interface RescheduleClientFlowProps {
@@ -241,7 +241,7 @@ export const RescheduleClientFlow: React.FC<RescheduleClientFlowProps> = ({
                     {currentStep === 'select_time' && (
                         <div className="space-y-4">
                             <label className="block text-sm font-semibold text-brand-text">
-                                Selecciona una hora para el {new Date(selectedDate || '').toLocaleDateString('es-ES')}
+                                Selecciona una hora para el {selectedDate && parseLocalDate(selectedDate).toLocaleDateString('es-ES')}
                             </label>
                             <div className="grid grid-cols-2 gap-2">
                                 {getAvailableTimes().map((time) => (

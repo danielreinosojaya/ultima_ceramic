@@ -3,6 +3,7 @@ import { toZonedTime, format } from 'date-fns-tz';
 import type { Booking, BankDetails, TimeSlot, PaymentDetails, GroupTechnique } from '../types.js';
 import { sql } from './db.js';
 import { generateAllGiftcardVersions } from './utils/giftcardImageGenerator.js';
+import { parseLocalDate } from '../utils/formatters.js';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_FROM_ADDRESS || 'no-reply@ceramicalma.com';
@@ -1280,7 +1281,7 @@ export const sendCouplesTourConfirmationEmail = async (booking: Booking, bankDet
     const technique_name = technique === 'potters_wheel' ? '🎯 Torno Alfarero' : '✋ Moldeo a Mano';
     
     const slot = slots && slots[0];
-    const slotDate = slot ? new Date(slot.date).toLocaleDateString('es-ES', { 
+    const slotDate = slot ? parseLocalDate(slot.date).toLocaleDateString('es-ES', { 
         weekday: 'long', 
         year: 'numeric', 
         month: 'long', 

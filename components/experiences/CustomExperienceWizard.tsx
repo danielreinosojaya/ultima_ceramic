@@ -20,6 +20,7 @@ import { CheckCircleIcon } from '../icons/CheckCircleIcon';
 import { FreeDateTimePicker } from './FreeDateTimePicker';
 import type { AvailableSlotResult, SlotAvailabilityResult } from '../../services/dataService';
 import { UserInfoModal } from '../UserInfoModal';
+import { parseLocalDate } from '../../utils/formatters';
 
 interface CustomExperienceWizardProps {
   pieces: Piece[];
@@ -825,7 +826,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                 <div className="flex justify-between py-3 border-b border-gray-100">
                   <span className="text-gray-600">Fecha:</span>
                   <span className={`font-bold ${slotAvailability.available ? 'text-green-600' : 'text-red-600'}`}>
-                    {new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-ES', {
+                    {parseLocalDate(selectedDate).toLocaleDateString('es-ES', {
                       weekday: 'long',
                       day: 'numeric',
                       month: 'long',
@@ -864,7 +865,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
             
             {/* Determinar si es weekday o weekend */}
             {(() => {
-              const dayOfWeek = new Date(selectedDate + 'T12:00:00').getDay();
+              const dayOfWeek = parseLocalDate(selectedDate).getDay();
               const isWeekend = dayOfWeek === 5 || dayOfWeek === 6 || dayOfWeek === 0; // Vie, Sáb, Dom
               const spaceRate = isWeekend ? 100 : 75;
               const config = state.config as CelebrationConfig;

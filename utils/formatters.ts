@@ -1,3 +1,10 @@
+// Parsea una fecha YYYY-MM-DD a Date LOCAL (no UTC)
+// Evita el problema de UTC offset cuando se crea Date sin hora específica
+export function parseLocalDate(dateStr: string): Date {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+}
+
 // Formatea hora local de Ecuador desde timestamp UTC (ISO string)
 // El backend ahora guarda en UTC puro, convertir a America/Guayaquil al mostrar
 export function formatLocalTimeFromUTC(isoString: string | undefined | null): string {

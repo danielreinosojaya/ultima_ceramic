@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import type { SlotAvailabilityResult, Delivery } from '../../services/dataService';
 import { FreeDateTimePicker } from './FreeDateTimePicker';
 import * as dataService from '../../services/dataService';
+import { parseLocalDate } from '../../utils/formatters';
 
 interface PaintingBookingFlowProps {
   deliveryId: string | null;
@@ -206,7 +207,7 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
               ✨ Al confirmar, reservaremos tu horario de pintura.
             </p>
             <div className="bg-gray-50 rounded-lg p-3 text-sm text-brand-text space-y-1">
-              <div><strong>Fecha:</strong> {new Date(selectedDate).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
+              <div><strong>Fecha:</strong> {parseLocalDate(selectedDate).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
               <div><strong>Hora:</strong> {selectedTime}</div>
               <div><strong>Participantes:</strong> {participants}</div>
             </div>
