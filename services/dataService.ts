@@ -2157,7 +2157,7 @@ const parseDelivery = (d: any): Delivery => {
 
 // ⚡ Carga ligera de deliveries (sin fotos - para listados)
 export const getDeliveries = async (): Promise<Delivery[]> => {
-    const rawDeliveries = await fetchData('/api/data?action=deliveries&limit=500');
+    const rawDeliveries = await fetchData('/api/data?action=deliveries&limit=2000');
     return rawDeliveries ? rawDeliveries.map(parseDelivery) : [];
 };
 
