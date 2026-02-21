@@ -1319,7 +1319,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     });
 
                     // Also get standalone customers from customers table
-                    const { rows: standaloneCustomers } = await sql`SELECT * FROM customers ORDER BY first_name ASC LIMIT 500`;
+                    // 🔧 LIMIT 2000: Balance entre cobertura y rendimiento (covers 99% de casos pero evita OOM)
+                    const { rows: standaloneCustomers } = await sql`SELECT * FROM customers ORDER BY first_name ASC, last_name ASC LIMIT 2000`;
                     standaloneCustomers.forEach(customerRow => {
                         const email = customerRow.email;
                         if (!customerMap.has(email)) {
@@ -1341,11 +1342,21 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             });
                         } else {
                             const existing = customerMap.get(email)!;
+                            // 🔧 FIX: Priorizar firstName/lastName de la tabla customers (más confiable)
+                            if (customerRow.first_name && !existing.userInfo.firstName) {
+                                existing.userInfo.firstName = customerRow.first_name;
+                            }
+                            if (customerRow.last_name && !existing.userInfo.lastName) {
+                                existing.userInfo.lastName = customerRow.last_name;
+                            }
                             if (customerRow.phone && !existing.userInfo.phone) {
                                 existing.userInfo.phone = customerRow.phone;
                             }
                             if (customerRow.country_code && !existing.userInfo.countryCode) {
                                 existing.userInfo.countryCode = customerRow.country_code;
+                            }
+                            if (customerRow.birthday && !existing.userInfo.birthday) {
+                                existing.userInfo.birthday = customerRow.birthday;
                             }
                         }
                     });
