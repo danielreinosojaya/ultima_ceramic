@@ -75,6 +75,18 @@ export const AdminConsole: React.FC = () => {
   const { dataVersion, forceRefresh } = useNotifications();
   const adminData = useAdminData();
   
+  // Show loading state while data is being fetched
+  if (adminData.loadingState.critical) {
+    return (
+      <div className="min-h-screen bg-brand-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-primary mx-auto mb-4"></div>
+          <p className="text-brand-secondary">Cargando datos críticos...</p>
+        </div>
+      </div>
+    );
+  }
+  
   const handleNavigationComplete = useCallback(() => {
     setNavigateTo(null);
   }, []);

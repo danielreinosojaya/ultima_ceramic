@@ -1094,25 +1094,29 @@ const App: React.FC = () => {
     
     if (isAdmin) {
         console.log("App - rendering AdminConsole");
+        const LoadingFallback = () => (
+            <div className="min-h-screen bg-brand-background flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-primary mx-auto mb-4"></div>
+                    <p className="text-brand-secondary">Cargando panel de administración...</p>
+                </div>
+            </div>
+        );
+        
         return (
             <AuthProvider>
                 <NotificationProvider>
-                    <Suspense fallback={
-                        <div className="min-h-screen bg-brand-background flex items-center justify-center">
-                            <div className="text-center">
-                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-primary mx-auto mb-4"></div>
-                                <p className="text-brand-secondary">Cargando panel de administración...</p>
-                            </div>
-                        </div>
-                    }>
-                        <AdminDataProvider isAdmin={isAdmin}>
-                            {adminModule === 'timecards' ? (
-                                <AdminTimecardPanelSimple adminCode={adminCode} />
-                            ) : (
-                                <AdminConsole />
-                            )}
-                        </AdminDataProvider>
-                    </Suspense>
+                    <AdminDataProvider isAdmin={isAdmin}>
+                        <ErrorBoundary fallback={<LoadingFallback />}>
+                            <Suspense fallback={<LoadingFallback />}>
+                                {adminModule === 'timecards' ? (
+                                    <AdminTimecardPanelSimple adminCode={adminCode} />
+                                ) : (
+                                    <AdminConsole />
+                                )}
+                            </Suspense>
+                        </ErrorBoundary>
+                    </AdminDataProvider>
                 </NotificationProvider>
             </AuthProvider>
         );
@@ -1121,8 +1125,17 @@ const App: React.FC = () => {
     // Cashier Box Reconciliation Mode
     if (isCashierMode) {
         return (
-            <ErrorBoundary componentName="CashierDashboard">
-                <CashierDashboard />
+            <ErrorBoundary fallback={<div className="min-h-screen flex items-center justify-center text-red-500"><p>Error cargando caja registradora</p></div>}>
+                <Suspense fallback={
+                    <div className="min-h-screen flex items-center justify-center">
+                        <div className="text-center">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-primary mx-auto mb-4"></div>
+                            <p className="text-brand-secondary">Cargando caja...</p>
+                        </div>
+                    </div>
+                }>
+                    <CashierDashboard />
+                </Suspense>
             </ErrorBoundary>
         );
     }
@@ -1135,9 +1148,9 @@ const App: React.FC = () => {
     // Modo formulario de cliente (QR)
     if (isClientDeliveryMode) {
         return (
-            <ErrorBoundary componentName="ClientDeliveryForm">
-                <div className="bg-brand-background min-h-screen text-brand-text font-sans relative flex flex-col">
-                    <React.Suspense fallback={
+            <div className="bg-brand-background min-h-screen text-brand-text font-sans relative flex flex-col">
+                <ErrorBoundary fallback={<div className="min-h-screen flex items-center justify-center text-red-500"><p>Error en formulario de entrega</p></div>}>
+                    <Suspense fallback={
                         <div className="min-h-screen flex items-center justify-center">
                             <div className="text-center">
                                 <p className="text-lg mb-4">Cargando formulario...</p>
@@ -1146,9 +1159,9 @@ const App: React.FC = () => {
                         </div>
                     }>
                         <ClientDeliveryForm />
-                    </React.Suspense>
-                </div>
-            </ErrorBoundary>
+                    </Suspense>
+                </ErrorBoundary>
+            </div>
         );
     }
 
