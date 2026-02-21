@@ -305,16 +305,54 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
             // Merge customers: prioritize booking customers (they have more data), then add standalone without bookings
             const customerMap = new Map<string, Customer>();
             
-            // First add customers from bookings (they have complete booking data)
-            customersFromBookings.forEach(customer => {
-                customerMap.set(customer.email, customer);
-            });
-            
-            // Then add standalone customers that don't have bookings
+            // Base con standalone (fuente confiable para firstName/lastName)
             standaloneCustomers.forEach(standaloneCustomer => {
-                if (!customerMap.has(standaloneCustomer.email)) {
-                    customerMap.set(standaloneCustomer.email, standaloneCustomer);
+                const key = (standaloneCustomer.email || standaloneCustomer.userInfo?.email || '').trim().toLowerCase();
+                if (!key) return;
+                customerMap.set(key, {
+                    ...standaloneCustomer,
+                    email: key,
+                    userInfo: {
+                        ...standaloneCustomer.userInfo,
+                        email: key,
+                    },
+                });
+            });
+
+            // Enriquecer con bookings preservando nombres existentes
+            customersFromBookings.forEach(customer => {
+                const key = (customer.email || customer.userInfo?.email || '').trim().toLowerCase();
+                if (!key) return;
+
+                const existing = customerMap.get(key);
+                if (!existing) {
+                    customerMap.set(key, {
+                        ...customer,
+                        email: key,
+                        userInfo: {
+                            ...customer.userInfo,
+                            email: key,
+                        },
+                    });
+                    return;
                 }
+
+                customerMap.set(key, {
+                    ...existing,
+                    bookings: customer.bookings,
+                    totalBookings: customer.totalBookings,
+                    totalSpent: customer.totalSpent,
+                    lastBookingDate: customer.lastBookingDate,
+                    userInfo: {
+                        ...existing.userInfo,
+                        email: key,
+                        firstName: existing.userInfo?.firstName || customer.userInfo?.firstName || '',
+                        lastName: existing.userInfo?.lastName || customer.userInfo?.lastName || '',
+                        phone: existing.userInfo?.phone || customer.userInfo?.phone || '',
+                        countryCode: existing.userInfo?.countryCode || customer.userInfo?.countryCode || '',
+                        birthday: existing.userInfo?.birthday || customer.userInfo?.birthday || null,
+                    },
+                });
             });
             
             const allCustomers = Array.from(customerMap.values());

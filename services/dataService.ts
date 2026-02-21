@@ -1653,7 +1653,7 @@ export const generateCustomersFromBookings = (bookings: Booking[]): Customer[] =
         const safeUserInfo: UserInfo = {
             firstName: data.userInfo.firstName || '',
             lastName: data.userInfo.lastName || '',
-            email: data.userInfo.email || '',
+            email: (data.userInfo.email || '').trim().toLowerCase(),
             phone: data.userInfo.phone || '',
             countryCode: data.userInfo.countryCode || '',
             birthday: data.userInfo.birthday || null
@@ -1685,21 +1685,27 @@ export const generateCustomersFromBookings = (bookings: Booking[]): Customer[] =
 // Get standalone customers from the customers table
 export const getStandaloneCustomers = async (): Promise<Customer[]> => {
     try {
-        const rawCustomers = await fetchData('/api/data?action=standaloneCustomers');
-        if (!rawCustomers) return [];
+        // Cargar set completo para CRM admin (evita excluir clientes como "Pilar De Ycaza")
+        const rawCustomers = await fetchData('/api/data?action=standaloneCustomers&limit=1000');
+        if (!rawCustomers || !Array.isArray(rawCustomers)) return [];
         
         return rawCustomers.map((customerRow: any) => {
+            const rowUserInfo = customerRow?.userInfo || customerRow?.user_info || {};
+            const email = String(
+                rowUserInfo.email || customerRow.email || customerRow.customer_email || ''
+            ).trim().toLowerCase();
+
             const safeUserInfo: UserInfo = {
-                firstName: customerRow.firstName || '',
-                lastName: customerRow.lastName || '', 
-                email: customerRow.email || '',
-                phone: customerRow.phone || '',
-                countryCode: customerRow.countryCode || '',
-                birthday: customerRow.birthday || null
+                firstName: rowUserInfo.firstName || customerRow.firstName || customerRow.first_name || '',
+                lastName: rowUserInfo.lastName || customerRow.lastName || customerRow.last_name || '',
+                email,
+                phone: rowUserInfo.phone || customerRow.phone || '',
+                countryCode: rowUserInfo.countryCode || customerRow.countryCode || customerRow.country_code || '',
+                birthday: rowUserInfo.birthday || customerRow.birthday || null
             };
             
             return {
-                email: customerRow.email,
+                email,
                 userInfo: safeUserInfo,
                 bookings: [], // Standalone customers have no bookings
                 totalBookings: 0,
@@ -1721,25 +1727,78 @@ export const getCustomersWithDeliveries = async (bookings: Booking[]): Promise<C
     // Get standalone customers from the customers table
     const standaloneCustomers = await getStandaloneCustomers();
     
-    // Merge customers, avoiding duplicates (booking-based customers take priority)
-    const customerEmailsFromBookings = new Set(customersFromBookings.map(c => c.email.toLowerCase()));
-    const uniqueStandaloneCustomers = standaloneCustomers.filter(c => 
-        !customerEmailsFromBookings.has(c.email.toLowerCase())
-    );
-    
-    const allCustomers = [...customersFromBookings, ...uniqueStandaloneCustomers];
+    // Merge por email normalizado, enriqueciendo nombres/phone desde tabla customers
+    const mergedByEmail = new Map<string, Customer>();
+
+    // Base: customers table (fuente confiable para firstName/lastName)
+    standaloneCustomers.forEach((customer) => {
+        const key = (customer.email || customer.userInfo?.email || '').trim().toLowerCase();
+        if (!key) return;
+        mergedByEmail.set(key, {
+            ...customer,
+            email: key,
+            userInfo: {
+                ...customer.userInfo,
+                email: key,
+            },
+        });
+    });
+
+    // Enriquecer con bookings y preservar nombres existentes válidos
+    customersFromBookings.forEach((bookingCustomer) => {
+        const key = (bookingCustomer.email || bookingCustomer.userInfo?.email || '').trim().toLowerCase();
+        if (!key) return;
+
+        const existing = mergedByEmail.get(key);
+        if (!existing) {
+            mergedByEmail.set(key, {
+                ...bookingCustomer,
+                email: key,
+                userInfo: {
+                    ...bookingCustomer.userInfo,
+                    email: key,
+                },
+            });
+            return;
+        }
+
+        mergedByEmail.set(key, {
+            ...existing,
+            bookings: bookingCustomer.bookings,
+            totalBookings: bookingCustomer.totalBookings,
+            totalSpent: bookingCustomer.totalSpent,
+            lastBookingDate: bookingCustomer.lastBookingDate,
+            userInfo: {
+                ...existing.userInfo,
+                email: key,
+                firstName: existing.userInfo?.firstName || bookingCustomer.userInfo?.firstName || '',
+                lastName: existing.userInfo?.lastName || bookingCustomer.userInfo?.lastName || '',
+                phone: existing.userInfo?.phone || bookingCustomer.userInfo?.phone || '',
+                countryCode: existing.userInfo?.countryCode || bookingCustomer.userInfo?.countryCode || '',
+                birthday: existing.userInfo?.birthday || bookingCustomer.userInfo?.birthday || null,
+            },
+        });
+    });
+
+    const allCustomers = Array.from(mergedByEmail.values());
     
     // ⚡ Get all deliveries (now lightweight - no photos loaded)
     const allDeliveries = await getDeliveries();
     
     // Add deliveries to each customer
     const customersWithDeliveries = allCustomers.map(customer => {
+        const customerEmail = (customer.email || customer.userInfo?.email || '').trim().toLowerCase();
         const customerDeliveries = allDeliveries.filter(d => 
-            d.customerEmail.toLowerCase() === customer.email.toLowerCase()
+            (d.customerEmail || '').trim().toLowerCase() === customerEmail
         );
         
         return {
             ...customer,
+            email: customerEmail,
+            userInfo: {
+                ...customer.userInfo,
+                email: customerEmail,
+            },
             deliveries: customerDeliveries
         };
     });
