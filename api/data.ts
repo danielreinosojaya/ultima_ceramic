@@ -1165,6 +1165,45 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     res.setHeader('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
                     break;
                 }
+                case 'deliveriesByCustomer': {
+                    const customerEmail = typeof req.query.customerEmail === 'string'
+                        ? req.query.customerEmail.trim().toLowerCase()
+                        : '';
+
+                    if (!customerEmail) {
+                        return res.status(400).json({ error: 'customerEmail required' });
+                    }
+
+                    const requestedLimit = req.query.limit ? parseInt(req.query.limit as string, 10) : 200;
+                    const limit = Number.isFinite(requestedLimit)
+                        ? Math.min(Math.max(requestedLimit, 1), 1000)
+                        : 200;
+
+                    const { rows: deliveries } = await sql`
+                        SELECT id, customer_email, description, scheduled_date, status,
+                               created_at, completed_at, delivered_at, ready_at, notes,
+                               wants_painting, painting_price, painting_status,
+                               painting_booking_date, painting_paid_at, painting_completed_at,
+                               CASE WHEN photos IS NOT NULL AND photos != '[]' AND photos != 'null'
+                                    THEN true ELSE false END as has_photos
+                        FROM deliveries
+                        WHERE LOWER(customer_email) = LOWER(${customerEmail})
+                        ORDER BY scheduled_date ASC, created_at DESC
+                        LIMIT ${limit}
+                    `;
+
+                    data = deliveries.map((d: any) => {
+                        const camelized = toCamelCase(d);
+                        return {
+                            ...camelized,
+                            customerEmail: (d.customer_email || '').trim().toLowerCase(),
+                            photos: []
+                        };
+                    });
+
+                    res.setHeader('Cache-Control', 'private, max-age=20, stale-while-revalidate=40');
+                    break;
+                }
                 case 'getDeliveryPhotos': {
                     // ⚡ Endpoint para cargar fotos de una delivery específica (compatible base64 y URLs CDN)
                     const deliveryId = req.query.deliveryId as string;
@@ -1177,6 +1216,26 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     if (rows.length === 0) {
                         return res.status(404).json({ error: 'Delivery not found' });
                     }
+
+                    const normalizePhotoUrl = (value: string): string | null => {
+                        if (typeof value !== 'string') return null;
+                        let normalized = value.trim();
+                        if (!normalized) return null;
+
+                        if ((normalized.startsWith('"') && normalized.endsWith('"')) || (normalized.startsWith("'") && normalized.endsWith("'"))) {
+                            normalized = normalized.slice(1, -1).trim();
+                        }
+
+                        if (normalized.startsWith('//')) {
+                            normalized = `https:${normalized}`;
+                        }
+
+                        if (normalized.startsWith('http://') || normalized.startsWith('https://') || normalized.startsWith('data:')) {
+                            return normalized;
+                        }
+
+                        return null;
+                    };
 
                     const normalizePhotos = (rawPhotos: any): string[] => {
                         if (!rawPhotos) return [];
@@ -1199,8 +1258,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
 
                         return parsed
                             .filter((photo: any) => typeof photo === 'string' && photo.trim())
-                            .map((photo: string) => photo.trim())
-                            .filter((photo: string) => photo.startsWith('http://') || photo.startsWith('https://') || photo.startsWith('data:'));
+                            .map((photo: string) => normalizePhotoUrl(photo))
+                            .filter((photo: string | null): photo is string => Boolean(photo));
                     };
 
                     // ⚡ Cache 5 minutos para fotos (raramente cambian)
@@ -5286,6 +5345,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             }
 
             try {
+                const normalizedEmail = (email || '').trim().toLowerCase();
+
                 // 1️⃣ Validar email (debe ser cliente existente o crear uno nuevo)
                 let { rows: [existingCustomer] } = await sql`
                     SELECT * FROM customers WHERE LOWER(email) = LOWER(${normalizedEmail})
@@ -5332,7 +5393,6 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
                 // 3️⃣ Crear entrega con created_by_client = true y campos de pintura
                 // IMPORTANTE: Normalizar email a lowercase para consistency
-                const normalizedEmail = (email || '').trim().toLowerCase();
                 const photosJson = photos && Array.isArray(photos) ? JSON.stringify(photos) : null;
                 const paintingStatus = wantsPainting ? 'pending_payment' : null;
                 

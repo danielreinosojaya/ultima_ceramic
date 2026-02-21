@@ -2073,6 +2073,26 @@ export const deleteCustomer = async (email: string): Promise<{ success: boolean 
 
 const parseDelivery = (d: any): Delivery => {
     let parsedPhotos: string[] = [];
+
+    const normalizePhotoUrl = (photo: unknown): string | null => {
+        if (typeof photo !== 'string') return null;
+        let normalized = photo.trim();
+        if (!normalized) return null;
+
+        if ((normalized.startsWith('"') && normalized.endsWith('"')) || (normalized.startsWith("'") && normalized.endsWith("'"))) {
+            normalized = normalized.slice(1, -1).trim();
+        }
+
+        if (normalized.startsWith('//')) {
+            normalized = `https:${normalized}`;
+        }
+
+        if (normalized.startsWith('data:') || normalized.startsWith('http://') || normalized.startsWith('https://')) {
+            return normalized;
+        }
+
+        return null;
+    };
     
     if (d.photos) {
         try {
@@ -2089,12 +2109,9 @@ const parseDelivery = (d: any): Delivery => {
                 parsedPhotos = rawPhotos;
             }
             // Filter out invalid/empty photos
-            parsedPhotos = parsedPhotos.filter((photo: any) => {
-                if (typeof photo === 'string' && photo.trim()) {
-                    return photo.startsWith('data:') || photo.startsWith('http://') || photo.startsWith('https://');
-                }
-                return false;
-            });
+            parsedPhotos = parsedPhotos
+                .map((photo: any) => normalizePhotoUrl(photo))
+                .filter((photo: string | null): photo is string => Boolean(photo));
         } catch (error) {
             console.error('[parseDelivery] Error parsing photos:', error, 'raw:', d.photos);
             parsedPhotos = [];
@@ -2140,6 +2157,26 @@ export const getDeliveries = async (): Promise<Delivery[]> => {
 // ⚡ Carga de fotos bajo demanda para una delivery específica
 export const getDeliveryPhotos = async (deliveryId: string): Promise<string[]> => {
     try {
+        const normalizePhotoUrl = (photo: unknown): string | null => {
+            if (typeof photo !== 'string') return null;
+            let normalized = photo.trim();
+            if (!normalized) return null;
+
+            if ((normalized.startsWith('"') && normalized.endsWith('"')) || (normalized.startsWith("'") && normalized.endsWith("'"))) {
+                normalized = normalized.slice(1, -1).trim();
+            }
+
+            if (normalized.startsWith('//')) {
+                normalized = `https:${normalized}`;
+            }
+
+            if (normalized.startsWith('data:') || normalized.startsWith('http://') || normalized.startsWith('https://')) {
+                return normalized;
+            }
+
+            return null;
+        };
+
         const result = await fetchData(`/api/data?action=getDeliveryPhotos&deliveryId=${deliveryId}`);
         if (!result || !result.photos) return [];
         
@@ -2159,12 +2196,9 @@ export const getDeliveryPhotos = async (deliveryId: string): Promise<string[]> =
         
         if (!Array.isArray(photos)) return [];
         
-        return photos.filter((photo: any) => {
-            if (typeof photo === 'string' && photo.trim()) {
-                return photo.startsWith('data:') || photo.startsWith('http://') || photo.startsWith('https://');
-            }
-            return false;
-        });
+        return photos
+            .map((photo: any) => normalizePhotoUrl(photo))
+            .filter((photo: string | null): photo is string => Boolean(photo));
     } catch (error) {
         console.error('[getDeliveryPhotos] Error:', error);
         return [];
@@ -2172,8 +2206,11 @@ export const getDeliveryPhotos = async (deliveryId: string): Promise<string[]> =
 };
 
 export const getDeliveriesByCustomer = async (customerEmail: string): Promise<Delivery[]> => {
-    const allDeliveries = await getDeliveries();
-    return allDeliveries.filter(d => d.customerEmail === customerEmail);
+    const normalizedEmail = (customerEmail || '').trim().toLowerCase();
+    if (!normalizedEmail) return [];
+
+    const rawDeliveries = await fetchData(`/api/data?action=deliveriesByCustomer&customerEmail=${encodeURIComponent(normalizedEmail)}&limit=1000`);
+    return rawDeliveries ? rawDeliveries.map(parseDelivery) : [];
 };
 
 export const createDelivery = async (deliveryData: Omit<Delivery, 'id' | 'createdAt'>): Promise<{ success: boolean; delivery?: Delivery }> => {

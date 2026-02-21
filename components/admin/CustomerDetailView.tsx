@@ -179,6 +179,48 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
         isSchedulingModalOpen: false,
     });
 
+    useEffect(() => {
+        const normalizedCustomerEmail = (customer.userInfo?.email || customer.email || '').trim().toLowerCase();
+        if (!normalizedCustomerEmail) return;
+
+        let cancelled = false;
+
+        const syncCustomerDeliveries = async () => {
+            const propDeliveries = Array.isArray(customer.deliveries) ? customer.deliveries : [];
+
+            setState(prev => {
+                const sameLength = prev.deliveries.length === propDeliveries.length;
+                if (sameLength) {
+                    const sameIds = prev.deliveries.every((delivery, index) => delivery.id === propDeliveries[index]?.id);
+                    if (sameIds) return prev;
+                }
+                return {
+                    ...prev,
+                    deliveries: propDeliveries
+                };
+            });
+
+            try {
+                const exactDeliveries = await dataService.getDeliveriesByCustomer(normalizedCustomerEmail);
+                if (cancelled) return;
+                setState(prev => ({
+                    ...prev,
+                    deliveries: exactDeliveries
+                }));
+            } catch (error) {
+                if (!cancelled) {
+                    console.error('[CustomerDetailView] Error syncing deliveries:', error);
+                }
+            }
+        };
+
+        syncCustomerDeliveries();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [customer.email, customer.userInfo?.email, customer.deliveries?.length]);
+
     // Estado para eliminar cliente
     const [deleteCustomerModal, setDeleteCustomerModal] = useState(false);
     const [deleteCustomerLoading, setDeleteCustomerLoading] = useState(false);
