@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proforma Taller de Cerámica - Ceramicalma</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f9f7f4;
+            color: #4a4a4a;
+            line-height: 1.8;
+        }
+
+        .download-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #b8704a;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: background-color 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 1000;
+        }
+
+        .download-btn:hover {
+            background-color: #9d5a38;
+        }
+
+        .download-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background-color: white;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 50px;
+            padding-top: 60px;
+        }
+
+        .logo {
+            font-size: 48px;
+            color: #b8704a;
+            font-weight: 600;
+            margin-bottom: 10px;
+            letter-spacing: 1px;
+        }
+
+        .subtitle {
+            font-size: 12px;
+            color: #b8704a;
+            letter-spacing: 3px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .date {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .title {
+            font-size: 28px;
+            color: #b8704a;
+            text-align: center;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .tagline {
+            font-size: 14px;
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            text-decoration: underline #b8704a 2px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #b8704a;
+        }
+
+        .greeting {
+            font-size: 14px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .intro-text {
+            font-size: 14px;
+            text-align: justify;
+            margin-bottom: 30px;
+            line-height: 1.8;
+            color: #555;
+        }
+
+        .section-divider {
+            border-bottom: 2px solid #b8704a;
+            margin: 40px 0 30px 0;
+        }
+
+        .section-title {
+            font-size: 16px;
+            color: white;
+            background-color: #b8704a;
+            padding: 12px 15px;
+            margin-bottom: 25px;
+            border-left: 4px solid #9d5a38;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .subsection-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+            margin-top: 20px;
+        }
+
+        .text-content {
+            font-size: 14px;
+            color: #555;
+            text-align: justify;
+            margin-bottom: 15px;
+            line-height: 1.8;
+        }
+
+        .option-box {
+            margin-bottom: 30px;
+        }
+
+        .option-header {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .option-text {
+            font-size: 13px;
+            color: #555;
+            text-align: justify;
+            margin-bottom: 12px;
+        }
+
+        .bullet-list {
+            margin-left: 20px;
+            margin-bottom: 15px;
+            font-size: 13px;
+        }
+
+        .bullet-list li {
+            margin-bottom: 8px;
+            color: #555;
+        }
+
+        .price {
+            font-size: 14px;
+            font-weight: 600;
+            color: #b8704a;
+            margin-top: 10px;
+        }
+
+        .highlight-box {
+            background-color: #f0e6d2;
+            border-left: 4px solid #b8704a;
+            padding: 20px;
+            margin-bottom: 25px;
+            border-radius: 3px;
+        }
+
+        .highlight-box h3 {
+            color: #b8704a;
+            font-size: 14px;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .highlight-box ul {
+            list-style: none;
+            margin-left: 0;
+        }
+
+        .highlight-box li {
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 8px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .highlight-box li:before {
+            content: "✓";
+            color: #b8704a;
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        .benefits-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .benefit-card {
+            background-color: #f0e6d2;
+            padding: 15px;
+            border-left: 4px solid #b8704a;
+            border-radius: 3px;
+        }
+
+        .benefit-title {
+            font-weight: 600;
+            color: #b8704a;
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+
+        .benefit-text {
+            font-size: 12px;
+            color: #555;
+        }
+
+        .facilitator-box {
+            background-color: #f0e6d2;
+            padding: 20px;
+            border-left: 4px solid #b8704a;
+            margin-bottom: 25px;
+            border-radius: 3px;
+        }
+
+        .facilitator-name {
+            font-weight: 600;
+            color: #b8704a;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .facilitator-list {
+            list-style: none;
+            margin-bottom: 15px;
+            font-size: 13px;
+            color: #555;
+        }
+
+        .facilitator-list li {
+            margin-bottom: 4px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .facilitator-list li:before {
+            content: "•";
+            position: absolute;
+            left: 0;
+        }
+
+        .facilitator-bio {
+            font-size: 13px;
+            color: #555;
+            text-align: justify;
+            line-height: 1.8;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 25px;
+            font-size: 13px;
+        }
+
+        table thead {
+            background-color: #b8704a;
+            color: white;
+        }
+
+        table th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        table td {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+            color: #555;
+        }
+
+        table tr:nth-child(even) {
+            background-color: #faf8f5;
+        }
+
+        .payment-note {
+            background-color: #f0e6d2;
+            padding: 15px 20px;
+            margin-bottom: 25px;
+            border-left: 4px solid #b8704a;
+            border-radius: 3px;
+            font-size: 13px;
+            color: #555;
+        }
+
+        .conditions-box {
+            background-color: #f0e6d2;
+            padding: 20px;
+            border-left: 4px solid #b8704a;
+            margin-bottom: 20px;
+            border-radius: 3px;
+        }
+
+        .conditions-box h4 {
+            color: #b8704a;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .conditions-box ul {
+            list-style: none;
+            margin-left: 0;
+        }
+
+        .conditions-box li {
+            font-size: 12px;
+            color: #555;
+            margin-bottom: 6px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .conditions-box li:before {
+            content: "✓";
+            color: #b8704a;
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        .conditions-box.exclude li:before {
+            content: "✕";
+            color: #b8704a;
+        }
+
+        .closing-box {
+            background-color: #f0e6d2;
+            padding: 20px;
+            border-left: 4px solid #b8704a;
+            margin-bottom: 30px;
+            border-radius: 3px;
+            text-align: center;
+        }
+
+        .closing-box p {
+            font-size: 13px;
+            color: #555;
+            text-align: justify;
+            margin-bottom: 10px;
+        }
+
+        .contact-box {
+            border: 2px solid #b8704a;
+            padding: 25px;
+            text-align: center;
+            margin-bottom: 30px;
+            border-radius: 3px;
+            background-color: #f0e6d2;
+        }
+
+        .contact-title {
+            color: #b8704a;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .contact-company {
+            color: #b8704a;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .contact-item {
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .closing-signature {
+            text-align: center;
+            margin-top: 40px;
+            margin-bottom: 20px;
+        }
+
+        .closing-signature p {
+            font-size: 13px;
+            color: #b8704a;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        @media (max-width: 768px) {
+            .benefits-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .download-btn {
+                position: relative;
+                top: 0;
+                right: 0;
+                margin-bottom: 20px;
+                width: 100%;
+                justify-content: center;
+            }
+
+            .container {
+                padding: 20px 10px;
+            }
+
+            .header {
+                padding-top: 20px;
+            }
+
+            table {
+                font-size: 12px;
+            }
+
+            table th, table td {
+                padding: 8px;
+            }
+        }
+
+        @media print {
+            .download-btn {
+                display: none !important;
+            }
+
+            body {
+                background-color: white;
+                margin: 0;
+                padding: 0;
+            }
+
+            .container {
+                padding: 20px;
+                margin: 0;
+                max-width: 100%;
+            }
+
+            .header {
+                padding-top: 0;
+                margin-bottom: 20px;
+                page-break-after: avoid;
+            }
+
+            .section-divider {
+                margin: 20px 0 15px 0;
+                page-break-inside: avoid;
+            }
+
+            .section {
+                page-break-inside: avoid;
+                orphans: 3;
+                widows: 3;
+            }
+
+            .section:nth-child(n+5) {
+                page-break-before: auto;
+            }
+
+            .section-title {
+                page-break-after: avoid;
+                margin-bottom: 15px;
+            }
+
+            .subsection-title {
+                page-break-after: avoid;
+            }
+
+            table {
+                page-break-inside: avoid;
+                margin: 15px 0;
+            }
+
+            .benefits-grid {
+                page-break-inside: avoid;
+            }
+
+            .option-box {
+                page-break-inside: avoid;
+            }
+
+            .highlight-box {
+                page-break-inside: avoid;
+            }
+
+            .facilitator-box {
+                page-break-inside: avoid;
+            }
+
+            .contact-box {
+                page-break-inside: avoid;
+            }
+
+            .closing-box {
+                page-break-inside: avoid;
+            }
+
+            .tagline {
+                page-break-after: avoid;
+            }
+
+            .intro-text {
+                page-break-after: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button class="download-btn" onclick="window.print()">
+        <svg fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+        </svg>
+        Descargar PDF
+    </button>
+
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">Ceramicalma</div>
+            <div class="subtitle">HOLISTIC POTTERY STUDIO</div>
+            <div class="date">Guayaquil, 2 de febrero de 2026</div>
+        </div>
+
+        <!-- Title -->
+        <h1 class="title">PROFORMA TALLER DE CERÁMICA</h1>
+        <p class="tagline">Empoderamiento Femenino: Creatividad, Autoexpresión y Desarrollo Personal</p>
+
+        <!-- Greeting -->
+        <p class="greeting">Hola Estimada Sandra,</p>
+
+        <p class="intro-text">
+            Presentamos a tu amable consideración la siguiente proforma de acuerdo a lo conversado, 
+            detallando cada punto del Taller de Cerámica y sus beneficios:
+        </p>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 1: Taller de Cerámica -->
+        <div class="section">
+            <div class="section-title">TALLER DE CERÁMICA / HANDBUILDING</div>
+            
+            <div class="subsection-title">Objetivo del Taller:</div>
+            <p class="text-content">
+                Contribuir al empoderamiento de las mujeres a través de un taller de cerámica que promueve la 
+                autoexpresión, el desarrollo personal y el reconocimiento de su valor, fortaleciendo su confianza y 
+                sentido de logro.
+            </p>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 2: Opciones de Taller -->
+        <div class="section">
+            <div class="section-title">OPCIONES DE TALLER</div>
+
+            <div class="option-box">
+                <div class="option-header">Opción 1: Técnica Pinch / Pellizco</div>
+                <p class="option-text">
+                    Aprenderemos una técnica de modelado a mano que se denomina pinch o pellizco, para crear 
+                    piezas de cerámica 100% a mano con materiales de alta calidad, las cuales podrán ser utilitarias 
+                    o decorativas.
+                </p>
+                <ul class="bullet-list">
+                    <li><strong>Duración:</strong> 2 horas</li>
+                    <li><strong>Piezas a realizar:</strong> taza, bowl, joyero, cenicero, portallaves, portavelas, portalápices, macetero</li>
+                </ul>
+                <div class="price">Valor: $45 por persona</div>
+            </div>
+
+            <div class="option-box">
+                <div class="option-header">Opción 2: Portapolaroid con Fotografía Instantánea</div>
+                <p class="option-text">
+                    Aprenderemos una técnica de modelado a mano para crear un hermoso portapolaroid (porta 
+                    fotos polaroid), en el cual podrán personalizarlo a su gusto, utilizamos materiales de alta calidad. 
+                    Durante el taller tendremos una cámara polaroid para tomar foto y que cada persona obtenga 1 foto 
+                    impresa para su piecita creada.
+                </p>
+                <ul class="bullet-list">
+                    <li><strong>Duración:</strong> 1 hora a 1 hora y media</li>
+                    <li><strong>Pieza a realizar:</strong> portapolaroid</li>
+                </ul>
+                <div class="price">Valor: $35 por persona</div>
+            </div>
+
+            <div class="highlight-box">
+                <h3>Incluye (ambas opciones):</h3>
+                <ul>
+                    <li>Todos los materiales de alta calidad (aptos para alimentos, microondas, lavavajillas)</li>
+                    <li>Herramientas especializadas</li>
+                    <li>Esmaltes (brillo transparente)</li>
+                    <li>Horneado profesional de las piezas</li>
+                    <li>Piezas entregadas listas para su uso aproximadamente 2 a 3 semanas después del evento</li>
+                    <li>Opción 2: 1 foto polaroid impresa por participante</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 3: Beneficios -->
+        <div class="section">
+            <div class="section-title">BENEFICIOS DE LA CERÁMICA PARA EL BIENESTAR INTEGRAL</div>
+            
+            <p class="text-content">Durante el taller abordaremos cómo esta práctica creativa ofrece:</p>
+
+            <div class="benefits-grid">
+                <div class="benefit-card">
+                    <div class="benefit-title">Reducción de estrés</div>
+                    <div class="benefit-text">Conexión terapéutica con el presente</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Fomento de la sociabilidad</div>
+                    <div class="benefit-text">Crear en comunidad</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Desarrollo de la creatividad</div>
+                    <div class="benefit-text">Expresión personal sin límites</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Aumento de concentración</div>
+                    <div class="benefit-text">Mindfulness a través del arte</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Mejora de autoestima</div>
+                    <div class="benefit-text">Reconocimiento del logro personal</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Conexión con el mundo interno</div>
+                    <div class="benefit-text">Autoconocimiento profundo</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Desarrollo mental</div>
+                    <div class="benefit-text">Resolución de problemas y paciencia</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Disminución de ansiedad</div>
+                    <div class="benefit-text">Gestión emocional efectiva</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Tolerancia a la frustración</div>
+                    <div class="benefit-text">Mayor resiliencia emocional</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 4: Facilitadora -->
+        <div class="section">
+            <div class="section-title">FACILITADORA DEL TALLER</div>
+
+            <div class="facilitator-box">
+                <div class="facilitator-name">Carolina Massuh Morán</div>
+                <ul class="facilitator-list">
+                    <li>Psicóloga Clínica</li>
+                    <li>Terapeuta Holística</li>
+                    <li>Máster en Psicoterapia del Bienestar Integral</li>
+                    <li>Ceramista especializada</li>
+                </ul>
+                <p class="facilitator-bio">
+                    Carolina combina sus diversos saberes para acompañar a los participantes en el maravilloso 
+                    camino de creación y autoconocimiento. En su trayectoria como artista ha brindado talleres, 
+                    workshops y clases en Guayaquil, Galápagos, Cuenca, Salinas, Olón y Ayampe. Su última 
+                    capacitación fue en Enero-Marzo 2024 en Michigan-USA, donde reforzó sus técnicas e 
+                    implementó mindfulness, meditación y conexión sensorial en sus clases de cerámica.
+                </p>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 5: Adicionales -->
+        <div class="section">
+            <div class="section-title">ADICIONALES: MENÚ DE BEBIDAS Y COMIDAS</div>
+
+            <p class="text-content">
+                Para enriquecer la experiencia, adjuntaremos nuestro menú de bebidas y comidas a esta 
+                cotización. Podrán seleccionar las opciones que deseen según las preferencias de tu equipo.
+            </p>
+
+            <div class="highlight-box">
+                <h3>Menú de bebidas y comidas:</h3>
+                <p style="font-size: 13px; color: #555;">
+                    Contamos con un menú variado que compartiremos contigo para que puedas seleccionar las 
+                    opciones que prefieras.
+                </p>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 6: Reserva de Espacio -->
+        <div class="section">
+            <div class="section-title">RESERVA DE ESPACIO</div>
+
+            <p class="text-content">
+                A la hora convenida, se reserva el espacio completo de Ceramicalma para garantizar una 
+                experiencia íntima y enfocada en el taller de cerámica para tu equipo.
+            </p>
+
+            <div class="highlight-box">
+                <h3>Importante:</h3>
+                <p style="font-size: 13px; color: #555; margin-bottom: 10px;">
+                    Si algunos de los invitados desean acompañar el evento sin participar en el taller de cerámica, pueden disfrutar del espacio y ser parte de la experiencia. Contáctanos con 
+                    anticipación para coordinar estos detalles adicionales.
+                </p>
+                <p style="font-size: 13px; color: #b8704a; font-style: italic;">
+                    Si requieres tiempo adicional más allá de las 2 horas de taller, comunícanos para ajustar horarios. 
+                    Disponemos de flexibilidad con valores por hora adicional según el día (ver tabla de inversión).
+                </p>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 7: Resumen de Inversión -->
+        <div class="section">
+            <div class="section-title">RESUMEN DE INVERSIÓN</div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Concepto</th>
+                        <th>Valor Unitario</th>
+                        <th>Aplicable</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Opción 1: Taller Pinch / Pellizco</td>
+                        <td>$45</td>
+                        <td>Por persona (2 horas)</td>
+                    </tr>
+                    <tr>
+                        <td>Opción 2: Portapolaroid + Foto</td>
+                        <td>$35</td>
+                        <td>Por persona (1 - 1.5 horas)</td>
+                    </tr>
+                    <tr>
+                        <td>Hora Adicional (martes a jueves)</td>
+                        <td>$75 + IVA</td>
+                        <td>Por hora, entre semana</td>
+                    </tr>
+                    <tr>
+                        <td>Hora Adicional (viernes a domingo)</td>
+                        <td>$100 + IVA</td>
+                        <td>Por hora, fin de semana</td>
+                    </tr>
+                    <tr>
+                        <td>Adicionales (Menú)</td>
+                        <td>Variable</td>
+                        <td>Según selección del menú</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="payment-note">
+                <strong style="color: #b8704a;">Forma de pago:</strong>
+                <ul style="list-style: none; margin-top: 8px;">
+                    <li style="margin-bottom: 4px;">• 50% anticipado para confirmar reserva</li>
+                    <li>• 50% restante dos días antes del evento</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 8: Condiciones -->
+        <div class="section">
+            <div class="section-title">CONDICIONES IMPORTANTES</div>
+
+            <div class="conditions-box">
+                <h4>Incluye en la cotización:</h4>
+                <ul>
+                    <li>Taller completo con facilitadora especializada</li>
+                    <li>Todos los materiales de alta calidad</li>
+                    <li>Herramientas y esmaltes</li>
+                    <li>Horneado profesional</li>
+                    <li>Entrega de obras listas para usar (2-3 semanas posteriores)</li>
+                    <li>Experiencia de empoderamiento y bienestar</li>
+                </ul>
+            </div>
+
+            <div class="conditions-box exclude">
+                <h4>No incluye en la cotización:</h4>
+                <ul>
+                    <li>Envíos individuales de las obras de arte fuera de Guayaquil*</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 9: Adenda Envíos -->
+        <div class="section">
+            <div class="section-title">ADENDA: SERVICIOS DE ENVÍO</div>
+
+            <p class="text-content">
+                Para facilitar la entrega de las obras realizadas, ofrecemos servicio de envío a diferentes ciudades:
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Destino</th>
+                        <th>Cantidad</th>
+                        <th>Valor Unitario</th>
+                        <th>Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Quito</td>
+                        <td>5 envíos</td>
+                        <td>$7 + IVA</td>
+                        <td>$35 + IVA</td>
+                    </tr>
+                    <tr>
+                        <td>Cuenca</td>
+                        <td>1 envío</td>
+                        <td>$7 + IVA</td>
+                        <td>$7 + IVA</td>
+                    </tr>
+                    <tr>
+                        <td>Guayaquil</td>
+                        <td>1 envío</td>
+                        <td>$7 + IVA</td>
+                        <td>$7 + IVA</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Closing -->
+        <div class="closing-box">
+            <p>¡Nos encantaría ser parte de esta experiencia transformadora para tu equipo!</p>
+            <p>
+                Si tienes preguntas, deseas conocer más detalles o estás listo para confirmar tu reserva, 
+                no dudes en contactarnos. Estamos aquí para hacer de este taller de cerámica un 
+                momento memorable lleno de creatividad, bienestar y conexión genuina.
+            </p>
+        </div>
+
+        <!-- Contact -->
+        <div class="contact-box">
+            <div class="contact-title">INFORMACIÓN DE CONTACTO</div>
+            <div class="contact-company">CERAMICALMA</div>
+            <div class="contact-item">
+                <span>✉</span>
+                <span>ceramicalma.ec@gmail.com</span>
+            </div>
+            <div class="contact-item">
+                <span>📱</span>
+                <span>@ceramicalma.ec</span>
+            </div>
+            <div class="contact-item">
+                <span>📍</span>
+                <span>Guayaquil - Ecuador</span>
+            </div>
+        </div>
+
+        <!-- Signature -->
+        <div class="closing-signature">
+            <p>Cordialmente,</p>
+            <p>CERAMICALMA</p>
+        </div>
+    </div>
+</body>
+</html>
