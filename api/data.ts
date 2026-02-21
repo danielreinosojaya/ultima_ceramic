@@ -1125,8 +1125,11 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     // ⚡ OPTIMIZACIÓN: Excluir fotos por defecto (muy pesadas - base64)
                     // Las fotos se cargan bajo demanda con getDeliveryPhotos
                     const includePhotos = req.query.includePhotos === 'true';
-                    // ⚡ FIX #9: Reduce default limit from 2000 to 500 (safe default for UI pagination)
-                    const limit = req.query.limit ? parseInt(req.query.limit as string) : 500;
+                    // ⚡ Protección: clamp de límite para evitar payloads excesivos
+                    const requestedLimit = req.query.limit ? parseInt(req.query.limit as string, 10) : 300;
+                    const limit = Number.isFinite(requestedLimit)
+                        ? Math.min(Math.max(requestedLimit, 1), 500)
+                        : 300;
                     
                     if (includePhotos) {
                         // Carga completa (solo cuando explícitamente se pide)
@@ -1176,13 +1179,25 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     break;
                 }
                 case 'standaloneCustomers': {
-                    // ⚡ FIX #7: LIMIT 500 para limitar resultado a primeros 500 clientes
-                    // Reduce payload al limitar rowset, no mediante partial SELECT
-                    const { rows: customers } = await sql`
-                        SELECT * FROM customers 
-                        ORDER BY first_name ASC, last_name ASC 
-                        LIMIT 500
-                    `;
+                    const emailQuery = typeof req.query.email === 'string' ? req.query.email.trim() : '';
+                    const requestedLimit = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
+                    const limit = Number.isFinite(requestedLimit)
+                        ? Math.min(Math.max(requestedLimit, 1), 300)
+                        : 100;
+
+                    const { rows: customers } = emailQuery
+                        ? await sql`
+                            SELECT id, email, first_name, last_name, phone, country_code, birthday
+                            FROM customers
+                            WHERE LOWER(email) = LOWER(${emailQuery})
+                            LIMIT 1
+                        `
+                        : await sql`
+                            SELECT id, email, first_name, last_name, phone, country_code, birthday
+                            FROM customers
+                            ORDER BY first_name ASC, last_name ASC
+                            LIMIT ${limit}
+                        `;
                     data = customers.map(customer => ({
                         email: customer.email,
                         userInfo: {
@@ -1202,11 +1217,15 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                 }
                 case 'getStandaloneCustomers': {
                     // Get all customers from customers table (standalone customers without necessarily having bookings)
-                    // ⚡ FIX #8: Apply LIMIT 500 to prevent loading all customers
+                    const requestedLimit = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
+                    const limit = Number.isFinite(requestedLimit)
+                        ? Math.min(Math.max(requestedLimit, 1), 300)
+                        : 100;
                     const { rows: standaloneCustomers } = await sql`
-                        SELECT * FROM customers 
+                        SELECT id, email, first_name, last_name, phone, country_code, birthday
+                        FROM customers 
                         ORDER BY first_name ASC, last_name ASC 
-                        LIMIT 500
+                        LIMIT ${limit}
                     `;
                     
                     // Convert to Customer format
@@ -1230,150 +1249,79 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     break;
                 }
                 case 'getCustomers': {
-                    // ⚡ OPTIMIZACIÓN: Usar pagination y caché agresivo
+                    // 🔧 OPTIMIZADO: Pagination verdadera + campos mínimos
                     const page = req.query.page ? parseInt(req.query.page as string) : 1;
                     const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
                     const offset = (page - 1) * limit;
                     
-                    console.log(`[getCustomers] Page ${page}, Limit ${limit}`);
-                    
-                    // ✅ OPTIMIZATION PHASE 2: SELECT only necessary fields for customer summary
-                    // Previously: SELECT * (all slots, product JSONB, payment_details, etc) - heavy payload
-                    // Now: Only email, basic user info, price, and created_at - 80% smaller
-                    const { rows: bookingData } = await sql`
+                    // ⚡ ESTRATEGIA: Obtener clientes PAGINATED + stats de bookings SIN full payload
+                    const { rows: pageCustomers } = await sql`
                         SELECT 
-                            id,
-                            user_info,
-                            is_paid,
-                            payment_details,
-                            price,
-                            created_at
-                        FROM bookings 
-                        ORDER BY created_at DESC 
-                        LIMIT 500
+                            id, email, first_name, last_name, phone, country_code, birthday, created_at 
+                        FROM customers 
+                        ORDER BY first_name ASC, last_name ASC
+                        LIMIT ${limit} OFFSET ${offset}
                     `;
                     
-                    const customerMap = new Map<string, Customer>();
+                    // Obtener TOTAL sin iterar (más rápido)
+                    const { rows: countResult } = await sql`SELECT COUNT(*) as total FROM customers`;
+                    const totalCustomers = parseInt(countResult[0]?.total || '0');
                     
-                    // Process booking customers - Extract data directly without parseBookingFromDB
-                    bookingData.forEach((row: any) => {
-                        if (!row || !row.user_info) return;
-                        
-                        let userInfo;
-                        if (typeof row.user_info === 'string') {
-                            try {
-                                userInfo = JSON.parse(row.user_info);
-                            } catch (e) {
-                                console.error('Error parsing userInfo:', e);
-                                return;
-                            }
-                        } else {
-                            userInfo = row.user_info;
-                        }
-                        
-                        if (!userInfo.email) return;
-                        
-                        const email = userInfo.email;
-                        const price = typeof row.price === 'number' ? row.price : (row.price ? parseFloat(row.price) : 0);
-                        let totalPaid = 0;
-                        const rawPaymentDetails = row.payment_details;
-                        if (Array.isArray(rawPaymentDetails)) {
-                            totalPaid = rawPaymentDetails.reduce((sum: number, payment: any) => {
-                                const amount = typeof payment?.amount === 'number' ? payment.amount : parseFloat(payment?.amount || '0');
-                                return sum + (Number.isFinite(amount) ? amount : 0);
-                            }, 0);
-                        } else if (typeof rawPaymentDetails === 'string') {
-                            try {
-                                const parsedPayments = JSON.parse(rawPaymentDetails);
-                                if (Array.isArray(parsedPayments)) {
-                                    totalPaid = parsedPayments.reduce((sum: number, payment: any) => {
-                                        const amount = typeof payment?.amount === 'number' ? payment.amount : parseFloat(payment?.amount || '0');
-                                        return sum + (Number.isFinite(amount) ? amount : 0);
-                                    }, 0);
-                                }
-                            } catch {
-                                totalPaid = 0;
-                            }
-                        }
-                        const paidAmount = totalPaid > 0 ? totalPaid : (row.is_paid ? price : 0);
-                        const createdAt = new Date(row.created_at);
-                        
-                        const existing = customerMap.get(email);
-                        if (existing) {
-                            existing.totalBookings += 1;
-                            existing.totalSpent += paidAmount;
-                            if (createdAt > existing.lastBookingDate) {
-                                existing.lastBookingDate = createdAt;
-                            }
-                        } else {
-                            customerMap.set(email, {
-                                email,
-                                userInfo,
-                                bookings: [], // Don't load full booking details - aggregate only
-                                totalBookings: 1,
-                                totalSpent: paidAmount,
-                                lastBookingDate: createdAt,
-                                deliveries: []
+                    // 📊 Obtener stats de bookings SIN cargar payload completo
+                    const { rows: bookingStats } = await sql`
+                        SELECT 
+                            (user_info->>'email')::text as email,
+                            COUNT(*) as total_bookings,
+                            COALESCE(SUM(CASE WHEN is_paid THEN price ELSE 0 END), 0) as total_spent
+                        FROM bookings 
+                        WHERE user_info->>'email' IS NOT NULL
+                        GROUP BY (user_info->>'email')::text
+                    `;
+                    
+                    // Crear mapa de stats (normalizado lowercase)
+                    const statsMap = new Map<string, any>();
+                    bookingStats.forEach((stat: any) => {
+                        if (stat.email) {
+                            statsMap.set(stat.email.toLowerCase().trim(), {
+                                count: parseInt(stat.total_bookings || '0'),
+                                spent: parseFloat(stat.total_spent || '0')
                             });
                         }
                     });
-
-                    // Also get standalone customers from customers table
-                    // 🔧 LIMIT 2000: Balance entre cobertura y rendimiento (covers 99% de casos pero evita OOM)
-                    const { rows: standaloneCustomers } = await sql`SELECT * FROM customers ORDER BY first_name ASC, last_name ASC LIMIT 2000`;
-                    standaloneCustomers.forEach(customerRow => {
-                        const email = customerRow.email;
-                        if (!customerMap.has(email)) {
-                            customerMap.set(email, {
-                                email,
-                                userInfo: {
-                                    firstName: customerRow.first_name || '',
-                                    lastName: customerRow.last_name || '',
-                                    email: customerRow.email,
-                                    phone: customerRow.phone || '',
-                                    countryCode: customerRow.country_code || '',
-                                    birthday: customerRow.birthday || null
-                                },
-                                bookings: [],
-                                totalBookings: 0,
-                                totalSpent: 0,
-                                lastBookingDate: new Date(0),
-                                deliveries: []
-                            });
-                        } else {
-                            const existing = customerMap.get(email)!;
-                            // 🔧 FIX: Priorizar firstName/lastName de la tabla customers (más confiable)
-                            if (customerRow.first_name && !existing.userInfo.firstName) {
-                                existing.userInfo.firstName = customerRow.first_name;
-                            }
-                            if (customerRow.last_name && !existing.userInfo.lastName) {
-                                existing.userInfo.lastName = customerRow.last_name;
-                            }
-                            if (customerRow.phone && !existing.userInfo.phone) {
-                                existing.userInfo.phone = customerRow.phone;
-                            }
-                            if (customerRow.country_code && !existing.userInfo.countryCode) {
-                                existing.userInfo.countryCode = customerRow.country_code;
-                            }
-                            if (customerRow.birthday && !existing.userInfo.birthday) {
-                                existing.userInfo.birthday = customerRow.birthday;
-                            }
-                        }
+                    
+                    // 4️⃣ Construir respuesta con stats
+                    const finalCustomers = pageCustomers.map(dbCustomer => {
+                        const normalizedEmail = dbCustomer.email.toLowerCase().trim();
+                        const stats = statsMap.get(normalizedEmail);
+                        
+                        return {
+                            email: dbCustomer.email,
+                            userInfo: {
+                                firstName: dbCustomer.first_name || '',
+                                lastName: dbCustomer.last_name || '',
+                                email: dbCustomer.email,
+                                phone: dbCustomer.phone || '',
+                                countryCode: dbCustomer.country_code || '',
+                                birthday: dbCustomer.birthday || null
+                            },
+                            bookings: [],
+                            totalBookings: stats?.count || 0,
+                            totalSpent: stats?.spent || 0,
+                            lastBookingDate: new Date(0),
+                            deliveries: []
+                        };
                     });
                     
-                    const allCustomers = Array.from(customerMap.values());
-                    const paginatedCustomers = allCustomers.slice(offset, offset + limit);
+                    console.log(`[getCustomers] Page ${page}: ${finalCustomers.length}/${totalCustomers} customers, with ${statsMap.size} having bookings`);
                     
-                    console.log(`[API] Generated ${allCustomers.length} customers, returning ${paginatedCustomers.length} for page ${page}`);
-                    
-                    // ✅ CACHE STRATEGY: 30 segundos para permitir updates rápidos después de pagos/bookings
-                    res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
+                    // ✅ CACHE: 5 min para data, pero sin stale-while-revalidate en customer list
+                    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-if-error=60');
                     data = {
-                        customers: paginatedCustomers,
-                        total: allCustomers.length,
+                        customers: finalCustomers,
+                        total: totalCustomers,
                         page,
                         limit,
-                        pages: Math.ceil(allCustomers.length / limit)
+                        pages: Math.ceil(totalCustomers / limit)
                     };
                     break;
                 }
@@ -1901,9 +1849,24 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                 case 'listPieces': {
                     try {
                         const { rows } = await sql`
-                            SELECT * FROM pieces WHERE is_active = true ORDER BY sort_order, name ASC
+                            SELECT
+                                id,
+                                name,
+                                description,
+                                category,
+                                base_price,
+                                estimated_hours,
+                                image_url,
+                                is_active,
+                                sort_order,
+                                created_at,
+                                updated_at
+                            FROM pieces
+                            WHERE is_active = true
+                            ORDER BY sort_order, name ASC
                         `;
                         data = toCamelCase(rows);
+                        res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=1800');
                     } catch (error) {
                         console.error('[listPieces GET] Error:', error);
                         return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
@@ -1963,9 +1926,54 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
             // Special handling for products - fetch from products table
             if (key === 'products') {
                 try {
-                    // ⚡ PHASE 5: Added LIMIT 1000 to prevent loading all product jSONB data
-                    // Products table stores: details, scheduling_rules, overrides (all JSONB)
-                    const { rows: products } = await sql`SELECT * FROM products ORDER BY name ASC LIMIT 1000`;
+                    const includeInactive = req.query.includeInactive === 'true';
+                    const requestedLimit = req.query.limit ? parseInt(req.query.limit as string, 10) : 200;
+                    const limit = Number.isFinite(requestedLimit)
+                        ? Math.min(Math.max(requestedLimit, 1), 300)
+                        : 200;
+
+                    const { rows: products } = includeInactive
+                        ? await sql`
+                            SELECT
+                                id,
+                                type,
+                                name,
+                                classes,
+                                price,
+                                description,
+                                image_url,
+                                details,
+                                is_active,
+                                scheduling_rules,
+                                overrides,
+                                min_participants,
+                                price_per_person,
+                                sort_order
+                            FROM products
+                            ORDER BY name ASC
+                            LIMIT ${limit}
+                        `
+                        : await sql`
+                            SELECT
+                                id,
+                                type,
+                                name,
+                                classes,
+                                price,
+                                description,
+                                image_url,
+                                details,
+                                is_active,
+                                scheduling_rules,
+                                overrides,
+                                min_participants,
+                                price_per_person,
+                                sort_order
+                            FROM products
+                            WHERE is_active = true
+                            ORDER BY name ASC
+                            LIMIT ${limit}
+                        `;
                     data = products.map(toCamelCase);
                     // ✅ OPTIMIZACIÓN: Cache CDN 1 hora (datos muy estables)
                     res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
@@ -6347,7 +6355,21 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         case 'listPieces': {
             try {
                 const { rows } = await sql`
-                    SELECT * FROM pieces WHERE is_active = true ORDER BY sort_order, name ASC
+                    SELECT
+                        id,
+                        name,
+                        description,
+                        category,
+                        base_price,
+                        estimated_hours,
+                        image_url,
+                        is_active,
+                        sort_order,
+                        created_at,
+                        updated_at
+                    FROM pieces
+                    WHERE is_active = true
+                    ORDER BY sort_order, name ASC
                 `;
                 return res.status(200).json({ success: true, data: toCamelCase(rows) });
             } catch (error) {

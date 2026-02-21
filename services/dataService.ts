@@ -202,7 +202,7 @@ export const ensureStandaloneCustomer = async (customerData: {
 }): Promise<{ success: boolean; customer?: Customer; error?: string }> => {
     // Verificar si el cliente ya existe en la base de datos
     try {
-        const response = await fetch(`/api/data?action=standaloneCustomers`);
+        const response = await fetch(`/api/data?action=standaloneCustomers&email=${encodeURIComponent(customerData.email)}`);
         const customers = await response.json();
         const exists = customers.some((c: any) => c.email?.toLowerCase() === customerData.email.toLowerCase());
         if (exists) {
