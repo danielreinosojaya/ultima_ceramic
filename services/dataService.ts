@@ -2159,6 +2159,25 @@ export const getDeliveries = async (): Promise<Delivery[]> => {
     return rawDeliveries ? rawDeliveries.map(parseDelivery) : [];
 };
 
+// ⚡ NUEVO: Obtener CONTEOS globales de entregas (sin límite, para dashboards)
+export const getDeliveryStats = async (): Promise<{
+    total: number;
+    pending: number;
+    ready: number;
+    completed: number;
+    delivered: number;
+    overdue: number;
+    uniqueCustomers: number;
+} | null> => {
+    try {
+        const result = await fetchData('/api/data?action=deliveriesCount');
+        return result || null;
+    } catch (error) {
+        console.error('[getDeliveryStats] Error:', error);
+        return null;
+    }
+};
+
 // ⚡ Carga de fotos bajo demanda para una delivery específica
 export const getDeliveryPhotos = async (deliveryId: string): Promise<string[]> => {
     try {

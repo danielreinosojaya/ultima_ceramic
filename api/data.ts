@@ -1134,23 +1134,23 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     
                     // ⚡ Si hay búsqueda, ignorar límite y buscar en toda la DB
                     const hasSearch = searchQuery.length > 0;
+                    const searchPattern = `%${searchQuery}%`;
                     
                     if (includePhotos) {
                         // Carga completa (solo cuando explícitamente se pide)
                         if (hasSearch) {
                             const { rows: deliveries } = await sql`
                                 SELECT * FROM deliveries 
-                                WHERE id ILIKE ${`%${searchQuery}%`} 
-                                   OR customer_email ILIKE ${`%${searchQuery}%`}
-                                   OR description ILIKE ${`%${searchQuery}%`}
-                                   OR notes ILIKE ${`%${searchQuery}%`}
+                                WHERE id ILIKE ${searchPattern} 
+                                   OR customer_email ILIKE ${searchPattern}
+                                   OR description ILIKE ${searchPattern}
+                                   OR notes ILIKE ${searchPattern}
                                 ORDER BY created_at DESC
                             `;
                             data = deliveries.map(toCamelCase);
                         } else {
                             const { rows: deliveries } = await sql`
                                 SELECT * FROM deliveries 
-                                WHERE scheduled_date >= NOW() - INTERVAL '12 months'
                                 ORDER BY scheduled_date ASC, created_at DESC 
                                 LIMIT ${limit}
                             `;
@@ -1167,10 +1167,10 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                        CASE WHEN photos IS NOT NULL AND photos != '[]' AND photos != 'null' 
                                             THEN true ELSE false END as has_photos
                                 FROM deliveries 
-                                WHERE id ILIKE ${`%${searchQuery}%`} 
-                                   OR customer_email ILIKE ${`%${searchQuery}%`}
-                                   OR description ILIKE ${`%${searchQuery}%`}
-                                   OR notes ILIKE ${`%${searchQuery}%`}
+                                WHERE id ILIKE ${searchPattern} 
+                                   OR customer_email ILIKE ${searchPattern}
+                                   OR description ILIKE ${searchPattern}
+                                   OR notes ILIKE ${searchPattern}
                                 ORDER BY created_at DESC
                             `;
                             data = deliveries.map((d: any) => {
@@ -1190,7 +1190,6 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                        CASE WHEN photos IS NOT NULL AND photos != '[]' AND photos != 'null' 
                                             THEN true ELSE false END as has_photos
                                 FROM deliveries 
-                                WHERE scheduled_date >= NOW() - INTERVAL '12 months'
                                 ORDER BY scheduled_date ASC, created_at DESC 
                                 LIMIT ${limit}
                             `;
@@ -1206,6 +1205,36 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     }
                     // ⚡ Cache 30 segundos para listado de deliveries
                     res.setHeader('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+                    break;
+                }
+                case 'deliveriesCount': {
+                    // ⚡ NUEVO: Endpoint para obtener CONTEOS reales sin límite de datos
+                    // Usado por dashboards informativos para mostrar números globales
+                    const { rows: countResults } = await sql`
+                        SELECT 
+                            COUNT(*) as total,
+                            SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+                            SUM(CASE WHEN status = 'ready' THEN 1 ELSE 0 END) as ready,
+                            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+                            SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) as delivered,
+                            SUM(CASE WHEN scheduled_date < NOW() AND status != 'delivered' THEN 1 ELSE 0 END) as overdue,
+                            COUNT(DISTINCT customer_email) as unique_customers
+                        FROM deliveries
+                    `;
+                    
+                    const counts = countResults[0] || {};
+                    data = {
+                        total: parseInt(counts.total || '0'),
+                        pending: parseInt(counts.pending || '0'),
+                        ready: parseInt(counts.ready || '0'),
+                        completed: parseInt(counts.completed || '0'),
+                        delivered: parseInt(counts.delivered || '0'),
+                        overdue: parseInt(counts.overdue || '0'),
+                        uniqueCustomers: parseInt(counts.unique_customers || '0')
+                    };
+                    
+                    // ⚡ Cache 60 segundos para conteos (menos críticos que datos)
+                    res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=120');
                     break;
                 }
                 case 'deliveriesByCustomer': {
@@ -1323,35 +1352,46 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         : 100;
 
                     // ⚡ Búsqueda server-side: si hay search/email, ignorar límite
-                    const { rows: customers } = emailQuery
-                        ? await sql`
+                    let queryRows: any[] = [];
+                    
+                    if (emailQuery) {
+                        const result = await sql`
                             SELECT id, email, first_name, last_name, phone
                             FROM customers
                             WHERE LOWER(email) = LOWER(${emailQuery})
                             LIMIT 1
-                        `
-                        : searchQuery
-                            ? await sql`
-                                SELECT id, email, first_name, last_name, phone
-                                FROM customers
-                                WHERE LOWER(first_name) ILIKE LOWER(${`%${searchQuery}%`})
-                                   OR LOWER(last_name) ILIKE LOWER(${`%${searchQuery}%`})
-                                   OR LOWER(email) ILIKE LOWER(${`%${searchQuery}%`})
-                                ORDER BY first_name ASC, last_name ASC
-                            `
-                            : fetchAll
-                                ? await sql`
-                                    SELECT id, email, first_name, last_name, phone
-                                    FROM customers
-                                    ORDER BY first_name ASC, last_name ASC
-                                `
-                                : await sql`
-                                    SELECT id, email, first_name, last_name, phone
-                                    FROM customers
-                                    ORDER BY first_name ASC, last_name ASC
-                                    LIMIT ${limit}
-                                `;
-                    data = customers.map(customer => ({
+                        `;
+                        queryRows = result.rows;
+                    } else if (searchQuery) {
+                        // ⚡ CORRECCIÓN: Crear patrón ANTES del sql`` tag
+                        const searchPattern = `%${searchQuery}%`;
+                        const result = await sql`
+                            SELECT id, email, first_name, last_name, phone
+                            FROM customers
+                            WHERE LOWER(first_name) ILIKE LOWER(${searchPattern})
+                               OR LOWER(last_name) ILIKE LOWER(${searchPattern})
+                               OR LOWER(email) ILIKE LOWER(${searchPattern})
+                            ORDER BY first_name ASC, last_name ASC
+                        `;
+                        queryRows = result.rows;
+                    } else if (fetchAll) {
+                        const result = await sql`
+                            SELECT id, email, first_name, last_name, phone
+                            FROM customers
+                            ORDER BY first_name ASC, last_name ASC
+                        `;
+                        queryRows = result.rows;
+                    } else {
+                        const result = await sql`
+                            SELECT id, email, first_name, last_name, phone
+                            FROM customers
+                            ORDER BY first_name ASC, last_name ASC
+                            LIMIT ${limit}
+                        `;
+                        queryRows = result.rows;
+                    }
+                    
+                    data = queryRows.map(customer => ({
                         email: customer.email,
                         userInfo: {
                             firstName: customer.first_name || '',
@@ -1377,30 +1417,39 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         : 100;
                     
                     // ⚡ Búsqueda server-side: si hay search, ignorar límite
-                    const { rows: standaloneCustomers } = searchQuery
-                        ? await sql`
+                    let queryRows: any[] = [];
+                    
+                    if (searchQuery) {
+                        // ⚡ CORRECCIÓN: Crear patrón ANTES del sql`` tag
+                        const searchPattern = `%${searchQuery}%`;
+                        const result = await sql`
                             SELECT id, email, first_name, last_name, phone
                             FROM customers
-                            WHERE LOWER(first_name) ILIKE LOWER(${`%${searchQuery}%`})
-                               OR LOWER(last_name) ILIKE LOWER(${`%${searchQuery}%`})
-                               OR LOWER(email) ILIKE LOWER(${`%${searchQuery}%`})
+                            WHERE LOWER(first_name) ILIKE LOWER(${searchPattern})
+                               OR LOWER(last_name) ILIKE LOWER(${searchPattern})
+                               OR LOWER(email) ILIKE LOWER(${searchPattern})
                             ORDER BY first_name ASC, last_name ASC
-                        `
-                        : fetchAll
-                            ? await sql`
-                                SELECT id, email, first_name, last_name, phone
-                                FROM customers
-                                ORDER BY first_name ASC, last_name ASC
-                            `
-                            : await sql`
-                                SELECT id, email, first_name, last_name, phone
-                                FROM customers 
-                                ORDER BY first_name ASC, last_name ASC 
-                                LIMIT ${limit}
-                            `;
+                        `;
+                        queryRows = result.rows;
+                    } else if (fetchAll) {
+                        const result = await sql`
+                            SELECT id, email, first_name, last_name, phone
+                            FROM customers
+                            ORDER BY first_name ASC, last_name ASC
+                        `;
+                        queryRows = result.rows;
+                    } else {
+                        const result = await sql`
+                            SELECT id, email, first_name, last_name, phone
+                            FROM customers 
+                            ORDER BY first_name ASC, last_name ASC 
+                            LIMIT ${limit}
+                        `;
+                        queryRows = result.rows;
+                    }
                     
                     // Convert to Customer format
-                    const formattedCustomers = standaloneCustomers.map(customer => ({
+                    const formattedCustomers = queryRows.map(customer => ({
                         email: customer.email,
                         userInfo: {
                             firstName: customer.first_name || '',

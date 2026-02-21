@@ -1,18 +1,68 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import type { Customer, Delivery } from '../../types';
+import * as dataService from '../../services/dataService';
 
 interface DeliveryMetricsProps {
     customers: Customer[];
 }
 
+interface DeliveryStats {
+    total: number;
+    pending: number;
+    ready: number;
+    completed: number;
+    delivered: number;
+    overdue: number;
+    uniqueCustomers: number;
+}
+
 export const DeliveryMetrics: React.FC<DeliveryMetricsProps> = ({ customers }) => {
+    const [stats, setStats] = useState<DeliveryStats | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    // ⚡ NUEVO: Cargar conteos globales desde el backend (sin límite)
+    useEffect(() => {
+        const loadStats = async () => {
+            try {
+                const globalStats = await dataService.getDeliveryStats();
+                if (globalStats) {
+                    setStats(globalStats);
+                }
+            } catch (error) {
+                console.error('Error loading delivery stats:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadStats();
+    }, []);
+
+    // Fallback a cálculos locales si no se cargan los stats globales
     const metrics = useMemo(() => {
+        if (stats) {
+            // Usar stats globales (números reales sin limite)
+            return {
+                totalDeliveries: stats.total,
+                pendingDeliveries: stats.pending,
+                readyDeliveries: stats.ready,
+                completedDeliveries: stats.completed,
+                deliveredDeliveries: stats.delivered,
+                overdueDeliveries: stats.overdue,
+                customersWithDeliveries: stats.uniqueCustomers,
+                customersWithPending: 0, // No disponible en stats global (cálculo local no es exacto con limit)
+                customersWithOverdue: 0  // No disponible en stats global
+            };
+        }
+
+        // Fallback: calcular sobre datos locales (limitados)
         const allDeliveries = customers.flatMap(c => c.deliveries || []);
         const today = new Date();
         
         const totalDeliveries = allDeliveries.length;
         const pendingDeliveries = allDeliveries.filter(d => d.status === 'pending').length;
+        const readyDeliveries = allDeliveries.filter(d => d.status === 'ready').length;
         const completedDeliveries = allDeliveries.filter(d => d.status === 'completed').length;
+        const deliveredDeliveries = allDeliveries.filter(d => d.status === 'delivered').length;
         const overdueDeliveries = allDeliveries.filter(d => {
             const scheduledDate = new Date(d.scheduledDate);
             return d.status === 'pending' && scheduledDate < today;
@@ -32,13 +82,15 @@ export const DeliveryMetrics: React.FC<DeliveryMetricsProps> = ({ customers }) =
         return {
             totalDeliveries,
             pendingDeliveries,
+            readyDeliveries,
             completedDeliveries,
+            deliveredDeliveries,
             overdueDeliveries,
             customersWithDeliveries,
             customersWithPending,
             customersWithOverdue
         };
-    }, [customers]);
+    }, [customers, stats]);
 
     if (metrics.totalDeliveries === 0) {
         return (
