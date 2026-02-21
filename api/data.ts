@@ -1152,10 +1152,14 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             ORDER BY scheduled_date ASC, created_at DESC 
                             LIMIT ${limit}
                         `;
-                        data = deliveries.map((d: any) => ({
-                            ...toCamelCase(d),
-                            photos: [] // Array vacío, se cargan bajo demanda
-                        }));
+                        data = deliveries.map((d: any) => {
+                            const camelized = toCamelCase(d);
+                            return {
+                                ...camelized,
+                                customerEmail: (d.customer_email || '').trim().toLowerCase(),
+                                photos: [] // Array vacío, se cargan bajo demanda
+                            };
+                        });
                     }
                     // ⚡ Cache 30 segundos para listado de deliveries
                     res.setHeader('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
@@ -1168,7 +1172,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         return res.status(400).json({ error: 'deliveryId required' });
                     }
                     const { rows } = await sql`
-                        SELECT photos FROM deliveries WHERE id = ${deliveryId}
+                        SELECT customer_email, photos FROM deliveries WHERE id = ${deliveryId}
                     `;
                     if (rows.length === 0) {
                         return res.status(404).json({ error: 'Delivery not found' });
@@ -1201,7 +1205,10 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
 
                     // ⚡ Cache 5 minutos para fotos (raramente cambian)
                     res.setHeader('Cache-Control', 'private, max-age=300, stale-while-revalidate=600');
-                    data = { photos: normalizePhotos(rows[0].photos) };
+                    data = { 
+                        customerEmail: (rows[0].customer_email || '').trim().toLowerCase(),
+                        photos: normalizePhotos(rows[0].photos) 
+                    };
                     break;
                 }
                 case 'standaloneCustomers': {
@@ -5281,7 +5288,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             try {
                 // 1️⃣ Validar email (debe ser cliente existente o crear uno nuevo)
                 let { rows: [existingCustomer] } = await sql`
-                    SELECT * FROM customers WHERE email = ${email}
+                    SELECT * FROM customers WHERE LOWER(email) = LOWER(${normalizedEmail})
                 `;
 
                 // 2️⃣ Si no existe, crear cliente nuevo
@@ -5299,7 +5306,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         const { rows: [newCustomer] } = await sql`
                             INSERT INTO customers (email, first_name, last_name, phone, country_code, birthday)
                             VALUES (
-                                ${email}, 
+                                ${normalizedEmail}, 
                                 ${userInfo.firstName || null}, 
                                 ${userInfo.lastName || null}, 
                                 ${userInfo.phone || null}, 
@@ -5314,7 +5321,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         // Si falla por email duplicado, obtener el existente
                         if (customerError?.code === '23505') {
                             const { rows: [duplicate] } = await sql`
-                                SELECT * FROM customers WHERE email = ${email}
+                                SELECT * FROM customers WHERE LOWER(email) = LOWER(${normalizedEmail})
                             `;
                             existingCustomer = duplicate;
                         } else {
@@ -5324,6 +5331,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 }
 
                 // 3️⃣ Crear entrega con created_by_client = true y campos de pintura
+                // IMPORTANTE: Normalizar email a lowercase para consistency
+                const normalizedEmail = (email || '').trim().toLowerCase();
                 const photosJson = photos && Array.isArray(photos) ? JSON.stringify(photos) : null;
                 const paintingStatus = wantsPainting ? 'pending_payment' : null;
                 
@@ -5340,7 +5349,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         painting_status
                     )
                     VALUES (
-                        ${email}, 
+                        ${normalizedEmail}, 
                         ${description || null}, 
                         ${scheduledDate}, 
                         'pending', 
@@ -5367,7 +5376,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         if (initialPhotoCount > 0) {
                             if (wantsPainting) {
                                 await emailServiceModule.sendDeliveryWithPaintingServiceEmail(
-                                    email,
+                                    normalizedEmail,
                                     customerName,
                                     {
                                         description: description || null,
@@ -5378,7 +5387,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                                 );
                             } else {
                                 await emailServiceModule.sendDeliveryCreatedByClientEmail(
-                                    email,
+                                    normalizedEmail,
                                     customerName,
                                     {
                                         description: description || null,
@@ -5489,7 +5498,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
                 if (shouldSendClientPhotoEmail) {
                     const { rows: [customerData] } = await sql`
-                        SELECT first_name, last_name FROM customers WHERE email = ${updatedDelivery.customer_email} LIMIT 1
+                        SELECT first_name, last_name FROM customers WHERE LOWER(email) = LOWER(${updatedDelivery.customer_email}) LIMIT 1
                     `;
                     const customerName = customerData?.first_name || 'Cliente';
 
