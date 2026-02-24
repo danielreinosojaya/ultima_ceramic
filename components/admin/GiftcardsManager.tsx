@@ -29,16 +29,15 @@ const GiftcardsManager: React.FC = () => {
   const [showManualCreateModal, setShowManualCreateModal] = React.useState(false);
   // Map of requestId -> giftcard validation info (balance, initialValue, metadata, giftcardId)
   const [requestBalances, setRequestBalances] = React.useState<Record<string, any>>({});
-  const [visibleRows, setVisibleRows] = React.useState<Set<string>>(new Set());
   
   // 🔍 FILTROS
   const [activeFilter, setActiveFilter] = React.useState<'all' | 'pending_send' | 'with_balance' | 'redeemed' | 'scheduled'>('all');
   
-  // � PAGINACIÓN
+  // 📑 PAGINACIÓN
   const [currentPage, setCurrentPage] = React.useState(1);
   const itemsPerPage = 10;
   
-  // �📅 MODAL DE EDICIÓN DE PROGRAMACIÓN
+  // 📅 MODAL DE EDICIÓN DE PROGRAMACIÓN
   const [editScheduleModal, setEditScheduleModal] = React.useState<{
     isOpen: boolean;
     requestId?: string;
@@ -52,10 +51,13 @@ const GiftcardsManager: React.FC = () => {
   const cacheRef = React.useRef<Record<string, { data: any; timestamp: number }>>({});
   const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
   const validationInProgressRef = React.useRef<Set<string>>(new Set());
+  const debounceRef = React.useRef<Record<string, NodeJS.Timeout>>({}); // Debounce timers por código
 
-  // Lazy load: validar código solo cuando es necesario (cuando entra en viewport o se abre modal)
-  const validateCodeLazy = React.useCallback((code: string, requestId: string) => {
-    // Si ya está en caché, skip
+  // Validación on-demand: llamar al validar SOLO cuando se necesita (al abrir modal, etc)
+  const validateCodeOnDemand = React.useCallback((code: string, requestId: string) => {
+    if (!code) return;
+
+    // Si ya está en caché válido, usar ese
     const cached = cacheRef.current[code];
     if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
       setRequestBalances(prev => ({ ...prev, [requestId]: cached.data }));
@@ -67,52 +69,36 @@ const GiftcardsManager: React.FC = () => {
       return;
     }
 
-    // Marcar como en progreso
-    validationInProgressRef.current.add(code);
+    // Agregar debounce: solo validar si pasaron 500ms desde el último intento
+    // Esto previene validaciones múltiples del mismo código en poco tiempo
+    if (debounceRef.current[code]) {
+      clearTimeout(debounceRef.current[code]);
+    }
 
-    (async () => {
-      try {
-        const info = await dataService.validateGiftcard(code);
-        
-        // Guardar en caché
-        cacheRef.current[code] = { data: info, timestamp: Date.now() };
-        
-        // Actualizar estado
-        setRequestBalances(prev => ({ ...prev, [requestId]: info }));
-      } catch (err) {
-        console.warn('[GiftcardsManager] error validating:', code, err);
-        cacheRef.current[code] = { data: { error: String(err) }, timestamp: Date.now() };
-      } finally {
-        validationInProgressRef.current.delete(code);
-      }
-    })();
+    debounceRef.current[code] = setTimeout(() => {
+      validationInProgressRef.current.add(code);
+
+      (async () => {
+        try {
+          const info = await dataService.validateGiftcard(code);
+          cacheRef.current[code] = { data: info, timestamp: Date.now() };
+          setRequestBalances(prev => ({ ...prev, [requestId]: info }));
+        } catch (err) {
+          console.warn('[GiftcardsManager] error validating:', code, err);
+          cacheRef.current[code] = { data: { error: String(err) }, timestamp: Date.now() };
+        } finally {
+          validationInProgressRef.current.delete(code);
+        }
+      })();
+    }, 300); // Debounce 300ms
   }, []);
 
-  // ✅ CORRECTO: useEffect en top level del componente
-  // Validar lazily cuando filas se hacen visibles
+  // Cleanup: limpiar timers de debounce cuando el componente se desmonta
   React.useEffect(() => {
-    if (!adminData.giftcardRequests) return;
-    
-    // Validar todas las filas visibles
-    for (const req of adminData.giftcardRequests) {
-      if (!visibleRows.has(String(req.id))) continue;
-      
-      const code = (req as any).metadata?.issuedCode || (req as any).metadata?.issued_code || req.code;
-      if (!code) continue;
-      
-      // Si ya está en caché o validando, skip
-      const cached = cacheRef.current[code];
-      if (cached) continue;
-      if (validationInProgressRef.current.has(code)) continue;
-      
-      // Validar
-      validateCodeLazy(code, req.id);
-    }
-  }, [visibleRows, adminData.giftcardRequests, validateCodeLazy]);
-
-  // REMOVED: No validar en bulk en carga inicial
-  // El useEffect anterior se ha removido para evitar 21 requests de una vez
-  // Ahora se valida lazy: solo cuando se necesita (Intersection Observer o cuando abre modal)
+    return () => {
+      Object.values(debounceRef.current).forEach(timer => clearTimeout(timer));
+    };
+  }, []);
 
   // Helper para obtener saldo de un request
   const getBalanceForRequest = (req: GiftcardRequest) => {
@@ -548,7 +534,7 @@ const GiftcardsManager: React.FC = () => {
                           setSelected(req);
                           const code = (req as any).metadata?.issuedCode || (req as any).metadata?.issued_code || req.code;
                           if (code) {
-                            validateCodeLazy(code, req.id);
+                            validateCodeOnDemand(code, req.id);
                           }
                         }}
                         title="Ver detalles completos"
