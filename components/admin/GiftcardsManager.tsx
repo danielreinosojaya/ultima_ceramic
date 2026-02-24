@@ -47,6 +47,9 @@ const GiftcardsManager: React.FC = () => {
     isLoading?: boolean;
   }>({ isOpen: false });
   
+  // 📅 MODAL DE GIFTCARDS PROGRAMADAS (top-level, not in IIFE)
+  const [showScheduledModal, setShowScheduledModal] = React.useState(false);
+  
   // Cache para evitar re-validaciones innecesarias
   const cacheRef = React.useRef<Record<string, { data: any; timestamp: number }>>({});
   const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
@@ -99,6 +102,35 @@ const GiftcardsManager: React.FC = () => {
       Object.values(debounceRef.current).forEach(timer => clearTimeout(timer));
     };
   }, []);
+
+  // Calcular parámetros de filtrado y paginación
+  const filteredRequests = React.useMemo(() => {
+    return adminData.giftcardRequests.filter(req => {
+      if (activeFilter === 'all') return true;
+      if (activeFilter === 'pending_send') return req.status === 'pending';
+      if (activeFilter === 'scheduled') return !!(req as any).scheduledSendAt && req.status === 'approved';
+      if (activeFilter === 'with_balance') {
+        return req.status === 'approved' && !(req as any).scheduledSendAt;
+      }
+      if (activeFilter === 'redeemed') {
+        const bal = getBalanceForRequest(req);
+        return bal !== null && bal === 0;
+      }
+      return true;
+    });
+  }, [activeFilter, adminData.giftcardRequests, requestBalances]);
+
+  // Reset página si filters cambian y página actual es inválida
+  const totalPages = Math.ceil(filteredRequests.length / itemsPerPage);
+  React.useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(1);
+    }
+  }, [filteredRequests.length, currentPage, totalPages]);
+
+  // Calcular índices para paginación
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedRequests = filteredRequests.slice(startIndex, startIndex + itemsPerPage);
 
   // Helper para obtener saldo de un request
   const getBalanceForRequest = (req: GiftcardRequest) => {
@@ -224,7 +256,6 @@ const GiftcardsManager: React.FC = () => {
         <>
           {(() => {
             const pendingScheduled = adminData.giftcardRequests.filter((req: any) => req.scheduledSendAt && req.status === 'approved');
-            const [showScheduledModal, setShowScheduledModal] = React.useState(false);
             if (pendingScheduled.length > 0) {
               return (
                 <>
@@ -245,131 +276,29 @@ const GiftcardsManager: React.FC = () => {
                       Ver detalles
                     </button>
                   </div>
-                  {showScheduledModal && (
-                    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-                      <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-2xl border border-brand-border relative max-h-96 overflow-y-auto">
-                        <button
-                          className="absolute top-3 right-3 text-brand-secondary hover:text-brand-primary text-xl font-bold"
-                          onClick={() => setShowScheduledModal(false)}
-                          aria-label="Cerrar"
-                        >×</button>
-                        <h3 className="text-xl font-bold text-brand-primary mb-4">📅 Giftcards programadas para envío</h3>
-                        <div className="space-y-3">
-                          {pendingScheduled.map((r: any, idx: number) => {
-                            const scheduledDateUTC = new Date(r.scheduledSendAt);
-                            const scheduledDateLocal = utcToLocal(r.scheduledSendAt);
-                            const now = new Date();
-                            const isPast = scheduledDateLocal && scheduledDateLocal < now;
-                            return (
-                              <div key={r.id} className={`p-4 rounded-lg border-2 flex justify-between items-start ${isPast ? 'bg-red-50 border-red-200' : 'bg-brand-primary/5 border-brand-primary/30'}`}>
-                                <div className="flex-1">
-                                  <div className="font-bold text-brand-primary">{idx + 1}. {r.recipientName}</div>
-                                  <div className="text-sm text-brand-secondary">{r.recipientEmail || r.recipientWhatsapp}</div>
-                                  <div className="text-sm mt-2">
-                                    <span className="font-semibold">Método:</span> {r.sendMethod === 'whatsapp' ? '💬 WhatsApp' : '📧 Email'}
-                                  </div>
-                                  <div className="text-sm">
-                                    <span className="font-semibold">Monto:</span> ${r.amount}
-                                  </div>
-                                  <div className={`text-sm mt-2 font-semibold ${isPast ? 'text-red-700' : 'text-brand-primary'}`}>
-                                    ⏰ {scheduledDateLocal?.toLocaleString('es-ES', { 
-                                      weekday: 'short',
-                                      year: 'numeric',
-                                      month: '2-digit',
-                                      day: '2-digit',
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    })}
-                                  </div>
-                                  {isPast && (
-                                    <div className="text-xs text-red-600 mt-1">⚠️ Este envío debería haber ocurrido ya</div>
-                                  )}
-                                </div>
-                                <button
-                                  className="ml-3 px-3 py-2 rounded-lg bg-brand-primary text-white text-xs font-semibold hover:bg-brand-primary/90 transition-colors whitespace-nowrap"
-                                  onClick={async () => {
-                                    const confirm = window.confirm(`¿Enviar giftcard ahora a ${r.recipientName}?`);
-                                    if (!confirm) return;
-                                    setIsProcessing(true);
-                                    try {
-                                      const res = await dataService.sendGiftcardNow(r.id);
-                                      if (res && res.success) {
-                                        alert('✅ Giftcard enviada exitosamente');
-                                        adminData.refreshCritical();
-                                        setShowScheduledModal(false);
-                                      } else {
-                                        alert('❌ Error: ' + (res?.error || 'error desconocido'));
-                                      }
-                                    } catch (err) {
-                                      alert('Error: ' + (err instanceof Error ? err.message : 'error desconocido'));
-                                    } finally {
-                                      setIsProcessing(false);
-                                    }
-                                  }}
-                                >
-                                  🚀 Enviar
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </>
               );
             }
             return null;
           })()}
-          {(() => {
-            const filteredRequests = adminData.giftcardRequests.filter(req => {
-              if (activeFilter === 'all') return true;
-              if (activeFilter === 'pending_send') return req.status === 'pending';
-              if (activeFilter === 'scheduled') return !!(req as any).scheduledSendAt && req.status === 'approved';
-              if (activeFilter === 'with_balance') {
-                return req.status === 'approved' && !(req as any).scheduledSendAt;
-              }
-              if (activeFilter === 'redeemed') {
-                const bal = getBalanceForRequest(req);
-                return bal !== null && bal === 0;
-              }
-              return true;
-            });
-
-            if (filteredRequests.length === 0) {
-              return (
-                <div className="w-full text-center py-8 text-brand-border italic">
-                  No hay giftcards en esta categoría
-                </div>
-              );
-            }
-
-            // 📑 CALCULAR PAGINACIÓN
-            const totalPages = Math.ceil(filteredRequests.length / itemsPerPage);
-            const startIndex = (currentPage - 1) * itemsPerPage;
-            const paginatedRequests = filteredRequests.slice(startIndex, startIndex + itemsPerPage);
-
-            // Reset página si es inválida
-            React.useEffect(() => {
-              if (currentPage > totalPages && totalPages > 0) {
-                setCurrentPage(1);
-              }
-            }, [filteredRequests.length, currentPage, totalPages]);
-
-            return (
-              <div className="w-full space-y-4">
-          <table className="w-full border rounded-xl overflow-hidden shadow">
-          <thead className="bg-brand-background">
-            <tr>
-              <th className="px-4 py-3 text-left text-brand-secondary font-bold text-sm">Comprador / Destinatario</th>
-              <th className="px-4 py-3 text-center text-brand-secondary font-bold text-sm">Monto</th>
-              <th className="px-4 py-3 text-center text-brand-secondary font-bold text-sm">Estado</th>
-              <th className="px-4 py-3 text-center text-brand-secondary font-bold text-sm">Saldo</th>
-              <th className="px-4 py-3 text-center text-brand-secondary font-bold text-sm">Envío</th>
-              <th className="px-4 py-3 text-center text-brand-secondary font-bold text-sm">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
+          {filteredRequests.length === 0 ? (
+            <div className="w-full text-center py-8 text-brand-border italic">
+              No hay giftcards en esta categoría
+            </div>
+          ) : (
+            <div className="w-full space-y-4">
+              <table className="w-full border rounded-xl overflow-hidden shadow">
+                <thead className="bg-brand-background">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-brand-secondary font-bold text-sm">Comprador / Destinatario</th>
+                    <th className="px-4 py-3 text-center text-brand-secondary font-bold text-sm">Monto</th>
+                    <th className="px-4 py-3 text-center text-brand-secondary font-bold text-sm">Estado</th>
+                    <th className="px-4 py-3 text-center text-brand-secondary font-bold text-sm">Saldo</th>
+                    <th className="px-4 py-3 text-center text-brand-secondary font-bold text-sm">Envío</th>
+                    <th className="px-4 py-3 text-center text-brand-secondary font-bold text-sm">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
             {paginatedRequests.map(req => {
               // DEBUG
               if ((req as any).scheduledSendAt) {
@@ -585,9 +514,8 @@ const GiftcardsManager: React.FC = () => {
             </button>
           </div>
         </div>
-              </div>
-            );
-          })()}
+            </div>
+          )}
         </>
       )}
       {selected && (
