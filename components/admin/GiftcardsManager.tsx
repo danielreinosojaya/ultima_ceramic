@@ -391,7 +391,6 @@ const GiftcardsManager: React.FC = () => {
                 <tr 
                   key={req.id} 
                   className={`border-t transition-colors hover:bg-brand-background/30 ${isScheduled && isPastSchedule ? 'bg-red-50' : ''}`}
-                  onMouseEnter={() => setVisibleRows(prev => new Set([...prev, String(req.id)]))}
                 >
                   {/* Comprador / Destinatario */}
                   <td className="px-4 py-3">
