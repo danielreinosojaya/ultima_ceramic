@@ -1034,7 +1034,7 @@ const ALIANZA_HTML = `<!DOCTYPE html>
             <div class="highlight-card" data-aos="zoom-in" data-aos-duration="1000">
                 <div class="highlight-card-content">
                     <div class="highlight-subtitle">Valor Agregado Anual</div>
-                    <div class="highlight-value">USD 3,500 + IVA</div>
+                    <div class="highlight-value">$3,800</div>
                     <p class="highlight-text">En beneficios y descuentos para tu organización</p>
                 </div>
             </div>
