@@ -93,6 +93,9 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
           />
         ))}
       </div>
+
+      {/* Scroll Trigger for Events Bottom Sheet */}
+      <div id="events-scroll-trigger" className="h-4 w-full" aria-hidden="true" />
     </div>
   );
 };

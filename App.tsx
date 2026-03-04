@@ -45,6 +45,7 @@ import { AuthProvider } from './context/AuthContext';
 import { ConfirmationPage } from './components/ConfirmationPage';
 import { OpenStudioModal } from './components/admin/OpenStudioModal';
 import { MyClassesPrompt } from './components/MyClassesPrompt';
+import { EventsBottomSheet, useScrollEventsTrigger } from './components/EventsBottomSheet';
 const ClientDashboard = lazy(() => import('./components/ClientDashboard').then(m => ({ default: m.ClientDashboard })));
 
 import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, DeliveryMethod, GiftcardHold, Piece, ExperiencePricing, ExperienceUIState, CourseSchedule, CourseEnrollment, ParticipantTechniqueAssignment, GroupTechnique } from './types';
@@ -109,6 +110,10 @@ const App: React.FC = () => {
     const [showMyClassesPrompt, setShowMyClassesPrompt] = useState(false);
     const [hasCheckedMyClasses, setHasCheckedMyClasses] = useState(false);
     const [clientEmail, setClientEmail] = useState<string | null>(null);
+    
+    // Events Bottom Sheet state
+    const [isEventsModalOpen, setIsEventsModalOpen] = useState(false);
+    const { shouldShowEvents } = useScrollEventsTrigger(true);
     
     // COUPLES_EXPERIENCE states
     const [isCouplesExperience, setIsCouplesExperience] = useState(false);
@@ -302,6 +307,27 @@ const App: React.FC = () => {
             setHasCheckedMyClasses(true);
         }
     }, [loading, hasCheckedMyClasses, view]);
+
+    // Show Events Bottom Sheet when scroll trigger is activated (only once)
+    const eventsModalShownRef = useRef(false);
+    useEffect(() => {
+        // Solo mostrar si:
+        // 1. view es 'welcome'
+        // 2. NO se ha mostrado antes
+        // 3. El modal no está ya abierto
+        if (shouldShowEvents && view === 'welcome' && !eventsModalShownRef.current && !isEventsModalOpen) {
+            eventsModalShownRef.current = true;
+            setIsEventsModalOpen(true);
+        }
+    }, [shouldShowEvents, view, isEventsModalOpen]);
+
+    // Handler for event clicks in the bottom sheet
+    const handleEventClick = (slug: string) => {
+        if (slug === 'sanvalentin') {
+            setView('valentine_landing');
+        }
+        // Add more event handlers here as needed
+    };
 
     const handleWelcomeSelect = (userType: 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio' | 'group_class_wizard' | 'single_class_wizard' | 'wheel_course' | 'custom_experience') => {
         setPrefillTechnique(null);
@@ -1268,6 +1294,13 @@ const App: React.FC = () => {
                     onDismiss={() => setShowMyClassesPrompt(false)}
                 />
             )}
+
+            {/* Events Bottom Sheet - Scroll Triggered Modal */}
+            <EventsBottomSheet
+                isOpen={isEventsModalOpen}
+                onClose={() => setIsEventsModalOpen(false)}
+                onEventClick={handleEventClick}
+            />
             </div>
         </AuthProvider>
     );

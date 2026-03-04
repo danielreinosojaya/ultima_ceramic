@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carolina Massuh Morán - Facilitadora de Taller</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Georgia', serif;
+            background: linear-gradient(135deg, #f5f0e8 0%, #e8e0d5 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+            color: #2c2c2c;
+        }
+        
+        .bio-card {
+            max-width: 700px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #8B7355 0%, #6B5344 100%);
+            padding: 40px;
+            text-align: center;
+            color: white;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            font-weight: 400;
+            letter-spacing: 2px;
+            margin-bottom: 8px;
+        }
+        
+        .header .subtitle {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        .bio-text {
+            font-size: 16px;
+            line-height: 2;
+            color: #4a4a4a;
+            margin-bottom: 30px;
+        }
+        
+        .credentials {
+            background: linear-gradient(135deg, #f9f6f2 0%, #f0ebe3 100%);
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+        }
+        
+        .credentials h3 {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #8B7355;
+            margin-bottom: 15px;
+        }
+        
+        .credentials p {
+            font-size: 14px;
+            color: #4a4a4a;
+            line-height: 1.8;
+        }
+        
+        .training {
+            background: linear-gradient(135deg, #f9f6f2 0%, #f0ebe3 100%);
+            padding: 25px;
+            border-radius: 12px;
+        }
+        
+        .training h3 {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #8B7355;
+            margin-bottom: 12px;
+        }
+        
+        .training p {
+            font-size: 14px;
+            color: #4a4a4a;
+            line-height: 1.8;
+        }
+        
+        .print-btn {
+            display: block;
+            width: 200px;
+            margin: 30px auto 0;
+            padding: 14px 28px;
+            background: #8B7355;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .print-btn:hover {
+            background: #6B5344;
+            transform: translateY(-2px);
+        }
+        
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            
+            .bio-card {
+                box-shadow: none;
+                max-width: 100%;
+            }
+            
+            .print-btn {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="bio-card">
+        <div class="header">
+            <h1>Carolina Massuh Morán</h1>
+            <div class="subtitle">Facilitadora del Taller</div>
+        </div>
+        
+        <div class="content">
+            <p class="bio-text">
+                Carolina Massuh Morán es una profesional que combina sus diversos saberes para acompañar a los participantes en el maravilloso camino de creación y autoconocimiento a través de la cerámica. Su enfoque integral une el arte cerámico con el bienestar emocional, creando experiencias transformadoras que van más allá de la simple creación manual. Como Psicóloga Clínica, Terapeuta Holística y Máster en Psicoterapia del Bienestar Integral, aporta una visión profunda y compasiva a cada taller. Su formación como ceramista especializada le permite guiar a los participantes con técnica y creatividad, facilitando un espacio seguro donde el proceso creativo se convierte en una vía de exploración personal y sanación.
+            </p>
+            
+            <div class="credentials">
+                <h3>Formación Académica</h3>
+                <p>Psicóloga Clínica, Terapeuta Holística, Máster en Psicoterapia del Bienestar Integral y ceramista especializada. Su última capacitación fue en Enero-Marzo 2024 en Michigan-USA, donde reforzó sus técnicas e implementó mindfulness, meditación y conexión sensorial en sus clases de cerámica.</p>
+            </div>
+            
+            <div class="training">
+                <h3>Experiencia</h3>
+                <p>En su trayectoria como artista ha brindado talleres, workshops y clases en diversas ciudades y destinos del Ecuador incluyendo Guayaquil, Galápagos, Cuenca, Salinas, Olón y Ayampe, compartiendo su pasión por la cerámica y el autoconocimiento con comunidades diversas.</p>
+            </div>
+            
+            <button class="print-btn" onclick="window.print()">
+                📄 Exportar a PDF
+            </button>
+        </div>
+    </div>
+</body>
+</html>

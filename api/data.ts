@@ -23,6 +23,25 @@ function toCamelCase(obj: any): any {
     return obj;
 }
 
+// Función auxiliar para hacer deep merge de objetos
+function deepMerge(target: any, source: any): any {
+    if (source === null || source === undefined) return target;
+    if (typeof source !== 'object' || Array.isArray(source)) return source;
+    
+    const result = { ...target };
+    
+    for (const key of Object.keys(source)) {
+        if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+            // Recursively merge nested objects
+            result[key] = deepMerge(target[key] || {}, source[key]);
+        } else {
+            result[key] = source[key];
+        }
+    }
+    
+    return result;
+}
+
 import { sql } from '@vercel/postgres';
 import { seedDatabase, ensureTablesExist, createCustomer } from './db.js';
 import * as emailService from './emailService.js';
@@ -2637,7 +2656,41 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
             await sql`COMMIT`;
             break;
         default:
-            await sql.query('INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;', [key, JSON.stringify(value)]);
+            // Keys que necesitan fusión (merge) en lugar de reemplazo
+            const mergeKeys = [
+                'scheduleOverrides', 
+                'freeDateTimeOverrides', 
+                'experienceTypeOverrides',
+                'classCapacity'
+            ];
+            
+            if (mergeKeys.includes(key)) {
+                // Leer el valor existente
+                const existing = await sql`SELECT value FROM settings WHERE key = ${key}`;
+                let existingData: any = {};
+                
+                if (existing.rows.length > 0 && typeof existing.rows[0].value === 'string') {
+                    try {
+                        existingData = JSON.parse(existing.rows[0].value);
+                    } catch (e) {
+                        existingData = {};
+                    }
+                }
+                
+                // Deep merge: fusionar nuevo valor con existente
+                const mergedData = deepMerge(existingData, value);
+                
+                await sql.query(
+                    'INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;', 
+                    [key, JSON.stringify(mergedData)]
+                );
+            } else {
+                // Para otras keys, comportamiento normal (reemplazo)
+                await sql.query(
+                    'INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;', 
+                    [key, JSON.stringify(value)]
+                );
+            }
             break;
     }
     return res.status(200).json({ success: true });
