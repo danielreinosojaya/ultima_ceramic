@@ -48,7 +48,7 @@ import { MyClassesPrompt } from './components/MyClassesPrompt';
 import { EventsBottomSheet, useScrollEventsTrigger } from './components/EventsBottomSheet';
 const ClientDashboard = lazy(() => import('./components/ClientDashboard').then(m => ({ default: m.ClientDashboard })));
 
-import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, DeliveryMethod, GiftcardHold, Piece, ExperiencePricing, ExperienceUIState, CourseSchedule, CourseEnrollment, ParticipantTechniqueAssignment, GroupTechnique } from './types';
+import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, DeliveryMethod, GiftcardHold, Piece, ExperiencePricing, ExperienceUIState, CourseSchedule, CourseEnrollment, ParticipantTechniqueAssignment, GroupTechnique, AvailableSlot, ClassCapacity, ScheduleOverrides, CapacityMessageSettings, DayKey } from './types';
 import * as dataService from './services/dataService';
 import { DEFAULT_POLICIES_TEXT } from './constants';
 import { slotsRequireNoRefund } from './utils/bookingPolicy';
@@ -371,7 +371,11 @@ const App: React.FC = () => {
         try {
             const result = await dataService.enrollInCourse({
                 studentEmail: enrollment.studentEmail!,
-                studentInfo: enrollment.studentInfo!,
+                studentInfo: {
+                    firstName: enrollment.studentInfo?.firstName || '',
+                    lastName: enrollment.studentInfo?.lastName || '',
+                    phoneNumber: enrollment.studentInfo?.phone || ''
+                },
                 courseScheduleId: enrollment.courseScheduleId!,
                 experience: (enrollment.studentInfo as any)?.experience || 'beginner',
                 specialConsiderations: (enrollment.studentInfo as any)?.specialConsiderations
@@ -487,7 +491,7 @@ const App: React.FC = () => {
             };
             
             // Use piece names if available, otherwise use technique name
-            const pieceName = pricing.pieces.map(p => p.name).join(', ') || techniqueNames[selectedTechnique] || 'Experiencia Cerámica';
+            const pieceName = pricing.pieces.map(p => p.pieceName).join(', ') || techniqueNames[selectedTechnique] || 'Experiencia Cerámica';
             
             product = {
                 id: `experience-${Date.now()}`,
@@ -524,7 +528,7 @@ const App: React.FC = () => {
         };
 
         // Add technique (prefer technique from SingleClassWizard/PieceExperience flow)
-        const finalTechnique = technique || prefillTechnique || (product.details?.technique);
+        const finalTechnique = technique || prefillTechnique || ('technique' in (product.details || {}) ? (product.details as any).technique : undefined);
         if (finalTechnique) {
             bookingData.technique = finalTechnique;
         }
@@ -623,13 +627,33 @@ const App: React.FC = () => {
                 case 'scheduling':
                     if (currentAppData.instructors.length === 0) {
                         const schedulingData = await dataService.getSchedulingData();
+                        const emptyAvailability: Record<DayKey, AvailableSlot[]> = {
+                            Sunday: [],
+                            Monday: [],
+                            Tuesday: [],
+                            Wednesday: [],
+                            Thursday: [],
+                            Friday: [],
+                            Saturday: []
+                        };
+                        const emptyCapacity: ClassCapacity = {
+                            potters_wheel: 0,
+                            molding: 0,
+                            introductory_class: 0
+                        };
+                        const emptyOverrides: ScheduleOverrides = {};
+                        const emptyMessages: CapacityMessageSettings = {
+                            thresholds: []
+                        };
+                        const finalAvailability = schedulingData.availability && Object.keys(schedulingData.availability).length > 0 ? schedulingData.availability as Record<DayKey, AvailableSlot[]> : emptyAvailability;
+                        const finalOverrides = schedulingData.scheduleOverrides && Object.keys(schedulingData.scheduleOverrides).length > 0 ? schedulingData.scheduleOverrides as ScheduleOverrides : emptyOverrides;
                         updates = {
                             instructors: schedulingData.instructors || [],
-                            availability: schedulingData.availability || { Sunday: [], Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [] },
-                            scheduleOverrides: schedulingData.scheduleOverrides || {},
-                            classCapacity: schedulingData.classCapacity || { potters_wheel: 0, molding: 0, introductory_class: 0 },
-                            capacityMessages: schedulingData.capacityMessages || { thresholds: [] }
-                        };
+                            availability: finalAvailability,
+                            scheduleOverrides: finalOverrides,
+                            classCapacity: (schedulingData.classCapacity || emptyCapacity) as ClassCapacity,
+                            capacityMessages: (schedulingData.capacityMessages || emptyMessages) as CapacityMessageSettings
+                        } as any;
                     }
                     break;
                 case 'bookings':
@@ -814,6 +838,8 @@ const App: React.FC = () => {
                 if (!technique) return <TechniqueSelector onSelect={handleTechniqueSelect} onBack={() => setView('welcome')} products={appData.products} />;
                 // Si la técnica es open_studio, nunca mostrar PackageSelector
                 if (technique === 'open_studio') return null;
+                // Solo mostrar si es potters_wheel o molding
+                if (technique !== 'potters_wheel' && technique !== 'molding') return <TechniqueSelector onSelect={handleTechniqueSelect} onBack={() => setView('welcome')} products={appData.products} />;
                 return <PackageSelector onSelect={handlePackageSelect} technique={technique} products={appData.products} />;
             case 'schedule':
                 if (!bookingDetails.product || bookingDetails.product.type !== 'CLASS_PACKAGE' || !bookingMode) return <WelcomeSelector onSelect={handleWelcomeSelect} />;
@@ -873,7 +899,10 @@ const App: React.FC = () => {
                 // PASO 1: Técnica selector (si no elegida)
                 if (couplesTechnique === null) {
                     const handleCouplesTechniqueSelect = (technique: Technique) => {
-                        setCouplesTechnique(technique);
+                        // Solo aceptar técnicas válidas para parejas
+                        if (technique === 'potters_wheel' || technique === 'molding') {
+                            setCouplesTechnique(technique as 'potters_wheel' | 'molding');
+                        }
                     };
 
                     const handleCouplesTechniqueBack = () => {
@@ -983,7 +1012,7 @@ const App: React.FC = () => {
                 return (
                     <PieceExperienceWizard
                         pieces={pieces}
-                        onConfirm={(pricing: ExperiencePricing, selectedTechnique: GroupTechnique) => {
+                        onConfirm={(pricing: ExperiencePricing) => {
                             setExperienceUIState(prev => ({
                                 ...prev,
                                 pricing,
@@ -993,7 +1022,6 @@ const App: React.FC = () => {
                                 ...prev,
                                 userInfo: null // Will be filled by user info modal
                             }));
-                            setTechnique(selectedTechnique);
                             setExperienceType('experience');
                             setIsUserInfoModalOpen(true);
                         }}
@@ -1020,7 +1048,7 @@ const App: React.FC = () => {
                             : []
                         }
                         appData={appData}
-                        onConfirm={(pricing: ExperiencePricing, selectedSlot: TimeSlot | null, selectedTechnique: GroupTechnique) => {
+                        onConfirm={(pricing: ExperiencePricing, selectedSlot: TimeSlot | null) => {
                             setExperienceUIState(prev => ({
                                 ...prev,
                                 pricing,
@@ -1031,7 +1059,6 @@ const App: React.FC = () => {
                                 slots: selectedSlot ? [selectedSlot] : [],
                                 userInfo: null // Will be filled by user info modal
                             }));
-                            setTechnique(selectedTechnique);
                             setExperienceType('experience');
                             setIsUserInfoModalOpen(true);
                         }}
@@ -1066,10 +1093,10 @@ const App: React.FC = () => {
                 return (
                     <CustomExperienceWizard
                         pieces={pieces}
-                        onConfirm={(booking) => {
+                        onConfirm={(booking: any) => {
                             // El booking ya fue guardado y el email ya fue enviado
                             // Guardar booking y navegar a ConfirmationPage para UX de clase mundial
-                            setConfirmedBooking(booking);
+                            setConfirmedBooking(booking as any);
                             setView('confirmation');
                         }}
                         onBack={() => setView('welcome')}

@@ -2837,7 +2837,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 : [];
 
             if (deliveryIds.length > 0) {
-                const placeholders = deliveryIds.map((_, index) => `$${index + 1}`).join(', ');
+                const placeholders = deliveryIds.map((_: string, index: number) => `$${index + 1}`).join(', ');
                 const query = `
                     SELECT id, photos
                     FROM deliveries

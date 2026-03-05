@@ -1,5 +1,5 @@
 import React from 'react';
-import { FEATURE_FLAGS } from '../featureFlags.ts';
+import { FEATURE_FLAGS } from '../featureFlags';
 
 interface WelcomeSelectorProps {
   onSelect: (userType: 'new' | 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio' | 'group_class_wizard' | 'single_class_wizard' | 'wheel_course' | 'custom_experience') => void;

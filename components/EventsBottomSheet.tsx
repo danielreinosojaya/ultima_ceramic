@@ -184,31 +184,31 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
         backdropFilter: isVisible && !isClosing ? 'blur(4px)' : 'none'
       }}
     >
-      {/* Modal Centrado - Más pequeño */}
+      {/* Modal Centrado - Responsivo */}
       <div
         ref={sheetRef}
-        className={`bg-brand-surface w-full mx-2 sm:mx-4 rounded-2xl shadow-2xl transform transition-all duration-300 ${
+        className={`bg-brand-surface w-full mx-2 sm:mx-4 rounded-2xl shadow-2xl transform transition-all duration-300 flex flex-col ${
           isVisible && !isClosing 
             ? 'scale-100 opacity-100' 
             : 'scale-95 opacity-0'
         }`}
         style={{
-          maxWidth: '380px',
-          maxHeight: '60vh',
+          maxWidth: '420px',
+          maxHeight: 'min(85vh, calc(100vh - 40px))',
           overflow: 'hidden'
         }}
       >
         {/* Header */}
-        <div className="px-5 pt-5 pb-3" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+        <div className="px-4 sm:px-5 pt-4 sm:pt-5 pb-2 sm:pb-3 flex-shrink-0" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <h2 className="font-serif text-xl font-bold text-brand-text">
+            <div className="flex items-center gap-2 flex-grow">
+              <h2 className="font-serif text-lg sm:text-xl font-bold text-brand-text leading-tight">
                 ¡Nuestros próximos eventos y colabs!
               </h2>
             </div>
             <button
               onClick={handleClose}
-              className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors duration-200"
+              className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 transition-colors duration-200 ml-2"
               aria-label="Cerrar"
             >
               <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -219,7 +219,7 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
         </div>
 
         {/* Events List */}
-        <div className="px-5 pb-5 overflow-y-auto" style={{ maxHeight: 'calc(70vh - 80px)' }}>
+        <div className="px-4 sm:px-5 pb-4 sm:pb-5 overflow-y-auto flex-grow" style={{ overscrollBehavior: 'contain' }}>
           <div className="space-y-3">
             {SPECIAL_EVENTS.map((event) => (
               <button
@@ -238,14 +238,14 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
                   {/* Event Info */}
                   <div className="flex-grow min-w-0">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-brand-text truncate">
+                      <h3 className="font-semibold text-brand-text truncate text-sm sm:text-base">
                         {event.title}
                       </h3>
-                      <span className="flex-shrink-0 px-1.5 py-0.5 bg-gray-100 text-gray-500 text-xs font-medium rounded">
+                      <span className="flex-shrink-0 px-2 py-0.5 bg-gray-100 text-gray-500 text-xs font-medium rounded whitespace-nowrap">
                         {event.date}
                       </span>
                     </div>
-                    <p className="text-brand-secondary text-xs mt-0.5 truncate">
+                    <p className="text-brand-secondary text-xs mt-0.5 line-clamp-2">
                       {event.subtitle}
                     </p>
                   </div>
