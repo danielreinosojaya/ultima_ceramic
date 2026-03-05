@@ -8,6 +8,7 @@ interface SpecialEvent {
   imageUrl: string;
   slug: string;
   color: string;
+  url?: string; // Para links externos
 }
 
 interface EventsBottomSheetProps {
@@ -19,39 +20,50 @@ interface EventsBottomSheetProps {
 // Eventos especiales - podrían venir de una API o constante
 const SPECIAL_EVENTS: SpecialEvent[] = [
   {
-    id: 'san-valentin-2026',
-    title: 'San Valentín',
-    subtitle: 'Taller romántico en pareja - 14 de febrero',
-    date: '14 Feb',
-    imageUrl: '/images/events/san-valentin.jpg',
-    slug: 'sanvalentin',
-    color: 'rose'
+    id: 'ceramica-cafe-12-mar',
+    title: 'Cerámica y Café',
+    subtitle: 'Ritual sensorial - Jueves 12 de marzo, 5:00 - 7:30pm',
+    date: '12 Mar',
+    imageUrl: '/images/events/ceramica-cafe.jpg',
+    slug: 'ceramica-cafe',
+    color: 'amber',
+    url: 'https://www.instagram.com/p/DVeohr7CVwr/'
   },
   {
-    id: 'halloween-2026',
-    title: 'Halloween',
-    subtitle: 'Taller temático de miedo',
-    date: '31 Oct',
-    imageUrl: '/images/events/halloween.jpg',
-    slug: 'halloween',
+    id: 'ceramica-yoga-13-mar',
+    title: 'Cerámica y Yoga',
+    subtitle: 'Conectando cuerpo y mente - Viernes 13 de marzo, 10:00am - 12:00pm',
+    date: '13 Mar',
+    imageUrl: '/images/events/ceramica-yoga.jpg',
+    slug: 'ceramica-yoga',
+    color: 'rose',
+    url: 'https://www.instagram.com/p/DVZoc9JCWgm/?img_index=1'
+  },
+  {
+    id: 'modelado-jaime-19-mar',
+    title: 'Taller de Modelado a Mano',
+    subtitle: 'Con Jaime Aldas (Páramo) - Jueves 19 de marzo, 6:00 - 9:00pm',
+    date: '19 Mar',
+    imageUrl: '/images/events/modelado.jpg',
+    slug: 'modelado-jaime',
     color: 'orange'
   },
   {
-    id: 'dia-madre-2026',
-    title: 'Día de la Madre',
-    subtitle: 'Regala una experiencia única',
-    date: 'Mayo',
-    imageUrl: '/images/events/dia-madre.jpg',
-    slug: 'dia-madre',
+    id: 'torno-jaime-22-mar',
+    title: 'Taller de Torno Alfarero',
+    subtitle: 'Con Jaime Aldas (Páramo) - Domingo 22 de marzo, 3:00 - 6:00pm',
+    date: '22 Mar',
+    imageUrl: '/images/events/torno.jpg',
+    slug: 'torno-jaime',
     color: 'pink'
   },
   {
-    id: 'aniversario-2026',
-    title: 'Aniversario Ceramicalma',
-    subtitle: 'Celebramos juntos nuestro cumpleaños',
-    date: 'Junio',
-    imageUrl: '/images/events/aniversario.jpg',
-    slug: 'aniversario',
+    id: 'taller-rum-24-abr',
+    title: 'Taller con Rum AM',
+    subtitle: 'Viernes 24 de abril, 6:00 - 8:00pm',
+    date: '24 Abr',
+    imageUrl: '/images/events/rum.jpg',
+    slug: 'taller-rum',
     color: 'amber'
   }
 ];
@@ -98,6 +110,12 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
   }, [isOpen]);
 
   const handleClose = () => {
+    // Guardar en localStorage que el modal fue cerrado manualmente
+    // Solo si ya se había mostrado antes
+    const wasShownBefore = localStorage.getItem('eventsModalShown');
+    if (wasShownBefore) {
+      localStorage.setItem('eventsModalDismissed', 'true');
+    }
     setIsClosing(true);
     setTimeout(() => {
       setIsVisible(false);
@@ -113,6 +131,18 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
   };
 
   const handleEventSelect = (slug: string) => {
+    // Buscar el evento
+    const event = SPECIAL_EVENTS.find(e => e.slug === slug);
+    
+    // Si tiene URL externa, abrir en nueva pestaña
+    if (event?.url) {
+      handleClose();
+      setTimeout(() => {
+        window.open(event.url, '_blank');
+      }, 350);
+      return;
+    }
+    
     handleClose();
     // Delay para que cierre el modal antes de navegar
     setTimeout(() => {
@@ -132,6 +162,17 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
     return colors[color] || colors.amber;
   };
 
+  const getEventIcon = (slug: string, color: string) => {
+    const icons: Record<string, string> = {
+      'ceramica-cafe': '☕',
+      'ceramica-yoga': '🧘',
+      'modelado-jaime': '🏺',
+      'torno-jaime': '🎨',
+      'taller-rum': '🍹'
+    };
+    return icons[slug] || '🎉';
+  };
+
   return (
     <div
       className={`fixed inset-0 z-50 flex items-center justify-center transition-all duration-300 ${
@@ -146,23 +187,23 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
       {/* Modal Centrado - Más pequeño */}
       <div
         ref={sheetRef}
-        className={`bg-brand-surface w-full mx-4 rounded-2xl shadow-2xl transform transition-all duration-300 ${
+        className={`bg-brand-surface w-full mx-2 sm:mx-4 rounded-2xl shadow-2xl transform transition-all duration-300 ${
           isVisible && !isClosing 
             ? 'scale-100 opacity-100' 
             : 'scale-95 opacity-0'
         }`}
         style={{
-          maxWidth: '420px',
-          maxHeight: '70vh'
+          maxWidth: '380px',
+          maxHeight: '60vh',
+          overflow: 'hidden'
         }}
       >
         {/* Header */}
-        <div className="px-5 pt-5 pb-3">
+        <div className="px-5 pt-5 pb-3" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-xl">🎉</span>
               <h2 className="font-serif text-xl font-bold text-brand-text">
-                Eventos Especiales
+                ¡Nuestros próximos eventos y colabs!
               </h2>
             </div>
             <button
@@ -190,9 +231,7 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
                   {/* Event Icon */}
                   <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${getEventColor(event.color)} flex items-center justify-center flex-shrink-0`}>
                     <span className="text-xl">
-                      {event.color === 'rose' ? '💕' : 
-                       event.color === 'orange' ? '🎃' : 
-                       event.color === 'pink' ? '🌸' : '🎂'}
+                      {getEventIcon(event.slug, event.color)}
                     </span>
                   </div>
                   
@@ -221,7 +260,7 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
 };
 
 // Hook personalizado para detectar scroll y mostrar el bottom sheet
-// Versión simplificada con scroll event
+// Muestra el modal después de 3 segundos o al hacer scroll 70%
 export const useScrollEventsTrigger = (enabled: boolean = true) => {
   const [shouldShowEvents, setShouldShowEvents] = useState(false);
   const hasShownRef = useRef(false);
@@ -229,6 +268,31 @@ export const useScrollEventsTrigger = (enabled: boolean = true) => {
   
   useEffect(() => {
     if (!enabled || hasShownRef.current) return;
+    
+    // Revisar si el usuario cerró el modal manualmente antes
+    // Solo bloquear si ya se mostró al menos una vez Y se cerró manualmente
+    const wasDismissed = localStorage.getItem('eventsModalDismissed');
+    const wasShownBefore = localStorage.getItem('eventsModalShown');
+    
+    // Si nunca se mostró antes, siempre mostrar
+    // Si ya se mostró Y se cerró manualmente, no mostrar
+    if (wasShownBefore && wasDismissed) {
+      return;
+    }
+    
+    // Marcar como mostrado la primera vez
+    if (!wasShownBefore) {
+      localStorage.setItem('eventsModalShown', 'true');
+    }
+    
+    // Timer de 5 segundos como backup - mostrar modal aunque no haga scroll
+    const timer5Seconds = setTimeout(() => {
+      if (!hasShownRef.current) {
+        console.log('[EventsBottomSheet] Showing modal after 5 seconds timer');
+        hasShownRef.current = true;
+        setShouldShowEvents(true);
+      }
+    }, 5000);
     
     const handleScroll = () => {
       if (hasShownRef.current || scrollTimeoutRef.current) return;
@@ -242,7 +306,8 @@ export const useScrollEventsTrigger = (enabled: boolean = true) => {
         const scrollPercentage = scrollPosition / documentHeight;
         
         if (scrollPercentage > 0.7) {
-          hasShownRef.current = true; // Marcar como mostrado INMEDIATAMENTE
+          console.log('[EventsBottomSheet] Showing modal - scrolled 70%');
+          hasShownRef.current = true;
           setShouldShowEvents(true);
         }
         
@@ -257,6 +322,7 @@ export const useScrollEventsTrigger = (enabled: boolean = true) => {
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
       }
+      clearTimeout(timer5Seconds);
     };
   }, [enabled]);
   
