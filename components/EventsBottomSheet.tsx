@@ -131,17 +131,14 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
     // Buscar el evento
     const event = SPECIAL_EVENTS.find(e => e.slug === slug);
     
-    // Si tiene URL externa, abrir en nueva pestaña
+    // Si tiene URL externa, abrir en nueva pestaña SIN cerrar el modal
     if (event?.url) {
-      handleClose();
-      setTimeout(() => {
-        window.open(event.url, '_blank');
-      }, 350);
+      window.open(event.url, '_blank');
       return;
     }
     
+    // Para eventos internos, cerrar el modal antes de navegar
     handleClose();
-    // Delay para que cierre el modal antes de navegar
     setTimeout(() => {
       onEventClick(slug);
     }, 350);
