@@ -155,6 +155,10 @@ const App: React.FC = () => {
         const pathname = window.location.pathname;
         const href = window.location.href;
 
+        // Limpiar flags de eventos viejos del localStorage (migración)
+        localStorage.removeItem('eventsModalDismissed');
+        localStorage.removeItem('eventsModalShown');
+
         // Check for Valentine registration page - /sanvalentin or ?sanvalentin=true
         if (pathname.includes('/sanvalentin') || href.includes('/sanvalentin') || urlParams.get('sanvalentin') === 'true') {
             setView('valentine_landing');

@@ -110,12 +110,9 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
   }, [isOpen]);
 
   const handleClose = () => {
-    // Guardar en localStorage que el modal fue cerrado manualmente
-    // Solo si ya se había mostrado antes
-    const wasShownBefore = localStorage.getItem('eventsModalShown');
-    if (wasShownBefore) {
-      localStorage.setItem('eventsModalDismissed', 'true');
-    }
+    // Guardar en sessionStorage que fue cerrado EN ESTA SESIÓN
+    // Solo blockear el modal si fue cerrado manually en la sesión actual
+    sessionStorage.setItem('eventsModalDismissedThisSession', 'true');
     setIsClosing(true);
     setTimeout(() => {
       setIsVisible(false);
@@ -260,7 +257,7 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
 };
 
 // Hook personalizado para detectar scroll y mostrar el bottom sheet
-// Muestra el modal después de 3 segundos o al hacer scroll 70%
+// Muestra el modal después de 5 segundos o al hacer scroll 70%
 export const useScrollEventsTrigger = (enabled: boolean = true) => {
   const [shouldShowEvents, setShouldShowEvents] = useState(false);
   const hasShownRef = useRef(false);
@@ -269,26 +266,24 @@ export const useScrollEventsTrigger = (enabled: boolean = true) => {
   useEffect(() => {
     if (!enabled || hasShownRef.current) return;
     
-    // Revisar si el usuario cerró el modal manualmente antes
-    // Solo bloquear si ya se mostró al menos una vez Y se cerró manualmente
-    const wasDismissed = localStorage.getItem('eventsModalDismissed');
-    const wasShownBefore = localStorage.getItem('eventsModalShown');
+    console.log('[useScrollEventsTrigger] Hook iniciado');
     
-    // Si nunca se mostró antes, siempre mostrar
-    // Si ya se mostró Y se cerró manualmente, no mostrar
-    if (wasShownBefore && wasDismissed) {
+    // Revisar si el usuario cerró el modal EN ESTA SESIÓN
+    // sessionStorage se limpia cuando cierras la pestaña, perfecto para este caso
+    const dismissedThisSession = sessionStorage.getItem('eventsModalDismissedThisSession');
+    
+    // Si fue cerrado en ESTA sesión, no mostrar de nuevo
+    if (dismissedThisSession) {
+      console.log('[useScrollEventsTrigger] Modal fue cerrado en esta sesión, no mostrar');
       return;
     }
     
-    // Marcar como mostrado la primera vez
-    if (!wasShownBefore) {
-      localStorage.setItem('eventsModalShown', 'true');
-    }
+    console.log('[useScrollEventsTrigger] Mostrando modal - 5 segundos de delay');
     
     // Timer de 5 segundos como backup - mostrar modal aunque no haga scroll
     const timer5Seconds = setTimeout(() => {
       if (!hasShownRef.current) {
-        console.log('[EventsBottomSheet] Showing modal after 5 seconds timer');
+        console.log('[useScrollEventsTrigger] Modal abierto: timer 5 segundos');
         hasShownRef.current = true;
         setShouldShowEvents(true);
       }
