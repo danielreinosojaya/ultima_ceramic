@@ -110,9 +110,6 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
   }, [isOpen]);
 
   const handleClose = () => {
-    // Guardar en sessionStorage que fue cerrado EN ESTA SESIÓN
-    // Solo blockear el modal si fue cerrado manually en la sesión actual
-    sessionStorage.setItem('eventsModalDismissedThisSession', 'true');
     setIsClosing(true);
     setTimeout(() => {
       setIsVisible(false);
@@ -254,66 +251,23 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
 };
 
 // Hook personalizado para detectar scroll y mostrar el bottom sheet
-// Muestra el modal después de 5 segundos o al hacer scroll 70%
+// Muestra el modal después de 5 segundos en la página de welcome
 export const useScrollEventsTrigger = (enabled: boolean = true) => {
   const [shouldShowEvents, setShouldShowEvents] = useState(false);
   const hasShownRef = useRef(false);
-  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   useEffect(() => {
     if (!enabled || hasShownRef.current) return;
     
-    console.log('[useScrollEventsTrigger] Hook iniciado');
-    
-    // Revisar si el usuario cerró el modal EN ESTA SESIÓN
-    // sessionStorage se limpia cuando cierras la pestaña, perfecto para este caso
-    const dismissedThisSession = sessionStorage.getItem('eventsModalDismissedThisSession');
-    
-    // Si fue cerrado en ESTA sesión, no mostrar de nuevo
-    if (dismissedThisSession) {
-      console.log('[useScrollEventsTrigger] Modal fue cerrado en esta sesión, no mostrar');
-      return;
-    }
-    
-    console.log('[useScrollEventsTrigger] Mostrando modal - 5 segundos de delay');
-    
-    // Timer de 5 segundos como backup - mostrar modal aunque no haga scroll
+    // Simple: mostrar el modal después de 5 segundos
     const timer5Seconds = setTimeout(() => {
       if (!hasShownRef.current) {
-        console.log('[useScrollEventsTrigger] Modal abierto: timer 5 segundos');
         hasShownRef.current = true;
         setShouldShowEvents(true);
       }
     }, 5000);
     
-    const handleScroll = () => {
-      if (hasShownRef.current || scrollTimeoutRef.current) return;
-      
-      // Debounce para no ejecutar múltiples veces
-      scrollTimeoutRef.current = setTimeout(() => {
-        const scrollPosition = window.scrollY + window.innerHeight;
-        const documentHeight = document.documentElement.scrollHeight;
-        
-        // Mostrar cuando el usuario haya scrolleado el 70% de la página
-        const scrollPercentage = scrollPosition / documentHeight;
-        
-        if (scrollPercentage > 0.7) {
-          console.log('[EventsBottomSheet] Showing modal - scrolled 70%');
-          hasShownRef.current = true;
-          setShouldShowEvents(true);
-        }
-        
-        scrollTimeoutRef.current = null;
-      }, 200);
-    };
-    
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    
     return () => {
-      window.removeEventListener('scroll', handleScroll);
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-      }
       clearTimeout(timer5Seconds);
     };
   }, [enabled]);
