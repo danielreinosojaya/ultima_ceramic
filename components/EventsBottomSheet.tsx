@@ -75,6 +75,7 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const [showUpcomingToast, setShowUpcomingToast] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
 
   // Animación de entrada
@@ -134,11 +135,11 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
       return;
     }
     
-    // Para eventos internos, cerrar el modal antes de navegar
-    handleClose();
+    // Sin URL = mostrar "próximamente" 
+    setShowUpcomingToast(true);
     setTimeout(() => {
-      onEventClick(slug);
-    }, 350);
+      setShowUpcomingToast(false);
+    }, 2000);
   };
 
   if (!isOpen && !isVisible) return null;
@@ -216,7 +217,12 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
               <button
                 key={event.id}
                 onClick={() => handleEventSelect(event.slug)}
-                className="group w-full text-left bg-white rounded-xl overflow-hidden shadow-subtle hover:shadow-lifted transition-all duration-300 hover:scale-[1.01] active:scale-[0.99]"
+                title={event.url ? '' : 'Próximamente'}
+                className={`group w-full text-left bg-white rounded-xl overflow-hidden shadow-subtle transition-all duration-300 ${
+                  event.url 
+                    ? 'hover:shadow-lifted hover:scale-[1.01] active:scale-[0.99] cursor-pointer' 
+                    : 'opacity-75 cursor-default'
+                }`}
               >
                 <div className="flex items-center gap-3 p-3">
                   {/* Event Icon */}
@@ -246,6 +252,15 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
           </div>
         </div>
       </div>
+      
+      {/* Toast "Próximamente" */}
+      {showUpcomingToast && (
+        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in-up">
+          <div className="bg-gray-800 text-white px-6 py-3 rounded-full shadow-lg text-sm font-medium">
+            ⏰ Próximamente
+          </div>
+        </div>
+      )}
     </div>
   );
 };
