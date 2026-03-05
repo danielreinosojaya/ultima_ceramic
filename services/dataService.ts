@@ -1239,6 +1239,26 @@ export const updateFreeDateTimeOverrides = (overrides: Record<string, { disabled
 export const getExperienceTypeOverrides = (): Promise<ExperienceTypeOverrides> => getData('experienceTypeOverrides');
 export const updateExperienceTypeOverrides = (overrides: ExperienceTypeOverrides): Promise<{ success: boolean }> => setData('experienceTypeOverrides', overrides);
 
+// Nueva función que fusiona correctamente las restricciones de técnica
+// Lee el valor actual desde la BD antes de guardar para evitar sobrescrituras
+export const mergeExperienceTypeOverrides = async (newData: ExperienceTypeOverrides): Promise<{ success: boolean }> => {
+    try {
+        const response = await fetchData(`/api/data?action=mergeExperienceTypeOverrides`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ newData })
+        });
+        
+        // Limpiar cache para que la próxima lectura obtenga datos frescos
+        clearCache('experienceTypeOverrides');
+        
+        return { success: true };
+    } catch (error) {
+        console.error('[mergeExperienceTypeOverrides] Error:', error);
+        return { success: false };
+    }
+};
+
 // Instructors - ✅ Usar cache para evitar requests múltiples
 let instructorsCache: { data: Instructor[] | null; timestamp: number } = { data: null, timestamp: 0 };
 const INSTRUCTORS_CACHE_DURATION = 60 * 60 * 1000; // 1 hora cache para instructors

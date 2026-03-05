@@ -38,6 +38,17 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
     const [allowedTimes, setAllowedTimes] = useState<string[]>([]);
     const [newAllowedTime, setNewAllowedTime] = useState('');
     const [restrictionReason, setRestrictionReason] = useState('');
+    
+    // 🔧 FIX: Estado LOCAL de restricciones - NUNCA sincronizar después de cambios
+    // Solo se usa para inicializar al montar el componente
+    const [localExperienceTypeOverrides, setLocalExperienceTypeOverrides] = useState<ExperienceTypeOverrides>(() => 
+        JSON.parse(JSON.stringify(experienceTypeOverrides))
+    );
+
+    // 🔧 FIX: REMOVED - NO sincronizar después de cambios locales
+    // El estado local es la fuente de verdad del componente
+    // El contexto se actualiza al reabrir el componente
+
 
     const buildSpecialDaySlots = useCallback((instructorId: number): AvailableSlot[] => {
         const slots: AvailableSlot[] = [];
@@ -243,7 +254,8 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
         }
         
         const dateStr = formatDateToYYYYMMDD(selectedTechRestrictDate);
-        const updatedOverrides: ExperienceTypeOverrides = { ...experienceTypeOverrides };
+        const previousState = JSON.parse(JSON.stringify(localExperienceTypeOverrides));
+        const updatedOverrides: ExperienceTypeOverrides = JSON.parse(JSON.stringify(localExperienceTypeOverrides));
         
         if (!updatedOverrides[dateStr]) {
             updatedOverrides[dateStr] = {};
@@ -254,20 +266,44 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
             reason: restrictionReason || undefined
         };
         
-        await dataService.updateExperienceTypeOverrides(updatedOverrides);
+        // Optimistic update local
+        setLocalExperienceTypeOverrides(updatedOverrides);
+        console.log('[handleAddTechRestriction] Optimistic update:', updatedOverrides);
         
-        // Reset
-        setAllowedTimes([]);
-        setNewAllowedTime('');
-        setRestrictionReason('');
-        onDataChange();
+        try {
+            // Enviar al backend
+            const result = await dataService.mergeExperienceTypeOverrides(updatedOverrides);
+            console.log('[handleAddTechRestriction] Backend response:', result);
+            
+            // 🔧 FIX CRÍTICO: Recargar datos frescos desde servidor DIRECTAMENTE
+            // No esperar al contexto lento, recargar ahora mismo
+            const freshData = await dataService.getExperienceTypeOverrides();
+            console.log('[handleAddTechRestriction] Datos frescos del servidor:', freshData);
+            
+            // Actualizar estado local con datos frescos de BD
+            setLocalExperienceTypeOverrides(freshData);
+            
+            // Reset
+            setAllowedTimes([]);
+            setNewAllowedTime('');
+            setRestrictionReason('');
+            
+            // Ahora llamar onDataChange para que contexto se actualice en background
+            onDataChange();
+        } catch (error) {
+            console.error('[handleAddTechRestriction] Error:', error);
+            alert('Error al guardar restricción');
+            // Revertir optimistic update en caso de error
+            setLocalExperienceTypeOverrides(previousState);
+        }
     };
 
     const handleRemoveTechRestriction = async () => {
         if (!selectedTechRestrictDate) return;
         
         const dateStr = formatDateToYYYYMMDD(selectedTechRestrictDate);
-        const updatedOverrides: ExperienceTypeOverrides = { ...experienceTypeOverrides };
+        const previousState = JSON.parse(JSON.stringify(localExperienceTypeOverrides));
+        const updatedOverrides: ExperienceTypeOverrides = JSON.parse(JSON.stringify(localExperienceTypeOverrides));
         
         if (updatedOverrides[dateStr]) {
             delete updatedOverrides[dateStr][selectedTechForRestrict];
@@ -276,8 +312,28 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
             }
         }
         
-        await dataService.updateExperienceTypeOverrides(updatedOverrides);
-        onDataChange();
+        // Optimistic update local
+        setLocalExperienceTypeOverrides(updatedOverrides);
+        console.log('[handleRemoveTechRestriction] Optimistic update:', updatedOverrides);
+        
+        try {
+            await dataService.mergeExperienceTypeOverrides(updatedOverrides);
+            console.log('[handleRemoveTechRestriction] Backend response successful');
+            
+            // 🔧 FIX CRÍTICO: Recargar datos frescos desde servidor DIRECTAMENTE
+            const freshData = await dataService.getExperienceTypeOverrides();
+            console.log('[handleRemoveTechRestriction] Datos frescos del servidor:', freshData);
+            
+            // Actualizar estado local con datos frescos de BD
+            setLocalExperienceTypeOverrides(freshData);
+            
+            onDataChange();
+        } catch (error) {
+            console.error('[handleRemoveTechRestriction] Error:', error);
+            alert('Error al eliminar restricción');
+            // Revertir cambios
+            setLocalExperienceTypeOverrides(previousState);
+        }
     };
 
     const handleAddAllowedTime = () => {
@@ -294,8 +350,9 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
     const currentTechRestriction = useMemo(() => {
         if (!selectedTechRestrictDate) return null;
         const dateStr = formatDateToYYYYMMDD(selectedTechRestrictDate);
-        return experienceTypeOverrides?.[dateStr]?.[selectedTechForRestrict];
-    }, [selectedTechRestrictDate, selectedTechForRestrict, experienceTypeOverrides]);
+        // 🔧 FIX: Usar estado LOCAL para tener datos frescos
+        return localExperienceTypeOverrides?.[dateStr]?.[selectedTechForRestrict];
+    }, [selectedTechRestrictDate, selectedTechForRestrict, localExperienceTypeOverrides]);
 
     // Actualizar allowedTimes cuando cambia el override actual
     useMemo(() => {
@@ -626,9 +683,8 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
                                 className="w-full p-2 border rounded-lg bg-white"
                             >
                                 <option value="potters_wheel">🎡 Torno Alfarero</option>
-                                <option value="molding">✋ Modelado a Mano</option>
+                                <option value="hand_modeling">✋ Modelado a Mano</option>
                                 <option value="painting">🎨 Pintura</option>
-                                <option value="hand_modeling">✋ Hand Modeling</option>
                             </select>
                         </div>
                     )}
@@ -638,7 +694,7 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
                     <div className="mt-4 p-4 bg-brand-background rounded-lg">
                         <div className="flex justify-between items-center mb-3">
                             <h4 className="font-bold text-brand-text">
-                                Restricción: {selectedTechForRestrict === 'potters_wheel' ? '🎡 Torno' : selectedTechForRestrict === 'molding' ? '✋ Modelado' : selectedTechForRestrict === 'painting' ? '🎨 Pintura' : 'Técnica'} 
+                                Restricción: {selectedTechForRestrict === 'potters_wheel' ? '🎡 Torno' : selectedTechForRestrict === 'hand_modeling' ? '✋ Modelado' : selectedTechForRestrict === 'painting' ? '🎨 Pintura' : 'Técnica'} 
                                 <span className="text-sm text-brand-secondary ml-2">({selectedTechRestrictDate.toLocaleDateString(language)})</span>
                             </h4>
                             {allowedTimes.length > 0 && (

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { checkSlotAvailability, SlotAvailabilityResult, getAvailability, getFreeDateTimeOverrides, getScheduleOverrides } from '../../services/dataService';
-import type { AvailableSlot, DayKey, ScheduleOverrides } from '../../types';
+import { checkSlotAvailability, SlotAvailabilityResult, getAvailability, getFreeDateTimeOverrides, getScheduleOverrides, getExperienceTypeOverrides } from '../../services/dataService';
+import type { AvailableSlot, DayKey, ScheduleOverrides, ExperienceTypeOverrides } from '../../types';
 import { SocialBadge } from '../SocialBadge';
 
 // Nombres de días para mapear Date.getDay() a DayKey
@@ -38,6 +38,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   const [loadedAvailability, setLoadedAvailability] = useState<Record<DayKey, AvailableSlot[]> | null>(null);
   const [freeDateTimeOverrides, setFreeDateTimeOverrides] = useState<Record<string, { disabledTimes: string[] }>>({});
   const [scheduleOverrides, setScheduleOverrides] = useState<ScheduleOverrides>({});
+  const [experienceTypeOverrides, setExperienceTypeOverrides] = useState<ExperienceTypeOverrides>({});
   
   // Usar availability de prop o la cargada del servidor
   const availability = propAvailability || loadedAvailability;
@@ -60,6 +61,16 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   useEffect(() => {
     getScheduleOverrides().then(setScheduleOverrides).catch(err => {
       console.error('[FreeDateTimePicker] Error loading scheduleOverrides:', err);
+    });
+  }, []);
+
+  // Cargar experienceTypeOverrides para validación local de restricciones de técnica
+  useEffect(() => {
+    getExperienceTypeOverrides().then(data => {
+      console.log('[FreeDateTimePicker] experienceTypeOverrides cargados:', data);
+      setExperienceTypeOverrides(data || {});
+    }).catch(err => {
+      console.error('[FreeDateTimePicker] Error loading experienceTypeOverrides:', err);
     });
   }, []);
 
@@ -164,6 +175,42 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     const disabledTimes = freeDateTimeOverrides?.[dateStr]?.disabledTimes || [];
     return disabledTimes.includes(time);
   }, [scheduleOverrides, freeDateTimeOverrides]);
+
+  // ✅ VALIDACIÓN LOCAL: Verificar si un slot está bloqueado por restricción de técnica (experienceTypeOverrides)
+  // Esto funciona INSTANTÁNEAMENTE sin esperar las API calls de checkSlotAvailability
+  const isSlotBlockedByTechRestrictionLocal = useCallback((dateStr: string, time: string): boolean => {
+    if (!experienceTypeOverrides || Object.keys(experienceTypeOverrides).length === 0) return false;
+    if (scheduleOverrides?.[dateStr]?.disableRules) return false;
+    
+    // Buscar restricción por técnica exacta O por alias (hand_modeling ↔ molding)
+    const techAliases: Record<string, string[]> = {
+      'hand_modeling': ['hand_modeling', 'molding'],
+      'molding': ['molding', 'hand_modeling'],
+      'potters_wheel': ['potters_wheel'],
+      'painting': ['painting'],
+    };
+    
+    const keysToCheck = techAliases[technique] || [technique];
+    const dateOverrides = experienceTypeOverrides[dateStr];
+    if (!dateOverrides) return false;
+    
+    for (const techKey of keysToCheck) {
+      const techOverride = dateOverrides[techKey];
+      if (techOverride?.allowedTimes) {
+        // Normalizar formato de hora para comparación
+        const normalizedTime = time.replace(/^(\d):/, '0$1:');
+        const isAllowed = techOverride.allowedTimes.some(allowed => {
+          const normalizedAllowed = allowed.replace(/^(\d):/, '0$1:');
+          return normalizedAllowed === normalizedTime;
+        });
+        if (!isAllowed) {
+          console.log(`🚫 [TechRestriction LOCAL] ${dateStr} ${time} bloqueado para ${technique} (key: ${techKey}). Permitidos: ${techOverride.allowedTimes.join(', ')}`);
+          return true;
+        }
+      }
+    }
+    return false;
+  }, [experienceTypeOverrides, technique, scheduleOverrides]);
 
   // Memoizar getAvailableHours para evitar recálculos innecesarios
   const getAvailableHours = useMemo(() => {
@@ -534,8 +581,11 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
               const hourState = hourAvailability[hour];
               const isBlockedByFixedClass = isSlotBlockedByFixedClass(selectedDate, hour);
               const isBlockedBySpecialEvent = isSlotBlockedBySpecialEvent(selectedDate, hour);
-              const isBlockedByTechniqueRestriction = hourState?.available === false && (hourState as any)?.blockedReason === 'technique_restriction';
-              const isUnavailableByCapacity = hourState ? (hourState.available === false && !isBlockedByTechniqueRestriction) : false;
+              // ✅ Doble validación: LOCAL (instantánea) + BACKEND (por API)
+              const isBlockedByTechRestrictionBackend = hourState?.available === false && (hourState as any)?.blockedReason === 'technique_restriction';
+              const isBlockedByTechRestrictionLocalCheck = isSlotBlockedByTechRestrictionLocal(selectedDate, hour);
+              const isBlockedByTechniqueRestriction = isBlockedByTechRestrictionBackend || isBlockedByTechRestrictionLocalCheck;
+              const isUnavailableByCapacity = hourState ? (hourState.available === false && !isBlockedByTechRestrictionBackend) : false;
               const isUnavailable = isBlockedByFixedClass || isBlockedBySpecialEvent || isUnavailableByCapacity || isBlockedByTechniqueRestriction;
               
               return (

@@ -399,7 +399,14 @@ const parseSlotAvailabilitySettings = async () => {
         { Sunday: [], Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [] };
     const scheduleOverrides: any = settingsResult.rows.find(s => s.key === 'scheduleOverrides')?.value || {};
     const freeDateTimeOverrides: any = settingsResult.rows.find(s => s.key === 'freeDateTimeOverrides')?.value || {};
-    const experienceTypeOverrides: any = settingsResult.rows.find(s => s.key === 'experienceTypeOverrides')?.value || {};
+    const rawExpTypeOverrides = settingsResult.rows.find(s => s.key === 'experienceTypeOverrides');
+    let experienceTypeOverrides: any = {};
+    if (rawExpTypeOverrides?.value) {
+        experienceTypeOverrides = typeof rawExpTypeOverrides.value === 'string' 
+            ? JSON.parse(rawExpTypeOverrides.value) 
+            : rawExpTypeOverrides.value;
+    }
+    console.log('[parseSlotAvailabilitySettings] experienceTypeOverrides loaded:', JSON.stringify(experienceTypeOverrides).substring(0, 500), '| type:', typeof rawExpTypeOverrides?.value, '| dates:', Object.keys(experienceTypeOverrides));
     const classCapacity: any = settingsResult.rows.find(s => s.key === 'classCapacity')?.value || 
         { potters_wheel: 8, molding: 22, introductory_class: 8 };
     return { availability, scheduleOverrides, freeDateTimeOverrides, experienceTypeOverrides, classCapacity };
@@ -678,21 +685,39 @@ const computeSlotAvailability = async (
 
     // ✅ VALIDACIÓN: ExperienceTypeOverrides - Control granular por técnica
     // Si una técnica tiene restricción de allowedTimes, solo esos horarios están permitidos
-    const techOverride = experienceTypeOverrides?.[requestedDate]?.[requestedTechnique];
-    if (techOverride?.allowedTimes && !techOverride.allowedTimes.includes(normalizedTime)) {
-        const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
-        return {
-            available: false,
-            normalizedTime,
-            blockedReason: 'technique_restriction',
-            capacity: {
-                max: maxCapacity,
-                booked: maxCapacity,
-                available: 0
-            },
-            bookingsCount: 0,
-            message: techOverride.reason || `${requestedTechnique} no disponible en este horario`
-        };
+    // Buscar por técnica exacta Y por alias (hand_modeling ↔ molding)
+    const techAliases: Record<string, string[]> = {
+        'hand_modeling': ['hand_modeling', 'molding'],
+        'molding': ['molding', 'hand_modeling'],
+        'potters_wheel': ['potters_wheel'],
+        'painting': ['painting'],
+    };
+    const techKeysToCheck = techAliases[requestedTechnique] || [requestedTechnique];
+    const dateOverrides = experienceTypeOverrides?.[requestedDate];
+    
+    console.log(`[checkSlotAvailability] date=${requestedDate} time=${normalizedTime} tech=${requestedTechnique} | dateOverrides keys:`, dateOverrides ? Object.keys(dateOverrides) : 'NONE', '| techKeysToCheck:', techKeysToCheck);
+    
+    for (const techKey of techKeysToCheck) {
+        const techOverride = dateOverrides?.[techKey];
+        if (techOverride?.allowedTimes && !techOverride.allowedTimes.includes(normalizedTime)) {
+            console.log(`[checkSlotAvailability] 🚫 BLOCKED by techRestriction: ${techKey}.allowedTimes=${JSON.stringify(techOverride.allowedTimes)} does NOT include ${normalizedTime}`);
+            const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
+            return {
+                available: false,
+                normalizedTime,
+                blockedReason: 'technique_restriction',
+                capacity: {
+                    max: maxCapacity,
+                    booked: maxCapacity,
+                    available: 0
+                },
+                bookingsCount: 0,
+                message: techOverride.reason || `${requestedTechnique} no disponible en este horario`
+            };
+        }
+        if (techOverride?.allowedTimes && techOverride.allowedTimes.includes(normalizedTime)) {
+            console.log(`[checkSlotAvailability] ✅ ALLOWED by techRestriction: ${techKey}.allowedTimes includes ${normalizedTime}`);
+        }
     }
 
     const disabledTimes = freeDateTimeOverrides?.[requestedDate]?.disabledTimes || [];
@@ -2669,11 +2694,12 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
                 const existing = await sql`SELECT value FROM settings WHERE key = ${key}`;
                 let existingData: any = {};
                 
-                if (existing.rows.length > 0 && typeof existing.rows[0].value === 'string') {
-                    try {
-                        existingData = JSON.parse(existing.rows[0].value);
-                    } catch (e) {
-                        existingData = {};
+                if (existing.rows.length > 0 && existing.rows[0].value !== null && existing.rows[0].value !== undefined) {
+                    // JSONB devuelve objeto directamente; TEXT devuelve string
+                    if (typeof existing.rows[0].value === 'string') {
+                        try { existingData = JSON.parse(existing.rows[0].value); } catch (e) { existingData = {}; }
+                    } else {
+                        existingData = existing.rows[0].value; // Ya es objeto (JSONB)
                     }
                 }
                 
@@ -3023,6 +3049,51 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 return res.status(200).json({ success: true, id: rows[0].id, createdAt: rows[0].created_at });
             } catch (error) {
                 console.error('Error al registrar giftcard:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+
+        case 'mergeExperienceTypeOverrides': {
+            // Actualiza experienceTypeOverrides leyendo primero el valor actual de la BD
+            // Esto soluciona el problema de sobrescritura cuando se agregan múltiples restricciones
+            const { newData } = req.body;
+            
+            if (!newData) {
+                return res.status(400).json({ success: false, error: 'newData es requerido' });
+            }
+            
+            try {
+                // 1. Leer el valor actual desde la BD
+                const { rows: existingRows } = await sql`
+                    SELECT value FROM settings WHERE key = 'experienceTypeOverrides'
+                `;
+                
+                let existingData: any = {};
+                if (existingRows.length > 0 && existingRows[0].value !== null && existingRows[0].value !== undefined) {
+                    // JSONB está parseado automáticamente por el driver pg → typeof es 'object'
+                    // TEXT estaría como string → necesita JSON.parse
+                    if (typeof existingRows[0].value === 'string') {
+                        try { existingData = JSON.parse(existingRows[0].value); } catch (e) { existingData = {}; }
+                    } else {
+                        existingData = existingRows[0].value; // Ya es objeto (JSONB)
+                    }
+                }
+                console.log('[mergeExperienceTypeOverrides] existingData desde BD:', existingData, '| type:', typeof existingRows[0]?.value);
+                
+                // 2. Deep merge con los nuevos datos
+                const mergedData = deepMerge(existingData, newData);
+                
+                // 3. Guardar el resultado fusionado
+                await sql`
+                    INSERT INTO settings (key, value) VALUES ('experienceTypeOverrides', ${JSON.stringify(mergedData)})
+                    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+                `;
+                
+                console.log('[mergeExperienceTypeOverrides] Fusionado:', { existing: Object.keys(existingData), merged: Object.keys(mergedData) });
+                
+                return res.status(200).json({ success: true, merged: mergedData });
+            } catch (error) {
+                console.error('Error al fusionar experienceTypeOverrides:', error);
                 return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
             }
         }
