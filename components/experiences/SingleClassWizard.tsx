@@ -285,17 +285,17 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
             <p className="text-gray-600">Selecciona la fecha y hora de tu clase</p>
           </div>
 
-          {/* Mensaje informativo para Modelado y Torno con 1 persona */}
-          {(technique === 'hand_modeling' || technique === 'potters_wheel') && participants === 1 && !(selectedDate && scheduleOverrides?.[selectedDate]?.disableRules === true) && (
+          {/* Mensaje informativo solo para Torno con 1 persona */}
+          {technique === 'potters_wheel' && participants === 1 && !(selectedDate && scheduleOverrides?.[selectedDate]?.disableRules === true) && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
               <div className="flex items-start gap-3">
                 <span className="text-xl">ℹ️</span>
                 <div>
                   <p className="font-semibold text-amber-900 text-sm">
-                    {technique === 'hand_modeling' ? 'Modelado a Mano' : 'Torno Alfarero'}: horarios del calendario
+                    Torno Alfarero: horarios del calendario
                   </p>
                   <p className="text-amber-700 text-xs mt-1">
-                    Para 1 persona solo verás horarios fijos del calendario ({technique === 'hand_modeling' ? 'modelado' : 'torno'}).
+                    Para 1 persona solo verás horarios fijos del calendario (torno).
                     También aparecerán horarios si ya existe una reserva abierta de <strong>3+ personas</strong> en ese mismo slot.
                   </p>
                 </div>
@@ -469,22 +469,22 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                     const overrideForDate = scheduleOverrides?.[selectedDate];
                     const isSpecialDayNoRules = overrideForDate?.disableRules === true;
 
-                    // ===== VALIDACIÓN SINGLE_CLASS =====
-                    // Modelado (hand_modeling) y Torno (potters_wheel) con 1 persona:
+                    // ===== VALIDACIÓN SINGLE_CLASS SOLO PARA TORNO =====
+                    // Torno (potters_wheel) con 1 persona:
                     // Solo mostrar horarios fijos del calendario o slots abiertos por 3+
+                    // Modelado y Pintura con 1 persona: mostrar TODOS los horarios disponibles
                     // Guard: solo filtrar si ya tenemos availability Y no estamos cargando cache
-                    if (!isSpecialDayNoRules && (technique === 'hand_modeling' || technique === 'potters_wheel') && participants === 1 && availability && !checkingAvailability) {
+                    if (!isSpecialDayNoRules && technique === 'potters_wheel' && participants === 1 && availability && !checkingAvailability) {
                       const date = parseLocalDate(selectedDate);
                       const dayOfWeek = date.getDay();
                       const dayKeys = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
                       const dayKey = dayKeys[dayOfWeek] as any;
                       
-                      // Obtener horarios fijos del calendario para esta técnica
-                      const techToCheck = technique === 'hand_modeling' ? 'molding' : 'potters_wheel';
+                      // Obtener horarios fijos del calendario para torno
                       const slotsForRules = overrideForDate?.slots ?? availability[dayKey] ?? [];
-                      const fixedSlots = slotsForRules.filter((s: any) => s.technique === techToCheck).map((s: any) => s.time) || [];
+                      const fixedSlots = slotsForRules.filter((s: any) => s.technique === 'potters_wheel').map((s: any) => s.time) || [];
                       
-                      console.log(`[SingleClassWizard] Filtering ${technique} on ${selectedDate}: fixedSlots=`, fixedSlots);
+                      console.log(`[SingleClassWizard] Filtering potters_wheel on ${selectedDate}: fixedSlots=`, fixedSlots);
                       
                       // Filtrar: solo mostrar horarios fijos del calendario O slots abiertos por 3+
                       allTimes = allTimes.filter(time => {
