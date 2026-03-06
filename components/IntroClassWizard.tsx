@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import type { Product, IntroductoryClass, EnrichedIntroClassSession, IntroClassSession, AppData } from '../types.js';
+import { parseLocalDate } from '../utils/formatters.js';
 // Eliminado useLanguage, la app ahora es monolingüe en español
 import { InstructorTag } from './InstructorTag.js';
 import { CapacityIndicator } from './CapacityIndicator.js';
@@ -113,7 +114,7 @@ export const IntroClassWizard: React.FC<IntroClassWizardProps> = ({ product, ses
                 const blanks = Array(firstDayOfMonth.getDay()).fill(null);
                 const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
                 const calendarDays = [...blanks, ...days];
-                const availableDaysInMonth = new Set(sessionsForSelectedMonth.map(s => new Date(s.date + 'T00:00:00').getDate()));
+                const availableDaysInMonth = new Set(sessionsForSelectedMonth.map(s => parseLocalDate(s.date).getDate()));
 
                 return (
                      <div className="animate-fade-in-fast">

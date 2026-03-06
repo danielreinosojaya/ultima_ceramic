@@ -49,7 +49,7 @@ export const RescheduleClientFlow: React.FC<RescheduleClientFlowProps> = ({
                 // Check if booking is eligible for rescheduling
                 // (Has 72h before slot date, hasn't exceeded allowance)
                 const slot = booking.slots[0];
-                const slotDate = new Date(slot.date);
+                const slotDate = parseLocalDate(slot.date);
                 const now = new Date();
                 const hoursUntil = (slotDate.getTime() - now.getTime()) / (1000 * 60 * 60);
                 
@@ -211,7 +211,7 @@ export const RescheduleClientFlow: React.FC<RescheduleClientFlowProps> = ({
                                         <div className="flex items-center justify-center gap-1 mb-1">
                                             <CalendarIcon className="w-3 h-3" />
                                         </div>
-                                        {new Date(date).toLocaleDateString('es-ES', {
+                                        {parseLocalDate(date).toLocaleDateString('es-ES', {
                                             day: '2-digit',
                                             month: 'short'
                                         })}

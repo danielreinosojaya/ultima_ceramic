@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { CouplesExperience, IntroClassSession, AppData, Technique, Booking } from '../types.js';
 import * as dataService from '../services/dataService.js';
+import { parseLocalDate } from '../utils/formatters.js';
 import { InstructorTag } from './InstructorTag.js';
 import { CapacityIndicator } from './CapacityIndicator.js';
 import { ClockIcon } from './icons/ClockIcon.js';
@@ -54,7 +55,7 @@ export const CouplesExperienceScheduler: React.FC<CouplesExperienceSchedulerProp
       // Filtrar por técnica seleccionada
       const filteredSessions = allSessions.filter((session: any) => {
         const rule = product.schedulingRules.find(
-          (r) => r.dayOfWeek === new Date(session.date).getDay() && r.time === session.time
+          (r) => r.dayOfWeek === parseLocalDate(session.date).getDay() && r.time === session.time
         );
         return rule?.technique === technique;
       });
@@ -62,7 +63,7 @@ export const CouplesExperienceScheduler: React.FC<CouplesExperienceSchedulerProp
       // Enriquecer con información de capacidad
       const enrichedSessions = filteredSessions.map((session: any) => {
         const rule = product.schedulingRules.find(
-          (r) => r.dayOfWeek === new Date(session.date).getDay() && r.time === session.time
+          (r) => r.dayOfWeek === parseLocalDate(session.date).getDay() && r.time === session.time
         );
 
         // Contar bookings parejas para esta sesión
@@ -191,7 +192,7 @@ export const CouplesExperienceScheduler: React.FC<CouplesExperienceSchedulerProp
                     <div className="flex items-center gap-3 mb-3">
                       <div className="flex items-center gap-2 text-lg font-semibold text-brand-text">
                         <span>📅</span>
-                        {new Date(session.date).toLocaleDateString('es-ES', {
+                        {parseLocalDate(session.date).toLocaleDateString('es-ES', {
                           weekday: 'long',
                           month: 'long',
                           day: 'numeric',

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { GroupTechnique, TimeSlot, Piece, ExperiencePricing, AppData } from '../../types';
 import * as dataService from '../../services/dataService';
+import { parseLocalDate } from '../../utils/formatters';
 import { SocialBadge } from '../SocialBadge';
 
 export interface SingleClassWizardProps {
@@ -473,7 +474,8 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                     // Solo mostrar horarios fijos del calendario o slots abiertos por 3+
                     // Guard: solo filtrar si ya tenemos availability Y no estamos cargando cache
                     if (!isSpecialDayNoRules && (technique === 'hand_modeling' || technique === 'potters_wheel') && participants === 1 && availability && !checkingAvailability) {
-                      const dayOfWeek = new Date(`${selectedDate}T00:00:00`).getDay();
+                      const date = parseLocalDate(selectedDate);
+                      const dayOfWeek = date.getDay();
                       const dayKeys = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
                       const dayKey = dayKeys[dayOfWeek] as any;
                       
@@ -615,7 +617,10 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
 
             <div className="flex justify-between pb-4 border-b">
               <span className="text-gray-600">Horario:</span>
-              <span className="font-bold">{selectedSlot?.time} • {new Date(selectedSlot?.date || '').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+              <span className="font-bold">{selectedSlot?.time} • {(() => {
+                const date = parseLocalDate(selectedSlot?.date || '');
+                return date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+              })()}</span>
             </div>
 
             <div className="flex justify-between text-lg font-bold pt-4 text-blue-600">

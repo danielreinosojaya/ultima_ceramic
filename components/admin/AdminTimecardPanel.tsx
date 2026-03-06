@@ -5,7 +5,7 @@ import { EmployeeScheduleManager } from './EmployeeScheduleManager';
 import { MonthlyReportViewer } from './MonthlyReportViewer';
 import { GeofenceManager } from './GeofenceManager';
 import { fetchWithAbort } from '../../utils/fetchWithAbort';
-import { formatLocalTimeFromUTC, calculateHoursInProgress, calculateHoursInProgressReadable, calculateHoursInProgressWithStatus } from '../../utils/formatters';
+import { parseLocalDate, formatLocalTimeFromUTC, calculateHoursInProgress, calculateHoursInProgressReadable, calculateHoursInProgressWithStatus } from '../../utils/formatters';
 
 interface AdminTimecardPanelProps {
   adminCode: string;
@@ -920,7 +920,7 @@ export const AdminTimecardPanel: React.FC<AdminTimecardPanelProps> = ({ adminCod
             <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full mx-4">
               <h2 className="text-2xl font-bold text-red-600 mb-4">🗑️ Eliminar Marcación</h2>
               <p className="text-brand-secondary mb-6">
-                ¿Seguro que deseas eliminar la marcación del {new Date(confirmDeleteTimecard.date).toLocaleDateString('es-ES')}?
+                ¿Seguro que deseas eliminar la marcación del {parseLocalDate(confirmDeleteTimecard.date).toLocaleDateString('es-ES')}?
               </p>
 
               <div className="flex gap-3">

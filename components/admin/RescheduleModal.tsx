@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import type { TimeSlot, RescheduleSlotInfo, EnrichedAvailableSlot, AppData } from '../../types';
 import * as dataService from '../../services/dataService';
+import { parseLocalDate } from '../../utils/formatters';
 import { InstructorTag } from '../InstructorTag';
 import { CapacityIndicator } from '../CapacityIndicator';
 
@@ -123,7 +124,7 @@ export const RescheduleModal: React.FC<RescheduleModalProps> = ({ isOpen, onClos
     
     if (!isOpen) return null;
 
-    const formattedCurrentSlotDate = new Date(slotInfo.slot.date + 'T00:00:00').toLocaleDateString(language, { weekday: 'long', month: 'long', day: 'numeric' });
+    const formattedCurrentSlotDate = parseLocalDate(slotInfo.slot.date).toLocaleDateString(language, { weekday: 'long', month: 'long', day: 'numeric' });
     const translatedDayNames = useMemo(() => [0, 1, 2, 3, 4, 5, 6].map(dayIndex => new Date(2024, 0, dayIndex + 7).toLocaleDateString(language, { weekday: 'short' })), [language]);
 
     // Modal de confirmación si requiere aprobación admin
