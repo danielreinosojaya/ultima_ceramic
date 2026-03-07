@@ -7411,21 +7411,19 @@ async function addBookingAction(
                 throw new Error(slotAvailability.message || `No hay cupos disponibles para ${requestedTechnique} en ${slot.date} a las ${normalizedTime}`);
             }
 
-            // REGLA ESPECIAL: Torno (potters_wheel) y Modelado (hand_modeling) con 1 persona
+            // REGLA ESPECIAL: Solo para Torno (potters_wheel) con 1 persona
             // Solo se permite si: (a) es horario fijo del calendario, O (b) fue abierto por reserva 3+
-            if (!isSpecialDayNoRules && (requestedTechnique === 'potters_wheel' || requestedTechnique === 'hand_modeling') && requestedParticipants === 1) {
+            // Modelado a Mano y Pintura con 1 persona: cualquier horario disponible está permitido
+            if (!isSpecialDayNoRules && requestedTechnique === 'potters_wheel' && requestedParticipants === 1) {
                 const dayKey = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
                 
-                // Técnica de calendario a buscar
-                const techToCheck = requestedTechnique === 'hand_modeling' ? 'molding' : 'potters_wheel';
-                const fixedSlots = getFixedSlotTimesForDate(slot.date, dayKey, availability, scheduleOverrides, techToCheck as 'potters_wheel' | 'molding');
+                const fixedSlots = getFixedSlotTimesForDate(slot.date, dayKey, availability, scheduleOverrides, 'potters_wheel');
                 const isFixedScheduleSlot = fixedSlots.includes(normalizedTime);
                 const isOpenedByLargeGroup = slotAvailability.openedByLargeGroup === true;
 
                 if (!isFixedScheduleSlot && !isOpenedByLargeGroup) {
-                    const techName = requestedTechnique === 'hand_modeling' ? 'Modelado a Mano' : 'Torno Alfarero';
                     throw new Error(
-                        `${techName}: Para 1 persona, solo puedes reservar horarios fijos del calendario o slots ya abiertos por un grupo de 3+ personas. ` +
+                        `Torno Alfarero: Para 1 persona, solo puedes reservar horarios fijos del calendario o slots ya abiertos por un grupo de 3+ personas. ` +
                         `El horario ${normalizedTime} no cumple estas condiciones.`
                     );
                 }
