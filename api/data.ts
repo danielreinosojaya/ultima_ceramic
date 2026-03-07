@@ -579,8 +579,25 @@ const getFixedSlotTimesForDate = (
     if (override && override.slots === null) return [];
 
     const baseSlots = override?.slots ?? availability[dayKey] ?? [];
+
+    // Include slots that:
+    // 1. Match the exact techniqueKey
+    // 2. Are aliases: 'hand_modeling' ↔ 'molding'
+    // 3. Have no technique assigned (generic slots available to all techniques)
+    const techniqueAliases: Record<string, string[]> = {
+        'molding': ['molding', 'hand_modeling'],
+        'potters_wheel': ['potters_wheel'],
+    };
+    const validTechniques = techniqueAliases[techniqueKey] || [techniqueKey];
+
     const times: string[] = baseSlots
-        .filter((slot: any) => slot.technique === techniqueKey)
+        .filter((slot: any) => {
+            const st = slot.technique;
+            // Generic slot (no technique): applies to all
+            if (!st) return true;
+            // Exact match or alias match
+            return validTechniques.includes(st);
+        })
         .map((slot: any) => normalizeTime(slot.time));
 
     if (techniqueKey === 'potters_wheel') {
