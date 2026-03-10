@@ -7151,6 +7151,7 @@ async function addBookingAction(
 
   try {
     const newBookingCode = generateBookingCode();
+        const adminOverride = Boolean((body as any).adminOverride || (options?.adminOverride));
     
     // Intentar agregar columnas si no existen
     try {
@@ -7396,7 +7397,7 @@ async function addBookingAction(
             const slotDate = new Date(`${slot.date}T00:00:00`);
             const dayOfWeek = slotDate.getDay();
             const isSpecialDayNoRules = scheduleOverrides?.[slot.date]?.disableRules === true;
-            if (!isSpecialDayNoRules && dayOfWeek === 1 && requestedTechnique === 'painting') {
+            if (!adminOverride && !isSpecialDayNoRules && dayOfWeek === 1 && requestedTechnique === 'painting') {
                 // Revisar si hay scheduleOverride para este lunes específico
                 const hasExceptionForThisDay = scheduleOverrides && scheduleOverrides[slot.date];
                 
@@ -7415,14 +7416,19 @@ async function addBookingAction(
                 requestedParticipants
             );
 
+            const blockedReason = (slotAvailability as any)?.blockedReason;
             if (!slotAvailability.available) {
+                if (adminOverride && blockedReason === 'technique_restriction') {
+                    console.log(`[addBookingAction SINGLE_CLASS] 🔓 Admin override: bypassing technique restriction for ${requestedTechnique} on ${slot.date} at ${normalizedTime}`);
+                } else {
                 throw new Error(slotAvailability.message || `No hay cupos disponibles para ${requestedTechnique} en ${slot.date} a las ${normalizedTime}`);
+                }
             }
 
             // REGLA ESPECIAL: Solo para Torno (potters_wheel) con 1 persona
             // Solo se permite si: (a) es horario fijo del calendario, O (b) fue abierto por reserva 3+
             // Modelado a Mano y Pintura con 1 persona: cualquier horario disponible está permitido
-            if (!isSpecialDayNoRules && requestedTechnique === 'potters_wheel' && requestedParticipants === 1) {
+            if (!adminOverride && !isSpecialDayNoRules && requestedTechnique === 'potters_wheel' && requestedParticipants === 1) {
                 const dayKey = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
                 
                 const fixedSlots = getFixedSlotTimesForDate(slot.date, dayKey, availability, scheduleOverrides, 'potters_wheel');
@@ -7520,7 +7526,6 @@ async function addBookingAction(
     };
 
     // 🔓 LOG ADMIN OVERRIDE IF PRESENT
-    const adminOverride = (body as any).adminOverride || (options?.adminOverride);
     const overrideReason = (body as any).overrideReason || (options?.overrideReason);
     const violatedRules = (body as any).violatedRules || (options?.violatedRules);
     
