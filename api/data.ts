@@ -2165,11 +2165,16 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         `;
 
                         try {
-                            await sql`
-                                UPDATE admin_tasks 
-                                SET last_executed_at = NOW(), updated_at = NOW()
-                                WHERE task_name = 'expire_old_bookings'
+                            const { rows: adminTasksTable } = await sql`
+                                SELECT to_regclass('public.admin_tasks') as table_name
                             `;
+                            if (adminTasksTable[0]?.table_name) {
+                                await sql`
+                                    UPDATE admin_tasks 
+                                    SET last_executed_at = NOW(), updated_at = NOW()
+                                    WHERE task_name = 'expire_old_bookings'
+                                `;
+                            }
                         } catch (taskErr) {
                             console.warn('[EXPIRE BOOKINGS][GET] Could not update admin_tasks:', taskErr);
                         }
@@ -2293,7 +2298,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                             b.status,
                                             b.expires_at,
                                             b.participants,
-                                            b.group_class_metadata,
+                                            b.group_metadata AS group_class_metadata,
                                             b.technique
                                         FROM bookings b
                                         LEFT JOIN products p ON p.id = b.product_id
@@ -2337,8 +2342,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                                 b.participants
                                             FROM bookings b
                                             LEFT JOIN products p ON p.id = b.product_id
-                                            WHERE b.status != 'expired'
-                                                AND b.created_at >= ${limitDate.toISOString()}
+                                            WHERE b.created_at >= ${limitDate.toISOString()}
                                             ORDER BY b.created_at DESC
                                             LIMIT 500
                                         `;
@@ -2376,8 +2380,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                                 b.expires_at
                                             FROM bookings b
                                             LEFT JOIN products p ON p.id = b.product_id
-                                            WHERE b.status != 'expired'
-                                                AND b.created_at >= ${limitDate.toISOString()}
+                                            WHERE b.created_at >= ${limitDate.toISOString()}
                                             ORDER BY b.created_at DESC
                                             LIMIT 500
                                         `;
@@ -6689,11 +6692,16 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 
                 // Actualizar último tiempo de ejecución en admin_tasks
                 try {
-                    await sql`
-                        UPDATE admin_tasks 
-                        SET last_executed_at = NOW(), updated_at = NOW()
-                        WHERE task_name = 'expire_old_bookings'
+                    const { rows: adminTasksTable } = await sql`
+                        SELECT to_regclass('public.admin_tasks') as table_name
                     `;
+                    if (adminTasksTable[0]?.table_name) {
+                        await sql`
+                            UPDATE admin_tasks 
+                            SET last_executed_at = NOW(), updated_at = NOW()
+                            WHERE task_name = 'expire_old_bookings'
+                        `;
+                    }
                 } catch (taskErr) {
                     console.warn('[EXPIRE BOOKINGS] Could not update admin_tasks:', taskErr);
                 }
