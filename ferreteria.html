@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proforma Taller de Cerámica - Ceramicalma</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f9f7f4;
+            color: #4a4a4a;
+            line-height: 1.8;
+        }
+
+        .download-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #b8704a;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: background-color 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 1000;
+        }
+
+        .download-btn:hover {
+            background-color: #9d5a38;
+        }
+
+        .download-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background-color: white;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 50px;
+            padding-top: 60px;
+        }
+
+        .logo {
+            font-size: 48px;
+            color: #b8704a;
+            font-weight: 600;
+            margin-bottom: 10px;
+            letter-spacing: 1px;
+        }
+
+        .subtitle {
+            font-size: 12px;
+            color: #b8704a;
+            letter-spacing: 3px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .date {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .title {
+            font-size: 28px;
+            color: #b8704a;
+            text-align: center;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .tagline {
+            font-size: 14px;
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            text-decoration: underline #b8704a 2px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #b8704a;
+        }
+
+        .greeting {
+            font-size: 14px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .intro-text {
+            font-size: 14px;
+            text-align: justify;
+            margin-bottom: 30px;
+            line-height: 1.8;
+            color: #555;
+        }
+
+        .section-divider {
+            border-bottom: 2px solid #b8704a;
+            margin: 40px 0 30px 0;
+        }
+
+        .section-title {
+            font-size: 16px;
+            color: white;
+            background-color: #b8704a;
+            padding: 12px 15px;
+            margin-bottom: 25px;
+            border-left: 4px solid #9d5a38;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .subsection-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+            margin-top: 20px;
+        }
+
+        .text-content {
+            font-size: 14px;
+            color: #555;
+            text-align: justify;
+            margin-bottom: 15px;
+            line-height: 1.8;
+        }
+
+        .option-box {
+            margin-bottom: 30px;
+        }
+
+        .option-header {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .option-text {
+            font-size: 13px;
+            color: #555;
+            text-align: justify;
+            margin-bottom: 12px;
+        }
+
+        .bullet-list {
+            margin-left: 20px;
+            margin-bottom: 15px;
+            font-size: 13px;
+        }
+
+        .bullet-list li {
+            margin-bottom: 8px;
+            color: #555;
+        }
+
+        .price {
+            font-size: 14px;
+            font-weight: 600;
+            color: #b8704a;
+            margin-top: 10px;
+        }
+
+        .highlight-box {
+            background-color: #f0e6d2;
+            border-left: 4px solid #b8704a;
+            padding: 20px;
+            margin-bottom: 25px;
+            border-radius: 3px;
+        }
+
+        .highlight-box h3 {
+            color: #b8704a;
+            font-size: 14px;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .highlight-box ul {
+            list-style: none;
+            margin-left: 0;
+        }
+
+        .highlight-box li {
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 8px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .highlight-box li:before {
+            content: "✓";
+            color: #b8704a;
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        .benefits-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .benefit-card {
+            background-color: #f0e6d2;
+            padding: 15px;
+            border-left: 4px solid #b8704a;
+            border-radius: 3px;
+        }
+
+        .benefit-title {
+            font-weight: 600;
+            color: #b8704a;
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+
+        .benefit-text {
+            font-size: 12px;
+            color: #555;
+        }
+
+        .facilitator-box {
+            background-color: #f0e6d2;
+            padding: 20px;
+            border-left: 4px solid #b8704a;
+            margin-bottom: 25px;
+            border-radius: 3px;
+        }
+
+        .facilitator-name {
+            font-weight: 600;
+            color: #b8704a;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .facilitator-list {
+            list-style: none;
+            margin-bottom: 15px;
+            font-size: 13px;
+            color: #555;
+        }
+
+        .facilitator-list li {
+            margin-bottom: 4px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .facilitator-list li:before {
+            content: "•";
+            position: absolute;
+            left: 0;
+        }
+
+        .facilitator-bio {
+            font-size: 13px;
+            color: #555;
+            text-align: justify;
+            line-height: 1.8;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 25px;
+            font-size: 13px;
+        }
+
+        table thead {
+            background-color: #b8704a;
+            color: white;
+        }
+
+        table th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        table td {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+            color: #555;
+        }
+
+        table tr:nth-child(even) {
+            background-color: #faf8f5;
+        }
+
+        .payment-note {
+            background-color: #f0e6d2;
+            padding: 15px 20px;
+            margin-bottom: 25px;
+            border-left: 4px solid #b8704a;
+            border-radius: 3px;
+            font-size: 13px;
+            color: #555;
+        }
+
+        .conditions-box {
+            background-color: #f0e6d2;
+            padding: 20px;
+            border-left: 4px solid #b8704a;
+            margin-bottom: 20px;
+            border-radius: 3px;
+        }
+
+        .conditions-box h4 {
+            color: #b8704a;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .conditions-box ul {
+            list-style: none;
+            margin-left: 0;
+        }
+
+        .conditions-box li {
+            font-size: 12px;
+            color: #555;
+            margin-bottom: 6px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .conditions-box li:before {
+            content: "✓";
+            color: #b8704a;
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        .conditions-box.exclude li:before {
+            content: "✕";
+            color: #b8704a;
+        }
+
+        .closing-box {
+            background-color: #f0e6d2;
+            padding: 20px;
+            border-left: 4px solid #b8704a;
+            margin-bottom: 30px;
+            border-radius: 3px;
+            text-align: center;
+        }
+
+        .closing-box p {
+            font-size: 13px;
+            color: #555;
+            text-align: justify;
+            margin-bottom: 10px;
+        }
+
+        .contact-box {
+            border: 2px solid #b8704a;
+            padding: 25px;
+            text-align: center;
+            margin-bottom: 30px;
+            border-radius: 3px;
+            background-color: #f0e6d2;
+        }
+
+        .contact-title {
+            color: #b8704a;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .contact-company {
+            color: #b8704a;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .contact-item {
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .closing-signature {
+            text-align: center;
+            margin-top: 40px;
+            margin-bottom: 20px;
+        }
+
+        .closing-signature p {
+            font-size: 13px;
+            color: #b8704a;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        @media (max-width: 768px) {
+            .benefits-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .download-btn {
+                position: relative;
+                top: 0;
+                right: 0;
+                margin-bottom: 20px;
+                width: 100%;
+                justify-content: center;
+            }
+
+            .container {
+                padding: 20px 10px;
+            }
+
+            .header {
+                padding-top: 20px;
+            }
+
+            table {
+                font-size: 12px;
+            }
+
+            table th, table td {
+                padding: 8px;
+            }
+        }
+
+        @media print {
+            .download-btn {
+                display: none !important;
+            }
+
+            body {
+                background-color: white;
+                margin: 0;
+                padding: 0;
+            }
+
+            .container {
+                padding: 20px;
+                margin: 0;
+                max-width: 100%;
+            }
+
+            .header {
+                padding-top: 0;
+                margin-bottom: 20px;
+                page-break-after: avoid;
+            }
+
+            .section-divider {
+                margin: 20px 0 15px 0;
+                page-break-inside: avoid;
+            }
+
+            .section {
+                page-break-inside: avoid;
+                orphans: 3;
+                widows: 3;
+            }
+
+            .section:nth-child(n+5) {
+                page-break-before: auto;
+            }
+
+            .section-title {
+                page-break-after: avoid;
+                margin-bottom: 15px;
+            }
+
+            .subsection-title {
+                page-break-after: avoid;
+            }
+
+            table {
+                page-break-inside: avoid;
+                margin: 15px 0;
+            }
+
+            .benefits-grid {
+                page-break-inside: avoid;
+            }
+
+            .option-box {
+                page-break-inside: avoid;
+            }
+
+            .highlight-box {
+                page-break-inside: avoid;
+            }
+
+            .facilitator-box {
+                page-break-inside: avoid;
+            }
+
+            .contact-box {
+                page-break-inside: avoid;
+            }
+
+            .closing-box {
+                page-break-inside: avoid;
+            }
+
+            .tagline {
+                page-break-after: avoid;
+            }
+
+            .intro-text {
+                page-break-after: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button class="download-btn" onclick="window.print()">
+        <svg fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+        </svg>
+        Descargar PDF
+    </button>
+
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">Ceramicalma</div>
+            <div class="subtitle">HOLISTIC POTTERY STUDIO</div>
+            <div class="date">Guayaquil, 11 de marzo de 2026</div>
+        </div>
+
+        <!-- Title -->
+        <h1 class="title">PROFORMA TALLER DE CERÁMICA</h1>
+        <p class="tagline">Taller de torno alfarero para gerentes y líderes</p>
+
+        <!-- Greeting -->
+        <p class="greeting">Hola Estimada María Jose,</p>
+
+        <p class="intro-text">
+            Presentamos a tu amable consideración la siguiente proforma de acuerdo a lo conversado, 
+            detallando cada punto del Taller de Cerámica y sus beneficios:
+        </p>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 1: Taller de Cerámica -->
+        <div class="section">
+            <div class="section-title">TALLER / DINÁMICA TORNO ALFARERO</div>
+            
+            <div class="subsection-title">Objetivo del Taller:</div>
+            <p class="text-content">
+                El objetivo de este taller es fortalecer la sincronía operativa y el liderazgo adaptativo a través de la co-creación en el torno alfarero. Al separar el control de la fuerza (pedal) de la ejecución táctica (manos), los participantes deben lograr una comunicación de alta precisión y una escucha activa absoluta para evitar el colapso de la pieza. La dinámica busca que el equipo experimente, en tiempo real, cómo la visión de un líder solo se materializa cuando existe un soporte operativo perfectamente alineado y sensible a las necesidades del proceso.
+            </p>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 2: Opciones de Taller -->
+        <div class="section">
+            <div class="section-title">OPCIONES DE TALLER</div>
+
+            <div class="option-box">
+                <div class="option-header">Opción 1: Técnica torno alfarero</div>
+                <p class="option-text">
+                    Aprenderemos este método de creación cerámica que utiliza la fuerza centrífuga para modelar la cerámica de forma simétrica. A diferencia del modelado a mano, aquí la pieza gira constantemente sobre un plato circular, permitiendo crear formas con gran rapidez y precisión.
+                </p>
+                <ul class="bullet-list">
+                    <li><strong>Duración:</strong> 2 horas</li>
+                    <li><strong>Fecha:</strong> Miércoles 1 de abril de 10:00 a 12:00</li>
+                    <li><strong>Piezas a realizar:</strong> cilindro estable que represente la estabilidad organizacional</li>
+                </ul>
+                <div class="price">Valor: $69 por persona (incluido IVA)</div>
+            </div>
+
+            <div class="highlight-box">
+                <h3>Dinámica: "Sincronía en el Torno"</h3>
+                <p style="font-size: 13px; color: #555; margin-bottom: 12px;"><strong>Configuración:</strong> 2 personas por torno.</p>
+                <ul style="margin-bottom: 15px;">
+                    <li><strong>Participante A (El Motor):</strong> Controla exclusivamente el pedal de velocidad. No puede tocar la cerámica.</li>
+                    <li><strong>Participante B (El Ejecutor):</strong> Moldea la cerámica. No tiene control sobre la velocidad.</li>
+                </ul>
+                
+                <p style="font-size: 13px; color: #555; margin-bottom: 12px;"><strong>1. El Objetivo (La Meta):</strong> Lograr elevar un cilindro estable de 15 cm de altura en 10 minutos. No se busca una pieza artística, sino una estructura sólida que represente la estabilidad organizacional.</p>
+                
+                <p style="font-size: 13px; color: #555; margin-bottom: 12px;"><strong>2. Directrices y Roles:</strong></p>
+                <ul style="margin-bottom: 15px; margin-left: 0;">
+                    <li style="font-size: 13px; color: #555; margin-bottom: 8px;"><strong>Designación de Líder:</strong> El grupo decide quién inicia en cada rol. El Líder es el Ejecutor, pues tiene la visión táctica de qué necesita la pieza, pero debe dar instrucciones claras al Motor.</li>
+                    <li style="font-size: 13px; color: #555; margin-bottom: 8px;"><strong>Comunicación Directa:</strong> El que moldea debe verbalizar con precisión: "Más rápido para centrar", "Baja la velocidad, voy a subir paredes", "Mantén constante".</li>
+                    <li style="font-size: 13px; color: #555; margin-bottom: 8px;"><strong>Escucha Activa:</strong> El que está en el pedal debe interpretar no solo las palabras, sino la tensión física de su compañero para ajustar la potencia en tiempo real.</li>
+                </ul>
+                
+                <p style="font-size: 13px; color: #555; margin-bottom: 12px;"><strong>3. Beneficios para el Equipo de Gerencia:</strong></p>
+                <ul style="margin-left: 0;">
+                    <li style="font-size: 13px; color: #555; margin-bottom: 8px;"><strong>Sincronización Crítica:</strong> Demuestra que la estrategia (manos) falla si la operación (pedal) no va al mismo ritmo. Si el pedal acelera cuando las manos piden calma, la pieza colapsa.</li>
+                    <li style="font-size: 13px; color: #555; margin-bottom: 8px;"><strong>Liderazgo de Servicio:</strong> El que controla el pedal entiende que su éxito no es lucirse, sino facilitar el trabajo de quien está moldeando.</li>
+                    <li style="font-size: 13px; color: #555; margin-bottom: 8px;"><strong>Feedback Inmediato:</strong> La cerámica no miente. Si la comunicación falla, el error se ve al instante. Esto elimina las "excusas de oficina" y obliga a corregir sobre la marcha.</li>
+                    <li style="font-size: 13px; color: #555;"><strong>Gestión de la Frustración:</strong> Si la pieza se rompe, el equipo debe decidir rápidamente si culpar al otro o aprender y reiniciar con una mejor estrategia de comunicación.</li>
+                </ul>
+            </div>
+
+            <div class="highlight-box">
+                <h3>Incluye en el taller:</h3>
+                <ul>
+                    <li>Todos los materiales de alta calidad (aptos para alimentos, microondas, lavavajillas)</li>
+                    <li>Herramientas especializadas</li>
+                    <li>Esmaltes (brillo transparente)</li>
+                    <li>Horneado profesional de las piezas</li>
+                    <li>Piezas entregadas listas para su uso aproximadamente 2 a 3 semanas después del evento</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 3: Beneficios -->
+        <div class="section">
+            <div class="section-title">BENEFICIOS DE LA CERÁMICA PARA EL BIENESTAR INTEGRAL</div>
+            
+            <p class="text-content">Durante el taller abordaremos cómo esta práctica creativa ofrece:</p>
+
+            <div class="benefits-grid">
+                <div class="benefit-card">
+                    <div class="benefit-title">Sincronización Crítica</div>
+                    <div class="benefit-text">Alineación estrategia-operación perfecta</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Liderazgo de Servicio</div>
+                    <div class="benefit-text">Facilitar en lugar de imposer</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Feedback Inmediato</div>
+                    <div class="benefit-text">El barro no miente sobre comunicación</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Gestión de Frustración</div>
+                    <div class="benefit-text">Aprender vs culpar tras el error</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Reducción de estrés</div>
+                    <div class="benefit-text">Conexión terapéutica con el presente</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Fomento de la sociabilidad</div>
+                    <div class="benefit-text">Crear en comunidad</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Desarrollo de la creatividad</div>
+                    <div class="benefit-text">Expresión personal sin límites</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Aumento de concentración</div>
+                    <div class="benefit-text">Mindfulness a través del arte</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Mejora de autoestima</div>
+                    <div class="benefit-text">Reconocimiento del logro personal</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 4: Facilitadora -->
+        <div class="section">
+            <div class="section-title">FACILITADORA DEL TALLER</div>
+
+            <div class="facilitator-box">
+                <div class="facilitator-name">Carolina Massuh Morán</div>
+                <ul class="facilitator-list">
+                    <li>Psicóloga Clínica</li>
+                    <li>Terapeuta Holística</li>
+                    <li>Máster en Psicoterapia del Bienestar Integral</li>
+                    <li>Ceramista especializada</li>
+                </ul>
+                <p class="facilitator-bio">
+                    Carolina combina sus diversos saberes para acompañar a los participantes en el maravilloso 
+                    camino de creación y autoconocimiento. En su trayectoria como artista ha brindado talleres, 
+                    workshops y clases en Guayaquil, Galápagos, Cuenca, Salinas, Olón y Ayampe. Su última 
+                    capacitación fue en Enero-Marzo 2024 en Michigan-USA, donde reforzó sus técnicas e 
+                    implementó mindfulness, meditación y conexión sensorial en sus clases de cerámica.
+                </p>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 5: Adicionales -->
+        <div class="section">
+            <div class="section-title">ADICIONALES: MENÚ DE BEBIDAS Y COMIDAS</div>
+
+            <p class="text-content">
+                Adjuntamos menú para que puedan seleccionar sus alimentos y bebidas.
+            </p>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 6: Reserva de Espacio -->
+        <div class="section">
+            <div class="section-title">RESERVA DE ESPACIO</div>
+
+            <p class="text-content">
+                A la hora convenida, se reserva el espacio completo de Ceramicalma para garantizar una 
+                experiencia íntima y enfocada en el taller de cerámica para tu equipo.
+            </p>
+
+            <div class="highlight-box">
+                <h3>Importante:</h3>
+                <p style="font-size: 13px; color: #555; margin-bottom: 10px;">
+                    Si algunos de los invitados desean acompañar el evento sin participar en el taller de cerámica, pueden disfrutar del espacio y ser parte de la experiencia. Contáctanos con 
+                    anticipación para coordinar estos detalles adicionales.
+                </p>
+                <p style="font-size: 13px; color: #b8704a; font-style: italic;">
+                    Si requieres tiempo adicional más allá de las 2 horas de taller, comunícanos para ajustar horarios. 
+                    Disponemos de flexibilidad con valores por hora adicional según el día (ver tabla de inversión).
+                </p>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 7: Resumen de Inversión -->
+        <div class="section">
+            <div class="section-title">RESUMEN DE INVERSIÓN</div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Concepto</th>
+                        <th>Valor Unitario</th>
+                        <th>Cantidad</th>
+                        <th>Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Taller / Dinámica torno alfarero (2 horas)</td>
+                        <td>$69 (incluido IVA)</td>
+                        <td>13 personas</td>
+                        <td>$897.00</td>
+                    </tr>
+                    <tr style="background-color: #f0e6d2; font-weight: 600;">
+                        <td colspan="3" style="text-align: right;">TOTAL PRESUPUESTO:</td>
+                        <td>$897.00</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="highlight-box" style="margin-top: 25px;">
+                <h3>Adicionales Variables (en caso de requerir):</h3>
+                <table style="margin-top: 15px; border: none;">
+                    <thead>
+                        <tr style="background-color: #b8704a; color: white;">
+                            <th style="padding: 10px; text-align: left; border: none;">Concepto</th>
+                            <th style="padding: 10px; text-align: left; border: none;">Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="background-color: transparent; border: none;">
+                            <td style="padding: 8px 10px; border: none; color: #555; font-size: 13px;">Hora Adicional (martes a jueves)</td>
+                            <td style="padding: 8px 10px; border: none; color: #555; font-size: 13px;">$75 + IVA</td>
+                        </tr>
+                        <tr style="background-color: transparent; border: none;">
+                            <td style="padding: 8px 10px; border: none; color: #555; font-size: 13px;">Hora Adicional (viernes a domingo)</td>
+                            <td style="padding: 8px 10px; border: none; color: #555; font-size: 13px;">$100 + IVA</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p style="margin-top: 15px; font-size: 13px; color: #555;"><strong>Oferta especial:</strong> Si requieren una hora adicional, podemos ofrecerles un descuento especial en <strong>$60 + IVA</strong>.</p>
+            </div>
+
+            <div class="payment-note">
+                <strong style="color: #b8704a;">Forma de pago:</strong>
+                <ul style="list-style: none; margin-top: 8px;">
+                    <li style="margin-bottom: 4px;">• 50% anticipado para confirmar reserva</li>
+                    <li>• 50% restante dos días antes del evento</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 8: Condiciones -->
+        <div class="section">
+            <div class="section-title">CONDICIONES IMPORTANTES</div>
+
+            <div class="conditions-box">
+                <h4>Incluye en la cotización:</h4>
+                <ul>
+                    <li>Taller completo con facilitadora especializada</li>
+                    <li>Todos los materiales de alta calidad</li>
+                    <li>Herramientas y esmaltes</li>
+                    <li>Horneado profesional</li>
+                    <li>Entrega de obras listas para usar (2-3 semanas posteriores)</li>
+                    <li>Experiencia de empoderamiento y bienestar</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Closing -->
+        <div class="closing-box">
+            <p>¡Nos encantaría ser parte de esta experiencia transformadora para tu equipo!</p>
+            <p>
+                Si tienes preguntas, deseas conocer más detalles o estás listo para confirmar tu reserva, 
+                no dudes en contactarnos. Estamos aquí para hacer de este taller de cerámica un 
+                momento memorable lleno de creatividad, bienestar y conexión genuina.
+            </p>
+        </div>
+
+        <!-- Contact -->
+        <div class="contact-box">
+            <div class="contact-title">INFORMACIÓN DE CONTACTO</div>
+            <div class="contact-company">CERAMICALMA</div>
+            <div class="contact-item">
+                <span>✉</span>
+                <span>ceramicalma.ec@gmail.com</span>
+            </div>
+            <div class="contact-item">
+                <span>📱</span>
+                <span>@ceramicalma.ec</span>
+            </div>
+            <div class="contact-item">
+                <span>📍</span>
+                <span>Guayaquil - Ecuador</span>
+            </div>
+        </div>
+
+        <!-- Signature -->
+        <div class="closing-signature">
+            <p>Cordialmente,</p>
+            <p>CERAMICALMA</p>
+        </div>
+    </div>
+</body>
+</html>

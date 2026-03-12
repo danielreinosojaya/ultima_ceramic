@@ -272,6 +272,12 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
     // Usar datos del AdminDataContext en lugar de cargar localmente
     const allProducts = adminData.products;
     const allBookings = adminData.bookings;
+    // ⚡ FIX: customer.bookings es siempre [] por optimización de performance (Phase 6b).
+    // Derivamos las reservas reales filtrando adminData.bookings por email del cliente.
+    const _customerEmail = (customer.userInfo?.email || customer.email || '').toLowerCase().trim();
+    const customerBookings = allBookings.filter(
+        (b: any) => (b.userInfo?.email || '').toLowerCase().trim() === _customerEmail
+    );
     
     // Hooks para completar entrega
     const [completeModal, setCompleteModal] = useState<{ open: boolean; deliveryId: string | null }>({ open: false, deliveryId: null });
@@ -288,7 +294,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
         try {
             await dataService.removeBookingSlot(deleteModal.bookingId, deleteModal.slot);
             // Validar si el cliente queda sin reservas
-            const bookingsRestantes = customer.bookings.filter(b => {
+            const bookingsRestantes = customerBookings.filter(b => {
                 if (b.id !== deleteModal.bookingId) return true;
                 // Si es el booking eliminado, verificar slots
                 if (Array.isArray(b.slots)) {
@@ -418,7 +424,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
     // Clases pasadas = slots anteriores
     const renderPastClassesTab = () => {
         const now = new Date();
-        const pastSlots = customer.bookings
+        const pastSlots = customerBookings
             .flatMap(booking => booking.slots
                 .filter(slot => new Date(slot.date + 'T00:00:00') < now)
                 .map(slot => ({ slot, booking }))
@@ -536,7 +542,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
     // Clases programadas = todos los slots futuros
     const renderScheduledClassesTab = () => {
         const now = new Date();
-        const scheduledSlots = customer.bookings
+        const scheduledSlots = customerBookings
             .flatMap(booking => booking.slots
                 .filter(slot => new Date(slot.date + 'T00:00:00') >= now)
                 .map(slot => ({ slot, booking }))
@@ -673,7 +679,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
 
     // Pagos realizados
     const renderPaymentsTab = () => {
-        const payments = customer.bookings
+        const payments = customerBookings
             .flatMap(booking => (booking.paymentDetails || []).map((payment, idx) => ({ payment, booking, idx })));
         console.log('CustomerDetailView - Render payments tab - payments:', payments);
         payments.forEach(({ payment, booking, idx }) => {
