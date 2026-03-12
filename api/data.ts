@@ -1606,6 +1606,57 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     break;
                 }
 
+                case 'bookingsByCustomerEmail': {
+                    // Retornar TODAS las reservas de un cliente específico (sin límite de días)
+                    // Usado por CustomerDetailView para mostrar clases pasadas/programadas/pagos
+                    const emailParam = req.query.email as string;
+                    if (!emailParam) {
+                        return res.status(400).json({ success: false, error: 'Missing email parameter' });
+                    }
+                    const normalizedEmail = emailParam.toLowerCase().trim();
+                    const { rows: customerBookingRows } = await sql`
+                        SELECT
+                            b.id,
+                            b.product_id,
+                            b.product_type,
+                            p.name AS product_name,
+                            b.product->>'technique' AS product_technique,
+                            b.slots,
+                            b.user_info,
+                            b.created_at,
+                            b.is_paid,
+                            b.price,
+                            b.booking_mode,
+                            b.booking_code,
+                            b.booking_date,
+                            b.attendance,
+                            b.status,
+                            b.expires_at,
+                            b.participants,
+                            b.payment_details,
+                            b.reschedule_allowance,
+                            b.reschedule_used,
+                            b.reschedule_history,
+                            b.last_reschedule_at,
+                            b.booking_type,
+                            b.group_metadata AS group_class_metadata,
+                            b.technique,
+                            b.client_note,
+                            b.accepted_no_refund,
+                            b.giftcard_id,
+                            b.giftcard_redeemed_amount
+                        FROM bookings b
+                        LEFT JOIN products p ON p.id = b.product_id
+                        WHERE LOWER(TRIM(b.user_info->>'email')) = ${normalizedEmail}
+                        ORDER BY b.created_at DESC
+                    `;
+                    const parsedCustomerBookings = customerBookingRows.map(parseBookingFromDB).filter(Boolean);
+                    console.log(`[bookingsByCustomerEmail] Found ${parsedCustomerBookings.length} bookings for ${normalizedEmail}`);
+                    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+                    data = parsedCustomerBookings;
+                    break;
+                }
+
                 case 'getAvailableSlots': {
                     // Endpoint inteligente para experiencias personalizadas
                     const { technique, participants, startDate, daysAhead } = req.query;

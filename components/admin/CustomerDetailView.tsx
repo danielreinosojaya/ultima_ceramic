@@ -272,12 +272,28 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
     // Usar datos del AdminDataContext en lugar de cargar localmente
     const allProducts = adminData.products;
     const allBookings = adminData.bookings;
+
     // ⚡ FIX: customer.bookings es siempre [] por optimización de performance (Phase 6b).
-    // Derivamos las reservas reales filtrando adminData.bookings por email del cliente.
+    // adminData.bookings solo carga últimos 30 días, excluyendo reservas antiguas.
+    // Solución: fetch dedicado on-demand al abrir el detalle de cliente, sin límite de días.
     const _customerEmail = (customer.userInfo?.email || customer.email || '').toLowerCase().trim();
-    const customerBookings = allBookings.filter(
-        (b: any) => (b.userInfo?.email || '').toLowerCase().trim() === _customerEmail
-    );
+    const [fetchedBookings, setFetchedBookings] = useState<Booking[] | null>(null);
+    const [bookingsLoading, setBookingsLoading] = useState(false);
+    const customerBookings: Booking[] = fetchedBookings ?? [];
+
+    useEffect(() => {
+        if (!_customerEmail) return;
+        setBookingsLoading(true);
+        dataService.getBookingsByCustomerEmail(_customerEmail)
+            .then(bookings => setFetchedBookings(Array.isArray(bookings) ? bookings : []))
+            .catch(err => {
+                console.error('[CustomerDetailView] Error fetching customer bookings:', err);
+                setFetchedBookings([]);
+            })
+            .finally(() => setBookingsLoading(false));
+    // Solo re-fetch si cambia el email del cliente
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [_customerEmail]);
     
     // Hooks para completar entrega
     const [completeModal, setCompleteModal] = useState<{ open: boolean; deliveryId: string | null }>({ open: false, deliveryId: null });
@@ -423,6 +439,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
 
     // Clases pasadas = slots anteriores
     const renderPastClassesTab = () => {
+        if (bookingsLoading) return <div className="p-8 text-center text-brand-secondary">Cargando clases...</div>;
         const now = new Date();
         const pastSlots = customerBookings
             .flatMap(booking => booking.slots
@@ -541,6 +558,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
 
     // Clases programadas = todos los slots futuros
     const renderScheduledClassesTab = () => {
+        if (bookingsLoading) return <div className="p-8 text-center text-brand-secondary">Cargando clases...</div>;
         const now = new Date();
         const scheduledSlots = customerBookings
             .flatMap(booking => booking.slots
@@ -679,6 +697,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
 
     // Pagos realizados
     const renderPaymentsTab = () => {
+        if (bookingsLoading) return <div className="p-8 text-center text-brand-secondary">Cargando pagos...</div>;
         const payments = customerBookings
             .flatMap(booking => (booking.paymentDetails || []).map((payment, idx) => ({ payment, booking, idx })));
         console.log('CustomerDetailView - Render payments tab - payments:', payments);
