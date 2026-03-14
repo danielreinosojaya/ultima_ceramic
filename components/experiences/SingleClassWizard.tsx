@@ -9,7 +9,7 @@ export interface SingleClassWizardProps {
   availableSlots?: TimeSlot[];
   appData?: AppData;
   initialTechnique?: GroupTechnique;
-  onConfirm: (pricing: ExperiencePricing, selectedSlot: TimeSlot | null) => void;
+  onConfirm: (pricing: ExperiencePricing, selectedSlot: TimeSlot | null, technique: GroupTechnique) => void;
   onBack: () => void;
   isLoading?: boolean;
 }

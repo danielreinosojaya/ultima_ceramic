@@ -1052,7 +1052,8 @@ const App: React.FC = () => {
                             : []
                         }
                         appData={appData}
-                        onConfirm={(pricing: ExperiencePricing, selectedSlot: TimeSlot | null) => {
+                        onConfirm={(pricing: ExperiencePricing, selectedSlot: TimeSlot | null, selectedTechnique: GroupTechnique) => {
+                            setTechnique(selectedTechnique);
                             setExperienceUIState(prev => ({
                                 ...prev,
                                 pricing,
