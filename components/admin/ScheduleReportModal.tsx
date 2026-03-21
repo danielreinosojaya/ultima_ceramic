@@ -60,7 +60,9 @@ export const ScheduleReportModal: React.FC<ScheduleReportModalProps> = ({ isOpen
             package: 'Paquete',
             paymentStatus: 'Estado de pago',
             paid: 'Pagado',
-            unpaid: 'Pendiente'
+            unpaid: 'Pendiente',
+            classProgress: 'Clase #',
+            singleClassLabel: 'Clase única'
         };
         
         generateScheduleReportPDF(allBookings, { start: startDate, end: endDate }, pdfTranslations, language);

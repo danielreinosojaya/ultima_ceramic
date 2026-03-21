@@ -178,7 +178,32 @@ interface ScheduleReportPdfTranslations {
     paymentStatus: string;
     paid: string;
     unpaid: string;
+    classProgress: string;  // Column header "Clase #"
+    singleClassLabel: string; // Label for non-package bookings
 }
+
+// Helper: Returns class progress string for a booking slot
+// CLASS_PACKAGE -> "X/Y" (e.g. "2/4")  |  Other types -> singleClassLabel
+const getClassProgress = (
+    booking: Booking,
+    currentDate: string,
+    currentTime: string,
+    singleClassLabel: string
+): string => {
+    if (booking.productType !== 'CLASS_PACKAGE') {
+        return singleClassLabel;
+    }
+    // Sort slots chronologically to determine order
+    const sortedSlots = [...booking.slots].sort((a, b) => {
+        const dateCompare = a.date.localeCompare(b.date);
+        if (dateCompare !== 0) return dateCompare;
+        return a.time.localeCompare(b.time);
+    });
+    const total = sortedSlots.length;
+    const idx = sortedSlots.findIndex(s => s.date === currentDate && s.time === currentTime);
+    if (idx === -1) return singleClassLabel;
+    return `${idx + 1}/${total}`;
+};
 
 const drawFooter = (docInstance: jsPDF, translations: PdfTranslations, footerInfo: FooterInfo) => {
     const pageHeight = docInstance.internal.pageSize.getHeight();
@@ -496,15 +521,17 @@ export const generateScheduleReportPDF = (
                       translations.attendee,
                       'Asistentes',
                       translations.package,
+                      translations.classProgress,
                       translations.paymentStatus
                   ]],
-                                    body: attendees.map(b => [
-                                            '', // Empty first column for grouping
-                                            `${b.userInfo.firstName} ${b.userInfo.lastName}`,
-                                            typeof b.participants === 'number' ? b.participants : 1,
-                                            getBookingDisplayName(b),
-                                            b.isPaid ? translations.paid : translations.unpaid
-                                    ]),
+                  body: attendees.map(b => [
+                      '', // Empty first column for grouping
+                      `${b.userInfo.firstName} ${b.userInfo.lastName}`,
+                      typeof b.participants === 'number' ? b.participants : 1,
+                      getBookingDisplayName(b),
+                      getClassProgress(b, dateStr, time, translations.singleClassLabel),
+                      b.isPaid ? translations.paid : translations.unpaid
+                  ]),
                   theme: 'grid',
                   headStyles: {
                       fillColor: '#C8A18F',
@@ -515,8 +542,9 @@ export const generateScheduleReportPDF = (
                   columnStyles: {
                       0: { halign: 'center', cellWidth: 20 },
                       2: { halign: 'center', cellWidth: 20 },
-                      3: { cellWidth: 50 },
-                      4: { halign: 'center' }
+                      3: { cellWidth: 45 },
+                      4: { halign: 'center', cellWidth: 22 },
+                      5: { halign: 'center' }
                   },
                   styles: {
                       font: 'helvetica',
