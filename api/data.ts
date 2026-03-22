@@ -662,9 +662,10 @@ const computeSlotAvailability = async (
 ) => {
     // ✅ OPTIMIZATION PHASE 2: Buscar bookings que TENGAN SLOTS en la fecha solicitada
     // Con LIMIT 1000 para evitar saturación (traer todos los bookings es ineficiente)
-    // Filtramos en memoria: solo bookings que tengan slots en la fecha solicitada
+    // Excluimos bookings expirados (no deben contar para capacidad)
     const bookingsResult = await sql`
         SELECT * FROM bookings 
+        WHERE COALESCE(status, 'active') != 'expired'
         ORDER BY created_at DESC
         LIMIT 1000
     `;
@@ -809,30 +810,40 @@ const computeSlotAvailability = async (
             continue;
         }
 
-        const overlapInfo = booking.slots.find((s: any) => {
-            if (s.date !== requestedDate) return false;
+        // FIX: contar participantes UNA SOLA VEZ por booking (no por cada slot solapado)
+        const participantCount = booking.participants || 1;
+        let bookingHasOverlap = false;
+        let bookingHasExactMatch = false;
+        let exactMatchSlot: any = null;
+
+        for (const s of booking.slots) {
+            if (s.date !== requestedDate) continue;
 
             const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
             const bookingEndMinutes = bookingStartMinutes + (2 * 60);
-
-            const hasOverlap = hasTimeOverlap(requestedStartMinutes, requestedEndMinutes, bookingStartMinutes, bookingEndMinutes);
-            const isSameExactTime = bookingStartMinutes === requestedStartMinutes && 
+            const slotHasOverlap = hasTimeOverlap(requestedStartMinutes, requestedEndMinutes, bookingStartMinutes, bookingEndMinutes);
+            const isSameExactTime = bookingStartMinutes === requestedStartMinutes &&
                                    bookingEndMinutes === requestedEndMinutes;
 
-            if (hasOverlap) {
-                const participantCount = booking.participants || 1;
-                overlappingParticipants += participantCount;
-
-                if (isSameExactTime) {
-                    exactMatchParticipants += participantCount;
-                }
+            if (slotHasOverlap) {
+                bookingHasOverlap = true;
             }
+            if (isSameExactTime) {
+                bookingHasExactMatch = true;
+                exactMatchSlot = s;
+            }
+        }
 
-            return isSameExactTime;
-        });
+        if (bookingHasOverlap) {
+            overlappingParticipants += participantCount;
+            if (bookingHasExactMatch) {
+                exactMatchParticipants += participantCount;
+            }
+        }
+
+        const overlapInfo = exactMatchSlot;
 
         if (overlapInfo) {
-            const participantCount = booking.participants || 1;
             bookingsInSlot.push({
                 id: booking.id,
                 participants: participantCount,
@@ -5285,6 +5296,9 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         case 'createCustomExperienceBooking': {
             try {
                 const { experienceType, technique, date, time, participants, config, userInfo, invoiceData, needsInvoice, totalPrice, menuSelections, childrenPieces } = req.body;
+                const adminOverride = Boolean(req.body.adminOverride);
+                const overrideReason = req.body.overrideReason || '';
+                const violatedRules = req.body.violatedRules || [];
 
                 // Validar campos requeridos
                 if (!experienceType || !technique || !date || !time || !participants || !userInfo || !totalPrice) {
@@ -5313,10 +5327,12 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     });
                 }
                 
-                // Obtener todos los bookings activos que tengan slots en esa fecha
+                // Obtener bookings no-expirados que tengan slots en esa fecha
                 const { rows: allBookingsRows } = await sql`
                     SELECT * FROM bookings 
+                    WHERE COALESCE(status, 'active') != 'expired'
                     ORDER BY created_at DESC
+                    LIMIT 1000
                 `;
                 const allBookings = allBookingsRows.map(parseBookingFromDB);
                 const bookingsOnDate = allBookings.filter(b => {
@@ -5371,24 +5387,34 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     
                     if (!techniquesMatch) continue;
                     
-                    // Verificar si hay overlap temporal en la misma fecha
+                    // FIX: contar participantes UNA SOLA VEZ por booking (no por cada slot solapado)
+                    const participantCount = booking.participants || 1;
+                    let bHasOverlap = false;
+                    let bHasExactMatch = false;
+
                     for (const s of booking.slots) {
                         if (s.date !== requestedDate) continue;
                         
                         const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
                         const bookingEndMinutes = bookingStartMinutes + (2 * 60);
                         
-                        const hasOverlap = hasTimeOverlap(requestedStartMinutes, requestedEndMinutes, bookingStartMinutes, bookingEndMinutes);
+                        const slotHasOverlap = hasTimeOverlap(requestedStartMinutes, requestedEndMinutes, bookingStartMinutes, bookingEndMinutes);
+                        const isExactMatch = bookingStartMinutes === requestedStartMinutes;
                         
-                        if (hasOverlap) {
-                            const participantCount = booking.participants || 1;
-                            overlappingParticipants += participantCount;
-                            console.log(`[createCustomExperienceBooking] OVERLAP: ${s.time} with ${participantCount} participants`);
+                        if (slotHasOverlap) {
+                            bHasOverlap = true;
+                        }
+                        if (isExactMatch) {
+                            bHasExactMatch = true;
+                        }
+                    }
 
-                            const isExactMatch = bookingStartMinutes === requestedStartMinutes;
-                            if (isExactMatch && participantCount >= 3) {
-                                openedByLargeGroupExactMatch = true;
-                            }
+                    if (bHasOverlap) {
+                        overlappingParticipants += participantCount;
+                        console.log(`[createCustomExperienceBooking] OVERLAP: booking with ${participantCount} participants`);
+
+                        if (bHasExactMatch && participantCount >= 3) {
+                            openedByLargeGroupExactMatch = true;
                         }
                     }
                 }
@@ -5397,7 +5423,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 // No debe abrir horarios libres: solo horarios fijos del calendario (molding)
                 // o slots ya abiertos por una reserva previa de 3+ personas en el mismo horario.
                 const isSpecialDayNoRules = scheduleOverrides?.[requestedDate]?.disableRules === true;
-                if (!isSpecialDayNoRules && requestedTechnique === 'hand_modeling' && requestedParticipants === 1) {
+                if (!adminOverride && !isSpecialDayNoRules && requestedTechnique === 'hand_modeling' && requestedParticipants === 1) {
                     const dayKey = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date(`${requestedDate}T00:00:00`).getDay()];
                     const normalizedRequestedTime = normalizeTime(requestedTime);
                     const fixedHandTimes = getFixedSlotTimesForDate(requestedDate, dayKey, availability, scheduleOverrides, 'molding')
@@ -5415,15 +5441,18 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 const availableCapacity = maxCapacity - overlappingParticipants;
                 const canBook = availableCapacity >= requestedParticipants;
                 
-                console.log(`[createCustomExperienceBooking] Capacity check: max=${maxCapacity}, overlapping=${overlappingParticipants}, available=${availableCapacity}, requested=${requestedParticipants}, canBook=${canBook}`);
+                console.log(`[createCustomExperienceBooking] Capacity check: max=${maxCapacity}, overlapping=${overlappingParticipants}, available=${availableCapacity}, requested=${requestedParticipants}, canBook=${canBook}, adminOverride=${adminOverride}`);
                 
-                if (!canBook) {
+                if (!canBook && !adminOverride) {
                     return res.status(400).json({
                         success: false,
                         error: availableCapacity <= 0
                             ? `Lo sentimos, no hay cupos disponibles para ${requestedDate} a las ${requestedTime}. El horario está lleno.`
                             : `Solo hay ${availableCapacity} cupos disponibles, pero necesitas ${requestedParticipants}.`
                     });
+                }
+                if (!canBook && adminOverride) {
+                    console.log(`[createCustomExperienceBooking] 🔓 Admin override: bypassing capacity check (available=${availableCapacity}, requested=${requestedParticipants}, reason="${overrideReason}")`);
                 }
                 // ===== FIN VALIDACIÓN DE CAPACIDAD =====
 
@@ -5485,6 +5514,22 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
                 const newBooking = rows[0];
                 console.log('[createCustomExperienceBooking] Booking created:', bookingCode, 'ID:', newBooking.id);
+
+                // 🔓 LOG ADMIN OVERRIDE IF PRESENT
+                if (adminOverride) {
+                    console.log('[🔓 ADMIN OVERRIDE] createCustomExperienceBooking with admin override:', {
+                        bookingCode,
+                        bookingId: newBooking.id,
+                        customer: `${userInfo.firstName} ${userInfo.lastName}`,
+                        technique: requestedTechnique,
+                        date: requestedDate,
+                        time: requestedTime,
+                        participants: requestedParticipants,
+                        violatedRules: violatedRules?.map((r: any) => `${r.rule}: ${r.message}`) || [],
+                        reason: overrideReason || 'No reason provided',
+                        timestamp: new Date().toISOString()
+                    });
+                }
 
                 // Crear invoice request si se proporcionó invoiceData
                 if (needsInvoice && invoiceData && newBooking.id) {
