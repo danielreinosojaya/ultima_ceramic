@@ -77,7 +77,7 @@ const getBookingDisplayName = (booking: Booking): string => {
 
 type FilterPeriod = 'today' | 'week' | 'month' | 'custom';
 type FinancialTab = 'summary' | 'pending' | 'capacity';
-type PendingSubTab = 'packages' | 'openStudio';
+type PendingSubTab = 'all' | 'packages' | 'openStudio';
 
 interface NavigationState {
     tab: AdminTab;
@@ -199,7 +199,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
     // Idioma fijo español
     const language = 'es-ES';
     const [activeTab, setActiveTab] = useState<FinancialTab>('summary');
-    const [pendingSubTab, setPendingSubTab] = useState<PendingSubTab>('packages');
+    const [pendingSubTab, setPendingSubTab] = useState<PendingSubTab>('all');
 
     // State for Summary Tab
     const [summaryPeriod, setSummaryPeriod] = useState<FilterPeriod>('month');
@@ -315,7 +315,11 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
         return { pendingPackageBookings: packages, pendingOpenStudioBookings: openStudio };
     }, [allBookings]); // Remove date dependencies since pending payments should show all unpaid bookings
     
-    const pendingBookingsToDisplay = pendingSubTab === 'packages' ? pendingPackageBookings : pendingOpenStudioBookings;
+    const pendingBookingsToDisplay = pendingSubTab === 'packages'
+        ? pendingPackageBookings
+        : pendingSubTab === 'openStudio'
+            ? pendingOpenStudioBookings
+            : [...pendingPackageBookings, ...pendingOpenStudioBookings].sort((a, b) => (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0));
     // Pagination logic
     const totalRows = pendingBookingsToDisplay.length;
     const totalPages = Math.ceil(totalRows / rowsPerPage);
@@ -804,10 +808,14 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                                 </div>
                                 <div className="flex gap-2">
                                     <label className="text-sm font-semibold text-brand-secondary">Ver:</label>
-                                    <select className="px-3 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary">
-                                        <option>Todos</option>
-                                        <option>Paquetes de clases</option>
-                                        <option>Open Studio</option>
+                                    <select
+                                        value={pendingSubTab}
+                                        onChange={e => { setPendingSubTab(e.target.value as PendingSubTab); setCurrentPage(1); }}
+                                        className="px-3 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary"
+                                    >
+                                        <option value="all">Todos</option>
+                                        <option value="packages">Paquetes de clases</option>
+                                        <option value="openStudio">Open Studio</option>
                                     </select>
                                 </div>
                             </div>
