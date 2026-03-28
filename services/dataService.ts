@@ -3011,12 +3011,12 @@ export const generateTimeSlots = (
   
   // Configuración correcta de horarios por día:
   // (El 'end' = ÚLTIMO START permitido, NO se genera :30 en esa hora)
-  // - Domingo: 10:00-16:00 (último start)
+  // - Domingo: 10:00-15:00 (último start → clase termina a las 17:00 = cierre)
   // - Lunes: CERRADO
   // - Martes-Viernes: 10:00-19:00 (último start)
   // - Sábado: 9:00-18:00 (último start)
   const hoursPerDay = [
-    { start: 10, end: 16, days: [0] },    // Domingo: último start 16:00
+    { start: 10, end: 15, days: [0] },    // Domingo: último start 15:00 (cierre 17:00 - 2h clase)
     // Lunes (1) EXCLUIDO - CERRADO
     { start: 10, end: 19, days: [2, 3, 4, 5] }, // Martes-Viernes: último start 19:00
     { start: 9, end: 18, days: [6] }      // Sábado: último start 18:00

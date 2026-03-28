@@ -632,10 +632,10 @@ const getBusinessHoursForDay = (dayOfWeek: number): string[] => {
         return hours;
     }
 
-    // Domingo: 10:00-16:00 (último start 16:00, NO 16:30)
+    // Domingo: 10:00-15:00 (último start 15:00 → clase termina a las 17:00 = cierre)
     if (dayOfWeek === 0) {
-        for (let hour = 10; hour <= 16; hour++) {
-            const mins = hour === 16 ? ['00'] : ['00', '30'];
+        for (let hour = 10; hour <= 15; hour++) {
+            const mins = hour === 15 ? ['00'] : ['00', '30'];
             for (const min of mins) {
                 hours.push(`${String(hour).padStart(2, '0')}:${min}`);
             }

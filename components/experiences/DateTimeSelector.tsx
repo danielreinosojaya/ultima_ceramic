@@ -83,7 +83,7 @@ export const DateTimeSelector: React.FC<DateTimeSelectorProps> = ({
     };
 
     if (dayOfWeek === 1) return []; // Lunes cerrado
-    if (dayOfWeek === 0) return buildSlots(10, 16); // Domingo: último start 16:00
+    if (dayOfWeek === 0) return buildSlots(10, 15); // Domingo: último start 15:00 (cierre 17:00 - 2h clase)
     if (dayOfWeek === 6) return buildSlots(9, 18);  // Sábado: último start 18:00
     return buildSlots(10, 19); // Martes a Viernes: último start 19:00
   };

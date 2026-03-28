@@ -239,7 +239,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     if (dayOfWeek === 1 && !hasOverrideForDate) return []; // Lunes cerrado por defecto, excepto en semanas especiales
     if (dayOfWeek === 1 && isSpecialDayNoRules) return buildSlots(10, 19);
     const baseHours = dayOfWeek === 0
-      ? buildSlots(10, 16)  // Domingo: último start 16:00
+      ? buildSlots(10, 15)  // Domingo: último start 15:00 (cierre 17:00 - 2h clase)
       : dayOfWeek === 6
       ? buildSlots(9, 18)   // Sábado: último start 18:00
       : buildSlots(10, 19); // Martes-Viernes: último start 19:00
