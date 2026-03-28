@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { getEcuadorToday, formatDateToYYYYMMDD } from '../../utils/formatters';
 import type { Product, UserInfo, Customer, TimeSlot, Booking } from '../../types';
 import * as dataService from '../../services/dataService';
 import * as adminValidator from '../../services/adminValidator';
@@ -571,7 +572,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
                 setSelectedDate(e.target.value);
                 setShowCalendar(false);
               }}
-              min={new Date().toISOString().split('T')[0]}
+              min={formatDateToYYYYMMDD(getEcuadorToday())}
             />
           )}
           {selectedDate && (

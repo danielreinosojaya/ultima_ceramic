@@ -5,6 +5,27 @@ export function parseLocalDate(dateStr: string): Date {
     return new Date(year, month - 1, day);
 }
 
+// ─── ECUADOR TIMEZONE UTILITIES ────────────────────────────────────────────
+// Ecuador usa UTC-5 fijo, sin horario de verano (America/Guayaquil)
+// Usar siempre estas funciones para "hoy" y formateo de fechas de calendario,
+// independientemente de la zona horaria del dispositivo del admin.
+
+/** Retorna el "hoy" en hora Ecuador (UTC-5). Usar en lugar de new Date() para lógica de calendario. */
+export function getEcuadorToday(): Date {
+    const ecuadorOffsetMs = -5 * 60 * 60 * 1000;
+    const ecuadorNow = new Date(Date.now() + ecuadorOffsetMs);
+    // Crear fecha local midnight usando los valores de fecha Ecuador
+    return new Date(ecuadorNow.getUTCFullYear(), ecuadorNow.getUTCMonth(), ecuadorNow.getUTCDate());
+}
+
+/** Formatea un Date a "YYYY-MM-DD" usando métodos locales (no UTC). Timezone-safe. */
+export function formatDateToYYYYMMDD(d: Date): string {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 // Formatea hora local de Ecuador desde timestamp UTC (ISO string)
 // El backend ahora guarda en UTC puro, convertir a America/Guayaquil al mostrar
 export function formatLocalTimeFromUTC(isoString: string | undefined | null): string {

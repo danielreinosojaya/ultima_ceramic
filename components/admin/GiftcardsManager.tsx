@@ -3,6 +3,7 @@ import type { GiftcardRequest } from '../../services/dataService';
 import * as dataService from '../../services/dataService';
 import { useAdminData } from '../../context/AdminDataContext';
 import { GiftcardManualCreateModal } from './GiftcardManualCreateModal';
+import { getEcuadorToday, formatDateToYYYYMMDD } from '../../utils/formatters';
 
 // Función para convertir UTC a hora local (Quito UTC-5)
 const utcToLocal = (isoString: string | null): Date | null => {
@@ -396,7 +397,7 @@ const GiftcardsManager: React.FC = () => {
                             setEditScheduleModal({
                               isOpen: true,
                               requestId: req.id,
-                              currentDate: scheduledDateLocal?.toISOString().split('T')[0] || '',
+                              currentDate: scheduledDateLocal ? formatDateToYYYYMMDD(scheduledDateLocal) : '',
                               currentTime: `${String(scheduledDateLocal?.getHours()).padStart(2, '0')}:${String(scheduledDateLocal?.getMinutes()).padStart(2, '0')}`,
                               recipientName: req.recipientName
                             });
@@ -414,7 +415,7 @@ const GiftcardsManager: React.FC = () => {
                             setEditScheduleModal({
                               isOpen: true,
                               requestId: req.id,
-                              currentDate: new Date().toISOString().split('T')[0],
+                              currentDate: formatDateToYYYYMMDD(getEcuadorToday()),
                               currentTime: '14:00',
                               recipientName: req.recipientName
                             });
@@ -771,7 +772,7 @@ const GiftcardsManager: React.FC = () => {
                       currentDate: e.target.value
                     }));
                   }}
-                  min={new Date().toISOString().split('T')[0]}
+                  min={formatDateToYYYYMMDD(getEcuadorToday())}
                   className="w-full px-3 py-2 border border-brand-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
                 />
               </div>

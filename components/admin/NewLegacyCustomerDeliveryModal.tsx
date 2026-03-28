@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { Delivery, UserInfo } from '../../types';
 import { COUNTRIES } from '../../constants';
+import { getEcuadorToday, formatDateToYYYYMMDD } from '../../utils/formatters';
 
 interface NewLegacyCustomerDeliveryModalProps {
     isOpen: boolean;
@@ -109,9 +110,7 @@ export const NewLegacyCustomerDeliveryModal: React.FC<NewLegacyCustomerDeliveryM
         }
     };
 
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    const tomorrowStr = formatDateToYYYYMMDD(new Date(getEcuadorToday().getTime() + 86400000));
 
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>

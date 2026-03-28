@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { Delivery } from '../../types';
+import { getEcuadorToday, formatDateToYYYYMMDD } from '../../utils/formatters';
 
 interface NewDeliveryModalProps {
     isOpen: boolean;
@@ -112,9 +113,7 @@ export const NewDeliveryModal: React.FC<NewDeliveryModalProps> = ({
     };
 
     // Get tomorrow as default date
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    const tomorrowStr = formatDateToYYYYMMDD(new Date(getEcuadorToday().getTime() + 86400000));
 
     if (!isOpen) return null;
 

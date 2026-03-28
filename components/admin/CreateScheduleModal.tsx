@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getEcuadorToday, formatDateToYYYYMMDD } from '../../utils/formatters';
 
 interface CreateScheduleModalProps {
     onClose: () => void;
@@ -199,7 +200,7 @@ export function CreateScheduleModal({ onClose, onSubmit }: CreateScheduleModalPr
                             className={`w-full px-4 py-2 border rounded-lg ${
                                 errors.startDate ? 'border-red-500' : 'border-gray-300'
                             }`}
-                            min={new Date().toISOString().split('T')[0]}
+                            min={formatDateToYYYYMMDD(getEcuadorToday())}
                         />
                         {errors.startDate && <p className="text-red-500 text-sm mt-1">{errors.startDate}</p>}
                     </div>

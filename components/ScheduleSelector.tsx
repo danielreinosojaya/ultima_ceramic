@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type { ClassPackage, TimeSlot, EnrichedAvailableSlot, BookingMode, AppData } from '../types.js';
+import { getEcuadorToday } from '../utils/formatters.js';
 import * as dataService from '../services/dataService.js';
 // Eliminado useLanguage, la app ahora es monolingüe en español
 import { BookingSidebar } from './BookingSidebar.js';
@@ -9,7 +10,12 @@ import { SocialBadge } from './SocialBadge.js';
 import { InstructorTag } from './InstructorTag.js';
 import { DAY_NAMES } from '../constants.js';
 
-const formatDateToYYYYMMDD = (d: Date): string => d.toISOString().split('T')[0];
+const formatDateToYYYYMMDD = (d: Date): string => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
 
 const parseYYYYMMDDToDate = (dateStr: string): Date => {
     const [year, month, day] = dateStr.split('-').map(Number);
@@ -40,7 +46,7 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
   // Inicializar sin slots seleccionados por defecto
   const [selectedSlots, setSelectedSlots] = useState<TimeSlot[]>([]);
   // Inicializar la vista en la semana del día actual
-  const [currentDate, setCurrentDate] = useState(getWeekStartDate(new Date()));
+  const [currentDate, setCurrentDate] = useState(getWeekStartDate(getEcuadorToday()));
 
   // Force load bookings if not available
   useEffect(() => {
@@ -68,7 +74,7 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
     d.setMilliseconds(0);
     return d;
   };
-  const today = useMemo(() => normalizeDate(new Date()), []);
+  const today = useMemo(() => normalizeDate(getEcuadorToday()), []);
 
   const firstSelectionDate = useMemo(() => {
     if (selectedSlots.length === 0 || bookingMode === 'monthly') return null;
@@ -151,7 +157,7 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
   const weekEnd = weekDates[6];
 
   // State for mobile view
-  const todayStr = useMemo(() => formatDateToYYYYMMDD(new Date()), []);
+  const todayStr = useMemo(() => formatDateToYYYYMMDD(getEcuadorToday()), []);
   const todayIndex = useMemo(() => weekDates.findIndex(d => formatDateToYYYYMMDD(d) === todayStr), [weekDates, todayStr]);
   const [selectedDayIndex, setSelectedDayIndex] = useState(todayIndex !== -1 ? todayIndex : 0);
 

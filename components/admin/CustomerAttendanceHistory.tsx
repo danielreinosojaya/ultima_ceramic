@@ -14,7 +14,12 @@ type PastSlot = {
     status: AttendanceStatus | 'not-marked';
 };
 
-const formatDateToYYYYMMDD = (d: Date): string => d.toISOString().split('T')[0];
+const formatDateToYYYYMMDD = (d: Date): string => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
 
 export const CustomerAttendanceHistory: React.FC<CustomerAttendanceHistoryProps> = ({ customer, onBack }) => {
     const [currentDate, setCurrentDate] = useState(new Date());

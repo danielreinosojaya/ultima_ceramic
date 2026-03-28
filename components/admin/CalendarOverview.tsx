@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import type { Booking, TimeSlot, UserInfo, EditableBooking, RescheduleSlotInfo, PaymentDetails, Product } from '../../types';
+import { getEcuadorToday } from '../../utils/formatters';
 import * as dataService from '../../services/dataService';
 // Eliminado useLanguage, la app ahora es monolingüe en español
 import { ManualBookingModal } from './ManualBookingModal';
@@ -26,7 +27,7 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
   
   // Monolingüe español, textos hardcodeados
   const language = 'es-ES';
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate, setCurrentDate] = useState(getEcuadorToday());
   const [isManualBookingModalOpen, setIsManualBookingModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isClearScheduleModalOpen, setIsClearScheduleModalOpen] = useState(false);

@@ -304,6 +304,7 @@ import type {
     Delivery, DeliveryStatus, UILabels, RecurringClassSlot, DynamicTimeSlot, SlotDisplayInfo, GroupTechnique, TimeSlot, ExperienceTypeOverrides
 } from '../types';
 import { DAY_NAMES, DEFAULT_PRODUCTS } from '../constants';
+import { getEcuadorToday } from '../utils/formatters';
 
 // --- API Helpers ---
 
@@ -1833,7 +1834,12 @@ export const getCustomersWithDeliveries = async (bookings: Booking[]): Promise<C
     return customersWithDeliveries;
 };
 
-const formatDateToYYYYMMDD = (d: Date): string => d.toISOString().split('T')[0];
+const formatDateToYYYYMMDD = (d: Date): string => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
 
 export const generateIntroClassSessions = (
     product: IntroductoryClass,
@@ -1842,8 +1848,7 @@ export const generateIntroClassSessions = (
 ): EnrichedIntroClassSession[] => {
     const { generationLimitInDays = 30, includeFull = false } = options;
     const allSessions: EnrichedIntroClassSession[] = [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = getEcuadorToday();
 
     const overridesByDate = (product.overrides || []).reduce((acc, override) => {
         acc[override.date] = override.sessions;
@@ -1940,6 +1945,9 @@ const getBookingsForSlot = (date: Date, slot: AvailableSlot, appData: Pick<AppDa
     });
 };
 
+// Domingo: el local cierra a las 17:00 → último slot de inicio permitido: 15:00
+const SUNDAY_LAST_SLOT = '15:00';
+
 export const getAvailableTimesForDate = (date: Date, appData: Pick<AppData, 'availability' | 'scheduleOverrides' | 'classCapacity' | 'bookings'>, technique?: Technique): EnrichedAvailableSlot[] => {
     const dateStr = formatDateToYYYYMMDD(date);
     const dayKey = DAY_NAMES[date.getDay()];
@@ -1950,6 +1958,16 @@ export const getAvailableTimesForDate = (date: Date, appData: Pick<AppData, 'ava
     let baseSlots = override ? override.slots! : appData.availability[dayKey];
     if (technique) {
         baseSlots = baseSlots.filter(s => s.technique === technique);
+    }
+
+    // Filtro domingo: eliminar slots que empiecen después de las 15:00
+    // (local cierra 17:00, clases duran 2h → último inicio válido: 15:00)
+    if (date.getDay() === 0) {
+        const toMinutes = (t: string) => {
+            const [h, m] = t.split(':').map(Number);
+            return h * 60 + (m || 0);
+        };
+        baseSlots = baseSlots.filter(s => toMinutes(s.time) <= toMinutes(SUNDAY_LAST_SLOT));
     }
 
     return baseSlots.map(slot => {
@@ -1979,7 +1997,7 @@ export const getAllConfiguredTimesForDate = (date: Date, appData: Pick<AppData, 
 };
 
 export const checkMonthlyAvailability = (startDate: Date, slot: AvailableSlot, appData: Pick<AppData, 'availability' | 'scheduleOverrides' | 'classCapacity' | 'bookings'>, technique: Technique): boolean => {
-    console.log(`[checkMonthlyAvailability] Checking ${startDate.toISOString().split('T')[0]} at ${slot.time}`);
+    console.log(`[checkMonthlyAvailability] Checking ${formatDateToYYYYMMDD(startDate)} at ${slot.time}`);
     
     let consecutiveAvailable = 0;
     let maxConsecutiveFromStart = 0;
@@ -1987,7 +2005,7 @@ export const checkMonthlyAvailability = (startDate: Date, slot: AvailableSlot, a
     for (let i = 0; i < 4; i++) {
         const checkDate = new Date(startDate);
         checkDate.setDate(startDate.getDate() + (i * 7));
-        const dateStr = checkDate.toISOString().split('T')[0];
+        const dateStr = formatDateToYYYYMMDD(checkDate);
         
         const daySlots = getAvailableTimesForDate(checkDate, appData, technique);
         const matchingSlot = daySlots.find(s => s.time === slot.time && s.instructorId === slot.instructorId);
@@ -2032,8 +2050,7 @@ export const getFutureCapacityMetrics = async (days: number): Promise<{ totalCap
     ]);
     
     let totalCapacity = 0;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = getEcuadorToday();
 
     for (let i = 0; i < days; i++) {
         const date = new Date(today);

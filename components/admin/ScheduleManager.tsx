@@ -147,6 +147,7 @@ const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): st
 };
 // import { useLanguage } from '../../context/LanguageContext';
 import { DAY_NAMES, PALETTE_COLORS } from '../../constants.js';
+import { getEcuadorToday, formatDateToYYYYMMDD as getEcuadorDateStr } from '../../utils/formatters';
 import { InstructorTag } from '../InstructorTag';
 import { BookingDetailsModal } from './BookingDetailsModal';
 import { generateWeeklySchedulePDF } from '../../services/pdfService';
@@ -184,7 +185,10 @@ type ScheduleData = Map<number, { instructor: Instructor, schedule: Record<strin
 
 const formatDateToYYYYMMDD = (d: Date): string => {
     if (isNaN(d.getTime())) return 'Invalid Date';
-    return d.toISOString().split('T')[0];
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 };
 
 const getWeekStartDate = (date: Date) => {
@@ -408,6 +412,14 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             dates.push(date);
         }
 
+        // Precompute week date strings using LOCAL date methods (timezone-safe, no DST edge cases)
+        const weekDateSet = new Set(dates.map(d => {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        }));
+
         const { instructors, bookings, products, availability, scheduleOverrides, classCapacity } = appData;
         
         const scheduleMap: ScheduleData = new Map();
@@ -425,14 +437,18 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 // Usar instructor del booking si existe, sino default
                 const instructorId = slot.instructorId || 1;
 
+                // Check if slot date falls within the current week (string-based, timezone-safe)
+                // This avoids the DST/precision edge case where Sunday midnight === endOfWeek timestamp
+                const inCurrentWeek = weekDateSet.has(slot.date);
+                if (!inCurrentWeek) {
+                    continue;
+                }
+
+                // Parse slot date for day-of-week capacity calculations
                 const slotDate = new Date(slot.date + "T00:00:00");
                 if (isNaN(slotDate.getTime())) {
                     continue;
                 }
-
-                const inCurrentWeek = slotDate >= startOfWeek && slotDate <= new Date(startOfWeek.getTime() + 6 * 24 * 60 * 60 * 1000);
-
-                if (inCurrentWeek) {
                     const dateStr = slot.date;
                     const normalizedTime = normalizeTime(slot.time);
                     
@@ -486,7 +502,6 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                     if (!existingSlot.bookings.some(b => b.id === booking.id)) {
                         existingSlot.bookings.push(booking);
                     }
-                }
             }
         }
 
@@ -590,7 +605,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         return count;
     };
     
-    const todayStr = useMemo(() => formatDateToYYYYMMDD(new Date()), []);
+    const todayStr = useMemo(() => getEcuadorDateStr(getEcuadorToday()), []);
     const todayIndex = useMemo(() => weekDates.findIndex(d => formatDateToYYYYMMDD(d) === todayStr), [weekDates, todayStr]);
     const [selectedDayIndex, setSelectedDayIndex] = useState(todayIndex !== -1 ? todayIndex : 0);
 
@@ -922,7 +937,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                     <DocumentDownloadIcon className="w-4 h-4" />
                     Descargar PDF
                 </button>
-                 <button onClick={() => setCurrentDate(getWeekStartDate(new Date()))} className="text-sm font-bold bg-brand-background py-2 px-4 rounded-lg hover:bg-brand-primary/20 transition-colors">Hoy</button>
+                 <button onClick={() => setCurrentDate(getWeekStartDate(getEcuadorToday()))} className="text-sm font-bold bg-brand-background py-2 px-4 rounded-lg hover:bg-brand-primary/20 transition-colors">Hoy</button>
                 <button onClick={handlePrevWeek} className="p-2 rounded-full hover:bg-gray-100">
                     &lt;
                 </button>

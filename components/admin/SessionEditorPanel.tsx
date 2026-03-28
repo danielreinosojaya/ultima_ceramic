@@ -21,7 +21,12 @@ export const SessionEditorPanel: React.FC<SessionEditorPanelProps> = ({ selected
   // Monolingüe español, textos hardcodeados. No usar useLanguage ni contextos de idioma.
   const adminData = useAdminData();
   const instructors = adminData.instructors; // ✅ Usar del context
-  const dateStr = useMemo(() => selectedDate.toISOString().split('T')[0], [selectedDate]);
+  const dateStr = useMemo(() => {
+    const year = selectedDate.getFullYear();
+    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const day = String(selectedDate.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, [selectedDate]);
 
   const [sessions, setSessions] = useState<Omit<EnrichedIntroClassSession, 'id' | 'isOverride'>[]>([]);
   const [isCancelled, setIsCancelled] = useState(false);
