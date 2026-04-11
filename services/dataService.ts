@@ -2188,7 +2188,8 @@ const parseDelivery = (d: any): Delivery => {
         paintingStatus: d.paintingStatus ?? d.painting_status ?? null,
         paintingBookingDate: d.paintingBookingDate ?? d.painting_booking_date ?? null,
         paintingPaidAt: d.paintingPaidAt ?? d.painting_paid_at ?? null,
-        paintingCompletedAt: d.paintingCompletedAt ?? d.painting_completed_at ?? null
+        paintingCompletedAt: d.paintingCompletedAt ?? d.painting_completed_at ?? null,
+        paintingPickupNotifiedAt: d.paintingPickupNotifiedAt ?? d.painting_pickup_notified_at ?? null
     };
 };
 
@@ -2410,6 +2411,27 @@ export const markDeliveryAsReady = async (deliveryId: string, resend: boolean = 
         return { ...result, delivery: parseDelivery(result.delivery) };
     }
     return result;
+};
+
+// Notifica al cliente que su pieza PINTADA ya pasó el horneado final y puede retirarse
+export const notifyPaintingPickupReady = async (
+    deliveryId: string,
+    resend: boolean = false
+): Promise<{ success: boolean; delivery?: Delivery; emailSent?: boolean; error?: string }> => {
+    try {
+        const result = await postAction('notifyPaintingPickupReady', { deliveryId, resend });
+        if (result.success && result.delivery) {
+            invalidateDeliveriesCache();
+            return { ...result, delivery: parseDelivery(result.delivery) };
+        }
+        return result;
+    } catch (error) {
+        console.error('[notifyPaintingPickupReady] Error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error notifying pickup ready'
+        };
+    }
 };
 
 export const deleteDelivery = async (deliveryId: string): Promise<{ success: boolean }> => {

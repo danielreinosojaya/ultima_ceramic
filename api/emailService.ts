@@ -1275,6 +1275,98 @@ export const sendDeliveryCompletedEmail = async (customerEmail: string, customer
     return result;
 };
 
+// Email: Pieza pintada lista para RETIRAR (después del horneado final post-pintura)
+export const sendPaintedPieceReadyForPickupEmail = async (
+    customerEmail: string,
+    customerName: string,
+    delivery: { description?: string | null; readyAt: string; }
+) => {
+    console.log('[sendPaintedPieceReadyForPickupEmail] Starting email send to:', customerEmail);
+
+    const readyDate = new Date(delivery.readyAt);
+    const expirationDate = new Date(readyDate);
+    expirationDate.setMonth(expirationDate.getMonth() + 2);
+
+    const formattedReadyDate = readyDate.toLocaleDateString('es-ES', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+    const formattedExpirationDate = expirationDate.toLocaleDateString('es-ES', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+
+    const displayDescription = delivery.description || 'Tu pieza de cerámica pintada';
+    const sanitizedDescription = displayDescription.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const subject = `🎁 ¡Tu pieza pintada está lista para retirar! - ${sanitizedDescription}`;
+    const html = `
+        <div style="font-family: Arial, sans-serif; color: #4A4540; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
+            <p style="font-size: 18px; font-weight: bold; color: #D95F43;">🎁 ¡Tu pieza pintada ya pasó el horneado final y está lista para retirar!</p>
+
+            <div style="background-color: #FDF7F2; border: 2px solid #D95F43; padding: 20px; border-radius: 10px; margin: 20px 0; text-align: center;">
+                <span style="font-size: 52px;">🎨✨</span>
+                <h3 style="color: #D95F43; margin: 10px 0;">Tu creación pintada te espera</h3>
+                <p style="margin: 10px 0; font-size: 16px;"><strong>${displayDescription}</strong></p>
+                <p style="margin: 5px 0; color: #6B5F58; font-size: 14px;">Lista desde: ${formattedReadyDate}</p>
+            </div>
+
+            <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #92400E; margin-top: 0;">⏰ Plazo de Recogida</h3>
+                <p style="margin: 10px 0; color: #78350F; font-size: 15px;">
+                    Tu pieza estará disponible hasta el <strong style="color: #D97706;">${formattedExpirationDate}</strong> (2 meses).
+                </p>
+                <p style="margin: 10px 0; color: #78350F; font-size: 14px;">
+                    ⚠️ Después de esta fecha no podemos garantizar su disponibilidad.
+                </p>
+            </div>
+
+            <div style="background-color: #F4F2F1; border-left: 4px solid #CCBCB2; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #4A4540; font-weight: bold;">🕐 Horario de Recogida</p>
+                <p style="margin: 8px 0 0 0; color: #6B5F58; font-size: 14px;">
+                    • Martes a Sábado: 10:00 AM - 8:00 PM<br/>
+                    • Domingos: 12:00 PM - 5:00 PM<br/>
+                    • Lunes: Cerrado
+                </p>
+            </div>
+
+            <div style="background-color: #F9FAFB; border: 1px solid #E5E7EB; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; font-weight: bold; color: #374151;">📍 Dirección</p>
+                <p style="margin: 8px 0 0 0; color: #6B7280; font-size: 14px;">
+                    Sol Plaza - Av. Samborondón Km 2.5<br/>
+                    Samborondón 092501, Ecuador
+                </p>
+            </div>
+
+            <p style="margin-top: 20px; font-size: 15px;">Si tienes alguna pregunta o necesitas coordinar la recogida, contáctanos por WhatsApp.</p>
+
+            <div style="margin: 30px 0; text-align: center;">
+                <a href="https://wa.me/593985813327" style="display: inline-block; background-color: #D95F43; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                    📱 Contactar por WhatsApp
+                </a>
+            </div>
+
+            <p style="color: #6B7280; font-size: 14px; margin-top: 30px;">
+                ¡Esperamos que ames tu creación pintada!<br/><br/>
+                Saludos,<br/>
+                <strong>El equipo de CeramicAlma</strong>
+            </p>
+        </div>
+    `;
+
+    const result = await sendEmail(customerEmail, subject, html);
+    console.log('[sendPaintedPieceReadyForPickupEmail] Email send result:', result);
+    try {
+        await logEmailEvent(customerEmail, 'painted_piece_ready_pickup', 'email', (result as any)?.sent ? 'sent' : 'failed');
+    } catch (e) {
+        console.warn('[sendPaintedPieceReadyForPickupEmail] Failed to log email event:', e);
+    }
+    return result;
+};
+
 // Special email for couples experience bookings with technique details
 export const sendCouplesTourConfirmationEmail = async (booking: Booking, bankDetails: BankDetails) => {
     const { userInfo, bookingCode, product, slots, technique } = booking;

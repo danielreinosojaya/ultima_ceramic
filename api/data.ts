@@ -1236,6 +1236,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                        created_at, completed_at, delivered_at, ready_at, notes,
                                        wants_painting, painting_price, painting_status, 
                                        painting_booking_date, painting_paid_at, painting_completed_at,
+                                       painting_pickup_notified_at,
                                        CASE WHEN photos IS NOT NULL AND photos != '[]' AND photos != 'null' 
                                             THEN true ELSE false END as has_photos
                                 FROM deliveries 
@@ -1259,6 +1260,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                        created_at, completed_at, delivered_at, ready_at, notes,
                                        wants_painting, painting_price, painting_status, 
                                        painting_booking_date, painting_paid_at, painting_completed_at,
+                                       painting_pickup_notified_at,
                                        CASE WHEN photos IS NOT NULL AND photos != '[]' AND photos != 'null' 
                                             THEN true ELSE false END as has_photos
                                 FROM deliveries 
@@ -6438,6 +6440,103 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             return res.status(200).json({ 
                 success: true, 
                 delivery: toCamelCase(readyDelivery),
+                emailSent: emailSentSuccessfully
+            });
+        }
+        case 'notifyPaintingPickupReady': {
+            // Notifica al cliente que su pieza PINTADA ya pasó el horneado final y puede retirarse.
+            // Se llama cuando painting_status === 'completed' y la pieza está físicamente lista.
+            const { deliveryId, resend = false } = req.body;
+
+            if (!deliveryId) {
+                return res.status(400).json({ error: 'deliveryId is required.' });
+            }
+
+            const { rows: [existingDelivery] } = await sql`
+                SELECT * FROM deliveries WHERE id = ${deliveryId}
+            `;
+
+            if (!existingDelivery) {
+                return res.status(404).json({ error: 'Delivery not found.' });
+            }
+
+            if (existingDelivery.painting_status !== 'completed') {
+                return res.status(400).json({
+                    error: 'Delivery painting_status must be "completed" before notifying pickup.'
+                });
+            }
+
+            // Si ya fue notificado y no es resend, rechazar
+            const alreadyNotified = Boolean(existingDelivery.painting_pickup_notified_at);
+            if (alreadyNotified && !resend) {
+                return res.status(400).json({
+                    error: 'Pickup notification already sent.',
+                    notifiedAt: existingDelivery.painting_pickup_notified_at
+                });
+            }
+
+            // Actualizar ready_at con NOW() (o mantener existente si resend) y registrar notificación
+            let updatedDelivery: any;
+            if (!resend || !existingDelivery.painting_pickup_notified_at) {
+                const { rows: [updated] } = await sql`
+                    UPDATE deliveries
+                    SET painting_pickup_notified_at = NOW(),
+                        ready_at = COALESCE(ready_at, NOW())
+                    WHERE id = ${deliveryId}
+                    RETURNING *
+                `;
+                updatedDelivery = updated;
+            } else {
+                updatedDelivery = existingDelivery;
+            }
+
+            // Resolver nombre del cliente
+            let customerName = 'Cliente';
+            try {
+                const { rows: [customerData] } = await sql`
+                    SELECT first_name FROM customers WHERE LOWER(email) = LOWER(${updatedDelivery.customer_email}) LIMIT 1
+                `;
+                if (customerData?.first_name) {
+                    customerName = customerData.first_name;
+                } else {
+                    const { rows: [bookingData] } = await sql`
+                        SELECT user_info FROM bookings
+                        WHERE user_info->>'email' = ${updatedDelivery.customer_email}
+                        ORDER BY created_at DESC LIMIT 1
+                    `;
+                    if (bookingData?.user_info) {
+                        const ui = typeof bookingData.user_info === 'string'
+                            ? JSON.parse(bookingData.user_info)
+                            : bookingData.user_info;
+                        customerName = ui.firstName || 'Cliente';
+                    }
+                }
+            } catch (nameErr) {
+                console.warn('[notifyPaintingPickupReady] Could not resolve customer name:', nameErr);
+            }
+
+            // Enviar email
+            let emailSentSuccessfully = false;
+            const notifiedAt = updatedDelivery.painting_pickup_notified_at || new Date().toISOString();
+            try {
+                const emailServiceModule = await import('./emailService.js');
+                const emailResult = await emailServiceModule.sendPaintedPieceReadyForPickupEmail(
+                    updatedDelivery.customer_email,
+                    customerName,
+                    {
+                        description: updatedDelivery.description,
+                        readyAt: notifiedAt
+                    }
+                );
+                emailSentSuccessfully = Boolean((emailResult as any)?.sent);
+                console.log('[notifyPaintingPickupReady] ✅ Email sent to:', updatedDelivery.customer_email, 'result:', emailResult);
+            } catch (emailErr: any) {
+                console.error('[notifyPaintingPickupReady] ❌ Email error:', emailErr?.message || emailErr);
+            }
+
+            return res.status(200).json({
+                success: true,
+                delivery: toCamelCase(updatedDelivery),
                 emailSent: emailSentSuccessfully
             });
         }

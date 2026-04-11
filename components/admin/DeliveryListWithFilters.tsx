@@ -1107,6 +1107,16 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                                     🎉 Completado
                                                 </span>
                                             )}
+                                            {delivery.paintingStatus === 'completed' && delivery.paintingPickupNotifiedAt && (
+                                                <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full font-bold border border-orange-300">
+                                                    🎁 Retiro notificado
+                                                </span>
+                                            )}
+                                            {delivery.paintingStatus === 'completed' && !delivery.paintingPickupNotifiedAt && delivery.status !== 'completed' && (
+                                                <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full font-bold border border-red-300 animate-pulse">
+                                                    ⚠️ Pendiente notificar retiro
+                                                </span>
+                                            )}
                                         </div>
                                         {delivery.paintingStatus === 'pending_payment' && (
                                             <p className="text-xs text-purple-700 font-medium">
@@ -1285,6 +1295,39 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                     >
                                         <span>🎉</span>
                                         <span className="hidden xs:inline">Completar</span>
+                                    </button>
+                                )}
+
+                                {delivery.wantsPainting && delivery.paintingStatus === 'completed' && delivery.status !== 'completed' && (
+                                    <button
+                                        className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white border border-orange-600 shadow-sm transition-all text-xs sm:text-sm font-bold"
+                                        title={delivery.paintingPickupNotifiedAt ? 'Reenviar notificación de retiro (pieza pintada lista)' : 'Notificar al cliente que su pieza pintada está lista para retirar'}
+                                        onClick={async () => {
+                                            const alreadyNotified = Boolean(delivery.paintingPickupNotifiedAt);
+                                            const msg = alreadyNotified
+                                                ? '¿Reenviar el email de retiro de pieza pintada al cliente?'
+                                                : '¿Notificar al cliente que su pieza pintada ya pasó el horneado final y está lista para retirar?';
+                                            if (confirm(msg)) {
+                                                try {
+                                                    const result = await dataService.notifyPaintingPickupReady(delivery.id, alreadyNotified);
+                                                    if (result.success) {
+                                                        if (result.delivery) {
+                                                            onDeliveryUpdated?.(result.delivery);
+                                                            adminData.optimisticUpsertDelivery(result.delivery);
+                                                        }
+                                                        alert(result.emailSent ? '✅ Cliente notificado por email.' : '✅ Estado actualizado (email no enviado, revisa logs).');
+                                                    } else {
+                                                        alert('Error: ' + (result.error || 'No se pudo notificar'));
+                                                    }
+                                                } catch (error) {
+                                                    console.error('Error notifying pickup ready:', error);
+                                                    alert('Error al notificar al cliente');
+                                                }
+                                            }
+                                        }}
+                                    >
+                                        <span>🎁</span>
+                                        <span className="hidden xs:inline">{delivery.paintingPickupNotifiedAt ? 'Reenviar Retiro' : 'Lista p/ Retirar'}</span>
                                     </button>
                                 )}
 

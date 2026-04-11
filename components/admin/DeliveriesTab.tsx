@@ -249,6 +249,10 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataC
                 onMarkReady={handleMarkReady}
                 formatDate={formatDate}
                 onDataChange={onDataChange}
+                onDeliveryUpdated={(updatedDelivery) => {
+                    adminData.optimisticUpsertDelivery(updatedDelivery);
+                    onDataChange?.();
+                }}
             />
 
             <NewLegacyCustomerDeliveryModal

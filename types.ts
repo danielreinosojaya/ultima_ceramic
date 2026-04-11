@@ -73,6 +73,7 @@ export interface Delivery {
     paintingBookingDate?: string | null; // Fecha agendada para pintura
     paintingPaidAt?: string | null; // Timestamp cuando pagó servicio
     paintingCompletedAt?: string | null; // Timestamp cuando completó pintura
+    paintingPickupNotifiedAt?: string | null; // Timestamp cuando admin notificó que pieza pintada está lista para retirar
 }
 
 export interface Customer {
