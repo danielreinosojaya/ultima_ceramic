@@ -96,7 +96,7 @@ const SPECIAL_EVENTS: SpecialEvent[] = [
     spotsLeft: 10,
     category: 'workshop',
     description: 'Crea flores eternas en cerámica como el regalo perfecto para el Día de la Madre. Disponible individual o en pareja, una experiencia llena de amor y creatividad.',
-    image: 'https://images.pexels.com/photos/3094218/pexels-photo-3094218.jpeg?auto=compress&cs=tinysrgb&w=800',
+    image: '/images/events/flores-eternas.jpg',
     price: 'Desde $70',
     eventDate: '2026-04-29',
   },
@@ -111,7 +111,7 @@ const SPECIAL_EVENTS: SpecialEvent[] = [
     spotsLeft: 15,
     category: 'experience',
     description: 'Una noche de conversaciones, cerámica y buena vibra junto al Rum-Com Club. Una colab que no te puedes perder.',
-    image: 'https://images.pexels.com/photos/4219654/pexels-photo-4219654.jpeg?auto=compress&cs=tinysrgb&w=800',
+    image: '/images/events/spill-the-tea.jpg',
     price: 'Por confirmar',
     eventDate: '2026-04-30',
   },
@@ -126,7 +126,7 @@ const SPECIAL_EVENTS: SpecialEvent[] = [
     spotsLeft: 6,
     category: 'workshop',
     description: 'Aprende las técnicas de modelado a mano con el reconocido ceramista Jaime Aldas del colectivo PÁRAMO. Una oportunidad única de aprender de un maestro.',
-    image: 'https://images.pexels.com/photos/3094799/pexels-photo-3094799.jpeg?auto=compress&cs=tinysrgb&w=800',
+    image: '/images/events/modelado-jaime.jpg',
     price: '$85 por persona',
     eventDate: '2026-05-01',
   },
@@ -141,7 +141,7 @@ const SPECIAL_EVENTS: SpecialEvent[] = [
     spotsLeft: 5,
     category: 'workshop',
     description: 'Domina el torno alfarero guiado por Jaime Aldas de PÁRAMO. Grupos reducidos para un aprendizaje profundo e íntimo con la arcilla.',
-    image: 'https://images.pexels.com/photos/4219654/pexels-photo-4219654.jpeg?auto=compress&cs=tinysrgb&w=800',
+    image: '/images/events/torno-alfarero.jpg',
     price: '$120 por persona',
     eventDate: '2026-05-03',
   },
@@ -350,8 +350,9 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const sheetRef = useRef<HTMLDivElement>(null);
 
-  const featuredEvent = SPECIAL_EVENTS.find(e => e.featured);
-  const otherEvents = SPECIAL_EVENTS.filter(e => !e.featured);
+  // Evento más próximo (dinámico) será el featured
+  const featuredEvent = getNextUpcomingEvent(SPECIAL_EVENTS);
+  const otherEvents = SPECIAL_EVENTS.filter(e => !featuredEvent || e.id !== featuredEvent.id);
 
   const filters = [
     { key: 'all', label: 'Todos' },
