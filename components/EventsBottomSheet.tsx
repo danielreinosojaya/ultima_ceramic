@@ -112,7 +112,7 @@ const SPECIAL_EVENTS: SpecialEvent[] = [
     category: 'experience',
     description: 'Una tarde de conversaciones, cerámica y buena vibra junto al Rum-Com Club. Una colab que no te puedes perder.',
     image: '/images/events/spill-the-tea.jpg',
-    price: 'Por confirmar',
+    price: '$45 por persona',
     eventDate: '2026-04-30',
     url: 'https://www.instagram.com/p/DXSJwN_jp_G/',
   },
