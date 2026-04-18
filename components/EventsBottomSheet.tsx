@@ -308,7 +308,7 @@ function RegularEventCard({ event }: { event: SpecialEvent }) {
       <div className="p-3.5 flex flex-col flex-1">
         <h4 className="font-bold text-sm mb-0.5 leading-snug" style={{ color: '#3D2410' }}>{event.title}</h4>
         <p className="text-xs mb-3 leading-relaxed flex-1" style={{ color: '#7A5C45' }}>
-          {event.description.length > 80 ? event.description.substring(0, 80) + '...' : event.description}
+          {event.description}
         </p>
 
         <div className="space-y-1 mb-3">
