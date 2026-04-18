@@ -15,6 +15,7 @@ const EVENT_DATE = '2026-04-30';
 const EVENT_TIME = '17:00';
 const EVENT_PRICE = 45;
 const EVENT_TECHNIQUE = 'hand_modeling' as const;
+const EVENT_TECHNIQUE_LABEL = 'Pintura de piezas';
 
 /**
  * RumcomBooking - Exclusive landing + booking for "Spill the Tea x Rum-Com Club"
@@ -159,7 +160,7 @@ export const RumcomBooking: React.FC<RumcomBookingProps> = ({
                 </div>
                 <div className="bg-[#FAF5EE] rounded-xl p-3">
                   <p className="text-xs text-[#A08060] font-medium">Técnica</p>
-                  <p className="text-sm font-bold text-[#3D2410]">Modelado a Mano</p>
+                  <p className="text-sm font-bold text-[#3D2410]">{EVENT_TECHNIQUE_LABEL}</p>
                 </div>
               </div>
 
@@ -206,23 +207,23 @@ export const RumcomBooking: React.FC<RumcomBookingProps> = ({
 
             {/* What to expect */}
             <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-              <h2 className="text-lg font-bold text-[#3D2410] mb-3">¿Qué incluye?</h2>
+              <h2 className="text-lg font-bold text-[#3D2410] mb-3">¿Qué incluye este spill the tea?</h2>
               <ul className="space-y-2 text-sm text-[#7A5C45]">
                 <li className="flex items-start gap-2">
-                  <span className="text-[#C4704E] mt-0.5">✦</span>
-                  <span>Experiencia de modelado a mano guiada</span>
+                  <span className="text-[#C4704E] mt-0.5">🫖</span>
+                  <span>Estación de té por <strong>@seitea.ec</strong></span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-[#C4704E] mt-0.5">✦</span>
-                  <span>Todos los materiales incluidos</span>
+                  <span className="text-[#C4704E] mt-0.5">🍓</span>
+                  <span>Piqueos de <strong>@santoverde.ec</strong> y dulces de <strong>@milmundos.ec</strong></span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-[#C4704E] mt-0.5">✦</span>
-                  <span>Colab especial con Rum-Com Club</span>
+                  <span className="text-[#C4704E] mt-0.5">🕯️</span>
+                  <span>Tu velita personal de <strong>@velasamaru.ec</strong></span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-[#C4704E] mt-0.5">✦</span>
-                  <span>Tu pieza horneada y lista en ~2 semanas</span>
+                  <span className="text-[#C4704E] mt-0.5">🌸</span>
+                  <span>Decoración por <strong>@violetagye</strong> y <strong>@blancrentals</strong></span>
                 </li>
               </ul>
             </div>
@@ -263,7 +264,7 @@ export const RumcomBooking: React.FC<RumcomBookingProps> = ({
                 </div>
                 <div className="flex justify-between py-3 border-b border-gray-100">
                   <span className="text-sm text-[#7A5C45]">Técnica</span>
-                  <span className="text-sm font-bold text-[#3D2410]">Modelado a Mano</span>
+                  <span className="text-sm font-bold text-[#3D2410]">{EVENT_TECHNIQUE_LABEL}</span>
                 </div>
                 <div className="flex justify-between py-3 border-b border-gray-100">
                   <span className="text-sm text-[#7A5C45]">Fecha y hora</span>
