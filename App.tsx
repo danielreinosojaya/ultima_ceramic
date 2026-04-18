@@ -511,8 +511,11 @@ const App: React.FC = () => {
                 'painting': 'Pintura de piezas'
             };
             
-            // Use piece names if available, otherwise use technique name
-            const pieceName = pricing.pieces.map(p => p.pieceName).join(', ') || techniqueNames[selectedTechnique] || 'Experiencia Cerámica';
+            // Use event name for rumcom, otherwise use piece names or technique name
+            let pieceName = pricing.pieces.map(p => p.pieceName).join(', ') || techniqueNames[selectedTechnique] || 'Experiencia Cerámica';
+            if (view === 'rumcom_booking') {
+                pieceName = 'Spill the Tea x Rum-Com Club';
+            }
             
             product = {
                 id: `experience-${Date.now()}`,

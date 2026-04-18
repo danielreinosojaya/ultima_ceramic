@@ -40,6 +40,11 @@ const getProductTypeName = (productType?: string): string => {
 
 // Helper para obtener el nombre del producto/técnica de un booking
 const getBookingDisplayName = (booking: Booking): string => {
+  // 0. Detección especial: Si es una reserva de Rumcom, siempre retornar nombre del evento
+  if ((booking.product?.details as any)?.bookingSource === 'rumcom') {
+    return 'Spill the Tea x Rum-Com Club';
+  }
+  
   // 1. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
   if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
     const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
