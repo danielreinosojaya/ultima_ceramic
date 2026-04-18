@@ -25,6 +25,7 @@ interface SpecialEvent {
   price: string;
   eventDate: string; // ISO format: YYYY-MM-DD
   url?: string;
+  internalSlug?: string; // For events that navigate within the app (e.g. 'rumcom')
   hideReserveButton?: boolean;
   hideAvailableSpots?: boolean;
 }
@@ -114,7 +115,7 @@ const SPECIAL_EVENTS: SpecialEvent[] = [
     image: '/images/events/spill-the-tea.jpg',
     price: '$45 por persona',
     eventDate: '2026-04-30',
-    url: 'https://www.instagram.com/p/DXSJwN_jp_G/',
+    internalSlug: 'rumcom',
   },
   {
     id: 'modelado-jaime-1-may',
@@ -171,13 +172,17 @@ function getNextUpcomingEvent(events: SpecialEvent[]): SpecialEvent | undefined 
 }
 
 // ── Featured Event Card ────────────────────────────────────────────────────────
-function FeaturedEventCard({ event }: { event: SpecialEvent }) {
+function FeaturedEventCard({ event, onEventClick }: { event: SpecialEvent; onEventClick?: (slug: string) => void }) {
   const spotsPercent = ((event.spots - event.spotsLeft) / event.spots) * 100;
   const isAlmostFull = event.spotsLeft <= 3;
   const catColor = categoryColors[event.category];
 
   const handleClick = () => {
-    if (event.url) window.open(event.url, '_blank');
+    if (event.internalSlug && onEventClick) {
+      onEventClick(event.internalSlug);
+    } else if (event.url) {
+      window.open(event.url, '_blank');
+    }
   };
 
   return (
@@ -273,12 +278,16 @@ function FeaturedEventCard({ event }: { event: SpecialEvent }) {
 }
 
 // ── Regular Event Card ─────────────────────────────────────────────────────────
-function RegularEventCard({ event }: { event: SpecialEvent }) {
+function RegularEventCard({ event, onEventClick }: { event: SpecialEvent; onEventClick?: (slug: string) => void }) {
   const isAlmostFull = event.spotsLeft <= 3;
   const catColor = categoryColors[event.category];
 
   const handleClick = () => {
-    if (event.url) window.open(event.url, '_blank');
+    if (event.internalSlug && onEventClick) {
+      onEventClick(event.internalSlug);
+    } else if (event.url) {
+      window.open(event.url, '_blank');
+    }
   };
 
   return (
@@ -345,6 +354,7 @@ function RegularEventCard({ event }: { event: SpecialEvent }) {
 export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
   isOpen,
   onClose,
+  onEventClick,
 }) => {
   const [visible, setVisible] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
@@ -504,12 +514,12 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
             </div>
           ) : (
             <div className="space-y-4">
-              {showFeatured && <FeaturedEventCard event={featuredEvent!} />}
+              {showFeatured && <FeaturedEventCard event={featuredEvent!} onEventClick={onEventClick} />}
 
               {filteredOther.length > 0 && (
                 <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
                   {filteredOther.map(event => (
-                    <RegularEventCard key={event.id} event={event} />
+                    <RegularEventCard key={event.id} event={event} onEventClick={onEventClick} />
                   ))}
                 </div>
               )}

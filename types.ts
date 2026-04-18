@@ -33,7 +33,9 @@ export type AppView =
   | 'wheel_course_confirmation'
   | 'valentine_landing'
   | 'valentine_form'
-  | 'valentine_success';
+  | 'valentine_success'
+  | 'rumcom_booking'
+  | 'rumcom_admin';
 export type BookingMode = 'flexible' | 'monthly';
 export type Technique = 'potters_wheel' | 'molding' | 'hand_modeling' | 'painting';
 

@@ -39,6 +39,8 @@ const CourseConfirmation = lazy(() => import('./components/courses/CourseConfirm
 const ValentineLanding = lazy(() => import('./components/valentine/ValentineLanding').then(m => ({ default: m.ValentineLanding })));
 const ValentineRegistrationForm = lazy(() => import('./components/valentine/ValentineRegistrationForm').then(m => ({ default: m.ValentineRegistrationForm })));
 const ValentineSuccess = lazy(() => import('./components/valentine/ValentineSuccess').then(m => ({ default: m.ValentineSuccess })));
+const RumcomBooking = lazy(() => import('./components/rumcom/RumcomBooking').then(m => ({ default: m.RumcomBooking })));
+const RumcomAdmin = lazy(() => import('./components/rumcom/RumcomAdmin').then(m => ({ default: m.RumcomAdmin })));
 import { NotificationProvider } from './context/NotificationContext';
 import { AdminDataProvider } from './context/AdminDataContext';
 import { AuthProvider } from './context/AuthContext';
@@ -162,6 +164,18 @@ const App: React.FC = () => {
         // Check for Valentine registration page - /sanvalentin or ?sanvalentin=true
         if (pathname.includes('/sanvalentin') || href.includes('/sanvalentin') || urlParams.get('sanvalentin') === 'true') {
             setView('valentine_landing');
+            return;
+        }
+
+        // Check for Rum-Com admin panel - /rumcomadmin (check BEFORE /rumcom)
+        if (pathname.includes('/rumcomadmin') || urlParams.get('rumcomadmin') === 'true') {
+            setView('rumcom_admin');
+            return;
+        }
+
+        // Check for Rum-Com event booking page - /rumcom
+        if (pathname.includes('/rumcom') || urlParams.get('rumcom') === 'true') {
+            setView('rumcom_booking');
             return;
         }
 
@@ -329,6 +343,9 @@ const App: React.FC = () => {
     const handleEventClick = (slug: string) => {
         if (slug === 'sanvalentin') {
             setView('valentine_landing');
+        }
+        if (slug === 'rumcom') {
+            window.location.href = '/rumcom';
         }
         // Add more event handlers here as needed
     };
@@ -508,6 +525,7 @@ const App: React.FC = () => {
                     pieces: pricing.pieces,
                     guidedOption: pricing.guidedOption,
                     technique: selectedTechnique,
+                    ...(view === 'rumcom_booking' ? { bookingSource: 'rumcom' } : {}),
                 }
             } as any;
         }
@@ -1138,6 +1156,49 @@ const App: React.FC = () => {
                             setValentineRegistrationId(null);
                             setView('welcome');
                         }}
+                    />
+                );
+
+            // ==================== RUMCOM EVENT VIEWS ====================
+            case 'rumcom_booking':
+                return (
+                    <RumcomBooking
+                        appData={appData}
+                        availableSlots={appData?.availability ?
+                            dataService.generateTimeSlots(new Date(), 180, appData?.scheduleOverrides || {}).map(slot => ({
+                                date: slot.date,
+                                time: slot.startTime,
+                                instructorId: 0,
+                                available: slot.capacity.hand_modeling?.available ?? slot.capacity['hand_modeling']?.available ?? 22,
+                                total: slot.capacity.hand_modeling?.max ?? slot.capacity['hand_modeling']?.max ?? 22,
+                                canBook: (slot.capacity.hand_modeling?.available ?? slot.capacity['hand_modeling']?.available ?? 22) > 0
+                            }))
+                            : []
+                        }
+                        onConfirm={(pricing: ExperiencePricing, selectedSlot: TimeSlot | null, selectedTechnique: 'hand_modeling') => {
+                            setTechnique(selectedTechnique);
+                            setExperienceUIState(prev => ({
+                                ...prev,
+                                pricing,
+                                piecesSelected: pricing.pieces
+                            }));
+                            setBookingDetails(prev => ({
+                                ...prev,
+                                slots: selectedSlot ? [selectedSlot] : [],
+                                userInfo: null
+                            }));
+                            setExperienceType('experience');
+                            setIsUserInfoModalOpen(true);
+                        }}
+                        onBack={() => setView('welcome')}
+                        isLoading={experienceUIState.isLoading}
+                    />
+                );
+            
+            case 'rumcom_admin':
+                return (
+                    <RumcomAdmin
+                        onBack={() => setView('welcome')}
                     />
                 );
 
