@@ -76,9 +76,17 @@ export const RumcomAdmin: React.FC<RumcomAdminProps> = ({ onBack }) => {
         receivedAt: new Date().toISOString(),
       };
       const result = await dataService.addPaymentToBooking(paymentModal.booking.id, payment);
-      if (result.success) {
+      if (result.success && result.booking) {
+        // OPCIÓN 3: Update local sin refetch completo
+        // Actualizar el booking localmente con la respuesta del servidor
+        setBookings(prevBookings =>
+          prevBookings.map(b =>
+            b.id === paymentModal.booking.id
+              ? result.booking! // Usar el booking actualizado del servidor
+              : b
+          )
+        );
         setPaymentModal(null);
-        await fetchBookings();
       }
     } catch (err) {
       console.error('[RumcomAdmin] Error registering payment:', err);
