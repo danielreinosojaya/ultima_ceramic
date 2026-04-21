@@ -242,7 +242,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
       ? buildSlots(10, 15)  // Domingo: último start 15:00 (cierre 17:00 - 2h clase)
       : dayOfWeek === 6
       ? buildSlots(9, 18)   // Sábado: último start 18:00
-      : buildSlots(10, 19); // Martes-Viernes: último start 19:00
+      : buildSlots(10, 18); // Martes-Viernes: último start 18:00 (clase termina 20:00)
 
     if (technique === 'painting') {
       return baseHours;
@@ -258,6 +258,14 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
       return fixedHours;
     }
     
+    // Torno en Martes (2) o Miércoles (3): último inicio 17:00 (clase 17:00-19:00)
+    if (technique === 'potters_wheel' && (dayOfWeek === 2 || dayOfWeek === 3)) {
+      const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0); };
+      const filtered = baseHours.filter(t => toMin(t) <= 17 * 60);
+      console.log(`🔒 [Torno Mar/Mié] Filtrado a max 17:00:`, filtered);
+      return filtered;
+    }
+
     console.log(`🆓 [${technique}] Horarios totales: ${baseHours.length} slots`);
     return baseHours;
   };
