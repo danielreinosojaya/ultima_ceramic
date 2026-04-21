@@ -1970,6 +1970,20 @@ export const getAvailableTimesForDate = (date: Date, appData: Pick<AppData, 'ava
         baseSlots = baseSlots.filter(s => toMinutes(s.time) <= toMinutes(SUNDAY_LAST_SLOT));
     }
 
+    // Martes (2) y Miércoles (3): torno alfarero último inicio 17:00, resto 18:00
+    if (date.getDay() === 2 || date.getDay() === 3) {
+        const toMinutes = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0); };
+        baseSlots = baseSlots.filter(s =>
+            s.technique === 'potters_wheel' ? toMinutes(s.time) <= 17 * 60 : toMinutes(s.time) <= 18 * 60
+        );
+    }
+
+    // Jueves (4) a Sábado (6): todas las técnicas último inicio 18:00 (clase termina 20:00)
+    if (date.getDay() >= 4 && date.getDay() <= 6) {
+        const toMinutes = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0); };
+        baseSlots = baseSlots.filter(s => toMinutes(s.time) <= 18 * 60);
+    }
+
     return baseSlots.map(slot => {
         const bookingsForSlot = getBookingsForSlot(date, slot, appData);
         const maxCapacity = override?.capacity ?? (slot.technique === 'molding' ? appData.classCapacity.molding : appData.classCapacity.potters_wheel);

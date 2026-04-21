@@ -643,9 +643,9 @@ const getBusinessHoursForDay = (dayOfWeek: number): string[] => {
         return hours;
     }
 
-    // Martes-Viernes: 10:00-19:00 (último start 19:00, NO 19:30)
-    for (let hour = 10; hour <= 19; hour++) {
-        const mins = hour === 19 ? ['00'] : ['00', '30'];
+    // Martes-Viernes: 10:00-18:00 (último start 18:00 → clase termina a las 20:00)
+    for (let hour = 10; hour <= 18; hour++) {
+        const mins = hour === 18 ? ['00'] : ['00', '30'];
         for (const min of mins) {
             hours.push(`${String(hour).padStart(2, '0')}:${min}`);
         }
@@ -1973,6 +1973,12 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
 
                             if (pottersCount > 0) {
                                 pottersTotal = resolveCapacity(dateStr, 'potters_wheel', maxCapacityMap, scheduleOverrides);
+
+                                // Martes (2) y Miércoles (3): torno alfarero último inicio 17:00 (clase 17:00-19:00)
+                                if ((currentDate.getDay() === 2 || currentDate.getDay() === 3) && slotStartMinutes > 17 * 60) {
+                                    pottersBlocked = true;
+                                    blockedReason = blockedReason || 'schedule_limit';
+                                }
 
                                 if (totalParticipants < 3 && !fixedPottersTimes.includes(normalizedTime)) {
                                     pottersBlocked = true;
