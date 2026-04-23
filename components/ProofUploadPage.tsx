@@ -68,6 +68,9 @@ export const ProofUploadPage: React.FC<ProofUploadPageProps> = ({ bookingCode, o
                 if (result.success) {
                     setProofUploaded(true);
                     setPageStatus('pending_verification');
+                    if (!result.bunnyAvailable) {
+                        setProofError('Tu reserva fue protegida. Envía también el comprobante por WhatsApp para que podamos verificarlo.');
+                    }
                 } else {
                     setProofError(result.error || 'Error al subir. Por favor intenta de nuevo.');
                 }

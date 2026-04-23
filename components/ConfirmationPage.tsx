@@ -155,7 +155,11 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                 const base64Data = ev.target?.result as string;
                 const result = await uploadPaymentProof(booking.id!, base64Data, file.name);
                 if (result.success) {
+                    // success = true even when Bunny is unavailable: status was still protected from expiry
                     setProofUploaded(true);
+                    if (!result.bunnyAvailable) {
+                        setProofError('Tu reserva fue protegida. El archivo no pudo guardarse en línea — envíalo también por WhatsApp para que el equipo lo revise.');
+                    }
                 } else {
                     setProofError(result.error || 'Error al subir el comprobante. Intenta por WhatsApp.');
                 }

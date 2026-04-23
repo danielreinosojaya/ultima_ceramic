@@ -1095,7 +1095,7 @@ export const sendPaymentReminder = async (bookingId: string): Promise<{ success:
     return postAction('sendPaymentReminder', { bookingId });
 };
 
-export const uploadPaymentProof = async (bookingId: string, base64Data: string, fileName?: string): Promise<{ success: boolean; proofUrl?: string; error?: string }> => {
+export const uploadPaymentProof = async (bookingId: string, base64Data: string, fileName?: string): Promise<{ success: boolean; proofUrl?: string | null; bunnyAvailable?: boolean; error?: string }> => {
     const result = await postAction('uploadPaymentProof', { bookingId, base64Data, fileName });
     if (result.success) {
         invalidateBookingsCache();

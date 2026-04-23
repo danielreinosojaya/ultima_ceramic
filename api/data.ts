@@ -2330,7 +2330,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                             b.expires_at,
                                             b.participants,
                                             b.group_metadata AS group_class_metadata,
-                                            b.technique
+                                            b.technique,
+                                            b.payment_proof_url
                                         FROM bookings b
                                         LEFT JOIN products p ON p.id = b.product_id
                                         WHERE b.created_at >= ${limitDate.toISOString()}
@@ -2343,7 +2344,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                     const missingOptionalColumn =
                                         queryErrorMessage.includes('group_class_metadata') ||
                                         queryErrorMessage.includes('technique') ||
-                                        queryErrorMessage.includes('participants');
+                                        queryErrorMessage.includes('participants') ||
+                                        queryErrorMessage.includes('payment_proof_url');
 
                                     if (!missingOptionalColumn) {
                                         throw bookingsQueryError;
@@ -2380,12 +2382,13 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                         bookings = rows.map((row: any) => ({
                                             ...row,
                                             group_class_metadata: null,
-                                            technique: null
+                                            technique: null,
+                                            payment_proof_url: null
                                         }));
                                     } catch (participantsFallbackError: any) {
                                         const participantsFallbackErrorMessage = String(participantsFallbackError?.message || '');
 
-                                        if (!participantsFallbackErrorMessage.includes('participants')) {
+                                        if (!participantsFallbackErrorMessage.includes('participants') && !participantsFallbackErrorMessage.includes('payment_proof_url')) {
                                             throw participantsFallbackError;
                                         }
 
@@ -2419,7 +2422,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                             ...row,
                                             participants: 1,
                                             group_class_metadata: null,
-                                            technique: null
+                                            technique: null,
+                                            payment_proof_url: null
                                         }));
                                     }
                                 }
@@ -2839,30 +2843,38 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             }
 
             const bunnyEnabledProof = Boolean(process.env.BUNNY_API_KEY && process.env.BUNNY_STORAGE_ZONE);
-            if (!bunnyEnabledProof) {
-                return res.status(503).json({ success: false, error: 'Photo upload service not available' });
+
+            let proofUrl: string | null = null;
+
+            if (bunnyEnabledProof) {
+                const proofUploadResult = await uploadProofToBunny({
+                    base64Data: proofData,
+                    bookingId: proofBookingId,
+                    fileName: proofFileName
+                });
+
+                if (!proofUploadResult.success) {
+                    // Bunny upload failed but we still protect the booking from expiry
+                    console.warn('[uploadPaymentProof] Bunny upload failed, marking pending_verification without URL:', proofUploadResult.error);
+                } else {
+                    proofUrl = proofUploadResult.url;
+                }
+            } else {
+                console.warn('[uploadPaymentProof] Bunny CDN not configured — marking booking as pending_verification without proof URL');
             }
 
-            const proofUploadResult = await uploadProofToBunny({
-                base64Data: proofData,
-                bookingId: proofBookingId,
-                fileName: proofFileName
-            });
-
-            if (!proofUploadResult.success) {
-                return res.status(500).json(proofUploadResult);
-            }
-
+            // Always protect booking from expiry: mark as pending_verification
+            // even if the file upload failed, so the cron never expires a paying customer.
             await sql`
                 UPDATE bookings
                 SET status = 'pending_verification',
-                    payment_proof_url = ${proofUploadResult.url},
-                    payment_proof_uploaded_at = NOW()
+                    payment_proof_url = ${proofUrl},
+                    payment_proof_uploaded_at = CASE WHEN ${proofUrl} IS NOT NULL THEN NOW() ELSE payment_proof_uploaded_at END
                 WHERE id = ${proofBookingId} AND status = 'active'
             `;
 
-            console.log('[uploadPaymentProof] ✅ Proof uploaded and booking updated:', proofBookingId);
-            return res.status(200).json({ success: true, proofUrl: proofUploadResult.url });
+            console.log('[uploadPaymentProof] ✅ Booking protected from expiry:', proofBookingId, 'proofUrl:', proofUrl);
+            return res.status(200).json({ success: true, proofUrl: proofUrl, bunnyAvailable: bunnyEnabledProof });
         }
         case 'rejectPaymentProof': {
             const { bookingId: rejectId } = req.body;
@@ -7066,6 +7078,28 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     success: false, 
                     error: error instanceof Error ? error.message : String(error) 
                 });
+            }
+        }
+        case 'applyBookingMigrations': {
+            // Run all optional column migrations on the bookings table.
+            // Safe to call after a DB restore — every statement uses IF NOT EXISTS.
+            try {
+                await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WITH TIME ZONE`;
+                await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'active'`;
+                await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS technique VARCHAR(50)`;
+                await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reschedule_allowance INT DEFAULT 0`;
+                await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reschedule_used INT DEFAULT 0`;
+                await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reschedule_history JSONB DEFAULT '[]'::jsonb`;
+                await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS last_reschedule_at TIMESTAMP WITH TIME ZONE`;
+                await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS participants INT DEFAULT 1`;
+                await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS group_metadata JSONB`;
+                await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_proof_url TEXT`;
+                await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_proof_uploaded_at TIMESTAMPTZ`;
+                console.log('[applyBookingMigrations] ✅ All booking columns ensured');
+                return res.status(200).json({ success: true, message: 'Booking migrations applied successfully' });
+            } catch (error) {
+                console.error('[applyBookingMigrations] Error:', error);
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
             }
         }
         case 'getClientBooking': {
