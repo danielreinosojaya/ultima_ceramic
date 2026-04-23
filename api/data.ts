@@ -2865,13 +2865,22 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
             // Always protect booking from expiry: mark as pending_verification
             // even if the file upload failed, so the cron never expires a paying customer.
-            await sql`
-                UPDATE bookings
-                SET status = 'pending_verification',
-                    payment_proof_url = ${proofUrl},
-                    payment_proof_uploaded_at = CASE WHEN ${proofUrl} IS NOT NULL THEN NOW() ELSE payment_proof_uploaded_at END
-                WHERE id = ${proofBookingId} AND status = 'active'
-            `;
+            // Split into two queries to avoid Neon type-inference error with $param IS NOT NULL in CASE.
+            if (proofUrl) {
+                await sql`
+                    UPDATE bookings
+                    SET status = 'pending_verification',
+                        payment_proof_url = ${proofUrl},
+                        payment_proof_uploaded_at = NOW()
+                    WHERE id = ${proofBookingId} AND status = 'active'
+                `;
+            } else {
+                await sql`
+                    UPDATE bookings
+                    SET status = 'pending_verification'
+                    WHERE id = ${proofBookingId} AND status = 'active'
+                `;
+            }
 
             console.log('[uploadPaymentProof] ✅ Booking protected from expiry:', proofBookingId, 'proofUrl:', proofUrl);
             return res.status(200).json({ success: true, proofUrl: proofUrl, bunnyAvailable: bunnyEnabledProof });
