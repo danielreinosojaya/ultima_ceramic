@@ -6,7 +6,6 @@ import { CheckCircleIcon } from './icons/CheckCircleIcon';
 import { BankIcon } from './icons/BankIcon';
 import { WhatsAppIcon } from './icons/WhatsAppIcon';
 import { DocumentDuplicateIcon } from './icons/DocumentDuplicateIcon';
-import { InfoCircleIcon } from './icons/InfoCircleIcon';
 import { generateBookingPDF } from '../services/pdfService';
 import { formatPrice } from '../utils/formatters';
 import { DownloadIcon } from './icons/DownloadIcon';
@@ -246,9 +245,9 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
             <div className="max-w-2xl mx-auto p-6 sm:p-8 bg-brand-surface rounded-xl shadow-lifted animate-fade-in-up">
             {/* Header */}
             <div className="text-center mb-6">
-                <CheckCircleIcon className="w-20 h-20 text-brand-success mx-auto mb-4" />
-                <h2 className="text-4xl font-bold text-brand-text mb-3">¡Pre-Reserva Confirmada!</h2>
-                <p className="text-brand-secondary text-base">Tu cupo está guardado. Sigue las instrucciones de pago para completar tu reserva.</p>
+                <CheckCircleIcon className="w-16 h-16 text-brand-success mx-auto mb-3" />
+                <h2 className="text-3xl font-bold text-brand-text mb-2">¡Cupo guardado!</h2>
+                <p className="text-brand-secondary text-sm">Completa el pago para confirmar tu reserva.</p>
             </div>
 
             {/* Resumen de Reserva - CLARO Y PROMINENTE */}
@@ -320,8 +319,8 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
             </div>
 
             {/* Código de Pre-Reserva */}
-            <div className="mb-6 bg-gradient-to-r from-brand-primary/10 to-brand-accent/10 border-2 border-brand-primary rounded-lg p-6 text-center">
-                <p className="text-xs font-semibold text-brand-secondary uppercase tracking-wider mb-3">Tu Código de Pre-Reserva</p>
+            <div className="mb-5 bg-gradient-to-r from-brand-primary/10 to-brand-accent/10 border-2 border-brand-primary rounded-lg p-5 text-center">
+                <p className="text-xs font-semibold text-brand-secondary uppercase tracking-wider mb-2">Tu Código de Pre-Reserva</p>
                 <div className="flex items-center justify-center gap-2 sm:gap-4 flex-wrap">
                     <p className="text-2xl sm:text-4xl font-bold text-brand-primary font-mono tracking-wider break-all" style={{ letterSpacing: '0.1em' }}>{booking.bookingCode}</p>
                     <button 
@@ -332,49 +331,20 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                         {copied ? <CheckCircleIcon className="w-6 h-6 text-brand-success" /> : <DocumentDuplicateIcon className="w-6 h-6" />}
                     </button>
                 </div>
-                <p className="text-xs text-brand-secondary mt-3">Guarda este código. Lo necesitarás al enviar tu comprobante de pago.</p>
+                <p className="text-xs text-brand-secondary mt-2">Inclúyelo como referencia en tu transferencia.</p>
             </div>
 
-            {/* Advertencia de expiración en 2 horas */}
-            <div className="mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-5 rounded-r-lg">
-                <div className="flex items-start gap-3">
-                    <span className="text-yellow-600 text-2xl font-bold">⏰</span>
-                    <div>
-                        <h3 className="font-bold text-yellow-900 mb-2">Pre-reserva válida por 2 horas</h3>
-                        <p className="text-sm text-yellow-800 mb-2">
-                            Esta pre-reserva estará disponible solo durante las próximas <strong>2 horas</strong>. Si no realizas el pago en este tiempo, 
-                            tu lugar será liberado y tendrás que volver a hacer el proceso de reserva.
-                        </p>
-                        {(() => {
-                            const createdDate = new Date(booking.createdAt);
-                            const expirationTime = new Date(createdDate.getTime() + (2 * 60 * 60 * 1000));
-                            const now = new Date();
-                            const diffMs = expirationTime.getTime() - now.getTime();
-                            
-                            if (diffMs <= 0) {
-                                return <p className="text-xs text-red-600 font-mono font-bold">⚠️ EXPIRÓ</p>;
-                            }
-                            
-                            return (
-                                <p className="text-sm text-yellow-700 font-mono font-semibold">
-                                    ⏱️ Expira a las: {expirationTime.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-                                </p>
-                            );
-                        })()}
-                    </div>
-                </div>
-            </div>
-
-            {/* Advertencia de tolerancia de 15 minutos */}
-            <div className="mb-6 bg-blue-50 border-l-4 border-blue-400 p-5 rounded-r-lg">
-                <div className="flex items-start gap-3">
-                    <InfoCircleIcon className="w-6 h-6 text-blue-600 flex-shrink-0 mt-1" />
-                    <div>
-                        <h3 className="font-bold text-blue-900 mb-2">Tolerancia el día de la clase</h3>
-                        <p className="text-sm text-blue-800">
-                            Tienes <strong>15 minutos de tolerancia</strong> desde la hora de inicio de la clase. Después de este tiempo, no se permiten ingresos tardíos.
-                        </p>
-                    </div>
+            {/* Aviso de expiración compacto */}
+            <div className="mb-5 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg flex items-start gap-3">
+                <span className="text-yellow-600 text-xl font-bold mt-0.5">⏰</span>
+                <div>
+                    <p className="font-bold text-yellow-900 text-sm">Válida por 2 horas · 15 min tolerancia el día de la clase</p>
+                    {(() => {
+                        const expirationTime = new Date(new Date(booking.createdAt).getTime() + 2 * 60 * 60 * 1000);
+                        const diffMs = expirationTime.getTime() - Date.now();
+                        if (diffMs <= 0) return <p className="text-xs text-red-600 font-mono font-bold mt-1">⚠️ EXPIRÓ</p>;
+                        return <p className="text-xs text-yellow-700 font-mono mt-1">Expira a las {expirationTime.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</p>;
+                    })()}
                 </div>
             </div>
 
@@ -475,55 +445,32 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                 </div>
             )}
 
-            {/* ¿Qué sigue? - Próximos pasos */}
-            <div className="mb-6 bg-brand-background p-6 rounded-lg">
-                <h3 className="text-lg font-bold text-brand-text mb-4">¿Qué sigue ahora?</h3>
-                <ol className="space-y-4 text-left">
-                    <li className="flex items-start gap-3">
-                        <span className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-primary text-white font-bold flex-shrink-0">1</span>
-                        <div>
-                            <span className="text-brand-text font-semibold">Realiza el pago de {formatPrice(booking.price)}</span>
-                            <p className="text-brand-secondary text-sm">Transfiere <strong>exactamente {formatPrice(booking.price)}</strong> a cualquiera de las cuentas bancarias mostradas arriba. <strong>Incluye tu código {booking.bookingCode} en la descripción</strong> para una validación más rápida.</p>
-                        </div>
-                    </li>
-                    <li className="flex items-start gap-3">
-                        <span className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-primary text-white font-bold flex-shrink-0">2</span>
-                        <div>
-                            <span className="text-brand-text font-semibold">Envía tu código + comprobante por WhatsApp</span>
-                            <p className="text-brand-secondary text-sm">Usa el botón de abajo para enviar tu código <span className="font-mono font-bold text-brand-primary">{booking.bookingCode}</span> junto al comprobante de pago.</p>
-                        </div>
-                    </li>
-                    <li className="flex items-start gap-3">
-                        <span className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-primary text-white font-bold flex-shrink-0">3</span>
-                        <div>
-                            <span className="text-brand-text font-semibold">Validación interna</span>
-                            <p className="text-brand-secondary text-sm">Nuestro equipo revisará tu comprobante y validará el pago en el sistema.</p>
-                        </div>
-                    </li>
-                    <li className="flex items-start gap-3">
-                        <span className="flex items-center justify-center w-8 h-8 rounded-full bg-brand-primary text-white font-bold flex-shrink-0">4</span>
-                        <div>
-                            <span className="text-brand-text font-semibold">Recibe tu confirmación final</span>
-                            <p className="text-brand-secondary text-sm">Una vez validado el pago, recibirás un correo electrónico confirmando tu reserva final.</p>
-                        </div>
-                    </li>
-                </ol>
+            {/* Próximos pasos (compacto) */}
+            <div className="mb-5 bg-brand-background p-4 rounded-lg border border-brand-border">
+                <h3 className="text-sm font-bold text-brand-text mb-3">¿Qué hacer ahora?</h3>
+                <div className="space-y-3 text-sm">
+                    <div className="flex items-start gap-3">
+                        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-primary text-white text-xs font-bold flex-shrink-0">1</span>
+                        <p className="text-brand-secondary"><strong className="text-brand-text">Transfiere {formatPrice(booking.price)}</strong> a cualquiera de las cuentas y usa <span className="font-mono text-brand-primary font-bold">{booking.bookingCode}</span> como referencia.</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-primary text-white text-xs font-bold flex-shrink-0">2</span>
+                        <p className="text-brand-secondary"><strong className="text-brand-text">Sube el comprobante</strong> usando el botón de abajo o el enlace enviado a tu correo.</p>
+                    </div>
+                </div>
             </div>
 
             {/* Botón de WhatsApp */}
-            <div className="mb-6">
+            <div className="mb-5">
                 <a
                     href={whatsappLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full flex items-center justify-center gap-3 bg-green-500 text-white font-bold py-4 px-8 rounded-xl hover:bg-green-600 transition-all duration-300 shadow-lg text-lg hover:scale-105"
+                    className="w-full flex items-center justify-center gap-3 bg-green-500 text-white font-bold py-3 px-8 rounded-xl hover:bg-green-600 transition-all duration-300 shadow-md text-base"
                 >
-                    <WhatsAppIcon className="w-7 h-7" />
-                    Enviar Código y Comprobante por WhatsApp
+                    <WhatsAppIcon className="w-6 h-6" />
+                    Enviar Comprobante por WhatsApp
                 </a>
-                <p className="text-xs text-brand-secondary text-center mt-2">
-                    Haz click arriba para abrir WhatsApp con tu código prellenado
-                </p>
             </div>
 
             {/* Upload comprobante de pago */}
