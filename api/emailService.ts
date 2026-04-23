@@ -232,17 +232,29 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
 
     const accounts = Array.isArray(bankDetails) ? bankDetails : [bankDetails];
     const accountsHtml = accounts.map(acc => `
-        <tr>
-            <td style="padding:10px 8px;border-bottom:1px solid #f0ede8;font-weight:700;color:#6b7280;">${acc.bankName}</td>
-            <td style="padding:10px 8px;border-bottom:1px solid #f0ede8;">${acc.accountHolder}</td>
-            <td style="padding:10px 8px;border-bottom:1px solid #f0ede8;font-family:monospace;font-weight:700;">${acc.accountNumber}</td>
-            <td style="padding:10px 8px;border-bottom:1px solid #f0ede8;font-size:12px;">${acc.accountType} · ${acc.taxId}</td>
-        </tr>
+        <div style="background: white; border: 1px solid #D1D0C6; border-radius: 6px; padding: 16px; margin-bottom: 12px;">
+            <div style="margin-bottom: 10px;">
+                <p style="margin:0 0 2px 0;font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Banco</p>
+                <p style="margin: 0; font-size: 15px; font-weight: 600; color: #4A4540;">${acc.bankName}</p>
+            </div>
+            <div style="margin-bottom: 10px;">
+                <p style="margin:0 0 2px 0;font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Titular</p>
+                <p style="margin: 0; font-size: 14px; color: #4A4540;">${acc.accountHolder}</p>
+            </div>
+            <div style="margin-bottom: 10px;">
+                <p style="margin:0 0 2px 0;font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Número de Cuenta</p>
+                <p style="margin: 0; font-size: 16px; font-family: 'Courier New', monospace; font-weight: 700; color: #828E98; letter-spacing: 1px; background: #F4F2F1; padding: 8px 12px; border-radius: 4px; display: inline-block;">${acc.accountNumber}</p>
+            </div>
+            <div>
+                <p style="margin:0 0 2px 0;font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Tipo · Cédula</p>
+                <p style="margin: 0; font-size: 14px; color: #4A4540;">${acc.accountType} · ${acc.taxId}</p>
+            </div>
+        </div>
     `).join('');
 
     const giftcardBlock = totalPaid > 0 ? `
-        <p style="margin:0 0 4px 0;font-size:13px;color:#6b7280;">Giftcard aplicada: <strong>-$${totalPaid.toFixed(2)}</strong></p>
-        <p style="margin:0;font-size:13px;color:#6b7280;">Monto pendiente: <strong style="color:#D95F43;">$${pendingBalance.toFixed(2)}</strong></p>
+        <p style="margin:4px 0 2px 0;font-size:13px;color:#958985;">Giftcard aplicada: <strong>-$${totalPaid.toFixed(2)}</strong></p>
+        <p style="margin:0;font-size:13px;color:#958985;">Saldo pendiente: <strong style="color:#828E98;">$${pendingBalance.toFixed(2)}</strong></p>
     ` : '';
 
     const policyBlock = booking.acceptedNoRefund
@@ -250,72 +262,86 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
         : `<p style="margin:16px 0 0 0;font-size:12px;color:#9ca3af;border-top:1px solid #f0ede8;padding-top:12px;">Puedes cancelar o reagendar sin costo hasta 48 horas antes de tu clase.</p>`;
 
     const html = `
-    <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#1f2937;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+    <div style="font-family: 'Cardo', serif; max-width: 600px; margin: 0 auto; background: #FFFFFF; padding: 0; border-radius: 12px; overflow: hidden; border: 1px solid #D1D0C6;">
         
         <!-- Header -->
-        <div style="background:#D95F43;padding:24px 32px;">
-            <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.8);letter-spacing:1px;text-transform:uppercase;">CeramicAlma</p>
-            <h1 style="margin:6px 0 0 0;font-size:22px;color:#fff;">¡Tu cupo está guardado!</h1>
+        <div style="background: linear-gradient(135deg, #828E98 0%, #6B7A86 100%); text-align: center; padding: 40px 20px; color: white;">
+            <h1 style="font-size: 32px; margin: 0 0 8px 0; font-weight: 700; letter-spacing: -0.5px;">Ceramicalma</h1>
+            <p style="font-size: 14px; margin: 0; opacity: 0.9; font-style: italic;">${productName}</p>
         </div>
 
-        <!-- Body -->
-        <div style="padding:28px 32px;">
-            <p style="margin:0 0 20px 0;">Hola <strong>${userInfo.firstName}</strong>, aquí está lo que necesitas:</p>
+        <!-- Main content -->
+        <div style="padding: 40px 30px;">
+            <h2 style="color: #828E98; font-size: 24px; margin: 0 0 20px 0; font-weight: 700;">⏳ ¡Tu cupo está guardado!</h2>
 
-            <!-- Booking summary -->
-            <div style="background:#fafaf9;border:1px solid #e5e7eb;border-radius:8px;padding:16px 20px;margin-bottom:20px;">
-                <p style="margin:0 0 6px 0;font-size:15px;font-weight:700;">${productName}</p>
-                ${slotInfo ? `<p style="margin:0 0 6px 0;font-size:14px;color:#6b7280;">📅 ${slotInfo}</p>` : ''}
-                <p style="margin:0;font-size:14px;color:#6b7280;">Participantes: ${booking.participants || 1} · Duración: 2 h</p>
-                <div style="margin-top:12px;border-top:1px solid #e5e7eb;padding-top:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-                    <div>
-                        <p style="margin:0;font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;">Tu código</p>
-                        <p style="margin:2px 0 0 0;font-size:24px;font-weight:700;font-family:monospace;color:#D95F43;letter-spacing:2px;">${bookingCode}</p>
-                    </div>
-                    <div style="text-align:right;">
-                        <p style="margin:0;font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;">Total</p>
-                        <p style="margin:2px 0 0 0;font-size:24px;font-weight:700;color:#1f2937;">$${numericPrice.toFixed(2)}</p>
-                        ${giftcardBlock}
-                    </div>
+            <p style="color: #4A4540; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">Hola <strong>${userInfo.firstName}</strong>,</p>
+
+            <p style="color: #958985; font-size: 15px; line-height: 1.7; margin: 0 0 28px 0;">
+                Para confirmar tu reserva, realiza el pago dentro de las próximas <strong>2 horas</strong>. Después, tu lugar se libera automáticamente.
+            </p>
+
+            <!-- Booking Details Box -->
+            <div style="background: #F4F2F1; border-left: 5px solid #828E98; padding: 24px; margin: 28px 0; border-radius: 8px;">
+                <h3 style="color: #828E98; margin: 0 0 16px 0; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">📋 Detalles de tu Reserva</h3>
+                <table style="width: 100%; color: #4A4540; font-size: 14px;">
+                    <tr style="border-bottom: 1px solid #D1D0C6;">
+                        <td style="padding: 10px 0; font-weight: 600; width: 40%;">Código:</td>
+                        <td style="padding: 10px 0; font-family: 'Courier New', monospace; letter-spacing: 0.5px; color: #828E98; font-weight: 700;">${bookingCode}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #D1D0C6;">
+                        <td style="padding: 10px 0; font-weight: 600;">Clase:</td>
+                        <td style="padding: 10px 0;">${productName}</td>
+                    </tr>
+                    ${slotInfo ? `<tr style="border-bottom: 1px solid #D1D0C6;">
+                        <td style="padding: 10px 0; font-weight: 600;">📅 Fecha / Hora:</td>
+                        <td style="padding: 10px 0;">${slotInfo}</td>
+                    </tr>` : ''}
+                    <tr style="border-bottom: 1px solid #D1D0C6;">
+                        <td style="padding: 10px 0; font-weight: 600;">👥 Participantes:</td>
+                        <td style="padding: 10px 0;">${booking.participants || 1} persona(s) · Duración: 2 h</td>
+                    </tr>
+                </table>
+                <div style="margin-top: 20px; padding-top: 16px; border-top: 2px solid #D1D0C6; text-align: right;">
+                    <p style="margin: 0; font-size: 24px; color: #828E98; font-weight: 700;">$${numericPrice.toFixed(2)}</p>
+                    ${giftcardBlock}
                 </div>
             </div>
 
-            <!-- Expiry notice -->
-            <div style="background:#fffbeb;border-left:4px solid #f59e0b;border-radius:4px;padding:12px 16px;margin-bottom:20px;">
-                <p style="margin:0;font-size:13px;color:#92400e;"><strong>⏰ Tienes 2 horas</strong> para pagar y subir el comprobante. Después, tu lugar se libera automáticamente.</p>
+            <!-- Payment Instructions -->
+            <div style="background: linear-gradient(135deg, rgba(204, 188, 178, 0.08) 0%, transparent 100%); border: 2px solid #D1D0C6; padding: 24px; margin: 28px 0; border-radius: 8px;">
+                <h3 style="color: #828E98; margin: 0 0 16px 0; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">💳 Datos de Transferencia</h3>
+                <p style="color: #4A4540; font-size: 14px; margin: 0 0 18px 0; line-height: 1.6;">
+                    Realiza tu transferencia a cualquiera de nuestras cuentas:
+                </p>
+                ${accountsHtml}
+                <p style="color: #4A4540; font-size: 13px; margin: 16px 0 0 0; line-height: 1.6;">
+                    <strong>Importante:</strong> Usa tu código <strong>${bookingCode}</strong> como referencia en la transferencia.
+                </p>
             </div>
 
-            <!-- Bank accounts -->
-            <p style="margin:0 0 8px 0;font-size:14px;font-weight:700;">Transfiere a cualquiera de estas cuentas:</p>
-            <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:8px;">
-                <thead>
-                    <tr style="background:#f9fafb;">
-                        <th style="padding:8px;text-align:left;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;">Banco</th>
-                        <th style="padding:8px;text-align:left;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;">Titular</th>
-                        <th style="padding:8px;text-align:left;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;">Cuenta</th>
-                        <th style="padding:8px;text-align:left;font-size:11px;color:#9ca3af;font-weight:600;text-transform:uppercase;">Tipo · Cédula</th>
-                    </tr>
-                </thead>
-                <tbody>${accountsHtml}</tbody>
-            </table>
-            <p style="margin:0 0 24px 0;font-size:12px;color:#6b7280;">Incluye <strong>${bookingCode}</strong> como referencia en la transferencia.</p>
-
-            <!-- Upload CTA -->
-            <div style="background:#fff7ed;border:2px solid #fb923c;border-radius:10px;padding:20px 24px;text-align:center;margin-bottom:20px;">
-                <p style="margin:0 0 4px 0;font-size:15px;font-weight:700;color:#9a3412;">¿Ya pagaste? Sube tu comprobante</p>
-                <p style="margin:0 0 16px 0;font-size:13px;color:#7c2d12;">Tu reserva quedará en revisión y <strong>no expirará</strong> mientras validamos tu pago.</p>
-                <a href="${uploadLink}" style="display:inline-block;background:#D95F43;color:#fff;padding:12px 32px;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;">Subir Comprobante →</a>
+            <!-- Proof Upload CTA -->
+            <div style="background:#fff7f5;border:2px solid #828E98;border-radius:10px;padding:24px;margin:28px 0;text-align:center;">
+                <p style="margin:0 0 6px 0;font-size:15px;font-weight:700;color:#4A4540;">¿Ya pagaste? Sube tu comprobante</p>
+                <p style="margin:0 0 16px 0;font-size:13px;color:#958985;">Tu reserva quedará en revisión y <strong>no expirará</strong> mientras validamos tu pago.</p>
+                <a href="${uploadLink}" style="display:inline-block;background:#828E98;color:#fff;padding:12px 32px;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;">Subir Comprobante →</a>
+                <p style="margin:16px 0 0 0;font-size:12px;color:#958985;">Si ya subiste tu comprobante, ignora este correo. Tu reserva está protegida.</p>
             </div>
-
-            <!-- Ignore note -->
-            <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">Si ya subiste tu comprobante, ignora este correo. Tu reserva está protegida.</p>
 
             ${policyBlock}
         </div>
 
         <!-- Footer -->
-        <div style="background:#f9fafb;padding:16px 32px;border-top:1px solid #e5e7eb;text-align:center;">
-            <p style="margin:0;font-size:12px;color:#9ca3af;">CeramicAlma · <a href="${appUrl}" style="color:#D95F43;text-decoration:none;">ceramicalma.com</a></p>
+        <div style="background: #F4F2F1; border-top: 1px solid #D1D0C6; padding: 24px 30px; text-align: center;">
+            <p style="color: #4A4540; font-size: 14px; margin: 0 0 12px 0;">
+                <strong>¿Preguntas? Contáctanos</strong><br/>
+                <span style="font-size: 13px; color: #958985;">
+                    📧 cmassuh@ceramicalma.com<br/>
+                    📱 +593 98 581 3327
+                </span>
+            </p>
+            <p style="color: #958985; font-size: 12px; margin: 14px 0 0 0; font-style: italic;">
+                El equipo de Ceramicalma · <a href="${appUrl}" style="color: #828E98; text-decoration: none;">ceramicalma.com</a>
+            </p>
         </div>
     </div>
     `;
@@ -1381,91 +1407,146 @@ export const sendCouplesTourConfirmationEmail = async (booking: Booking, bankDet
     }) : '';
     const slotTime = slot?.time || '';
 
-    const subject = `¡Tu Experiencia en Pareja está Confirmada! (Código: ${bookingCode})`;
-    
-    const accounts = Array.isArray(bankDetails) ? bankDetails : [bankDetails];
-    const accountsHtml = `
-        <table style="width:100%; font-size:15px; color:#333; border-collapse:collapse; background:#f9f9f9; border-radius:12px; margin-top:20px;">
-            <thead>
-                <tr style="background:#eaeaea;">
-                    <th style="padding:10px; text-align:left; font-size:16px; color:#7c868e;">Banco</th>
-                    <th style="padding:10px; text-align:left;">Titular</th>
-                    <th style="padding:10px; text-align:left;">Número</th>
-                    <th style="padding:10px; text-align:left;">Tipo</th>
-                    <th style="padding:10px; text-align:left;">Cédula</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${accounts.map(acc => `
-                    <tr>
-                        <td style="padding:8px; font-weight:bold; color:#7c868e;">${acc.bankName}</td>
-                        <td style="padding:8px;">${acc.accountHolder}</td>
-                        <td style="padding:8px;">${acc.accountNumber}</td>
-                        <td style="padding:8px;">${acc.accountType}</td>
-                        <td style="padding:8px;">${acc.taxId}</td>
-                    </tr>
-                `).join('')}
-            </tbody>
-        </table>
-        <div style="margin-top: 10px; font-style: italic; color:#555;"><strong>Importante:</strong> Usa tu código de reserva <strong>${bookingCode}</strong> como referencia en la transferencia.</div>
-    `;
+    const subject = `⏳ Pre-Reserva Experiencia en Pareja - ${bookingCode}`;
+    const price = typeof booking.price === 'number' ? booking.price : parseFloat(String(booking.price || 190));
+    const appUrl = process.env.APP_PUBLIC_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://ceramicalma.com');
+    const uploadLink = `${appUrl}/?comprobante=${encodeURIComponent(bookingCode)}`;
+
+    const accountsHtml = accounts.map(acc => `
+        <div style="background: white; border: 1px solid #D1D0C6; border-radius: 6px; padding: 16px; margin-bottom: 12px;">
+            <div style="margin-bottom: 10px;">
+                <p style="margin:0 0 2px 0;font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Banco</p>
+                <p style="margin: 0; font-size: 15px; font-weight: 600; color: #4A4540;">${acc.bankName}</p>
+            </div>
+            <div style="margin-bottom: 10px;">
+                <p style="margin:0 0 2px 0;font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Titular</p>
+                <p style="margin: 0; font-size: 14px; color: #4A4540;">${acc.accountHolder}</p>
+            </div>
+            <div style="margin-bottom: 10px;">
+                <p style="margin:0 0 2px 0;font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Número de Cuenta</p>
+                <p style="margin: 0; font-size: 16px; font-family: 'Courier New', monospace; font-weight: 700; color: #828E98; letter-spacing: 1px; background: #F4F2F1; padding: 8px 12px; border-radius: 4px; display: inline-block;">${acc.accountNumber}</p>
+            </div>
+            <div>
+                <p style="margin:0 0 2px 0;font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Tipo · Cédula</p>
+                <p style="margin: 0; font-size: 14px; color: #4A4540;">${acc.accountType} · ${acc.taxId}</p>
+            </div>
+        </div>
+    `).join('');
 
     const html = `
-        <div style="font-family: Arial, sans-serif; color: #333;">
-            <h2 style="color: #D95F43;">♥️ ¡Hola, ${userInfo.firstName}!</h2>
-            <p>¡Qué emoción! Tu experiencia en pareja ha sido confirmada en CeramicAlma. Código de reserva:</p>
-            <p style="font-size: 24px; font-weight: bold; color: #D95F43; margin: 20px 0;">${bookingCode}</p>
+    <div style="font-family: 'Cardo', serif; max-width: 600px; margin: 0 auto; background: #FFFFFF; padding: 0;">
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #828E98 0%, #6B7A86 100%); text-align: center; padding: 40px 20px; color: white;">
+            <h1 style="font-size: 32px; margin: 0 0 8px 0; font-weight: 700; letter-spacing: -0.5px;">Ceramicalma</h1>
+            <p style="font-size: 14px; margin: 0; opacity: 0.9; font-style: italic;">Experiencia en Pareja</p>
+        </div>
 
-            <div style="background: linear-gradient(135deg, #FFE5D9 0%, #FFE5D9 100%); border-left: 4px solid #D95F43; padding: 20px; margin: 20px 0; border-radius: 8px;">
-                <h3 style="margin-top: 0; color: #D95F43;">📅 Detalles de tu Experiencia</h3>
-                <p style="margin: 10px 0;"><strong>Técnica seleccionada:</strong> ${technique_name}</p>
-                <p style="margin: 10px 0;"><strong>Fecha:</strong> ${slotDate}</p>
-                <p style="margin: 10px 0;"><strong>Hora:</strong> ${slotTime}</p>
-                <p style="margin: 10px 0;"><strong>Duración:</strong> 2 horas</p>
-                <p style="margin: 10px 0;"><strong>Precio:</strong> <span style="font-size: 18px; font-weight: bold; color: #D95F43;">$190</span></p>
+        <!-- Main content -->
+        <div style="padding: 40px 30px;">
+            <h2 style="color: #828E98; font-size: 24px; margin: 0 0 20px 0; font-weight: 700;">♥️ ¡Tu Pre-Reserva Está Lista!</h2>
+
+            <p style="color: #4A4540; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">Hola <strong>${userInfo.firstName}</strong>,</p>
+
+            <p style="color: #958985; font-size: 15px; line-height: 1.7; margin: 0 0 28px 0;">
+                Hemos guardado tu lugar para la experiencia en pareja. Para confirmarla, realiza el pago dentro de las próximas <strong>2 horas</strong>.
+            </p>
+
+            <!-- Booking Details Box -->
+            <div style="background: #F4F2F1; border-left: 5px solid #828E98; padding: 24px; margin: 28px 0; border-radius: 8px;">
+                <h3 style="color: #828E98; margin: 0 0 16px 0; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">📋 Detalles de tu Experiencia</h3>
+                <table style="width: 100%; color: #4A4540; font-size: 14px;">
+                    <tr style="border-bottom: 1px solid #D1D0C6;">
+                        <td style="padding: 10px 0; font-weight: 600; width: 40%;">Código:</td>
+                        <td style="padding: 10px 0; font-family: 'Courier New', monospace; letter-spacing: 0.5px; color: #828E98; font-weight: 700;">${bookingCode}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #D1D0C6;">
+                        <td style="padding: 10px 0; font-weight: 600;">Técnica:</td>
+                        <td style="padding: 10px 0;">${technique_name}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #D1D0C6;">
+                        <td style="padding: 10px 0; font-weight: 600;">📅 Fecha:</td>
+                        <td style="padding: 10px 0;">${slotDate}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #D1D0C6;">
+                        <td style="padding: 10px 0; font-weight: 600;">🕐 Hora:</td>
+                        <td style="padding: 10px 0;">${slotTime}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid #D1D0C6;">
+                        <td style="padding: 10px 0; font-weight: 600;">⏱️ Duración:</td>
+                        <td style="padding: 10px 0;">2 horas</td>
+                    </tr>
+                </table>
+                <div style="margin-top: 20px; padding-top: 16px; border-top: 2px solid #D1D0C6; text-align: right;">
+                    <p style="margin: 0; font-size: 24px; color: #828E98; font-weight: 700;">$${price.toFixed(2)}</p>
+                </div>
             </div>
 
-            <div style="background-color: #F0F9FF; border-left: 4px solid #0EA5E9; padding: 20px; margin: 20px 0; border-radius: 8px;">
-                <h3 style="margin-top: 0; color: #0369A1;">🎨 ¿Qué incluye tu experiencia?</h3>
-                <ul style="margin: 10px 0; padding-left: 20px;">
-                    <li style="margin: 8px 0;"><strong>Clase guiada 2h</strong> - Un instructor experto los guiará en cada paso</li>
-                    <li style="margin: 8px 0;"><strong>Técnica a elegir</strong> - ${technique === 'potters_wheel' ? '🎯 Domina el torno alfarero clásico' : '✋ Crea libremente con moldeo a mano'}</li>
-                    <li style="margin: 8px 0;"><strong>Materiales</strong> - Todo incluido: arcilla, agua, herramientas</li>
-                    <li style="margin: 8px 0;"><strong>Horneado profesional</strong> - Tus creaciones se hornean en nuestro horno</li>
-                    <li style="margin: 8px 0;"><strong>🍷 Vino y 🥂 Piqueos</strong> - Disfruta mientras crean juntos</li>
-                    <li style="margin: 8px 0;"><strong>Piezas aptas para alimentos</strong> - Perfectas para uso diario</li>
+            <!-- What's included -->
+            <div style="background: #F4F2F1; border-left: 5px solid #CCBCB2; padding: 24px; margin: 28px 0; border-radius: 8px;">
+                <h3 style="color: #4A4540; margin: 0 0 14px 0; font-size: 16px; font-weight: 700;">🎁 ¿Qué incluye tu experiencia?</h3>
+                <ul style="color: #4A4540; font-size: 14px; margin: 0; padding-left: 20px; line-height: 1.8;">
+                    <li style="margin-bottom: 6px;">✓ <strong>Clase guiada 2h</strong> — Un instructor experto los guiará paso a paso</li>
+                    <li style="margin-bottom: 6px;">✓ <strong>Técnica:</strong> ${technique === 'potters_wheel' ? '🎯 Torno Alfarero — domina el torno clásico' : '✋ Modelado a Mano — crea libremente'}</li>
+                    <li style="margin-bottom: 6px;">✓ <strong>Materiales</strong> — Arcilla, agua, herramientas, todo incluido</li>
+                    <li style="margin-bottom: 6px;">✓ <strong>Horneado profesional</strong> — Tus piezas se hornean en nuestro horno</li>
+                    <li style="margin-bottom: 6px;">✓ <strong>🍷 Vino y 🥂 Piqueos</strong> — Disfruten mientras crean juntos</li>
+                    <li>✓ <strong>Piezas aptas para alimentos</strong> — Perfectas para uso diario</li>
                 </ul>
             </div>
 
-            <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 8px;">
-                <p style="margin: 0; color: #92400E; font-weight: bold;">⏰ Pre-Reserva Válida por 2 Horas</p>
-                <p style="margin: 8px 0 0 0; color: #78350F; font-size: 14px;">
-                    Esta pre-reserva estará disponible solo durante las próximas <strong>2 horas</strong>. Para confirmar, realiza el pago a través de transferencia bancaria.
+            <!-- Payment Instructions -->
+            <div style="background: linear-gradient(135deg, rgba(204, 188, 178, 0.08) 0%, transparent 100%); border: 2px solid #D1D0C6; padding: 24px; margin: 28px 0; border-radius: 8px;">
+                <h3 style="color: #828E98; margin: 0 0 16px 0; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">💳 Datos de Transferencia</h3>
+                <p style="color: #4A4540; font-size: 14px; margin: 0 0 18px 0; line-height: 1.6;">
+                    Realiza tu transferencia a cualquiera de nuestras cuentas:
+                </p>
+                ${accountsHtml}
+                <div style="margin-top: 20px; padding: 16px; background: white; border: 2px solid #828E98; border-radius: 8px; text-align: center;">
+                    <p style="margin: 0 0 6px 0; font-size: 12px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Monto a Transferir</p>
+                    <p style="margin: 0; font-size: 28px; color: #828E98; font-weight: 700;">$${price.toFixed(2)}</p>
+                </div>
+                <p style="color: #4A4540; font-size: 13px; margin: 16px 0 0 0; line-height: 1.6;">
+                    <strong>Importante:</strong> Usa tu código <strong>${bookingCode}</strong> como referencia en la transferencia.
                 </p>
             </div>
 
-            <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin: 20px 0; border-radius: 8px;">
-                <p style="margin: 0; color: #92400E; font-weight: bold;">💳 Pago Anticipado Requerido</p>
-                <p style="margin: 8px 0 0 0; color: #78350F; font-size: 14px;">
-                    Esta experiencia requiere pago completo y anticipado: <strong>$190</strong>
-                </p>
+            <!-- Proof Upload CTA -->
+            <div style="background:#fff7f5;border:2px solid #828E98;border-radius:10px;padding:24px;margin:28px 0;text-align:center;">
+                <p style="margin:0 0 6px 0;font-size:15px;font-weight:700;color:#4A4540;">¿Ya pagaste? Sube tu comprobante</p>
+                <p style="margin:0 0 16px 0;font-size:13px;color:#958985;">Tu reserva quedará en revisión y <strong>no expirará</strong> mientras validamos tu pago.</p>
+                <a href="${uploadLink}" style="display:inline-block;background:#828E98;color:#fff;padding:12px 32px;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;">Subir Comprobante →</a>
+                <p style="margin:16px 0 0 0;font-size:12px;color:#958985;">Si ya subiste tu comprobante, ignora este correo. Tu reserva está protegida.</p>
             </div>
 
-            <p>Para confirmar, realiza una transferencia bancaria con los siguientes datos:</p>
-            ${accountsHtml}
-
-            <div style="background-color: #EFF6FF; border-left: 4px solid #3B82F6; padding: 15px; margin: 20px 0; border-radius: 8px;">
-                <p style="margin: 0; color: #1E40AF; font-weight: bold;">📋 Información Importante</p>
-                <p style="margin: 8px 0 0 0; color: #1E3A8A; font-size: 14px;">
-                    • <strong>Llega 15 minutos antes</strong> - Para aclimatarse y conocer el espacio<br/>
-                    • <strong>Política de cancelación:</strong> No reembolsable ni reagendable (pago anticipado)<br/>
-                    • <strong>Contacto:</strong> Si tienes dudas, responde a este email o envíanos un WhatsApp
-                </p>
+            <!-- Important info -->
+            <div style="background: #F4F2F1; border-left: 5px solid #CCBCB2; padding: 24px; margin: 28px 0; border-radius: 8px;">
+                <h3 style="color: #4A4540; margin: 0 0 14px 0; font-size: 16px; font-weight: 700;">📋 Información Importante</h3>
+                <ul style="color: #4A4540; font-size: 14px; margin: 0; padding-left: 20px; line-height: 1.8;">
+                    <li style="margin-bottom: 6px;">✓ Llega <strong>15 minutos antes</strong> para aclimatarse y conocer el espacio</li>
+                    <li style="margin-bottom: 6px;">✓ <strong>Política de cancelación:</strong> No reembolsable ni reagendable</li>
+                    <li>✓ ¿Dudas? Responde este email o contáctanos por WhatsApp</li>
+                </ul>
             </div>
 
-            <p style="margin-top: 20px; font-size: 16px;">¡Prepárense para una experiencia única y llena de magia! ♥️</p>
-            <p>Saludos,<br/>El equipo de CeramicAlma</p>
+            <p style="color: #958985; font-size: 15px; line-height: 1.7; margin: 28px 0 0 0;">
+                ¡Prepárense para una experiencia única y llena de magia! ♥️
+            </p>
         </div>
+
+        <!-- Footer -->
+        <div style="background: #F4F2F1; border-top: 1px solid #D1D0C6; padding: 24px 30px; text-align: center;">
+            <p style="color: #4A4540; font-size: 14px; margin: 0 0 12px 0;">
+                <strong>¿Preguntas? Contáctanos</strong><br/>
+                <span style="font-size: 13px; color: #958985;">
+                    📧 cmassuh@ceramicalma.com<br/>
+                    📱 +593 98 581 3327
+                </span>
+            </p>
+            <p style="color: #958985; font-size: 12px; margin: 14px 0 0 0; font-style: italic;">
+                El equipo de Ceramicalma · <a href="${appUrl}" style="color: #828E98; text-decoration: none;">ceramicalma.com</a>
+            </p>
+        </div>
+    </div>
     `;
 
     const result = await sendEmail(userInfo.email, subject, html);
@@ -2184,7 +2265,9 @@ export const sendCustomExperiencePreBookingEmail = async (
     }
 
     const subject = `⏳ Pre-Reserva Experiencia Grupal - ${bookingCode}`;
-    
+    const appUrl = process.env.APP_PUBLIC_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://ceramicalma.com');
+    const uploadLink = `${appUrl}/?comprobante=${encodeURIComponent(bookingCode)}`;
+
     const html = `
         <div style="font-family: 'Cardo', serif; max-width: 600px; margin: 0 auto; background: #FFFFFF; padding: 0;">
             <!-- Header with brand gradient -->
@@ -2304,6 +2387,14 @@ export const sendCustomExperiencePreBookingEmail = async (
                     <p style="color: #4A4540; font-size: 13px; margin: 16px 0 0 0; line-height: 1.6;">
                         <strong>⏰ Importante:</strong> Usa tu código de reserva <strong>${bookingCode}</strong> como referencia en la transferencia. Esta pre-reserva expira en <strong>2 horas</strong>.
                     </p>
+                </div>
+
+                <!-- Proof Upload CTA -->
+                <div style="background:#fff7f5;border:2px solid #828E98;border-radius:10px;padding:24px;margin:28px 0;text-align:center;">
+                    <p style="margin:0 0 6px 0;font-size:15px;font-weight:700;color:#4A4540;">¿Ya pagaste? Sube tu comprobante</p>
+                    <p style="margin:0 0 16px 0;font-size:13px;color:#958985;">Tu reserva quedará en revisión y <strong>no expirará</strong> mientras validamos tu pago.</p>
+                    <a href="${uploadLink}" style="display:inline-block;background:#828E98;color:#fff;padding:12px 32px;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;">Subir Comprobante →</a>
+                    <p style="margin:16px 0 0 0;font-size:12px;color:#958985;">Si ya subiste tu comprobante, ignora este correo. Tu reserva está protegida.</p>
                 </div>
 
                 <!-- Terms & Conditions -->
