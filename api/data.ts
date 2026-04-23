@@ -2223,45 +2223,6 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     }
                     break;
                 }
-                case 'expireOldBookings': {
-                    try {
-                        const { rows: expiredBookings } = await sql`
-                            UPDATE bookings 
-                            SET status = 'expired'
-                            WHERE status = 'active' 
-                              AND is_paid = false 
-                              AND expires_at < NOW()
-                            RETURNING id, booking_code, user_info
-                        `;
-
-                        try {
-                            const { rows: adminTasksTable } = await sql`
-                                SELECT to_regclass('public.admin_tasks') as table_name
-                            `;
-                            if (adminTasksTable[0]?.table_name) {
-                                await sql`
-                                    UPDATE admin_tasks 
-                                    SET last_executed_at = NOW(), updated_at = NOW()
-                                    WHERE task_name = 'expire_old_bookings'
-                                `;
-                            }
-                        } catch (taskErr) {
-                            console.warn('[EXPIRE BOOKINGS][GET] Could not update admin_tasks:', taskErr);
-                        }
-
-                        return res.status(200).json({
-                            success: true,
-                            message: 'Pre-reservas expiradas marcadas',
-                            expired: expiredBookings.length
-                        });
-                    } catch (error) {
-                        console.error('[expireOldBookings][GET] Error:', error);
-                        return res.status(500).json({
-                            success: false,
-                            error: error instanceof Error ? error.message : String(error)
-                        });
-                    }
-                }
             default:
                 return res.status(400).json({ error: `Unknown action: ${action}` });
         }
@@ -4593,7 +4554,9 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
                 const { rows: [updatedBookingRow] } = await sql`
                     UPDATE bookings
-                    SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
+                    SET payment_details = ${JSON.stringify(updatedPayments)},
+                        is_paid = ${isPaid},
+                        status = CASE WHEN ${isPaid} THEN 'confirmed' ELSE status END
                     WHERE id = ${bookingId}
                     RETURNING *;
                 `;
@@ -4679,7 +4642,9 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             
             const { rows: [updatedBookingRow] } = await sql`
                 UPDATE bookings
-                SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
+                SET payment_details = ${JSON.stringify(updatedPayments)},
+                    is_paid = ${isPaid},
+                    status = CASE WHEN ${isPaid} THEN 'confirmed' ELSE 'active' END
                 WHERE id = ${bookingId}
                 RETURNING *;
             `;
@@ -4759,7 +4724,9 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
             const { rows: [updatedBookingRow] } = await sql`
                 UPDATE bookings
-                SET payment_details = ${JSON.stringify(updatedPayments)}, is_paid = ${isPaid}
+                SET payment_details = ${JSON.stringify(updatedPayments)},
+                    is_paid = ${isPaid},
+                    status = CASE WHEN ${isPaid} THEN 'confirmed' ELSE 'active' END
                 WHERE id = ${bookingId}
                 RETURNING *;
             `;
@@ -4771,7 +4738,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         }
         case 'markBookingAsUnpaid':
             const markUnpaidBody = req.body;
-            await sql`UPDATE bookings SET is_paid = false, payment_details = NULL WHERE id = ${markUnpaidBody.bookingId}`;
+            await sql`UPDATE bookings SET is_paid = false, payment_details = NULL, status = 'active' WHERE id = ${markUnpaidBody.bookingId}`;
             break;
         case 'rescheduleBookingSlot': {
             const rescheduleBody = req.body;

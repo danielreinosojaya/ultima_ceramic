@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { Booking, GroupTechnique } from '../../types';
 import * as dataService from '../../services/dataService';
 import { fetchWithAbort } from '../../utils/fetchWithAbort';
@@ -71,7 +71,7 @@ const getBookingDisplayName = (booking: Booking): string => {
 };
 
 interface ExpiredBooking extends Booking {
-  status: 'expired' | 'active';
+  status: 'expired' | 'active' | 'confirmed' | 'pending';
   expiresAt?: Date;
   hoursUntilExpiry?: number;
 }
@@ -82,58 +82,55 @@ type SortOrder = 'asc' | 'desc';
 export const ExpiredBookingsManager: React.FC = () => {
   const [bookings, setBookings] = useState<ExpiredBooking[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'active' | 'expired'>('all');
-  const [searchEmail, setSearchEmail] = useState('');
+  const [filter, setFilter] = useState<'all' | 'active' | 'expired' | 'confirmed'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [sortField, setSortField] = useState<SortField>('createdAt');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const bookingsRef = useRef<ExpiredBooking[]>([]);
   const itemsPerPage = 25;
 
 
   useEffect(() => {
-    // Limpiar reservas expiradas cuando se carga el componente
     expireOldBookings();
     loadBookings();
-    
-    // Smart polling con AbortController para evitar memory leaks
-    const abortController = new AbortController();
+
     let isActive = true;
     let pollTimer: NodeJS.Timeout | null = null;
-    
-    const schedulePoll = (currentBookings: ExpiredBooking[]) => {
+
+    // Scheduling usa ref para leer bookings actuales, evitando stale closure
+    const schedulePoll = () => {
       if (!isActive) return;
-      
-      // Determinar si hay reservas críticas
+
+      const currentBookings = bookingsRef.current;
       const hasExpiredSoon = currentBookings.some(b => {
         const hoursLeft = b.hoursUntilExpiry || 0;
-        return hoursLeft < 1 && hoursLeft > 0; // Expira en menos de 1 hora
+        return hoursLeft < 1 && hoursLeft > 0;
       });
-      
-      const nextInterval = hasExpiredSoon ? 30000 : 300000; // 30s si crítico, 5min normal
-      
+
+      const nextInterval = hasExpiredSoon ? 30000 : 300000;
+
       if (pollTimer) clearTimeout(pollTimer);
-      
+
       pollTimer = setTimeout(() => {
         if (isActive) {
           loadBookings();
-          // Volver a programar con nuevo intervalo
-          schedulePoll(bookings);
+          schedulePoll();
         }
       }, nextInterval);
     };
-    
-    schedulePoll(bookings);
-    
+
+    schedulePoll();
+
     return () => {
       isActive = false;
       if (pollTimer) clearTimeout(pollTimer);
-      abortController.abort();
     };
   }, []);
 
   const expireOldBookings = async () => {
     try {
-      await fetchWithAbort('expire-old-bookings', '/api/data?action=expireOldBookings', { method: 'GET' });
+      await fetchWithAbort('expire-old-bookings', '/api/data?action=expireOldBookings', { method: 'POST' });
       console.log('[ExpiredBookingsManager] Old bookings expired');
     } catch (error) {
       if (!(error instanceof Error && error.message === 'Request cancelled')) {
@@ -152,6 +149,7 @@ export const ExpiredBookingsManager: React.FC = () => {
         const hoursUntilExpiry = expiresAt ? (expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60) : null;
         return { ...b, hoursUntilExpiry: hoursUntilExpiry || 0, status: b.status || 'active' };
       });
+      bookingsRef.current = enrichedBookings;
       setBookings(enrichedBookings);
     } catch (error) {
       if (!(error instanceof Error && error.message === 'Request cancelled')) {
@@ -164,13 +162,21 @@ export const ExpiredBookingsManager: React.FC = () => {
 
   // Filtrar por estado y búsqueda
   const filteredBookings = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+
     let filtered = bookings.filter(b => {
-      if (filter === 'active') return b.status === 'active' && b.isPaid === false;
+      if (filter === 'active') return b.status === 'active' && !b.isPaid;
       if (filter === 'expired') return b.status === 'expired';
+      if (filter === 'confirmed') return b.status === 'confirmed' || b.isPaid;
       return true;
-    }).filter(b => 
-      searchEmail === '' || b.userInfo?.email?.toLowerCase().includes(searchEmail.toLowerCase())
-    );
+    }).filter(b => {
+      if (!q) return true;
+      const email = b.userInfo?.email?.toLowerCase() || '';
+      const firstName = b.userInfo?.firstName?.toLowerCase() || '';
+      const lastName = b.userInfo?.lastName?.toLowerCase() || '';
+      const code = b.bookingCode?.toLowerCase() || '';
+      return email.includes(q) || firstName.includes(q) || lastName.includes(q) || code.includes(q);
+    });
 
     // Ordenamiento inteligente
     return filtered.sort((a, b) => {
@@ -216,7 +222,7 @@ export const ExpiredBookingsManager: React.FC = () => {
 
   const activeUnpaidCount = bookings.filter(b => b.status === 'active' && !b.isPaid).length;
   const expiredCount = bookings.filter(b => b.status === 'expired').length;
-  const paidCount = bookings.filter(b => b.isPaid).length;
+  const confirmedCount = bookings.filter(b => b.status === 'confirmed' || b.isPaid).length;
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -265,9 +271,9 @@ export const ExpiredBookingsManager: React.FC = () => {
           <p className="text-xs text-red-600 mt-2">no pagadas a tiempo</p>
         </div>
         <div className="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-lg p-5 shadow-sm">
-          <p className="text-xs font-semibold text-green-600 uppercase tracking-wider">Pagadas</p>
-          <p className="text-4xl font-bold text-green-900 mt-3">{paidCount}</p>
-          <p className="text-xs text-green-600 mt-2">confirmadas</p>
+          <p className="text-xs font-semibold text-green-600 uppercase tracking-wider">Confirmadas</p>
+          <p className="text-4xl font-bold text-green-900 mt-3">{confirmedCount}</p>
+          <p className="text-xs text-green-600 mt-2">pagadas y confirmadas</p>
         </div>
       </div>
 
@@ -304,12 +310,22 @@ export const ExpiredBookingsManager: React.FC = () => {
           >
             Expiradas ({expiredCount})
           </button>
+          <button
+            onClick={() => { setFilter('confirmed'); setCurrentPage(1); }}
+            className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+              filter === 'confirmed'
+                ? 'bg-green-600 text-white shadow-md'
+                : 'bg-brand-surface text-brand-text hover:bg-brand-border'
+            }`}
+          >
+            Confirmadas ({confirmedCount})
+          </button>
         </div>
         <input
-          type="email"
-          placeholder="🔍 Buscar por email del cliente..."
-          value={searchEmail}
-          onChange={(e) => { setSearchEmail(e.target.value); setCurrentPage(1); }}
+          type="text"
+          placeholder="🔍 Buscar por email, nombre, apellido o código..."
+          value={searchQuery}
+          onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
           className="w-full px-4 py-2 border border-brand-border rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent transition-all"
         />
       </div>
@@ -361,14 +377,14 @@ export const ExpiredBookingsManager: React.FC = () => {
                           className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
                             booking.status === 'expired'
                               ? 'bg-red-100 text-red-700'
-                              : booking.isPaid
+                              : booking.status === 'confirmed' || booking.isPaid
                               ? 'bg-green-100 text-green-700'
                               : 'bg-yellow-100 text-yellow-700'
                           }`}
                         >
                           {booking.status === 'expired' && <XIcon className="w-3 h-3" />}
-                          {booking.isPaid && <CheckIcon className="w-3 h-3" />}
-                          {booking.status === 'expired' ? 'Expirada' : booking.isPaid ? 'Pagada' : 'Pendiente'}
+                          {(booking.status === 'confirmed' || booking.isPaid) && <CheckIcon className="w-3 h-3" />}
+                          {booking.status === 'expired' ? 'Expirada' : (booking.status === 'confirmed' || booking.isPaid) ? 'Confirmada' : 'Pendiente pago'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-xs text-brand-secondary">
@@ -444,9 +460,11 @@ export const ExpiredBookingsManager: React.FC = () => {
       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-5">
         <h3 className="font-bold text-blue-900 mb-3">� Cómo funciona:</h3>
         <ul className="text-sm text-blue-800 space-y-2">
+          <li>✓ Expiración automática cada <strong>5 minutos</strong> via cron job del servidor (24/7, sin necesidad de abrir el panel)</li>
           <li>✓ Pre-reservas activas por <strong>2 horas</strong> desde su creación</li>
           <li>✓ Se marcan automáticamente como <strong>"Expirada"</strong> cuando vence el plazo</li>
           <li>✓ Los registros se guardan en la DB para seguimiento de clientes</li>
+          <li>✓ Busca por email, nombre, apellido o código de reserva</li>
           <li>✓ Ordena por cualquier columna para análisis customizado</li>
         </ul>
       </div>

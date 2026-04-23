@@ -400,7 +400,7 @@ export interface Booking {
     giftcardId?: string;
     pendingBalance?: number;
     expiresAt?: Date; // Pre-reserva válida hasta esta fecha (NOW + 2 hours)
-    status?: 'active' | 'expired' | 'paid'; // Estado de la reserva
+    status?: 'active' | 'expired' | 'confirmed' | 'pending'; // Estado de la reserva
     
     // COUPLES_EXPERIENCE specific
     technique?: Technique; // Técnica seleccionada para parejas
