@@ -213,7 +213,7 @@ export const ExpiredBookingsManager: React.FC = () => {
         return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
       }
     });
-  }, [bookings, filter, searchEmail, sortField, sortOrder]);
+  }, [bookings, filter, searchQuery, sortField, sortOrder]);
 
   const totalPages = Math.ceil(filteredBookings.length / itemsPerPage);
   const startIdx = (currentPage - 1) * itemsPerPage;
