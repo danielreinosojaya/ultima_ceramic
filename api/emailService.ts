@@ -2700,6 +2700,136 @@ export const sendValentineLastChanceEmail = async (data: {
     return result;
 };
 
+export const sendBookingExpiredEmail = async (params: {
+    email: string;
+    firstName: string;
+    bookingCode: string;
+    productName: string;
+    slots?: Array<{ date: string; time: string }>;
+}) => {
+    const { email, firstName, bookingCode, productName, slots } = params;
+    const subject = `Tu pre-reserva en CeramicAlma ha vencido (${bookingCode})`;
+
+    const slotsHtml = slots && slots.length > 0 ? `
+        <div style="background-color: #f0f9ff; border-left: 4px solid #0EA5E9; padding: 15px; margin: 20px 0; border-radius: 8px;">
+            <p style="margin: 0; color: #0369A1; font-weight: bold;">📅 ${slots.length > 1 ? 'Clases que habías agendado' : 'Clase que habías agendado'}</p>
+            <table style="margin-top: 10px; width: 100%; border-collapse: collapse;">
+                ${slots.map((slot, index) => {
+                    const slotDate = new Date(slot.date + 'T00:00:00').toLocaleDateString('es-ES', {
+                        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+                    });
+                    return `
+                        <tr style="border-bottom: 1px solid #e0f2fe;">
+                            <td style="padding: 8px 0; color: #0369A1; font-weight: bold;">${slots.length > 1 ? `Clase ${index + 1}:` : ''}</td>
+                            <td style="padding: 8px 0; color: #0c4a6e;">${slotDate}</td>
+                            <td style="padding: 8px 0; color: #0c4a6e; font-weight: bold;">${slot.time}</td>
+                        </tr>
+                    `;
+                }).join('')}
+            </table>
+        </div>
+    ` : '';
+
+    const html = `
+        <div style="font-family: Arial, sans-serif; color: #333;">
+            <h2>¡Hola, ${firstName}!</h2>
+            <p>Te escribimos para informarte que tu pre-reserva para <strong>${productName}</strong> ha vencido sin confirmación de pago.</p>
+
+            <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                <p style="margin: 0;"><strong>Código de reserva:</strong> <span style="font-size: 18px; color: #D95F43; font-weight: bold;">${bookingCode}</span></p>
+                <p style="margin: 8px 0 0 0;"><strong>Clase:</strong> ${productName}</p>
+            </div>
+
+            ${slotsHtml}
+
+            <div style="background-color: #FEF2F2; border-left: 4px solid #EF4444; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #991B1B; font-weight: bold;">⏰ Tu cupo fue liberado</p>
+                <p style="margin: 8px 0 0 0; color: #7F1D1D; font-size: 14px;">
+                    Las pre-reservas se mantienen <strong>2 horas</strong> mientras se aguarda el comprobante de pago.
+                    Pasado ese plazo, el cupo queda disponible para otros clientes automáticamente.
+                </p>
+            </div>
+
+            <div style="background-color: #EFF6FF; border-left: 4px solid #3B82F6; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #1E40AF; font-weight: bold;">🔄 ¿Quieres volver a reservar?</p>
+                <p style="margin: 8px 0 0 0; color: #1E3A8A; font-size: 14px;">
+                    No te preocupes, puedes hacer una nueva reserva en cualquier momento. Una vez confirmada,
+                    recuerda enviar el comprobante de pago por <strong>WhatsApp</strong> dentro de las 2 horas para asegurar tu lugar.
+                </p>
+            </div>
+
+            <p style="margin-top: 20px;">Si tienes alguna duda, no dudes en contactarnos. ¡Esperamos verte pronto en el taller!</p>
+            <p>Saludos,<br/>El equipo de CeramicAlma</p>
+        </div>
+    `;
+
+    const result = await sendEmail(email, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(email, 'pre-booking-expired', 'email', status, bookingCode);
+    console.info('[emailService] Booking expired email sent to', email, bookingCode, status);
+    return result;
+};
+
+export const sendPaymentReminderEmail = async (booking: Booking, bankDetails: BankDetails) => {
+    const { userInfo, bookingCode, price, slots } = booking;
+    const numericPrice = typeof price === 'number' ? price : parseFloat(String(price));
+    const productName = getBookingDisplayName(booking);
+    const subject = `⚠️ RECORDATORIO: Tu reserva vence pronto - ${bookingCode} | CeramicAlma`;
+
+    const accounts = Array.isArray(bankDetails) ? bankDetails : [bankDetails];
+    const accountsHtml = accounts.map(acc => `
+        <tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:8px 12px;color:#374151;">${acc.bankName || ''}</td>
+            <td style="padding:8px 12px;color:#374151;">${acc.accountHolder}</td>
+            <td style="padding:8px 12px;font-family:monospace;font-weight:700;color:#4B5563;">${acc.accountNumber}</td>
+            <td style="padding:8px 12px;color:#374151;">${acc.accountType}</td>
+        </tr>
+    `).join('');
+
+    const slotsText = slots && slots.length > 0
+        ? slots.map(s => `${s.date} a las ${s.time}`).join(', ')
+        : '';
+
+    const html = `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#1f2937;">
+            <div style="background:#FEF3C7;border-left:4px solid #F59E0B;padding:16px 20px;border-radius:8px;margin-bottom:24px;">
+                <h2 style="margin:0 0 8px 0;color:#92400E;font-size:20px;">⚠️ Tu cupo vence pronto</h2>
+                <p style="margin:0;color:#78350F;font-size:14px;">Pre-reserva <strong>${bookingCode}</strong> — <strong>${productName}</strong></p>
+            </div>
+            <p>Hola <strong>${userInfo.firstName}</strong>,</p>
+            <p>Te recordamos que tienes una pre-reserva activa que <strong>vencerá en las próximas horas</strong>.
+            Si no realizas el pago a tiempo, tu lugar quedará disponible para otros clientes.</p>
+            ${slotsText ? `<p>📅 Clase agendada: <strong>${slotsText}</strong></p>` : ''}
+            <p>Monto a pagar: <strong style="font-size:18px;color:#D95F43;">$${numericPrice.toFixed(2)}</strong></p>
+            <p>Realiza una transferencia bancaria con los siguientes datos y envía el comprobante por <strong>WhatsApp</strong>:</p>
+            <table style="width:100%;border-collapse:collapse;background:#f9fafb;border-radius:8px;overflow:hidden;margin-top:8px;">
+                <thead>
+                    <tr style="background:#e5e7eb;">
+                        <th style="padding:10px 12px;text-align:left;font-size:13px;color:#6b7280;">Banco</th>
+                        <th style="padding:10px 12px;text-align:left;font-size:13px;color:#6b7280;">Titular</th>
+                        <th style="padding:10px 12px;text-align:left;font-size:13px;color:#6b7280;">Número</th>
+                        <th style="padding:10px 12px;text-align:left;font-size:13px;color:#6b7280;">Tipo</th>
+                    </tr>
+                </thead>
+                <tbody>${accountsHtml}</tbody>
+            </table>
+            <div style="background:#EFF6FF;border-left:4px solid #3B82F6;padding:14px 18px;border-radius:8px;margin-top:24px;">
+                <p style="margin:0;color:#1E40AF;font-size:13px;">
+                    Una vez realizado el pago, envía el comprobante por WhatsApp y tu reserva quedará <strong>confirmada</strong>.
+                </p>
+            </div>
+            <p style="margin-top:24px;">¡Esperamos verte pronto en el taller!</p>
+            <p>Saludos,<br/>El equipo de CeramicAlma</p>
+        </div>
+    `;
+
+    const result = await sendEmail(userInfo.email, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(userInfo.email, 'payment-reminder', 'email', status, bookingCode);
+    console.info('[emailService] Payment reminder sent to', userInfo.email, bookingCode, status);
+    return result;
+};
+
 // ============================================================
 // EMAIL ALIASES - Enviar desde diferentes direcciones
 // ============================================================

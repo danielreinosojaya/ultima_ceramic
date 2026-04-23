@@ -5012,8 +5012,75 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 return res.status(200).json({ success: true, message: 'Booking deleted successfully' });
             } catch (error) {
                 console.error('[deleteBooking] Error:', error);
-                // If booking doesn't exist or has invalid format, return 404
                 return res.status(404).json({ error: 'Booking not found' });
+            }
+        }
+        case 'extendBookingExpiry': {
+            const { bookingId: extendId } = req.body;
+            if (!extendId || typeof extendId !== 'string') {
+                return res.status(400).json({ error: 'bookingId is required' });
+            }
+            try {
+                const { rows: [updated] } = await sql`
+                    UPDATE bookings
+                    SET expires_at = COALESCE(expires_at, NOW()) + INTERVAL '1 hour'
+                    WHERE id = ${extendId} AND status = 'active'
+                    RETURNING expires_at
+                `;
+                if (!updated) {
+                    return res.status(404).json({ error: 'Booking not found or not active' });
+                }
+                return res.status(200).json({ success: true, newExpiresAt: updated.expires_at });
+            } catch (error) {
+                console.error('[extendBookingExpiry] Error:', error);
+                return res.status(500).json({ error: 'Failed to extend booking expiry' });
+            }
+        }
+        case 'cancelPreBooking': {
+            const { bookingId: cancelId } = req.body;
+            if (!cancelId || typeof cancelId !== 'string') {
+                return res.status(400).json({ error: 'bookingId is required' });
+            }
+            try {
+                const { rowCount } = await sql`
+                    UPDATE bookings SET status = 'expired'
+                    WHERE id = ${cancelId} AND status = 'active' AND (is_paid = false OR is_paid IS NULL)
+                `;
+                if (rowCount === 0) {
+                    return res.status(404).json({ error: 'Booking not found or already paid/expired' });
+                }
+                return res.status(200).json({ success: true, message: 'Pre-booking cancelled, slot freed' });
+            } catch (error) {
+                console.error('[cancelPreBooking] Error:', error);
+                return res.status(500).json({ error: 'Failed to cancel pre-booking' });
+            }
+        }
+        case 'sendPaymentReminder': {
+            const { bookingId: reminderId } = req.body;
+            if (!reminderId || typeof reminderId !== 'string') {
+                return res.status(400).json({ error: 'bookingId is required' });
+            }
+            try {
+                const { rows: [bookingRow] } = await sql`SELECT * FROM bookings WHERE id = ${reminderId}`;
+                if (!bookingRow) {
+                    return res.status(404).json({ error: 'Booking not found' });
+                }
+                const reminderBooking = parseBookingFromDB(bookingRow);
+                if (!reminderBooking.userInfo?.email) {
+                    return res.status(400).json({ error: 'Booking has no email address' });
+                }
+                const bankDetails = {
+                    bankName: 'Banco Pichincha',
+                    accountHolder: 'Carolina Massuh Morán',
+                    accountNumber: '2100334248',
+                    accountType: 'Cuenta Corriente',
+                    taxId: '0921343935'
+                };
+                await emailService.sendPaymentReminderEmail(reminderBooking, bankDetails);
+                return res.status(200).json({ success: true, message: `Reminder sent to ${reminderBooking.userInfo.email}` });
+            } catch (error) {
+                console.error('[sendPaymentReminder] Error:', error);
+                return res.status(500).json({ error: 'Failed to send reminder email' });
             }
         }
         case 'deleteBookingsInDateRange':

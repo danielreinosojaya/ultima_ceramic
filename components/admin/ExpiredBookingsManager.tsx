@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { Booking, GroupTechnique } from '../../types';
 import * as dataService from '../../services/dataService';
+import { addPaymentToBooking, extendBookingExpiry, cancelPreBooking, sendPaymentReminder, invalidateBookingsCache } from '../../services/dataService';
 import { fetchWithAbort } from '../../utils/fetchWithAbort';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -89,6 +90,97 @@ export const ExpiredBookingsManager: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const bookingsRef = useRef<ExpiredBooking[]>([]);
   const itemsPerPage = 25;
+  const [actionLoading, setActionLoading] = useState<Record<string, string>>({});
+  const [releaseConfirm, setReleaseConfirm] = useState<string | null>(null);
+  const [payModal, setPayModal] = useState<{ bookingId: string; price: number; name: string } | null>(null);
+  const [payAmount, setPayAmount] = useState('');
+  const [payMethod, setPayMethod] = useState('Transferencia');
+  const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const showMsg = (type: 'success' | 'error', text: string) => {
+    setActionMessage({ type, text });
+    setTimeout(() => setActionMessage(null), 4000);
+  };
+
+  const handleExtend = async (bookingId: string) => {
+    setActionLoading(p => ({ ...p, [bookingId]: 'extend' }));
+    try {
+      const res = await extendBookingExpiry(bookingId);
+      if (res.success) {
+        showMsg('success', '+1 hora aplicada correctamente');
+        await loadBookings();
+      } else {
+        showMsg('error', 'No se pudo extender: reserva no activa');
+      }
+    } catch {
+      showMsg('error', 'Error al extender');
+    } finally {
+      setActionLoading(p => { const n = { ...p }; delete n[bookingId]; return n; });
+    }
+  };
+
+  const handleRelease = async (bookingId: string) => {
+    setReleaseConfirm(null);
+    setActionLoading(p => ({ ...p, [bookingId]: 'release' }));
+    try {
+      const res = await cancelPreBooking(bookingId);
+      if (res.success) {
+        showMsg('success', 'Cupo liberado correctamente');
+        invalidateBookingsCache();
+        await loadBookings();
+      } else {
+        showMsg('error', 'No se pudo liberar el cupo');
+      }
+    } catch {
+      showMsg('error', 'Error al liberar cupo');
+    } finally {
+      setActionLoading(p => { const n = { ...p }; delete n[bookingId]; return n; });
+    }
+  };
+
+  const handleReminder = async (bookingId: string) => {
+    setActionLoading(p => ({ ...p, [bookingId]: 'reminder' }));
+    try {
+      const res = await sendPaymentReminder(bookingId);
+      if (res.success) {
+        showMsg('success', `Recordatorio enviado: ${res.message || ''}`);
+      } else {
+        showMsg('error', 'No se pudo enviar el recordatorio');
+      }
+    } catch {
+      showMsg('error', 'Error al enviar recordatorio');
+    } finally {
+      setActionLoading(p => { const n = { ...p }; delete n[bookingId]; return n; });
+    }
+  };
+
+  const handleConfirmPayment = async () => {
+    if (!payModal) return;
+    const amount = parseFloat(payAmount);
+    if (isNaN(amount) || amount <= 0) { showMsg('error', 'Monto inválido'); return; }
+    setActionLoading(p => ({ ...p, [payModal.bookingId]: 'pay' }));
+    try {
+      const res = await addPaymentToBooking(payModal.bookingId, {
+        amount,
+        method: payMethod,
+        receivedAt: new Date().toISOString(),
+        notes: 'Registrado desde panel admin - Pre-reservas',
+      } as any);
+      if (res.success) {
+        showMsg('success', `Pago de $${amount.toFixed(2)} registrado correctamente`);
+        invalidateBookingsCache();
+        await loadBookings();
+        setPayModal(null);
+        setPayAmount('');
+      } else {
+        showMsg('error', 'Error al registrar el pago');
+      }
+    } catch {
+      showMsg('error', 'Error al confirmar pago');
+    } finally {
+      setActionLoading(p => { const n = { ...p }; delete n[payModal.bookingId]; return n; });
+    }
+  };
 
 
   useEffect(() => {
@@ -248,6 +340,83 @@ export const ExpiredBookingsManager: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Modal Confirmar Pago */}
+      {payModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setPayModal(null)}>
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-brand-text mb-1">Confirmar Pago</h3>
+            <p className="text-sm text-brand-secondary mb-4">{payModal.name}</p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-brand-text mb-1">Monto</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={payAmount}
+                  onChange={e => setPayAmount(e.target.value)}
+                  placeholder={`$${payModal.price.toFixed(2)}`}
+                  className="w-full px-3 py-2 border border-brand-border rounded-lg focus:ring-2 focus:ring-brand-primary"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-brand-text mb-1">Método de pago</label>
+                <select
+                  value={payMethod}
+                  onChange={e => setPayMethod(e.target.value)}
+                  className="w-full px-3 py-2 border border-brand-border rounded-lg focus:ring-2 focus:ring-brand-primary"
+                >
+                  <option value="Transferencia">Transferencia bancaria</option>
+                  <option value="Efectivo">Efectivo</option>
+                  <option value="Tarjeta">Tarjeta</option>
+                  <option value="Giftcard">Giftcard</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <button onClick={() => setPayModal(null)} className="flex-1 px-4 py-2 border border-brand-border rounded-lg text-brand-secondary hover:bg-brand-surface transition-colors">Cancelar</button>
+              <button
+                onClick={handleConfirmPayment}
+                disabled={!!actionLoading[payModal.bookingId]}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors"
+              >
+                {actionLoading[payModal.bookingId] === 'pay' ? 'Registrando...' : 'Confirmar Pago'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Liberar Cupo */}
+      {releaseConfirm && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setReleaseConfirm(null)}>
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-red-700 mb-2">¿Liberar cupo?</h3>
+            <p className="text-sm text-brand-secondary mb-5">La pre-reserva se marcará como expirada y el cupo quedará disponible. Esta acción no se puede deshacer.</p>
+            <div className="flex gap-2">
+              <button onClick={() => setReleaseConfirm(null)} className="flex-1 px-4 py-2 border border-brand-border rounded-lg text-brand-secondary hover:bg-brand-surface transition-colors">Cancelar</button>
+              <button
+                onClick={() => handleRelease(releaseConfirm)}
+                disabled={!!actionLoading[releaseConfirm]}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {actionLoading[releaseConfirm] === 'release' ? 'Liberando...' : 'Sí, liberar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast de acciones */}
+      {actionMessage && (
+        <div className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-lg shadow-lg text-white font-semibold transition-all ${
+          actionMessage.type === 'success' ? 'bg-green-600' : 'bg-red-600'
+        }`}>
+          {actionMessage.type === 'success' ? '✅' : '❌'} {actionMessage.text}
+        </div>
+      )}
+
       <div>
         <h2 className="text-3xl font-bold text-brand-text mb-1">Gestión de Pre-Reservas</h2>
         <p className="text-brand-secondary">Monitorea reservas activas, pendientes de pago y expiradas</p>
@@ -355,6 +524,7 @@ export const ExpiredBookingsManager: React.FC = () => {
                     <th className="px-4 py-3 text-left font-bold text-brand-text"><SortButton field="status" label="Estado" /></th>
                     <th className="px-4 py-3 text-left font-bold text-brand-text"><SortButton field="createdAt" label="Creada" /></th>
                     <th className="px-4 py-3 text-left font-bold text-brand-text"><SortButton field="expiresAt" label="Vencimiento" /></th>
+                    <th className="px-4 py-3 text-left font-bold text-brand-text">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -405,6 +575,57 @@ export const ExpiredBookingsManager: React.FC = () => {
                         ) : (
                           <span className="text-brand-secondary">-</span>
                         )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1">
+                          {/* Confirmar pago: activo sin pagar o expirado */}
+                          {(!booking.isPaid) && (
+                            <button
+                              onClick={() => {
+                                setPayAmount(booking.price?.toFixed(2) || '');
+                                setPayModal({ bookingId: booking.id!, price: booking.price || 0, name: `${booking.userInfo?.firstName} ${booking.userInfo?.lastName} — ${booking.bookingCode}` });
+                              }}
+                              disabled={!!actionLoading[booking.id!]}
+                              title="Confirmar pago"
+                              className="px-2 py-1 text-xs bg-green-50 text-green-700 border border-green-300 rounded-md hover:bg-green-100 disabled:opacity-50 transition-colors font-semibold whitespace-nowrap"
+                            >
+                              ✅ Pago
+                            </button>
+                          )}
+                          {/* Extender +1h: solo activo sin pagar */}
+                          {booking.status === 'active' && !booking.isPaid && (
+                            <button
+                              onClick={() => handleExtend(booking.id!)}
+                              disabled={!!actionLoading[booking.id!]}
+                              title="Extender 1 hora más"
+                              className="px-2 py-1 text-xs bg-blue-50 text-blue-700 border border-blue-300 rounded-md hover:bg-blue-100 disabled:opacity-50 transition-colors font-semibold whitespace-nowrap"
+                            >
+                              {actionLoading[booking.id!] === 'extend' ? '...' : '⏱+1h'}
+                            </button>
+                          )}
+                          {/* Enviar recordatorio: solo activo sin pagar */}
+                          {booking.status === 'active' && !booking.isPaid && (
+                            <button
+                              onClick={() => handleReminder(booking.id!)}
+                              disabled={!!actionLoading[booking.id!]}
+                              title="Enviar recordatorio de pago por email"
+                              className="px-2 py-1 text-xs bg-yellow-50 text-yellow-700 border border-yellow-300 rounded-md hover:bg-yellow-100 disabled:opacity-50 transition-colors font-semibold whitespace-nowrap"
+                            >
+                              {actionLoading[booking.id!] === 'reminder' ? '...' : '📧 Recordar'}
+                            </button>
+                          )}
+                          {/* Liberar cupo: solo activo sin pagar */}
+                          {booking.status === 'active' && !booking.isPaid && (
+                            <button
+                              onClick={() => setReleaseConfirm(booking.id!)}
+                              disabled={!!actionLoading[booking.id!]}
+                              title="Liberar cupo (cancelar pre-reserva)"
+                              className="px-2 py-1 text-xs bg-red-50 text-red-700 border border-red-300 rounded-md hover:bg-red-100 disabled:opacity-50 transition-colors font-semibold whitespace-nowrap"
+                            >
+                              {actionLoading[booking.id!] === 'release' ? '...' : '🔓 Liberar'}
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

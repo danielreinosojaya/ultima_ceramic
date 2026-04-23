@@ -1,4 +1,5 @@
 import { sql } from '@vercel/postgres';
+import * as emailService from './emailService.js';
 
 export const runtime = 'nodejs';
 
@@ -39,7 +40,13 @@ export default async function handler(req: any, res: any) {
               AND is_paid = false
               AND expires_at IS NOT NULL
               AND expires_at < NOW()
-            RETURNING id, booking_code, user_info->>'email' AS customer_email
+            RETURNING
+                id,
+                booking_code,
+                user_info->>'email'     AS customer_email,
+                user_info->>'firstName' AS first_name,
+                product->>'name'        AS product_name,
+                slots
         `;
 
         const count = expiredBookings.length;
@@ -48,6 +55,32 @@ export default async function handler(req: any, res: any) {
             console.log(`[cron-expire-bookings] ✅ Expired ${count} pre-reservas:`,
                 expiredBookings.map((b: any) => `${b.booking_code} (${b.customer_email})`).join(', ')
             );
+
+            // Enviar email de notificación a cada cliente afectado
+            const emailResults = await Promise.allSettled(
+                expiredBookings
+                    .filter((b: any) => b.customer_email)
+                    .map((b: any) => {
+                        let parsedSlots: Array<{ date: string; time: string }> | undefined;
+                        try {
+                            parsedSlots = b.slots
+                                ? (typeof b.slots === 'string' ? JSON.parse(b.slots) : b.slots)
+                                : undefined;
+                        } catch { parsedSlots = undefined; }
+
+                        return emailService.sendBookingExpiredEmail({
+                            email: b.customer_email,
+                            firstName: b.first_name || 'Cliente',
+                            bookingCode: b.booking_code,
+                            productName: b.product_name || 'Clase',
+                            slots: parsedSlots,
+                        });
+                    })
+            );
+
+            const emailsSent = emailResults.filter(r => r.status === 'fulfilled').length;
+            const emailsFailed = emailResults.filter(r => r.status === 'rejected').length;
+            console.log(`[cron-expire-bookings] Emails — sent: ${emailsSent}, failed: ${emailsFailed}`);
         } else {
             console.log('[cron-expire-bookings] No pre-reservas to expire');
         }

@@ -1079,6 +1079,22 @@ export const markBookingAsUnpaid = async (bookingId: string): Promise<{ success:
     return result;
 };
 
+export const extendBookingExpiry = async (bookingId: string): Promise<{ success: boolean; newExpiresAt?: string }> => {
+    return postAction('extendBookingExpiry', { bookingId });
+};
+
+export const cancelPreBooking = async (bookingId: string): Promise<{ success: boolean }> => {
+    const result = await postAction('cancelPreBooking', { bookingId });
+    if (result.success) {
+        invalidateBookingsCache();
+    }
+    return result;
+};
+
+export const sendPaymentReminder = async (bookingId: string): Promise<{ success: boolean; message?: string }> => {
+    return postAction('sendPaymentReminder', { bookingId });
+};
+
 // ============== RESCHEDULE POLICY MANAGER ==============
 
 /**
