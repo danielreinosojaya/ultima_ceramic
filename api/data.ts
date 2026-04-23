@@ -2904,21 +2904,47 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
             // Always protect booking from expiry: mark as pending_verification
             // even if the file upload failed, so the cron never expires a paying customer.
-            // Split into two queries to avoid Neon type-inference error with $param IS NOT NULL in CASE.
-            if (proofUrl) {
-                await sql`
-                    UPDATE bookings
-                    SET status = 'pending_verification',
-                        payment_proof_url = ${proofUrl},
-                        payment_proof_uploaded_at = NOW()
-                    WHERE id = ${proofBookingId} AND status = 'active'
-                `;
-            } else {
-                await sql`
-                    UPDATE bookings
-                    SET status = 'pending_verification'
-                    WHERE id = ${proofBookingId} AND status = 'active'
-                `;
+            // NOTE: We update regardless of current status (except expired/confirmed) to handle
+            // cases where status was already pending_verification from a previous upload attempt.
+            try {
+                if (proofUrl) {
+                    const { rowCount: rowsUpdated } = await sql`
+                        UPDATE bookings
+                        SET status = 'pending_verification',
+                            payment_proof_url = ${proofUrl},
+                            payment_proof_uploaded_at = NOW()
+                        WHERE id = ${proofBookingId}
+                          AND status NOT IN ('expired', 'confirmed')
+                    `;
+                    if (!rowsUpdated || rowsUpdated === 0) {
+                        console.warn('[uploadPaymentProof] UPDATE matched 0 rows — booking may be expired/confirmed or id mismatch:', proofBookingId);
+                    }
+                } else {
+                    const { rowCount: rowsUpdated } = await sql`
+                        UPDATE bookings
+                        SET status = 'pending_verification'
+                        WHERE id = ${proofBookingId}
+                          AND status NOT IN ('expired', 'confirmed')
+                    `;
+                    if (!rowsUpdated || rowsUpdated === 0) {
+                        console.warn('[uploadPaymentProof] (no-url) UPDATE matched 0 rows for booking:', proofBookingId);
+                    }
+                }
+            } catch (dbError: any) {
+                // If payment_proof_uploaded_at column doesn't exist, retry without it
+                if (String(dbError?.message || '').includes('payment_proof_uploaded_at') && proofUrl) {
+                    console.warn('[uploadPaymentProof] payment_proof_uploaded_at column missing, retrying without it');
+                    await sql`
+                        UPDATE bookings
+                        SET status = 'pending_verification',
+                            payment_proof_url = ${proofUrl}
+                        WHERE id = ${proofBookingId}
+                          AND status NOT IN ('expired', 'confirmed')
+                    `;
+                } else {
+                    console.error('[uploadPaymentProof] DB update error:', dbError);
+                    return res.status(500).json({ success: false, error: 'Failed to save proof to database' });
+                }
             }
 
             console.log('[uploadPaymentProof] ✅ Booking protected from expiry:', proofBookingId, 'proofUrl:', proofUrl);

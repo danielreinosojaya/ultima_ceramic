@@ -254,8 +254,10 @@ export const ExpiredBookingsManager: React.FC = () => {
         const hoursLeft = b.hoursUntilExpiry || 0;
         return hoursLeft < 1 && hoursLeft > 0;
       });
+      // Poll every 30s if any booking is near expiry OR has pending_verification (awaiting proof review)
+      const hasPendingVerification = currentBookings.some(b => b.status === 'pending_verification');
 
-      const nextInterval = hasExpiredSoon ? 30000 : 300000;
+      const nextInterval = (hasExpiredSoon || hasPendingVerification) ? 30000 : 300000;
 
       if (pollTimer) clearTimeout(pollTimer);
 
