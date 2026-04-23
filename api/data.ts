@@ -2223,6 +2223,45 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     }
                     break;
                 }
+                case 'getBookingByCode': {
+                    try {
+                        const rawCode = req.query?.bookingCode;
+                        const bookingCode = typeof rawCode === 'string' ? rawCode.toUpperCase().trim() : null;
+                        if (!bookingCode) {
+                            return res.status(400).json({ success: false, error: 'bookingCode required' });
+                        }
+                        const { rows } = await sql`
+                            SELECT id, booking_code, status, product, product_type, price, slots,
+                                   payment_proof_url, is_paid, user_info
+                            FROM bookings
+                            WHERE booking_code = ${bookingCode}
+                            LIMIT 1
+                        `;
+                        if (!rows.length) {
+                            return res.status(404).json({ success: false, error: 'Booking not found' });
+                        }
+                        const row = rows[0];
+                        const parsed = parseBookingFromDB(row);
+                        return res.status(200).json({
+                            success: true,
+                            booking: {
+                                id: parsed.id,
+                                bookingCode: parsed.bookingCode,
+                                status: parsed.status || 'active',
+                                productType: parsed.productType,
+                                productName: parsed.product?.name || parsed.productType || '',
+                                slots: parsed.slots || [],
+                                price: parsed.price || 0,
+                                isPaid: parsed.isPaid || false,
+                                paymentProofUrl: parsed.paymentProofUrl || null,
+                                firstName: parsed.userInfo?.firstName || '',
+                            }
+                        });
+                    } catch (error) {
+                        console.error('[getBookingByCode GET] Error:', error);
+                        return res.status(500).json({ success: false, error: 'Failed to fetch booking' });
+                    }
+                }
             default:
                 return res.status(400).json({ error: `Unknown action: ${action}` });
         }
