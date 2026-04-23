@@ -48,7 +48,7 @@ import * as emailService from './emailService.js';
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { generatePaymentId, generateGiftcardCode } from '../utils/formatters.js';
 import { checkRateLimit } from './rateLimiter.js';
-import { uploadPhotoToBunny } from './bunnyUpload.js';
+import { uploadPhotoToBunny, uploadProofToBunny } from './bunnyUpload.js';
 import type {
     Booking,
     ClientNotification,
@@ -2831,6 +2831,60 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
             console.log('[uploadDeliveryPhoto] Success! URL:', uploadResult.url);
             return res.status(200).json(uploadResult);
+        }
+        case 'uploadPaymentProof': {
+            const { bookingId: proofBookingId, base64Data: proofData, fileName: proofFileName } = req.body;
+            if (!proofData || !proofBookingId) {
+                return res.status(400).json({ success: false, error: 'Missing base64Data or bookingId' });
+            }
+
+            const bunnyEnabledProof = Boolean(process.env.BUNNY_API_KEY && process.env.BUNNY_STORAGE_ZONE);
+            if (!bunnyEnabledProof) {
+                return res.status(503).json({ success: false, error: 'Photo upload service not available' });
+            }
+
+            const proofUploadResult = await uploadProofToBunny({
+                base64Data: proofData,
+                bookingId: proofBookingId,
+                fileName: proofFileName
+            });
+
+            if (!proofUploadResult.success) {
+                return res.status(500).json(proofUploadResult);
+            }
+
+            await sql`
+                UPDATE bookings
+                SET status = 'pending_verification',
+                    payment_proof_url = ${proofUploadResult.url},
+                    payment_proof_uploaded_at = NOW()
+                WHERE id = ${proofBookingId} AND status = 'active'
+            `;
+
+            console.log('[uploadPaymentProof] ✅ Proof uploaded and booking updated:', proofBookingId);
+            return res.status(200).json({ success: true, proofUrl: proofUploadResult.url });
+        }
+        case 'rejectPaymentProof': {
+            const { bookingId: rejectId } = req.body;
+            if (!rejectId || typeof rejectId !== 'string') {
+                return res.status(400).json({ success: false, error: 'bookingId is required' });
+            }
+            try {
+                const { rowCount } = await sql`
+                    UPDATE bookings
+                    SET status = 'expired',
+                        payment_proof_url = NULL,
+                        payment_proof_uploaded_at = NULL
+                    WHERE id = ${rejectId} AND status = 'pending_verification'
+                `;
+                if (rowCount === 0) {
+                    return res.status(404).json({ success: false, error: 'Booking not found or not in pending_verification status' });
+                }
+                return res.status(200).json({ success: true });
+            } catch (error) {
+                console.error('[rejectPaymentProof] Error:', error);
+                return res.status(500).json({ success: false, error: 'Failed to reject proof' });
+            }
         }
         case 'migrateDeliveryPhotosToBunny': {
             const body = req.body || {};
@@ -7121,6 +7175,49 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             }
         }
 
+        case 'getBookingByCode': {
+            // Public endpoint — returns safe booking info by booking code
+            // Used for proof-upload recovery page after client closes tab
+            try {
+                const rawCode = req.query?.bookingCode;
+                const bookingCode = typeof rawCode === 'string' ? rawCode.toUpperCase().trim() : null;
+                if (!bookingCode) {
+                    return res.status(400).json({ success: false, error: 'bookingCode required' });
+                }
+                const { rows } = await sql`
+                    SELECT id, booking_code, status, product, product_type, price, slots,
+                           payment_proof_url, is_paid, user_info
+                    FROM bookings
+                    WHERE booking_code = ${bookingCode}
+                    LIMIT 1
+                `;
+                if (!rows.length) {
+                    return res.status(404).json({ success: false, error: 'Booking not found' });
+                }
+                const row = rows[0];
+                const parsed = parseBookingFromDB(row);
+                // Return only safe public fields — no full user PII
+                return res.status(200).json({
+                    success: true,
+                    booking: {
+                        id: parsed.id,
+                        bookingCode: parsed.bookingCode,
+                        status: parsed.status || 'active',
+                        productType: parsed.productType,
+                        productName: parsed.product?.name || parsed.productType || '',
+                        slots: parsed.slots || [],
+                        price: parsed.price || 0,
+                        isPaid: parsed.isPaid || false,
+                        paymentProofUrl: parsed.paymentProofUrl || null,
+                        firstName: parsed.userInfo?.firstName || '',
+                    }
+                });
+            } catch (error) {
+                console.error('[getBookingByCode] Error:', error);
+                return res.status(500).json({ success: false, error: 'Failed to fetch booking' });
+            }
+        }
+
         // ==================== NEW EXPERIENCE ENDPOINTS ====================
 
         case 'listPieces': {
@@ -7399,6 +7496,8 @@ async function addBookingAction(
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS last_reschedule_at TIMESTAMP WITH TIME ZONE`;
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS participants INT DEFAULT 1`;
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS group_metadata JSONB`;
+      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_proof_url TEXT`;
+      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_proof_uploaded_at TIMESTAMPTZ`;
     } catch (e) {
       console.warn('[ADD BOOKING] Could not add columns (may already exist):', e);
     }
@@ -7421,8 +7520,11 @@ async function addBookingAction(
     // Mapeo de nombres de producto -> técnica válida
     const productToTechnique: Record<string, string> = {
       'pintura de piezas': 'painting',
+      'pintura': 'painting',
       'torno alfarero': 'potters_wheel',
+      'torno': 'potters_wheel',
       'modelado a mano': 'hand_modeling',
+      'modelado': 'hand_modeling',
       'clase grupal': 'potters_wheel',
       'clase grupal (mixto)': 'potters_wheel', // fallback para mixto
     };

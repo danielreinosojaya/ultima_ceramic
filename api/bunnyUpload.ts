@@ -174,6 +174,74 @@ export async function uploadPhotoToBunny(request: UploadPhotoRequest): Promise<U
     }
 }
 
+interface UploadProofRequest {
+    base64Data: string;
+    bookingId: string;
+    fileName?: string;
+}
+
+/**
+ * Subir comprobante de pago a Bunny CDN (payment-proofs/{bookingId}/)
+ */
+export async function uploadProofToBunny(request: UploadProofRequest): Promise<UploadPhotoResponse> {
+    console.log('[uploadProofToBunny] Starting upload:', {
+        bookingId: request.bookingId,
+        base64Size: request.base64Data?.length,
+        fileName: request.fileName
+    });
+
+    try {
+        if (!BUNNY_API_KEY || !BUNNY_STORAGE_ZONE) {
+            return { success: false, error: 'Bunny CDN not configured' };
+        }
+
+        if (!request.base64Data || !request.bookingId) {
+            return { success: false, error: 'Missing base64Data or bookingId' };
+        }
+
+        const parsed = parseBase64(request.base64Data);
+        if (!parsed) {
+            return { success: false, error: 'Invalid base64 data or file too large (max 5MB)' };
+        }
+
+        const timestamp = Date.now();
+        const randomSuffix = Math.random().toString(36).substring(2, 8);
+        const extMap: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'application/pdf': 'pdf' };
+        const ext = extMap[parsed.mimeType] || 'jpg';
+        const fileName = request.fileName || `proof-${timestamp}-${randomSuffix}.${ext}`;
+        const path = `payment-proofs/${request.bookingId}/${fileName}`;
+        const uploadUrl = `${BUNNY_API_BASE}/${path}`;
+
+        console.log('[uploadProofToBunny] Uploading to path:', path);
+
+        const uploadResponse = await fetch(uploadUrl, {
+            method: 'PUT',
+            headers: {
+                'AccessKey': BUNNY_API_KEY,
+                'Content-Type': parsed.mimeType
+            },
+            body: parsed.data
+        });
+
+        if (!uploadResponse.ok) {
+            const errorText = await uploadResponse.text();
+            console.error('[uploadProofToBunny] Upload failed:', uploadResponse.status, errorText);
+            return { success: false, error: `Upload failed: ${uploadResponse.statusText}` };
+        }
+
+        if (!BUNNY_CDN_HOSTNAME) {
+            return { success: false, error: 'BUNNY_CDN_HOSTNAME not configured' };
+        }
+
+        const cdnUrl = `https://${BUNNY_CDN_HOSTNAME}/payment-proofs/${request.bookingId}/${fileName}`;
+        console.log('[uploadProofToBunny] ✅ Proof uploaded:', cdnUrl);
+        return { success: true, url: cdnUrl };
+    } catch (error) {
+        console.error('[uploadProofToBunny] Exception:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+}
+
 /**
  * Extensión de archivo basada en MIME type
  */

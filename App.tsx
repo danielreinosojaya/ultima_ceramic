@@ -45,6 +45,7 @@ import { NotificationProvider } from './context/NotificationContext';
 import { AdminDataProvider } from './context/AdminDataContext';
 import { AuthProvider } from './context/AuthContext';
 import { ConfirmationPage } from './components/ConfirmationPage';
+import { ProofUploadPage } from './components/ProofUploadPage';
 import { OpenStudioModal } from './components/admin/OpenStudioModal';
 import { MyClassesPrompt } from './components/MyClassesPrompt';
 import { EventsBottomSheet, useScrollEventsTrigger } from './components/EventsBottomSheet';
@@ -151,11 +152,21 @@ const App: React.FC = () => {
     
     const [appData, setAppData] = useState<AppData | null>(null);
     const [loading, setLoading] = useState(true);
+    const [proofUploadCode, setProofUploadCode] = useState<string | null>(null);
 
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
         const pathname = window.location.pathname;
         const href = window.location.href;
+
+        // Check for proof upload recovery page — /?comprobante=CODE
+        // Must be first so it takes priority over all other routes
+        const comprobanteCode = urlParams.get('comprobante');
+        if (comprobanteCode) {
+            setProofUploadCode(comprobanteCode.toUpperCase().trim());
+            setView('proof_upload');
+            return;
+        }
 
         // Limpiar flags de eventos viejos del localStorage (migración)
         localStorage.removeItem('eventsModalDismissed');
@@ -1157,6 +1168,17 @@ const App: React.FC = () => {
                         registrationId={valentineRegistrationId || ''}
                         onDone={() => {
                             setValentineRegistrationId(null);
+                            setView('welcome');
+                        }}
+                    />
+                );
+
+            case 'proof_upload':
+                return (
+                    <ProofUploadPage
+                        bookingCode={proofUploadCode || ''}
+                        onDone={() => {
+                            setProofUploadCode(null);
                             setView('welcome');
                         }}
                     />

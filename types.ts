@@ -35,7 +35,8 @@ export type AppView =
   | 'valentine_form'
   | 'valentine_success'
   | 'rumcom_booking'
-  | 'rumcom_admin';
+  | 'rumcom_admin'
+  | 'proof_upload';
 export type BookingMode = 'flexible' | 'monthly';
 export type Technique = 'potters_wheel' | 'molding' | 'hand_modeling' | 'painting';
 
@@ -400,7 +401,9 @@ export interface Booking {
     giftcardId?: string;
     pendingBalance?: number;
     expiresAt?: Date; // Pre-reserva válida hasta esta fecha (NOW + 2 hours)
-    status?: 'active' | 'expired' | 'confirmed' | 'pending'; // Estado de la reserva
+    status?: 'active' | 'expired' | 'confirmed' | 'pending' | 'pending_verification'; // Estado de la reserva
+    paymentProofUrl?: string;     // URL del comprobante de pago subido por el cliente
+    paymentProofUploadedAt?: string; // ISO timestamp de cuando se subió el comprobante
     
     // COUPLES_EXPERIENCE specific
     technique?: Technique; // Técnica seleccionada para parejas

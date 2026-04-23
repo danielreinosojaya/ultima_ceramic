@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { Booking, GroupTechnique } from '../../types';
 import * as dataService from '../../services/dataService';
-import { addPaymentToBooking, extendBookingExpiry, cancelPreBooking, sendPaymentReminder, invalidateBookingsCache } from '../../services/dataService';
+import { addPaymentToBooking, extendBookingExpiry, cancelPreBooking, sendPaymentReminder, rejectPaymentProof, invalidateBookingsCache } from '../../services/dataService';
 import { fetchWithAbort } from '../../utils/fetchWithAbort';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -72,7 +72,7 @@ const getBookingDisplayName = (booking: Booking): string => {
 };
 
 interface ExpiredBooking extends Booking {
-  status: 'expired' | 'active' | 'confirmed' | 'pending';
+  status: 'expired' | 'active' | 'confirmed' | 'pending' | 'pending_verification';
   expiresAt?: Date;
   hoursUntilExpiry?: number;
 }
@@ -83,7 +83,7 @@ type SortOrder = 'asc' | 'desc';
 export const ExpiredBookingsManager: React.FC = () => {
   const [bookings, setBookings] = useState<ExpiredBooking[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'active' | 'expired' | 'confirmed'>('all');
+  const [filter, setFilter] = useState<'all' | 'active' | 'expired' | 'confirmed' | 'review'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [sortField, setSortField] = useState<SortField>('createdAt');
@@ -149,6 +149,24 @@ export const ExpiredBookingsManager: React.FC = () => {
       }
     } catch {
       showMsg('error', 'Error al enviar recordatorio');
+    } finally {
+      setActionLoading(p => { const n = { ...p }; delete n[bookingId]; return n; });
+    }
+  };
+
+  const handleRejectProof = async (bookingId: string) => {
+    setActionLoading(p => ({ ...p, [bookingId]: 'reject' }));
+    try {
+      const res = await rejectPaymentProof(bookingId);
+      if (res.success) {
+        showMsg('success', 'Comprobante rechazado, reserva marcada como expirada');
+        invalidateBookingsCache();
+        await loadBookings();
+      } else {
+        showMsg('error', 'No se pudo rechazar el comprobante');
+      }
+    } catch {
+      showMsg('error', 'Error al rechazar comprobante');
     } finally {
       setActionLoading(p => { const n = { ...p }; delete n[bookingId]; return n; });
     }
@@ -260,6 +278,7 @@ export const ExpiredBookingsManager: React.FC = () => {
       if (filter === 'active') return b.status === 'active' && !b.isPaid;
       if (filter === 'expired') return b.status === 'expired';
       if (filter === 'confirmed') return b.status === 'confirmed' || b.isPaid;
+      if (filter === 'review') return b.status === 'pending_verification';
       return true;
     }).filter(b => {
       if (!q) return true;
@@ -315,6 +334,7 @@ export const ExpiredBookingsManager: React.FC = () => {
   const activeUnpaidCount = bookings.filter(b => b.status === 'active' && !b.isPaid).length;
   const expiredCount = bookings.filter(b => b.status === 'expired').length;
   const confirmedCount = bookings.filter(b => b.status === 'confirmed' || b.isPaid).length;
+  const reviewCount = bookings.filter(b => b.status === 'pending_verification').length;
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -423,7 +443,7 @@ export const ExpiredBookingsManager: React.FC = () => {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-5 shadow-sm">
           <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider">Total</p>
           <p className="text-4xl font-bold text-blue-900 mt-3">{bookings.length}</p>
@@ -438,6 +458,11 @@ export const ExpiredBookingsManager: React.FC = () => {
           <p className="text-xs font-semibold text-red-600 uppercase tracking-wider">Expiradas</p>
           <p className="text-4xl font-bold text-red-900 mt-3">{expiredCount}</p>
           <p className="text-xs text-red-600 mt-2">no pagadas a tiempo</p>
+        </div>
+        <div className="bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 rounded-lg p-5 shadow-sm">
+          <p className="text-xs font-semibold text-orange-600 uppercase tracking-wider">En Revisión</p>
+          <p className="text-4xl font-bold text-orange-900 mt-3">{reviewCount}</p>
+          <p className="text-xs text-orange-600 mt-2">comprobantes pendientes</p>
         </div>
         <div className="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-lg p-5 shadow-sm">
           <p className="text-xs font-semibold text-green-600 uppercase tracking-wider">Confirmadas</p>
@@ -489,6 +514,16 @@ export const ExpiredBookingsManager: React.FC = () => {
           >
             Confirmadas ({confirmedCount})
           </button>
+          <button
+            onClick={() => { setFilter('review'); setCurrentPage(1); }}
+            className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+              filter === 'review'
+                ? 'bg-orange-500 text-white shadow-md'
+                : 'bg-brand-surface text-brand-text hover:bg-brand-border'
+            }`}
+          >
+            En Revisión ({reviewCount})
+          </button>
         </div>
         <input
           type="text"
@@ -524,6 +559,7 @@ export const ExpiredBookingsManager: React.FC = () => {
                     <th className="px-4 py-3 text-left font-bold text-brand-text"><SortButton field="status" label="Estado" /></th>
                     <th className="px-4 py-3 text-left font-bold text-brand-text"><SortButton field="createdAt" label="Creada" /></th>
                     <th className="px-4 py-3 text-left font-bold text-brand-text"><SortButton field="expiresAt" label="Vencimiento" /></th>
+                    <th className="px-4 py-3 text-left font-bold text-brand-text">Comprobante</th>
                     <th className="px-4 py-3 text-left font-bold text-brand-text">Acciones</th>
                   </tr>
                 </thead>
@@ -547,6 +583,8 @@ export const ExpiredBookingsManager: React.FC = () => {
                           className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
                             booking.status === 'expired'
                               ? 'bg-red-100 text-red-700'
+                              : booking.status === 'pending_verification'
+                              ? 'bg-orange-100 text-orange-700'
                               : booking.status === 'confirmed' || booking.isPaid
                               ? 'bg-green-100 text-green-700'
                               : 'bg-yellow-100 text-yellow-700'
@@ -554,7 +592,7 @@ export const ExpiredBookingsManager: React.FC = () => {
                         >
                           {booking.status === 'expired' && <XIcon className="w-3 h-3" />}
                           {(booking.status === 'confirmed' || booking.isPaid) && <CheckIcon className="w-3 h-3" />}
-                          {booking.status === 'expired' ? 'Expirada' : (booking.status === 'confirmed' || booking.isPaid) ? 'Confirmada' : 'Pendiente pago'}
+                          {booking.status === 'expired' ? 'Expirada' : booking.status === 'pending_verification' ? 'En revisión' : (booking.status === 'confirmed' || booking.isPaid) ? 'Confirmada' : 'Pendiente pago'}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-xs text-brand-secondary">
@@ -574,6 +612,21 @@ export const ExpiredBookingsManager: React.FC = () => {
                           </div>
                         ) : (
                           <span className="text-brand-secondary">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {booking.paymentProofUrl ? (
+                          <a
+                            href={booking.paymentProofUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Ver comprobante de pago"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-orange-700 bg-orange-50 border border-orange-300 rounded-md hover:bg-orange-100 transition-colors"
+                          >
+                            📎 Ver
+                          </a>
+                        ) : (
+                          <span className="text-xs text-brand-secondary">-</span>
                         )}
                       </td>
                       <td className="px-4 py-3">
@@ -614,7 +667,7 @@ export const ExpiredBookingsManager: React.FC = () => {
                               {actionLoading[booking.id!] === 'reminder' ? '...' : '📧 Recordar'}
                             </button>
                           )}
-                          {/* Liberar cupo: solo activo sin pagar */}
+                          {/* Liberar cupo: activo sin pagar */}
                           {booking.status === 'active' && !booking.isPaid && (
                             <button
                               onClick={() => setReleaseConfirm(booking.id!)}
@@ -623,6 +676,17 @@ export const ExpiredBookingsManager: React.FC = () => {
                               className="px-2 py-1 text-xs bg-red-50 text-red-700 border border-red-300 rounded-md hover:bg-red-100 disabled:opacity-50 transition-colors font-semibold whitespace-nowrap"
                             >
                               {actionLoading[booking.id!] === 'release' ? '...' : '🔓 Liberar'}
+                            </button>
+                          )}
+                          {/* Rechazar comprobante: solo pending_verification */}
+                          {booking.status === 'pending_verification' && (
+                            <button
+                              onClick={() => handleRejectProof(booking.id!)}
+                              disabled={!!actionLoading[booking.id!]}
+                              title="Rechazar comprobante y liberar cupo"
+                              className="px-2 py-1 text-xs bg-red-50 text-red-700 border border-red-300 rounded-md hover:bg-red-100 disabled:opacity-50 transition-colors font-semibold whitespace-nowrap"
+                            >
+                              {actionLoading[booking.id!] === 'reject' ? '...' : '❌ Rechazar'}
                             </button>
                           )}
                         </div>

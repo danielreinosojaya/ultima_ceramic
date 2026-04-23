@@ -327,8 +327,10 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
           isPaid: false,
           paymentDetails: [],
           participants,
-          // Técnica para CUSTOM_EXPERIENCE
-          ...(selectedProduct.type === 'CUSTOM_EXPERIENCE' && selectedTechnique ? { technique: selectedTechnique } : {}),
+          // Técnica: siempre pasar explícitamente (de selectedTechnique o de product.details)
+          technique: selectedProduct.type === 'CUSTOM_EXPERIENCE' && selectedTechnique
+            ? selectedTechnique
+            : (selectedProduct as any).details?.technique || undefined,
           // Admin override flags
           adminOverride,
           overrideReason: adminOverride ? overrideReason : undefined,

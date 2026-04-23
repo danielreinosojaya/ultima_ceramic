@@ -1095,6 +1095,44 @@ export const sendPaymentReminder = async (bookingId: string): Promise<{ success:
     return postAction('sendPaymentReminder', { bookingId });
 };
 
+export const uploadPaymentProof = async (bookingId: string, base64Data: string, fileName?: string): Promise<{ success: boolean; proofUrl?: string; error?: string }> => {
+    const result = await postAction('uploadPaymentProof', { bookingId, base64Data, fileName });
+    if (result.success) {
+        invalidateBookingsCache();
+    }
+    return result;
+};
+
+export const rejectPaymentProof = async (bookingId: string): Promise<{ success: boolean; error?: string }> => {
+    const result = await postAction('rejectPaymentProof', { bookingId });
+    if (result.success) {
+        invalidateBookingsCache();
+    }
+    return result;
+};
+
+export interface BookingPublicInfo {
+    id: string;
+    bookingCode: string;
+    status: string;
+    productType?: string;
+    productName: string;
+    slots: Array<{ date: string; time: string }>;
+    price: number;
+    isPaid: boolean;
+    paymentProofUrl: string | null;
+    firstName: string;
+}
+
+export const getBookingByCode = async (code: string): Promise<{ success: boolean; booking?: BookingPublicInfo; error?: string }> => {
+    try {
+        const res = await fetch(`/api/data?action=getBookingByCode&bookingCode=${encodeURIComponent(code.toUpperCase().trim())}`);
+        return await res.json();
+    } catch {
+        return { success: false, error: 'Error de red' };
+    }
+};
+
 // ============== RESCHEDULE POLICY MANAGER ==============
 
 /**

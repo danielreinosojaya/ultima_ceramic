@@ -14,6 +14,7 @@ import { SINGLE_CLASS_PRICE, VAT_RATE } from '../constants';
 import { useEffect } from 'react';
 import { FEATURE_FLAGS } from '../featureFlags.ts';
 import type { GroupTechnique } from '../types';
+import { uploadPaymentProof } from '../services/dataService';
 
 // Helper para obtener nombre de técnica desde metadata
 const getTechniqueName = (technique: GroupTechnique): string => {
@@ -90,6 +91,9 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
     const language = 'es-ES';
     const [copied, setCopied] = useState(false);
     const [modalOpen, setModalOpen] = useState(false);
+    const [proofUploading, setProofUploading] = useState(false);
+    const [proofUploaded, setProofUploaded] = useState(booking.status === 'pending_verification');
+    const [proofError, setProofError] = useState<string | null>(null);
 
     // � DEBUG: Verificar que booking llegó correctamente a ConfirmationPage
     console.log('✅ ConfirmationPage mounted with booking:', {
@@ -129,6 +133,43 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
         });
+    };
+
+    const handleProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (file.size > 5 * 1024 * 1024) {
+            setProofError('El archivo es muy grande. Máximo 5MB.');
+            return;
+        }
+        const allowed = ['image/jpeg', 'image/png', 'application/pdf'];
+        if (!allowed.includes(file.type)) {
+            setProofError('Solo se aceptan imágenes JPG, PNG o archivos PDF.');
+            return;
+        }
+        setProofUploading(true);
+        setProofError(null);
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+            try {
+                const base64Data = ev.target?.result as string;
+                const result = await uploadPaymentProof(booking.id!, base64Data, file.name);
+                if (result.success) {
+                    setProofUploaded(true);
+                } else {
+                    setProofError(result.error || 'Error al subir el comprobante. Intenta por WhatsApp.');
+                }
+            } catch {
+                setProofError('Error al subir el comprobante. Intenta por WhatsApp.');
+            } finally {
+                setProofUploading(false);
+            }
+        };
+        reader.onerror = () => {
+            setProofError('Error leyendo el archivo.');
+            setProofUploading(false);
+        };
+        reader.readAsDataURL(file);
     };
     
     const whatsappParticipants = typeof booking.participants === 'number' && booking.participants > 0
@@ -480,6 +521,46 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                     Haz click arriba para abrir WhatsApp con tu código prellenado
                 </p>
             </div>
+
+            {/* Upload comprobante de pago */}
+            {booking.id && (
+                !proofUploaded ? (
+                    <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-5">
+                        <h4 className="font-bold text-amber-900 mb-1 flex items-center gap-2">
+                            <span>📎</span> Sube tu comprobante aquí
+                        </h4>
+                        <p className="text-sm text-amber-800 mb-3">
+                            También puedes subir tu comprobante directamente. Tu reserva quedará en revisión y <strong>no expirará</strong> mientras validamos tu pago.
+                        </p>
+                        <label className={`flex flex-col items-center justify-center w-full py-6 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
+                            proofUploading ? 'border-amber-300 bg-amber-100 cursor-not-allowed' : 'border-amber-300 hover:border-amber-400 hover:bg-amber-100'
+                        }`}>
+                            <span className="text-2xl mb-1">{proofUploading ? '⏳' : '⬆️'}</span>
+                            <span className="text-sm font-semibold text-amber-800">
+                                {proofUploading ? 'Subiendo comprobante...' : 'Seleccionar JPG, PNG o PDF (máx 5MB)'}
+                            </span>
+                            <input
+                                type="file"
+                                accept="image/jpeg,image/png,application/pdf"
+                                className="hidden"
+                                onChange={handleProofUpload}
+                                disabled={proofUploading}
+                            />
+                        </label>
+                        {proofError && (
+                            <p className="text-sm text-red-600 mt-2 font-semibold">❌ {proofError}</p>
+                        )}
+                    </div>
+                ) : (
+                    <div className="mb-6 bg-green-50 border border-green-300 rounded-xl p-5 flex items-start gap-3">
+                        <span className="text-2xl flex-shrink-0">✅</span>
+                        <div>
+                            <p className="font-bold text-green-900">¡Comprobante recibido!</p>
+                            <p className="text-sm text-green-800 mt-1">Tu reserva está en revisión. El equipo validará tu pago y recibirás confirmación por correo. Tu lugar no expirará durante este proceso.</p>
+                        </div>
+                    </div>
+                )
+            )}
 
             <BankAccountsModal open={modalOpen} onClose={() => setModalOpen(false)} accounts={bankAccounts} />
 

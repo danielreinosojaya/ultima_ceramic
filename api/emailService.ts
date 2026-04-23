@@ -248,6 +248,8 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
         </div>
     ` : '';
     
+    const appUrl = process.env.APP_PUBLIC_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://ceramicalma.com');
+    const uploadLink = `${appUrl}/?comprobante=${encodeURIComponent(bookingCode)}`;
     const subject = `Tu Pre-Reserva en CeramicAlma está confirmada (Código: ${bookingCode})`;
     // Mostrar todas las cuentas en una tabla compacta y profesional
     const accounts = Array.isArray(bankDetails) ? bankDetails : [bankDetails];
@@ -303,6 +305,14 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
             `}
             <p>Para confirmar tu asistencia, por favor realiza una transferencia bancaria con los siguientes datos y envíanos el comprobante por WhatsApp.</p>
             ${accountsHtml}
+
+            <div style="background:#FFF7ED;border:2px solid #FB923C;border-radius:12px;padding:20px 24px;margin:24px 0;text-align:center;">
+                <p style="margin:0 0 6px 0;font-weight:bold;color:#9A3412;font-size:16px;">📎 ¿Ya pagaste? Sube tu comprobante ahora</p>
+                <p style="margin:0 0 16px 0;color:#7C2D12;font-size:13px;">Hazlo directamente desde este link — tu reserva pasará a <strong>"En Revisión"</strong> y <strong>no expirará</strong> mientras validamos tu pago.</p>
+                <a href="${uploadLink}" style="background:#D95F43;color:#ffffff;padding:12px 32px;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;display:inline-block;">Subir Comprobante →</a>
+                <p style="margin:16px 0 0 0;color:#9A3412;font-size:12px;">O envíalo por WhatsApp si prefieres.</p>
+            </div>
+
             ${booking.acceptedNoRefund ? `
             <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 15px; margin-top: 20px; border-radius: 8px;">
                 <p style="margin: 0; color: #92400E; font-weight: bold;">⚠️ Política de No Reembolso ni Reagendamiento</p>
@@ -2774,6 +2784,8 @@ export const sendPaymentReminderEmail = async (booking: Booking, bankDetails: Ba
     const { userInfo, bookingCode, price, slots } = booking;
     const numericPrice = typeof price === 'number' ? price : parseFloat(String(price));
     const productName = getBookingDisplayName(booking);
+    const appUrl = process.env.APP_PUBLIC_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://ceramicalma.com');
+    const uploadLink = `${appUrl}/?comprobante=${encodeURIComponent(bookingCode)}`;
     const subject = `⚠️ RECORDATORIO: Tu reserva vence pronto - ${bookingCode} | CeramicAlma`;
 
     const accounts = Array.isArray(bankDetails) ? bankDetails : [bankDetails];
@@ -2817,6 +2829,11 @@ export const sendPaymentReminderEmail = async (booking: Booking, bankDetails: Ba
                 <p style="margin:0;color:#1E40AF;font-size:13px;">
                     Una vez realizado el pago, envía el comprobante por WhatsApp y tu reserva quedará <strong>confirmada</strong>.
                 </p>
+            </div>
+            <div style="background:#FFF7ED;border:2px solid #FB923C;border-radius:12px;padding:20px 24px;margin:24px 0;text-align:center;">
+                <p style="margin:0 0 6px 0;font-weight:bold;color:#9A3412;font-size:16px;">📎 ¿Ya pagaste? Sube tu comprobante aquí</p>
+                <p style="margin:0 0 16px 0;color:#7C2D12;font-size:13px;">Haz click abajo — tu reserva pasará a <strong>"En Revisión"</strong> y no expirará mientras validamos.</p>
+                <a href="${uploadLink}" style="background:#D95F43;color:#ffffff;padding:12px 32px;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;display:inline-block;">Subir Comprobante →</a>
             </div>
             <p style="margin-top:24px;">¡Esperamos verte pronto en el taller!</p>
             <p>Saludos,<br/>El equipo de CeramicAlma</p>
