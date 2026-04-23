@@ -157,13 +157,13 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                     // success = true even when Bunny is unavailable: status was still protected from expiry
                     setProofUploaded(true);
                     if (!result.bunnyAvailable) {
-                        setProofError('Tu reserva fue protegida. El archivo no pudo guardarse en línea — envíalo también por WhatsApp para que el equipo lo revise.');
+                        setProofError('Tu reserva fue protegida. El archivo no pudo guardarse en línea — por favor contáctanos si el problema persiste.');
                     }
                 } else {
-                    setProofError(result.error || 'Error al subir el comprobante. Intenta por WhatsApp.');
+                    setProofError(result.error || 'Error al subir el comprobante. Por favor intenta de nuevo.');
                 }
             } catch {
-                setProofError('Error al subir el comprobante. Intenta por WhatsApp.');
+                setProofError('Error al subir el comprobante. Por favor intenta de nuevo.');
             } finally {
                 setProofUploading(false);
             }
@@ -189,7 +189,7 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
     const whatsappTime = whatsappSlot?.time ? ` (${whatsappSlot.time})` : '';
     const whatsappActivity = getBookingDisplayName(booking);
 
-    const whatsappMessage = `¡Hola! Mi código de pre-reserva es *${booking.bookingCode}*. Reservé *${whatsappActivity}* para *${whatsappParticipants}* el *${whatsappDate}${whatsappTime}*. Adjunto el comprobante de pago para validar mi reserva.`;
+    const whatsappMessage = `¡Hola! Tengo una pregunta sobre mi reserva con código *${booking.bookingCode}* — *${whatsappActivity}* el *${whatsappDate}${whatsappTime}*.`;
     const whatsappLink = `https://wa.me/${footerInfo.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(whatsappMessage)}`;
     
     const handleDownloadTicket = async () => {
@@ -460,7 +460,7 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                 </div>
             </div>
 
-            {/* Botón de WhatsApp */}
+            {/* Botón de WhatsApp - solo para dudas */}
             <div className="mb-5">
                 <a
                     href={whatsappLink}
@@ -469,7 +469,7 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                     className="w-full flex items-center justify-center gap-3 bg-green-500 text-white font-bold py-3 px-8 rounded-xl hover:bg-green-600 transition-all duration-300 shadow-md text-base"
                 >
                     <WhatsAppIcon className="w-6 h-6" />
-                    Enviar Comprobante por WhatsApp
+                    ¿Dudas? Contáctanos por WhatsApp
                 </a>
             </div>
 

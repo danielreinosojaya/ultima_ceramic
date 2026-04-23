@@ -222,10 +222,9 @@ export const ProofUploadPage: React.FC<ProofUploadPageProps> = ({ bookingCode, o
                     )}
                 </div>
 
-                {/* Alternative: WhatsApp */}
+                {/* Contact for help */}
                 <p className="text-center text-sm text-brand-secondary">
-                    ¿Prefieres enviar por WhatsApp? También puedes enviarnos el comprobante directamente
-                    junto a tu código <strong className="font-mono text-brand-primary">{bookingCode}</strong>.
+                    ¿Tienes alguna duda? Puedes contactarnos por WhatsApp y con gusto te ayudamos.
                 </p>
             </div>
         );

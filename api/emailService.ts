@@ -520,7 +520,7 @@ export const sendGiftcardRequestReceivedEmail = async (
                     <strong>¿Cómo continuar?</strong>
                     <ol style="padding-left:18px; color:#444; font-size:15px;">
                         <li>Realiza el pago por el monto indicado a la cuenta bancaria mostrada arriba.</li>
-                        <li>Envía el comprobante únicamente por WhatsApp.</li>
+                        <li>Una vez realizada la transferencia, tu giftcard será procesada en menos de 24 horas.</li>
                         <li>Te avisaremos cuando tu giftcard esté lista y enviada al destinatario.</li>
                     </ol>
                 </div>
@@ -595,7 +595,6 @@ export const sendGiftcardPaymentConfirmedEmail = async (
             <div style="margin-bottom:18px; font-size:15px; color:#444;">
                 <strong>¿Dudas o necesitas ayuda?</strong> <br>
                 WhatsApp: <a href="https://wa.me/593985813327" style="color:#1d4ed8; text-decoration:none;">+593 985813327</a>
-                <br><span style="font-size:13px; color:#888;">El comprobante de pago se recibe únicamente por WhatsApp.</span>
             </div>
             ${downloadHtml}
             <div style="margin-top:24px; font-size:13px; color:#888; text-align:center;">
