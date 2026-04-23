@@ -8143,7 +8143,7 @@ async function addBookingAction(
     }
 
         // Send pre-booking confirmation email
-        const suppressPreBookingEmail = Boolean(options?.suppressPreBookingEmail) || technique === 'painting';
+        const suppressPreBookingEmail = Boolean(options?.suppressPreBookingEmail);
         if (!suppressPreBookingEmail) {
             try {
                 console.log('[ADD BOOKING] Sending pre-booking confirmation email to:', booking.userInfo.email);
