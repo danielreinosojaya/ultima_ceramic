@@ -48,7 +48,8 @@ export const RumcomBooking: React.FC<RumcomBookingProps> = ({
           EVENT_DATE,
           EVENT_TIME,
           EVENT_TECHNIQUE,
-          1
+          1,
+          { skipTechRestriction: true }
         );
         setSlotAvailability({
           available: result.capacity?.available ?? 0,

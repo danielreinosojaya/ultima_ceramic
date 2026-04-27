@@ -658,7 +658,8 @@ const computeSlotAvailability = async (
     requestedDate: string,
     requestedTime: string,
     requestedTechnique: string,
-    requestedParticipants: number
+    requestedParticipants: number,
+    skipTechRestriction: boolean = false
 ) => {
     // ✅ OPTIMIZATION PHASE 2: Buscar bookings que TENGAN SLOTS en la fecha solicitada
     // Con LIMIT 1000 para evitar saturación (traer todos los bookings es ineficiente)
@@ -704,38 +705,44 @@ const computeSlotAvailability = async (
     // ✅ VALIDACIÓN: ExperienceTypeOverrides - Control granular por técnica
     // Si una técnica tiene restricción de allowedTimes, solo esos horarios están permitidos
     // Buscar por técnica exacta Y por alias (hand_modeling ↔ molding)
-    const techAliases: Record<string, string[]> = {
-        'hand_modeling': ['hand_modeling', 'molding'],
-        'molding': ['molding', 'hand_modeling'],
-        'potters_wheel': ['potters_wheel'],
-        'painting': ['painting'],
-    };
-    const techKeysToCheck = techAliases[requestedTechnique] || [requestedTechnique];
-    const dateOverrides = experienceTypeOverrides?.[requestedDate];
-    
-    console.log(`[checkSlotAvailability] date=${requestedDate} time=${normalizedTime} tech=${requestedTechnique} | dateOverrides keys:`, dateOverrides ? Object.keys(dateOverrides) : 'NONE', '| techKeysToCheck:', techKeysToCheck);
-    
-    for (const techKey of techKeysToCheck) {
-        const techOverride = dateOverrides?.[techKey];
-        if (techOverride?.allowedTimes && !techOverride.allowedTimes.includes(normalizedTime)) {
-            console.log(`[checkSlotAvailability] 🚫 BLOCKED by techRestriction: ${techKey}.allowedTimes=${JSON.stringify(techOverride.allowedTimes)} does NOT include ${normalizedTime}`);
-            const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
-            return {
-                available: false,
-                normalizedTime,
-                blockedReason: 'technique_restriction',
-                capacity: {
-                    max: maxCapacity,
-                    booked: maxCapacity,
-                    available: 0
-                },
-                bookingsCount: 0,
-                message: techOverride.reason || `${requestedTechnique} no disponible en este horario`
-            };
+    // skipTechRestriction=true se usa para eventos fijos (ej: Rumcom/Spill the Tea) que
+    // deben ignorar esta restricción ya que tienen su propia ruta de reserva.
+    if (!skipTechRestriction) {
+        const techAliases: Record<string, string[]> = {
+            'hand_modeling': ['hand_modeling', 'molding'],
+            'molding': ['molding', 'hand_modeling'],
+            'potters_wheel': ['potters_wheel'],
+            'painting': ['painting'],
+        };
+        const techKeysToCheck = techAliases[requestedTechnique] || [requestedTechnique];
+        const dateOverrides = experienceTypeOverrides?.[requestedDate];
+        
+        console.log(`[checkSlotAvailability] date=${requestedDate} time=${normalizedTime} tech=${requestedTechnique} | dateOverrides keys:`, dateOverrides ? Object.keys(dateOverrides) : 'NONE', '| techKeysToCheck:', techKeysToCheck);
+        
+        for (const techKey of techKeysToCheck) {
+            const techOverride = dateOverrides?.[techKey];
+            if (techOverride?.allowedTimes && !techOverride.allowedTimes.includes(normalizedTime)) {
+                console.log(`[checkSlotAvailability] 🚫 BLOCKED by techRestriction: ${techKey}.allowedTimes=${JSON.stringify(techOverride.allowedTimes)} does NOT include ${normalizedTime}`);
+                const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
+                return {
+                    available: false,
+                    normalizedTime,
+                    blockedReason: 'technique_restriction',
+                    capacity: {
+                        max: maxCapacity,
+                        booked: maxCapacity,
+                        available: 0
+                    },
+                    bookingsCount: 0,
+                    message: techOverride.reason || `${requestedTechnique} no disponible en este horario`
+                };
+            }
+            if (techOverride?.allowedTimes && techOverride.allowedTimes.includes(normalizedTime)) {
+                console.log(`[checkSlotAvailability] ✅ ALLOWED by techRestriction: ${techKey}.allowedTimes includes ${normalizedTime}`);
+            }
         }
-        if (techOverride?.allowedTimes && techOverride.allowedTimes.includes(normalizedTime)) {
-            console.log(`[checkSlotAvailability] ✅ ALLOWED by techRestriction: ${techKey}.allowedTimes includes ${normalizedTime}`);
-        }
+    } else {
+        console.log(`[checkSlotAvailability] ⚡ skipTechRestriction=true — bypassing experienceTypeOverrides for ${requestedTechnique}@${normalizedTime}`);
     }
 
     const disabledTimes = freeDateTimeOverrides?.[requestedDate]?.disabledTimes || [];
@@ -2150,7 +2157,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                 }
                 case 'checkSlotAvailability': {
                     // Endpoint para validar disponibilidad de un slot específico en tiempo real
-                    const { date, time, technique, participants } = req.query;
+                    const { date, time, technique, participants, skipTechRestriction: skipTechParam } = req.query;
                     
                     if (!date || !time || !technique || !participants) {
                         return res.status(400).json({ 
@@ -2163,13 +2170,15 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     const requestedTime = time as string;
                     const requestedTechnique = technique as string;
                     const requestedParticipants = parseInt(participants as string);
+                    const skipTechRestriction = skipTechParam === 'true';
 
                     try {
                         const availability = await computeSlotAvailability(
                             requestedDate,
                             requestedTime,
                             requestedTechnique,
-                            requestedParticipants
+                            requestedParticipants,
+                            skipTechRestriction
                         );
 
                         const responseData = {
@@ -5254,7 +5263,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 const { rows: [bookingData] } = await sql`SELECT * FROM bookings WHERE id = ${attendanceId}`;
                 
                 if (bookingData && bookingData.product_type === 'CLASS_PACKAGE') {
-                    const parsedBooking = parseBookingFromDB(bookingData);
+                    const parsedBooking =(bookingData);
                     const product = parsedBooking.product as any;
                     const customerEmail = parsedBooking.userInfo?.email;
                     const firstName = parsedBooking.userInfo?.firstName || 'Cliente';

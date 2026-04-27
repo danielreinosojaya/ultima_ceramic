@@ -1548,7 +1548,8 @@ export const checkSlotAvailability = async (
     date: string, 
     time: string, 
     technique: string, 
-    participants: number
+    participants: number,
+    options?: { skipTechRestriction?: boolean }
 ): Promise<SlotAvailabilityResult> => {
     const queryParams = new URLSearchParams({
         action: 'checkSlotAvailability',
@@ -1557,6 +1558,9 @@ export const checkSlotAvailability = async (
         technique,
         participants: participants.toString()
     });
+    if (options?.skipTechRestriction) {
+        queryParams.set('skipTechRestriction', 'true');
+    }
 
     try {
         const response = await fetch(`/api/data?${queryParams.toString()}`);
