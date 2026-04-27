@@ -746,7 +746,7 @@ const computeSlotAvailability = async (
     }
 
     const disabledTimes = freeDateTimeOverrides?.[requestedDate]?.disabledTimes || [];
-    if (!isSpecialDayNoRules && disabledTimes.includes(normalizedTime)) {
+    if (!isSpecialDayNoRules && !skipTechRestriction && disabledTimes.includes(normalizedTime)) {
         const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
         return {
             available: false,
