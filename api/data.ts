@@ -5477,12 +5477,17 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             }
             break;
         case 'addBooking': {
-            // Call the addBookingAction function with request body
-            const bookingResult = await addBookingAction(req.body);
-            if (!bookingResult.success) {
-                return res.status(400).json({ error: bookingResult.message || 'Failed to add booking.' });
+            try {
+                const bookingResult = await addBookingAction(req.body);
+                if (!bookingResult.success) {
+                    return res.status(400).json({ error: bookingResult.message || 'Failed to add booking.' });
+                }
+                return res.status(200).json(bookingResult);
+            } catch (bookingError) {
+                const msg = bookingError instanceof Error ? bookingError.message : 'Failed to create booking';
+                console.error('[addBooking] Error:', msg);
+                return res.status(400).json({ success: false, error: msg });
             }
-            return res.status(200).json(bookingResult);
         }
         case 'createCustomExperienceBooking': {
             try {
@@ -7863,11 +7868,14 @@ async function addBookingAction(
             }
 
             // Verificar disponibilidad usando computeSlotAvailability
+            // skipTechRestriction=true para eventos con su propia ruta (ej: Rumcom/Spill the Tea)
+            const skipTechRestriction = Boolean((body as any).skipTechRestriction);
             const slotAvailability = await computeSlotAvailability(
                 slot.date,
                 normalizedTime,
                 requestedTechnique,
-                requestedParticipants
+                requestedParticipants,
+                skipTechRestriction
             );
 
             const blockedReason = (slotAvailability as any)?.blockedReason;
@@ -8112,7 +8120,7 @@ async function addBookingAction(
         try {
           await sql`
             INSERT INTO giftcard_audit (
-              id, giftcard_id, event_type, amount, metadata, created_at
+              id, giftcard_id, action, amount, metadata, timestamp
             ) VALUES (
               uuid_generate_v4(),
               ${String(giftcardId)},
@@ -8251,7 +8259,8 @@ async function addBookingAction(
     };
   } catch (error) {
     console.error('Error creating booking:', error);
-    throw new Error('Failed to create booking');
+    // Re-throw original error so the HTTP handler can return a meaningful response
+    throw error instanceof Error ? error : new Error('Failed to create booking');
   }
 }
 

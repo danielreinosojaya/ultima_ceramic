@@ -591,6 +591,11 @@ const App: React.FC = () => {
             }
         }
 
+        // Events with their own booking page bypass technique restrictions
+        if (view === 'rumcom_booking') {
+            (bookingData as any).skipTechRestriction = true;
+        }
+
         try {
             // Attach giftcard info if the user applied a giftcard
             if (activeGiftcardHold) {
