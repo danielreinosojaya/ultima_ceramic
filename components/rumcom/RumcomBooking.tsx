@@ -16,6 +16,7 @@ const EVENT_TIME = '17:00';
 const EVENT_PRICE = 45;
 const EVENT_TECHNIQUE = 'hand_modeling' as const;
 const EVENT_TECHNIQUE_LABEL = 'Pintura de piezas';
+const EVENT_MAX_CAPACITY = 20;
 
 /**
  * RumcomBooking - Exclusive landing + booking for "Spill the Tea x Rum-Com Club"
@@ -51,17 +52,21 @@ export const RumcomBooking: React.FC<RumcomBookingProps> = ({
           1,
           { skipTechRestriction: true }
         );
+        // Calculate booked count against EVENT_MAX_CAPACITY (20 fixed for this event)
+        const dbMax = result.capacity?.max ?? EVENT_MAX_CAPACITY;
+        const dbBooked = dbMax - (result.capacity?.available ?? 0);
+        const eventAvailable = Math.max(0, EVENT_MAX_CAPACITY - dbBooked);
         setSlotAvailability({
-          available: result.capacity?.available ?? 0,
-          total: result.capacity?.max ?? 20,
-          canBook: result.available,
+          available: eventAvailable,
+          total: EVENT_MAX_CAPACITY,
+          canBook: result.available && eventAvailable > 0,
           message: result.message,
         });
       } catch (err) {
         console.error('[RumcomBooking] Error checking availability:', err);
         setSlotAvailability({
           available: 0,
-          total: 20,
+          total: EVENT_MAX_CAPACITY,
           canBook: false,
           message: 'Error verificando disponibilidad',
         });
@@ -225,6 +230,10 @@ export const RumcomBooking: React.FC<RumcomBookingProps> = ({
                 <li className="flex items-start gap-2">
                   <span className="text-[#C4704E] mt-0.5">🌸</span>
                   <span>Decoración por <strong>@violetagye</strong> y <strong>@blancrentals</strong></span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-[#C4704E] mt-0.5">☕️</span>
+                  <span><strong>@coffeebreak</strong> — coffee cart con 5 variaciones de café y matcha!</span>
                 </li>
               </ul>
             </div>
