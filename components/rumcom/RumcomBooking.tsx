@@ -16,7 +16,9 @@ const EVENT_TIME = '17:00';
 const EVENT_PRICE = 45;
 const EVENT_TECHNIQUE = 'hand_modeling' as const;
 const EVENT_TECHNIQUE_LABEL = 'Pintura de piezas';
-const EVENT_MAX_CAPACITY = 20;
+const EVENT_TOTAL_CAPACITY = 20;
+const EVENT_RESERVED_SEATS = 1; // 1 asiento reservado para sorteo interno
+const EVENT_MAX_CAPACITY = EVENT_TOTAL_CAPACITY - EVENT_RESERVED_SEATS; // 19 cupos públicos
 
 /**
  * RumcomBooking - Exclusive landing + booking for "Spill the Tea x Rum-Com Club"

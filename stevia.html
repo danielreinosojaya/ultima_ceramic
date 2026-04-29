@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proforma Brunch y Cerámica - Ceramicalma</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f9f7f4;
+            color: #4a4a4a;
+            line-height: 1.8;
+        }
+
+        .download-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #b8704a;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: background-color 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 1000;
+        }
+
+        .download-btn:hover {
+            background-color: #9d5a38;
+        }
+
+        .download-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background-color: white;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 50px;
+            padding-top: 60px;
+        }
+
+        .logo {
+            font-size: 48px;
+            color: #b8704a;
+            font-weight: 600;
+            margin-bottom: 10px;
+            letter-spacing: 1px;
+        }
+
+        .subtitle {
+            font-size: 12px;
+            color: #b8704a;
+            letter-spacing: 3px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .date {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .title {
+            font-size: 28px;
+            color: #b8704a;
+            text-align: center;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .tagline {
+            font-size: 14px;
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            text-decoration: underline #b8704a 2px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #b8704a;
+        }
+
+        .greeting {
+            font-size: 14px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .intro-text {
+            font-size: 14px;
+            text-align: justify;
+            margin-bottom: 30px;
+            line-height: 1.8;
+            color: #555;
+        }
+
+        .section-divider {
+            border-bottom: 2px solid #b8704a;
+            margin: 40px 0 30px 0;
+        }
+
+        .section-title {
+            font-size: 16px;
+            color: white;
+            background-color: #b8704a;
+            padding: 12px 15px;
+            margin-bottom: 25px;
+            border-left: 4px solid #9d5a38;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .subsection-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+            margin-top: 20px;
+        }
+
+        .text-content {
+            font-size: 14px;
+            color: #555;
+            text-align: justify;
+            margin-bottom: 15px;
+            line-height: 1.8;
+        }
+
+        .option-box {
+            margin-bottom: 30px;
+        }
+
+        .option-header {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .option-text {
+            font-size: 13px;
+            color: #555;
+            text-align: justify;
+            margin-bottom: 12px;
+        }
+
+        .bullet-list {
+            margin-left: 20px;
+            margin-bottom: 15px;
+            font-size: 13px;
+        }
+
+        .bullet-list li {
+            margin-bottom: 8px;
+            color: #555;
+        }
+
+        .price {
+            font-size: 14px;
+            font-weight: 600;
+            color: #b8704a;
+            margin-top: 10px;
+        }
+
+        .highlight-box {
+            background-color: #f0e6d2;
+            border-left: 4px solid #b8704a;
+            padding: 20px;
+            margin-bottom: 25px;
+            border-radius: 3px;
+        }
+
+        .highlight-box h3 {
+            color: #b8704a;
+            font-size: 14px;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .highlight-box ul {
+            list-style: none;
+            margin-left: 0;
+        }
+
+        .highlight-box li {
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 8px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .highlight-box li:before {
+            content: "✓";
+            color: #b8704a;
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        .benefits-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .benefit-card {
+            background-color: #f0e6d2;
+            padding: 15px;
+            border-left: 4px solid #b8704a;
+            border-radius: 3px;
+        }
+
+        .benefit-title {
+            font-weight: 600;
+            color: #b8704a;
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+
+        .benefit-text {
+            font-size: 12px;
+            color: #555;
+        }
+
+        .facilitator-box {
+            background-color: #f0e6d2;
+            padding: 20px;
+            border-left: 4px solid #b8704a;
+            margin-bottom: 25px;
+            border-radius: 3px;
+        }
+
+        .facilitator-name {
+            font-weight: 600;
+            color: #b8704a;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .facilitator-list {
+            list-style: none;
+            margin-bottom: 15px;
+            font-size: 13px;
+            color: #555;
+        }
+
+        .facilitator-list li {
+            margin-bottom: 4px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .facilitator-list li:before {
+            content: "•";
+            position: absolute;
+            left: 0;
+        }
+
+        .facilitator-bio {
+            font-size: 13px;
+            color: #555;
+            text-align: justify;
+            line-height: 1.8;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 25px;
+            font-size: 13px;
+        }
+
+        table thead {
+            background-color: #b8704a;
+            color: white;
+        }
+
+        table th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        table td {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+            color: #555;
+        }
+
+        table tr:nth-child(even) {
+            background-color: #faf8f5;
+        }
+
+        .payment-note {
+            background-color: #f0e6d2;
+            padding: 15px 20px;
+            margin-bottom: 25px;
+            border-left: 4px solid #b8704a;
+            border-radius: 3px;
+            font-size: 13px;
+            color: #555;
+        }
+
+        .conditions-box {
+            background-color: #f0e6d2;
+            padding: 20px;
+            border-left: 4px solid #b8704a;
+            margin-bottom: 20px;
+            border-radius: 3px;
+        }
+
+        .conditions-box h4 {
+            color: #b8704a;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .conditions-box ul {
+            list-style: none;
+            margin-left: 0;
+        }
+
+        .conditions-box li {
+            font-size: 12px;
+            color: #555;
+            margin-bottom: 6px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .conditions-box li:before {
+            content: "✓";
+            color: #b8704a;
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        .conditions-box.exclude li:before {
+            content: "✕";
+            color: #b8704a;
+        }
+
+        .closing-box {
+            background-color: #f0e6d2;
+            padding: 20px;
+            border-left: 4px solid #b8704a;
+            margin-bottom: 30px;
+            border-radius: 3px;
+            text-align: center;
+        }
+
+        .closing-box p {
+            font-size: 13px;
+            color: #555;
+            text-align: justify;
+            margin-bottom: 10px;
+        }
+
+        .contact-box {
+            border: 2px solid #b8704a;
+            padding: 25px;
+            text-align: center;
+            margin-bottom: 30px;
+            border-radius: 3px;
+            background-color: #f0e6d2;
+        }
+
+        .contact-title {
+            color: #b8704a;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .contact-company {
+            color: #b8704a;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .contact-item {
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .closing-signature {
+            text-align: center;
+            margin-top: 40px;
+            margin-bottom: 20px;
+        }
+
+        .closing-signature p {
+            font-size: 13px;
+            color: #b8704a;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .capacity-note {
+            background-color: #f0e6d2;
+            border-left: 4px solid #b8704a;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 3px;
+            font-size: 13px;
+            color: #555;
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            .benefits-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .download-btn {
+                position: relative;
+                top: 0;
+                right: 0;
+                margin-bottom: 20px;
+                width: 100%;
+                justify-content: center;
+            }
+
+            .container {
+                padding: 20px 10px;
+            }
+
+            .header {
+                padding-top: 20px;
+            }
+
+            table {
+                font-size: 12px;
+            }
+
+            table th, table td {
+                padding: 8px;
+            }
+        }
+
+        @media print {
+            .download-btn {
+                display: none !important;
+            }
+
+            body {
+                background-color: white;
+                margin: 0;
+                padding: 0;
+            }
+
+            .container {
+                padding: 20px;
+                margin: 0;
+                max-width: 100%;
+            }
+
+            .header {
+                padding-top: 0;
+                margin-bottom: 20px;
+                page-break-after: avoid;
+            }
+
+            .section-divider {
+                margin: 20px 0 15px 0;
+                page-break-inside: avoid;
+            }
+
+            .section {
+                page-break-inside: avoid;
+                orphans: 3;
+                widows: 3;
+            }
+
+            .section:nth-child(n+5) {
+                page-break-before: auto;
+            }
+
+            .section-title {
+                page-break-after: avoid;
+                margin-bottom: 15px;
+            }
+
+            .subsection-title {
+                page-break-after: avoid;
+            }
+
+            table {
+                page-break-inside: avoid;
+                margin: 15px 0;
+            }
+
+            .benefits-grid {
+                page-break-inside: avoid;
+            }
+
+            .option-box {
+                page-break-inside: avoid;
+            }
+
+            .highlight-box {
+                page-break-inside: avoid;
+            }
+
+            .facilitator-box {
+                page-break-inside: avoid;
+            }
+
+            .contact-box {
+                page-break-inside: avoid;
+            }
+
+            .closing-box {
+                page-break-inside: avoid;
+            }
+
+            .tagline {
+                page-break-after: avoid;
+            }
+
+            .intro-text {
+                page-break-after: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button class="download-btn" onclick="window.print()">
+        <svg fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+        </svg>
+        Descargar PDF
+    </button>
+
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">Ceramicalma</div>
+            <div class="subtitle">HOLISTIC POTTERY STUDIO</div>
+            <div class="date">Guayaquil, 29 de abril de 2026</div>
+        </div>
+
+        <!-- Title -->
+        <h1 class="title">PROFORMA EVENTO CORPORATIVO</h1>
+        <p class="tagline">Brunch y cerámica Stevia</p>
+
+        <!-- Greeting -->
+        <p class="greeting">Hola Estimada Estefanía Garrido,</p>
+
+        <p class="intro-text">
+            Presentamos a tu amable consideración la siguiente proforma dirigida a <strong>Piar Agencia de Relaciones Públicas</strong>, 
+            de acuerdo a lo conversado para el evento de promoción de la marca Stevia Life, detallando cada punto de la propuesta, 
+            incluyendo alquiler del espacio, brunch, menú disponible y las actividades de cerámica:
+        </p>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 1: Descripción del Evento -->
+        <div class="section">
+            <div class="section-title">DESCRIPCIÓN DEL EVENTO</div>
+
+            <div class="subsection-title">Concepto del Evento:</div>
+            <p class="text-content">
+                Evento corporativo en formato brunch organizado por <strong>Piar Agencia de Relaciones Públicas</strong> para la promoción 
+                de la marca de endulzante Stevia Life, diseñado para conectar a entre 20 y 30 personas en un espacio cálido, creativo 
+                y acogedor. El evento combina una experiencia gastronómica saludable con una actividad artística de cerámica, creando 
+                momentos memorables de conexión, bienestar e identidad de marca.
+            </p>
+
+            <div class="highlight-box">
+                <h3>Estructura del evento:</h3>
+                <ul>
+                    <li>Recepción con café e infusiones de bienvenida</li>
+                    <li>Espacio breve para charlas (marca Stevia Life y nutrición)</li>
+                    <li>Brunch tipo degustación con opciones saludables: bebidas, preparaciones dulces y saladas</li>
+                    <li>Actividad de cerámica: creación de un charm o pintado de pieza pre-elaborada</li>
+                    <li>Espacio cómodo para networking entre los asistentes</li>
+                </ul>
+            </div>
+
+
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 2: Alquiler del Espacio -->
+        <div class="section">
+            <div class="section-title">ALQUILER DEL ESPACIO</div>
+
+            <div class="subsection-title">Fecha y Horario:</div>
+            <p class="text-content">
+                <strong>Miércoles 3 de junio de 2026 | 10:00 a 13:00 (3 horas)</strong><br>
+                El espacio se reserva de forma exclusiva para el evento de Piar Agencia de Relaciones Públicas, 
+                garantizando privacidad y total comodidad para los asistentes.
+            </p>
+
+            <div class="option-box">
+                <div class="option-header">Alquiler Entre Semana (lunes a jueves)</div>
+                <ul class="bullet-list">
+                    <li><strong>Duración base:</strong> hasta 3 horas</li>
+                    <li><strong>Capacidad:</strong> 26 personas sentadas / 30 personas en total</li>
+                    <li><strong>Hora adicional:</strong> $75 + IVA</li>
+                </ul>
+                <div class="price">Valor: $225 + IVA (3 horas a $75 + IVA/hora)</div>
+            </div>
+
+            <div class="highlight-box">
+                <h3>El alquiler del espacio incluye:</h3>
+                <ul>
+                    <li>Aire acondicionado</li>
+                    <li>Parlantes y sistema de sonido básico</li>
+                    <li>Micrófonos disponibles para las charlas</li>
+                    <li>Parqueo seguro</li>
+                    <li>WiFi de alta velocidad</li>
+                    <li>Mesas y sillas para todos los asistentes</li>
+                    <li>Decoración e iluminación del espacio</li>
+                    <li>Reserva exclusiva del espacio durante el evento</li>
+                    <li>Personal de apoyo durante el evento</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 3: Menú Brunch -->
+        <div class="section">
+            <div class="section-title">MENÚ BRUNCH</div>
+
+            <div class="highlight-box">
+                <h3>Menú adjunto:</h3>
+                <p style="font-size: 13px; color: #555; text-align: justify;">
+                    Adjuntamos a esta proforma nuestro menú completo para que puedas revisar todas las opciones disponibles 
+                    y seleccionar con anticipación los alimentos y bebidas que prefieras para el evento. 
+                    De esta manera garantizamos que todo esté preparado a tu medida.
+                </p>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 4: Actividades de Cerámica -->
+        <div class="section">
+            <div class="section-title">ACTIVIDADES DE CERÁMICA</div>
+
+            <p class="text-content">
+                Complementa la experiencia del brunch con una actividad creativa de cerámica que los participantes 
+                llevarán a casa como recuerdo del evento. Ofrecemos dos opciones:
+            </p>
+
+            <div class="option-box">
+                <div class="option-header">Opción A: Crea un Charm con tu Inicial</div>
+                <p class="option-text">
+                    Cada participante crea su propio charm de cerámica con la inicial de su nombre y detalles 
+                    decorativos personalizados. Una pieza única y significativa que funciona como recuerdo del evento 
+                    y del vínculo con la marca Stevia Life.
+                </p>
+                <ul class="bullet-list">
+                    <li><strong>Duración:</strong> aproximadamente 45 minutos</li>
+                    <li><strong>Incluye:</strong> arcilla, herramientas, esmalte y horneado profesional</li>
+                    <li><strong>Entrega:</strong> piezas listas en 2 a 3 semanas</li>
+                </ul>
+                <div class="price">Valor: $25.00 por persona (incluido IVA)</div>
+            </div>
+
+            <div class="option-box">
+                <div class="option-header">Opción B: Pintar Pieza de Cerámica Pre-Elaborada</div>
+                <p class="option-text">
+                    Cada participante pinta una pieza de cerámica ya elaborada con glazes de colores de alta temperatura, 
+                    aptos para alimentos, microondas y lavavajillas. Una actividad accesible, relajante y creativa para todos.
+                </p>
+                <ul class="bullet-list">
+                    <li><strong>Opciones de piezas:</strong> taza, florero mediano, platito</li>
+                    <li><strong>Duración:</strong> aproximadamente 45 a 60 minutos</li>
+                    <li><strong>Incluye:</strong> pieza pre-elaborada, pinturas y horneado profesional</li>
+                    <li><strong>Entrega:</strong> piezas listas en 2 a 3 semanas</li>
+                </ul>
+                <div class="price">Valor: $25.00 por persona (incluido IVA)</div>
+            </div>
+
+            <div class="highlight-box">
+                <h3>Beneficios de la actividad cerámica en tu evento:</h3>
+                <ul>
+                    <li>Actividad rompe-hielo perfecta para networking</li>
+                    <li>Experiencia memorable que fortalece el recuerdo de la marca</li>
+                    <li>Beneficios terapéuticos: reduce el estrés y fomenta la concentración</li>
+                    <li>Recuerdo físico y personalizado que cada asistente lleva a casa</li>
+                    <li>Facilitación a cargo de ceramista especializada</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 5: Facilitadora -->
+        <div class="section">
+            <div class="section-title">FACILITADORA DE CERÁMICA</div>
+
+            <div class="facilitator-box">
+                <div class="facilitator-name">Carolina Massuh Morán</div>
+                <ul class="facilitator-list">
+                    <li>Psicóloga Clínica</li>
+                    <li>Terapeuta Holística</li>
+                    <li>Máster en Psicoterapia del Bienestar Integral</li>
+                    <li>Ceramista especializada</li>
+                </ul>
+                <p class="facilitator-bio">
+                    Carolina combina sus diversos saberes para acompañar a los participantes en el maravilloso 
+                    camino de creación y autoconocimiento. En su trayectoria como artista ha brindado talleres, 
+                    workshops y clases en Guayaquil, Galápagos, Cuenca, Salinas, Olón y Ayampe. Su última 
+                    capacitación fue en Enero-Marzo 2024 en Michigan-USA, donde reforzó sus técnicas e 
+                    implementó mindfulness, meditación y conexión sensorial en sus clases de cerámica.
+                </p>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 6: Resumen de Inversión -->
+        <div class="section">
+            <div class="section-title">RESUMEN DE INVERSIÓN</div>
+
+            <p class="text-content">
+                A continuación se presenta el desglose de costos para el evento de Stevia Life con un estimado de 25 a 30 personas:
+            </p>
+
+            <div class="highlight-box">
+                <h3>Alquiler del Espacio</h3>
+                <table style="margin-top: 15px;">
+                    <thead>
+                        <tr>
+                            <th>Concepto</th>
+                            <th>Duración</th>
+                            <th>Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Alquiler del espacio — miércoles 3 de junio</td>
+                            <td>3 horas (10:00 a 13:00) a $75 + IVA/hora</td>
+                            <td>$225 + IVA</td>
+                        </tr>
+                        <tr>
+                            <td>Hora adicional (en caso de requerirla)</td>
+                            <td>Por hora</td>
+                            <td>$75 + IVA</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="highlight-box">
+                <h3>Actividad de Cerámica (escoger una opción)</h3>
+                <table style="margin-top: 15px;">
+                    <thead>
+                        <tr>
+                            <th>Concepto</th>
+                            <th>Valor Unitario</th>
+                            <th>25 personas</th>
+                            <th>30 personas</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Opción A: Charm con inicial</td>
+                            <td>$25.00</td>
+                            <td>$625.00</td>
+                            <td>$750.00</td>
+                        </tr>
+                        <tr>
+                            <td>Opción B: Pintar pieza pre-elaborada</td>
+                            <td>$25.00</td>
+                            <td>$625.00</td>
+                            <td>$750.00</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="highlight-box" style="margin-top: 25px;">
+                <h3>Menú Brunch (cotización personalizada)</h3>
+                <p style="font-size: 13px; color: #555; text-align: justify; margin-top: 10px;">
+                    El valor del brunch se cotizará de forma personalizada según las opciones de menú seleccionadas. 
+                    Adjuntamos menú completo para que puedas definir las opciones, y prepararemos un desglose 
+                    detallado de costos una vez confirmadas las preferencias del equipo.
+                </p>
+            </div>
+
+            <div class="highlight-box" style="margin-top: 25px; background-color: #e8d5bc;">
+                <h3 style="font-size: 15px;">TOTAL GENERAL ESTIMADO</h3>
+                <table style="margin-top: 15px;">
+                    <thead>
+                        <tr>
+                            <th>Concepto</th>
+                            <th>25 personas</th>
+                            <th>30 personas</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Alquiler del espacio (3 horas)</td>
+                            <td>$258.75 <span style="font-size: 11px; color: #888;">($225 + IVA 15%)</span></td>
+                            <td>$258.75 <span style="font-size: 11px; color: #888;">($225 + IVA 15%)</span></td>
+                        </tr>
+                        <tr>
+                            <td>Actividad de cerámica (opción A o B)</td>
+                            <td>$625.00 <span style="font-size: 11px; color: #888;">(IVA incluido)</span></td>
+                            <td>$750.00 <span style="font-size: 11px; color: #888;">(IVA incluido)</span></td>
+                        </tr>
+                        <tr style="font-style: italic;">
+                            <td>Menú brunch</td>
+                            <td colspan="2" style="color: #b8704a; font-weight: 600; text-align: center;">Pendiente — se detallará una vez confirmadas las opciones del menú adjunto</td>
+                        </tr>
+                        <tr style="background-color: #c8825a; color: white;">
+                            <td style="color: white; font-weight: 600;">Subtotal confirmado</td>
+                            <td style="color: white; font-weight: 600;">$883.75</td>
+                            <td style="color: white; font-weight: 600;">$1,008.75</td>
+                        </tr>
+                        <tr style="background-color: #b8704a; color: white; font-weight: 600;">
+                            <td style="color: white; font-weight: 700;">TOTAL FINAL</td>
+                            <td style="color: white; font-weight: 700;" colspan="2">Subtotal + valor del brunch (a confirmar con selección de menú)</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p style="font-size: 12px; color: #666; margin-top: 10px; font-style: italic;">
+                    * Hora adicional disponible a $75 + IVA en caso de requerirla.
+                </p>
+            </div>
+
+            <div class="payment-note">
+                <strong style="color: #b8704a;">Forma de pago:</strong>
+                <ul style="list-style: none; margin-top: 8px;">
+                    <li style="margin-bottom: 4px;">• 50% anticipado para confirmar reserva</li>
+                    <li>• 50% restante dos días antes del evento</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 7: Condiciones -->
+        <div class="section">
+            <div class="section-title">CONDICIONES IMPORTANTES</div>
+
+            <div class="conditions-box">
+                <h4>Incluye en la cotización:</h4>
+                <ul>
+                    <li>Reserva exclusiva del espacio completo de Ceramicalma</li>
+                    <li>Aire acondicionado, parlantes, micrófonos y WiFi</li>
+                    <li>Parqueo seguro para todos los asistentes</li>
+                    <li>Mesas, sillas y equipamiento para el evento</li>
+                    <li>Menú brunch personalizado según preferencias</li>
+                    <li>Actividad de cerámica con facilitadora especializada</li>
+                    <li>Todos los materiales de cerámica incluidos</li>
+                    <li>Horneado profesional y entrega de piezas (2-3 semanas posteriores)</li>
+                    <li>Personal de apoyo durante el evento</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Closing -->
+        <div class="closing-box">
+            <p>¡Nos encantaría ser parte del evento de Stevia Life!</p>
+            <p>
+                Si tienes preguntas, deseas conocer más detalles o estás lista para confirmar tu reserva, 
+                no dudes en contactarnos. Estamos aquí para hacer de este brunch de cerámica una 
+                experiencia memorable llena de creatividad, bienestar y conexión genuina.
+            </p>
+            <p>
+                También podemos coordinar una visita al espacio para que puedas conocerlo personalmente 
+                antes del evento. ¡Escríbenos!
+            </p>
+        </div>
+
+        <!-- Contact -->
+        <div class="contact-box">
+            <div class="contact-title">INFORMACIÓN DE CONTACTO</div>
+            <div class="contact-company">CERAMICALMA</div>
+            <div class="contact-item">
+                <span>✉</span>
+                <span>ceramicalma.ec@gmail.com</span>
+            </div>
+            <div class="contact-item">
+                <span>📱</span>
+                <span>@ceramicalma.ec</span>
+            </div>
+            <div class="contact-item">
+                <span>📍</span>
+                <span>Guayaquil - Ecuador</span>
+            </div>
+        </div>
+
+        <!-- Signature -->
+        <div class="closing-signature">
+            <p>Cordialmente,</p>
+            <p>CERAMICALMA</p>
+        </div>
+    </div>
+</body>
+</html>
