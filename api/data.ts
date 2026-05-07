@@ -1488,6 +1488,70 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     }));
                     break;
                 }
+                case 'getDeliveryEmailLogs': {
+                    const { deliveryId, customerEmail } = req.body;
+                    
+                    try {
+                        let logs: any[] = [];
+                        
+                        // Si se proporciona deliveryId, obtener email de la delivery
+                        if (deliveryId) {
+                            const { rows: [delivery] } = await sql`
+                                SELECT customer_email FROM deliveries WHERE id = ${deliveryId} LIMIT 1
+                            `;
+                            
+                            if (!delivery) {
+                                return res.status(404).json({ error: 'Delivery not found' });
+                            }
+                            
+                            // Buscar logs de email para ese cliente relacionados con deliveries
+                            const { rows } = await sql`
+                                SELECT * FROM client_notifications
+                                WHERE LOWER(client_email) = LOWER(${delivery.customer_email})
+                                AND type IN (
+                                    'delivery_ready', 
+                                    'delivery_ready_painting',
+                                    'delivery_completed',
+                                    'painted_piece_ready_pickup',
+                                    'painting_booking_scheduled'
+                                )
+                                ORDER BY created_at DESC
+                                LIMIT 50
+                            `;
+                            logs = rows;
+                        } else if (customerEmail) {
+                            // Buscar por email directamente
+                            const { rows } = await sql`
+                                SELECT * FROM client_notifications
+                                WHERE LOWER(client_email) = LOWER(${customerEmail})
+                                AND type IN (
+                                    'delivery_ready', 
+                                    'delivery_ready_painting',
+                                    'delivery_completed',
+                                    'painted_piece_ready_pickup',
+                                    'painting_booking_scheduled'
+                                )
+                                ORDER BY created_at DESC
+                                LIMIT 50
+                            `;
+                            logs = rows;
+                        } else {
+                            return res.status(400).json({ error: 'deliveryId or customerEmail is required' });
+                        }
+                        
+                        return res.status(200).json({ 
+                            success: true, 
+                            logs: toCamelCase(logs) 
+                        });
+                        
+                    } catch (error: any) {
+                        console.error('[getDeliveryEmailLogs] Error:', error);
+                        return res.status(500).json({ 
+                            success: false, 
+                            error: error.message || 'Error fetching email logs' 
+                        });
+                    }
+                }
                 case 'getStandaloneCustomers': {
                     // Get all customers from customers table (standalone customers without necessarily having bookings)
                     const searchQuery = typeof req.query.search === 'string' ? req.query.search.trim() : '';

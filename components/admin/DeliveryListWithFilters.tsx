@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import type { Delivery } from '../../types';
 import { MagnifyingGlassIcon, FunnelIcon, XMarkIcon, QuestionMarkCircleIcon, ArrowDownTrayIcon, ArrowsUpDownIcon } from '@heroicons/react/24/outline';
 import { PhotoViewerModal } from './PhotoViewerModal';
+import { EmailNotificationsPanel } from './EmailNotificationsPanel';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import * as dataService from '../../services/dataService';
@@ -1134,6 +1135,15 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                         )}
                                     </div>
                                 )}
+
+                                {/* 📧 NUEVO: Panel de Notificaciones por Email */}
+                                <div className="mt-3">
+                                    <EmailNotificationsPanel
+                                        deliveryId={delivery.id}
+                                        customerEmail={delivery.customerEmail}
+                                        compact={false}
+                                    />
+                                </div>
 
                                 {/* Fotos - Responsive grid con lazy loading automático */}
                                 {(() => {

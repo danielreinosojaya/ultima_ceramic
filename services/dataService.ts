@@ -2349,6 +2349,21 @@ export const getDeliveriesByCustomer = async (customerEmail: string): Promise<De
     return rawDeliveries ? rawDeliveries.map(parseDelivery) : [];
 };
 
+// ✅ NUEVO: Obtener logs de emails enviados para una delivery
+export const getDeliveryEmailLogs = async (deliveryId: string): Promise<any[]> => {
+    if (!deliveryId) return [];
+    try {
+        const result = await postData('getDeliveryEmailLogs', { deliveryId });
+        if (result && result.success && Array.isArray(result.logs)) {
+            return result.logs;
+        }
+        return [];
+    } catch (error) {
+        console.error('[getDeliveryEmailLogs] Error fetching email logs:', error);
+        return [];
+    }
+};
+
 export const createDelivery = async (deliveryData: Omit<Delivery, 'id' | 'createdAt'>): Promise<{ success: boolean; delivery?: Delivery }> => {
     const result = await postAction('createDelivery', deliveryData);
     if (result.success && result.delivery) {

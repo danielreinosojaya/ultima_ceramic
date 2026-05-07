@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proforma Alquiler de Espacio - Ceramicalma</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f9f7f4;
+            color: #4a4a4a;
+            line-height: 1.8;
+        }
+
+        .download-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #b8704a;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: background-color 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 1000;
+        }
+
+        .download-btn:hover {
+            background-color: #9d5a38;
+        }
+
+        .download-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background-color: white;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 50px;
+            padding-top: 60px;
+        }
+
+        .logo {
+            font-size: 48px;
+            color: #b8704a;
+            font-weight: 600;
+            margin-bottom: 10px;
+            letter-spacing: 1px;
+        }
+
+        .subtitle {
+            font-size: 12px;
+            color: #b8704a;
+            letter-spacing: 3px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .date {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .title {
+            font-size: 28px;
+            color: #b8704a;
+            text-align: center;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .tagline {
+            font-size: 14px;
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            text-decoration: underline #b8704a 2px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #b8704a;
+        }
+
+        .greeting {
+            font-size: 14px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .intro-text {
+            font-size: 14px;
+            text-align: justify;
+            margin-bottom: 30px;
+            line-height: 1.8;
+            color: #555;
+        }
+
+        .section-divider {
+            border-bottom: 2px solid #b8704a;
+            margin: 40px 0 30px 0;
+        }
+
+        .section-title {
+            font-size: 16px;
+            color: white;
+            background-color: #b8704a;
+            padding: 12px 15px;
+            margin-bottom: 25px;
+            border-left: 4px solid #9d5a38;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .subsection-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+            margin-top: 20px;
+        }
+
+        .text-content {
+            font-size: 14px;
+            color: #555;
+            text-align: justify;
+            margin-bottom: 15px;
+            line-height: 1.8;
+        }
+
+        .option-box {
+            margin-bottom: 30px;
+        }
+
+        .option-header {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .option-text {
+            font-size: 13px;
+            color: #555;
+            text-align: justify;
+            margin-bottom: 12px;
+        }
+
+        .bullet-list {
+            margin-left: 20px;
+            margin-bottom: 15px;
+            font-size: 13px;
+        }
+
+        .bullet-list li {
+            margin-bottom: 8px;
+            color: #555;
+        }
+
+        .price {
+            font-size: 14px;
+            font-weight: 600;
+            color: #b8704a;
+            margin-top: 10px;
+        }
+
+        .highlight-box {
+            background-color: #f0e6d2;
+            border-left: 4px solid #b8704a;
+            padding: 20px;
+            margin-bottom: 25px;
+            border-radius: 3px;
+        }
+
+        .highlight-box h3 {
+            color: #b8704a;
+            font-size: 14px;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .highlight-box ul {
+            list-style: none;
+            margin-left: 0;
+        }
+
+        .highlight-box li {
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 8px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .highlight-box li:before {
+            content: "✓";
+            color: #b8704a;
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        .benefits-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .benefit-card {
+            background-color: #f0e6d2;
+            padding: 15px;
+            border-left: 4px solid #b8704a;
+            border-radius: 3px;
+        }
+
+        .benefit-title {
+            font-weight: 600;
+            color: #b8704a;
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+
+        .benefit-text {
+            font-size: 12px;
+            color: #555;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 25px;
+            font-size: 13px;
+        }
+
+        table thead {
+            background-color: #b8704a;
+            color: white;
+        }
+
+        table th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        table td {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+            color: #555;
+        }
+
+        table tr:nth-child(even) {
+            background-color: #faf8f5;
+        }
+
+        .payment-note {
+            background-color: #f0e6d2;
+            padding: 15px 20px;
+            margin-bottom: 25px;
+            border-left: 4px solid #b8704a;
+            border-radius: 3px;
+            font-size: 13px;
+            color: #555;
+        }
+
+        .conditions-box {
+            background-color: #f0e6d2;
+            padding: 20px;
+            border-left: 4px solid #b8704a;
+            margin-bottom: 20px;
+            border-radius: 3px;
+        }
+
+        .conditions-box h4 {
+            color: #b8704a;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .conditions-box ul {
+            list-style: none;
+            margin-left: 0;
+        }
+
+        .conditions-box li {
+            font-size: 12px;
+            color: #555;
+            margin-bottom: 6px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .conditions-box li:before {
+            content: "✓";
+            color: #b8704a;
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        .conditions-box.exclude li:before {
+            content: "✕";
+            color: #b8704a;
+        }
+
+        .closing-box {
+            background-color: #f0e6d2;
+            padding: 20px;
+            border-left: 4px solid #b8704a;
+            margin-bottom: 30px;
+            border-radius: 3px;
+            text-align: center;
+        }
+
+        .closing-box p {
+            font-size: 13px;
+            color: #555;
+            text-align: justify;
+            margin-bottom: 10px;
+        }
+
+        .contact-box {
+            border: 2px solid #b8704a;
+            padding: 25px;
+            text-align: center;
+            margin-bottom: 30px;
+            border-radius: 3px;
+            background-color: #f0e6d2;
+        }
+
+        .contact-title {
+            color: #b8704a;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .contact-company {
+            color: #b8704a;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .contact-item {
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .closing-signature {
+            text-align: center;
+            margin-top: 40px;
+            margin-bottom: 20px;
+        }
+
+        .closing-signature p {
+            font-size: 13px;
+            color: #b8704a;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .capacity-note {
+            background-color: #f0e6d2;
+            border-left: 4px solid #b8704a;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 3px;
+            font-size: 13px;
+            color: #555;
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            .benefits-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .download-btn {
+                position: relative;
+                top: 0;
+                right: 0;
+                margin-bottom: 20px;
+                width: 100%;
+                justify-content: center;
+            }
+
+            .container {
+                padding: 20px 10px;
+            }
+
+            .header {
+                padding-top: 20px;
+            }
+
+            table {
+                font-size: 12px;
+            }
+
+            table th, table td {
+                padding: 8px;
+            }
+        }
+
+        @media print {
+            .download-btn {
+                display: none !important;
+            }
+
+            body {
+                background-color: white;
+                margin: 0;
+                padding: 0;
+            }
+
+            .container {
+                padding: 20px;
+                margin: 0;
+                max-width: 100%;
+            }
+
+            .header {
+                padding-top: 0;
+                margin-bottom: 20px;
+                page-break-after: avoid;
+            }
+
+            .section-divider {
+                margin: 20px 0 15px 0;
+                page-break-inside: avoid;
+            }
+
+            .section {
+                page-break-inside: avoid;
+                orphans: 3;
+                widows: 3;
+            }
+
+            .section-title {
+                page-break-after: avoid;
+                margin-bottom: 15px;
+            }
+
+            .subsection-title {
+                page-break-after: avoid;
+            }
+
+            table {
+                page-break-inside: avoid;
+                margin: 15px 0;
+            }
+
+            .benefits-grid {
+                page-break-inside: avoid;
+            }
+
+            .option-box {
+                page-break-inside: avoid;
+            }
+
+            .highlight-box {
+                page-break-inside: avoid;
+            }
+
+            .contact-box {
+                page-break-inside: avoid;
+            }
+
+            .closing-box {
+                page-break-inside: avoid;
+            }
+
+            .tagline {
+                page-break-after: avoid;
+            }
+
+            .intro-text {
+                page-break-after: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button class="download-btn" onclick="window.print()">
+        <svg fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+        </svg>
+        Descargar PDF
+    </button>
+
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">Ceramicalma</div>
+            <div class="subtitle">HOLISTIC POTTERY STUDIO</div>
+            <div class="date">Guayaquil, 7 de mayo de 2026</div>
+        </div>
+
+        <!-- Title -->
+        <h1 class="title">PROFORMA ALQUILER DE ESPACIO</h1>
+        <p class="tagline">Lanzamiento de Marca Saludable</p>
+
+        <!-- Greeting -->
+        <p class="greeting">Estimada Paola Santos,</p>
+
+        <p class="intro-text">
+            Presentamos a tu amable consideración la siguiente proforma para el alquiler del espacio de <strong>Ceramicalma</strong>, 
+            un ambiente único, cálido y acogedor, ideal para el lanzamiento de tu marca saludable. Nuestro espacio está diseñado 
+            para crear experiencias memorables donde la creatividad, la conexión y el bienestar se encuentran en un solo lugar.
+        </p>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 1: Descripción del Espacio -->
+        <div class="section">
+            <div class="section-title">DESCRIPCIÓN DEL ESPACIO</div>
+
+            <p class="text-content">
+                Ceramicalma es un estudio holístico de cerámica que transmite calidez, creatividad y autenticidad. 
+                Espacio ideal para eventos corporativos, lanzamientos de marca, presentaciones y reuniones donde el 
+                ambiente crea experiencias memorables.
+            </p>
+
+            <div class="benefits-grid">
+                <div class="benefit-card">
+                    <div class="benefit-title">Ambiente Único</div>
+                    <div class="benefit-text">Espacio artístico y fotogénico, perfecto para marcas creativas y saludables.</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Ubicación Premium</div>
+                    <div class="benefit-text">Samborondón km 2,5, con parqueo seguro gratuito para todos tus invitados.</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Equipamiento Completo</div>
+                    <div class="benefit-text">Audio profesional, 4 micrófonos, A/C, WiFi y servicio de atención incluidos.</div>
+                </div>
+                <div class="benefit-card">
+                    <div class="benefit-title">Capacidad 25-30 personas</div>
+                    <div class="benefit-text">25 sillas + mesas amplias, reserva exclusiva del espacio completo.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 2: Tarifas -->
+        <div class="section">
+            <div class="section-title">TARIFAS DE ALQUILER</div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Día</th>
+                        <th>Tarifa por Hora</th>
+                        <th>3 Horas (IVA incluido)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Martes, Miércoles, Jueves</td>
+                        <td>$75 + IVA</td>
+                        <td style="font-weight: 600; color: #b8704a;">$258.75</td>
+                    </tr>
+                    <tr>
+                        <td>Viernes, Sábado, Domingo</td>
+                        <td>$100 + IVA</td>
+                        <td style="font-weight: 600; color: #b8704a;">$345.00</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="capacity-note">
+                Duración: 3 horas. Incluye 15 minutos de gracia. Pasado este tiempo se cobra la hora adicional según tarifa del día.
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 3: Incluye / No Incluye -->
+        <div class="section">
+            <div class="section-title">QUÉ INCLUYE Y QUÉ NO INCLUYE</div>
+
+            <div class="conditions-box">
+                <h4>✓ Incluye:</h4>
+                <ul>
+                    <li>Espacio completo en reserva exclusiva</li>
+                    <li>25 sillas + mesas amplias</li>
+                    <li>Aire acondicionado</li>
+                    <li>Parqueo seguro gratuito</li>
+                    <li>Sistema de audio profesional + 4 micrófonos</li>
+                    <li>WiFi de alta velocidad</li>
+                    <li>Servicio de atención a invitados</li>
+                    <li>Iluminación natural y artificial</li>
+                </ul>
+            </div>
+
+            <div class="conditions-box exclude">
+                <h4>✕ No incluye:</h4>
+                <ul>
+                    <li>Alimentos o piqueos</li>
+                    <li>Bebidas</li>
+                    <li>Menaje adicional (vajilla, cubiertos, copas)</li>
+                    <li>Personal de saloneros o catering</li>
+                </ul>
+            </div>
+
+            <div class="payment-note">
+                <strong style="color: #b8704a;">Servicios adicionales:</strong> 
+                Si deseas complementar con bebidas, piqueos o catering, podemos presentarte una propuesta con cotización detallada.
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <!-- Section 4: Condiciones y Forma de Pago -->
+        <div class="section">
+            <div class="section-title">CONDICIONES Y FORMA DE PAGO</div>
+
+            <div class="payment-note">
+                <strong style="color: #b8704a;">Forma de pago:</strong>
+                <ul style="list-style: none; margin-top: 8px;">
+                    <li style="margin-bottom: 4px;">• 50% anticipado para confirmar la reserva</li>
+                    <li>• 50% restante dos días antes del evento</li>
+                </ul>
+            </div>
+
+            <div class="conditions-box">
+                <h4>Políticas de cancelación:</h4>
+                <ul>
+                    <li>Cancelación con +7 días: devolución del 100% del anticipo</li>
+                    <li>Cancelación con -7 días: devolución del 50% del anticipo</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Closing -->
+        <div class="closing-box">
+            <p>¡Nos encantaría ser parte de tu lanzamiento de marca saludable!</p>
+            <p>
+                Si deseas confirmar la reserva, conocer el espacio personalmente o agregar servicios adicionales 
+                (catering, bebidas, piqueos), contáctanos.
+            </p>
+        </div>
+
+        <!-- Contact -->
+        <div class="contact-box">
+            <div class="contact-title">INFORMACIÓN DE CONTACTO</div>
+            <div class="contact-company">CERAMICALMA</div>
+            <div class="contact-item">
+                <span>✉</span>
+                <span>ceramicalma.ec@gmail.com</span>
+            </div>
+            <div class="contact-item">
+                <span>📱</span>
+                <span>@ceramicalma.ec</span>
+            </div>
+            <div class="contact-item">
+                <span>📍</span>
+                <span>Samborondón km 2,5 - Guayaquil, Ecuador</span>
+            </div>
+        </div>
+
+        <!-- Signature -->
+        <div class="closing-signature">
+            <p>Cordialmente,</p>
+            <p>CERAMICALMA</p>
+        </div>
+    </div>
+</body>
+</html>
