@@ -3,6 +3,7 @@ import type { Delivery } from '../../types';
 import { MagnifyingGlassIcon, FunnelIcon, XMarkIcon, QuestionMarkCircleIcon, ArrowDownTrayIcon, ArrowsUpDownIcon } from '@heroicons/react/24/outline';
 import { PhotoViewerModal } from './PhotoViewerModal';
 import { EmailNotificationsPanel } from './EmailNotificationsPanel';
+import { DeliveryTimeline } from './DeliveryTimeline';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import * as dataService from '../../services/dataService';
@@ -1136,12 +1137,20 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                     </div>
                                 )}
 
-                                {/* 📧 NUEVO: Panel de Notificaciones por Email */}
+                                {/* 📧 Panel de Notificaciones por Email */}
                                 <div className="mt-3">
                                     <EmailNotificationsPanel
                                         deliveryId={delivery.id}
                                         customerEmail={delivery.customerEmail}
                                         compact={false}
+                                    />
+                                </div>
+
+                                {/* 📍 Timeline de Seguimiento del Proceso */}
+                                <div className="mt-3">
+                                    <DeliveryTimeline
+                                        delivery={delivery}
+                                        formatDate={formatDate}
                                     />
                                 </div>
 
