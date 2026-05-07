@@ -1002,28 +1002,28 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                         if (diffDays > 1) {
                                             return (
                                                 <div className="inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-blue-50 text-blue-700 font-semibold text-xs sm:text-sm border border-blue-200">
-                                                    ⏳ Finalizar en {diffDays} días
+                                                    ⏳ Pieza debe estar lista en {diffDays} días
                                                 </div>
                                             );
                                         }
                                         if (diffDays === 1) {
                                             return (
                                                 <div className="inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-amber-100 text-amber-800 font-semibold text-xs sm:text-sm border border-amber-300">
-                                                    ⚠️ Finalizar MAÑANA
+                                                    ⚠️ Pieza debe estar lista MAÑANA
                                                 </div>
                                             );
                                         }
                                         if (diffDays === 0) {
                                             return (
                                                 <div className="inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-amber-100 text-amber-800 font-semibold text-xs sm:text-sm border border-amber-300">
-                                                    ⚠️ Finalizar HOY
+                                                    ⚠️ Pieza debe estar lista HOY
                                                 </div>
                                             );
                                         }
                                         const overdueDays = Math.abs(diffDays);
                                         return (
                                             <div className="inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-red-100 text-red-800 font-semibold text-xs sm:text-sm border border-red-300">
-                                                🔴 VENCIDA: Hace {overdueDays} día{overdueDays > 1 ? 's' : ''}
+                                                🔴 ATRASADA: Debía estar lista hace {overdueDays} día{overdueDays > 1 ? 's' : ''}
                                             </div>
                                         );
                                     }
@@ -1052,11 +1052,11 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                                     </div>
                                                 ) : isExpiringSoon ? (
                                                     <div className="inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-orange-100 text-orange-800 font-semibold text-xs sm:text-sm border border-orange-300 ml-2">
-                                                        ⏰ Retira en {daysUntilExpiration} días
+                                                        ⏰ Cliente debe retirar en {daysUntilExpiration} días
                                                     </div>
                                                 ) : (
                                                     <div className="inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-green-100 text-green-700 text-xs sm:text-sm border border-green-200 ml-2">
-                                                        ✅ Falta {daysUntilExpiration} días
+                                                        ✅ Cliente tiene {daysUntilExpiration} días para retirar
                                                     </div>
                                                 )}
                                             </div>
@@ -1081,11 +1081,14 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                 {/* Servicio de Pintura */}
                                 {delivery.wantsPainting && (
                                     <div className="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300 rounded-lg p-3 space-y-2">
-                                        <div className="flex items-center justify-between">
-                                            <p className="text-sm font-bold text-purple-900">🎨 Servicio de Pintura</p>
-                                            <span className="text-xs bg-purple-600 text-white px-2 py-1 rounded-full font-bold">
-                                                ${delivery.paintingPrice || 20}
-                                            </span>
+                                        <div className="space-y-1">
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-sm font-bold text-purple-900">🎨 Servicio de Pintura</p>
+                                                <span className="text-xs bg-purple-600 text-white px-2 py-1 rounded-full font-bold">
+                                                    ${delivery.paintingPrice || 20}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-purple-700 italic">Cliente quiere pintar su pieza en el taller (sesión privada 2hrs)</p>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <span className="text-xs font-semibold text-gray-700">Estado:</span>
@@ -1226,8 +1229,8 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                 {/* Botones de gestión de pintura */}
                                 {delivery.wantsPainting && delivery.paintingStatus === 'pending_payment' && (
                                     <button
-                                        className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white border border-yellow-600 shadow-sm transition-all text-xs sm:text-sm font-bold"
-                                        title="Marcar pago de pintura como recibido"
+                                        className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white border border-yellow-600 shadow-sm transition-all text-xs font-bold"
+                                        title="Marcar que el cliente ya pagó los $20 del servicio de pintura"
                                         onClick={async () => {
                                             if (confirm('¿Confirmas que el cliente pagó el servicio de pintura ($20)?')) {
                                                 try {
@@ -1248,14 +1251,14 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                         }}
                                     >
                                         <span>💰</span>
-                                        <span className="hidden xs:inline">Marcar Pagado</span>
+                                        <span>Confirmar Pago Recibido</span>
                                     </button>
                                 )}
 
                                 {delivery.wantsPainting && delivery.paintingStatus === 'paid' && delivery.status === 'ready' && (
                                     <button
-                                        className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border border-blue-600 shadow-sm transition-all text-xs sm:text-sm font-bold"
-                                        title="Agendar sesión de pintura"
+                                        className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border border-blue-600 shadow-sm transition-all text-xs font-bold"
+                                        title="Agendar fecha y hora para sesión de pintura del cliente"
                                         onClick={() => {
                                             const dateStr = prompt('Fecha de pintura (YYYY-MM-DD):');
                                             if (dateStr) {
@@ -1285,14 +1288,14 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                         }}
                                     >
                                         <span>📅</span>
-                                        <span className="hidden xs:inline">Agendar</span>
+                                        <span>Agendar Sesión Pintura</span>
                                     </button>
                                 )}
 
                                 {delivery.wantsPainting && delivery.paintingStatus === 'scheduled' && (
                                     <button
-                                        className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white border border-purple-600 shadow-sm transition-all text-xs sm:text-sm font-bold"
-                                        title="Marcar pintura como completada"
+                                        className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white border border-purple-600 shadow-sm transition-all text-xs font-bold"
+                                        title="Marcar que el cliente terminó de pintar su pieza"
                                         onClick={async () => {
                                             if (confirm('¿Confirmas que el cliente completó la sesión de pintura?')) {
                                                 try {
@@ -1313,14 +1316,14 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                         }}
                                     >
                                         <span>🎉</span>
-                                        <span className="hidden xs:inline">Completar</span>
+                                        <span>Pintura Completada</span>
                                     </button>
                                 )}
 
                                 {delivery.wantsPainting && delivery.paintingStatus === 'completed' && delivery.status !== 'completed' && (
                                     <button
-                                        className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white border border-orange-600 shadow-sm transition-all text-xs sm:text-sm font-bold"
-                                        title={delivery.paintingPickupNotifiedAt ? 'Reenviar notificación de retiro (pieza pintada lista)' : 'Notificar al cliente que su pieza pintada está lista para retirar'}
+                                        className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white border border-orange-600 shadow-sm transition-all text-xs font-bold"
+                                        title={delivery.paintingPickupNotifiedAt ? 'Reenviar email que pieza pintada ya está lista' : 'Enviar email: pieza pintada horneada y lista para recoger'}
                                         onClick={async () => {
                                             const alreadyNotified = Boolean(delivery.paintingPickupNotifiedAt);
                                             const msg = alreadyNotified
@@ -1346,54 +1349,54 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                         }}
                                     >
                                         <span>🎁</span>
-                                        <span className="hidden xs:inline">{delivery.paintingPickupNotifiedAt ? 'Reenviar Retiro' : 'Lista p/ Retirar'}</span>
+                                        <span>{delivery.paintingPickupNotifiedAt ? 'Reenviar: Pieza Lista' : 'Notificar: Pieza Lista'}</span>
                                     </button>
                                 )}
 
                                 {/* Botones estándar */}
                                 <button
-                                    className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 shadow-sm transition-all text-xs sm:text-sm font-semibold"
-                                    title="Contactar cliente por WhatsApp"
+                                    className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 shadow-sm transition-all text-xs font-semibold"
+                                    title="Abrir WhatsApp para contactar al cliente"
                                     onClick={() => handleWhatsAppContact(delivery.customerEmail, delivery.description)}
                                 >
-                                    <span className="text-base sm:text-lg">📱</span>
-                                    <span className="hidden xs:inline">WhatsApp</span>
+                                    <span>📱</span>
+                                    <span>Contactar Cliente</span>
                                 </button>
                                 <button
-                                    className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 shadow-sm transition-all text-xs sm:text-sm font-semibold"
-                                    title="Eliminar entrega"
+                                    className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 shadow-sm transition-all text-xs font-semibold"
+                                    title="Eliminar esta entrega permanentemente"
                                     onClick={() => onDelete(delivery)}
                                 >
-                                    <span className="text-base sm:text-lg">🗑️</span>
-                                    <span className="hidden xs:inline">Eliminar</span>
+                                    <span>🗑️</span>
+                                    <span>Eliminar Entrega</span>
                                 </button>
                                 {delivery.status !== 'completed' && !delivery.readyAt && (
                                     <button
-                                        className="w-full xs:w-auto xs:flex-grow inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white shadow-md transition-all text-xs sm:text-sm font-bold"
-                                        title="Notificar al cliente que su pieza está lista"
+                                        className="w-full xs:w-auto xs:flex-grow inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white shadow-md transition-all text-xs font-bold"
+                                        title="Enviar email al cliente: tu pieza está lista para recoger"
                                         onClick={() => onMarkReady(delivery.id)}
                                     >
                                         <span>✨</span>
-                                        <span>Marcar como Lista</span>
+                                        <span>Pieza Lista → Notificar Cliente</span>
                                     </button>
                                 )}
                                 {delivery.status !== 'completed' && delivery.readyAt && (
                                     <>
                                         <button
-                                            className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 shadow-sm transition-all text-xs sm:text-sm font-semibold"
-                                            title="Reenviar email de notificación al cliente"
+                                            className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 shadow-sm transition-all text-xs font-semibold"
+                                            title="Reenviar email: pieza lista para recoger"
                                             onClick={() => onMarkReady(delivery.id)}
                                         >
                                             <span>📧</span>
-                                            <span className="hidden xs:inline">Reenviar</span>
+                                            <span>Reenviar Email</span>
                                         </button>
                                         <button
-                                            className="flex-1 xs:flex-none inline-flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white shadow-md transition-all text-xs sm:text-sm font-bold"
-                                            title="Completar entrega"
+                                            className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white shadow-md transition-all text-xs font-bold"
+                                            title="Marcar que el cliente ya retiró su pieza"
                                             onClick={() => onComplete(delivery.id)}
                                         >
                                             <span>✓</span>
-                                            <span>Completar</span>
+                                            <span>Cliente Retiró Pieza</span>
                                         </button>
                                     </>
                                 )}
