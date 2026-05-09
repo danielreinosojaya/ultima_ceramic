@@ -666,7 +666,7 @@ export interface ClientNotification {
     clientEmail: string;
     type: ClientNotificationType;
     channel: 'Email' | 'WhatsApp';
-    status: 'Sent' | 'Failed' | 'Pending';
+    status: 'sent' | 'failed' | 'pending';
     bookingCode: string;
     scheduledAt?: string; // ISO string
 }
