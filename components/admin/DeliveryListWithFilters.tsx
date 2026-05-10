@@ -1322,13 +1322,13 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
 
                                 {delivery.wantsPainting && delivery.paintingStatus === 'completed' && delivery.status !== 'completed' && (
                                     <button
-                                        className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white border border-orange-600 shadow-sm transition-all text-xs font-bold"
-                                        title={delivery.paintingPickupNotifiedAt ? 'Reenviar email que pieza pintada ya está lista' : 'Enviar email: pieza pintada horneada y lista para recoger'}
+                                        className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white border border-green-600 shadow-lg transition-all text-xs font-bold animate-pulse hover:animate-none"
+                                        title={delivery.paintingPickupNotifiedAt ? 'Reenviar email: pieza pintada lista para retirar' : 'PASO 4: Click cuando la pieza pintada salió del horneado final y está lista para que el cliente la retire'}
                                         onClick={async () => {
                                             const alreadyNotified = Boolean(delivery.paintingPickupNotifiedAt);
                                             const msg = alreadyNotified
                                                 ? '¿Reenviar el email de retiro de pieza pintada al cliente?'
-                                                : '¿Notificar al cliente que su pieza pintada ya pasó el horneado final y está lista para retirar?';
+                                                : '¿Confirmas que la pieza SALIÓ DEL HORNO y está lista para retirar? Se enviará email al cliente.';
                                             if (confirm(msg)) {
                                                 try {
                                                     const result = await dataService.notifyPaintingPickupReady(delivery.id, alreadyNotified);
@@ -1337,7 +1337,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                                             onDeliveryUpdated?.(result.delivery);
                                                             adminData.optimisticUpsertDelivery(result.delivery);
                                                         }
-                                                        alert(result.emailSent ? '✅ Cliente notificado por email.' : '✅ Estado actualizado (email no enviado, revisa logs).');
+                                                        alert(result.emailSent ? '✅ Cliente notificado por email: pieza lista para retirar.' : '✅ Estado actualizado (email no enviado, revisa logs).');
                                                     } else {
                                                         alert('Error: ' + (result.error || 'No se pudo notificar'));
                                                     }
@@ -1348,8 +1348,8 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                             }
                                         }}
                                     >
-                                        <span>🎁</span>
-                                        <span>{delivery.paintingPickupNotifiedAt ? 'Reenviar: Pieza Lista' : 'Notificar: Pieza Lista'}</span>
+                                        <span>🔥</span>
+                                        <span>{delivery.paintingPickupNotifiedAt ? 'Reenviar Email' : 'Horneado Completo → Avisar Cliente'}</span>
                                     </button>
                                 )}
 
