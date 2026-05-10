@@ -1255,6 +1255,58 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                     </button>
                                 )}
 
+                                {/* BOTÓN DE EMERGENCIA: Detectar anomalía (pagó hace >7 días sin completar) */}
+                                {delivery.wantsPainting && delivery.paintingStatus === 'paid' && delivery.paintingPaidAt && (() => {
+                                    const daysSincePaid = Math.floor((Date.now() - new Date(delivery.paintingPaidAt).getTime()) / (1000 * 60 * 60 * 24));
+                                    return daysSincePaid > 7;
+                                })() && (
+                                    <div className="flex-1 xs:flex-none">
+                                        <div className="bg-orange-50 border-2 border-orange-400 rounded-lg p-2 mb-2">
+                                            <div className="flex items-center gap-2 text-xs text-orange-800 font-bold mb-1">
+                                                <span>⚠️</span>
+                                                <span>ALERTA: Pagó hace {Math.floor((Date.now() - new Date(delivery.paintingPaidAt).getTime()) / (1000 * 60 * 60 * 24))} días sin sesión completada</span>
+                                            </div>
+                                            <div className="text-xs text-orange-700 mb-2">
+                                                Posible problema: sesión agendada con otro email o completada fuera del sistema
+                                            </div>
+                                            <button
+                                                className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white border border-orange-700 shadow-lg transition-all text-xs font-bold"
+                                                title="EMERGENCIA: Forzar marcar como completada cuando cliente ya pintó pero hubo problema de vinculación"
+                                                onClick={async () => {
+                                                    const confirmMsg = `⚠️ ACCIÓN MANUAL DE EMERGENCIA\n\n` +
+                                                        `¿Confirmas que el cliente YA PINTÓ su pieza pero el sistema no lo detectó?\n\n` +
+                                                        `Esto marcará painting_status como "completed" y habilitará el botón de horneado.\n\n` +
+                                                        `Usa esto solo cuando:\n` +
+                                                        `- Cliente agendó con otro email\n` +
+                                                        `- Sesión se registró fuera del sistema\n` +
+                                                        `- Necesitas avanzar manualmente el flujo`;
+                                                    
+                                                    if (confirm(confirmMsg)) {
+                                                        try {
+                                                            const result = await dataService.forcePaintingCompleted(delivery.id);
+                                                            if (result.success) {
+                                                                if (result.delivery) {
+                                                                    onDeliveryUpdated?.(result.delivery);
+                                                                    adminData.optimisticUpsertDelivery(result.delivery);
+                                                                }
+                                                                alert('✅ Pintura marcada como completada.\nAhora puedes usar el botón verde "🔥 Horneado Completo" cuando la pieza salga del horno.');
+                                                            } else {
+                                                                alert('Error: ' + (result.error || 'No se pudo forzar completar'));
+                                                            }
+                                                        } catch (error) {
+                                                            console.error('Error forcing painting completed:', error);
+                                                            alert('Error al forzar completar pintura');
+                                                        }
+                                                    }
+                                                }}
+                                            >
+                                                <span>🔧</span>
+                                                <span>Forzar: Marcar Pintura Completada</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {delivery.wantsPainting && delivery.paintingStatus === 'paid' && delivery.status === 'ready' && (
                                     <button
                                         className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border border-blue-600 shadow-sm transition-all text-xs font-bold"

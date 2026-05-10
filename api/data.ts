@@ -6701,6 +6701,46 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 emailSent: emailSentSuccessfully
             });
         }
+        case 'forcePaintingCompleted': {
+            // EMERGENCIA: Forzar marcar pintura como completada cuando hubo discrepancia de emails
+            // Se usa cuando painting_status='paid' por varios días sin completar por problema de vinculación
+            const { deliveryId } = req.body;
+
+            if (!deliveryId) {
+                return res.status(400).json({ error: 'deliveryId is required.' });
+            }
+
+            const { rows: [existingDelivery] } = await sql`
+                SELECT * FROM deliveries WHERE id = ${deliveryId}
+            `;
+
+            if (!existingDelivery) {
+                return res.status(404).json({ error: 'Delivery not found.' });
+            }
+
+            if (!existingDelivery.wants_painting) {
+                return res.status(400).json({ error: 'Delivery does not have painting service.' });
+            }
+
+            if (existingDelivery.painting_status === 'completed') {
+                return res.status(400).json({ error: 'Painting already completed.' });
+            }
+
+            // Actualizar a completed
+            const { rows: [updatedDelivery] } = await sql`
+                UPDATE deliveries
+                SET painting_status = 'completed',
+                    painting_completed_at = NOW()
+                WHERE id = ${deliveryId}
+                RETURNING *
+            `;
+
+            return res.status(200).json({
+                success: true,
+                delivery: toCamelCase(updatedDelivery),
+                message: 'Pintura marcada como completada manualmente'
+            });
+        }
         case 'notifyPaintingPickupReady': {
             // Notifica al cliente que su pieza PINTADA ya pasó el horneado final y puede retirarse.
             // Se llama cuando painting_status === 'completed' y la pieza está físicamente lista.

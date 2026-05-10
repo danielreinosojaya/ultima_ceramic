@@ -2364,6 +2364,22 @@ export const getDeliveryEmailLogs = async (deliveryId: string): Promise<any[]> =
     }
 };
 
+// ✅ EMERGENCIA: Forzar marcar pintura como completada (cuando hubo discrepancia de emails)
+export const forcePaintingCompleted = async (deliveryId: string): Promise<{ success: boolean; delivery?: Delivery; error?: string }> => {
+    if (!deliveryId) return { success: false, error: 'deliveryId is required' };
+    try {
+        const result = await postData('forcePaintingCompleted', { deliveryId });
+        if (result && result.success && result.delivery) {
+            invalidateDeliveriesCache();
+            return { success: true, delivery: parseDelivery(result.delivery) };
+        }
+        return { success: false, error: result?.error || 'Failed to force complete painting' };
+    } catch (error) {
+        console.error('[forcePaintingCompleted] Error:', error);
+        return { success: false, error: 'Exception occurred' };
+    }
+};
+
 export const createDelivery = async (deliveryData: Omit<Delivery, 'id' | 'createdAt'>): Promise<{ success: boolean; delivery?: Delivery }> => {
     const result = await postAction('createDelivery', deliveryData);
     if (result.success && result.delivery) {
