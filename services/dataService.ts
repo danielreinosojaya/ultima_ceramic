@@ -2353,7 +2353,7 @@ export const getDeliveriesByCustomer = async (customerEmail: string): Promise<De
 export const getDeliveryEmailLogs = async (deliveryId: string): Promise<any[]> => {
     if (!deliveryId) return [];
     try {
-        const result = await postData('getDeliveryEmailLogs', { deliveryId });
+        const result = await postAction('getDeliveryEmailLogs', { deliveryId });
         if (result && result.success && Array.isArray(result.logs)) {
             return result.logs;
         }
@@ -2368,7 +2368,7 @@ export const getDeliveryEmailLogs = async (deliveryId: string): Promise<any[]> =
 export const forcePaintingCompleted = async (deliveryId: string): Promise<{ success: boolean; delivery?: Delivery; error?: string }> => {
     if (!deliveryId) return { success: false, error: 'deliveryId is required' };
     try {
-        const result = await postData('forcePaintingCompleted', { deliveryId });
+        const result = await postAction('forcePaintingCompleted', { deliveryId });
         if (result && result.success && result.delivery) {
             invalidateDeliveriesCache();
             return { success: true, delivery: parseDelivery(result.delivery) };
