@@ -273,7 +273,8 @@ async function handleListBookings(req: VercelRequest, res: VercelResponse) {
                 slots,
                 booking_date,
                 created_at,
-                is_paid
+                is_paid,
+                technique
             FROM bookings
             WHERE (user_info->>'email')::text = ${identifier}
             ORDER BY created_at DESC
@@ -296,6 +297,7 @@ async function handleListBookings(req: VercelRequest, res: VercelResponse) {
                 userInfo: booking.user_info,
                 productId: booking.product_id,
                 productType: booking.product_type,
+                technique: booking.technique || productInfo?.details?.technique,
                 product: {
                     name: productInfo.name || booking.product_type || 'Experiencia',
                     type: booking.product_type,

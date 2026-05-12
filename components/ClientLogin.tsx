@@ -14,8 +14,45 @@ interface Booking {
     bookingCode: string;
     productName?: string;
     productType?: string;
+    product?: { name?: string; type?: string };
+    technique?: string;
     bookingDate?: string;
 }
+
+// Traducción de productType a etiqueta legible para el cliente.
+// Sirve como fallback cuando no hay product.name disponible.
+const PRODUCT_TYPE_LABELS: Record<string, string> = {
+    'SINGLE_CLASS': 'Clase Suelta',
+    'CLASS_PACKAGE': 'Paquete de Clases',
+    'INTRODUCTORY_CLASS': 'Clase Introductoria',
+    'GROUP_CLASS': 'Clase Grupal',
+    'GROUP_EXPERIENCE': 'Experiencia Grupal',
+    'CUSTOM_GROUP_EXPERIENCE': 'Experiencia Grupal Personalizada',
+    'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
+    'OPEN_STUDIO': 'Estudio Abierto',
+    'WHEEL_COURSE': 'Curso de Torno'
+};
+
+const TECHNIQUE_LABELS: Record<string, string> = {
+    'potters_wheel': 'Torno Alfarero',
+    'hand_modeling': 'Modelado a Mano',
+    'molding': 'Modelado a Mano',
+    'painting': 'Pintura de piezas'
+};
+
+const getBookingLabel = (booking: Booking): string => {
+    // Pintura del upsell (CUSTOM_GROUP_EXPERIENCE + technique='painting' o nombre con "pintura")
+    if (booking.technique && TECHNIQUE_LABELS[booking.technique]) {
+        const isCustomOrPainting = booking.productType === 'CUSTOM_GROUP_EXPERIENCE' || booking.technique === 'painting';
+        if (isCustomOrPainting) return TECHNIQUE_LABELS[booking.technique];
+    }
+    const productName = booking.product?.name || booking.productName;
+    if (productName && productName !== booking.productType) return productName;
+    if (booking.productType && PRODUCT_TYPE_LABELS[booking.productType]) {
+        return PRODUCT_TYPE_LABELS[booking.productType];
+    }
+    return 'Experiencia';
+};
 
 export const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess, onBack, showBackButton = true }) => {
     const { login, booking: authBooking, loading: authLoading } = useAuth();
@@ -210,7 +247,7 @@ export const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess, onBack, sho
                                     >
                                         <div className="flex items-start justify-between">
                                             <div className="flex-1">
-                                                <p className="font-semibold text-brand-text">{booking.productName || booking.productType || 'Experiencia'}</p>
+                                                <p className="font-semibold text-brand-text">{getBookingLabel(booking)}</p>
                                                 {booking.bookingDate && (
                                                     <p className="text-sm text-brand-secondary">
                                                         {booking.bookingDate}

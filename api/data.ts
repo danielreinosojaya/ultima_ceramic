@@ -6492,11 +6492,15 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     LIMIT 1
                 `;
 
-                const product = productRows[0]
+                // El producto de pintura puede estar en la BD con cualquier `type`
+                // (históricamente quedó como GROUP_EXPERIENCE). Forzamos el tipo a
+                // CUSTOM_GROUP_EXPERIENCE en el booking generado para que los helpers
+                // de display (PDF, agendamientos, dashboards) muestren la técnica
+                // "Pintura de piezas" en lugar de "GROUP_EXPERIENCE" crudo.
+                const rawProduct = productRows[0]
                     ? toCamelCase(productRows[0])
                     : {
                         id: 'painting_service',
-                        type: 'GROUP_EXPERIENCE',
                         name: 'Pintura de piezas',
                         description: 'Reserva de pintura (servicio prepagado)',
                         isActive: true,
@@ -6511,9 +6515,13 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         }
                     } as any;
 
+                // Override de tipo a CUSTOM_GROUP_EXPERIENCE — no afecta la BD del
+                // producto, solo el snapshot embebido en este booking.
+                const product = { ...rawProduct, type: 'CUSTOM_GROUP_EXPERIENCE' };
+
                 const bookingPayload: any = {
                     productId: product.id || 'painting_service',
-                    productType: product.type || 'GROUP_EXPERIENCE',
+                    productType: 'CUSTOM_GROUP_EXPERIENCE',
                     product,
                     slots: [{ date, time: availability.normalizedTime, instructorId: 0 }],
                     userInfo,

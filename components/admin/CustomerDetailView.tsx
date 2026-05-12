@@ -479,7 +479,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                     </p>
                                     <p className="text-sm text-brand-secondary mb-1">{formatDate(slot.date)} a las {slot.time}</p>
                                     <p className="text-sm text-brand-secondary mb-1">Código: {booking.bookingCode}</p>
-                                    <p className="text-sm text-brand-secondary mb-1">Tipo: {booking.productType}</p>
+                                    <p className="text-sm text-brand-secondary mb-1">Tipo: {getBookingDisplayName(booking)}</p>
                                     <p className="text-sm text-brand-secondary mb-1">Estado: <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${isPaid ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-800'}`}>{isPaid ? 'Finalizada' : 'No pagada'}</span></p>
                                 </div>
                                 <div className="flex gap-2">
@@ -605,7 +605,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                 </p>
                                 <p className="text-sm text-brand-secondary mb-1">{formatDate(slot.date)} a las {slot.time}</p>
                                 <p className="text-sm text-brand-secondary mb-1">Código: {booking.bookingCode}</p>
-                                <p className="text-sm text-brand-secondary mb-1">Tipo: {booking.productType}</p>
+                                <p className="text-sm text-brand-secondary mb-1">Tipo: {getBookingDisplayName(booking)}</p>
                                 <p className="text-sm text-brand-secondary mb-1">Estado: <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Programada</span></p>
                             </div>
                             <div className="flex gap-2">
