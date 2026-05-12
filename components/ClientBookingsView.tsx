@@ -31,6 +31,8 @@ const getProductTypeName = (productType?: string): string => {
 
 // Helper para obtener el nombre del producto/técnica de un booking
 // CRÍTICO: Para SINGLE_CLASS, SIEMPRE mostrar técnica, nunca "Clase Suelta"
+// NOTA: La diferenciación "Upsell - pieza ya hecha" se aplica solo en vistas
+// del admin. Aquí (cliente) se muestra siempre "Pintura de piezas".
 const getBookingDisplayName = (booking: Booking): string => {
     // 0. Para SINGLE_CLASS, SIEMPRE mostrar técnica
     if (booking.productType === 'SINGLE_CLASS') {

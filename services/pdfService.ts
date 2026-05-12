@@ -31,9 +31,30 @@ const getProductTypeName = (productType?: string): string => {
   return typeNames[productType || ''] || 'Clase';
 };
 
+// Detecta si un booking corresponde al upsell de pintura post-clase
+// (cliente vuelve a pintar SU propia pieza ya hecha en una clase anterior).
+// Marcado explícitamente desde schedulePaintingBooking con product.kind.
+const isPaintingUpsell = (booking: Booking): boolean => {
+  const product = booking.product as any;
+  return product?.kind === 'painting_upsell'
+    || (booking.productType === 'CUSTOM_GROUP_EXPERIENCE'
+        && booking.technique === 'painting'
+        && booking.productId === 'painting_service');
+};
+
+// Etiqueta amigable para distinguir las dos pinturas en displays:
+//   - Upsell: el cliente trae SU pieza (la que hizo en una clase previa)
+//   - Resto:  pintura de pieza nueva (catálogo / experiencia personalizada)
+const PAINTING_UPSELL_LABEL = 'Upsell - pieza ya hecha';
+
 // Helper para obtener el nombre del producto/técnica de un booking
 // CRÍTICO: Para SINGLE_CLASS, SIEMPRE mostrar técnica, nunca "Clase Suelta"
 const getBookingDisplayName = (booking: Booking): string => {
+  // 0a. Upsell de pintura post-clase: etiqueta explícita y diferenciada
+  if (isPaintingUpsell(booking)) {
+    return PAINTING_UPSELL_LABEL;
+  }
+
   // 0. CRÍTICO: Para SINGLE_CLASS, SIEMPRE priorizar técnica (nunca "Clase Suelta")
   if (booking.productType === 'SINGLE_CLASS') {
     if (booking.technique) {
@@ -86,6 +107,13 @@ const getBookingDisplayName = (booking: Booking): string => {
 // Helper para obtener el nombre del producto/técnica de un slot
 // CRÍTICO: Para SINGLE_CLASS, mostrar técnica en lugar de "Clase Suelta"
 const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): string => {
+  // 0a. Si TODOS los bookings del slot son upsells de pintura, etiquetar como tal.
+  //     Si el slot mezcla upsell con otras pinturas, fallback a "Pintura de piezas"
+  //     (lo decide el resto del flujo de prioridades).
+  if (slot.bookings.length > 0 && slot.bookings.every(isPaintingUpsell)) {
+    return PAINTING_UPSELL_LABEL;
+  }
+
   // 0. CRÍTICO: Para SINGLE_CLASS con técnica, mostrar técnica
   const singleClassWithTechnique = slot.bookings.find(
     b => b.technique && b.productType === 'SINGLE_CLASS'

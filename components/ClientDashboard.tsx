@@ -32,6 +32,9 @@ const getProductTypeName = (productType?: string): string => {
 };
 
 // Helper para obtener el nombre del producto/técnica de un booking
+// NOTA: La diferenciación "Upsell - pieza ya hecha" se aplica solo en vistas
+// del admin. Aquí (cliente) se muestra siempre "Pintura de piezas" para no
+// exponer jerga interna al usuario final.
 const getBookingDisplayName = (booking: Booking): string => {
     // 0. Para experiencia grupal personalizada, priorizar técnica sobre nombre genérico
     if (

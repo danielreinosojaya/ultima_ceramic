@@ -28,8 +28,21 @@ const getProductTypeName = (productType?: string): string => {
   return typeNames[productType || ''] || 'Clase';
 };
 
+// Detecta upsell de pintura post-clase (cliente pinta SU pieza ya hecha).
+const isPaintingUpsell = (booking: Booking): boolean => {
+    const product = booking.product as any;
+    return product?.kind === 'painting_upsell'
+        || (booking.productType === 'CUSTOM_GROUP_EXPERIENCE'
+            && booking.technique === 'painting'
+            && (booking as any).productId === 'painting_service');
+};
+
+const PAINTING_UPSELL_LABEL = 'Upsell - pieza ya hecha';
+
 // Helper para obtener el nombre del producto/técnica de un booking
 const getBookingDisplayName = (booking: Booking): string => {
+    if (isPaintingUpsell(booking)) return PAINTING_UPSELL_LABEL;
+
     // 0. Para experiencia grupal personalizada, priorizar técnica sobre nombre genérico
     if (
         booking.technique &&

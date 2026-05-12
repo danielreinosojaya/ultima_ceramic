@@ -58,8 +58,25 @@ const getUnderlyingTechnique = (booking: Booking): string => {
   return booking.productType || 'unknown';
 };
 
+// Detecta el upsell de pintura post-clase (cliente pinta SU pieza ya hecha).
+// Marcado explícitamente desde schedulePaintingBooking con product.kind.
+const isPaintingUpsell = (booking: Booking): boolean => {
+    const product = booking.product as any;
+    return product?.kind === 'painting_upsell'
+        || (booking.productType === 'CUSTOM_GROUP_EXPERIENCE'
+            && booking.technique === 'painting'
+            && (booking as any).productId === 'painting_service');
+};
+
+const PAINTING_UPSELL_LABEL = 'Upsell - pieza ya hecha';
+
 // Helper para obtener el nombre display de un booking
 const getBookingDisplayName = (booking: Booking): string => {
+    // 0a. Upsell de pintura post-clase: etiqueta diferenciada
+    if (isPaintingUpsell(booking)) {
+        return PAINTING_UPSELL_LABEL;
+    }
+
     // 0. Para experiencia grupal personalizada, priorizar técnica sobre nombre genérico
     if (
         booking.technique &&
@@ -103,6 +120,11 @@ const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): st
       return 'Clase';
     }
     return productName;
+  }
+
+  // Slot 100% de upsells de pintura: etiqueta diferenciada
+  if (slot.bookings.every(isPaintingUpsell)) {
+    return PAINTING_UPSELL_LABEL;
   }
 
   const firstBooking = slot.bookings[0];

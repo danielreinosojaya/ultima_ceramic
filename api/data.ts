@@ -6517,7 +6517,15 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
                 // Override de tipo a CUSTOM_GROUP_EXPERIENCE — no afecta la BD del
                 // producto, solo el snapshot embebido en este booking.
-                const product = { ...rawProduct, type: 'CUSTOM_GROUP_EXPERIENCE' };
+                // El campo `kind` marca explícitamente este booking como upsell
+                // post-clase (cliente pinta su propia pieza), para distinguirlo
+                // de otras pinturas (catálogo, experiencia personalizada con
+                // técnica pintura, etc.) en los displays (PDF, agendamientos).
+                const product = {
+                    ...rawProduct,
+                    type: 'CUSTOM_GROUP_EXPERIENCE',
+                    kind: 'painting_upsell'
+                };
 
                 const bookingPayload: any = {
                     productId: product.id || 'painting_service',
