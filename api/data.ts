@@ -42,6 +42,7 @@ function deepMerge(target: any, source: any): any {
     return result;
 }
 
+import { randomUUID } from 'crypto';
 import { sql } from '@vercel/postgres';
 import { seedDatabase, ensureTablesExist, createCustomer } from './db.js';
 import * as emailService from './emailService.js';
@@ -52,6 +53,10 @@ import { uploadPhotoToBunny, uploadProofToBunny } from './bunnyUpload.js';
 import type {
     Booking,
     ClientNotification,
+    CorporateEvent,
+    CorporateEventActivityEntry,
+    CorporateEventLocationType,
+    CorporateEventStage,
     GroupInquiry,
     InvoiceRequest,
     Notification,
@@ -211,6 +216,9 @@ const parseBookingFromDB = (dbRow: any): Booking => {
             ? parseInt(dbRow.participants, 10) 
             : 1;
         camelCased.technique = derivedTechnique || undefined;
+        camelCased.corporateEventId = dbRow.corporate_event_id
+            ? String(dbRow.corporate_event_id)
+            : undefined;
         
         if (camelCased.price && typeof camelCased.price === 'string') {
             camelCased.price = parseFloat(camelCased.price);
@@ -373,6 +381,54 @@ const parseGroupInquiryFromDB = (dbRow: any): GroupInquiry => {
     camelCased.createdAt = camelCased.createdAt || null;
     return camelCased as GroupInquiry;
 }
+
+const parseCorporateEventFromDB = (dbRow: any): CorporateEvent => {
+    if (!dbRow) throw new Error('parseCorporateEventFromDB: empty row');
+    let activityLog: CorporateEventActivityEntry[] = dbRow.activity_log;
+    if (typeof activityLog === 'string') {
+        try {
+            activityLog = JSON.parse(activityLog);
+        } catch {
+            activityLog = [];
+        }
+    }
+    if (!Array.isArray(activityLog)) activityLog = [];
+
+    const depositDue = dbRow.deposit_due_date;
+    let depositDueDate: string | null = null;
+    if (depositDue) {
+        if (typeof depositDue === 'string') depositDueDate = depositDue.slice(0, 10);
+        else if (depositDue instanceof Date) depositDueDate = depositDue.toISOString().slice(0, 10);
+    }
+
+    return {
+        id: String(dbRow.id),
+        companyName: dbRow.company_name ?? '',
+        contactName: dbRow.contact_name ?? '',
+        email: dbRow.email ?? '',
+        phone: dbRow.phone ?? '',
+        countryCode: dbRow.country_code ?? '',
+        stage: (dbRow.stage || 'lead') as CorporateEventStage,
+        locationType: (dbRow.location_type || 'studio') as CorporateEventLocationType,
+        locationNotes: dbRow.location_notes ?? '',
+        allowFood: Boolean(dbRow.allow_food),
+        allowDecoration: Boolean(dbRow.allow_decoration),
+        allowEscort: Boolean(dbRow.allow_escort),
+        groupDynamicsNotes: dbRow.group_dynamics_notes ?? '',
+        specialRequirements: dbRow.special_requirements ?? '',
+        participantsEstimate: Number(dbRow.participants_estimate) || 0,
+        depositAmount:
+            dbRow.deposit_amount != null && dbRow.deposit_amount !== ''
+                ? parseFloat(String(dbRow.deposit_amount))
+                : null,
+        depositDueDate,
+        depositReceived: Boolean(dbRow.deposit_received),
+        activityLog,
+        sourceInquiryId: dbRow.source_inquiry_id ? String(dbRow.source_inquiry_id) : null,
+        createdAt: dbRow.created_at ? new Date(dbRow.created_at).toISOString() : '',
+        updatedAt: dbRow.updated_at ? new Date(dbRow.updated_at).toISOString() : '',
+    };
+};
 
 const parseInvoiceRequestFromDB = (dbRow: any): InvoiceRequest => {
     if (!dbRow) return dbRow;
@@ -1158,6 +1214,13 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                 data = inquiries.map(parseGroupInquiryFromDB);
                 break;
             }
+            case 'corporateEvents': {
+                const { rows } = await sql`
+                    SELECT * FROM corporate_events ORDER BY updated_at DESC NULLS LAST, created_at DESC
+                `;
+                data = rows.map(parseCorporateEventFromDB);
+                break;
+            }
             case 'notifications': {
                 // ⚡ FIX #6: LIMIT 1000 para evitar cargar toda la tabla de notificaciones históricas
                 // Reduce de cargar 10000+ registros a 1000 (típicamente ~30-40% reduction en payload)
@@ -1489,8 +1552,21 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     break;
                 }
                 case 'getDeliveryEmailLogs': {
-                    const { deliveryId, customerEmail } = req.body;
-                    
+                    const body = req.body && typeof req.body === 'object' ? req.body : {};
+                    const q = req.query || {};
+                    const deliveryId =
+                        typeof body.deliveryId === 'string'
+                            ? body.deliveryId
+                            : typeof q.deliveryId === 'string'
+                              ? q.deliveryId
+                              : undefined;
+                    const customerEmail =
+                        typeof body.customerEmail === 'string'
+                            ? body.customerEmail
+                            : typeof q.customerEmail === 'string'
+                              ? q.customerEmail
+                              : undefined;
+
                     try {
                         let logs: any[] = [];
                         
@@ -5414,6 +5490,201 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 // No lanzar error, solo loguear - el attendance se guardó correctamente
             }
             break;
+        case 'addCorporateEvent': {
+            const b = req.body || {};
+            const activityLog = Array.isArray(b.activityLog) ? b.activityLog : [];
+            const participantsEst =
+                typeof b.participantsEstimate === 'number'
+                    ? b.participantsEstimate
+                    : parseInt(String(b.participantsEstimate ?? 0), 10) || 0;
+            const depositAmt =
+                b.depositAmount != null && b.depositAmount !== ''
+                    ? Number(b.depositAmount)
+                    : null;
+            const { rows: [corpRow] } = await sql`
+                INSERT INTO corporate_events (
+                    company_name, contact_name, email, phone, country_code,
+                    stage, location_type, location_notes,
+                    allow_food, allow_decoration, allow_escort,
+                    group_dynamics_notes, special_requirements,
+                    participants_estimate,
+                    deposit_amount, deposit_due_date, deposit_received,
+                    activity_log, source_inquiry_id
+                ) VALUES (
+                    ${b.companyName ?? ''},
+                    ${b.contactName ?? ''},
+                    ${b.email ?? ''},
+                    ${b.phone ?? ''},
+                    ${b.countryCode ?? ''},
+                    ${b.stage ?? 'lead'},
+                    ${b.locationType ?? 'studio'},
+                    ${b.locationNotes ?? ''},
+                    ${Boolean(b.allowFood)},
+                    ${Boolean(b.allowDecoration)},
+                    ${Boolean(b.allowEscort)},
+                    ${b.groupDynamicsNotes ?? ''},
+                    ${b.specialRequirements ?? ''},
+                    ${participantsEst},
+                    ${depositAmt},
+                    ${b.depositDueDate || null},
+                    ${Boolean(b.depositReceived)},
+                    ${JSON.stringify(activityLog)},
+                    ${b.sourceInquiryId || null}
+                )
+                RETURNING *;
+            `;
+            result = parseCorporateEventFromDB(corpRow);
+            break;
+        }
+        case 'updateCorporateEvent': {
+            const b = req.body || {};
+            if (!b.id) {
+                return res.status(400).json({ error: 'id is required' });
+            }
+            const { rows: [existingRow] } = await sql`SELECT * FROM corporate_events WHERE id = ${b.id}`;
+            if (!existingRow) {
+                return res.status(404).json({ error: 'Corporate event not found' });
+            }
+            const cur = parseCorporateEventFromDB(existingRow);
+            const next: CorporateEvent = {
+                ...cur,
+                companyName: b.companyName !== undefined ? String(b.companyName) : cur.companyName,
+                contactName: b.contactName !== undefined ? String(b.contactName) : cur.contactName,
+                email: b.email !== undefined ? String(b.email) : cur.email,
+                phone: b.phone !== undefined ? String(b.phone) : cur.phone,
+                countryCode: b.countryCode !== undefined ? String(b.countryCode) : cur.countryCode,
+                stage: b.stage !== undefined ? (b.stage as CorporateEventStage) : cur.stage,
+                locationType: b.locationType !== undefined ? (b.locationType as CorporateEventLocationType) : cur.locationType,
+                locationNotes: b.locationNotes !== undefined ? String(b.locationNotes) : cur.locationNotes,
+                allowFood: b.allowFood !== undefined ? Boolean(b.allowFood) : cur.allowFood,
+                allowDecoration: b.allowDecoration !== undefined ? Boolean(b.allowDecoration) : cur.allowDecoration,
+                allowEscort: b.allowEscort !== undefined ? Boolean(b.allowEscort) : cur.allowEscort,
+                groupDynamicsNotes:
+                    b.groupDynamicsNotes !== undefined ? String(b.groupDynamicsNotes) : cur.groupDynamicsNotes,
+                specialRequirements:
+                    b.specialRequirements !== undefined ? String(b.specialRequirements) : cur.specialRequirements,
+                participantsEstimate:
+                    b.participantsEstimate !== undefined
+                        ? typeof b.participantsEstimate === 'number'
+                            ? b.participantsEstimate
+                            : parseInt(String(b.participantsEstimate), 10) || 0
+                        : cur.participantsEstimate,
+                depositAmount:
+                    b.depositAmount !== undefined
+                        ? b.depositAmount === null || b.depositAmount === ''
+                            ? null
+                            : Number(b.depositAmount)
+                        : cur.depositAmount,
+                depositDueDate:
+                    b.depositDueDate !== undefined
+                        ? b.depositDueDate
+                            ? String(b.depositDueDate).slice(0, 10)
+                            : null
+                        : cur.depositDueDate,
+                depositReceived: b.depositReceived !== undefined ? Boolean(b.depositReceived) : cur.depositReceived,
+                activityLog: Array.isArray(b.activityLog) ? b.activityLog : cur.activityLog,
+                sourceInquiryId:
+                    b.sourceInquiryId !== undefined
+                        ? b.sourceInquiryId
+                            ? String(b.sourceInquiryId)
+                            : null
+                        : cur.sourceInquiryId,
+                id: cur.id,
+                createdAt: cur.createdAt,
+                updatedAt: cur.updatedAt,
+            };
+            await sql`
+                UPDATE corporate_events SET
+                    company_name = ${next.companyName},
+                    contact_name = ${next.contactName},
+                    email = ${next.email},
+                    phone = ${next.phone},
+                    country_code = ${next.countryCode},
+                    stage = ${next.stage},
+                    location_type = ${next.locationType},
+                    location_notes = ${next.locationNotes},
+                    allow_food = ${next.allowFood},
+                    allow_decoration = ${next.allowDecoration},
+                    allow_escort = ${next.allowEscort},
+                    group_dynamics_notes = ${next.groupDynamicsNotes},
+                    special_requirements = ${next.specialRequirements},
+                    participants_estimate = ${next.participantsEstimate},
+                    deposit_amount = ${next.depositAmount},
+                    deposit_due_date = ${next.depositDueDate},
+                    deposit_received = ${next.depositReceived},
+                    activity_log = ${JSON.stringify(next.activityLog)},
+                    source_inquiry_id = ${next.sourceInquiryId},
+                    updated_at = NOW()
+                WHERE id = ${b.id}
+            `;
+            const { rows: [updatedCorp] } = await sql`SELECT * FROM corporate_events WHERE id = ${b.id}`;
+            result = parseCorporateEventFromDB(updatedCorp);
+            break;
+        }
+        case 'deleteCorporateEvent': {
+            const { id: corpDelId } = req.body || {};
+            if (!corpDelId) {
+                return res.status(400).json({ error: 'id is required' });
+            }
+            await sql`DELETE FROM corporate_events WHERE id = ${corpDelId}`;
+            result = { success: true };
+            break;
+        }
+        case 'linkBookingCorporateEvent': {
+            const { bookingId, corporateEventId } = req.body || {};
+            if (!bookingId) {
+                return res.status(400).json({ error: 'bookingId is required' });
+            }
+            if (corporateEventId) {
+                const { rows: ceCheck } = await sql`SELECT 1 FROM corporate_events WHERE id = ${corporateEventId} LIMIT 1`;
+                if (ceCheck.length === 0) {
+                    return res.status(404).json({ error: 'Corporate event not found' });
+                }
+            }
+            const { rowCount: linkRowCount } = await sql`
+                UPDATE bookings SET corporate_event_id = ${corporateEventId || null}
+                WHERE id = ${bookingId}
+            `;
+            if (!linkRowCount) {
+                return res.status(404).json({ error: 'Booking not found', success: false });
+            }
+            const { rows: [bookingRow] } = await sql`SELECT * FROM bookings WHERE id = ${bookingId}`;
+            result = { success: true, booking: parseBookingFromDB(bookingRow) };
+            break;
+        }
+        case 'addCorporateEventActivity': {
+            const { corporateEventId: ceId, body: noteBody, author: noteAuthor } = req.body || {};
+            if (!ceId || noteBody === undefined || noteBody === null || String(noteBody).trim() === '') {
+                return res.status(400).json({ error: 'corporateEventId and body are required' });
+            }
+            const { rows: [ceRow] } = await sql`SELECT activity_log FROM corporate_events WHERE id = ${ceId}`;
+            if (!ceRow) {
+                return res.status(404).json({ error: 'Corporate event not found' });
+            }
+            let logArr: CorporateEventActivityEntry[] = ceRow.activity_log;
+            if (typeof logArr === 'string') {
+                try {
+                    logArr = JSON.parse(logArr);
+                } catch {
+                    logArr = [];
+                }
+            }
+            if (!Array.isArray(logArr)) logArr = [];
+            const entry: CorporateEventActivityEntry = {
+                id: randomUUID(),
+                at: new Date().toISOString(),
+                body: String(noteBody).trim(),
+                author: noteAuthor ? String(noteAuthor) : undefined,
+            };
+            logArr.push(entry);
+            await sql`
+                UPDATE corporate_events SET activity_log = ${JSON.stringify(logArr)}, updated_at = NOW()
+                WHERE id = ${ceId}
+            `;
+            const { rows: [fullRow] } = await sql`SELECT * FROM corporate_events WHERE id = ${ceId}`;
+            result = parseCorporateEventFromDB(fullRow);
+            break;
+        }
         case 'addGroupInquiry':
             const addInquiryBody = req.body;
             const newInquiry = { ...addInquiryBody, status: 'New', createdAt: new Date().toISOString() };
@@ -6716,6 +6987,82 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 delivery: toCamelCase(readyDelivery),
                 emailSent: emailSentSuccessfully
             });
+        }
+        case 'getDeliveryEmailLogs': {
+            // POST: mismo comportamiento que GET; el admin usa postAction desde el cliente.
+            const body = req.body && typeof req.body === 'object' ? req.body : {};
+            const q = req.query || {};
+            const deliveryId =
+                typeof body.deliveryId === 'string'
+                    ? body.deliveryId
+                    : typeof q.deliveryId === 'string'
+                      ? q.deliveryId
+                      : undefined;
+            const customerEmail =
+                typeof body.customerEmail === 'string'
+                    ? body.customerEmail
+                    : typeof q.customerEmail === 'string'
+                      ? q.customerEmail
+                      : undefined;
+
+            try {
+                let logs: any[] = [];
+
+                if (deliveryId) {
+                    const { rows: [delivery] } = await sql`
+                        SELECT customer_email FROM deliveries WHERE id = ${deliveryId} LIMIT 1
+                    `;
+
+                    if (!delivery) {
+                        return res.status(404).json({ success: false, error: 'Delivery not found' });
+                    }
+
+                    const { rows } = await sql`
+                        SELECT * FROM client_notifications
+                        WHERE LOWER(client_email) = LOWER(${delivery.customer_email})
+                        AND type IN (
+                            'delivery_ready',
+                            'delivery_ready_painting',
+                            'delivery_completed',
+                            'painted_piece_ready_pickup',
+                            'painting_booking_scheduled'
+                        )
+                        ORDER BY created_at DESC
+                        LIMIT 50
+                    `;
+                    logs = rows;
+                } else if (customerEmail) {
+                    const { rows } = await sql`
+                        SELECT * FROM client_notifications
+                        WHERE LOWER(client_email) = LOWER(${customerEmail})
+                        AND type IN (
+                            'delivery_ready',
+                            'delivery_ready_painting',
+                            'delivery_completed',
+                            'painted_piece_ready_pickup',
+                            'painting_booking_scheduled'
+                        )
+                        ORDER BY created_at DESC
+                        LIMIT 50
+                    `;
+                    logs = rows;
+                } else {
+                    return res
+                        .status(400)
+                        .json({ success: false, error: 'deliveryId or customerEmail is required' });
+                }
+
+                return res.status(200).json({
+                    success: true,
+                    logs: toCamelCase(logs),
+                });
+            } catch (error: any) {
+                console.error('[getDeliveryEmailLogs] Error:', error);
+                return res.status(500).json({
+                    success: false,
+                    error: error.message || 'Error fetching email logs',
+                });
+            }
         }
         case 'forcePaintingCompleted': {
             // EMERGENCIA: Forzar marcar pintura como completada cuando hubo discrepancia de emails

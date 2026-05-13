@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { GroupInquiry, InquiryStatus } from '../../types';
+import type { GroupInquiry, InquiryStatus, NavigationState } from '../../types';
 import * as dataService from '../../services/dataService';
 import { ChatBubbleLeftRightIcon } from '../icons/ChatBubbleLeftRightIcon';
 
@@ -16,9 +16,10 @@ interface InquiryManagerProps {
     navigateToId?: string;
     inquiries: GroupInquiry[];
     onDataChange: () => void;
+    setNavigateTo?: React.Dispatch<React.SetStateAction<NavigationState | null>>;
 }
 
-export const InquiryManager: React.FC<InquiryManagerProps> = ({ navigateToId, inquiries = [], onDataChange }) => {
+export const InquiryManager: React.FC<InquiryManagerProps> = ({ navigateToId, inquiries = [], onDataChange, setNavigateTo }) => {
     const language = 'es-ES';
     const [expandedInquiryId, setExpandedInquiryId] = useState<string | null>(null);
     const [highlightedInquiryId, setHighlightedInquiryId] = useState<string | null>(null);
@@ -41,6 +42,40 @@ export const InquiryManager: React.FC<InquiryManagerProps> = ({ navigateToId, in
             onDataChange();
         }
     };
+    const handleConvertToCorporateEvent = async (inquiry: GroupInquiry) => {
+        const tentative =
+            [inquiry.tentativeDate, inquiry.tentativeTime].filter(Boolean).join(' ') || 'sin fecha tentativa';
+        const spec = [inquiry.message?.trim() || '', '', `Fecha tentativa: ${tentative}`].filter(Boolean).join('\n');
+        try {
+            const created = await dataService.addCorporateEvent({
+                companyName: (inquiry.eventType || '').trim() || inquiry.name || 'Consulta grupal',
+                contactName: inquiry.name,
+                email: inquiry.email,
+                phone: inquiry.phone,
+                countryCode: inquiry.countryCode || '',
+                stage: 'lead',
+                locationType: 'studio',
+                locationNotes: '',
+                allowFood: false,
+                allowDecoration: false,
+                allowEscort: false,
+                groupDynamicsNotes: '',
+                specialRequirements: spec,
+                participantsEstimate: inquiry.participants,
+                depositAmount: null,
+                depositDueDate: null,
+                depositReceived: false,
+                activityLog: [],
+                sourceInquiryId: inquiry.id,
+            });
+            onDataChange();
+            setNavigateTo?.({ tab: 'corporate-events', targetId: created.id });
+        } catch (e) {
+            console.error(e);
+            alert('No se pudo crear el evento corporativo.');
+        }
+    };
+
     const handleDelete = async (id: string) => {
         const confirmed = window.confirm('¿Seguro que quieres eliminar esta consulta?');
         if (confirmed) {
@@ -162,7 +197,7 @@ export const InquiryManager: React.FC<InquiryManagerProps> = ({ navigateToId, in
                             </tr>
                             {expandedInquiryId === inquiry.id && (
                                 <tr className="bg-brand-background animate-fade-in-fast">
-                                    <td colSpan={5} className="px-6 py-4">
+                                    <td colSpan={6} className="px-6 py-4">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                                             <div>
                                                 <h5 className="font-bold text-brand-secondary mb-1">Mensaje</h5>
@@ -178,13 +213,25 @@ export const InquiryManager: React.FC<InquiryManagerProps> = ({ navigateToId, in
                                                 </p>
                                             </div>
                                         </div>
+                                        <div className="mt-4">
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleConvertToCorporateEvent(inquiry);
+                                                }}
+                                                className="text-sm font-bold bg-violet-600 text-white px-4 py-2 rounded-lg hover:bg-violet-700"
+                                            >
+                                                Convertir en evento corporativo
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             )}
                           </React.Fragment>
                         )) : (
                             <tr>
-                                <td colSpan={5} className="text-center py-10 text-brand-secondary">
+                                <td colSpan={6} className="text-center py-10 text-brand-secondary">
                                     No hay consultas.
                                 </td>
                             </tr>

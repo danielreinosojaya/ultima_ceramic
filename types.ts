@@ -417,6 +417,9 @@ export interface Booking {
     rescheduleHistory?: RescheduleHistoryEntry[]; // Historial detallado de reagendamientos
     lastRescheduleAt?: string; // ISO timestamp del último reagendamiento
 
+    /** Reserva vinculada a un proyecto de evento corporativo especial (admin) */
+    corporateEventId?: string;
+
     // Propiedades derivadas
     date?: string; // Derivada de bookingDate
     time?: string; // Derivada de slots
@@ -527,6 +530,50 @@ export interface GroupInquiry {
     status: InquiryStatus;
     createdAt: string | null; // ISO date string
     inquiryType: 'group' | 'couple' | 'team_building';
+}
+
+/** Pipeline interno para eventos corporativos especiales (B2B) */
+export type CorporateEventStage =
+    | 'lead'
+    | 'quoted'
+    | 'deposit_received'
+    | 'scheduled'
+    | 'in_progress'
+    | 'closed'
+    | 'cancelled';
+
+export type CorporateEventLocationType = 'studio' | 'external';
+
+export interface CorporateEventActivityEntry {
+    id: string;
+    at: string; // ISO
+    body: string;
+    author?: string;
+}
+
+export interface CorporateEvent {
+    id: string;
+    companyName: string;
+    contactName: string;
+    email: string;
+    phone: string;
+    countryCode: string;
+    stage: CorporateEventStage;
+    locationType: CorporateEventLocationType;
+    locationNotes: string;
+    allowFood: boolean;
+    allowDecoration: boolean;
+    allowEscort: boolean;
+    groupDynamicsNotes: string;
+    specialRequirements: string;
+    participantsEstimate: number;
+    depositAmount: number | null;
+    depositDueDate: string | null;
+    depositReceived: boolean;
+    activityLog: CorporateEventActivityEntry[];
+    sourceInquiryId: string | null;
+    createdAt: string;
+    updatedAt: string;
 }
 
 export type InvoiceRequestStatus = 'Pending' | 'Processed';
@@ -640,7 +687,7 @@ export interface AppData {
 }
 
 // Admin & Notifications
-export type AdminTab = 'calendar' | 'schedule' | 'products' | 'customers' | 'inquiries' | 'instructors' | 'settings' | 'schedule-settings' | 'communications' | 'financials' | 'invoicing';
+export type AdminTab = 'calendar' | 'schedule' | 'products' | 'customers' | 'inquiries' | 'instructors' | 'settings' | 'schedule-settings' | 'communications' | 'financials' | 'invoicing' | 'corporate-events';
 
 export interface NavigationState {
     tab: AdminTab;

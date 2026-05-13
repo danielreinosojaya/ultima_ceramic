@@ -340,6 +340,36 @@ export async function ensureTablesExist() {
         await sql`CREATE INDEX IF NOT EXISTS idx_experience_confirmations_status ON experience_confirmations(status);`;
         await sql`CREATE INDEX IF NOT EXISTS idx_experience_confirmations_expires_at ON experience_confirmations(expires_at);`;
         await sql`CREATE INDEX IF NOT EXISTS idx_bookings_booking_type ON bookings(booking_type);`;
+
+        await sql`
+            CREATE TABLE IF NOT EXISTS corporate_events (
+                id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                company_name VARCHAR(255) NOT NULL DEFAULT '',
+                contact_name VARCHAR(255) NOT NULL DEFAULT '',
+                email VARCHAR(255) NOT NULL DEFAULT '',
+                phone VARCHAR(50) NOT NULL DEFAULT '',
+                country_code VARCHAR(10) NOT NULL DEFAULT '',
+                stage VARCHAR(40) NOT NULL DEFAULT 'lead',
+                location_type VARCHAR(20) NOT NULL DEFAULT 'studio',
+                location_notes TEXT,
+                allow_food BOOLEAN NOT NULL DEFAULT false,
+                allow_decoration BOOLEAN NOT NULL DEFAULT false,
+                allow_escort BOOLEAN NOT NULL DEFAULT false,
+                group_dynamics_notes TEXT,
+                special_requirements TEXT,
+                participants_estimate INT NOT NULL DEFAULT 0,
+                deposit_amount NUMERIC(10, 2),
+                deposit_due_date DATE,
+                deposit_received BOOLEAN NOT NULL DEFAULT false,
+                activity_log JSONB NOT NULL DEFAULT '[]'::jsonb,
+                source_inquiry_id UUID,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+        `;
+        await sql`CREATE INDEX IF NOT EXISTS idx_corporate_events_stage ON corporate_events(stage);`;
+        await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS corporate_event_id UUID REFERENCES corporate_events(id) ON DELETE SET NULL;`;
+        await sql`CREATE INDEX IF NOT EXISTS idx_bookings_corporate_event_id ON bookings(corporate_event_id);`;
         
         console.log("Essential columns and indexes ensured.");
     } catch (error) {

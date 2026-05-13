@@ -35,6 +35,7 @@ import ErrorBoundary from './ErrorBoundary';
 import { ExpiredBookingsManager } from './ExpiredBookingsManager';
 import { AdminCourseManagement } from './AdminCourseManagement';
 import { ValentineAdminPanel } from './ValentineAdminPanel';
+import { CorporateEventsPanel } from './CorporateEventsPanel';
 
 interface AdminData {
   products: Product[];
@@ -74,7 +75,9 @@ export const AdminConsole: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const { dataVersion, forceRefresh } = useNotifications();
   const adminData = useAdminData();
-  
+  /** Solo para vista semanal: alinear semana con la reserva sin re-ejecutar cambio de tab en cada refresh de bookings */
+  const scheduleHighlightTargetIdRef = useRef<string | null>(null);
+
   const handleNavigationComplete = useCallback(() => {
     setNavigateTo(null);
   }, []);
@@ -97,18 +100,35 @@ export const AdminConsole: React.FC = () => {
   }, [adminData.loading]);
 
   useEffect(() => {
-  if (navigateTo) {
-    // Si la navegación viene de 'schedule', activa el tab 'calendar' y modo 'week'
+    if (!navigateTo) {
+      scheduleHighlightTargetIdRef.current = null;
+      return;
+    }
     if (navigateTo.tab === 'schedule') {
+      scheduleHighlightTargetIdRef.current = navigateTo.targetId;
       setActiveTab('calendar');
       setCalendarView('week');
-      // Opcional: buscar el booking y setear la semana si tienes la fecha
-      // Esto se puede mejorar si tienes acceso a la fecha del slot
+      (window as unknown as { navigateToState?: NavigationState }).navigateToState = {
+        tab: 'schedule',
+        targetId: navigateTo.targetId,
+      };
     } else {
+      scheduleHighlightTargetIdRef.current = null;
       setActiveTab(navigateTo.tab);
     }
-  }
   }, [navigateTo]);
+
+  useEffect(() => {
+    const id = scheduleHighlightTargetIdRef.current;
+    if (!id) return;
+    const booking = adminData.bookings.find((b) => b.id === id);
+    if (!booking?.slots?.length) return;
+    const sorted = [...booking.slots].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+    const d = sorted[0]?.date;
+    if (d && d !== 'TBD') {
+      setWeekStartDate(new Date(d + 'T00:00:00'));
+    }
+  }, [adminData.bookings]);
 
   const handleNotificationClick = async (notification: Notification) => {
     handleSync(); 
@@ -140,8 +160,7 @@ export const AdminConsole: React.FC = () => {
   const renderContent = () => {
     // Mantener contenido montado durante refresh para evitar pérdida de estado en módulos
 
-  // targetId para ScheduleManager si la navegación viene de 'schedule' o 'calendar'
-  const targetId = (navigateTo && (navigateTo.tab === 'schedule' || navigateTo.tab === 'calendar')) ? navigateTo.targetId : undefined;
+    const navigationTargetId = navigateTo?.targetId;
 
     const appDataForScheduleManager: AppData = { 
         products: adminData.products,
@@ -201,16 +220,39 @@ export const AdminConsole: React.FC = () => {
         return <CrmDashboard 
                   bookings={adminData.bookings}
                   customers={adminData.customers}
-                  navigateToEmail={targetId} 
+                  navigateToEmail={navigateTo?.tab === 'customers' ? navigationTargetId : undefined}
                   onDataChange={handleSync} 
                   onNavigationComplete={handleNavigationComplete}
                   invoiceRequests={adminData.invoiceRequests}
                   setNavigateTo={setNavigateTo}
                 />;
       case 'inquiries':
-        return <InquiryManager inquiries={adminData.inquiries} onDataChange={handleSync} navigateToId={targetId} />;
+        return (
+          <InquiryManager
+            inquiries={adminData.inquiries}
+            onDataChange={handleSync}
+            navigateToId={navigateTo?.tab === 'inquiries' ? navigationTargetId : undefined}
+            setNavigateTo={setNavigateTo}
+          />
+        );
+      case 'corporate-events':
+        return (
+          <CorporateEventsPanel
+            onDataChange={handleSync}
+            navigateToId={navigateTo?.tab === 'corporate-events' ? navigationTargetId : undefined}
+            setNavigateTo={setNavigateTo}
+            onNavigationComplete={handleNavigationComplete}
+          />
+        );
       case 'invoicing':
-        return <InvoiceManager invoiceRequests={adminData.invoiceRequests} onDataChange={handleSync} navigateToId={targetId} setNavigateTo={setNavigateTo} />;
+        return (
+          <InvoiceManager
+            invoiceRequests={adminData.invoiceRequests}
+            onDataChange={handleSync}
+            navigateToId={navigateTo?.tab === 'invoicing' ? navigationTargetId : undefined}
+            setNavigateTo={setNavigateTo}
+          />
+        );
       case 'communications':
         return <ClientNotificationLog />;
       case 'courses':
@@ -277,6 +319,16 @@ export const AdminConsole: React.FC = () => {
               <TabButton tab="calendar" icon={<CalendarIcon className="w-4 h-4" />}>Calendario</TabButton>
               <TabButton tab="schedule-settings" icon={<CalendarEditIcon className="w-4 h-4" />}>Configuración de Horarios</TabButton>
               <TabButton tab="inquiries" icon={<ChatBubbleLeftRightIcon className="w-4 h-4" />}>Consultas</TabButton>
+              <TabButton
+                tab="corporate-events"
+                icon={
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
+                    <path strokeWidth="2" strokeLinecap="round" d="M4 10h4v10H4zM10 6h4v14h-4zM16 12h4v8h-4z" />
+                  </svg>
+                }
+              >
+                Eventos corp.
+              </TabButton>
               <TabButton tab="communications" icon={<PaperAirplaneIcon className="w-4 h-4" />}>Comunicaciones</TabButton>
               <TabButton tab="financials" icon={<ChartBarIcon className="w-4 h-4" />}>Finanzas</TabButton>
               <TabButton tab="customers" icon={<UserGroupIcon className="w-4 h-4" />}>Clientes</TabButton>

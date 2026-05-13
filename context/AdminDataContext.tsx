@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect, ReactNode, useRef } from 'react';
 import * as dataService from '../services/dataService';
-import type { Product, Booking, Customer, GroupInquiry, Instructor, ScheduleOverrides, FreeDateTimeOverrides, DayKey, AvailableSlot, ClassCapacity, CapacityMessageSettings, Announcement, InvoiceRequest, Delivery, PaymentDetails, ExperienceTypeOverrides } from '../types';
+import type { Product, Booking, Customer, GroupInquiry, Instructor, ScheduleOverrides, FreeDateTimeOverrides, DayKey, AvailableSlot, ClassCapacity, CapacityMessageSettings, Announcement, InvoiceRequest, Delivery, PaymentDetails, ExperienceTypeOverrides, CorporateEvent } from '../types';
 
 interface AdminData {
   products: Product[];
@@ -16,6 +16,7 @@ interface AdminData {
   capacityMessages: CapacityMessageSettings;
   announcements: Announcement[];
   invoiceRequests: InvoiceRequest[];
+  corporateEvents: CorporateEvent[];
   giftcardRequests: import('../services/dataService').GiftcardRequest[];
   giftcards: any[];
   notifications: import('../types').Notification[];
@@ -67,6 +68,7 @@ const initialState = {
   capacityMessages: { thresholds: [] },
   announcements: [],
   invoiceRequests: [],
+  corporateEvents: [],
   giftcardRequests: [],
   giftcards: [],
   notifications: [],
@@ -632,6 +634,7 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
         dataService.getGiftcards().catch(() => []),
         dataService.getFreeDateTimeOverrides().catch(() => ({})),
         dataService.getExperienceTypeOverrides().catch(() => ({})),
+        dataService.getCorporateEvents().catch(() => []),
       ]);
 
       dispatch({
@@ -643,6 +646,7 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
           giftcards: results[3].status === 'fulfilled' ? results[3].value : [],
           freeDateTimeOverrides: results[4].status === 'fulfilled' ? results[4].value : {},
           experienceTypeOverrides: results[5].status === 'fulfilled' ? results[5].value : {},
+          corporateEvents: results[6].status === 'fulfilled' ? results[6].value : [],
         }
       });
       console.debug('[AdminDataContext] Loaded secondary data (admin): giftcards count', results[3].status === 'fulfilled' ? (results[3].value || []).length : 0);

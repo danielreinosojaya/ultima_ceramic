@@ -11,7 +11,7 @@ import { DocumentDownloadIcon } from '../icons/DocumentDownloadIcon';
 import { CalendarClearIcon } from '../icons/CalendarClearIcon';
 import { AcceptPaymentModal } from './AcceptPaymentModal';
 
-type AttendeeInfo = { userInfo: UserInfo; bookingId: string; isPaid: boolean; bookingCode?: string; paymentDetails?: PaymentDetails; };
+type AttendeeInfo = { userInfo: UserInfo; bookingId: string; isPaid: boolean; bookingCode?: string; paymentDetails?: PaymentDetails[] };
 type SlotInfo = { attendees: AttendeeInfo[]; instructorId: number; };
 type BookingsByDate = Record<string, Record<string, SlotInfo>>;
 
@@ -31,10 +31,12 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
   const [isManualBookingModalOpen, setIsManualBookingModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isClearScheduleModalOpen, setIsClearScheduleModalOpen] = useState(false);
+  const [corporateMonthFilter, setCorporateMonthFilter] = useState(false);
 
   const { bookingsByDate, unpaidDates } = useMemo(() => {
     console.log('CalendarOverview processing bookings:', bookings?.length || 0);
-    if (!bookings || bookings.length === 0) {
+    const list = corporateMonthFilter ? (bookings || []).filter((b) => b.corporateEventId) : bookings || [];
+    if (!list || list.length === 0) {
       console.log('No bookings to process');
       return { bookingsByDate: {}, unpaidDates: new Set<string>() };
     }
@@ -42,7 +44,7 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
     const acc: BookingsByDate = {};
     const unpaid = new Set<string>();
     
-    bookings.forEach((booking, index) => {
+    list.forEach((booking, index) => {
       console.log(`Processing booking ${index}:`, {
         id: booking.id,
         isPaid: booking.isPaid,
@@ -85,7 +87,7 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
     
     console.log('Final bookingsByDate:', Object.keys(acc).length, 'dates with bookings');
     return { bookingsByDate: acc, unpaidDates: unpaid };
-  }, [bookings]);
+  }, [bookings, corporateMonthFilter]);
   
   const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
   const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
@@ -145,6 +147,15 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
             <p className="text-brand-secondary">Visualiza y gestiona las reservas del mes. Haz clic en un día para ver el detalle semanal.</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+            <label className="flex items-center gap-2 text-sm font-semibold text-brand-secondary cursor-pointer">
+              <input
+                type="checkbox"
+                checked={corporateMonthFilter}
+                onChange={(e) => setCorporateMonthFilter(e.target.checked)}
+                className="rounded border-brand-secondary"
+              />
+              Solo corporativos
+            </label>
             <button 
               onClick={() => setIsClearScheduleModalOpen(true)}
               className="flex items-center justify-center gap-2 bg-red-100 border border-red-500 text-red-600 font-bold py-2 px-4 rounded-lg hover:bg-red-600 hover:text-white transition-colors"
@@ -193,8 +204,12 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
             const dateStr = formatDateToYYYYMMDD(date);
             const hasBookings = !!bookingsByDate[dateStr];
             const hasUnpaidBookings = unpaidDates.has(dateStr);
+            const dayBookingsSource = corporateMonthFilter ? (bookings || []).filter((b) => b.corporateEventId) : bookings || [];
             // Check if any booking for this day is a group class (manual booking or not)
-            const isGroupClassDay = hasBookings && Object.values(bookingsByDate[dateStr]).some(slotInfo => (slotInfo as SlotInfo).attendees.some(att => att.bookingId && bookings.find(b => b.id === att.bookingId && b.productType === 'GROUP_CLASS')));
+            const isGroupClassDay = hasBookings && Object.values(bookingsByDate[dateStr]).some(slotInfo => (slotInfo as SlotInfo).attendees.some(att => att.bookingId && dayBookingsSource.find(b => b.id === att.bookingId && b.productType === 'GROUP_CLASS')));
+            const isCorporateDay = hasBookings && Object.values(bookingsByDate[dateStr]).some(slotInfo =>
+              (slotInfo as SlotInfo).attendees.some((att) => att.bookingId && dayBookingsSource.find((b) => b.id === att.bookingId && b.corporateEventId))
+            );
             return (
               <div 
                 key={day}
@@ -203,7 +218,13 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
                 <button
                   onClick={() => onDateSelect(date)}
                   className={`w-full aspect-square border rounded-md flex flex-col items-center justify-center text-sm font-semibold transition-all duration-200 p-1 group
-                    ${hasBookings ? (isGroupClassDay ? 'bg-blue-100 hover:bg-blue-200 cursor-pointer' : 'bg-brand-primary/20 hover:bg-brand-primary/30 cursor-pointer') : 'bg-white'}
+                    ${hasBookings
+                      ? isCorporateDay
+                        ? 'bg-violet-100 hover:bg-violet-200 border-violet-300 cursor-pointer'
+                        : isGroupClassDay
+                        ? 'bg-blue-100 hover:bg-blue-200 cursor-pointer'
+                        : 'bg-brand-primary/20 hover:bg-brand-primary/30 cursor-pointer'
+                      : 'bg-white'}
                   `}
                 >
                   <span className="transition-transform duration-200 group-hover:scale-110">{day}</span>

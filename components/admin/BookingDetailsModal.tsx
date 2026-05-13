@@ -48,7 +48,19 @@ const formatTimeForInput = (time12h: string): string => {
     return date.toTimeString().slice(0, 5);
 };
 
-export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, time, attendees, instructorId, onClose, onRemoveAttendee, onAcceptPayment, onMarkAsUnpaid, onEditAttendee, onRescheduleAttendee }) => {
+export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({
+  date,
+  time,
+  attendees,
+  instructorId,
+  onClose,
+  onRemoveAttendee,
+  onAcceptPayment,
+  onMarkAsUnpaid,
+  onEditAttendee,
+  onRescheduleAttendee,
+  allBookings = [],
+}) => {
   // Fallbacks para evitar errores si no se pasan como función
   const safeOnEditAttendee = typeof onEditAttendee === 'function' ? onEditAttendee : () => {};
   const safeOnRescheduleAttendee = typeof onRescheduleAttendee === 'function' ? onRescheduleAttendee : () => {};
@@ -66,22 +78,29 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, 
   const [bookingsMap, setBookingsMap] = useState<Record<string, any>>({});
 
   useEffect(() => {
-    const fetchAllBookings = async () => {
+    let cancelled = false;
+    const loadMap = async () => {
       if (attendees.length === 0) return;
-      // Use cached data from dataService instead of fresh fetch
-      const cachedBookings = await dataService.getBookings();
-      // Map bookingId to booking object for fast lookup
       const map: Record<string, any> = {};
+      if (Array.isArray(allBookings) && allBookings.length > 0) {
+        allBookings.forEach((b: any) => {
+          map[b.id] = b;
+        });
+        if (!cancelled) setBookingsMap(map);
+        return;
+      }
+      const cachedBookings = await dataService.getBookings();
+      if (cancelled) return;
       cachedBookings.forEach((b: any) => {
         map[b.id] = b;
       });
       setBookingsMap(map);
     };
-    // Only fetch once when component mounts
-    if (Object.keys(bookingsMap).length === 0) {
-      fetchAllBookings();
-    }
-  }, [attendees.length]); // Only depend on length, not full attendees array
+    loadMap();
+    return () => {
+      cancelled = true;
+    };
+  }, [date, time, attendees, allBookings]);
 
   // ...existing code...
 
@@ -166,6 +185,11 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({ date, 
                 <div className="text-xs font-mono text-brand-accent mb-2">
                   Código: {attendee.bookingCode}
                 </div>
+                )}
+                {attendeeBooking?.corporateEventId && (
+                  <div className="text-xs font-bold uppercase bg-violet-100 text-violet-900 inline-block px-2 py-0.5 rounded mb-2">
+                    Evento corporativo
+                  </div>
                 )}
                 <div className="flex items-center text-sm">
                   <MailIcon className="w-4 h-4 mr-2 text-brand-secondary" />

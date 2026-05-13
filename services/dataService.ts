@@ -301,7 +301,8 @@ import type {
     PaymentDetails, AttendanceStatus, ClientNotification, AutomationSettings, ClassPackage, 
     IntroductoryClass, OpenStudioSubscription, UserInfo, Customer, EnrichedIntroClassSession, 
     BackgroundSettings, AppData, BankDetails, InvoiceRequest, Technique, GroupClass, SingleClass,
-    Delivery, DeliveryStatus, UILabels, RecurringClassSlot, DynamicTimeSlot, SlotDisplayInfo, GroupTechnique, TimeSlot, ExperienceTypeOverrides
+    Delivery, DeliveryStatus, UILabels, RecurringClassSlot, DynamicTimeSlot, SlotDisplayInfo, GroupTechnique, TimeSlot, ExperienceTypeOverrides,
+    CorporateEvent, CorporateEventActivityEntry
 } from '../types';
 import { DAY_NAMES, DEFAULT_PRODUCTS } from '../constants';
 import { getEcuadorToday } from '../utils/formatters';
@@ -1403,6 +1404,77 @@ export const deleteGroupInquiry = async (id: string): Promise<void> => {
     if (!response.ok) {
         throw new Error(`Failed to delete inquiry: ${response.statusText}`);
     }
+};
+
+const parseCorporateEvent = (e: any): CorporateEvent => {
+    const log: CorporateEventActivityEntry[] = Array.isArray(e.activityLog) ? e.activityLog : [];
+    return {
+        id: String(e.id),
+        companyName: e.companyName ?? '',
+        contactName: e.contactName ?? '',
+        email: e.email ?? '',
+        phone: e.phone ?? '',
+        countryCode: e.countryCode ?? '',
+        stage: e.stage ?? 'lead',
+        locationType: e.locationType ?? 'studio',
+        locationNotes: e.locationNotes ?? '',
+        allowFood: Boolean(e.allowFood),
+        allowDecoration: Boolean(e.allowDecoration),
+        allowEscort: Boolean(e.allowEscort),
+        groupDynamicsNotes: e.groupDynamicsNotes ?? '',
+        specialRequirements: e.specialRequirements ?? '',
+        participantsEstimate: typeof e.participantsEstimate === 'number' ? e.participantsEstimate : parseInt(String(e.participantsEstimate ?? 0), 10) || 0,
+        depositAmount: e.depositAmount != null && e.depositAmount !== '' ? Number(e.depositAmount) : null,
+        depositDueDate: e.depositDueDate ?? null,
+        depositReceived: Boolean(e.depositReceived),
+        activityLog: log,
+        sourceInquiryId: e.sourceInquiryId ? String(e.sourceInquiryId) : null,
+        createdAt: e.createdAt ?? '',
+        updatedAt: e.updatedAt ?? '',
+    };
+};
+
+export const getCorporateEvents = async (): Promise<CorporateEvent[]> => {
+    const raw = await fetchData('/api/data?action=corporateEvents');
+    if (!Array.isArray(raw)) return [];
+    return raw.map(parseCorporateEvent);
+};
+
+export const addCorporateEvent = async (
+    data: Omit<CorporateEvent, 'id' | 'createdAt' | 'updatedAt' | 'activityLog'> & { activityLog?: CorporateEventActivityEntry[] }
+): Promise<CorporateEvent> => {
+    const result = await postAction('addCorporateEvent', { ...data, activityLog: data.activityLog ?? [] });
+    return parseCorporateEvent(result);
+};
+
+export const updateCorporateEvent = async (data: Partial<CorporateEvent> & { id: string }): Promise<CorporateEvent> => {
+    const result = await postAction('updateCorporateEvent', data);
+    return parseCorporateEvent(result);
+};
+
+export const deleteCorporateEvent = async (id: string): Promise<{ success: boolean }> => {
+    return postAction('deleteCorporateEvent', { id });
+};
+
+export const linkBookingCorporateEvent = async (
+    bookingId: string,
+    corporateEventId: string | null
+): Promise<{ success: boolean; booking?: Booking | null }> => {
+    const result = await postAction('linkBookingCorporateEvent', { bookingId, corporateEventId });
+    invalidateBookingsCache();
+    return {
+        success: Boolean(result?.success),
+        booking: result?.booking ? parseBooking(result.booking) : undefined,
+    };
+};
+
+export const addCorporateEventActivity = async (
+    corporateEventId: string,
+    body: string,
+    author?: string
+): Promise<CorporateEvent> => {
+    const result = await postAction('addCorporateEventActivity', { corporateEventId, body, author });
+    return parseCorporateEvent(result);
 };
 
 // Invoicing

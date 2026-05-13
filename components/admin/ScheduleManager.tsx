@@ -299,6 +299,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [modalData, setModalData] = useState<{ date: string; time: string; attendees: any[]; instructorId: number; onClose?: () => void } | null>(null);
     const [showUnpaidOnly, setShowUnpaidOnly] = useState(false);
+    const [showCorporateOnly, setShowCorporateOnly] = useState(false);
     const [now, setNow] = useState(new Date());
     const [bookingToHighlight, setBookingToHighlight] = useState<Booking | null>(null);
         // Handlers for BookingDetailsModal
@@ -822,36 +823,58 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     const weekEnd = weekDates[6];
     
     const filteredScheduleData = useMemo(() => {
-        if (!showUnpaidOnly) {
-            return scheduleData;
-        }
-        
-        const filtered: ScheduleData = new Map();
-        for (const [instructorId, data] of scheduleData.entries()) {
-            const newSchedule: Record<string, EnrichedSlot[]> = {};
-            let instructorHasUnpaid = false;
-            for (const [dateStr, slots] of Object.entries(data.schedule)) {
-                const slotsArr = Array.isArray(slots) ? slots : [];
-                const slotsWithUnpaid = slotsArr.map(slot => {
-                    const unpaidBookings = slot.bookings.filter(b => !b.isPaid);
-                    
-                    return {
-                        ...slot,
-                        bookings: unpaidBookings
-                    };
-                }).filter(slot => slot.bookings.length > 0);
+        let base = scheduleData;
+        if (showUnpaidOnly) {
+            const unpaidMap: ScheduleData = new Map();
+            for (const [instructorId, data] of scheduleData.entries()) {
+                const newSchedule: Record<string, EnrichedSlot[]> = {};
+                let instructorHasUnpaid = false;
+                for (const [dateStr, slots] of Object.entries(data.schedule)) {
+                    const slotsArr = Array.isArray(slots) ? slots : [];
+                    const slotsWithUnpaid = slotsArr
+                        .map((slot) => ({
+                            ...slot,
+                            bookings: slot.bookings.filter((b) => !b.isPaid),
+                        }))
+                        .filter((slot) => slot.bookings.length > 0);
 
-                if (slotsWithUnpaid.length > 0) {
-                    newSchedule[dateStr] = slotsWithUnpaid;
-                    instructorHasUnpaid = true;
+                    if (slotsWithUnpaid.length > 0) {
+                        newSchedule[dateStr] = slotsWithUnpaid;
+                        instructorHasUnpaid = true;
+                    }
+                }
+                if (instructorHasUnpaid) {
+                    unpaidMap.set(instructorId, { ...data, schedule: newSchedule });
                 }
             }
-            if (instructorHasUnpaid) {
-                filtered.set(instructorId, { ...data, schedule: newSchedule });
+            base = unpaidMap;
+        }
+        if (!showCorporateOnly) {
+            return base;
+        }
+        const corpMap: ScheduleData = new Map();
+        for (const [instructorId, data] of base.entries()) {
+            const newSchedule: Record<string, EnrichedSlot[]> = {};
+            let hasAny = false;
+            for (const [dateStr, slots] of Object.entries(data.schedule)) {
+                const slotsArr = Array.isArray(slots) ? slots : [];
+                const corpSlots = slotsArr
+                    .map((slot) => ({
+                        ...slot,
+                        bookings: slot.bookings.filter((b) => Boolean(b.corporateEventId)),
+                    }))
+                    .filter((slot) => slot.bookings.length > 0);
+                if (corpSlots.length > 0) {
+                    newSchedule[dateStr] = corpSlots;
+                    hasAny = true;
+                }
+            }
+            if (hasAny) {
+                corpMap.set(instructorId, { ...data, schedule: newSchedule });
             }
         }
-        return filtered;
-    }, [showUnpaidOnly, scheduleData]);
+        return corpMap;
+    }, [showUnpaidOnly, showCorporateOnly, scheduleData]);
 
     const hasVisibleSlotsInFilter = useMemo(() => {
         if (!showUnpaidOnly) return true;
@@ -883,7 +906,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 attendees={modalData.attendees}
                 instructorId={modalData.instructorId}
                 product={{ id: 'placeholder', name: 'Clase', type: 'class', price: 0 } as any}
-                allBookings={[]}
+                allBookings={appData.bookings}
                 onClose={closeAllModals}
                 onRemoveAttendee={handleRemoveAttendee}
                 onAcceptPayment={handleAcceptPayment}
@@ -1026,13 +1049,20 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             return null;
         })()}
 
-        <div className="flex justify-end mb-4">
+        <div className="flex flex-wrap justify-end gap-4 mb-4">
             <label className="flex items-center gap-2 cursor-pointer text-sm font-semibold text-brand-secondary">
                  <div className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${showUnpaidOnly ? 'bg-brand-primary' : 'bg-gray-200'}`}>
                     <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${showUnpaidOnly ? 'translate-x-6' : 'translate-x-1'}`}/>
                 </div>
                 <input type="checkbox" checked={showUnpaidOnly} onChange={() => setShowUnpaidOnly(!showUnpaidOnly)} className="hidden" />
                 Mostrar solo reservas no pagadas
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer text-sm font-semibold text-brand-secondary">
+                 <div className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${showCorporateOnly ? 'bg-violet-600' : 'bg-gray-200'}`}>
+                    <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${showCorporateOnly ? 'translate-x-6' : 'translate-x-1'}`}/>
+                </div>
+                <input type="checkbox" checked={showCorporateOnly} onChange={() => setShowCorporateOnly(!showCorporateOnly)} className="hidden" />
+                Solo eventos corporativos
             </label>
         </div>
 
@@ -1081,16 +1111,23 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                                     const hasUnpaidBookings = unpaidBookingsCount > 0;
                                                     const isHighlighted = bookingToHighlight && slot.bookings.some(b => b.id === bookingToHighlight.id);
                                                     const isGroupClass = slot.bookings.some(b => b.productType === 'GROUP_CLASS');
+                                                    const isCorporateSlot = slot.bookings.some(b => b.corporateEventId);
                                                     const hasPaidBooking = slot.bookings.some(b => b.isPaid);
                                                     const isEmptySlot = slot.bookings.length === 0;
                                                     const bgColor = isEmptySlot
                                                         ? 'bg-gray-50'
+                                                        : isCorporateSlot
+                                                        ? 'bg-violet-100'
                                                         : isGroupClass
                                                         ? 'bg-blue-100'
                                                         : hasPaidBooking
                                                         ? 'bg-green-100'
                                                         : `bg-${colorMap[instructor.colorScheme]?.bg || colorMap[defaultColorName].bg}`;
-                                                    const borderColor = isGroupClass ? 'border-blue-400' : `border-${colorMap[instructor.colorScheme]?.text || colorMap[defaultColorName].text}/50`;
+                                                    const borderColor = isCorporateSlot
+                                                        ? 'border-violet-500'
+                                                        : isGroupClass
+                                                        ? 'border-blue-400'
+                                                        : `border-${colorMap[instructor.colorScheme]?.text || colorMap[defaultColorName].text}/50`;
                                                     const slotKey = `${slot.date}-${normalizeTime(slot.time)}-${slot.instructorId}-${slotIndex}`;
                                                     return (
                                                         <button 
@@ -1100,8 +1137,11 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                                             className={`w-full text-left p-2 rounded-md shadow-sm border-l-4 ${bgColor} ${borderColor} hover:shadow-md transition-shadow relative overflow-hidden ${isHighlighted ? 'animate-pulse-border' : ''}`}> 
                                                             {hasUnpaidBookings && <div className="absolute inset-0 unpaid-booking-stripe opacity-70"></div>}
                                                             <div className="relative z-10">
-                                                                <div className={`font-bold text-xs text-${isGroupClass ? 'blue-800' : colorMap[instructor.colorScheme]?.text || colorMap[defaultColorName].text} flex items-center gap-1`}>
+                                                                <div className={`font-bold text-xs text-${isCorporateSlot ? 'violet-900' : isGroupClass ? 'blue-800' : colorMap[instructor.colorScheme]?.text || colorMap[defaultColorName].text} flex items-center gap-1 flex-wrap`}>
                                                                     {slot.time}
+                                                                    {isCorporateSlot && (
+                                                                        <span className="text-[10px] font-bold uppercase bg-violet-200 text-violet-900 px-1 rounded">Corp</span>
+                                                                    )}
                                                                     {isGroupClass && <UserGroupIcon className="w-3.5 h-3.5" />}
                                                                 </div>
                                                                 <div className="text-xs font-semibold text-gray-800 mt-1 truncate">
@@ -1174,9 +1214,10 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                     const hasUnpaidBookings = unpaidBookingsCount > 0;
                                     const isHighlighted = bookingToHighlight && slot.bookings.some(b => b.id === bookingToHighlight.id);
                                     const isGroupClass = slot.bookings.some(b => b.productType === 'GROUP_CLASS');
+                                    const isCorporateSlot = slot.bookings.some(b => b.corporateEventId);
                                     const hasPaidBooking = slot.bookings.some(b => b.isPaid);
-                                    const bgColor = isGroupClass ? 'bg-blue-100' : hasPaidBooking ? 'bg-green-50' : 'bg-white';
-                                    const borderColor = isGroupClass ? 'border-blue-400' : 'border-gray-200';
+                                    const bgColor = isCorporateSlot ? 'bg-violet-100' : isGroupClass ? 'bg-blue-100' : hasPaidBooking ? 'bg-green-50' : 'bg-white';
+                                    const borderColor = isCorporateSlot ? 'border-violet-500' : isGroupClass ? 'border-blue-400' : 'border-gray-200';
                                     const slotKey = `${slot.date}-${normalizeTime(slot.time)}-${slot.instructorId}-${slotIndex}`;
                                     return (
                                         <button
@@ -1189,7 +1230,10 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                             <div className="relative z-10">
                                                 <div className="flex justify-between items-start">
                                                     <div>
-                                                        <div className="font-bold text-sm text-brand-text flex items-center gap-1">{slot.time}
+                                                        <div className="font-bold text-sm text-brand-text flex items-center gap-1 flex-wrap">{slot.time}
+                                                        {isCorporateSlot && (
+                                                            <span className="text-[10px] font-bold uppercase bg-violet-200 text-violet-900 px-1 rounded">Corp</span>
+                                                        )}
                                                         {isGroupClass && <UserGroupIcon className="w-3.5 h-3.5 text-blue-800" />}
                                                         </div>
                                                         <div className="text-xs font-semibold text-gray-600 mt-1 truncate">{getSlotDisplayName(slot)}</div>
