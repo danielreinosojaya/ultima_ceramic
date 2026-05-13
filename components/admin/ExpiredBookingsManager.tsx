@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import type { Booking, GroupTechnique } from '../../types';
+import type { AppData, Booking, GroupTechnique } from '../../types';
 import * as dataService from '../../services/dataService';
 import { addPaymentToBooking, extendBookingExpiry, cancelPreBooking, sendPaymentReminder, rejectPaymentProof, invalidateBookingsCache } from '../../services/dataService';
+import { useAdminData } from '../../context/AdminDataContext';
+import { PreBookingQuickManageModal } from './PreBookingQuickManageModal';
 import { fetchWithAbort } from '../../utils/fetchWithAbort';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -94,6 +96,8 @@ type SortField = 'createdAt' | 'expiresAt' | 'price' | 'userName' | 'status';
 type SortOrder = 'asc' | 'desc';
 
 export const ExpiredBookingsManager: React.FC = () => {
+  const adminData = useAdminData();
+  const [manageBooking, setManageBooking] = useState<Booking | null>(null);
   const [bookings, setBookings] = useState<ExpiredBooking[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'active' | 'expired' | 'confirmed' | 'review'>('all');
@@ -397,6 +401,37 @@ export const ExpiredBookingsManager: React.FC = () => {
     }
   };
 
+  const appDataForQuickManage = useMemo((): AppData | null => {
+    if (adminData.instructors.length === 0 || adminData.products.length === 0) return null;
+    return {
+      instructors: adminData.instructors,
+      availability: adminData.availability || {},
+      products: adminData.products,
+      scheduleOverrides: adminData.scheduleOverrides || {},
+      freeDateTimeOverrides: adminData.freeDateTimeOverrides || {},
+      experienceTypeOverrides: adminData.experienceTypeOverrides || {},
+      classCapacity: adminData.classCapacity || { potters_wheel: 4, molding: 6, introductory_class: 8 },
+      capacityMessages: adminData.capacityMessages || { thresholds: [] },
+      announcements: adminData.announcements || [],
+      bookings: adminData.bookings,
+      policies: '',
+      confirmationMessage: { title: '', message: '' },
+      footerInfo: { address: '', email: '', whatsapp: '', googleMapsLink: '', instagramHandle: '' },
+      bankDetails: [{ bankName: '', accountHolder: '', accountNumber: '', accountType: '', taxId: '' }],
+    };
+  }, [
+    adminData.instructors,
+    adminData.products,
+    adminData.availability,
+    adminData.scheduleOverrides,
+    adminData.freeDateTimeOverrides,
+    adminData.experienceTypeOverrides,
+    adminData.classCapacity,
+    adminData.capacityMessages,
+    adminData.announcements,
+    adminData.bookings,
+  ]);
+
   const SortButton = ({ field, label }: { field: SortField; label: string }) => (
     <button
       onClick={() => handleSort(field)}
@@ -412,6 +447,15 @@ export const ExpiredBookingsManager: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <PreBookingQuickManageModal
+        booking={manageBooking}
+        appData={appDataForQuickManage}
+        isOpen={!!manageBooking}
+        onClose={() => setManageBooking(null)}
+        onApplied={loadBookings}
+        onRefreshAdmin={() => adminData.refreshCritical?.()}
+      />
+
       {/* Modal Confirmar Pago */}
       {payModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setPayModal(null)}>
@@ -746,6 +790,14 @@ export const ExpiredBookingsManager: React.FC = () => {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setManageBooking(booking as Booking)}
+                            title="Re-agendar, editar datos, ajustar pago… sin ir a clientes ni agenda"
+                            className="px-2 py-1 text-xs bg-slate-700 text-white border border-slate-800 rounded-md hover:bg-slate-800 font-semibold whitespace-nowrap"
+                          >
+                            ⚙️ Gestionar
+                          </button>
                           {/* Confirmar pago: activo sin pagar o expirado */}
                           {(!booking.isPaid) && (
                             <button
@@ -858,13 +910,14 @@ export const ExpiredBookingsManager: React.FC = () => {
 
       {/* Información */}
       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-5">
-        <h3 className="font-bold text-blue-900 mb-3">� Cómo funciona:</h3>
+        <h3 className="font-bold text-blue-900 mb-3">Cómo funciona:</h3>
         <ul className="text-sm text-blue-800 space-y-2">
           <li>✓ Expiración automática cada <strong>5 minutos</strong> via cron job del servidor (24/7, sin necesidad de abrir el panel)</li>
           <li>✓ Pre-reservas activas por <strong>2 horas</strong> desde su creación</li>
           <li>✓ Se marcan automáticamente como <strong>"Expirada"</strong> cuando vence el plazo</li>
           <li>✓ Los registros se guardan en la DB para seguimiento de clientes</li>
           <li>✓ Busca por email, nombre, apellido o código de reserva</li>
+          <li>✓ <strong>Gestionar</strong> en cada fila: re-agendar, editar cliente/precio/participantes, ajustar el primer pago o marcar como no pagada sin ir a Clientes ni Agenda</li>
           <li>✓ Ordena por cualquier columna para análisis customizado</li>
         </ul>
       </div>
