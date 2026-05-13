@@ -47,6 +47,13 @@ const isPaintingUpsell = (booking: Booking): boolean => {
 
 const PAINTING_UPSELL_LABEL = 'Upsell - pieza ya hecha';
 
+// Suma de montos en payment_details
+const sumPaymentDetails = (booking: Booking): number => {
+  const arr = booking.paymentDetails;
+  if (!Array.isArray(arr)) return 0;
+  return arr.reduce((acc, p) => acc + (typeof p?.amount === 'number' ? p.amount : 0), 0);
+};
+
 // Helper para obtener el nombre del producto/técnica de un booking
 const getBookingDisplayName = (booking: Booking): string => {
   if (isPaintingUpsell(booking)) return PAINTING_UPSELL_LABEL;
@@ -454,6 +461,7 @@ export const ExpiredBookingsManager: React.FC = () => {
         onClose={() => setManageBooking(null)}
         onApplied={loadBookings}
         onRefreshAdmin={() => adminData.refreshCritical?.()}
+        onBookingReplaced={b => setManageBooking(b)}
       />
 
       {/* Modal Confirmar Pago */}
@@ -715,6 +723,7 @@ export const ExpiredBookingsManager: React.FC = () => {
                     <th className="px-4 py-3 text-left font-bold text-brand-text">Email</th>
                     <th className="px-4 py-3 text-left font-bold text-brand-text">Clase</th>
                     <th className="px-4 py-3 text-right font-bold text-brand-text"><SortButton field="price" label="Monto" /></th>
+                    <th className="px-4 py-3 text-right font-bold text-brand-text">Pagos</th>
                     <th className="px-4 py-3 text-left font-bold text-brand-text"><SortButton field="status" label="Estado" /></th>
                     <th className="px-4 py-3 text-left font-bold text-brand-text"><SortButton field="createdAt" label="Creada" /></th>
                     <th className="px-4 py-3 text-left font-bold text-brand-text"><SortButton field="expiresAt" label="Vencimiento" /></th>
@@ -737,6 +746,28 @@ export const ExpiredBookingsManager: React.FC = () => {
                       <td className="px-4 py-3 text-xs text-brand-secondary">{booking.userInfo?.email}</td>
                       <td className="px-4 py-3 text-sm text-brand-text">{getBookingDisplayName(booking)}</td>
                       <td className="px-4 py-3 font-bold text-brand-primary text-right">${booking.price?.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right text-xs">
+                        {(() => {
+                          const n = Array.isArray(booking.paymentDetails) ? booking.paymentDetails.length : 0;
+                          const sum = sumPaymentDetails(booking as Booking);
+                          const pr = typeof booking.price === 'number' ? booking.price : 0;
+                          if (n === 0 && sum <= 0) {
+                            return <span className="text-brand-secondary">—</span>;
+                          }
+                          const ok = sum + 0.001 >= pr && pr > 0;
+                          return (
+                            <div className="inline-block text-left">
+                              <div className="font-semibold text-brand-text whitespace-nowrap">
+                                {n} · ${sum.toFixed(2)}
+                                <span className="text-brand-secondary font-normal"> / ${pr.toFixed(2)}</span>
+                              </div>
+                              {pr > 0 && !ok && (
+                                <div className="text-amber-700 font-medium">Falta ${(pr - sum).toFixed(2)}</div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </td>
                       <td className="px-4 py-3">
                         <span
                           className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
