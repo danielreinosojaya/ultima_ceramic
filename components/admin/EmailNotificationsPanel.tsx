@@ -23,7 +23,8 @@ const EMAIL_TYPE_LABELS: Record<string, string> = {
     'delivery_ready_painting': '🎨 Pieza Lista para Pintar',
     'delivery_completed': '✅ Entrega Completada',
     'painted_piece_ready_pickup': '🎁 Pieza Pintada Lista',
-    'painting_booking_scheduled': '📅 Pintura Agendada'
+    'painting_booking_scheduled': '📅 Pintura Agendada',
+    'painting_booking_rescheduled': '📅 Pintura reagendada / corregida'
 };
 
 // Mapeo de status a indicadores visuales

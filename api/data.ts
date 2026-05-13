@@ -2969,6 +2969,54 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
     }
 }
 
+/** Reserva en agenda (`kind: painting_upsell`) para anular cupo al reagendar desde admin. */
+async function findPaintingUpsellBookingForReschedule(
+    customerEmail: string,
+    paintingBookingDateIso: string
+): Promise<string | null> {
+    const { rows: candidates } = await sql`
+        SELECT id, slots, product, status, created_at
+        FROM bookings
+        WHERE user_info->>'email' = ${customerEmail}
+        AND COALESCE(status, 'active') NOT IN ('expired', 'cancelled')
+        AND product IS NOT NULL
+        AND (product::jsonb->>'kind') = 'painting_upsell'
+        ORDER BY created_at DESC
+        LIMIT 40
+    `;
+    if (!candidates?.length) return null;
+    const targetMs = new Date(paintingBookingDateIso).getTime();
+    if (!Number.isFinite(targetMs)) {
+        return candidates[0]?.id || null;
+    }
+    let bestId: string | null = null;
+    let bestDiff = Infinity;
+    for (const row of candidates) {
+        let slots: any = row.slots;
+        if (typeof slots === 'string') {
+            try {
+                slots = JSON.parse(slots);
+            } catch {
+                continue;
+            }
+        }
+        const s0 = Array.isArray(slots) ? slots[0] : null;
+        if (!s0?.date || s0.time == null) continue;
+        const tNorm = String(s0.time).replace(/:00$/, '').slice(0, 5);
+        const candidateMs = new Date(`${s0.date}T${tNorm}:00`).getTime();
+        if (!Number.isFinite(candidateMs)) continue;
+        const d = Math.abs(candidateMs - targetMs);
+        if (d < bestDiff) {
+            bestDiff = d;
+            bestId = row.id;
+        }
+    }
+    if (bestId && bestDiff <= 48 * 60 * 60 * 1000) {
+        return bestId;
+    }
+    return candidates[0]?.id || null;
+}
+
 async function handleAction(action: string, req: VercelRequest, res: VercelResponse) {
     let result: any = { success: true };
     switch (action) {  // Corregido: Se agregó el paréntesis faltante
@@ -6660,8 +6708,10 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         }
 
         case 'schedulePaintingBooking': {
-            const { deliveryId, date, time, participants, adminOverride, markPaintingPaid } = req.body;
+            const { deliveryId, date, time, participants, adminOverride, markPaintingPaid, adminReschedule } = req.body;
             const isAdminOverride = adminOverride === true;
+            const isAdminReschedule = adminReschedule === true;
+            let didAdminReschedule = false;
 
             if (!deliveryId || !date || !time || participants === undefined || participants === null) {
                 return res.status(400).json({ error: 'deliveryId, date, time, participants are required' });
@@ -6673,15 +6723,6 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             }
 
             try {
-                const availability = await computeSlotAvailability(date, time, 'painting', requestedParticipants);
-                if (!availability.available) {
-                    return res.status(409).json({
-                        success: false,
-                        error: availability.message,
-                        capacity: availability.capacity
-                    });
-                }
-
                 const { rows: deliveryRows0 } = await sql`
                     SELECT * FROM deliveries WHERE id = ${deliveryId}
                 `;
@@ -6691,6 +6732,56 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 }
 
                 let delivery: any = deliveryRows0[0];
+
+                // Admin: corregir cita equivocada — libera cupo (expira booking) y deja entrega en "paid" sin fecha
+                if (isAdminReschedule) {
+                    const deliveryStatus = (delivery as any).status;
+                    if (deliveryStatus === 'completed') {
+                        return res.status(400).json({
+                            error: 'No se puede reagendar pintura: la entrega ya está cerrada (completed).'
+                        });
+                    }
+                    const psR = (delivery as any).painting_status ?? (delivery as any).paintingStatus ?? null;
+                    const wantsR = Boolean((delivery as any).wants_painting ?? (delivery as any).wantsPainting);
+                    const existingIso =
+                        (delivery as any).painting_booking_date ?? (delivery as any).paintingBookingDate ?? null;
+                    if (!wantsR || psR !== 'scheduled' || !existingIso) {
+                        return res.status(400).json({
+                            error: 'Solo se puede reagendar cuando la pintura está agendada y hay fecha guardada en la entrega.'
+                        });
+                    }
+                    const oldBookingId = await findPaintingUpsellBookingForReschedule(
+                        delivery.customer_email,
+                        String(existingIso)
+                    );
+                    if (!oldBookingId) {
+                        return res.status(404).json({
+                            error:
+                                'No se encontró una reserva activa de pintura (upsell) en agenda para este cliente. Revisa el calendario o anula la cita manualmente y vuelve a intentar.'
+                        });
+                    }
+                    await sql`
+                        UPDATE bookings SET status = 'expired' WHERE id = ${oldBookingId}
+                    `;
+                    await sql`
+                        UPDATE deliveries
+                        SET painting_status = 'paid',
+                            painting_booking_date = NULL
+                        WHERE id = ${deliveryId}
+                    `;
+                    const { rows: deliveryRowsR } = await sql`SELECT * FROM deliveries WHERE id = ${deliveryId}`;
+                    delivery = deliveryRowsR[0];
+                    didAdminReschedule = true;
+                }
+
+                const availability = await computeSlotAvailability(date, time, 'painting', requestedParticipants);
+                if (!availability.available) {
+                    return res.status(409).json({
+                        success: false,
+                        error: availability.message,
+                        capacity: availability.capacity
+                    });
+                }
 
                 // Admin: habilitar pintura upsell + marcar pagado si hace falta, sin flujo web del cliente
                 if (isAdminOverride) {
@@ -6892,7 +6983,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                             description: delivery.description,
                             bookingDate: date,
                             bookingTime: availability.normalizedTime,
-                            participants: requestedParticipants
+                            participants: requestedParticipants,
+                            isCorrection: didAdminReschedule
                         }
                     );
                 } catch (emailErr) {

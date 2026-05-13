@@ -114,13 +114,13 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
     const [paintAgendaTime, setPaintAgendaTime] = useState('10:00');
     const [paintAgendaParticipants, setPaintAgendaParticipants] = useState('1');
     const [paintAgendaMarkPaid, setPaintAgendaMarkPaid] = useState(true);
+    const [paintAgendaIsReschedule, setPaintAgendaIsReschedule] = useState(false);
     const [paintAgendaSubmitting, setPaintAgendaSubmitting] = useState(false);
     const [paintAgendaError, setPaintAgendaError] = useState('');
 
     const canOfferPaintAgendaScheduling = (d: Delivery): boolean => {
         if (d.status === 'completed') return false;
         if (d.wantsPainting && d.paintingStatus === 'completed') return false;
-        if (d.wantsPainting && d.paintingStatus === 'scheduled' && d.paintingBookingDate) return false;
         return true;
     };
 
@@ -129,9 +129,22 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
     };
 
     const openPaintAgendaModal = (d: Delivery) => {
+        const isReschedule = Boolean(
+            d.wantsPainting && d.paintingStatus === 'scheduled' && d.paintingBookingDate
+        );
+        setPaintAgendaIsReschedule(isReschedule);
         setPaintAgendaDelivery(d);
-        setPaintAgendaDate('');
-        setPaintAgendaTime('10:00');
+        const pad2 = (n: number) => String(n).padStart(2, '0');
+        if (isReschedule && d.paintingBookingDate) {
+            const dt = new Date(d.paintingBookingDate);
+            setPaintAgendaDate(
+                `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`
+            );
+            setPaintAgendaTime(`${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`);
+        } else {
+            setPaintAgendaDate('');
+            setPaintAgendaTime('10:00');
+        }
         setPaintAgendaParticipants('1');
         setPaintAgendaMarkPaid(true);
         setPaintAgendaError('');
@@ -139,6 +152,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
 
     const closePaintAgendaModal = () => {
         setPaintAgendaDelivery(null);
+        setPaintAgendaIsReschedule(false);
         setPaintAgendaSubmitting(false);
         setPaintAgendaError('');
     };
@@ -653,7 +667,8 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
             setPaintAgendaError('Participantes inválidos.');
             return;
         }
-        const adminOverride = useAdminPathForPaintSchedule(paintAgendaDelivery);
+        const adminOverride =
+            !paintAgendaIsReschedule && useAdminPathForPaintSchedule(paintAgendaDelivery);
         setPaintAgendaSubmitting(true);
         setPaintAgendaError('');
         try {
@@ -662,6 +677,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                 date: dateStr,
                 time: timeStr,
                 participants: parts,
+                ...(paintAgendaIsReschedule ? { adminReschedule: true } : {}),
                 ...(adminOverride ? { adminOverride: true, markPaintingPaid: paintAgendaMarkPaid } : {}),
             });
             if (result.success && result.delivery) {
@@ -669,7 +685,11 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                 adminData.optimisticUpsertDelivery(result.delivery);
                 onDataChange?.();
                 closePaintAgendaModal();
-                alert('✅ Sesión de pintura agendada en la agenda. Se envió (o intentó) el correo al cliente.');
+                alert(
+                    paintAgendaIsReschedule
+                        ? '✅ Cita de pintura corregida en la agenda. Se envió (o intentó) el correo actualizado al cliente.'
+                        : '✅ Sesión de pintura agendada en la agenda. Se envió (o intentó) el correo al cliente.'
+                );
             } else {
                 setPaintAgendaError(result.error || 'No se pudo agendar. Revisa cupo u horario.');
             }
@@ -1393,14 +1413,24 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                         type="button"
                                         className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border border-blue-800 shadow-sm transition-all text-xs font-bold"
                                         title={
-                                            useAdminPathForPaintSchedule(delivery)
-                                                ? 'Crea reserva en agenda + habilita pintura si el cliente no siguió el flujo web'
-                                                : 'Crea la reserva de pintura en la agenda (mismo flujo que el cliente)'
+                                            delivery.wantsPainting &&
+                                            delivery.paintingStatus === 'scheduled' &&
+                                            delivery.paintingBookingDate
+                                                ? 'Anula la cita anterior en agenda, crea la nueva y reenvía correo al cliente'
+                                                : useAdminPathForPaintSchedule(delivery)
+                                                  ? 'Crea reserva en agenda + habilita pintura si el cliente no siguió el flujo web'
+                                                  : 'Crea la reserva de pintura en la agenda (mismo flujo que el cliente)'
                                         }
                                         onClick={() => openPaintAgendaModal(delivery)}
                                     >
                                         <span>📅</span>
-                                        <span>Agendar pintura (agenda)…</span>
+                                        <span>
+                                            {delivery.wantsPainting &&
+                                            delivery.paintingStatus === 'scheduled' &&
+                                            delivery.paintingBookingDate
+                                                ? 'Corregir / reagendar pintura…'
+                                                : 'Agendar pintura (agenda)…'}
+                                        </span>
                                     </button>
                                 )}
 
@@ -1892,11 +1922,21 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                         className="bg-white rounded-xl shadow-2xl max-w-md w-full p-5"
                         onClick={e => e.stopPropagation()}
                     >
-                        <h3 className="text-lg font-bold text-brand-text mb-1">Agendar pintura en agenda</h3>
+                        <h3 className="text-lg font-bold text-brand-text mb-1">
+                            {paintAgendaIsReschedule
+                                ? 'Corregir o reagendar pintura'
+                                : 'Agendar pintura en agenda'}
+                        </h3>
                         <p className="text-xs text-brand-secondary mb-3 font-mono truncate">{paintAgendaDelivery.customerEmail}</p>
                         <p className="text-sm text-brand-secondary mb-4">
                             {paintAgendaDelivery.customerName || paintAgendaDelivery.customerEmail}
-                            {useAdminPathForPaintSchedule(paintAgendaDelivery) && (
+                            {paintAgendaIsReschedule && (
+                                <span className="block mt-2 text-blue-900 bg-blue-50 border border-blue-200 rounded px-2 py-1.5 text-xs">
+                                    Se anulará la cita anterior en el calendario (cupos) y se enviará un correo con la{' '}
+                                    <strong>nueva</strong> fecha y hora.
+                                </span>
+                            )}
+                            {!paintAgendaIsReschedule && useAdminPathForPaintSchedule(paintAgendaDelivery) && (
                                 <span className="block mt-2 text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 text-xs">
                                     Modo admin: se habilitará pintura en esta entrega y se marcará como pagada si aún no lo está (precio por defecto $20 si falta).
                                 </span>
@@ -1935,7 +1975,8 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                     disabled={paintAgendaSubmitting}
                                 />
                             </div>
-                            {useAdminPathForPaintSchedule(paintAgendaDelivery) &&
+                            {!paintAgendaIsReschedule &&
+                                useAdminPathForPaintSchedule(paintAgendaDelivery) &&
                                 paintAgendaDelivery.wantsPainting &&
                                 paintAgendaDelivery.paintingStatus === 'pending_payment' && (
                                     <label className="flex items-center gap-2 text-sm text-brand-text">
@@ -1967,7 +2008,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                 disabled={paintAgendaSubmitting}
                                 onClick={handlePaintAgendaSubmit}
                             >
-                                {paintAgendaSubmitting ? 'Agendando…' : 'Confirmar'}
+                                {paintAgendaSubmitting ? 'Guardando…' : paintAgendaIsReschedule ? 'Confirmar corrección' : 'Confirmar'}
                             </button>
                         </div>
                     </div>

@@ -1129,11 +1129,21 @@ export const sendDeliveryReadyForPaintingEmail = async (
 export const sendPaintingBookingScheduledEmail = async (
     customerEmail: string,
     customerName: string,
-    payload: { description?: string | null; bookingDate: string; bookingTime: string; participants: number; }
+    payload: {
+        description?: string | null;
+        bookingDate: string;
+        bookingTime: string;
+        participants: number;
+        /** true = admin corrigió fecha/hora; el cliente recibe texto de “actualizado” */
+        isCorrection?: boolean;
+    }
 ) => {
     const displayDescription = payload.description || 'Tu pieza de cerámica';
     const sanitizedDescription = displayDescription.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
-    const subject = `🎨 Reserva de pintura confirmada - ${sanitizedDescription}`;
+    const isCorrection = payload.isCorrection === true;
+    const subject = isCorrection
+        ? `🎨 Reserva de pintura actualizada - ${sanitizedDescription}`
+        : `🎨 Reserva de pintura confirmada - ${sanitizedDescription}`;
     const formattedDate = new Date(payload.bookingDate + 'T00:00:00').toLocaleDateString('es-ES', {
         weekday: 'long',
         year: 'numeric',
@@ -1144,7 +1154,11 @@ export const sendPaintingBookingScheduledEmail = async (
     const html = `
         <div style="font-family: Arial, sans-serif; color: #4A4540; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
-            <p style="font-size: 18px; font-weight: bold; color: #D95F43;">🎨 Tu reserva de pintura ha sido confirmada.</p>
+            <p style="font-size: 18px; font-weight: bold; color: #D95F43;">${
+                isCorrection
+                    ? '🎨 Hemos actualizado la fecha u hora de tu reserva de pintura.'
+                    : '🎨 Tu reserva de pintura ha sido confirmada.'
+            }</p>
 
             <div style="background-color: #FDF7F2; border-left: 4px solid #D95F43; padding: 20px; border-radius: 8px; margin: 20px 0;">
                 <p style="margin: 0; font-size: 16px;"><strong>${displayDescription}</strong></p>
@@ -1170,7 +1184,12 @@ export const sendPaintingBookingScheduledEmail = async (
 
     const result = await sendEmail(customerEmail, subject, html);
     try {
-        await logEmailEvent(customerEmail, 'painting_booking_scheduled', 'email', (result as any)?.sent ? 'sent' : 'failed');
+        await logEmailEvent(
+            customerEmail,
+            isCorrection ? 'painting_booking_rescheduled' : 'painting_booking_scheduled',
+            'email',
+            (result as any)?.sent ? 'sent' : 'failed'
+        );
     } catch (e) {
         console.warn('[sendPaintingBookingScheduledEmail] Failed to log email event:', e);
     }

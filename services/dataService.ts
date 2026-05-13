@@ -2737,6 +2737,8 @@ export const schedulePaintingBooking = async (payload: {
     adminOverride?: boolean;
     /** Con adminOverride y pending_payment: si false, no marca pagado (402) */
     markPaintingPaid?: boolean;
+    /** Admin: anula cita upsell anterior en agenda y crea una nueva (correo “actualizado”) */
+    adminReschedule?: boolean;
 }): Promise<{ success: boolean; delivery?: Delivery; error?: string }> => {
     try {
         const result = await postAction('schedulePaintingBooking', payload);
