@@ -6754,15 +6754,16 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         delivery.customer_email,
                         String(existingIso)
                     );
-                    if (!oldBookingId) {
-                        return res.status(404).json({
-                            error:
-                                'No se encontró una reserva activa de pintura (upsell) en agenda para este cliente. Revisa el calendario o anula la cita manualmente y vuelve a intentar.'
-                        });
+                    if (oldBookingId) {
+                        await sql`
+                            UPDATE bookings SET status = 'expired' WHERE id = ${oldBookingId}
+                        `;
+                    } else {
+                        console.warn(
+                            '[schedulePaintingBooking] adminReschedule: no hay booking painting_upsell activo; se sincroniza solo la entrega (cita borrada manualmente o datos viejos).',
+                            { deliveryId, email: delivery.customer_email }
+                        );
                     }
-                    await sql`
-                        UPDATE bookings SET status = 'expired' WHERE id = ${oldBookingId}
-                    `;
                     await sql`
                         UPDATE deliveries
                         SET painting_status = 'paid',

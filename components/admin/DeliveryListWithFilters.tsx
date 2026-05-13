@@ -1933,7 +1933,8 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                             {paintAgendaIsReschedule && (
                                 <span className="block mt-2 text-blue-900 bg-blue-50 border border-blue-200 rounded px-2 py-1.5 text-xs">
                                     Se anulará la cita anterior en el calendario (cupos) y se enviará un correo con la{' '}
-                                    <strong>nueva</strong> fecha y hora.
+                                    <strong>nueva</strong> fecha y hora. Si ya borraste la reserva en calendario, igual se
+                                    alineará el estado de la entrega y podrás guardar la nueva cita.
                                 </span>
                             )}
                             {!paintAgendaIsReschedule && useAdminPathForPaintSchedule(paintAgendaDelivery) && (
