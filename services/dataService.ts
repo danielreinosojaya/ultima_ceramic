@@ -2727,12 +2727,16 @@ export const checkPaintingPaymentStatus = async (deliveryId: string): Promise<{ 
     }
 };
 
-// ⚡ Agendar reserva de pintura (cliente) - ya pagada
+// ⚡ Agendar reserva de pintura (cliente ya pagó, o admin con adminOverride)
 export const schedulePaintingBooking = async (payload: {
     deliveryId: string;
     date: string; // YYYY-MM-DD
     time: string; // HH:mm
     participants: number;
+    /** Habilita pintura + pago en entrega y crea booking en agenda sin flujo web */
+    adminOverride?: boolean;
+    /** Con adminOverride y pending_payment: si false, no marca pagado (402) */
+    markPaintingPaid?: boolean;
 }): Promise<{ success: boolean; delivery?: Delivery; error?: string }> => {
     try {
         const result = await postAction('schedulePaintingBooking', payload);

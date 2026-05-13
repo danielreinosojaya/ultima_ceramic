@@ -108,6 +108,41 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
     const [dateTo, setDateTo] = useState<string>(''); // formato YYYY-MM-DD
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc'); // orden por created_at
 
+    /** Agendar pintura upsell en la agenda (mismo endpoint que el cliente + opción admin) */
+    const [paintAgendaDelivery, setPaintAgendaDelivery] = useState<Delivery | null>(null);
+    const [paintAgendaDate, setPaintAgendaDate] = useState('');
+    const [paintAgendaTime, setPaintAgendaTime] = useState('10:00');
+    const [paintAgendaParticipants, setPaintAgendaParticipants] = useState('1');
+    const [paintAgendaMarkPaid, setPaintAgendaMarkPaid] = useState(true);
+    const [paintAgendaSubmitting, setPaintAgendaSubmitting] = useState(false);
+    const [paintAgendaError, setPaintAgendaError] = useState('');
+
+    const canOfferPaintAgendaScheduling = (d: Delivery): boolean => {
+        if (d.status === 'completed') return false;
+        if (d.wantsPainting && d.paintingStatus === 'completed') return false;
+        if (d.wantsPainting && d.paintingStatus === 'scheduled' && d.paintingBookingDate) return false;
+        return true;
+    };
+
+    const useAdminPathForPaintSchedule = (d: Delivery): boolean => {
+        return !(d.wantsPainting === true && d.paintingStatus === 'paid' && d.status === 'ready');
+    };
+
+    const openPaintAgendaModal = (d: Delivery) => {
+        setPaintAgendaDelivery(d);
+        setPaintAgendaDate('');
+        setPaintAgendaTime('10:00');
+        setPaintAgendaParticipants('1');
+        setPaintAgendaMarkPaid(true);
+        setPaintAgendaError('');
+    };
+
+    const closePaintAgendaModal = () => {
+        setPaintAgendaDelivery(null);
+        setPaintAgendaSubmitting(false);
+        setPaintAgendaError('');
+    };
+
     const filteredDeliveries = useMemo(() => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -603,6 +638,46 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
 
         // PENDING - Default (not started)
         return <span className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-full bg-gray-100 text-gray-800 border border-gray-300">📋 EN PROCESO</span>;
+    };
+
+    const handlePaintAgendaSubmit = async () => {
+        if (!paintAgendaDelivery) return;
+        const dateStr = paintAgendaDate.trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+            setPaintAgendaError('Indica una fecha válida (YYYY-MM-DD).');
+            return;
+        }
+        const timeStr = (paintAgendaTime || '10:00').trim();
+        const parts = parseInt(paintAgendaParticipants, 10);
+        if (!Number.isFinite(parts) || parts < 1) {
+            setPaintAgendaError('Participantes inválidos.');
+            return;
+        }
+        const adminOverride = useAdminPathForPaintSchedule(paintAgendaDelivery);
+        setPaintAgendaSubmitting(true);
+        setPaintAgendaError('');
+        try {
+            const result = await dataService.schedulePaintingBooking({
+                deliveryId: paintAgendaDelivery.id,
+                date: dateStr,
+                time: timeStr,
+                participants: parts,
+                ...(adminOverride ? { adminOverride: true, markPaintingPaid: paintAgendaMarkPaid } : {}),
+            });
+            if (result.success && result.delivery) {
+                onDeliveryUpdated?.(result.delivery);
+                adminData.optimisticUpsertDelivery(result.delivery);
+                onDataChange?.();
+                closePaintAgendaModal();
+                alert('✅ Sesión de pintura agendada en la agenda. Se envió (o intentó) el correo al cliente.');
+            } else {
+                setPaintAgendaError(result.error || 'No se pudo agendar. Revisa cupo u horario.');
+            }
+        } catch (e) {
+            setPaintAgendaError(e instanceof Error ? e.message : 'Error al agendar');
+        } finally {
+            setPaintAgendaSubmitting(false);
+        }
     };
 
     return (
@@ -1313,40 +1388,19 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                     );
                                 })()}
 
-                                {delivery.wantsPainting && delivery.paintingStatus === 'paid' && delivery.status === 'ready' && (
+                                {canOfferPaintAgendaScheduling(delivery) && (
                                     <button
-                                        className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border border-blue-600 shadow-sm transition-all text-xs font-bold"
-                                        title="Agendar fecha y hora para sesión de pintura del cliente"
-                                        onClick={() => {
-                                            const dateStr = prompt('Fecha de pintura (YYYY-MM-DD):');
-                                            if (dateStr) {
-                                                try {
-                                                    const date = new Date(dateStr);
-                                                    if (isNaN(date.getTime())) {
-                                                        alert('Fecha inválida. Usa formato YYYY-MM-DD');
-                                                        return;
-                                                    }
-                                                    dataService.updatePaintingStatus(delivery.id, 'scheduled', {
-                                                        paintingBookingDate: date.toISOString()
-                                                    }).then(result => {
-                                                        if (result.success) {
-                                                            if (result.delivery) {
-                                                                onDeliveryUpdated?.(result.delivery);
-                                                                adminData.optimisticUpsertDelivery(result.delivery);
-                                                            }
-                                                        } else {
-                                                            alert('Error: ' + (result.error || 'No se pudo agendar'));
-                                                        }
-                                                    });
-                                                } catch (error) {
-                                                    console.error('Error scheduling:', error);
-                                                    alert('Error al agendar');
-                                                }
-                                            }
-                                        }}
+                                        type="button"
+                                        className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border border-blue-800 shadow-sm transition-all text-xs font-bold"
+                                        title={
+                                            useAdminPathForPaintSchedule(delivery)
+                                                ? 'Crea reserva en agenda + habilita pintura si el cliente no siguió el flujo web'
+                                                : 'Crea la reserva de pintura en la agenda (mismo flujo que el cliente)'
+                                        }
+                                        onClick={() => openPaintAgendaModal(delivery)}
                                     >
                                         <span>📅</span>
-                                        <span>Agendar Sesión Pintura</span>
+                                        <span>Agendar pintura (agenda)…</span>
                                     </button>
                                 )}
 
@@ -1829,6 +1883,97 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
             )}
 
             {/* Photo Viewer Modal */}
+            {paintAgendaDelivery && (
+                <div
+                    className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4"
+                    onClick={() => !paintAgendaSubmitting && closePaintAgendaModal()}
+                >
+                    <div
+                        className="bg-white rounded-xl shadow-2xl max-w-md w-full p-5"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <h3 className="text-lg font-bold text-brand-text mb-1">Agendar pintura en agenda</h3>
+                        <p className="text-xs text-brand-secondary mb-3 font-mono truncate">{paintAgendaDelivery.customerEmail}</p>
+                        <p className="text-sm text-brand-secondary mb-4">
+                            {paintAgendaDelivery.customerName || paintAgendaDelivery.customerEmail}
+                            {useAdminPathForPaintSchedule(paintAgendaDelivery) && (
+                                <span className="block mt-2 text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 text-xs">
+                                    Modo admin: se habilitará pintura en esta entrega y se marcará como pagada si aún no lo está (precio por defecto $20 si falta).
+                                </span>
+                            )}
+                        </p>
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-xs font-semibold text-brand-secondary mb-1">Fecha (YYYY-MM-DD)</label>
+                                <input
+                                    type="date"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                    value={paintAgendaDate}
+                                    onChange={e => setPaintAgendaDate(e.target.value)}
+                                    disabled={paintAgendaSubmitting}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-brand-secondary mb-1">Hora</label>
+                                <input
+                                    type="time"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                    value={paintAgendaTime}
+                                    onChange={e => setPaintAgendaTime(e.target.value)}
+                                    disabled={paintAgendaSubmitting}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-brand-secondary mb-1">Participantes</label>
+                                <input
+                                    type="number"
+                                    min={1}
+                                    max={22}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                    value={paintAgendaParticipants}
+                                    onChange={e => setPaintAgendaParticipants(e.target.value)}
+                                    disabled={paintAgendaSubmitting}
+                                />
+                            </div>
+                            {useAdminPathForPaintSchedule(paintAgendaDelivery) &&
+                                paintAgendaDelivery.wantsPainting &&
+                                paintAgendaDelivery.paintingStatus === 'pending_payment' && (
+                                    <label className="flex items-center gap-2 text-sm text-brand-text">
+                                        <input
+                                            type="checkbox"
+                                            checked={paintAgendaMarkPaid}
+                                            onChange={e => setPaintAgendaMarkPaid(e.target.checked)}
+                                            disabled={paintAgendaSubmitting}
+                                        />
+                                        Marcar pago de pintura como recibido al agendar
+                                    </label>
+                                )}
+                            {paintAgendaError && (
+                                <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-2 py-2">{paintAgendaError}</div>
+                            )}
+                        </div>
+                        <div className="flex gap-2 mt-5">
+                            <button
+                                type="button"
+                                className="flex-1 py-2 rounded-lg border border-gray-300 text-sm font-semibold"
+                                disabled={paintAgendaSubmitting}
+                                onClick={closePaintAgendaModal}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                className="flex-1 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-50"
+                                disabled={paintAgendaSubmitting}
+                                onClick={handlePaintAgendaSubmit}
+                            >
+                                {paintAgendaSubmitting ? 'Agendando…' : 'Confirmar'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <PhotoViewerModal
                 isOpen={photoViewerOpen}
                 photos={photosToView}

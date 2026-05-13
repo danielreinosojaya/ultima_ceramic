@@ -6660,7 +6660,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         }
 
         case 'schedulePaintingBooking': {
-            const { deliveryId, date, time, participants } = req.body;
+            const { deliveryId, date, time, participants, adminOverride, markPaintingPaid } = req.body;
+            const isAdminOverride = adminOverride === true;
 
             if (!deliveryId || !date || !time || participants === undefined || participants === null) {
                 return res.status(400).json({ error: 'deliveryId, date, time, participants are required' });
@@ -6681,12 +6682,52 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     });
                 }
 
-                const { rows: [delivery] } = await sql`
+                const { rows: deliveryRows0 } = await sql`
                     SELECT * FROM deliveries WHERE id = ${deliveryId}
                 `;
 
-                if (!delivery) {
+                if (!deliveryRows0?.length) {
                     return res.status(404).json({ error: 'Delivery not found' });
+                }
+
+                let delivery: any = deliveryRows0[0];
+
+                // Admin: habilitar pintura upsell + marcar pagado si hace falta, sin flujo web del cliente
+                if (isAdminOverride) {
+                    const deliveryStatus = (delivery as any).status;
+                    if (deliveryStatus === 'completed') {
+                        return res.status(400).json({
+                            error: 'No se puede agendar pintura: la entrega ya está cerrada (completed).'
+                        });
+                    }
+                    const ps0 = (delivery as any).painting_status ?? (delivery as any).paintingStatus ?? null;
+                    const wants0 = Boolean((delivery as any).wants_painting ?? (delivery as any).wantsPainting);
+
+                    if (!wants0 || ps0 === null) {
+                        await sql`
+                            UPDATE deliveries
+                            SET wants_painting = true,
+                                painting_price = COALESCE(painting_price, 20),
+                                painting_status = 'paid',
+                                painting_paid_at = COALESCE(painting_paid_at, NOW())
+                            WHERE id = ${deliveryId}
+                        `;
+                    } else if (ps0 === 'pending_payment') {
+                        if (markPaintingPaid === false) {
+                            return res.status(402).json({
+                                error: 'Pintura sin pago registrado. Marca "pago recibido" en admin o envía markPaintingPaid: true.'
+                            });
+                        }
+                        await sql`
+                            UPDATE deliveries
+                            SET painting_status = 'paid',
+                                painting_paid_at = COALESCE(painting_paid_at, NOW())
+                            WHERE id = ${deliveryId}
+                        `;
+                    }
+
+                    const { rows: deliveryRows1 } = await sql`SELECT * FROM deliveries WHERE id = ${deliveryId}`;
+                    delivery = deliveryRows1[0];
                 }
 
                 const wantsPainting = Boolean((delivery as any).wants_painting ?? (delivery as any).wantsPainting);
