@@ -61,6 +61,9 @@ export const PreBookingQuickManageModal: React.FC<PreBookingQuickManageModalProp
   const [editPayRef, setEditPayRef] = useState<{ id?: string; index: number } | null>(null);
   const [deletingRef, setDeletingRef] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  /** Lista global `getBookings` no trae payment_details (payload liviano); aquí cargamos el detalle. */
+  const [resolvedBooking, setResolvedBooking] = useState<Booking | null>(null);
+  const [paymentsDetailStatus, setPaymentsDetailStatus] = useState<'idle' | 'loading' | 'ready'>('idle');
 
   const resetPayForm = useCallback(() => {
     setPayAmount('');
@@ -81,26 +84,58 @@ export const PreBookingQuickManageModal: React.FC<PreBookingQuickManageModalProp
     setPriceStr(booking.price != null ? String(booking.price) : '');
     setParticipantsStr(booking.participants != null ? String(booking.participants) : '1');
     resetPayForm();
-  }, [booking, isOpen, resetPayForm]);
+    // Solo al cambiar reserva o abrir; si el padre refresca la misma id (p. ej. pagos), no resetear el formulario
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, booking?.id, resetPayForm]);
 
   useEffect(() => {
     if (!isOpen) setMessage(null);
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen || !booking?.id) {
+      setResolvedBooking(null);
+      setPaymentsDetailStatus('idle');
+      return;
+    }
+    let cancelled = false;
+    setPaymentsDetailStatus('loading');
+    (async () => {
+      try {
+        const full = await dataService.getBookingById(booking.id);
+        if (cancelled) return;
+        setResolvedBooking(full);
+        onBookingReplaced?.(full);
+      } catch {
+        if (cancelled) return;
+        setResolvedBooking(null);
+      } finally {
+        if (!cancelled) setPaymentsDetailStatus('ready');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Solo al abrir / cambiar reserva; onBookingReplaced puede cambiar identidad en el padre
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, booking?.id]);
+
   if (!isOpen || !booking) return null;
 
-  const slotForReschedule: TimeSlot = booking.slots?.[0] ? { ...booking.slots[0] } : { ...EMPTY_SLOT };
-  const hasRealSlot = !!(booking.slots && booking.slots.length > 0);
-  const attendeeName = `${booking.userInfo?.firstName || ''} ${booking.userInfo?.lastName || ''}`.trim() || 'Cliente';
+  const currentBooking = resolvedBooking ?? booking;
+
+  const slotForReschedule: TimeSlot = currentBooking.slots?.[0] ? { ...currentBooking.slots[0] } : { ...EMPTY_SLOT };
+  const hasRealSlot = !!(currentBooking.slots && currentBooking.slots.length > 0);
+  const attendeeName = `${currentBooking.userInfo?.firstName || ''} ${currentBooking.userInfo?.lastName || ''}`.trim() || 'Cliente';
   const rescheduleSlotInfo: RescheduleSlotInfo = {
     bookingId: booking.id,
     slot: slotForReschedule,
     attendeeName,
   };
 
-  const payments = Array.isArray(booking.paymentDetails) ? booking.paymentDetails : [];
-  const paidSum = sumPayments(booking);
-  const priceNum = typeof booking.price === 'number' ? booking.price : parseFloat(String(booking.price)) || 0;
+  const payments = Array.isArray(currentBooking.paymentDetails) ? currentBooking.paymentDetails : [];
+  const paidSum = sumPayments(currentBooking);
+  const priceNum = typeof currentBooking.price === 'number' ? currentBooking.price : parseFloat(String(currentBooking.price)) || 0;
   const balance = Math.round((priceNum - paidSum) * 100) / 100;
 
   const showToast = (type: 'ok' | 'err', text: string) => {
@@ -109,8 +144,10 @@ export const PreBookingQuickManageModal: React.FC<PreBookingQuickManageModalProp
   };
 
   const syncBookingFromServer = async () => {
+    if (!booking?.id) return;
     try {
       const fresh = await dataService.getBookingById(booking.id);
+      setResolvedBooking(fresh);
       onBookingReplaced?.(fresh);
     } catch {
       /* padre refrescará con loadBookings */
@@ -156,15 +193,15 @@ export const PreBookingQuickManageModal: React.FC<PreBookingQuickManageModalProp
     setSavingEdit(true);
     try {
       const userInfo = {
-        ...booking.userInfo,
+        ...currentBooking.userInfo,
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         email: email.trim(),
         phone: phone.trim(),
-        countryCode: countryCode.trim() || booking.userInfo?.countryCode || '+593',
+        countryCode: countryCode.trim() || currentBooking.userInfo?.countryCode || '+593',
       };
       const res = await dataService.updateBooking({
-        ...booking,
+        ...currentBooking,
         userInfo,
         price,
         participants,
@@ -192,14 +229,15 @@ export const PreBookingQuickManageModal: React.FC<PreBookingQuickManageModalProp
 
     setSavingPay(true);
     try {
-      if (editPayRef !== null && payments[editPayRef.index]) {
+      const payList = Array.isArray(currentBooking.paymentDetails) ? currentBooking.paymentDetails : [];
+      if (editPayRef !== null && payList[editPayRef.index]) {
         const updatedDetails: Record<string, unknown> = {
           amount,
           method: payMethod,
           receivedAt,
         };
         if (payNotes.trim()) updatedDetails.notes = payNotes.trim();
-        const p = payments[editPayRef.index];
+        const p = payList[editPayRef.index];
         const idOrIdx = p.id ?? editPayRef.index;
         const res = await dataService.updatePaymentDetails(booking.id, idOrIdx, updatedDetails as Partial<PaymentDetails>);
         if (res.success) {
@@ -360,7 +398,7 @@ export const PreBookingQuickManageModal: React.FC<PreBookingQuickManageModalProp
                 <input className="w-full px-3 py-2 border border-brand-border rounded-lg text-sm" type="number" min={1} value={participantsStr} onChange={e => setParticipantsStr(e.target.value)} />
               </div>
             </div>
-            {booking.isPaid && (
+            {currentBooking.isPaid && (
               <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2 mt-2">
                 El sistema marca “pagada” cuando la suma de pagos ≥ precio. Ajusta montos o el precio para que cuadre.
               </p>
@@ -379,70 +417,80 @@ export const PreBookingQuickManageModal: React.FC<PreBookingQuickManageModalProp
             <h4 className="text-sm font-bold text-brand-text mb-2 flex items-center gap-2">
               <span>💳</span> Pagos registrados
             </h4>
-            <div className="flex flex-wrap items-center gap-2 text-xs mb-3">
-              <span className="px-2 py-1 rounded-md bg-slate-100 font-semibold text-slate-800">
-                {payments.length} movimiento{payments.length !== 1 ? 's' : ''}
-              </span>
-              <span className="px-2 py-1 rounded-md bg-slate-100 text-slate-700">
-                Abonado: <strong>${paidSum.toFixed(2)}</strong> · Precio: <strong>${priceNum.toFixed(2)}</strong>
-              </span>
-              {balance > 0.009 && (
-                <span className="px-2 py-1 rounded-md bg-amber-100 text-amber-900 font-semibold">Falta ${balance.toFixed(2)}</span>
-              )}
-              {balance <= 0.009 && paidSum > 0 && (
-                <span className="px-2 py-1 rounded-md bg-green-100 text-green-800 font-semibold">Cubierto</span>
-              )}
-            </div>
+            <p className="text-[11px] text-brand-secondary mb-2">
+              La tabla de pre-reservas no trae el detalle de pagos por velocidad; se carga al abrir este panel.
+            </p>
 
-            {payments.length === 0 ? (
-              <p className="text-sm text-brand-secondary mb-3">Sin pagos registrados aún.</p>
+            {paymentsDetailStatus === 'loading' ? (
+              <p className="text-sm text-brand-secondary animate-pulse mb-4">Cargando movimientos de pago…</p>
             ) : (
-              <div className="overflow-x-auto border border-brand-border rounded-lg mb-4">
-                <table className="w-full text-xs">
-                  <thead className="bg-brand-surface">
-                    <tr>
-                      <th className="text-left px-2 py-2 font-bold">Monto</th>
-                      <th className="text-left px-2 py-2 font-bold">Método</th>
-                      <th className="text-left px-2 py-2 font-bold">Recibido</th>
-                      <th className="text-right px-2 py-2 font-bold">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {payments.map((p, index) => {
-                      const rowKey = p.id || `i-${index}`;
-                      const busy = deletingRef === rowKey;
-                      return (
-                        <tr key={rowKey} className="border-t border-brand-border">
-                          <td className="px-2 py-2 font-semibold">${Number(p.amount).toFixed(2)}</td>
-                          <td className="px-2 py-2">{formatMethodLabel(p.method)}</td>
-                          <td className="px-2 py-2 text-brand-secondary whitespace-nowrap">
-                            {p.receivedAt
-                              ? new Date(p.receivedAt).toLocaleString('es-EC', { dateStyle: 'short', timeStyle: 'short' })
-                              : '—'}
-                          </td>
-                          <td className="px-2 py-2 text-right whitespace-nowrap">
-                            <button
-                              type="button"
-                              className="text-indigo-600 font-semibold hover:underline mr-2"
-                              onClick={() => startEditPayment(p, index)}
-                            >
-                              Editar
-                            </button>
-                            <button
-                              type="button"
-                              disabled={busy}
-                              className="text-red-600 font-semibold hover:underline disabled:opacity-40"
-                              onClick={() => handleDeletePayment(p, index)}
-                            >
-                              {busy ? '…' : 'Quitar'}
-                            </button>
-                          </td>
+              <>
+                <div className="flex flex-wrap items-center gap-2 text-xs mb-3">
+                  <span className="px-2 py-1 rounded-md bg-slate-100 font-semibold text-slate-800">
+                    {payments.length} movimiento{payments.length !== 1 ? 's' : ''}
+                  </span>
+                  <span className="px-2 py-1 rounded-md bg-slate-100 text-slate-700">
+                    Abonado: <strong>${paidSum.toFixed(2)}</strong> · Precio: <strong>${priceNum.toFixed(2)}</strong>
+                  </span>
+                  {balance > 0.009 && (
+                    <span className="px-2 py-1 rounded-md bg-amber-100 text-amber-900 font-semibold">Falta ${balance.toFixed(2)}</span>
+                  )}
+                  {balance <= 0.009 && paidSum > 0 && (
+                    <span className="px-2 py-1 rounded-md bg-green-100 text-green-800 font-semibold">Cubierto</span>
+                  )}
+                </div>
+
+                {payments.length === 0 ? (
+                  <p className="text-sm text-brand-secondary mb-3">Sin pagos registrados en base de datos.</p>
+                ) : (
+                  <div className="overflow-x-auto border border-brand-border rounded-lg mb-4">
+                    <table className="w-full text-xs">
+                      <thead className="bg-brand-surface">
+                        <tr>
+                          <th className="text-left px-2 py-2 font-bold">Monto</th>
+                          <th className="text-left px-2 py-2 font-bold">Método</th>
+                          <th className="text-left px-2 py-2 font-bold">Recibido</th>
+                          <th className="text-right px-2 py-2 font-bold">Acciones</th>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                      </thead>
+                      <tbody>
+                        {payments.map((p, index) => {
+                          const rowKey = p.id || `i-${index}`;
+                          const busy = deletingRef === rowKey;
+                          return (
+                            <tr key={rowKey} className="border-t border-brand-border">
+                              <td className="px-2 py-2 font-semibold">${Number(p.amount).toFixed(2)}</td>
+                              <td className="px-2 py-2">{formatMethodLabel(p.method)}</td>
+                              <td className="px-2 py-2 text-brand-secondary whitespace-nowrap">
+                                {p.receivedAt
+                                  ? new Date(p.receivedAt).toLocaleString('es-EC', { dateStyle: 'short', timeStyle: 'short' })
+                                  : '—'}
+                              </td>
+                              <td className="px-2 py-2 text-right whitespace-nowrap">
+                                <button
+                                  type="button"
+                                  className="text-indigo-600 font-semibold hover:underline mr-2"
+                                  onClick={() => startEditPayment(p, index)}
+                                >
+                                  Editar
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  className="text-red-600 font-semibold hover:underline disabled:opacity-40"
+                                  onClick={() => handleDeletePayment(p, index)}
+                                >
+                                  {busy ? '…' : 'Quitar'}
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
             )}
 
             <div className="rounded-lg border border-dashed border-brand-border p-3 bg-brand-surface/40">
@@ -480,7 +528,7 @@ export const PreBookingQuickManageModal: React.FC<PreBookingQuickManageModalProp
               <div className="flex flex-wrap gap-2 mt-3">
                 <button
                   type="button"
-                  disabled={savingPay}
+                  disabled={savingPay || paymentsDetailStatus === 'loading'}
                   onClick={handleSavePayment}
                   className="px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 disabled:opacity-50"
                 >
@@ -499,10 +547,10 @@ export const PreBookingQuickManageModal: React.FC<PreBookingQuickManageModalProp
             <h4 className="text-sm font-bold text-red-800 mb-2">Zona sensible</h4>
             <button
               type="button"
-              disabled={unpayLoading || !booking.isPaid}
+              disabled={unpayLoading || !currentBooking.isPaid}
               onClick={handleMarkUnpaid}
               className="px-4 py-2 rounded-lg border border-red-300 text-red-700 text-sm font-semibold hover:bg-red-50 disabled:opacity-40"
-              title={!booking.isPaid ? 'Solo aplica si la reserva figura como pagada' : ''}
+              title={!currentBooking.isPaid ? 'Solo aplica si la reserva figura como pagada' : ''}
             >
               {unpayLoading ? 'Procesando…' : 'Marcar como no pagada (borra todos los pagos)'}
             </button>

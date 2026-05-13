@@ -723,7 +723,9 @@ export const ExpiredBookingsManager: React.FC = () => {
                     <th className="px-4 py-3 text-left font-bold text-brand-text">Email</th>
                     <th className="px-4 py-3 text-left font-bold text-brand-text">Clase</th>
                     <th className="px-4 py-3 text-right font-bold text-brand-text"><SortButton field="price" label="Monto" /></th>
-                    <th className="px-4 py-3 text-right font-bold text-brand-text">Pagos</th>
+                    <th className="px-4 py-3 text-right font-bold text-brand-text" title="El listado no incluye montos por línea; abre Gestionar para ver pagos reales">
+                      Pagos
+                    </th>
                     <th className="px-4 py-3 text-left font-bold text-brand-text"><SortButton field="status" label="Estado" /></th>
                     <th className="px-4 py-3 text-left font-bold text-brand-text"><SortButton field="createdAt" label="Creada" /></th>
                     <th className="px-4 py-3 text-left font-bold text-brand-text"><SortButton field="expiresAt" label="Vencimiento" /></th>
