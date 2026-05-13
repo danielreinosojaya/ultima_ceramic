@@ -130,6 +130,10 @@ export const DeliveryTimeline: React.FC<DeliveryTimelineProps> = ({
                                             SIGUIENTE: Agendar sesión de pintura con cliente
                                         </div>
                                     </div>
+                                    <div className="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 leading-snug mt-1">
+                                        <strong>Sin cita en sistema pero ya pintó:</strong> no agendes una fecha ficticia. En la tarjeta de entregas, botón{' '}
+                                        <span className="whitespace-nowrap">&quot;Ya pintó (sin cita en sistema)&quot;</span> para cerrar el paso 3 y seguir al horneado / aviso de retiro.
+                                    </div>
                                 </div>
                             )}
                             {delivery.paintingStatus === 'scheduled' && delivery.paintingBookingDate && (

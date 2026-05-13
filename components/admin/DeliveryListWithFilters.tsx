@@ -1255,57 +1255,63 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                     </button>
                                 )}
 
-                                {/* BOTÓN DE EMERGENCIA: Detectar anomalía (pagó hace >7 días sin completar) */}
-                                {delivery.wantsPainting && delivery.paintingStatus === 'paid' && delivery.paintingPaidAt && (() => {
-                                    const daysSincePaid = Math.floor((Date.now() - new Date(delivery.paintingPaidAt).getTime()) / (1000 * 60 * 60 * 24));
-                                    return daysSincePaid > 7;
-                                })() && (
-                                    <div className="flex-1 xs:flex-none">
-                                        <div className="bg-orange-50 border-2 border-orange-400 rounded-lg p-2 mb-2">
-                                            <div className="flex items-center gap-2 text-xs text-orange-800 font-bold mb-1">
-                                                <span>⚠️</span>
-                                                <span>ALERTA: Pagó hace {Math.floor((Date.now() - new Date(delivery.paintingPaidAt).getTime()) / (1000 * 60 * 60 * 24))} días sin sesión completada</span>
+                                {/* Pieza ya pintada / cita nunca guardada: NO agendar fecha ficticia — saltar a completed */}
+                                {delivery.wantsPainting && delivery.paintingStatus === 'paid' && (() => {
+                                    const daysSincePaid = delivery.paintingPaidAt
+                                        ? Math.floor((Date.now() - new Date(delivery.paintingPaidAt).getTime()) / (1000 * 60 * 60 * 24))
+                                        : null;
+                                    const confirmSkipSchedule = async () => {
+                                        const confirmMsg =
+                                            `¿Confirmas que el cliente YA PINTÓ su pieza?\n\n` +
+                                            `El agendamiento no quedó en el sistema (o hubo otro fallo de registro). ` +
+                                            `No se creará una cita ficticia: solo se marca la pintura como completada para poder avisar retiro tras el horneado final.\n\n` +
+                                            `¿Continuar?`;
+                                        if (!confirm(confirmMsg)) return;
+                                        try {
+                                            const result = await dataService.forcePaintingCompleted(delivery.id);
+                                            if (result.success) {
+                                                if (result.delivery) {
+                                                    onDeliveryUpdated?.(result.delivery);
+                                                    adminData.optimisticUpsertDelivery(result.delivery);
+                                                }
+                                                alert(
+                                                    '✅ Pintura marcada como completada.\nUsa el botón verde "🔥 Horneado Completo → Avisar Cliente" cuando la pieza salga del horno.'
+                                                );
+                                            } else {
+                                                alert('Error: ' + (result.error || 'No se pudo actualizar'));
+                                            }
+                                        } catch (error) {
+                                            console.error('Error forcing painting completed:', error);
+                                            alert('Error al marcar pintura completada');
+                                        }
+                                    };
+                                    return (
+                                        <div className="w-full basis-full min-w-0 border-t border-dashed border-gray-200 pt-2 mt-1">
+                                            <div className="rounded-lg border border-amber-200 bg-amber-50/90 px-2 py-2 space-y-2">
+                                                {daysSincePaid !== null && daysSincePaid > 7 && (
+                                                    <div className="text-[11px] text-amber-900 font-semibold flex items-start gap-1.5">
+                                                        <span>⚠️</span>
+                                                        <span>
+                                                            Lleva {daysSincePaid} días en &quot;pago recibido&quot; sin paso completado. Revisa si falta registrar algo o si conviene usar el botón de abajo.
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                <p className="text-[11px] text-amber-950 leading-snug">
+                                                    Si la pieza <strong>ya está pintada</strong> y <strong>no debe existir</strong> un agendamiento en sistema (nunca se guardó la cita), usa este botón. No inventes una fecha en &quot;Agendar&quot;.
+                                                </p>
+                                                <button
+                                                    type="button"
+                                                    className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white border border-amber-800 shadow-sm transition-all text-xs font-bold"
+                                                    title="Marcar pintura como completada sin paso de cita agendada (solo si ya pintó en taller)"
+                                                    onClick={confirmSkipSchedule}
+                                                >
+                                                    <span>🎨</span>
+                                                    <span>Ya pintó (sin cita en sistema) → marcar pintura completada</span>
+                                                </button>
                                             </div>
-                                            <div className="text-xs text-orange-700 mb-2">
-                                                Posible problema: sesión agendada con otro email o completada fuera del sistema
-                                            </div>
-                                            <button
-                                                className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white border border-orange-700 shadow-lg transition-all text-xs font-bold"
-                                                title="EMERGENCIA: Forzar marcar como completada cuando cliente ya pintó pero hubo problema de vinculación"
-                                                onClick={async () => {
-                                                    const confirmMsg = `⚠️ ACCIÓN MANUAL DE EMERGENCIA\n\n` +
-                                                        `¿Confirmas que el cliente YA PINTÓ su pieza pero el sistema no lo detectó?\n\n` +
-                                                        `Esto marcará painting_status como "completed" y habilitará el botón de horneado.\n\n` +
-                                                        `Usa esto solo cuando:\n` +
-                                                        `- Cliente agendó con otro email\n` +
-                                                        `- Sesión se registró fuera del sistema\n` +
-                                                        `- Necesitas avanzar manualmente el flujo`;
-                                                    
-                                                    if (confirm(confirmMsg)) {
-                                                        try {
-                                                            const result = await dataService.forcePaintingCompleted(delivery.id);
-                                                            if (result.success) {
-                                                                if (result.delivery) {
-                                                                    onDeliveryUpdated?.(result.delivery);
-                                                                    adminData.optimisticUpsertDelivery(result.delivery);
-                                                                }
-                                                                alert('✅ Pintura marcada como completada.\nAhora puedes usar el botón verde "🔥 Horneado Completo" cuando la pieza salga del horno.');
-                                                            } else {
-                                                                alert('Error: ' + (result.error || 'No se pudo forzar completar'));
-                                                            }
-                                                        } catch (error) {
-                                                            console.error('Error forcing painting completed:', error);
-                                                            alert('Error al forzar completar pintura');
-                                                        }
-                                                    }
-                                                }}
-                                            >
-                                                <span>🔧</span>
-                                                <span>Forzar: Marcar Pintura Completada</span>
-                                            </button>
                                         </div>
-                                    </div>
-                                )}
+                                    );
+                                })()}
 
                                 {delivery.wantsPainting && delivery.paintingStatus === 'paid' && delivery.status === 'ready' && (
                                     <button
