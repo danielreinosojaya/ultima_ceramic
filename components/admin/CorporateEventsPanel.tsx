@@ -30,6 +30,40 @@ interface CorporateEventsPanelProps {
     onNavigationComplete?: () => void;
 }
 
+/** Texto en el que buscamos (código, nombre, email, teléfono, tipo, id). */
+function bookingSearchHaystack(b: Booking): string {
+    const u = b.userInfo;
+    return [
+        b.id,
+        b.bookingCode,
+        u?.firstName,
+        u?.lastName,
+        u?.email,
+        u?.phone,
+        u?.countryCode,
+        b.productType,
+        typeof b.product === 'object' && b.product ? (b.product as { name?: string }).name : '',
+    ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+}
+
+function filterBookingsForPicker(bookings: Booking[], query: string): Booking[] {
+    const sorted = [...bookings].sort((a, b) => {
+        const da = new Date(a.createdAt).getTime() || 0;
+        const db = new Date(b.createdAt).getTime() || 0;
+        return db - da;
+    });
+    const q = query.trim().toLowerCase();
+    if (!q) return sorted.slice(0, 40);
+    const tokens = q.split(/\s+/).filter(Boolean);
+    return sorted.filter((b) => {
+        const h = bookingSearchHaystack(b);
+        return tokens.every((t) => h.includes(t));
+    }).slice(0, 80);
+}
+
 const emptyForm = (): Omit<CorporateEvent, 'id' | 'createdAt' | 'updatedAt'> => ({
     companyName: '',
     contactName: '',
@@ -65,7 +99,10 @@ export const CorporateEventsPanel: React.FC<CorporateEventsPanelProps> = ({
     const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
     const [showCreate, setShowCreate] = useState(false);
     const [createForm, setCreateForm] = useState(emptyForm());
-    const [linkDrafts, setLinkDrafts] = useState<Record<string, string>>({});
+    /** Reserva elegida para vincular (por evento expandido) */
+    const [linkSelectedId, setLinkSelectedId] = useState<Record<string, string>>({});
+    const [linkSearchQuery, setLinkSearchQuery] = useState<Record<string, string>>({});
+    const [linkIdPaste, setLinkIdPaste] = useState<Record<string, string>>({});
 
     useEffect(() => {
         if (navigateToId) {
@@ -81,8 +118,12 @@ export const CorporateEventsPanel: React.FC<CorporateEventsPanelProps> = ({
         return corporateEvents.filter((e) => e.stage === stageFilter);
     }, [corporateEvents, stageFilter]);
 
-    const bookingsForLink = useMemo(() => {
-        return [...bookings].sort((a, b) => (b.bookingCode || '').localeCompare(a.bookingCode || ''));
+    const bookingsSortedRecent = useMemo(() => {
+        return [...bookings].sort((a, b) => {
+            const da = new Date(a.createdAt).getTime() || 0;
+            const db = new Date(b.createdAt).getTime() || 0;
+            return db - da;
+        });
     }, [bookings]);
 
     const handleCreate = async () => {
@@ -146,9 +187,9 @@ export const CorporateEventsPanel: React.FC<CorporateEventsPanelProps> = ({
     };
 
     const handleLinkBooking = async (evId: string) => {
-        const bookingId = (linkDrafts[evId] || '').trim();
+        const bookingId = (linkSelectedId[evId] || '').trim();
         if (!bookingId) {
-            alert('Elige una reserva.');
+            alert('Busca y elige una fila de la lista, o usa el ID pegado abajo.');
             return;
         }
         setSaving(true);
@@ -157,7 +198,9 @@ export const CorporateEventsPanel: React.FC<CorporateEventsPanelProps> = ({
             if (res.booking) {
                 optimisticPatchBooking(bookingId, { corporateEventId: evId });
             }
-            setLinkDrafts((d) => ({ ...d, [evId]: '' }));
+            setLinkSelectedId((d) => ({ ...d, [evId]: '' }));
+            setLinkSearchQuery((d) => ({ ...d, [evId]: '' }));
+            setLinkIdPaste((d) => ({ ...d, [evId]: '' }));
             onDataChange();
         } catch (e) {
             console.error(e);
@@ -165,6 +208,21 @@ export const CorporateEventsPanel: React.FC<CorporateEventsPanelProps> = ({
         } finally {
             setSaving(false);
         }
+    };
+
+    const resolvePastedBookingId = (evId: string) => {
+        const raw = (linkIdPaste[evId] || '').trim();
+        if (!raw) {
+            alert('Pega el UUID de la reserva (desde el panel de clientes o la URL).');
+            return;
+        }
+        const found = bookings.find((b) => b.id === raw || b.id.replace(/-/g, '') === raw.replace(/-/g, ''));
+        if (!found) {
+            alert('No hay ninguna reserva con ese ID en los datos cargados.');
+            return;
+        }
+        setLinkSelectedId((d) => ({ ...d, [evId]: found.id }));
+        setLinkIdPaste((d) => ({ ...d, [evId]: '' }));
     };
 
     const handleUnlinkBooking = async (b: Booking) => {
@@ -614,28 +672,110 @@ export const CorporateEventsPanel: React.FC<CorporateEventsPanelProps> = ({
                                                 ))
                                             )}
                                         </ul>
-                                        <div className="flex flex-wrap gap-2 items-center">
-                                            <select
-                                                className="border rounded px-2 py-1 text-sm min-w-[200px]"
-                                                value={linkDrafts[ev.id] || ''}
-                                                onChange={(e) => setLinkDrafts((d) => ({ ...d, [ev.id]: e.target.value }))}
-                                            >
-                                                <option value="">Seleccionar reserva…</option>
-                                                {bookingsForLink.map((b) => (
-                                                    <option key={b.id} value={b.id}>
-                                                        {b.bookingCode} — {b.userInfo?.firstName} {b.userInfo?.lastName}
-                                                        {b.corporateEventId ? ' (ya vinculada)' : ''}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            <button
-                                                type="button"
-                                                disabled={saving}
-                                                onClick={() => handleLinkBooking(ev.id)}
-                                                className="bg-brand-primary text-white text-sm font-bold px-3 py-1 rounded"
-                                            >
-                                                Vincular
-                                            </button>
+                                        <div className="space-y-2">
+                                            <label className="block text-xs text-brand-secondary">
+                                                Buscar reserva
+                                                <input
+                                                    type="search"
+                                                    className="mt-1 w-full border rounded px-2 py-1.5 text-sm"
+                                                    placeholder="Código, nombre, email, teléfono…"
+                                                    value={linkSearchQuery[ev.id] || ''}
+                                                    onChange={(e) =>
+                                                        setLinkSearchQuery((d) => ({ ...d, [ev.id]: e.target.value }))
+                                                    }
+                                                />
+                                            </label>
+                                            <div className="max-h-48 overflow-y-auto border rounded bg-white text-sm">
+                                                {filterBookingsForPicker(
+                                                    bookingsSortedRecent,
+                                                    linkSearchQuery[ev.id] || ''
+                                                ).map((b) => {
+                                                    const selected = linkSelectedId[ev.id] === b.id;
+                                                    const linkedElsewhere = Boolean(
+                                                        b.corporateEventId && b.corporateEventId !== ev.id
+                                                    );
+                                                    const slotHint =
+                                                        b.slots?.length && b.slots[0]?.date !== 'TBD'
+                                                            ? `${b.slots[0].date} ${b.slots[0].time}`
+                                                            : 'sin fecha en agenda';
+                                                    return (
+                                                        <button
+                                                            key={b.id}
+                                                            type="button"
+                                                            onClick={() =>
+                                                                setLinkSelectedId((d) => ({ ...d, [ev.id]: b.id }))
+                                                            }
+                                                            className={`w-full text-left px-2 py-2 border-b border-gray-100 last:border-0 hover:bg-brand-background ${
+                                                                selected ? 'bg-brand-primary/15 ring-1 ring-inset ring-brand-primary' : ''
+                                                            } ${linkedElsewhere ? 'opacity-60' : ''}`}
+                                                        >
+                                                            <div className="font-mono text-xs text-brand-accent">
+                                                                {b.bookingCode}
+                                                            </div>
+                                                            <div className="font-semibold text-brand-text">
+                                                                {b.userInfo?.firstName} {b.userInfo?.lastName}
+                                                            </div>
+                                                            <div className="text-xs text-brand-secondary truncate">
+                                                                {b.userInfo?.email} · {slotHint}
+                                                            </div>
+                                                            {b.corporateEventId && (
+                                                                <div className="text-[10px] font-bold text-amber-800 mt-0.5">
+                                                                    {b.corporateEventId === ev.id
+                                                                        ? 'Ya vinculada a este evento'
+                                                                        : 'Ya vinculada a otro evento'}
+                                                                </div>
+                                                            )}
+                                                        </button>
+                                                    );
+                                                })}
+                                                {filterBookingsForPicker(
+                                                    bookingsSortedRecent,
+                                                    linkSearchQuery[ev.id] || ''
+                                                ).length === 0 && (
+                                                    <p className="p-3 text-brand-secondary text-xs">
+                                                        No hay coincidencias. Prueba otras palabras o pega el ID abajo.
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <div className="flex flex-wrap gap-2 items-end">
+                                                <label className="flex-1 min-w-[160px] text-xs text-brand-secondary">
+                                                    O pega el ID de la reserva (UUID)
+                                                    <input
+                                                        className="mt-1 w-full border rounded px-2 py-1 font-mono text-xs"
+                                                        placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                                                        value={linkIdPaste[ev.id] || ''}
+                                                        onChange={(e) =>
+                                                            setLinkIdPaste((d) => ({ ...d, [ev.id]: e.target.value }))
+                                                        }
+                                                    />
+                                                </label>
+                                                <button
+                                                    type="button"
+                                                    className="text-sm font-bold border border-brand-secondary text-brand-secondary px-3 py-1.5 rounded hover:bg-brand-background"
+                                                    onClick={() => resolvePastedBookingId(ev.id)}
+                                                >
+                                                    Usar ID
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    disabled={saving || !linkSelectedId[ev.id]}
+                                                    onClick={() => handleLinkBooking(ev.id)}
+                                                    className="bg-brand-primary text-white text-sm font-bold px-4 py-1.5 rounded disabled:opacity-40"
+                                                >
+                                                    Vincular selección
+                                                </button>
+                                            </div>
+                                            {linkSelectedId[ev.id] && (
+                                                <p className="text-xs text-brand-secondary">
+                                                    Seleccionada:{' '}
+                                                    <span className="font-mono text-brand-text">
+                                                        {
+                                                            bookings.find((b) => b.id === linkSelectedId[ev.id])
+                                                                ?.bookingCode
+                                                        }
+                                                    </span>
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
 
