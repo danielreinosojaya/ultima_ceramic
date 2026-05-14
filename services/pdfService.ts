@@ -208,6 +208,76 @@ interface ScheduleReportPdfTranslations {
     unpaid: string;
     classProgress: string;  // Column header "Clase #"
     singleClassLabel: string; // Label for non-package bookings
+    /** Texto pequeño bajo el encabezado del PDF explicando la columna de pago (opcional) */
+    paymentLegend?: string;
+    /** Etiqueta "Abono" / cobrado parcial (opcional) */
+    depositLabel?: string;
+    /** Etiqueta "Saldo" pendiente (opcional) */
+    balanceLabel?: string;
+    /** Cuando hubo abonos pero no hay precio en la reserva para calcular total */
+    noListPriceHint?: string;
+}
+
+const formatMoneyScheduleReport = (n: number, language: string): string =>
+    new Intl.NumberFormat(language, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n);
+
+function sumBookingPaymentsForReport(booking: Booking): number {
+    const raw = booking.paymentDetails;
+    const arr = Array.isArray(raw) ? raw : [];
+    return arr.reduce((sum, p) => {
+        const a = Number(p.amount) || 0;
+        const g = Number(p.giftcardAmount) || 0;
+        return sum + a + g;
+    }, 0);
+}
+
+function getBookingListPriceForReport(booking: Booking): number | null {
+    const p = Number(booking.price);
+    if (Number.isFinite(p) && p > 0) return p;
+    const pr = booking.product as Product | undefined;
+    const pp = Number(pr?.price);
+    if (Number.isFinite(pp) && pp > 0) return pp;
+    return null;
+}
+
+/** Texto de celda: pagado completo, pendiente total, o abono + saldo cuando hay datos. */
+function formatScheduleReportPaymentCell(
+    booking: Booking,
+    t: ScheduleReportPdfTranslations,
+    language: string
+): string {
+    const depositLbl = t.depositLabel ?? 'Abono';
+    const balanceLbl = t.balanceLabel ?? 'Saldo';
+    const noPriceHint = t.noListPriceHint ?? 'sin total en reserva';
+    const paidSum = sumBookingPaymentsForReport(booking);
+    const listPrice = getBookingListPriceForReport(booking);
+    const pending =
+        typeof booking.pendingBalance === 'number' && booking.pendingBalance > 0.009
+            ? booking.pendingBalance
+            : listPrice !== null
+              ? Math.max(0, listPrice - paidSum)
+              : null;
+
+    const looksFullyPaid =
+        booking.isPaid ||
+        (listPrice !== null && paidSum > 0.009 && pending !== null && pending <= 0.009) ||
+        (listPrice !== null && paidSum >= listPrice - 0.009);
+
+    if (looksFullyPaid) {
+        if (paidSum > 0.009) {
+            return `${t.paid} (${formatMoneyScheduleReport(paidSum, language)})`;
+        }
+        return t.paid;
+    }
+
+    if (paidSum > 0.009) {
+        if (listPrice !== null && pending !== null && pending > 0.009) {
+            return `${depositLbl} ${formatMoneyScheduleReport(paidSum)} · ${balanceLbl} ${formatMoneyScheduleReport(pending)}`;
+        }
+        return `${depositLbl} ${formatMoneyScheduleReport(paidSum)} (${noPriceHint})`;
+    }
+
+    return t.unpaid;
 }
 
 // Helper: Returns class progress string for a booking slot
@@ -525,6 +595,16 @@ export const generateScheduleReportPDF = (
     doc.text(`${translations.generatedOn}: ${new Date().toLocaleString(language)}`, pageWidth / 2, currentY, { align: 'center' });
     currentY += 10;
 
+    if (translations.paymentLegend) {
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(8);
+        doc.setTextColor('#6B5F58');
+        const legendLines = doc.splitTextToSize(translations.paymentLegend, pageWidth - pageMargin * 2);
+        doc.text(legendLines, pageMargin, currentY);
+        currentY += legendLines.length * 3.5 + 4;
+        doc.setFont('helvetica', 'normal');
+    }
+
     // --- CREATE TABLES FOR EACH DAY ---
     if (sortedDates.length === 0) {
       doc.text("No classes scheduled for this period.", pageWidth / 2, currentY + 20, { align: 'center' });
@@ -558,7 +638,7 @@ export const generateScheduleReportPDF = (
                       typeof b.participants === 'number' ? b.participants : 1,
                       getBookingDisplayName(b),
                       getClassProgress(b, dateStr, time, translations.singleClassLabel),
-                      b.isPaid ? translations.paid : translations.unpaid
+                      formatScheduleReportPaymentCell(b, translations, language)
                   ]),
                   theme: 'grid',
                   headStyles: {
@@ -570,9 +650,9 @@ export const generateScheduleReportPDF = (
                   columnStyles: {
                       0: { halign: 'center', cellWidth: 20 },
                       2: { halign: 'center', cellWidth: 20 },
-                      3: { cellWidth: 45 },
-                      4: { halign: 'center', cellWidth: 22 },
-                      5: { halign: 'center' }
+                      3: { cellWidth: 40 },
+                      4: { halign: 'center', cellWidth: 20 },
+                      5: { halign: 'left', cellWidth: 48, overflow: 'linebreak' as const }
                   },
                   styles: {
                       font: 'helvetica',

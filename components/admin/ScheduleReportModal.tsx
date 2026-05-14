@@ -58,11 +58,16 @@ export const ScheduleReportModal: React.FC<ScheduleReportModalProps> = ({ isOpen
             attendee: 'Asistente',
             contact: 'Contacto',
             package: 'Paquete',
-            paymentStatus: 'Estado de pago',
+            paymentStatus: 'Pago / saldo',
             paid: 'Pagado',
             unpaid: 'Pendiente',
             classProgress: 'Clase #',
-            singleClassLabel: 'Clase única'
+            singleClassLabel: 'Clase única',
+            paymentLegend:
+                'Columna «Pago / saldo»: muestra abonos registrados y saldo pendiente según el precio de la reserva (o pendingBalance). Si no hay precio en la reserva, solo verás el monto abonado.',
+            depositLabel: 'Abono',
+            balanceLabel: 'Saldo',
+            noListPriceHint: 'sin total en reserva'
         };
         
         generateScheduleReportPDF(allBookings, { start: startDate, end: endDate }, pdfTranslations, language);
