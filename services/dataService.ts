@@ -945,6 +945,22 @@ export const getBookingById = async (bookingId: string): Promise<Booking> => {
     }
 };
 
+/** Abonos y saldos reales (la lista admin omite payment_details por performance). */
+export const getBookingsPaymentLedger = async (
+    bookingIds: string[]
+): Promise<{
+    success: boolean;
+    ledger?: Record<string, { paymentDetails: PaymentDetails[]; pendingBalance: number; isPaid: boolean }>;
+    error?: string;
+}> => {
+    try {
+        return await postAction('getBookingsPaymentLedger', { bookingIds });
+    } catch (error) {
+        console.error('getBookingsPaymentLedger error:', error);
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+};
+
 // Giftcard client helpers
 export const validateGiftcard = async (code: string): Promise<any> => {
     try {

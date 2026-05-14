@@ -7862,6 +7862,79 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 });
             }
         }
+
+        /** Para PDF / reportes: lista liviana de reservas no trae payment_details; se consultan aquí en batch. */
+        case 'getBookingsPaymentLedger': {
+            try {
+                const rawIds = (req.body as any)?.bookingIds;
+                if (!Array.isArray(rawIds) || rawIds.length === 0) {
+                    return res.status(400).json({ success: false, error: 'bookingIds array required' });
+                }
+                const bookingIds = [...new Set(rawIds.map((x: any) => String(x).trim()).filter(Boolean))].slice(
+                    0,
+                    400
+                );
+                const { rows } = await sql`
+                    SELECT id, payment_details, price, is_paid
+                    FROM bookings
+                    WHERE id = ANY(${bookingIds}::uuid[])
+                `;
+                const ledger: Record<
+                    string,
+                    { paymentDetails: any[]; pendingBalance: number; isPaid: boolean }
+                > = {};
+                for (const row of rows) {
+                    const price =
+                        typeof row.price === 'number' && !Number.isNaN(row.price)
+                            ? row.price
+                            : parseFloat(String(row.price ?? '0')) || 0;
+                    let paymentDetails: any[] = [];
+                    const raw = (row as any).payment_details;
+                    if (raw) {
+                        try {
+                            const payments = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                            if (Array.isArray(payments)) {
+                                paymentDetails = payments.map((p: any) => ({
+                                    ...p,
+                                    amount:
+                                        typeof p.amount === 'string'
+                                            ? parseFloat(p.amount)
+                                            : Number(p.amount) || 0,
+                                    giftcardAmount:
+                                        p.giftcardAmount != null
+                                            ? typeof p.giftcardAmount === 'string'
+                                                ? parseFloat(p.giftcardAmount)
+                                                : Number(p.giftcardAmount) || 0
+                                            : undefined,
+                                    method: p.method || 'Cash',
+                                    receivedAt: p.receivedAt || new Date().toISOString()
+                                }));
+                            }
+                        } catch {
+                            paymentDetails = [];
+                        }
+                    }
+                    const totalPaid = paymentDetails.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+                    const isPaid =
+                        (row as any).is_paid !== undefined && (row as any).is_paid !== null
+                            ? Boolean((row as any).is_paid)
+                            : totalPaid >= price - 0.009;
+                    const pendingBalance =
+                        isPaid && totalPaid === 0 && paymentDetails.length === 0
+                            ? 0
+                            : Math.max(0, price - totalPaid);
+                    ledger[String((row as any).id)] = { paymentDetails, pendingBalance, isPaid };
+                }
+                return res.status(200).json({ success: true, ledger });
+            } catch (error) {
+                console.error('[getBookingsPaymentLedger] Error:', error);
+                return res.status(500).json({
+                    success: false,
+                    error: error instanceof Error ? error.message : String(error)
+                });
+            }
+        }
+
         case 'getBookingById': {
             try {
                 const { bookingId } = req.query;

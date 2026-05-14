@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { Booking } from '../../types';
 // import { useLanguage } from '../../context/LanguageContext';
 import { generateScheduleReportPDF } from '../../services/pdfService';
+import * as dataService from '../../services/dataService';
 
 interface ScheduleReportModalProps {
     isOpen: boolean;
@@ -46,8 +47,9 @@ export const ScheduleReportModal: React.FC<ScheduleReportModalProps> = ({ isOpen
     const language = 'es-ES';
     const [period, setPeriod] = useState<FilterPeriod>('week');
     const [customRange, setCustomRange] = useState({ start: '', end: '' });
+    const [pdfLoading, setPdfLoading] = useState(false);
 
-    const handleGenerateReport = () => {
+    const handleGenerateReport = async () => {
         const { startDate, endDate } = getDatesForPeriod(period, customRange);
 
         const pdfTranslations = {
@@ -64,14 +66,39 @@ export const ScheduleReportModal: React.FC<ScheduleReportModalProps> = ({ isOpen
             classProgress: 'Clase #',
             singleClassLabel: 'Clase única',
             paymentLegend:
-                '«Pago / saldo»: Pagado con monto cobrado; Pendiente con Total a cobrar cuando hay precio en la reserva; Abono + Saldo si hubo pagos parciales.',
+                '«Pago / saldo»: al generar el PDF se cargan los abonos reales desde el servidor. Pagado con monto; Pendiente con total o saldo; Abono + Saldo si hay pagos parciales.',
             depositLabel: 'Abono',
             balanceLabel: 'Saldo',
             noListPriceHint: 'sin total en reserva',
             totalDueLabel: 'Total'
         };
-        
-        generateScheduleReportPDF(allBookings, { start: startDate, end: endDate }, pdfTranslations, language);
+
+        setPdfLoading(true);
+        let bookingsForPdf: Booking[] = allBookings;
+        try {
+            const ids = [...new Set(allBookings.map((b) => b.id).filter(Boolean))];
+            if (ids.length > 0) {
+                const res = await dataService.getBookingsPaymentLedger(ids);
+                if (res?.success && res.ledger) {
+                    bookingsForPdf = allBookings.map((b) => {
+                        const patch = res.ledger![b.id];
+                        if (!patch) return b;
+                        return {
+                            ...b,
+                            paymentDetails: patch.paymentDetails,
+                            pendingBalance: patch.pendingBalance,
+                            isPaid: patch.isPaid
+                        };
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn('[ScheduleReportModal] getBookingsPaymentLedger failed', e);
+        } finally {
+            setPdfLoading(false);
+        }
+
+        generateScheduleReportPDF(bookingsForPdf, { start: startDate, end: endDate }, pdfTranslations, language);
         onClose();
     };
 
@@ -127,8 +154,13 @@ export const ScheduleReportModal: React.FC<ScheduleReportModalProps> = ({ isOpen
                     <button type="button" onClick={onClose} className="bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100">
                         Cancelar
                     </button>
-                    <button type="button" onClick={handleGenerateReport} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent">
-                        Generar reporte
+                    <button
+                        type="button"
+                        disabled={pdfLoading}
+                        onClick={handleGenerateReport}
+                        className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                        {pdfLoading ? 'Cargando pagos…' : 'Generar reporte'}
                     </button>
                 </div>
             </div>
