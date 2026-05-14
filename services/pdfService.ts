@@ -216,6 +216,8 @@ interface ScheduleReportPdfTranslations {
     balanceLabel?: string;
     /** Cuando hubo abonos pero no hay precio en la reserva para calcular total */
     noListPriceHint?: string;
+    /** Tras «Pendiente» cuando hay monto a cobrar y aún no hubo abonos (opcional) */
+    totalDueLabel?: string;
 }
 
 const formatMoneyScheduleReport = (n: number, language: string): string =>
@@ -234,6 +236,18 @@ function sumBookingPaymentsForReport(booking: Booking): number {
 function getBookingListPriceForReport(booking: Booking): number | null {
     const p = Number(booking.price);
     if (Number.isFinite(p) && p > 0) return p;
+    const meta = booking.groupClassMetadata;
+    if (meta) {
+        const tp = Number(meta.totalPrice);
+        if (Number.isFinite(tp) && tp > 0) return tp;
+        const fromParts = Number(booking.participants);
+        const fromMeta = Number(meta.totalParticipants);
+        const n =
+            (Number.isFinite(fromParts) && fromParts > 0 ? fromParts : 0) ||
+            (Number.isFinite(fromMeta) && fromMeta > 0 ? fromMeta : 0);
+        const ppp = Number(meta.pricePerPerson);
+        if (Number.isFinite(ppp) && ppp > 0 && n > 0) return ppp * n;
+    }
     const pr = booking.product as Product | undefined;
     const pp = Number(pr?.price);
     if (Number.isFinite(pp) && pp > 0) return pp;
@@ -249,6 +263,7 @@ function formatScheduleReportPaymentCell(
     const depositLbl = t.depositLabel ?? 'Abono';
     const balanceLbl = t.balanceLabel ?? 'Saldo';
     const noPriceHint = t.noListPriceHint ?? 'sin total en reserva';
+    const totalDueLbl = t.totalDueLabel ?? 'Total';
     const paidSum = sumBookingPaymentsForReport(booking);
     const listPrice = getBookingListPriceForReport(booking);
     const pending =
@@ -272,9 +287,20 @@ function formatScheduleReportPaymentCell(
 
     if (paidSum > 0.009) {
         if (listPrice !== null && pending !== null && pending > 0.009) {
-            return `${depositLbl} ${formatMoneyScheduleReport(paidSum)} · ${balanceLbl} ${formatMoneyScheduleReport(pending)}`;
+            return `${depositLbl} ${formatMoneyScheduleReport(paidSum, language)} · ${balanceLbl} ${formatMoneyScheduleReport(pending, language)}`;
         }
-        return `${depositLbl} ${formatMoneyScheduleReport(paidSum)} (${noPriceHint})`;
+        return `${depositLbl} ${formatMoneyScheduleReport(paidSum, language)} (${noPriceHint})`;
+    }
+
+    // Sin abonos: mostrar cuánto falta cobrar si hay precio o pendingBalance
+    const dueIfNothingPaid =
+        typeof booking.pendingBalance === 'number' && booking.pendingBalance > 0.009
+            ? booking.pendingBalance
+            : listPrice !== null && listPrice > 0.009
+              ? listPrice
+              : null;
+    if (dueIfNothingPaid !== null) {
+        return `${t.unpaid} · ${totalDueLbl} ${formatMoneyScheduleReport(dueIfNothingPaid, language)}`;
     }
 
     return t.unpaid;
