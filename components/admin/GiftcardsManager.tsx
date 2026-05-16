@@ -4,22 +4,7 @@ import * as dataService from '../../services/dataService';
 import { useAdminData } from '../../context/AdminDataContext';
 import { GiftcardManualCreateModal } from './GiftcardManualCreateModal';
 import { getEcuadorToday, formatDateToYYYYMMDD } from '../../utils/formatters';
-
-// Función para convertir UTC a hora local (Quito UTC-5)
-const utcToLocal = (isoString: string | null): Date | null => {
-  if (!isoString) return null;
-  
-  // La fecha viene en UTC desde la BD
-  // Necesitamos mostrarla como hora de Quito (UTC-5)
-  // Ejemplo: "2025-11-22T03:00:00Z" (UTC) = 2025-11-21 22:00 (Quito)
-  
-  const utcDate = new Date(isoString);
-  
-  // Obtener componentes UTC y restarlos 5 horas para Quito
-  const quitoDate = new Date(utcDate.getTime() - (5 * 60 * 60 * 1000));
-  
-  return quitoDate;
-};
+import { formatEcuadorDateTime, ecuadorLocalToUtcIso, utcIsoToEcuadorParts } from '../../utils/giftcardTimezone';
 
 const GiftcardsManager: React.FC = () => {
   const adminData = useAdminData();
@@ -318,7 +303,7 @@ const GiftcardsManager: React.FC = () => {
                         <div className="text-brand-primary font-bold text-lg">
                           {pendingScheduled.length} giftcard{pendingScheduled.length !== 1 ? 's' : ''} pendiente{pendingScheduled.length !== 1 ? 's' : ''} de envío programado
                         </div>
-                        <div className="text-sm text-brand-secondary">Próximo envío: {utcToLocal(pendingScheduled[0]?.scheduledSendAt)?.toLocaleString('es-ES', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }) || '—'}</div>
+                        <div className="text-sm text-brand-secondary">Próximo envío (hora Ecuador): {formatEcuadorDateTime(pendingScheduled[0]?.scheduledSendAt)}</div>
                       </div>
                     </div>
                     <button
@@ -382,9 +367,7 @@ const GiftcardsManager: React.FC = () => {
               
               const bal = getBalanceForRequest(req);
               const isScheduled = (req as any).scheduledSendAt;
-              const scheduledDateUTC = isScheduled ? new Date((req as any).scheduledSendAt) : null;
-              const scheduledDateLocal = isScheduled ? utcToLocal((req as any).scheduledSendAt) : null;
-              const isPastSchedule = scheduledDateLocal && scheduledDateLocal < new Date();
+              const isPastSchedule = isScheduled && new Date((req as any).scheduledSendAt) < new Date();
               
               return (
                 <tr 
@@ -433,6 +416,7 @@ const GiftcardsManager: React.FC = () => {
                       <span className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
                         req.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 
                         req.status === 'approved' ? 'bg-green-100 text-green-700' : 
+                        req.status === 'delivered' ? 'bg-emerald-100 text-emerald-800' :
                         req.status === 'rejected' ? 'bg-red-100 text-red-700' : 
                         'bg-blue-100 text-blue-700'
                       }`}>
@@ -465,12 +449,7 @@ const GiftcardsManager: React.FC = () => {
                           {(req as any).sendMethod === 'whatsapp' ? '💬 WhatsApp' : '📧 Email'}
                         </div>
                         <div className={`text-xs font-semibold ${isPastSchedule ? 'text-red-700 bg-red-100' : 'text-brand-primary bg-brand-primary/10'} px-2 py-1 rounded`}>
-                          📅 {scheduledDateLocal!.toLocaleString('es-ES', { 
-                            month: '2-digit',
-                            day: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
+                          📅 {formatEcuadorDateTime((req as any).scheduledSendAt)}
                         </div>
                         {isPastSchedule && (
                           <div className="text-xs text-red-600 font-semibold">⚠️ Vencida</div>
@@ -481,8 +460,8 @@ const GiftcardsManager: React.FC = () => {
                             setEditScheduleModal({
                               isOpen: true,
                               requestId: req.id,
-                              currentDate: scheduledDateLocal ? formatDateToYYYYMMDD(scheduledDateLocal) : '',
-                              currentTime: `${String(scheduledDateLocal?.getHours()).padStart(2, '0')}:${String(scheduledDateLocal?.getMinutes()).padStart(2, '0')}`,
+                              currentDate: utcIsoToEcuadorParts((req as any).scheduledSendAt)?.date || '',
+                              currentTime: utcIsoToEcuadorParts((req as any).scheduledSendAt)?.time || '14:00',
                               recipientName: req.recipientName
                             });
                           }}
@@ -615,7 +594,7 @@ const GiftcardsManager: React.FC = () => {
                     <div><span className="font-semibold">Comprador:</span> <span className="font-semibold text-brand-primary">{selected.buyerName}</span></div>
                     <div><span className="font-semibold">Destinatario:</span> <span className="font-semibold text-brand-primary">{selected.recipientName}</span></div>
                     <div><span className="font-semibold">Monto:</span> <span className="font-bold text-green-600">${selected.amount}</span></div>
-                    <div><span className="font-semibold">Estado:</span> <span className={`px-2 py-0.5 rounded text-xs font-semibold ${selected.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : selected.status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{selected.status}</span></div>
+                    <div><span className="font-semibold">Estado:</span> <span className={`px-2 py-0.5 rounded text-xs font-semibold ${selected.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : selected.status === 'approved' ? 'bg-green-100 text-green-700' : selected.status === 'delivered' ? 'bg-emerald-100 text-emerald-800' : selected.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>{selected.status}</span></div>
                   </div>
                 </div>
                 <button
@@ -661,7 +640,7 @@ const GiftcardsManager: React.FC = () => {
                         <div>
                           <div className="font-semibold">Programado:</div>
                           <div className="font-mono bg-white px-2 py-1.5 rounded border border-brand-primary/30 text-brand-primary font-bold mt-1">
-                            {utcToLocal((selected as any).scheduledSendAt)?.toLocaleString('es-ES', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                            {formatEcuadorDateTime((selected as any).scheduledSendAt)}
                           </div>
                         </div>
                         {new Date((selected as any).scheduledSendAt) < new Date() && (
@@ -723,7 +702,7 @@ const GiftcardsManager: React.FC = () => {
                       try {
                         const res = await dataService.approveGiftcardRequest(selected.id, adminUser, noteText || undefined);
                         if (res && res.success) {
-                          adminData.refreshCritical();
+                          adminData.refreshCritical?.();
                           setSelected(null);
                           setNoteText('');
                         } else {
@@ -873,7 +852,7 @@ const GiftcardsManager: React.FC = () => {
             <div className="space-y-4">
               {/* Fecha */}
               <div>
-                <label className="block text-sm font-semibold text-brand-secondary mb-2">Fecha</label>
+                <label className="block text-sm font-semibold text-brand-secondary mb-2">Fecha (hora Ecuador)</label>
                 <input
                   type="date"
                   value={editScheduleModal.currentDate || ''}
@@ -890,7 +869,7 @@ const GiftcardsManager: React.FC = () => {
 
               {/* Hora */}
               <div>
-                <label className="block text-sm font-semibold text-brand-secondary mb-2">Hora</label>
+                <label className="block text-sm font-semibold text-brand-secondary mb-2">Hora (hora Ecuador)</label>
                 <input
                   type="time"
                   value={editScheduleModal.currentTime || ''}
@@ -923,11 +902,10 @@ const GiftcardsManager: React.FC = () => {
 
                     setEditScheduleModal(prev => ({ ...prev, isLoading: true }));
                     try {
-                      // Construir fecha UTC
-                      const [hours, minutes] = editScheduleModal.currentTime.split(':').map(Number);
-                      const date = new Date(editScheduleModal.currentDate);
-                      date.setUTCHours(hours + 5, minutes, 0, 0); // Convertir a UTC (UTC-5)
-                      const utcDateTime = date.toISOString();
+                      const utcDateTime = ecuadorLocalToUtcIso(
+                        editScheduleModal.currentDate,
+                        editScheduleModal.currentTime
+                      );
 
                       const res = await dataService.updateGiftcardSchedule(
                         editScheduleModal.requestId,

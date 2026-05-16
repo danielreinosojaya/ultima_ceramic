@@ -1,33 +1,6 @@
 import React from 'react';
 import * as dataService from '../../services/dataService';
-
-// Función para convertir hora local (Quito UTC-5) a UTC
-const localToUTC = (dateStr: string, timeStr: string): string => {
-  // dateStr: "2025-11-21", timeStr: "21:41" (hora local de Quito)
-  // Necesitamos convertir esta hora a UTC (UTC-5 significa UTC = Quito + 5 horas)
-  // Ejemplo: 21:41 Quito (UTC-5) = 02:41 UTC (día siguiente)
-  
-  const [hours, minutes] = timeStr.split(':').map(Number);
-  
-  // Crear fecha UTC explícitamente usando el string "2025-11-21" como UTC
-  // dateStr es en formato YYYY-MM-DD
-  const [year, month, day] = dateStr.split('-').map(Number);
-  
-  // Crear fecha en UTC (no en hora local del navegador)
-  const utcDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
-  
-  // Ahora sumar 5 horas para convertir de "Quito" a UTC
-  utcDate.setUTCHours(hours + 5, minutes, 0, 0);
-  
-  console.log('🌍 Conversión localToUTC:', {
-    input: `${dateStr}T${timeStr}`,
-    quitoTime: `${dateStr}T${timeStr}:00 (Quito, UTC-5)`,
-    utcResult: utcDate.toISOString(),
-    explanation: `${hours}:${minutes.toString().padStart(2, '0')} Quito = ${utcDate.getUTCHours()}:${utcDate.getUTCMinutes().toString().padStart(2, '0')} UTC`
-  });
-  
-  return utcDate.toISOString();
-};
+import { ecuadorLocalToUtcIso } from '../../utils/giftcardTimezone';
 
 export const GiftcardManualPaymentInstructions: React.FC<{ onFinish: () => void; amount: number; personalization: any; deliveryMethod: { type: string; data?: any }; buyerEmail: string }> = ({ onFinish, amount, personalization, deliveryMethod, buyerEmail }) => {
   // Generar código único (ejemplo: GIF-XXXXXX)
@@ -56,7 +29,9 @@ export const GiftcardManualPaymentInstructions: React.FC<{ onFinish: () => void;
           code,
           message: personalization?.message || '',
           sendMethod: (deliveryMethod?.type as 'email' | 'whatsapp') || undefined,
-          scheduledSendAt: deliveryMethod?.data?.scheduled ? localToUTC(deliveryMethod.data.sendDate, deliveryMethod.data.sendTime) : null
+          scheduledSendAt: deliveryMethod?.data?.scheduled
+            ? ecuadorLocalToUtcIso(deliveryMethod.data.sendDate, deliveryMethod.data.sendTime)
+            : null
         };
         
         console.log('📤 Enviando giftcard:', {

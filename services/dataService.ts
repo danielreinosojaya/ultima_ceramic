@@ -26,7 +26,7 @@ export type GiftcardRequest = {
     amount: number;
     code: string;
     message?: string;
-    status: 'pending' | 'approved' | 'rejected' | 'delivered' | 'deleted';
+    status: 'pending' | 'approved' | 'rejected' | 'delivered' | 'deleted' | string;
     createdAt: string;
     sendMethod?: 'email' | 'whatsapp';
     scheduledSendAt?: string | null;
@@ -43,7 +43,11 @@ export type GiftcardRequest = {
 
 export const getGiftcardRequests = async (): Promise<GiftcardRequest[]> => {
     try {
-        const response = await fetch('/api/data?action=listGiftcardRequests');
+        invalidateGiftcardsCache();
+        const response = await fetch(`/api/data?action=listGiftcardRequests&_t=${Date.now()}`, {
+            cache: 'no-store',
+            headers: { Pragma: 'no-cache', 'Cache-Control': 'no-cache' },
+        });
         if (!response.ok) throw new Error('Error fetching giftcard requests');
         const data = await response.json();
         if (!Array.isArray(data)) return [];
@@ -77,8 +81,12 @@ export const approveGiftcardRequest = async (
 ): Promise<{ success: boolean; request?: GiftcardRequest; error?: string }> => {
     try {
         const res = await postAction('approveGiftcardRequest', { id, adminUser, note, metadata });
-        if (res && res.success && res.request) {
-            return { success: true, request: res.request as GiftcardRequest };
+        if (res && res.success) {
+            invalidateGiftcardsCache();
+            if (res.request) {
+                return { success: true, request: res.request as GiftcardRequest };
+            }
+            return { success: true };
         }
         return { success: false, error: res?.error || 'Failed to approve giftcard request' };
     } catch (error) {
@@ -2875,6 +2883,7 @@ export const checkGiftcardBalance = async (code: string): Promise<{
 // Send giftcard immediately (override scheduling)
 export const sendGiftcardNow = async (requestId: string | number): Promise<{ success: boolean; error?: string }> => {
     try {
+        invalidateGiftcardsCache();
         const response = await fetch('/api/data?action=sendGiftcardNow', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

@@ -50,6 +50,7 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 import { generatePaymentId, generateGiftcardCode } from '../utils/formatters.js';
 import { checkRateLimit } from './rateLimiter.js';
 import { uploadPhotoToBunny, uploadProofToBunny } from './bunnyUpload.js';
+import { deliverGiftcardToRecipient } from './utils/giftcardDelivery.js';
 import type {
     Booking,
     ClientNotification,
@@ -1166,8 +1167,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         metadata: row.metadata || null
                     }));
                     data = formatted;
-                    // ✅ OPTIMIZACIÓN: Cache CDN 5 minutos (datos dinámicos)
-                    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+                    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
                 } catch (error) {
                     console.error('Error al listar giftcards:', error);
                     data = [];
@@ -3017,72 +3017,6 @@ async function findPaintingUpsellBookingForReschedule(
     return candidates[0]?.id || null;
 }
 
-/** Envía la giftcard al destinatario por email o registra enlace WhatsApp */
-async function deliverGiftcardToRecipient(
-    request: Record<string, any>,
-    code: string,
-    requestId: string | number
-): Promise<{ sent: boolean; method: string; error?: string; waLink?: string; emailResult?: any }> {
-    const emailService = await import('./emailService.js');
-    const sendMethod = String(request.send_method || request.sendMethod || 'email').toLowerCase();
-    const issuedCode = code;
-
-    if (sendMethod === 'whatsapp') {
-        const recipientPhone = request.recipient_whatsapp || request.recipientWhatsapp;
-        if (!recipientPhone) {
-            return { sent: false, method: 'whatsapp', error: 'No hay número de WhatsApp del destinatario' };
-        }
-        const recipientName = request.recipient_name || request.recipientName || '';
-        const message = `Hola ${recipientName}, tu giftcard de $${request.amount} ha sido aprobada.%0A%0ACódigo: ${issuedCode}%0AMonto: USD $${Number(request.amount).toFixed(2)}%0AValidez: 3 meses desde la fecha de emisión%0A%0AContáctanos por WhatsApp para redimirla.`;
-        const waLink = `https://wa.me/${recipientPhone}?text=${message}`;
-        console.log('[deliverGiftcardToRecipient] WhatsApp link:', waLink);
-        await sql`
-            UPDATE giftcard_requests
-            SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({
-                whatsapp_sent_at: new Date().toISOString(),
-                whatsapp_link: waLink,
-                whatsapp_phone: recipientPhone
-            })}::jsonb
-            WHERE id = ${requestId}
-        `;
-        return { sent: true, method: 'whatsapp', waLink };
-    }
-
-    const recipientEmail = request.recipient_email || request.recipientEmail;
-    if (!recipientEmail) {
-        return { sent: false, method: 'email', error: 'No hay email del destinatario' };
-    }
-
-    const emailResult = await emailService.sendGiftcardRecipientEmail(recipientEmail, {
-        recipientName: request.recipient_name || request.recipientName,
-        amount: Number(request.amount),
-        code: issuedCode,
-        message: request.buyer_message || request.buyerMessage || '',
-        buyerName: request.buyer_name || request.buyerName
-    });
-
-    const emailSent = !emailResult || (emailResult as { sent?: boolean }).sent !== false;
-    await sql`
-        UPDATE giftcard_requests
-        SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({
-            emailDelivery: {
-                recipient: { sent: emailSent, sentAt: new Date().toISOString(), ...(emailResult || {}) }
-            }
-        })}::jsonb
-        WHERE id = ${requestId}
-    `;
-
-    if (!emailSent) {
-        return {
-            sent: false,
-            method: 'email',
-            error: (emailResult as { error?: string })?.error || 'El proveedor de email no confirmó el envío',
-            emailResult
-        };
-    }
-    return { sent: true, method: 'email', emailResult };
-}
-
 async function handleAction(action: string, req: VercelRequest, res: VercelResponse) {
     let result: any = { success: true };
     switch (action) {  // Corregido: Se agregó el paréntesis faltante
@@ -3936,6 +3870,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     metadata: row.metadata || null
                 }));
                 console.log('[listGiftcardRequests] ✅ Retornando giftcards formateados');
+                res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
                 return res.status(200).json(formatted);
             } catch (error) {
                 console.error('Error al listar giftcards:', error);
@@ -3960,11 +3895,19 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     UPDATE giftcard_requests SET status = 'approved', approved_by = ${String(adminUser)}, approved_at = NOW(), metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify({ approvedBy: adminUser })}::jsonb WHERE id = ${id} RETURNING *;
                 `;
 
-                // Insert approval event
-                await sql`
-                    INSERT INTO giftcard_events (giftcard_request_id, event_type, admin_user, note, metadata)
-                    VALUES (${id}, 'approved', ${String(adminUser)}, ${body.note || null}, ${body.metadata ? JSON.stringify(body.metadata) : null});
-                `;
+                if (!updated) {
+                    await sql`ROLLBACK`;
+                    return res.status(404).json({ success: false, error: 'Giftcard request not found' });
+                }
+
+                try {
+                    await sql`
+                        INSERT INTO giftcard_events (giftcard_request_id, event_type, admin_user, note, metadata)
+                        VALUES (${id}, 'approved', ${String(adminUser)}, ${body.note || null}, ${body.metadata ? JSON.stringify(body.metadata) : null});
+                    `;
+                } catch (eventErr) {
+                    console.warn('[approveGiftcardRequest] giftcard_events insert skipped:', eventErr);
+                }
 
                 // Issue giftcard assets (code, QR, PDF) and persist giftcard record
                 // Generate unique code: GC- + 6 base36 chars (uppercase)
@@ -4174,7 +4117,9 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     if (!scheduledSendAt) {
                         try {
                             recipientDeliveryResult = await deliverGiftcardToRecipient(updated, code, id);
-                            if (!recipientDeliveryResult.sent) {
+                            if (recipientDeliveryResult.sent) {
+                                await sql`UPDATE giftcard_requests SET status = 'delivered' WHERE id = ${id}`;
+                            } else if (!recipientDeliveryResult.sent) {
                                 console.warn('[approveGiftcardRequest] Recipient delivery failed:', recipientDeliveryResult.error);
                             }
                         } catch (recipientErr) {
@@ -4190,10 +4135,16 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         try {
                             let schedulingInfo = '';
                             if (scheduledSendAt) {
-                                const scheduledDate = new Date(scheduledSendAt);
-                                const localDate = new Date(scheduledDate.getTime() - (5 * 60 * 60 * 1000));
-                                const timeStr = localDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-                                schedulingInfo = `Será enviada el ${localDate.toLocaleDateString('es-ES')} a las ${timeStr} vía ${sendMethod === 'whatsapp' ? 'WhatsApp' : 'Email'}.`;
+                                const ecLabel = new Date(scheduledSendAt).toLocaleString('es-EC', {
+                                    timeZone: 'America/Guayaquil',
+                                    year: 'numeric',
+                                    month: '2-digit',
+                                    day: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    hour12: false,
+                                });
+                                schedulingInfo = `Será enviada el ${ecLabel} (hora Ecuador) vía ${sendMethod === 'whatsapp' ? 'WhatsApp' : 'Email'}.`;
                             }
 
                             buyerEmailResult = await emailServiceModule.sendGiftcardPaymentConfirmedEmail(
@@ -4229,7 +4180,12 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 }
 
                 await sql`COMMIT`;
-                const responsePayload: any = { success: true, request: toCamelCase(updated) };
+
+                const { rows: [freshRow] } = await sql`SELECT * FROM giftcard_requests WHERE id = ${id}`;
+                const responsePayload: any = {
+                    success: true,
+                    request: toCamelCase(freshRow || updated),
+                };
                 if (issuedGiftcard) responsePayload.giftcard = toCamelCase(issuedGiftcard);
                 return res.status(200).json(responsePayload);
             } catch (error) {
@@ -4361,12 +4317,16 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     return res.status(404).json({ success: false, error: 'Giftcard request not found' });
                 }
 
-                if (request.status !== 'approved') {
-                    return res.status(400).json({ success: false, error: 'Giftcard must be approved before sending' });
-                }
-                
                 const issuedCode = request.metadata?.issued_code || request.metadata?.issuedCode || request.code;
-                const delivery = await deliverGiftcardToRecipient(request, issuedCode || request.code, requestId);
+                if (!issuedCode) {
+                    return res.status(400).json({ success: false, error: 'No hay código emitido. Aprueba la solicitud primero.' });
+                }
+
+                if (request.status !== 'approved' && request.status !== 'delivered') {
+                    return res.status(400).json({ success: false, error: 'La giftcard debe estar aprobada antes de enviar' });
+                }
+
+                const delivery = await deliverGiftcardToRecipient(request, issuedCode, requestId);
 
                 if (!delivery.sent) {
                     return res.status(400).json({
@@ -4375,6 +4335,12 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         delivery
                     });
                 }
+
+                await sql`
+                    UPDATE giftcard_requests
+                    SET status = 'delivered'
+                    WHERE id = ${requestId}
+                `;
 
                 console.log('[sendGiftcardNow] Giftcard sent successfully:', requestId, delivery.method);
                 return res.status(200).json({
