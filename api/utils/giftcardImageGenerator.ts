@@ -13,13 +13,13 @@ export interface GiftcardData {
 
 export type GiftcardVersion = 'v1' | 'v2';
 
-/** Recorte superior de tu_giftcard.png (cara frontal con para/de/valor) */
+/** Plantilla completa tu_giftcard.png: dos caras apiladas (1080×1080) */
 const CARD_WIDTH = 1080;
-const CARD_HEIGHT = 540;
+const CARD_HEIGHT = 1080;
 const TEMPLATE_FILE = 'tu_giftcard.png';
 
 /**
- * Posiciones sobre la cara superior de tu_giftcard.png (1080×1080).
+ * Textos sobre la cara frontal (mitad superior). La cara trasera es solo plantilla.
  * Ajusta left/top aquí y corre: npm run preview:giftcard
  */
 export const GIFTCARD_LAYOUT = {
@@ -100,7 +100,6 @@ export const generateGiftcardImage = async (
   const senderName = truncate(data.senderName, 42);
   const amountLabel = `$${Number(data.amount).toFixed(2)}`;
 
-  // Satori (@vercel/og) distorsiona background-size; <img> + recorte = plantilla fiel.
   const element = React.createElement(
     'div',
     {
@@ -109,14 +108,13 @@ export const generateGiftcardImage = async (
         height: CARD_HEIGHT,
         display: 'flex',
         position: 'relative',
-        overflow: 'hidden',
       },
     },
     [
       React.createElement('img', {
         src: background,
         width: CARD_WIDTH,
-        height: CARD_WIDTH,
+        height: CARD_HEIGHT,
         style: {
           position: 'absolute',
           top: 0,
