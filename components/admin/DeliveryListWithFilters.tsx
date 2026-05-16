@@ -4,7 +4,7 @@ import { MagnifyingGlassIcon, FunnelIcon, XMarkIcon, QuestionMarkCircleIcon, Arr
 import { PhotoViewerModal } from './PhotoViewerModal';
 import { EmailNotificationsPanel } from './EmailNotificationsPanel';
 import { DeliveryTimeline } from './DeliveryTimeline';
-import { DeliveryPaintingAdminGuidePanel } from './DeliveryPaintingAdminGuidePanel';
+import type { DeliveryPaintingFlowActions } from './DeliveryPaintingFlowTimeline';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import * as dataService from '../../services/dataService';
@@ -153,6 +153,91 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
             alert('Error al guardar');
         }
     };
+
+    const handleForcePaintingCompleted = async (delivery: Delivery) => {
+        const confirmMsg =
+            `¿Confirmas que el cliente YA PINTÓ su pieza?\n\n` +
+            `No se creará una cita ficticia: solo se marca la pintura como completada para poder avisar retiro tras el horneado final.\n\n` +
+            `¿Continuar?`;
+        if (!confirm(confirmMsg)) return;
+        try {
+            const result = await dataService.forcePaintingCompleted(delivery.id);
+            if (result.success) {
+                if (result.delivery) {
+                    onDeliveryUpdated?.(result.delivery);
+                    adminData.optimisticUpsertDelivery(result.delivery);
+                }
+                alert(
+                    '✅ Pintura marcada como completada.\nUsa el paso 5 del flujo cuando la pieza salga del horno.'
+                );
+            } else {
+                alert('Error: ' + (result.error || 'No se pudo actualizar'));
+            }
+        } catch (error) {
+            console.error('Error forcing painting completed:', error);
+            alert('Error al marcar pintura completada');
+        }
+    };
+
+    const buildPaintingFlowActions = (delivery: Delivery): DeliveryPaintingFlowActions => ({
+        onDeferPayment: () => {
+            void handleDeferPaintingPayment(delivery);
+        },
+        onRegisterPayment: () => {
+            void handleRegisterPaintingPayment(delivery);
+        },
+        onMarkReady: () => onMarkReady(delivery.id),
+        onResendReadyEmail: () => onMarkReady(delivery.id),
+        onOpenScheduleModal: () => openPaintAgendaModal(delivery),
+        onMarkPaintingCompleted: () => {
+            void (async () => {
+                if (!confirm('¿Confirmas que el cliente completó la sesión de pintura?')) return;
+                try {
+                    const result = await dataService.updatePaintingStatus(delivery.id, 'completed');
+                    if (result.success && result.delivery) {
+                        onDeliveryUpdated?.(result.delivery);
+                        adminData.optimisticUpsertDelivery(result.delivery);
+                    } else {
+                        alert('Error: ' + (result.error || 'No se pudo completar'));
+                    }
+                } catch (error) {
+                    console.error('Error completing painting:', error);
+                    alert('Error al completar');
+                }
+            })();
+        },
+        onForcePaintingCompleted: () => {
+            void handleForcePaintingCompleted(delivery);
+        },
+        onNotifyPickup: (resend) => {
+            void (async () => {
+                const msg = resend
+                    ? '¿Reenviar el email de retiro de pieza pintada al cliente?'
+                    : '¿Confirmas que la pieza SALIÓ DEL HORNO y está lista para retirar? Se enviará email al cliente.';
+                if (!confirm(msg)) return;
+                try {
+                    const result = await dataService.notifyPaintingPickupReady(delivery.id, resend);
+                    if (result.success) {
+                        if (result.delivery) {
+                            onDeliveryUpdated?.(result.delivery);
+                            adminData.optimisticUpsertDelivery(result.delivery);
+                        }
+                        alert(
+                            result.emailSent
+                                ? '✅ Cliente notificado por email: pieza lista para retirar.'
+                                : '✅ Estado actualizado (email no enviado, revisa logs).'
+                        );
+                    } else {
+                        alert('Error: ' + (result.error || 'No se pudo notificar'));
+                    }
+                } catch (error) {
+                    console.error('Error notifying pickup ready:', error);
+                    alert('Error al notificar al cliente');
+                }
+            })();
+        },
+        onCompleteDelivery: () => onComplete(delivery.id),
+    });
 
     const handleRegisterPaintingPayment = async (delivery: Delivery) => {
         const price = delivery.paintingPrice ?? 20;
@@ -1272,25 +1357,6 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                                 </span>
                                             )}
                                         </div>
-                                        {delivery.paintingStatus === 'pending_payment' && (
-                                            <p className="text-xs text-purple-700 font-medium">
-                                                Cobro pendiente: podés «Acordar cobro después» y seguir el flujo sin marcar pagado.
-                                            </p>
-                                        )}
-                                        {delivery.paintingStatus === 'deferred' && (
-                                            <p className="text-xs text-sky-800 font-medium">
-                                                Cobro acordado para después — podés agendar la sesión de pintura.
-                                            </p>
-                                        )}
-                                        {delivery.readyAt ? (
-                                            <p className="text-xs text-purple-700 font-medium">
-                                                📧 Email enviado: lista para pintar
-                                            </p>
-                                        ) : (
-                                            <p className="text-xs text-purple-700 font-medium">
-                                                📧 Email pendiente: se envía al marcar "Lista"
-                                            </p>
-                                        )}
                                     </div>
                                 )}
 
@@ -1303,17 +1369,16 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                     />
                                 </div>
 
-                                {delivery.wantsPainting && (
-                                    <div className="mt-3">
-                                        <DeliveryPaintingAdminGuidePanel delivery={delivery} />
-                                    </div>
-                                )}
-
                                 {/* 📍 Timeline de Seguimiento del Proceso */}
                                 <div className="mt-3">
                                     <DeliveryTimeline
                                         delivery={delivery}
                                         formatDate={formatDate}
+                                        paintingActions={
+                                            delivery.wantsPainting
+                                                ? buildPaintingFlowActions(delivery)
+                                                : undefined
+                                        }
                                     />
                                 </div>
 
@@ -1386,188 +1451,6 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
 
                             {/* Card Footer - Action Buttons */}
                             <div className="bg-gray-50 px-3 sm:px-4 py-2 sm:py-3 border-t border-gray-200 flex flex-wrap gap-2">
-                                {/* Botones de gestión de pintura */}
-                                {delivery.wantsPainting && delivery.paintingStatus === 'pending_payment' && (
-                                    <>
-                                        <button
-                                            type="button"
-                                            className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 text-white border border-sky-700 shadow-sm transition-all text-xs font-bold"
-                                            title="Cliente pagará después; permite agendar sin marcar cobrado"
-                                            onClick={() => handleDeferPaintingPayment(delivery)}
-                                        >
-                                            <span>📋</span>
-                                            <span>Acordar cobro después</span>
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white border border-yellow-600 shadow-sm transition-all text-xs font-bold"
-                                            title="Solo si ya recibiste el pago del upsell"
-                                            onClick={() => handleRegisterPaintingPayment(delivery)}
-                                        >
-                                            <span>💰</span>
-                                            <span>Registrar cobro ${delivery.paintingPrice || 20}</span>
-                                        </button>
-                                    </>
-                                )}
-
-                                {delivery.wantsPainting &&
-                                    delivery.paintingStatus === 'deferred' &&
-                                    !delivery.paintingBookingDate && (
-                                        <button
-                                            type="button"
-                                            className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white border border-yellow-600 shadow-sm transition-all text-xs font-bold"
-                                            title="Registrar cobro cuando el cliente pague"
-                                            onClick={() => handleRegisterPaintingPayment(delivery)}
-                                        >
-                                            <span>💰</span>
-                                            <span>Registrar cobro ${delivery.paintingPrice || 20}</span>
-                                        </button>
-                                    )}
-
-                                {/* Pieza ya pintada / cita nunca guardada: NO agendar fecha ficticia — saltar a completed */}
-                                {delivery.wantsPainting && delivery.paintingStatus === 'paid' && (() => {
-                                    const daysSincePaid = delivery.paintingPaidAt
-                                        ? Math.floor((Date.now() - new Date(delivery.paintingPaidAt).getTime()) / (1000 * 60 * 60 * 24))
-                                        : null;
-                                    const confirmSkipSchedule = async () => {
-                                        const confirmMsg =
-                                            `¿Confirmas que el cliente YA PINTÓ su pieza?\n\n` +
-                                            `El agendamiento no quedó en el sistema (o hubo otro fallo de registro). ` +
-                                            `No se creará una cita ficticia: solo se marca la pintura como completada para poder avisar retiro tras el horneado final.\n\n` +
-                                            `¿Continuar?`;
-                                        if (!confirm(confirmMsg)) return;
-                                        try {
-                                            const result = await dataService.forcePaintingCompleted(delivery.id);
-                                            if (result.success) {
-                                                if (result.delivery) {
-                                                    onDeliveryUpdated?.(result.delivery);
-                                                    adminData.optimisticUpsertDelivery(result.delivery);
-                                                }
-                                                alert(
-                                                    '✅ Pintura marcada como completada.\nUsa el botón verde "🔥 Horneado Completo → Avisar Cliente" cuando la pieza salga del horno.'
-                                                );
-                                            } else {
-                                                alert('Error: ' + (result.error || 'No se pudo actualizar'));
-                                            }
-                                        } catch (error) {
-                                            console.error('Error forcing painting completed:', error);
-                                            alert('Error al marcar pintura completada');
-                                        }
-                                    };
-                                    return (
-                                        <div className="w-full basis-full min-w-0 border-t border-dashed border-gray-200 pt-2 mt-1">
-                                            <div className="rounded-lg border border-amber-200 bg-amber-50/90 px-2 py-2 space-y-2">
-                                                {daysSincePaid !== null && daysSincePaid > 7 && (
-                                                    <div className="text-[11px] text-amber-900 font-semibold flex items-start gap-1.5">
-                                                        <span>⚠️</span>
-                                                        <span>
-                                                            Lleva {daysSincePaid} días en &quot;pago recibido&quot; sin paso completado. Revisa si falta registrar algo o si conviene usar el botón de abajo.
-                                                        </span>
-                                                    </div>
-                                                )}
-                                                <p className="text-[11px] text-amber-950 leading-snug">
-                                                    Si la pieza <strong>ya está pintada</strong> y <strong>no debe existir</strong> un agendamiento en sistema (nunca se guardó la cita), usa este botón. No inventes una fecha en &quot;Agendar&quot;.
-                                                </p>
-                                                <button
-                                                    type="button"
-                                                    className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white border border-amber-800 shadow-sm transition-all text-xs font-bold"
-                                                    title="Marcar pintura como completada sin paso de cita agendada (solo si ya pintó en taller)"
-                                                    onClick={confirmSkipSchedule}
-                                                >
-                                                    <span>🎨</span>
-                                                    <span>Ya pintó (sin cita en sistema) → marcar pintura completada</span>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    );
-                                })()}
-
-                                {canOfferPaintAgendaScheduling(delivery) && (
-                                    <button
-                                        type="button"
-                                        className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border border-blue-800 shadow-sm transition-all text-xs font-bold"
-                                        title={
-                                            delivery.wantsPainting &&
-                                            delivery.paintingStatus === 'scheduled' &&
-                                            delivery.paintingBookingDate
-                                                ? 'Anula la cita anterior en agenda, crea la nueva y reenvía correo al cliente'
-                                                : useAdminPathForPaintSchedule(delivery)
-                                                  ? 'Crea reserva en agenda + habilita pintura si el cliente no siguió el flujo web'
-                                                  : 'Crea la reserva de pintura en la agenda (mismo flujo que el cliente)'
-                                        }
-                                        onClick={() => openPaintAgendaModal(delivery)}
-                                    >
-                                        <span>📅</span>
-                                        <span>
-                                            {delivery.wantsPainting &&
-                                            delivery.paintingStatus === 'scheduled' &&
-                                            delivery.paintingBookingDate
-                                                ? 'Corregir / reagendar pintura…'
-                                                : 'Agendar pintura (agenda)…'}
-                                        </span>
-                                    </button>
-                                )}
-
-                                {delivery.wantsPainting && delivery.paintingStatus === 'scheduled' && (
-                                    <button
-                                        className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white border border-purple-600 shadow-sm transition-all text-xs font-bold"
-                                        title="Marcar que el cliente terminó de pintar su pieza"
-                                        onClick={async () => {
-                                            if (confirm('¿Confirmas que el cliente completó la sesión de pintura?')) {
-                                                try {
-                                                    const result = await dataService.updatePaintingStatus(delivery.id, 'completed');
-                                                    if (result.success) {
-                                                        if (result.delivery) {
-                                                            onDeliveryUpdated?.(result.delivery);
-                                                            adminData.optimisticUpsertDelivery(result.delivery);
-                                                        }
-                                                    } else {
-                                                        alert('Error: ' + (result.error || 'No se pudo completar'));
-                                                    }
-                                                } catch (error) {
-                                                    console.error('Error completing painting:', error);
-                                                    alert('Error al completar');
-                                                }
-                                            }
-                                        }}
-                                    >
-                                        <span>🎉</span>
-                                        <span>Pintura Completada</span>
-                                    </button>
-                                )}
-
-                                {delivery.wantsPainting && delivery.paintingStatus === 'completed' && delivery.status !== 'completed' && (
-                                    <button
-                                        className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white border border-green-600 shadow-lg transition-all text-xs font-bold animate-pulse hover:animate-none"
-                                        title={delivery.paintingPickupNotifiedAt ? 'Reenviar email: pieza pintada lista para retirar' : 'PASO 4: Click cuando la pieza pintada salió del horneado final y está lista para que el cliente la retire'}
-                                        onClick={async () => {
-                                            const alreadyNotified = Boolean(delivery.paintingPickupNotifiedAt);
-                                            const msg = alreadyNotified
-                                                ? '¿Reenviar el email de retiro de pieza pintada al cliente?'
-                                                : '¿Confirmas que la pieza SALIÓ DEL HORNO y está lista para retirar? Se enviará email al cliente.';
-                                            if (confirm(msg)) {
-                                                try {
-                                                    const result = await dataService.notifyPaintingPickupReady(delivery.id, alreadyNotified);
-                                                    if (result.success) {
-                                                        if (result.delivery) {
-                                                            onDeliveryUpdated?.(result.delivery);
-                                                            adminData.optimisticUpsertDelivery(result.delivery);
-                                                        }
-                                                        alert(result.emailSent ? '✅ Cliente notificado por email: pieza lista para retirar.' : '✅ Estado actualizado (email no enviado, revisa logs).');
-                                                    } else {
-                                                        alert('Error: ' + (result.error || 'No se pudo notificar'));
-                                                    }
-                                                } catch (error) {
-                                                    console.error('Error notifying pickup ready:', error);
-                                                    alert('Error al notificar al cliente');
-                                                }
-                                            }
-                                        }}
-                                    >
-                                        <span>🔥</span>
-                                        <span>{delivery.paintingPickupNotifiedAt ? 'Reenviar Email' : 'Horneado Completo → Avisar Cliente'}</span>
-                                    </button>
-                                )}
 
                                 {/* Botones estándar */}
                                 <button
@@ -1586,7 +1469,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                     <span>🗑️</span>
                                     <span>Eliminar Entrega</span>
                                 </button>
-                                {delivery.status !== 'completed' && !delivery.readyAt && (
+                                {!delivery.wantsPainting && delivery.status !== 'completed' && !delivery.readyAt && (
                                     <button
                                         className="w-full xs:w-auto xs:flex-grow inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white shadow-md transition-all text-xs font-bold"
                                         title="Enviar email al cliente: tu pieza está lista para recoger"
@@ -1596,7 +1479,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                         <span>Pieza Lista → Notificar Cliente</span>
                                     </button>
                                 )}
-                                {delivery.status !== 'completed' && delivery.readyAt && (
+                                {!delivery.wantsPainting && delivery.status !== 'completed' && delivery.readyAt && (
                                     <>
                                         <button
                                             className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 shadow-sm transition-all text-xs font-semibold"

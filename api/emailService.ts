@@ -933,7 +933,7 @@ export const sendDeliveryWithPaintingServiceEmail = async (
     return result;
 };
 
-export const sendDeliveryReadyEmail = async (customerEmail: string, customerName: string, delivery: { id?: string | null; description?: string | null; readyAt: string; wantsPainting?: boolean; paintingPrice?: number | null; }) => {
+export const sendDeliveryReadyEmail = async (customerEmail: string, customerName: string, delivery: { id?: string | null; description?: string | null; readyAt: string; wantsPainting?: boolean; paintingPrice?: number | null; paintingStatus?: string | null; }) => {
     console.log('[sendDeliveryReadyEmail] READY EMAIL - Starting send to:', customerEmail, 'wantsPainting:', delivery.wantsPainting);
     
     // Si el cliente quiere pintar, enviar email diferente
@@ -1033,10 +1033,17 @@ export const sendDeliveryReadyEmail = async (customerEmail: string, customerName
 export const sendDeliveryReadyForPaintingEmail = async (
     customerEmail: string, 
     customerName: string, 
-    delivery: { id?: string | null; description?: string | null; readyAt: string; paintingPrice?: number | null; }
+    delivery: { id?: string | null; description?: string | null; readyAt: string; paintingPrice?: number | null; paintingStatus?: string | null; }
 ) => {
     console.log('[sendDeliveryReadyForPaintingEmail] Starting email send to:', customerEmail);
     
+    const appUrl = process.env.APP_PUBLIC_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://ceramicalma.com');
+    const paintingPrice = delivery.paintingPrice ?? 20;
+    const ps = delivery.paintingStatus;
+    const needsPaymentReminder = ps === 'pending_payment' || ps === 'deferred';
+    const scheduleLink = `${appUrl}/?booking=painting${delivery.id ? `&deliveryId=${encodeURIComponent(String(delivery.id))}` : ''}`;
+    const whatsappLink = 'https://wa.me/593985813327';
+
     const readyDate = new Date(delivery.readyAt);
     const formattedReadyDate = readyDate.toLocaleDateString('es-ES', { 
         weekday: 'long', 
@@ -1048,6 +1055,31 @@ export const sendDeliveryReadyForPaintingEmail = async (
     const displayDescription = delivery.description || 'Tu pieza de cerámica';
     const sanitizedDescription = displayDescription.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
     const subject = `🎨 ¡Tu pieza está lista para pintar! - ${sanitizedDescription}`;
+
+    const paymentReminderHtml = needsPaymentReminder
+        ? `
+            <div style="background-color: #FEF3C7; border: 2px solid #F59E0B; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                <h3 style="color: #92400E; margin-top: 0;">💰 Pago del servicio de pintura ($${paintingPrice})</h3>
+                <p style="margin: 10px 0; color: #78350F; font-size: 14px; line-height: 1.6;">
+                    ${
+                        ps === 'pending_payment'
+                            ? 'Aún no registramos tu pago. Para agendar en línea necesitas el pago confirmado, <strong>o</strong> puedes:'
+                            : `Acordamos cobrar <strong>$${paintingPrice}</strong> después. Igual puedes pagar antes o el día de tu sesión:`
+                    }
+                </p>
+                <ul style="margin: 12px 0; padding-left: 20px; color: #78350F; font-size: 14px; line-height: 1.7;">
+                    <li><strong>Transferencia:</strong> escríbenos por WhatsApp; te enviamos los datos de cuenta y puedes adjuntar tu comprobante.</li>
+                    <li><strong>Pago el día de la cita:</strong> en efectivo o transferencia al llegar a pintar.</li>
+                </ul>
+                <div style="text-align: center; margin-top: 16px;">
+                    <a href="${whatsappLink}" style="display: inline-block; background-color: #D97706; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px;">
+                        📱 Enviar comprobante / consultar pago
+                    </a>
+                </div>
+            </div>
+        `
+        : '';
+
     const html = `
         <div style="font-family: Arial, sans-serif; color: #4A4540; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
@@ -1062,18 +1094,22 @@ export const sendDeliveryReadyForPaintingEmail = async (
                 <p style="margin: 10px 0; color: #6B5F58; text-align: center;">Lista desde: ${formattedReadyDate}</p>
             </div>
 
+            ${paymentReminderHtml}
+
             <div style="background-color: #FDF7F2; border-left: 4px solid #D95F43; padding: 20px; border-radius: 8px; margin: 20px 0;">
                 <h3 style="color: #D95F43; margin-top: 0;">🎨 Reserva tu Horario de Pintura</h3>
                 <p style="margin: 10px 0; color: #6B5F58; font-size: 14px;">
-                    Necesitas agendar tu sesión de pintura en nuestro calendario. Es muy fácil:
+                    ${needsPaymentReminder && ps === 'pending_payment'
+                        ? 'Cuando tu pago esté registrado, agenda aquí (o escríbenos y te agendamos):'
+                        : 'Agenda tu sesión de pintura en nuestro calendario:'}
                 </p>
                 <ol style="margin: 10px 0; color: #6B5F58; font-size: 14px;">
-                    <li style="margin: 5px 0;"><strong>Visita nuestro sitio web</strong> y selecciona "Pintura de Piezas"</li>
+                    <li style="margin: 5px 0;"><strong>Usa el botón</strong> de reserva de pintura</li>
                     <li style="margin: 5px 0;"><strong>Elige fecha y horario</strong> que más te convenga</li>
-                    <li style="margin: 5px 0;"><strong>Confirma tu reserva</strong> en el calendario</li>
+                    <li style="margin: 5px 0;"><strong>Confirma tu reserva</strong></li>
                 </ol>
                 <div style="text-align: center; margin-top: 20px;">
-                    <a href="https://ceramicalma.com/?booking=painting${delivery.id ? `&deliveryId=${encodeURIComponent(String(delivery.id))}` : ''}" style="display: inline-block; background-color: #D95F43; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                    <a href="${scheduleLink}" style="display: inline-block; background-color: #D95F43; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
                         📅 Reservar Horario de Pintura
                     </a>
                 </div>

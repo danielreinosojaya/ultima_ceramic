@@ -7098,6 +7098,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 
                 const wantsPainting = Boolean((readyDelivery as any).wants_painting ?? (readyDelivery as any).wantsPainting);
                 const paintingPrice = (readyDelivery as any).painting_price ?? (readyDelivery as any).paintingPrice ?? null;
+                const paintingStatus = (readyDelivery as any).painting_status ?? (readyDelivery as any).paintingStatus ?? null;
                 console.log('[markDeliveryAsReady] 🔍 Step 4: Calling sendDeliveryReadyEmail with:', {
                     id: readyDelivery.id,
                     email: readyDelivery.customer_email,
@@ -7105,7 +7106,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     description: readyDelivery.description,
                     readyAt: readyAt,
                     wantsPainting,
-                    paintingPrice
+                    paintingPrice,
+                    paintingStatus
                 });
                 
                 const emailResult = await emailServiceModule.sendDeliveryReadyEmail(
@@ -7116,7 +7118,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         description: readyDelivery.description,
                         readyAt: readyAt,
                         wantsPainting,
-                        paintingPrice
+                        paintingPrice,
+                        paintingStatus
                     }
                 );
                 
