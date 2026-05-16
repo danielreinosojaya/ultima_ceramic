@@ -684,28 +684,17 @@ export const sendGiftcardRecipientEmail = async (
             </div>
         `;
         
-        // Generate both giftcard versions (v1 and v2)
-        const { v1, v2 } = await generateAllGiftcardVersions({
+        const { v1: giftcardPng } = await generateAllGiftcardVersions({
             code: payload.code,
             amount: payload.amount,
             recipientName: payload.recipientName,
             senderName: payload.buyerName,
             message: payload.message
         });
-        
-        // NO enviar attachments si están vacíos (Vercel no soporta canvas/fonts)
-        const attachments = (v1 && v2) ? [
-            {
-                filename: 'giftcard-v1.png',
-                data: v1,
-                type: 'image/png'
-            },
-            {
-                filename: 'giftcard-v2.png',
-                data: v2,
-                type: 'image/png'
-            }
-        ] : undefined;
+
+        const attachments = giftcardPng
+            ? [{ filename: 'giftcard-ceramicalma.png', data: giftcardPng, type: 'image/png' }]
+            : undefined;
         
         return sendEmail(recipientEmail, subject, html, attachments);
     } catch (error) {

@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "gen:pdf": "node -r ts-node/register ./scripts/generate-sample-pdf.ts",
     "gen:pdf:puppeteer": "node --loader ts-node/esm ./scripts/generate-sample-puppeteer.ts",
+    "preview:giftcard": "node --import tsx ./scripts/preview-giftcard-png.ts",
     "build:api": "tsc --outDir dist/api api/**/*.ts"
   },
   "dependencies": {
@@ -48,6 +49,7 @@
     "@vitejs/plugin-react": "^4.3.1",
     "nunjucks": "^3.2.3",
     "ts-node": "^10.9.2",
+    "tsx": "^4.19.4",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

@@ -1,5 +1,7 @@
-// NO usar sharp - no funciona en Vercel serverless
-// Retornamos SVG directamente como base64
+import { ImageResponse } from '@vercel/og';
+import React from 'react';
+import fs from 'fs';
+import path from 'path';
 
 export interface GiftcardData {
   code: string;
@@ -11,81 +13,131 @@ export interface GiftcardData {
 
 export type GiftcardVersion = 'v1' | 'v2';
 
-// Crear SVG manualmente - sin depender de Satori/JSX ni Sharp
-const createGiftcardSVG = (data: GiftcardData): string => {
-  const recipientName = (data.recipientName || 'María').substring(0, 30);
-  const senderName = (data.senderName || 'Juan').substring(0, 30);
-  const code = (data.code || 'GC-ABC123').substring(0, 30);
-  const message = (data.message || '').substring(0, 80);
+/** Recorte superior de tu_giftcard.png (cara frontal con para/de/valor) */
+const CARD_WIDTH = 1080;
+const CARD_HEIGHT = 540;
+const TEMPLATE_FILE = 'tu_giftcard.png';
 
-  const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="600" height="400" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#f5f3ea;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#e8e3d6;stop-opacity:1" />
-    </linearGradient>
-  </defs>
-  
-  <!-- Background with gradient -->
-  <rect width="600" height="400" fill="url(#bgGradient)"/>
-  
-  <!-- Border -->
-  <rect x="6" y="6" width="588" height="388" rx="20" ry="20" fill="none" stroke="#a89c94" stroke-width="6"/>
-  
-  <!-- Título -->
-  <text x="300" y="80" font-size="48" font-weight="bold" color="#958985" text-anchor="middle" font-family="Arial, sans-serif" fill="#958985" letter-spacing="2">
-    REGALO ESPECIAL
-  </text>
-  
-  <!-- Para: -->
-  <text x="50" y="160" font-size="18" font-family="Arial, sans-serif" fill="#666">
-    para:
-  </text>
-  <text x="120" y="160" font-size="18" font-weight="bold" font-family="Arial, sans-serif" fill="#333">
-    ${recipientName}
-  </text>
-  
-  <!-- De: -->
-  <text x="50" y="200" font-size="18" font-family="Arial, sans-serif" fill="#666">
-    de:
-  </text>
-  <text x="120" y="200" font-size="18" font-weight="bold" font-family="Arial, sans-serif" fill="#333">
-    ${senderName}
-  </text>
-  
-  <!-- Valor -->
-  <text x="300" y="280" font-size="22" text-anchor="middle" font-family="Arial, sans-serif" fill="#666">
-    Valor: $${data.amount}
-  </text>
-  
-  <!-- Código -->
-  <text x="300" y="330" font-size="28" font-weight="bold" text-anchor="middle" font-family="Arial, sans-serif" fill="#9D277D" letter-spacing="3">
-    ${code}
-  </text>
-  
-  <!-- Mensaje -->
-  ${message ? `<text x="300" y="355" font-size="14" font-style="italic" text-anchor="middle" font-family="Arial, sans-serif" fill="#555">"${message}"</text>` : ''}
-  
-  <!-- Logo -->
-  <text x="550" y="380" font-size="14" text-anchor="end" font-weight="bold" font-family="Arial, sans-serif" fill="#999">
-    CERAMICALMA
-  </text>
-</svg>`;
+/**
+ * Posiciones sobre la cara superior de tu_giftcard.png (1080×1080).
+ * Ajusta left/top aquí y corre: npm run preview:giftcard
+ */
+export const GIFTCARD_LAYOUT = {
+  recipientName: { left: 330, top: 270, fontSize: 28, color: '#6b5d54', fontWeight: 600 },
+  senderName: { left: 330, top: 330, fontSize: 28, color: '#6b5d54', fontWeight: 600 },
+  amount: { left: 398, top: 410, fontSize: 18, color: '#6b5d54', fontWeight: 700 },
+} as const;
 
-  return svg;
+const LAYOUT = GIFTCARD_LAYOUT;
+
+let cachedTemplateDataUrl: string | null = null;
+
+const truncate = (value: string | undefined, max: number): string => {
+  const s = (value || '').trim();
+  if (s.length <= max) return s || '—';
+  return `${s.slice(0, max - 1)}…`;
 };
 
-// Retorna SVG como Buffer (no PNG, para compatibilidad con Vercel)
+const resolveTemplatePath = (): string => {
+  const candidates = [
+    path.join(process.cwd(), 'public', 'assets', TEMPLATE_FILE),
+    path.join(process.cwd(), 'assets', TEMPLATE_FILE),
+    path.join(process.cwd(), 'public', TEMPLATE_FILE),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  throw new Error(
+    `Plantilla de giftcard no encontrada (${TEMPLATE_FILE}). Colócala en public/assets/${TEMPLATE_FILE}`
+  );
+};
+
+const getTemplateDataUrl = (): string => {
+  if (cachedTemplateDataUrl) return cachedTemplateDataUrl;
+  const templatePath = resolveTemplatePath();
+  const buffer = fs.readFileSync(templatePath);
+  cachedTemplateDataUrl = `data:image/png;base64,${buffer.toString('base64')}`;
+  return cachedTemplateDataUrl;
+};
+
+const textLayer = (
+  text: string,
+  style: {
+    left: number;
+    top: number;
+    fontSize: number;
+    color: string;
+    fontWeight: number | string;
+    letterSpacing?: number;
+  }
+) =>
+  React.createElement(
+    'div',
+    {
+      style: {
+        position: 'absolute',
+        left: style.left,
+        top: style.top,
+        fontSize: style.fontSize,
+        color: style.color,
+        fontWeight: style.fontWeight,
+        letterSpacing: style.letterSpacing ?? 0,
+        fontFamily: 'Georgia, "Times New Roman", serif',
+        maxWidth: CARD_WIDTH - style.left - 40,
+        lineHeight: 1.2,
+      },
+    },
+    text
+  );
+
+/** Genera PNG real (buffer) con plantilla + datos dinámicos */
 export const generateGiftcardImage = async (
   data: GiftcardData,
   _version: GiftcardVersion = 'v1'
 ): Promise<Buffer> => {
-  const svg = createGiftcardSVG(data);
-  return Buffer.from(svg, 'utf-8');
+  const background = getTemplateDataUrl();
+  const recipientName = truncate(data.recipientName, 42);
+  const senderName = truncate(data.senderName, 42);
+  const amountLabel = `$${Number(data.amount).toFixed(2)}`;
+
+  // Satori (@vercel/og) distorsiona background-size; <img> + recorte = plantilla fiel.
+  const element = React.createElement(
+    'div',
+    {
+      style: {
+        width: CARD_WIDTH,
+        height: CARD_HEIGHT,
+        display: 'flex',
+        position: 'relative',
+        overflow: 'hidden',
+      },
+    },
+    [
+      React.createElement('img', {
+        src: background,
+        width: CARD_WIDTH,
+        height: CARD_WIDTH,
+        style: {
+          position: 'absolute',
+          top: 0,
+          left: 0,
+        },
+      }),
+      textLayer(recipientName, LAYOUT.recipientName),
+      textLayer(senderName, LAYOUT.senderName),
+      textLayer(amountLabel, LAYOUT.amount),
+    ]
+  );
+
+  const response = new ImageResponse(element, {
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
+  });
+
+  const arrayBuffer = await response.arrayBuffer();
+  return Buffer.from(arrayBuffer);
 };
 
-// Retorna SVG como base64
 export const generateGiftcardImageBase64 = async (
   data: GiftcardData,
   version: GiftcardVersion = 'v1'
@@ -94,17 +146,17 @@ export const generateGiftcardImageBase64 = async (
   return buffer.toString('base64');
 };
 
-// Retorna el SVG raw (para uso directo en emails como inline SVG)
-export const generateGiftcardSVG = (data: GiftcardData): string => {
-  return createGiftcardSVG(data);
+/** @deprecated Usar generateGiftcardImageBase64; mantiene compatibilidad con emailService */
+export const generateGiftcardSVG = (_data: GiftcardData): string => {
+  return '';
 };
 
 export const generateAllGiftcardVersions = async (
   data: GiftcardData
 ): Promise<{ v1: string; v2: string }> => {
   try {
-    const v1Base64 = await generateGiftcardImageBase64(data, 'v1');
-    return { v1: v1Base64, v2: v1Base64 };
+    const base64 = await generateGiftcardImageBase64(data, 'v1');
+    return { v1: base64, v2: base64 };
   } catch (error) {
     console.error('[generateAllGiftcardVersions] Error:', error);
     return { v1: '', v2: '' };
