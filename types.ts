@@ -53,7 +53,7 @@ export interface UserInfo {
 
 // Delivery System Types
 export type DeliveryStatus = 'pending' | 'ready' | 'completed' | 'overdue';
-export type PaintingStatus = 'pending_payment' | 'paid' | 'scheduled' | 'completed';
+export type PaintingStatus = 'pending_payment' | 'deferred' | 'paid' | 'scheduled' | 'completed';
 
 export interface Delivery {
     id: string;

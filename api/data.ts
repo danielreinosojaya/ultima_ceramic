@@ -6581,7 +6581,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             }
             
             // Validar estados permitidos
-            const validStatuses = ['pending_payment', 'paid', 'scheduled', 'completed'];
+            const validStatuses = ['pending_payment', 'deferred', 'paid', 'scheduled', 'completed'];
             if (!validStatuses.includes(paintingStatus)) {
                 return res.status(400).json({ error: 'Invalid paintingStatus' });
             }
@@ -6675,6 +6675,14 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     });
                 }
 
+                if (paintingStatus === 'deferred') {
+                    return res.status(402).json({
+                        success: false,
+                        isPaid: false,
+                        error: 'El cobro está acordado para después. Usa el enlace de agendamiento que envió el equipo o contacta al taller.'
+                    });
+                }
+
                 if (paintingStatus === 'completed') {
                     return res.status(400).json({ 
                         success: false, 
@@ -6764,9 +6772,12 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                             { deliveryId, email: delivery.customer_email }
                         );
                     }
+                    const hadPaidAt = Boolean(
+                        (delivery as any).painting_paid_at ?? (delivery as any).paintingPaidAt
+                    );
                     await sql`
                         UPDATE deliveries
-                        SET painting_status = 'paid',
+                        SET painting_status = ${hadPaidAt ? 'paid' : 'deferred'},
                             painting_booking_date = NULL
                         WHERE id = ${deliveryId}
                     `;
@@ -6806,10 +6817,20 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         `;
                     } else if (ps0 === 'pending_payment') {
                         if (markPaintingPaid === false) {
-                            return res.status(402).json({
-                                error: 'Pintura sin pago registrado. Marca "pago recibido" en admin o envía markPaintingPaid: true.'
-                            });
+                            await sql`
+                                UPDATE deliveries
+                                SET painting_status = 'deferred'
+                                WHERE id = ${deliveryId}
+                            `;
+                        } else {
+                            await sql`
+                                UPDATE deliveries
+                                SET painting_status = 'paid',
+                                    painting_paid_at = COALESCE(painting_paid_at, NOW())
+                                WHERE id = ${deliveryId}
+                            `;
                         }
+                    } else if (ps0 === 'deferred' && markPaintingPaid === true) {
                         await sql`
                             UPDATE deliveries
                             SET painting_status = 'paid',
@@ -6841,7 +6862,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 
                 if (currentPaintingStatus === 'pending_payment') {
                     return res.status(402).json({ 
-                        error: 'Painting service has not been paid yet. Please coordinate payment with our team before scheduling.' 
+                        error: 'Cobro pendiente. En admin usa «Acordar cobro después» o registra el pago antes de agendar.' 
                     });
                 }
                 
@@ -6849,7 +6870,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     return res.status(400).json({ error: 'Painting service is already completed' });
                 }
                 
-                if (currentPaintingStatus !== 'paid') {
+                if (currentPaintingStatus !== 'paid' && currentPaintingStatus !== 'deferred') {
                     return res.status(400).json({ error: 'Invalid painting service status. Please contact support.' });
                 }
 

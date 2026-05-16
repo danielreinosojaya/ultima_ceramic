@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Delivery } from '../../types';
+import { getPaintingFlowStep } from '../../utils/deliveryPaintingAdminGuide';
 
 interface DeliveryTimelineProps {
     delivery: Delivery;
@@ -32,12 +33,10 @@ export const DeliveryTimeline: React.FC<DeliveryTimelineProps> = ({
     // FLUJO CON SERVICIO DE PINTURA (5 pasos)
     if (delivery.wantsPainting) {
         const totalSteps = 5;
-        let currentStep = 1; // Siempre empieza en 1 (creada)
-        
-        if (delivery.readyAt) currentStep = 2; // Pieza lista para pintar
-        if (delivery.paintingStatus === 'paid' || delivery.paintingStatus === 'scheduled') currentStep = 3; // Proceso de pintura
-        if (delivery.paintingStatus === 'completed') currentStep = 4; // Pintura completada
-        if (delivery.paintingPickupNotifiedAt || delivery.status === 'completed') currentStep = 5; // Cliente retira
+        const currentStep = getPaintingFlowStep(delivery);
+        const ps = delivery.paintingStatus;
+        const step3Active =
+            ps === 'paid' || ps === 'deferred' || ps === 'scheduled' || ps === 'completed';
         
         return (
             <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-5 border-2 border-purple-300 shadow-sm">
@@ -96,29 +95,47 @@ export const DeliveryTimeline: React.FC<DeliveryTimelineProps> = ({
                     </div>
 
                     {/* PASO 3: Cliente Pinta su Pieza */}
-                    <div className={`relative flex gap-4 rounded-lg p-3 border-2 shadow-sm ${delivery.paintingStatus === 'completed' ? 'bg-white border-pink-500' : (delivery.paintingStatus === 'paid' || delivery.paintingStatus === 'scheduled') ? 'bg-white border-pink-400' : 'bg-gray-50 border-gray-300 opacity-70'}`}>
+                    <div className={`relative flex gap-4 rounded-lg p-3 border-2 shadow-sm ${delivery.paintingStatus === 'completed' ? 'bg-white border-pink-500' : step3Active ? 'bg-white border-pink-400' : 'bg-gray-50 border-gray-300 opacity-70'}`}>
                         <div className="flex flex-col items-center flex-shrink-0">
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shadow-md z-10 ${
                                 delivery.paintingStatus === 'completed' ? 'bg-gradient-to-br from-pink-500 to-pink-600 text-white scale-110' :
-                                (delivery.paintingStatus === 'paid' || delivery.paintingStatus === 'scheduled') ? 'bg-gradient-to-br from-pink-400 to-pink-500 text-white' :
+                                step3Active ? 'bg-gradient-to-br from-pink-400 to-pink-500 text-white' :
                                 'bg-gray-300 text-gray-600'
                             }`}>
-                                {delivery.paintingStatus === 'completed' ? '✓' : (delivery.paintingStatus === 'paid' || delivery.paintingStatus === 'scheduled') ? '⏳' : '3'}
+                                {delivery.paintingStatus === 'completed' ? '✓' : step3Active ? '⏳' : '3'}
                             </div>
                             {currentStep > 3 && <div className="w-1 h-16 bg-gradient-to-b from-pink-500 to-orange-500 mt-2 rounded-full"></div>}
                         </div>
                         <div className="flex-1">
-                            <div className={`font-bold ${delivery.paintingStatus === 'completed' ? 'text-pink-900' : (delivery.paintingStatus === 'paid' || delivery.paintingStatus === 'scheduled') ? 'text-pink-800' : 'text-gray-500'}`}>
+                            <div className={`font-bold ${delivery.paintingStatus === 'completed' ? 'text-pink-900' : step3Active ? 'text-pink-800' : 'text-gray-500'}`}>
                                 🎨 3. Cliente Pinta su Pieza
                             </div>
                             {delivery.paintingStatus === 'pending_payment' && (
                                 <div className="mt-2 space-y-1">
                                     <div className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded border border-yellow-300 inline-block">
-                                        💰 Esperando pago de ${delivery.paintingPrice || 20}
+                                        💰 Cobro pendiente (${delivery.paintingPrice || 20})
                                     </div>
-                                    <div className="text-xs text-orange-700 font-bold">Cliente debe pagar antes de agendar sesión</div>
+                                    <div className="text-xs text-orange-700 font-bold">
+                                        👉 Admin: «Acordar cobro después» o «Registrar cobro» — luego agendar
+                                    </div>
+
                                 </div>
                             )}
+                            
+                            {delivery.paintingStatus === 'deferred' && !delivery.paintingBookingDate && (
+                                <div className="mt-2 space-y-1">
+                                    <div className="text-xs bg-sky-100 text-sky-900 px-2 py-1 rounded border border-sky-300 inline-block">
+                                        📋 Cobro acordado para después (${delivery.paintingPrice || 20})
+                                    </div>
+                                    <div className="mt-1 flex items-start gap-2">
+                                        <span className="text-lg">👉</span>
+                                        <div className="text-xs text-orange-700 font-bold bg-orange-50 px-2 py-1 rounded border border-orange-300">
+                                            SIGUIENTE: Agendar sesión de pintura
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             {delivery.paintingStatus === 'paid' && !delivery.paintingBookingDate && (
                                 <div className="mt-2 space-y-1">
                                     <div className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded border border-green-300 inline-block">

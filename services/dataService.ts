@@ -2691,7 +2691,7 @@ export const updateDeliveryStatuses = async (): Promise<{ success: boolean; upda
 // ⚡ Actualizar estado del servicio de pintura
 export const updatePaintingStatus = async (
     deliveryId: string,
-    paintingStatus: 'pending_payment' | 'paid' | 'scheduled' | 'completed',
+    paintingStatus: 'pending_payment' | 'deferred' | 'paid' | 'scheduled' | 'completed',
     options?: {
         paintingBookingDate?: string;
         paintingPaidAt?: string;

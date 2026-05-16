@@ -4,6 +4,7 @@ import { MagnifyingGlassIcon, FunnelIcon, XMarkIcon, QuestionMarkCircleIcon, Arr
 import { PhotoViewerModal } from './PhotoViewerModal';
 import { EmailNotificationsPanel } from './EmailNotificationsPanel';
 import { DeliveryTimeline } from './DeliveryTimeline';
+import { DeliveryPaintingAdminGuidePanel } from './DeliveryPaintingAdminGuidePanel';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import * as dataService from '../../services/dataService';
@@ -125,7 +126,55 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
     };
 
     const useAdminPathForPaintSchedule = (d: Delivery): boolean => {
+        if (d.paintingStatus === 'deferred') return false;
+        if (d.paintingStatus === 'pending_payment') return true;
         return !(d.wantsPainting === true && d.paintingStatus === 'paid' && d.status === 'ready');
+    };
+
+    const handleDeferPaintingPayment = async (delivery: Delivery) => {
+        const price = delivery.paintingPrice ?? 20;
+        if (
+            !confirm(
+                `¿Acordar que el cliente pagará ${price} después (sin marcar como cobrado ahora)? Podrás agendar la sesión de pintura.`
+            )
+        ) {
+            return;
+        }
+        try {
+            const result = await dataService.updatePaintingStatus(delivery.id, 'deferred');
+            if (result.success && result.delivery) {
+                onDeliveryUpdated?.(result.delivery);
+                adminData.optimisticUpsertDelivery(result.delivery);
+            } else {
+                alert('Error: ' + (result.error || 'No se pudo actualizar'));
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error al guardar');
+        }
+    };
+
+    const handleRegisterPaintingPayment = async (delivery: Delivery) => {
+        const price = delivery.paintingPrice ?? 20;
+        if (
+            !confirm(
+                `¿Registrar que el cliente YA pagó ${price} por el servicio de pintura? (Solo si recibiste el dinero.)`
+            )
+        ) {
+            return;
+        }
+        try {
+            const result = await dataService.updatePaintingStatus(delivery.id, 'paid');
+            if (result.success && result.delivery) {
+                onDeliveryUpdated?.(result.delivery);
+                adminData.optimisticUpsertDelivery(result.delivery);
+            } else {
+                alert('Error: ' + (result.error || 'No se pudo actualizar'));
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error al guardar');
+        }
     };
 
     const openPaintAgendaModal = (d: Delivery) => {
@@ -146,7 +195,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
             setPaintAgendaTime('10:00');
         }
         setPaintAgendaParticipants('1');
-        setPaintAgendaMarkPaid(true);
+        setPaintAgendaMarkPaid(d.paintingStatus !== 'pending_payment' && d.paintingStatus !== 'deferred');
         setPaintAgendaError('');
     };
 
@@ -1192,6 +1241,11 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                                     💰 Pendiente pago
                                                 </span>
                                             )}
+                                            {delivery.paintingStatus === 'deferred' && (
+                                                <span className="text-xs bg-sky-100 text-sky-900 px-2 py-1 rounded-full font-bold border border-sky-300">
+                                                    📋 Cobro después
+                                                </span>
+                                            )}
                                             {delivery.paintingStatus === 'paid' && (
                                                 <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-bold border border-green-300">
                                                     ✅ Pagado
@@ -1220,7 +1274,12 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                         </div>
                                         {delivery.paintingStatus === 'pending_payment' && (
                                             <p className="text-xs text-purple-700 font-medium">
-                                                ⚠️ Cliente debe coordinar pago inmediato
+                                                Cobro pendiente: podés «Acordar cobro después» y seguir el flujo sin marcar pagado.
+                                            </p>
+                                        )}
+                                        {delivery.paintingStatus === 'deferred' && (
+                                            <p className="text-xs text-sky-800 font-medium">
+                                                Cobro acordado para después — podés agendar la sesión de pintura.
                                             </p>
                                         )}
                                         {delivery.readyAt ? (
@@ -1243,6 +1302,12 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                         compact={false}
                                     />
                                 </div>
+
+                                {delivery.wantsPainting && (
+                                    <div className="mt-3">
+                                        <DeliveryPaintingAdminGuidePanel delivery={delivery} />
+                                    </div>
+                                )}
 
                                 {/* 📍 Timeline de Seguimiento del Proceso */}
                                 <div className="mt-3">
@@ -1323,32 +1388,41 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                             <div className="bg-gray-50 px-3 sm:px-4 py-2 sm:py-3 border-t border-gray-200 flex flex-wrap gap-2">
                                 {/* Botones de gestión de pintura */}
                                 {delivery.wantsPainting && delivery.paintingStatus === 'pending_payment' && (
-                                    <button
-                                        className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white border border-yellow-600 shadow-sm transition-all text-xs font-bold"
-                                        title="Marcar que el cliente ya pagó los $20 del servicio de pintura"
-                                        onClick={async () => {
-                                            if (confirm('¿Confirmas que el cliente pagó el servicio de pintura ($20)?')) {
-                                                try {
-                                                    const result = await dataService.updatePaintingStatus(delivery.id, 'paid');
-                                                    if (result.success) {
-                                                        if (result.delivery) {
-                                                            onDeliveryUpdated?.(result.delivery);
-                                                            adminData.optimisticUpsertDelivery(result.delivery);
-                                                        }
-                                                    } else {
-                                                        alert('Error: ' + (result.error || 'No se pudo actualizar'));
-                                                    }
-                                                } catch (error) {
-                                                    console.error('Error marking as paid:', error);
-                                                    alert('Error al actualizar el estado');
-                                                }
-                                            }
-                                        }}
-                                    >
-                                        <span>💰</span>
-                                        <span>Confirmar Pago Recibido</span>
-                                    </button>
+                                    <>
+                                        <button
+                                            type="button"
+                                            className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 text-white border border-sky-700 shadow-sm transition-all text-xs font-bold"
+                                            title="Cliente pagará después; permite agendar sin marcar cobrado"
+                                            onClick={() => handleDeferPaintingPayment(delivery)}
+                                        >
+                                            <span>📋</span>
+                                            <span>Acordar cobro después</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white border border-yellow-600 shadow-sm transition-all text-xs font-bold"
+                                            title="Solo si ya recibiste el pago del upsell"
+                                            onClick={() => handleRegisterPaintingPayment(delivery)}
+                                        >
+                                            <span>💰</span>
+                                            <span>Registrar cobro ${delivery.paintingPrice || 20}</span>
+                                        </button>
+                                    </>
                                 )}
+
+                                {delivery.wantsPainting &&
+                                    delivery.paintingStatus === 'deferred' &&
+                                    !delivery.paintingBookingDate && (
+                                        <button
+                                            type="button"
+                                            className="flex-1 xs:flex-none inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white border border-yellow-600 shadow-sm transition-all text-xs font-bold"
+                                            title="Registrar cobro cuando el cliente pague"
+                                            onClick={() => handleRegisterPaintingPayment(delivery)}
+                                        >
+                                            <span>💰</span>
+                                            <span>Registrar cobro ${delivery.paintingPrice || 20}</span>
+                                        </button>
+                                    )}
 
                                 {/* Pieza ya pintada / cita nunca guardada: NO agendar fecha ficticia — saltar a completed */}
                                 {delivery.wantsPainting && delivery.paintingStatus === 'paid' && (() => {
@@ -1987,7 +2061,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                             onChange={e => setPaintAgendaMarkPaid(e.target.checked)}
                                             disabled={paintAgendaSubmitting}
                                         />
-                                        Marcar pago de pintura como recibido al agendar
+                                        Si está marcado: registra cobro al agendar. Si no: deja «cobro después» y agenda igual.
                                     </label>
                                 )}
                             {paintAgendaError && (
