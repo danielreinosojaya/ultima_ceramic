@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import type { SlotAvailabilityResult, Delivery } from '../../services/dataService';
 import { FreeDateTimePicker } from './FreeDateTimePicker';
 import * as dataService from '../../services/dataService';
-import { parseLocalDate } from '../../utils/formatters';
+import { parseLocalDate, isEcuadorSlotInPast } from '../../utils/formatters';
 
 interface PaintingBookingFlowProps {
   deliveryId: string | null;
@@ -37,6 +37,10 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
     }
     if (selectedAvailability && selectedAvailability.available === false) {
       setError('Ese horario ya no tiene cupos. Por favor selecciona otro.');
+      return;
+    }
+    if (selectedDate && selectedTime && isEcuadorSlotInPast(selectedDate, selectedTime)) {
+      setError('Ese horario ya pasó (hora Ecuador). Elige una fecha y hora futuras.');
       return;
     }
     if (!deliveryId) {

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { checkSlotAvailability, SlotAvailabilityResult, getAvailability, getFreeDateTimeOverrides, getScheduleOverrides, getExperienceTypeOverrides } from '../../services/dataService';
 import type { AvailableSlot, DayKey, ScheduleOverrides, ExperienceTypeOverrides } from '../../types';
 import { SocialBadge } from '../SocialBadge';
+import { getEcuadorDateYmd, isEcuadorSlotInPast } from '../../utils/formatters';
 
 // Nombres de días para mapear Date.getDay() a DayKey
 const DAY_KEYS: DayKey[] = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -287,7 +288,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
       return candidateHours.filter(hour => fixedSlots.includes(hour) || Boolean(hourAvailability[hour]?.openedByLargeGroup));
     }
 
-    return candidateHours;
+    return candidateHours.filter(hour => !isEcuadorSlotInPast(selectedDate, hour));
   }, [selectedDate, technique, participants, getAvailableHours, getFixedSlotsByType, hourAvailability, scheduleOverrides]);
 
   // Validar disponibilidad cuando se selecciona hora
@@ -404,10 +405,8 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   };
 
   const isPastDate = (day: number) => {
-    const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return date < today;
+    const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return dateStr < getEcuadorDateYmd();
   };
 
   const handleMonthChange = (direction: 'prev' | 'next') => {
@@ -435,6 +434,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
 
   const handleTimeClick = async (time: string) => {
     if (!selectedDate) return;
+    if (isEcuadorSlotInPast(selectedDate, time)) return;
     // Si ya tenemos disponibilidad pre-checada, úsala sin nuevo request
     const cached = hourAvailability[time];
     if (cached) {
@@ -594,7 +594,8 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
               const isBlockedByTechRestrictionLocalCheck = isSlotBlockedByTechRestrictionLocal(selectedDate, hour);
               const isBlockedByTechniqueRestriction = isBlockedByTechRestrictionBackend || isBlockedByTechRestrictionLocalCheck;
               const isUnavailableByCapacity = hourState ? (hourState.available === false && !isBlockedByTechRestrictionBackend) : false;
-              const isUnavailable = isBlockedByFixedClass || isBlockedBySpecialEvent || isUnavailableByCapacity || isBlockedByTechniqueRestriction;
+              const isPastSlotEcuador = isEcuadorSlotInPast(selectedDate, hour);
+              const isUnavailable = isBlockedByFixedClass || isBlockedBySpecialEvent || isUnavailableByCapacity || isBlockedByTechniqueRestriction || isPastSlotEcuador;
               
               return (
                 <button

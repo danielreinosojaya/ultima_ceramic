@@ -47,7 +47,12 @@ import { sql } from '@vercel/postgres';
 import { seedDatabase, ensureTablesExist, createCustomer } from './db.js';
 import * as emailService from './emailService.js';
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { generatePaymentId, generateGiftcardCode } from '../utils/formatters.js';
+import {
+    generatePaymentId,
+    generateGiftcardCode,
+    ecuadorSlotStartIso,
+    isEcuadorSlotInPast,
+} from '../utils/formatters.js';
 import { checkRateLimit } from './rateLimiter.js';
 import { uploadPhotoToBunny, uploadProofToBunny } from './bunnyUpload.js';
 import { deliverGiftcardToRecipient } from './utils/giftcardDelivery.js';
@@ -6761,9 +6766,11 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         }
 
         case 'schedulePaintingBooking': {
-            const { deliveryId, date, time, participants, adminOverride, markPaintingPaid, adminReschedule } = req.body;
+            const { deliveryId, date, time, participants, adminOverride, markPaintingPaid, adminReschedule, allowPastSlot } = req.body;
             const isAdminOverride = adminOverride === true;
             const isAdminReschedule = adminReschedule === true;
+            const isAdminAllowPast =
+                allowPastSlot === true || isAdminOverride || isAdminReschedule;
             let didAdminReschedule = false;
 
             if (!deliveryId || !date || !time || participants === undefined || participants === null) {
@@ -6837,6 +6844,14 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         success: false,
                         error: availability.message,
                         capacity: availability.capacity
+                    });
+                }
+
+                if (!isAdminAllowPast && isEcuadorSlotInPast(date, availability.normalizedTime)) {
+                    return res.status(400).json({
+                        success: false,
+                        error:
+                            'No se puede agendar pintura en el pasado (hora Ecuador). Elige una fecha y hora futuras.'
                     });
                 }
 
@@ -7040,8 +7055,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     });
                 }
 
-                const bookingDateTimeLocal = new Date(`${date}T${availability.normalizedTime}:00`);
-                const bookingDateIso = bookingDateTimeLocal.toISOString();
+                const bookingDateIso = ecuadorSlotStartIso(date, availability.normalizedTime);
 
                 const { rows: [updatedDelivery] } = await sql`
                     UPDATE deliveries

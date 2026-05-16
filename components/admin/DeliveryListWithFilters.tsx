@@ -9,6 +9,7 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import * as dataService from '../../services/dataService';
 import { useAdminData } from '../../context/AdminDataContext';
+import { isoToEcuadorYmdAndTime } from '../../utils/formatters';
 
 // Helper function to detect critical deliveries
 const isCritical = (delivery: Delivery): boolean => {
@@ -270,11 +271,9 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
         setPaintAgendaDelivery(d);
         const pad2 = (n: number) => String(n).padStart(2, '0');
         if (isReschedule && d.paintingBookingDate) {
-            const dt = new Date(d.paintingBookingDate);
-            setPaintAgendaDate(
-                `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`
-            );
-            setPaintAgendaTime(`${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`);
+            const { date: ecDate, time: ecTime } = isoToEcuadorYmdAndTime(d.paintingBookingDate);
+            setPaintAgendaDate(ecDate);
+            setPaintAgendaTime(ecTime);
         } else {
             setPaintAgendaDate('');
             setPaintAgendaTime('10:00');
@@ -811,6 +810,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                 date: dateStr,
                 time: timeStr,
                 participants: parts,
+                allowPastSlot: true,
                 ...(paintAgendaIsReschedule ? { adminReschedule: true } : {}),
                 ...(adminOverride ? { adminOverride: true, markPaintingPaid: paintAgendaMarkPaid } : {}),
             });

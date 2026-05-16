@@ -26,6 +26,71 @@ export function formatDateToYYYYMMDD(d: Date): string {
     return `${year}-${month}-${day}`;
 }
 
+export const ECUADOR_TZ = 'America/Guayaquil';
+/** Ecuador fijo UTC−5 (sin horario de verano). */
+const ECUADOR_UTC_OFFSET_HOURS = 5;
+
+export function normalizeSlotTimeHHMM(time: string): string {
+    if (!time) return '';
+    if (/^\d{2}:\d{2}$/.test(time)) return time;
+    const match = time.match(/(\d{1,2}):(\d{2})/);
+    if (match) return `${match[1].padStart(2, '0')}:${match[2]}`;
+    return time;
+}
+
+/** Fecha calendario actual en Ecuador (YYYY-MM-DD). */
+export function getEcuadorDateYmd(nowMs = Date.now()): string {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: ECUADOR_TZ,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).format(new Date(nowMs));
+}
+
+/** Instant UTC (ms) del inicio del slot en hora Ecuador. */
+export function ecuadorSlotStartMs(dateYmd: string, time: string): number {
+    const m = dateYmd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return NaN;
+    const y = Number(m[1]);
+    const mo = Number(m[2]) - 1;
+    const d = Number(m[3]);
+    const [hh, mm] = normalizeSlotTimeHHMM(time).split(':').map(Number);
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return NaN;
+    return Date.UTC(y, mo, d, hh + ECUADOR_UTC_OFFSET_HOURS, mm, 0);
+}
+
+export function ecuadorSlotStartIso(dateYmd: string, time: string): string {
+    const ms = ecuadorSlotStartMs(dateYmd, time);
+    if (!Number.isFinite(ms)) throw new Error('Invalid Ecuador slot date/time');
+    return new Date(ms).toISOString();
+}
+
+/** true si el inicio del slot ya pasó (o es ahora) en hora Ecuador. */
+export function isEcuadorSlotInPast(dateYmd: string, time: string, minLeadMinutes = 0): boolean {
+    const slotMs = ecuadorSlotStartMs(dateYmd, time);
+    if (!Number.isFinite(slotMs)) return true;
+    return slotMs <= Date.now() + minLeadMinutes * 60 * 1000;
+}
+
+export function isoToEcuadorYmdAndTime(iso: string): { date: string; time: string } {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return { date: '', time: '10:00' };
+    const date = new Intl.DateTimeFormat('en-CA', {
+        timeZone: ECUADOR_TZ,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).format(d);
+    const time = new Intl.DateTimeFormat('en-GB', {
+        timeZone: ECUADOR_TZ,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    }).format(d);
+    return { date, time: normalizeSlotTimeHHMM(time) };
+}
+
 // Formatea hora local de Ecuador desde timestamp UTC (ISO string)
 // El backend ahora guarda en UTC puro, convertir a America/Guayaquil al mostrar
 export function formatLocalTimeFromUTC(isoString: string | undefined | null): string {

@@ -2816,6 +2816,8 @@ export const schedulePaintingBooking = async (payload: {
     markPaintingPaid?: boolean;
     /** Admin: anula cita upsell anterior en agenda y crea una nueva (correo “actualizado”) */
     adminReschedule?: boolean;
+    /** Admin panel: permite fecha/hora pasada (correcciones, registros tardíos) */
+    allowPastSlot?: boolean;
 }): Promise<{ success: boolean; delivery?: Delivery; error?: string }> => {
     try {
         const result = await postAction('schedulePaintingBooking', payload);
