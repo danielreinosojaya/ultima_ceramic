@@ -6929,6 +6929,17 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     return res.status(400).json({ error: 'Invalid painting service status. Please contact support.' });
                 }
 
+                const paintingPaidAt =
+                    (delivery as any).painting_paid_at ?? (delivery as any).paintingPaidAt ?? null;
+                const paintingIsPrepaid =
+                    currentPaintingStatus === 'paid' || Boolean(paintingPaidAt);
+                const paintingPriceRaw =
+                    (delivery as any).painting_price ?? (delivery as any).paintingPrice ?? null;
+                const paintingPrice =
+                    paintingPriceRaw != null && !Number.isNaN(Number(paintingPriceRaw))
+                        ? Number(paintingPriceRaw)
+                        : null;
+
                 let userInfo: any = null;
                 const { rows: [bookingData] } = await sql`
                     SELECT user_info FROM bookings 
@@ -7013,8 +7024,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     product,
                     slots: [{ date, time: availability.normalizedTime, instructorId: 0 }],
                     userInfo,
-                    isPaid: true,
-                    price: 0,
+                    isPaid: paintingIsPrepaid,
+                    price: paintingIsPrepaid ? 0 : paintingPrice ?? 0,
                     bookingMode: 'flexible',
                     bookingDate: date,
                     participants: requestedParticipants,
@@ -7061,7 +7072,9 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                             bookingDate: date,
                             bookingTime: availability.normalizedTime,
                             participants: requestedParticipants,
-                            isCorrection: didAdminReschedule
+                            isCorrection: didAdminReschedule,
+                            paymentContext: paintingIsPrepaid ? 'paid' : 'pay_on_day',
+                            paintingPrice
                         }
                     );
                 } catch (emailErr) {

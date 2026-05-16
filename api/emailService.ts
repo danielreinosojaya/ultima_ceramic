@@ -1166,7 +1166,7 @@ export const sendDeliveryReadyForPaintingEmail = async (
     return result;
 };
 
-// Email: Confirmación de reserva de pintura (ya pagada)
+// Email: Cita de pintura agendada (copy según si el servicio ya está pagado o cobro el día de la cita)
 export const sendPaintingBookingScheduledEmail = async (
     customerEmail: string,
     customerName: string,
@@ -1177,14 +1177,24 @@ export const sendPaintingBookingScheduledEmail = async (
         participants: number;
         /** true = admin corrigió fecha/hora; el cliente recibe texto de “actualizado” */
         isCorrection?: boolean;
+        /** 'paid' = prepagado; 'pay_on_day' = cobro pendiente / acordado para el día de la cita */
+        paymentContext?: 'paid' | 'pay_on_day';
+        paintingPrice?: number | null;
     }
 ) => {
     const displayDescription = payload.description || 'Tu pieza de cerámica';
     const sanitizedDescription = displayDescription.replace(/[\n\r]+/g, ' ').replace(/\s+/g, ' ').trim();
     const isCorrection = payload.isCorrection === true;
+    const payOnDay = payload.paymentContext === 'pay_on_day';
+    const priceLabel =
+        payload.paintingPrice != null && payload.paintingPrice > 0
+            ? `$${Number(payload.paintingPrice).toFixed(2)}`
+            : null;
     const subject = isCorrection
-        ? `🎨 Reserva de pintura actualizada - ${sanitizedDescription}`
-        : `🎨 Reserva de pintura confirmada - ${sanitizedDescription}`;
+        ? `🎨 Cita de pintura actualizada - ${sanitizedDescription}`
+        : payOnDay
+            ? `🎨 Cita de pintura agendada - ${sanitizedDescription}`
+            : `🎨 Reserva de pintura confirmada - ${sanitizedDescription}`;
     const formattedDate = new Date(payload.bookingDate + 'T00:00:00').toLocaleDateString('es-ES', {
         weekday: 'long',
         year: 'numeric',
@@ -1197,8 +1207,10 @@ export const sendPaintingBookingScheduledEmail = async (
             <h2 style="color: #D95F43;">¡Hola, ${customerName}!</h2>
             <p style="font-size: 18px; font-weight: bold; color: #D95F43;">${
                 isCorrection
-                    ? '🎨 Hemos actualizado la fecha u hora de tu reserva de pintura.'
-                    : '🎨 Tu reserva de pintura ha sido confirmada.'
+                    ? '🎨 Hemos actualizado la fecha u hora de tu cita de pintura.'
+                    : payOnDay
+                        ? '🎨 Tu cita de pintura quedó agendada.'
+                        : '🎨 Tu reserva de pintura ha sido confirmada.'
             }</p>
 
             <div style="background-color: #FDF7F2; border-left: 4px solid #D95F43; padding: 20px; border-radius: 8px; margin: 20px 0;">
@@ -1208,10 +1220,18 @@ export const sendPaintingBookingScheduledEmail = async (
                 <p style="margin: 4px 0 0 0; color: #6B5F58; font-size: 14px;">Participantes: ${payload.participants}</p>
             </div>
 
-            <div style="background-color: #F4F2F1; border-left: 4px solid #CCBCB2; padding: 18px; margin: 20px 0; border-radius: 8px;">
+            ${payOnDay
+                ? `<div style="background-color: #FFF8E6; border-left: 4px solid #D95F43; padding: 18px; margin: 20px 0; border-radius: 8px;">
+                <p style="margin: 0; color: #4A4540; font-weight: bold;">💳 Pago del servicio de pintura</p>
+                <p style="margin: 8px 0 0 0; color: #6B5F58; font-size: 14px;">
+                    El cobro del servicio de pintura${priceLabel ? ` (${priceLabel})` : ''} queda para el <strong>día de tu cita</strong>.
+                    Puedes pagar en el estudio con <strong>tarjeta</strong> al llegar.
+                </p>
+            </div>`
+                : `<div style="background-color: #F4F2F1; border-left: 4px solid #CCBCB2; padding: 18px; margin: 20px 0; border-radius: 8px;">
                 <p style="margin: 0; color: #4A4540; font-weight: bold;">✅ Servicio ya pagado</p>
                 <p style="margin: 8px 0 0 0; color: #6B5F58; font-size: 14px;">No necesitas realizar ningún pago adicional.</p>
-            </div>
+            </div>`}
 
             <p style="margin-top: 20px; font-size: 15px;">Si necesitas cambiar la hora, contáctanos por WhatsApp.</p>
             <div style="margin: 20px 0; text-align: center;">
