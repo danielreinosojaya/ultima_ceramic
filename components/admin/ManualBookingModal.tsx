@@ -6,6 +6,7 @@ import * as adminValidator from '../../services/adminValidator';
 import type { ValidationResult, ValidationWarning } from '../../services/adminValidator';
 import { ConfirmAdminOverrideModal } from './ConfirmAdminOverrideModal';
 import { COUNTRIES } from '@/constants';
+import { useAdminData } from '../../context/AdminDataContext';
 
 interface ManualBookingModalProps {
   isOpen: boolean;
@@ -24,6 +25,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
   availableProducts = [],
   preselectedCustomer
 }) => {
+  const adminData = useAdminData();
   const [productError, setProductError] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(preselectedCustomer || null);
@@ -288,6 +290,8 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
       const isCustomExperience = selectedProduct === null;
       const firstSlot = selectedSlots[0];
 
+      let createdBooking: Booking | null = null;
+
       if (isCustomExperience) {
         // Para Experiencia Personalizada: usar createCustomExperienceBooking
         const customExperiencePayload = {
@@ -315,16 +319,11 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
           clientNote
         };
 
-        const response = await fetch('/api/data?action=createCustomExperienceBooking', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(customExperiencePayload)
-        });
-
-        const result = await response.json();
-        if (!response.ok || !result.success) {
-          throw new Error(result.error || 'No se pudo crear la experiencia personalizada');
+        const customResult = await dataService.createCustomExperienceBooking(customExperiencePayload);
+        if (!customResult.success) {
+          throw new Error(customResult.error || 'No se pudo crear la experiencia personalizada');
         }
+        createdBooking = customResult.booking ?? null;
       } else {
         // Para productos de catálogo: usar addBooking
         const bookingData = {
@@ -358,6 +357,11 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
 
         const result = await dataService.addBooking(bookingData);
         if (!result.success) throw new Error(result.message || 'No se pudo agendar la clase');
+        createdBooking = result.booking ?? null;
+      }
+
+      if (createdBooking?.id) {
+        adminData.optimisticUpsertBooking(createdBooking);
       }
 
       // Feedback visual profesional

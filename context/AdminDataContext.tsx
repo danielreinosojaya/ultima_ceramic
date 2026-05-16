@@ -473,7 +473,7 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
       if (loadingRef.current.critical) return;
     }
     
-    if (loadingRef.current.critical) {
+    if (loadingRef.current.critical && !force) {
       console.log('[AdminDataContext] Already loading critical, skipping');
       return;
     }
@@ -483,6 +483,9 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
     dispatch({ type: 'SET_ERROR', error: null });
 
     try {
+      if (force) {
+        dataService.invalidateBookingsCache();
+      }
       // Usar batch optimizado del dataService para datos críticos con fallback
       const results = await Promise.allSettled([
         dataService.getBookings().catch(() => []),

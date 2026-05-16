@@ -929,6 +929,35 @@ export const addBooking = async (bookingData: any): Promise<AddBookingResult> =>
     return result;
 };
 
+/** Reserva manual / experiencia personalizada (admin) — invalida cache y parsea booking */
+export const createCustomExperienceBooking = async (
+    payload: Record<string, unknown>
+): Promise<{ success: boolean; booking?: Booking | null; error?: string }> => {
+    try {
+        const response = await fetch('/api/data?action=createCustomExperienceBooking', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            return {
+                success: false,
+                error: result.error || 'No se pudo crear la experiencia personalizada',
+            };
+        }
+        invalidateBookingsCache();
+        const booking = result.booking ? parseBooking(result.booking) : null;
+        return { success: true, booking, error: undefined };
+    } catch (error) {
+        console.error('[createCustomExperienceBooking] Error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error al crear la reserva',
+        };
+    }
+};
+
 // Obtener un booking por su ID
 export const getBookingById = async (bookingId: string): Promise<Booking> => {
     try {
