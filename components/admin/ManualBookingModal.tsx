@@ -36,6 +36,21 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
   const [submitDisabled, setSubmitDisabled] = useState(false);
   const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
   const [participants, setParticipants] = useState<number>(1);
+  /** Texto del input — evita forzar "1" mientras el admin borra para escribir otro número */
+  const [participantsInput, setParticipantsInput] = useState('1');
+
+  const commitParticipantsInput = (raw: string): number => {
+    const n = parseInt(raw, 10);
+    if (!Number.isFinite(n) || n < 1) {
+      setParticipants(1);
+      setParticipantsInput('1');
+      return 1;
+    }
+    const clamped = Math.min(100, n);
+    setParticipants(clamped);
+    setParticipantsInput(String(clamped));
+    return clamped;
+  };
   // Calendar and time picker states
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<string>('');
@@ -129,6 +144,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
       setProductError('');
       setSearchTerm('');
       setParticipants(1);
+      setParticipantsInput('1');
       setValidationResult(null);
       setShowOverrideModal(false);
       setOverrideInProgress(false);
@@ -156,6 +172,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
     if (selectedProduct) {
       const range = getParticipantsRange(selectedProduct);
       setParticipants(range.min);
+      setParticipantsInput(String(range.min));
       // Reset technique when product changes (unless it's CUSTOM_EXPERIENCE)
       if (selectedProduct.type !== 'CUSTOM_EXPERIENCE') {
         setSelectedTechnique(null);
@@ -209,7 +226,8 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
       }
       
       if (!selectedSlots.length) throw new Error('Agrega al menos un horario');
-      if (participants < 1 || participants > 100) {
+      const participantsCount = commitParticipantsInput(participantsInput);
+      if (participantsCount < 1 || participantsCount > 100) {
         throw new Error('Número de participantes debe estar entre 1 y 100');
       }
 
@@ -220,7 +238,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
           date: selectedSlots[0].date,
           time: selectedSlots[0].time,
           technique: selectedTechnique,
-          participants,
+          participants: participantsCount,
           productType: 'CUSTOM_EXPERIENCE',
           product: null
         });
@@ -238,7 +256,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
           date: selectedSlots[0].date,
           time: selectedSlots[0].time,
           technique: selectedProduct.details?.technique,
-          participants,
+          participants: participantsCount,
           productType: selectedProduct.type,
           product: selectedProduct
         });
@@ -266,6 +284,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
   const performBookingSubmit = async (adminOverride: boolean, overrideReason: string) => {
     setOverrideInProgress(true);
     try {
+      const participantsCount = commitParticipantsInput(participantsInput);
       const isCustomExperience = selectedProduct === null;
       const firstSlot = selectedSlots[0];
 
@@ -276,9 +295,9 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
           technique: selectedTechnique,
           date: firstSlot.date,
           time: firstSlot.time,
-          participants,
+          participants: participantsCount,
           config: {
-            participants
+            participants: participantsCount
           },
           userInfo: selectedCustomer?.userInfo || {
             firstName: selectedCustomer?.userInfo?.firstName || '',
@@ -326,7 +345,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
           bookingMode: 'flexible',
           isPaid: false,
           paymentDetails: [],
-          participants,
+          participants: participantsCount,
           // Técnica: siempre pasar explícitamente (de selectedTechnique o de product.details)
           technique: selectedProduct.type === 'CUSTOM_EXPERIENCE' && selectedTechnique
             ? selectedTechnique
@@ -473,24 +492,36 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
                 {selectedProduct?.type === 'SINGLE_CLASS' ? '(Siempre 1)' : '(1-100 personas)'}
               </span>
             </label>
-            <input 
-              type="number" 
-              min={1}
-              max={selectedProduct?.type === 'SINGLE_CLASS' ? 1 : 100}
-              value={participants} 
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              value={participantsInput}
               onChange={e => {
-                const value = Math.max(1, parseInt(e.target.value) || 1);
-                // Para SINGLE_CLASS, forzar siempre 1
                 if (selectedProduct?.type === 'SINGLE_CLASS') {
                   setParticipants(1);
-                } else if (value >= 1 && value <= 100) {
-                  setParticipants(value);
+                  setParticipantsInput('1');
+                  return;
                 }
+                const digits = e.target.value.replace(/\D/g, '').slice(0, 3);
+                setParticipantsInput(digits);
+                if (digits !== '') {
+                  const n = parseInt(digits, 10);
+                  if (n >= 1 && n <= 100) setParticipants(n);
+                }
+              }}
+              onBlur={() => {
+                if (selectedProduct?.type === 'SINGLE_CLASS') {
+                  setParticipants(1);
+                  setParticipantsInput('1');
+                  return;
+                }
+                commitParticipantsInput(participantsInput);
               }}
               disabled={selectedProduct?.type === 'SINGLE_CLASS'}
               className={`w-full px-3 py-2 border rounded-lg ${
-                selectedProduct?.type === 'SINGLE_CLASS' 
-                  ? 'bg-gray-100 cursor-not-allowed' 
+                selectedProduct?.type === 'SINGLE_CLASS'
+                  ? 'bg-gray-100 cursor-not-allowed'
                   : ''
               } ${participants < 1 || participants > 100 ? 'border-red-500' : ''}`}
             />
