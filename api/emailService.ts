@@ -549,19 +549,29 @@ export const sendGiftcardPaymentConfirmedEmail = async (
         recipientEmail?: string;
         message?: string;
         schedulingInfo?: string;
+        scheduledSendAt?: string | Date | null;
+        recipientAlreadySent?: boolean;
     },
     _pdfBase64?: string,
     downloadLink?: string
 ) => {
-    const isScheduled = !!payload.schedulingInfo;
-    const subject = isScheduled 
-        ? `¡Tu pago fue recibido! La giftcard será enviada en la fecha programada 🎁` 
-        : `¡Tu pago fue recibido! La giftcard ya fue enviada 🎁`;
+    const isScheduled = !!payload.scheduledSendAt;
+    const recipientSent = !!payload.recipientAlreadySent;
+    const subject = isScheduled
+        ? `¡Tu pago fue recibido! La giftcard será enviada en la fecha programada 🎁`
+        : recipientSent
+            ? `¡Tu pago fue recibido! La giftcard ya fue enviada 🎁`
+            : `¡Tu pago fue recibido! Tu giftcard está lista 🎁`;
+    const introLine = isScheduled
+        ? 'Tu pago fue confirmado. La giftcard será enviada en la fecha programada.'
+        : recipientSent
+            ? 'Tu pago fue confirmado y la giftcard ya fue enviada al destinatario.'
+            : 'Tu pago fue confirmado. La giftcard será enviada al destinatario en breve.';
     const downloadHtml = downloadLink ? `<p style="margin:10px 0;"><a href="${downloadLink}" style="color:#1d4ed8; text-decoration:none;">Descargar comprobante PDF</a></p>` : '';
     const html = `
         <div style="font-family: Arial, Helvetica, sans-serif; color:#222; max-width:600px; margin:0 auto; background:#fff; border-radius:16px; box-shadow:0 2px 12px #0001; padding:36px 28px 32px 28px;">
             <h1 style="color:#D95F43; font-size:2.1rem; margin-bottom:0.5rem; text-align:center; font-weight:800; letter-spacing:0.01em;">¡Gracias por tu regalo!</h1>
-            <p style="font-size:1.15rem; color:#444; text-align:center; margin-bottom:1.2rem;">${isScheduled ? 'Tu pago fue confirmado. La giftcard será enviada en la fecha programada.' : 'Tu pago fue confirmado y la giftcard ya fue enviada al destinatario.'}</p>
+            <p style="font-size:1.15rem; color:#444; text-align:center; margin-bottom:1.2rem;">${introLine}</p>
             <div style="background:#f9fafb; border:1px solid #e5e7eb; padding:18px 20px; border-radius:10px; margin-bottom:18px;">
                 <div style="font-size:16px; color:#555; margin-bottom:8px;">Para: <strong>${payload.recipientName || '—'}</strong></div>
                 <div style="font-size:16px; color:#555; margin-bottom:8px;">Email/WhatsApp: <strong>${payload.recipientEmail || '—'}</strong></div>
@@ -587,9 +597,17 @@ export const sendGiftcardPaymentConfirmedEmail = async (
             <div style="margin-bottom:18px;">
                 <h3 style="font-size:18px; color:#222; margin-bottom:8px;">¿Qué sucede ahora?</h3>
                 <ol style="padding-left:18px; color:#444; font-size:15px;">
-                    <li>El destinatario ya recibió su giftcard por email o WhatsApp.</li>
-                    <li>Le hemos explicado cómo redimirla y los pasos a seguir.</li>
-                    <li>Si no la encuentra, puedes reenviarle este código o contactarnos para ayuda.</li>
+                    ${isScheduled
+                        ? `<li>La giftcard se enviará al destinatario en la fecha programada.</li>
+                           <li>Te avisaremos cuando el envío se complete.</li>
+                           <li>Si necesitas adelantar el envío, contáctanos por WhatsApp.</li>`
+                        : recipientSent
+                            ? `<li>El destinatario ya recibió su giftcard por email o WhatsApp.</li>
+                               <li>Le hemos explicado cómo redimirla y los pasos a seguir.</li>
+                               <li>Si no la encuentra, puedes reenviarle este código o contactarnos para ayuda.</li>`
+                            : `<li>Estamos procesando el envío al destinatario.</li>
+                               <li>Si no llega en unos minutos, contáctanos por WhatsApp con el código de referencia.</li>
+                               <li>Puedes reenviarle el código manualmente mientras tanto.</li>`}
                 </ol>
             </div>
             <div style="margin-bottom:18px; font-size:15px; color:#444;">

@@ -50,6 +50,9 @@ const GiftcardsManager: React.FC = () => {
   
   // 📅 MODAL DE GIFTCARDS PROGRAMADAS (top-level, not in IIFE)
   const [showScheduledModal, setShowScheduledModal] = React.useState(false);
+
+  // Selección múltiple para eliminación permanente (pruebas / limpieza)
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   
   // Cache para evitar re-validaciones innecesarias
   const cacheRef = React.useRef<Record<string, { data: any; timestamp: number }>>({});
@@ -249,6 +252,54 @@ const GiftcardsManager: React.FC = () => {
       </div>
       
       <p className="text-brand-secondary text-center mb-2">Aquí podrás gestionar todas las solicitudes de giftcard recibidas.</p>
+
+      {selectedIds.size > 0 && (
+        <div className="w-full flex flex-wrap items-center justify-between gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
+          <span className="text-sm font-semibold text-red-800">{selectedIds.size} seleccionada(s)</span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="px-3 py-2 text-sm rounded-lg border border-red-300 text-red-700 hover:bg-red-100"
+              onClick={() => setSelectedIds(new Set())}
+            >
+              Deseleccionar
+            </button>
+            <button
+              type="button"
+              className="px-4 py-2 text-sm rounded-lg bg-red-800 text-white font-semibold hover:bg-red-900"
+              onClick={async () => {
+                const typed = window.prompt(
+                  `ELIMINAR PERMANENTEMENTE ${selectedIds.size} solicitud(es).\nEscribe ELIMINAR para confirmar:`
+                );
+                if (typed !== 'ELIMINAR') return;
+                const adminUser = window.prompt('Usuario admin:', 'admin') || 'admin';
+                setIsProcessing(true);
+                try {
+                  const res = await dataService.bulkHardDeleteGiftcardRequests(
+                    Array.from(selectedIds),
+                    adminUser,
+                    'bulk cleanup from admin'
+                  );
+                  if (res?.success) {
+                    alert(`✅ ${res.count ?? selectedIds.size} solicitud(es) eliminada(s) permanentemente`);
+                    setSelectedIds(new Set());
+                    adminData.refreshCritical?.();
+                  } else {
+                    alert('❌ ' + (res?.error || 'Error al eliminar'));
+                  }
+                } catch (err) {
+                  alert('Error: ' + (err instanceof Error ? err.message : 'error'));
+                } finally {
+                  setIsProcessing(false);
+                }
+              }}
+              disabled={isProcessing}
+            >
+              🗑️ Eliminar permanentemente
+            </button>
+          </div>
+        </div>
+      )}
       {adminData.loading ? (
         <div className="w-full text-center text-brand-border italic">Cargando solicitudes...</div>
       ) : adminData.giftcardRequests.length === 0 ? (
@@ -291,6 +342,24 @@ const GiftcardsManager: React.FC = () => {
               <table className="w-full border rounded-xl overflow-hidden shadow">
                 <thead className="bg-brand-background">
                   <tr>
+                    <th className="px-2 py-3 text-center w-10">
+                      <input
+                        type="checkbox"
+                        aria-label="Seleccionar todas en esta página"
+                        checked={paginatedRequests.length > 0 && paginatedRequests.every(r => selectedIds.has(r.id))}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedIds(prev => new Set([...prev, ...paginatedRequests.map(r => r.id)]));
+                          } else {
+                            setSelectedIds(prev => {
+                              const next = new Set(prev);
+                              paginatedRequests.forEach(r => next.delete(r.id));
+                              return next;
+                            });
+                          }
+                        }}
+                      />
+                    </th>
                     <th className="px-4 py-3 text-left text-brand-secondary font-bold text-sm">Comprador / Destinatario</th>
                     <th className="px-4 py-3 text-center text-brand-secondary font-bold text-sm">Monto</th>
                     <th className="px-4 py-3 text-center text-brand-secondary font-bold text-sm">Estado</th>
@@ -322,6 +391,21 @@ const GiftcardsManager: React.FC = () => {
                   key={req.id} 
                   className={`border-t transition-colors hover:bg-brand-background/30 ${isScheduled && isPastSchedule ? 'bg-red-50' : ''}`}
                 >
+                  <td className="px-2 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      aria-label={`Seleccionar solicitud ${req.id}`}
+                      checked={selectedIds.has(req.id)}
+                      onChange={(e) => {
+                        setSelectedIds(prev => {
+                          const next = new Set(prev);
+                          if (e.target.checked) next.add(req.id);
+                          else next.delete(req.id);
+                          return next;
+                        });
+                      }}
+                    />
+                  </td>
                   {/* Comprador / Destinatario */}
                   <td className="px-4 py-3">
                     <div className="space-y-1">
@@ -708,16 +792,16 @@ const GiftcardsManager: React.FC = () => {
                 >❌ Rechazar</button>
 
                 <button
-                  className="px-3 py-2 rounded-lg bg-red-700 text-white text-sm font-semibold hover:bg-red-800 disabled:opacity-50 transition-colors"
+                  className="px-3 py-2 rounded-lg border-2 border-red-400 text-red-700 text-sm font-semibold hover:bg-red-50 disabled:opacity-50 transition-colors"
                   onClick={async () => {
-                    const confirmDelete = window.confirm('¿Confirma que desea ELIMINAR esta solicitud?');
+                    const confirmDelete = window.confirm('¿Archivar esta solicitud? (se oculta de la lista)');
                     if (!confirmDelete) return;
                     const adminUser = window.prompt('Usuario admin:', 'admin') || 'admin';
                     setIsProcessing(true);
                     try {
                       const res = await dataService.deleteGiftcardRequest(selected.id, adminUser, noteText || undefined);
                       if (res && res.success) {
-                        alert('✅ Eliminada');
+                        alert('✅ Archivada');
                         adminData.refreshCritical();
                         setSelected(null);
                       } else {
@@ -730,7 +814,34 @@ const GiftcardsManager: React.FC = () => {
                     }
                   }}
                   disabled={isProcessing}
-                >🗑️ Eliminar</button>
+                >📦 Archivar</button>
+
+                <button
+                  className="px-3 py-2 rounded-lg bg-red-900 text-white text-sm font-semibold hover:bg-red-950 disabled:opacity-50 transition-colors"
+                  onClick={async () => {
+                    const typed = window.prompt(
+                      'ELIMINACIÓN PERMANENTE. No se puede deshacer.\nEscribe ELIMINAR para confirmar:'
+                    );
+                    if (typed !== 'ELIMINAR') return;
+                    const adminUser = window.prompt('Usuario admin:', 'admin') || 'admin';
+                    setIsProcessing(true);
+                    try {
+                      const res = await dataService.hardDeleteGiftcardRequest(selected.id, adminUser, noteText || undefined);
+                      if (res && res.success) {
+                        alert('✅ Eliminada permanentemente');
+                        adminData.refreshCritical();
+                        setSelected(null);
+                      } else {
+                        alert('❌ ' + (res?.error || 'Error'));
+                      }
+                    } catch (err) {
+                      alert('Error: ' + (err instanceof Error ? err.message : 'error'));
+                    } finally {
+                      setIsProcessing(false);
+                    }
+                  }}
+                  disabled={isProcessing}
+                >🗑️ Borrar definitivo</button>
 
                 <button
                   className="px-3 py-2 rounded-lg border-2 border-brand-border text-brand-secondary text-sm font-semibold hover:bg-brand-background disabled:opacity-50 transition-colors"

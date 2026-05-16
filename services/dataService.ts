@@ -191,6 +191,22 @@ export const hardDeleteGiftcardRequest = async (
     }
 };
 
+export const bulkHardDeleteGiftcardRequests = async (
+    ids: string[],
+    adminUser: string,
+    note?: string
+): Promise<{ success: boolean; count?: number; error?: string }> => {
+    try {
+        const res = await postAction('bulkHardDeleteGiftcardRequests', { ids, adminUser, note });
+        if (res && res.success) {
+            return { success: true, count: res.count };
+        }
+        return { success: false, error: res?.error || 'Failed to bulk delete giftcard requests' };
+    } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+};
+
 // Si el cliente no tiene reservas, agregarlo como standalone
 export const ensureStandaloneCustomer = async (customerData: {
     email: string;
