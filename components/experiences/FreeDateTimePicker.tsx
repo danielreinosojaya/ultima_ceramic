@@ -241,7 +241,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     const baseHours = dayOfWeek === 0
       ? buildSlots(10, 15)  // Domingo: último start 15:00 (cierre 17:00 - 2h clase)
       : dayOfWeek === 6
-      ? buildSlots(9, 18)   // Sábado: último start 18:00
+      ? buildSlots(10, 18)  // Sábado: apertura 10:00, último start 18:00
       : buildSlots(10, 18); // Martes-Viernes: último start 18:00 (clase termina 20:00)
 
     if (technique === 'painting') {

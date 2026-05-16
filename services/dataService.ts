@@ -2722,16 +2722,24 @@ export const updatePaintingStatus = async (
 };
 
 // 🔴 Validar que el cliente haya pagado el servicio de pintura
-export const checkPaintingPaymentStatus = async (deliveryId: string): Promise<{ success: boolean; isPaid: boolean; error?: string }> => {
+export const checkPaintingPaymentStatus = async (
+    deliveryId: string
+): Promise<{ success: boolean; isPaid: boolean; canSchedule?: boolean; payOnDay?: boolean; error?: string }> => {
     try {
         const result = await postAction('checkPaintingPaymentStatus', { deliveryId });
         if (result.success) {
-            return { success: true, isPaid: result.isPaid ?? false };
+            return {
+                success: true,
+                isPaid: result.isPaid ?? false,
+                canSchedule: result.canSchedule ?? result.isPaid ?? false,
+                payOnDay: result.payOnDay === true,
+            };
         }
         return {
             success: false,
             isPaid: false,
-            error: result.error || 'Could not verify payment status'
+            canSchedule: false,
+            error: result.error || 'No se pudo verificar el estado de la entrega'
         };
     } catch (error) {
         console.error('[checkPaintingPaymentStatus] Error:', error);
@@ -3233,12 +3241,12 @@ export const generateTimeSlots = (
   // - Domingo: 10:00-15:00 (último start → clase termina a las 17:00 = cierre)
   // - Lunes: CERRADO
   // - Martes-Viernes: 10:00-19:00 (último start)
-  // - Sábado: 9:00-18:00 (último start)
+  // - Sábado: 10:00-18:00 (último start)
   const hoursPerDay = [
     { start: 10, end: 15, days: [0] },    // Domingo: último start 15:00 (cierre 17:00 - 2h clase)
     // Lunes (1) EXCLUIDO - CERRADO
     { start: 10, end: 19, days: [2, 3, 4, 5] }, // Martes-Viernes: último start 19:00
-    { start: 9, end: 18, days: [6] }      // Sábado: último start 18:00
+    { start: 10, end: 18, days: [6] }     // Sábado: apertura 10:00, último start 18:00
   ];
 
     for (let d = 0; d < daysCount; d++) {

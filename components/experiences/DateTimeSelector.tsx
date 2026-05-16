@@ -84,7 +84,7 @@ export const DateTimeSelector: React.FC<DateTimeSelectorProps> = ({
 
     if (dayOfWeek === 1) return []; // Lunes cerrado
     if (dayOfWeek === 0) return buildSlots(10, 15); // Domingo: último start 15:00 (cierre 17:00 - 2h clase)
-    if (dayOfWeek === 6) return buildSlots(9, 18);  // Sábado: último start 18:00
+    if (dayOfWeek === 6) return buildSlots(10, 18); // Sábado: apertura 10:00, último start 18:00
     return buildSlots(10, 19); // Martes a Viernes: último start 19:00
   };
 
@@ -250,7 +250,7 @@ export const DateTimeSelector: React.FC<DateTimeSelectorProps> = ({
             </h4>
             <p className="text-xs text-gray-600 mt-1 space-y-1">
               <div>💡 Cada 30 minutos | Duración: 2 horas</div>
-              <div>📅 Sábados: 9:00 AM - 7:00 PM</div>
+              <div>📅 Sábados: 10:00 AM - 7:00 PM</div>
               <div>📅 Domingos: 10:00 AM - 6:00 PM</div>
               <div>📅 Otros días: 10:00 AM - 7:00 PM</div>
             </p>

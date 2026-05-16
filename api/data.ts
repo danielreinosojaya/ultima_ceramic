@@ -677,9 +677,9 @@ const getBusinessHoursForDay = (dayOfWeek: number): string[] => {
 
     if (dayOfWeek === 1) return hours; // Lunes cerrado
 
-    // Sábado: 9:00-18:00 (último start 18:00, NO 18:30)
+    // Sábado: 10:00-18:00 (último start 18:00, NO 18:30)
     if (dayOfWeek === 6) {
-        for (let hour = 9; hour <= 18; hour++) {
+        for (let hour = 10; hour <= 18; hour++) {
             const mins = hour === 18 ? ['00'] : ['00', '30'];
             for (const min of mins) {
                 hours.push(`${String(hour).padStart(2, '0')}:${min}`);
@@ -6647,7 +6647,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
             try {
                 const { rows: [delivery] } = await sql`
-                    SELECT wants_painting, painting_status FROM deliveries WHERE id = ${deliveryId}
+                    SELECT wants_painting, painting_status, ready_at FROM deliveries WHERE id = ${deliveryId}
                 `;
 
                 if (!delivery) {
@@ -6656,30 +6656,15 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
                 const wantsPainting = Boolean((delivery as any).wants_painting);
                 const paintingStatus = (delivery as any).painting_status;
+                const readyAt = (delivery as any).ready_at ?? null;
 
                 // Verificar que el cliente tiene painting habilitado
                 if (!wantsPainting) {
                     return res.status(400).json({ 
                         success: false, 
                         isPaid: false,
-                        error: 'This delivery does not have painting service enabled' 
-                    });
-                }
-
-                // Verificar que está pagado
-                if (paintingStatus === 'pending_payment') {
-                    return res.status(402).json({ 
-                        success: false, 
-                        isPaid: false,
-                        error: 'Painting service has not been paid yet. Please coordinate payment with our team before scheduling.' 
-                    });
-                }
-
-                if (paintingStatus === 'deferred') {
-                    return res.status(402).json({
-                        success: false,
-                        isPaid: false,
-                        error: 'El cobro está acordado para después. Usa el enlace de agendamiento que envió el equipo o contacta al taller.'
+                        canSchedule: false,
+                        error: 'Esta entrega no tiene servicio de pintura habilitado.' 
                     });
                 }
 
@@ -6687,22 +6672,42 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     return res.status(400).json({ 
                         success: false, 
                         isPaid: false,
-                        error: 'Painting service is already completed' 
+                        canSchedule: false,
+                        error: 'El servicio de pintura ya fue completado.' 
                     });
                 }
 
-                if (paintingStatus !== 'paid' && paintingStatus !== 'scheduled') {
+                // Puede agendar en web: pagado, cobro después (deferred), o cobro pendiente pero pieza ya lista
+                const canSchedule =
+                    paintingStatus === 'paid' ||
+                    paintingStatus === 'scheduled' ||
+                    paintingStatus === 'deferred' ||
+                    (paintingStatus === 'pending_payment' && Boolean(readyAt));
+
+                if (!canSchedule) {
+                    if (paintingStatus === 'pending_payment') {
+                        return res.status(402).json({ 
+                            success: false, 
+                            isPaid: false,
+                            canSchedule: false,
+                            error: 'Tu pieza aún no está lista para pintar en el sistema. Cuando el taller te avise por correo, podrás agendar (y pagar el día de la cita si aplica).' 
+                        });
+                    }
                     return res.status(400).json({ 
                         success: false, 
                         isPaid: false,
-                        error: 'Invalid painting service status. Please contact support.' 
+                        canSchedule: false,
+                        error: 'Estado de pintura no válido para agendar. Escríbenos por WhatsApp.' 
                     });
                 }
 
-                // ✅ Está pagado
+                const isPaid = paintingStatus === 'paid' || paintingStatus === 'scheduled';
+
                 return res.status(200).json({ 
                     success: true, 
-                    isPaid: true 
+                    isPaid,
+                    canSchedule: true,
+                    payOnDay: !isPaid,
                 });
 
             } catch (error: any) {
@@ -6861,9 +6866,19 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 }
                 
                 if (currentPaintingStatus === 'pending_payment') {
-                    return res.status(402).json({ 
-                        error: 'Cobro pendiente. En admin usa «Acordar cobro después» o registra el pago antes de agendar.' 
-                    });
+                    const readyAt =
+                        (delivery as any).ready_at ?? (delivery as any).readyAt ?? null;
+                    if (!readyAt && !isAdminOverride) {
+                        return res.status(402).json({ 
+                            error: 'Cobro pendiente y la pieza aún no está lista. Marca «Pieza lista» en admin o usa «Acordar cobro después».' 
+                        });
+                    }
+                    if (!readyAt && isAdminOverride) {
+                        return res.status(402).json({ 
+                            error: 'Cobro pendiente. En admin usa «Acordar cobro después» o registra el pago antes de agendar.' 
+                        });
+                    }
+                    // Cliente con pieza lista: puede agendar y pagar el día de la cita
                 }
                 
                 if (currentPaintingStatus === 'completed') {

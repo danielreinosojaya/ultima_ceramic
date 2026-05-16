@@ -44,20 +44,21 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
       return;
     }
 
-    // 🔴 Validar que el cliente haya pagado el servicio de pintura ANTES de permitir continuar
+    // Validar que la entrega permite agendar (pagado, cobro después, o pieza lista con pago pendiente)
     setIsValidatingPayment(true);
     setError('');
     
     try {
       const result = await dataService.checkPaintingPaymentStatus(deliveryId);
+      const canSchedule = result.canSchedule ?? result.isPaid;
       
-      if (!result.success || !result.isPaid) {
-        setError(result.error || 'No se pudo verificar el estado de pago. Intenta nuevamente.');
+      if (!result.success || !canSchedule) {
+        setError(result.error || 'No se pudo verificar si puedes agendar. Intenta nuevamente.');
         setIsValidatingPayment(false);
         return;
       }
 
-      // ✅ Pago confirmado, mostrar modal
+      // ✅ Puede agendar, mostrar modal de confirmación
       setError('');
       setShowConfirmModal(true);
     } catch (err) {

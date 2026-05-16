@@ -905,7 +905,7 @@ export const sendDeliveryWithPaintingServiceEmail = async (
                 <p style="margin: 0; color: #4A4540; font-weight: bold;">💡 Información del Taller</p>
                 <p style="margin: 8px 0 0 0; color: #6B5F58; font-size: 14px;">
                     • Martes a Viernes: 10:00 AM - 9:00 PM<br/>
-                    • Sábados: 9:00 AM - 8:00 PM<br/>
+                    • Sábados: 10:00 AM - 8:00 PM<br/>
                     • Domingos: 10:00 AM - 6:00 PM<br/>
                     • Ubicación: Sol Plaza - Av. Samborondón<br/>
                     • Duración sesión de pintura: ~1-2 horas
@@ -1063,13 +1063,13 @@ export const sendDeliveryReadyForPaintingEmail = async (
                 <p style="margin: 10px 0; color: #78350F; font-size: 14px; line-height: 1.6;">
                     ${
                         ps === 'pending_payment'
-                            ? 'Aún no registramos tu pago. Para agendar en línea necesitas el pago confirmado, <strong>o</strong> puedes:'
-                            : `Acordamos cobrar <strong>$${paintingPrice}</strong> después. Igual puedes pagar antes o el día de tu sesión:`
+                            ? 'Aún no registramos tu pago en el sistema. Puedes agendar tu horario abajo y pagar antes o el día de tu sesión:'
+                            : `Acordamos cobrar <strong>$${paintingPrice}</strong> después. Puedes agendar tu horario y pagar antes o el día de tu sesión:`
                     }
                 </p>
                 <ul style="margin: 12px 0; padding-left: 20px; color: #78350F; font-size: 14px; line-height: 1.7;">
                     <li><strong>Transferencia:</strong> escríbenos por WhatsApp; te enviamos los datos de cuenta y puedes adjuntar tu comprobante.</li>
-                    <li><strong>Pago el día de la cita:</strong> en efectivo o transferencia al llegar a pintar.</li>
+                    <li><strong>Pago el día de la cita:</strong> efectivo, transferencia o tarjeta al llegar a pintar.</li>
                 </ul>
                 <div style="text-align: center; margin-top: 16px;">
                     <a href="${whatsappLink}" style="display: inline-block; background-color: #D97706; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px;">
@@ -1099,9 +1099,7 @@ export const sendDeliveryReadyForPaintingEmail = async (
             <div style="background-color: #FDF7F2; border-left: 4px solid #D95F43; padding: 20px; border-radius: 8px; margin: 20px 0;">
                 <h3 style="color: #D95F43; margin-top: 0;">🎨 Reserva tu Horario de Pintura</h3>
                 <p style="margin: 10px 0; color: #6B5F58; font-size: 14px;">
-                    ${needsPaymentReminder && ps === 'pending_payment'
-                        ? 'Cuando tu pago esté registrado, agenda aquí (o escríbenos y te agendamos):'
-                        : 'Agenda tu sesión de pintura en nuestro calendario:'}
+                    Agenda tu sesión de pintura en nuestro calendario (el cobro puede quedar para el día de la cita):
                 </p>
                 <ol style="margin: 10px 0; color: #6B5F58; font-size: 14px;">
                     <li style="margin: 5px 0;"><strong>Usa el botón</strong> de reserva de pintura</li>
@@ -1119,7 +1117,7 @@ export const sendDeliveryReadyForPaintingEmail = async (
                 <p style="margin: 0; color: #4A4540; font-weight: bold;">🕐 Horarios Disponibles</p>
                 <p style="margin: 8px 0 0 0; color: #6B5F58; font-size: 14px;">
                     • Martes a Viernes: 10:00 AM - 9:00 PM<br/>
-                    • Sábados: 9:00 AM - 8:00 PM<br/>
+                    • Sábados: 10:00 AM - 8:00 PM<br/>
                     • Domingos: 10:00 AM - 6:00 PM<br/>
                     • Duración: ~1-2 horas
                 </p>
