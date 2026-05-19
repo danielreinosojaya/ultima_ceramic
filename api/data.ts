@@ -54,6 +54,11 @@ import {
     isEcuadorSlotInPast,
 } from '../utils/formatters.js';
 import { slotOverlapsPrivateEvent } from '../utils/privateEventBlocks.js';
+import {
+    getTechniqueRestrictionForDate,
+    isSlotBlockedByExperienceTypeOverride,
+    sanitizeExperienceTypeOverrides,
+} from '../utils/experienceTypeRestrictions.js';
 import { checkRateLimit } from './rateLimiter.js';
 import { uploadPhotoToBunny, uploadProofToBunny } from './bunnyUpload.js';
 import { deliverGiftcardToRecipient } from './utils/giftcardDelivery.js';
@@ -465,9 +470,11 @@ const parseSlotAvailabilitySettings = async () => {
     const rawExpTypeOverrides = settingsResult.rows.find(s => s.key === 'experienceTypeOverrides');
     let experienceTypeOverrides: any = {};
     if (rawExpTypeOverrides?.value) {
-        experienceTypeOverrides = typeof rawExpTypeOverrides.value === 'string' 
-            ? JSON.parse(rawExpTypeOverrides.value) 
-            : rawExpTypeOverrides.value;
+        const raw =
+            typeof rawExpTypeOverrides.value === 'string'
+                ? JSON.parse(rawExpTypeOverrides.value)
+                : rawExpTypeOverrides.value;
+        experienceTypeOverrides = sanitizeExperienceTypeOverrides(raw);
     }
     console.log('[parseSlotAvailabilitySettings] experienceTypeOverrides loaded:', JSON.stringify(experienceTypeOverrides).substring(0, 500), '| type:', typeof rawExpTypeOverrides?.value, '| dates:', Object.keys(experienceTypeOverrides));
     const classCapacity: any = settingsResult.rows.find(s => s.key === 'classCapacity')?.value || 
@@ -772,38 +779,36 @@ const computeSlotAvailability = async (
     // skipTechRestriction=true se usa para eventos fijos (ej: Rumcom/Spill the Tea) que
     // deben ignorar esta restricción ya que tienen su propia ruta de reserva.
     if (!skipTechRestriction) {
-        const techAliases: Record<string, string[]> = {
-            'hand_modeling': ['hand_modeling', 'molding'],
-            'molding': ['molding', 'hand_modeling'],
-            'potters_wheel': ['potters_wheel'],
-            'painting': ['painting'],
-        };
-        const techKeysToCheck = techAliases[requestedTechnique] || [requestedTechnique];
-        const dateOverrides = experienceTypeOverrides?.[requestedDate];
-        
-        console.log(`[checkSlotAvailability] date=${requestedDate} time=${normalizedTime} tech=${requestedTechnique} | dateOverrides keys:`, dateOverrides ? Object.keys(dateOverrides) : 'NONE', '| techKeysToCheck:', techKeysToCheck);
-        
-        for (const techKey of techKeysToCheck) {
-            const techOverride = dateOverrides?.[techKey];
-            if (techOverride?.allowedTimes && !techOverride.allowedTimes.includes(normalizedTime)) {
-                console.log(`[checkSlotAvailability] 🚫 BLOCKED by techRestriction: ${techKey}.allowedTimes=${JSON.stringify(techOverride.allowedTimes)} does NOT include ${normalizedTime}`);
-                const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
-                return {
-                    available: false,
-                    normalizedTime,
-                    blockedReason: 'technique_restriction',
-                    capacity: {
-                        max: maxCapacity,
-                        booked: maxCapacity,
-                        available: 0
-                    },
-                    bookingsCount: 0,
-                    message: techOverride.reason || `${requestedTechnique} no disponible en este horario`
-                };
-            }
-            if (techOverride?.allowedTimes && techOverride.allowedTimes.includes(normalizedTime)) {
-                console.log(`[checkSlotAvailability] ✅ ALLOWED by techRestriction: ${techKey}.allowedTimes includes ${normalizedTime}`);
-            }
+        const restriction = getTechniqueRestrictionForDate(
+            experienceTypeOverrides,
+            requestedDate,
+            requestedTechnique
+        );
+        if (
+            restriction &&
+            isSlotBlockedByExperienceTypeOverride(
+                experienceTypeOverrides,
+                requestedDate,
+                requestedTechnique,
+                normalizedTime
+            )
+        ) {
+            console.log(
+                `[checkSlotAvailability] 🚫 BLOCKED by techRestriction: ${requestedTechnique} allowedTimes=${JSON.stringify(restriction.allowedTimes)} does NOT include ${normalizedTime}`
+            );
+            const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
+            return {
+                available: false,
+                normalizedTime,
+                blockedReason: 'technique_restriction',
+                capacity: {
+                    max: maxCapacity,
+                    booked: maxCapacity,
+                    available: 0,
+                },
+                bookingsCount: 0,
+                message: restriction.reason || `${requestedTechnique} no disponible en este horario`,
+            };
         }
     } else {
         console.log(`[checkSlotAvailability] ⚡ skipTechRestriction=true — bypassing experienceTypeOverrides for ${requestedTechnique}@${normalizedTime}`);
@@ -3509,8 +3514,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 }
                 console.log('[mergeExperienceTypeOverrides] existingData desde BD:', existingData, '| type:', typeof existingRows[0]?.value);
                 
-                // 2. Deep merge con los nuevos datos
-                const mergedData = deepMerge(existingData, newData);
+                // 2. Deep merge con los nuevos datos y quitar entradas inválidas (allowedTimes vacío)
+                const mergedData = sanitizeExperienceTypeOverrides(deepMerge(existingData, newData));
                 
                 // 3. Guardar el resultado fusionado
                 await sql`

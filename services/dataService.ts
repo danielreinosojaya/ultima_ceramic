@@ -1666,6 +1666,8 @@ export const getGroupClassSlots = async (params: GroupClassSlotsParams): Promise
 // Tipo para resultado de checkSlotAvailability
 export interface SlotAvailabilityResult {
     success: boolean;
+    /** true si falló la red o la API; no usar `available` para bloquear la UI */
+    fetchError?: boolean;
     available: boolean;
     date: string;
     time: string;
@@ -1706,11 +1708,26 @@ export const checkSlotAvailability = async (
     try {
         const response = await fetch(`/api/data?${queryParams.toString()}`);
         const data = await response.json();
+        if (!response.ok || data.success === false) {
+            return {
+                success: false,
+                fetchError: true,
+                available: false,
+                date,
+                time,
+                technique,
+                requestedParticipants: participants,
+                capacity: { max: 0, booked: 0, available: 0 },
+                bookingsCount: 0,
+                message: data.error || data.message || 'Error al verificar disponibilidad',
+            };
+        }
         return data;
     } catch (error) {
         console.error('Error checking slot availability:', error);
         return {
             success: false,
+            fetchError: true,
             available: false,
             date,
             time,

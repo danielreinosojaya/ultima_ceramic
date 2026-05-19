@@ -6,6 +6,10 @@ import { DAY_NAMES } from '@/constants';
 import { PlusIcon } from '../icons/PlusIcon';
 import { TrashIcon } from '../icons/TrashIcon';
 import { InstructorManager } from './InstructorManager';
+import {
+    findInvalidExperienceTypeOverrideEntries,
+    sanitizeExperienceTypeOverrides,
+} from '../../utils/experienceTypeRestrictions';
 
 const formatDateToYYYYMMDD = (d: Date): string => {
     const year = d.getFullYear();
@@ -46,9 +50,25 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
     
     // 🔧 FIX: Estado LOCAL de restricciones - NUNCA sincronizar después de cambios
     // Solo se usa para inicializar al montar el componente
-    const [localExperienceTypeOverrides, setLocalExperienceTypeOverrides] = useState<ExperienceTypeOverrides>(() => 
-        JSON.parse(JSON.stringify(experienceTypeOverrides))
+    const [localExperienceTypeOverrides, setLocalExperienceTypeOverrides] = useState<ExperienceTypeOverrides>(() =>
+        sanitizeExperienceTypeOverrides(JSON.parse(JSON.stringify(experienceTypeOverrides)))
     );
+
+    const invalidOverrideIssues = useMemo(
+        () => findInvalidExperienceTypeOverrideEntries(localExperienceTypeOverrides),
+        [localExperienceTypeOverrides]
+    );
+
+    const pottersWheelRestrictionDates = useMemo(() => {
+        return Object.entries(localExperienceTypeOverrides)
+            .filter(([, day]) => day?.potters_wheel?.allowedTimes && day.potters_wheel.allowedTimes.length > 0)
+            .map(([date, day]) => ({
+                date,
+                count: day.potters_wheel!.allowedTimes!.length,
+                reason: day.potters_wheel!.reason,
+            }))
+            .sort((a, b) => a.date.localeCompare(b.date));
+    }, [localExperienceTypeOverrides]);
 
     // 🔧 FIX: REMOVED - NO sincronizar después de cambios locales
     // El estado local es la fuente de verdad del componente
@@ -260,7 +280,9 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
         
         const dateStr = formatDateToYYYYMMDD(selectedTechRestrictDate);
         const previousState = JSON.parse(JSON.stringify(localExperienceTypeOverrides));
-        const updatedOverrides: ExperienceTypeOverrides = JSON.parse(JSON.stringify(localExperienceTypeOverrides));
+        const updatedOverrides: ExperienceTypeOverrides = sanitizeExperienceTypeOverrides(
+            JSON.parse(JSON.stringify(localExperienceTypeOverrides))
+        );
         
         if (!updatedOverrides[dateStr]) {
             updatedOverrides[dateStr] = {};
@@ -271,22 +293,19 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
             reason: restrictionReason || undefined
         };
         
-        // Optimistic update local
-        setLocalExperienceTypeOverrides(updatedOverrides);
+        const sanitizedToSave = sanitizeExperienceTypeOverrides(updatedOverrides);
+        setLocalExperienceTypeOverrides(sanitizedToSave);
         console.log('[handleAddTechRestriction] Optimistic update:', updatedOverrides);
         
         try {
             // Enviar al backend
-            const result = await dataService.mergeExperienceTypeOverrides(updatedOverrides);
+            const result = await dataService.mergeExperienceTypeOverrides(sanitizedToSave);
             console.log('[handleAddTechRestriction] Backend response:', result);
             
-            // 🔧 FIX CRÍTICO: Recargar datos frescos desde servidor DIRECTAMENTE
-            // No esperar al contexto lento, recargar ahora mismo
             const freshData = await dataService.getExperienceTypeOverrides();
             console.log('[handleAddTechRestriction] Datos frescos del servidor:', freshData);
             
-            // Actualizar estado local con datos frescos de BD
-            setLocalExperienceTypeOverrides(freshData);
+            setLocalExperienceTypeOverrides(sanitizeExperienceTypeOverrides(freshData || {}));
             
             // Reset
             setAllowedTimes([]);
@@ -300,6 +319,23 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
             alert('Error al guardar restricción');
             // Revertir optimistic update en caso de error
             setLocalExperienceTypeOverrides(previousState);
+        }
+    };
+
+    const handleSanitizeInvalidOverrides = async () => {
+        const sanitized = sanitizeExperienceTypeOverrides(localExperienceTypeOverrides);
+        const previousState = JSON.parse(JSON.stringify(localExperienceTypeOverrides));
+        setLocalExperienceTypeOverrides(sanitized);
+        try {
+            await dataService.mergeExperienceTypeOverrides(sanitized);
+            const freshData = await dataService.getExperienceTypeOverrides();
+            setLocalExperienceTypeOverrides(sanitizeExperienceTypeOverrides(freshData || {}));
+            onDataChange();
+            alert('Restricciones inválidas eliminadas de la base de datos.');
+        } catch (error) {
+            console.error('[handleSanitizeInvalidOverrides] Error:', error);
+            setLocalExperienceTypeOverrides(previousState);
+            alert('Error al limpiar restricciones inválidas');
         }
     };
 
@@ -667,7 +703,51 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
             {/* RESTRICCIONES POR TÉCNICA - CONTROL GRANULAR */}
             <div>
                 <h2 className="text-xl font-serif text-brand-text mb-2">🔒 Restricciones por Técnica</h2>
-                <p className="text-brand-secondary text-sm mb-4">Limita qué horarios están disponibles para una técnica específica en un día. Ejemplo: Sábado 21 enero, solo Torno a las 9 AM.</p>
+                <p className="text-brand-secondary text-sm mb-4">
+                    Lista blanca por día y técnica: solo los horarios agregados quedan reservables.
+                    <strong className="text-brand-text"> Torno</strong> sin entrada aquí = horario normal del calendario.
+                </p>
+
+                {invalidOverrideIssues.length > 0 && (
+                    <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                        <p className="font-semibold text-red-800 text-sm mb-2">
+                            {invalidOverrideIssues.length} restricción(es) inválida(s) en la base de datos
+                        </p>
+                        <p className="text-xs text-red-700 mb-2">
+                            Entradas con lista blanca vacía bloqueaban todos los horarios por error.
+                        </p>
+                        <ul className="text-xs text-red-700 mb-3 space-y-1 max-h-32 overflow-y-auto">
+                            {invalidOverrideIssues.map((issue) => (
+                                <li key={`${issue.date}-${issue.technique}`}>
+                                    {issue.date} · {issue.technique}: {issue.issue}
+                                </li>
+                            ))}
+                        </ul>
+                        <button
+                            type="button"
+                            onClick={handleSanitizeInvalidOverrides}
+                            className="text-sm font-semibold text-white bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-md"
+                        >
+                            Limpiar entradas inválidas
+                        </button>
+                    </div>
+                )}
+
+                {pottersWheelRestrictionDates.length > 0 && (
+                    <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
+                        <p className="font-semibold text-amber-900 mb-1">
+                            Torno con lista blanca activa ({pottersWheelRestrictionDates.length} día(s))
+                        </p>
+                        <ul className="text-xs text-amber-800 space-y-0.5 max-h-28 overflow-y-auto">
+                            {pottersWheelRestrictionDates.map((row) => (
+                                <li key={row.date}>
+                                    {row.date}: {row.count} horario(s) permitido(s)
+                                    {row.reason ? ` — ${row.reason}` : ''}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label htmlFor="tech-restrict-date" className="block text-sm font-bold text-brand-secondary mb-1">Fecha</label>

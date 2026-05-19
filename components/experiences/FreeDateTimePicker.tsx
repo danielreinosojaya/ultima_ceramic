@@ -4,6 +4,10 @@ import type { AvailableSlot, DayKey, ScheduleOverrides, ExperienceTypeOverrides 
 import { SocialBadge } from '../SocialBadge';
 import { getEcuadorDateYmd, isEcuadorSlotInPast } from '../../utils/formatters';
 import { slotOverlapsPrivateEvent } from '../../utils/privateEventBlocks';
+import {
+  isSlotBlockedByExperienceTypeOverride,
+  sanitizeExperienceTypeOverrides,
+} from '../../utils/experienceTypeRestrictions';
 
 // Nombres de días para mapear Date.getDay() a DayKey
 const DAY_KEYS: DayKey[] = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -69,8 +73,9 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   // Cargar experienceTypeOverrides para validación local de restricciones de técnica
   useEffect(() => {
     getExperienceTypeOverrides().then(data => {
-      console.log('[FreeDateTimePicker] experienceTypeOverrides cargados:', data);
-      setExperienceTypeOverrides(data || {});
+      const sanitized = sanitizeExperienceTypeOverrides(data || {});
+      console.log('[FreeDateTimePicker] experienceTypeOverrides cargados:', sanitized);
+      setExperienceTypeOverrides(sanitized);
     }).catch(err => {
       console.error('[FreeDateTimePicker] Error loading experienceTypeOverrides:', err);
     });
@@ -182,41 +187,14 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     return slotOverlapsPrivateEvent(dateStr, time);
   }, []);
 
-  // ✅ VALIDACIÓN LOCAL: Verificar si un slot está bloqueado por restricción de técnica (experienceTypeOverrides)
-  // Esto funciona INSTANTÁNEAMENTE sin esperar las API calls de checkSlotAvailability
+  // Validación local: experienceTypeOverrides (lista blanca; allowedTimes vacío = sin restricción)
   const isSlotBlockedByTechRestrictionLocal = useCallback((dateStr: string, time: string): boolean => {
-    if (!experienceTypeOverrides || Object.keys(experienceTypeOverrides).length === 0) return false;
     if (scheduleOverrides?.[dateStr]?.disableRules) return false;
-    
-    // Buscar restricción por técnica exacta O por alias (hand_modeling ↔ molding)
-    const techAliases: Record<string, string[]> = {
-      'hand_modeling': ['hand_modeling', 'molding'],
-      'molding': ['molding', 'hand_modeling'],
-      'potters_wheel': ['potters_wheel'],
-      'painting': ['painting'],
-    };
-    
-    const keysToCheck = techAliases[technique] || [technique];
-    const dateOverrides = experienceTypeOverrides[dateStr];
-    if (!dateOverrides) return false;
-    
-    for (const techKey of keysToCheck) {
-      const techOverride = dateOverrides[techKey];
-      if (techOverride?.allowedTimes) {
-        // Normalizar formato de hora para comparación
-        const normalizedTime = time.replace(/^(\d):/, '0$1:');
-        const isAllowed = techOverride.allowedTimes.some(allowed => {
-          const normalizedAllowed = allowed.replace(/^(\d):/, '0$1:');
-          return normalizedAllowed === normalizedTime;
-        });
-        if (!isAllowed) {
-          console.log(`🚫 [TechRestriction LOCAL] ${dateStr} ${time} bloqueado para ${technique} (key: ${techKey}). Permitidos: ${techOverride.allowedTimes.join(', ')}`);
-          return true;
-        }
-      }
-    }
-    return false;
+    return isSlotBlockedByExperienceTypeOverride(experienceTypeOverrides, dateStr, technique, time);
   }, [experienceTypeOverrides, technique, scheduleOverrides]);
+
+  const isAvailabilityCheckKnown = (hourState: SlotAvailabilityResult | null | undefined): boolean =>
+    Boolean(hourState?.success && !hourState.fetchError);
 
   // Memoizar getAvailableHours para evitar recálculos innecesarios
   const getAvailableHours = useMemo(() => {
@@ -442,7 +420,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     if (isEcuadorSlotInPast(selectedDate, time)) return;
     // Si ya tenemos disponibilidad pre-checada, úsala sin nuevo request
     const cached = hourAvailability[time];
-    if (cached) {
+    if (cached && isAvailabilityCheckKnown(cached)) {
       setSlotAvailability(cached);
       onSelectTime(time, cached);
       if (availabilityRef.current) {
@@ -596,20 +574,32 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
               const isBlockedBySpecialEvent = isSlotBlockedBySpecialEvent(selectedDate, hour);
               const isBlockedByPrivateEvent = isSlotBlockedByPrivateEvent(selectedDate, hour);
               // ✅ Doble validación: LOCAL (instantánea) + BACKEND (por API)
-              const isBlockedByTechRestrictionBackend = hourState?.available === false && (hourState as any)?.blockedReason === 'technique_restriction';
-              const isBlockedByPrivateEventBackend = hourState?.available === false && (hourState as any)?.blockedReason === 'private_event';
+              const availabilityKnown = isAvailabilityCheckKnown(hourState);
+              const isBlockedByTechRestrictionBackend =
+                availabilityKnown && hourState!.available === false && hourState!.blockedReason === 'technique_restriction';
+              const isBlockedByPrivateEventBackend =
+                availabilityKnown && hourState!.available === false && hourState!.blockedReason === 'private_event';
               const isBlockedByTechRestrictionLocalCheck = isSlotBlockedByTechRestrictionLocal(selectedDate, hour);
               const isBlockedByTechniqueRestriction = isBlockedByTechRestrictionBackend || isBlockedByTechRestrictionLocalCheck;
-              const isUnavailableByCapacity = hourState ? (hourState.available === false && !isBlockedByTechRestrictionBackend && !isBlockedByPrivateEventBackend) : false;
+              const isUnavailableByCapacity =
+                availabilityKnown &&
+                hourState!.available === false &&
+                !isBlockedByTechRestrictionBackend &&
+                !isBlockedByPrivateEventBackend;
               const isPastSlotEcuador = isEcuadorSlotInPast(selectedDate, hour);
               const isUnavailable = isBlockedByFixedClass || isBlockedBySpecialEvent || isBlockedByPrivateEvent || isBlockedByPrivateEventBackend || isUnavailableByCapacity || isBlockedByTechniqueRestriction || isPastSlotEcuador;
+              const isCheckingThisHour = loadingDayAvailability && !availabilityKnown;
               
               return (
                 <button
                   key={hour}
                   onClick={() => handleTimeClick(hour)}
-                  disabled={checkingAvailability || loadingDayAvailability || isUnavailable}
-                  title={isBlockedByFixedClass
+                  disabled={checkingAvailability || isUnavailable}
+                  title={isCheckingThisHour
+                    ? 'Verificando disponibilidad…'
+                    : hourState?.fetchError
+                    ? 'No se pudo verificar; haz clic para reintentar'
+                    : isBlockedByFixedClass
                     ? 'Bloqueado por clase fija de torno'
                     : isBlockedByPrivateEvent || isBlockedByPrivateEventBackend
                     ? 'Bloqueado por evento privado'
@@ -624,7 +614,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
                       : isUnavailable
                         ? 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
                         : 'border-gray-200 bg-white hover:border-brand-primary hover:bg-brand-primary/5 hover:scale-105'
-                  } ${(checkingAvailability || loadingDayAvailability) ? 'opacity-50' : ''}`}
+                  } ${(checkingAvailability || isCheckingThisHour) ? 'opacity-70' : ''}`}
                 >
                   <div className="flex flex-col items-center gap-1">
                     <span>{hour}</span>
