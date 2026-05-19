@@ -3,6 +3,7 @@ import { checkSlotAvailability, SlotAvailabilityResult, getAvailability, getFree
 import type { AvailableSlot, DayKey, ScheduleOverrides, ExperienceTypeOverrides } from '../../types';
 import { SocialBadge } from '../SocialBadge';
 import { getEcuadorDateYmd, isEcuadorSlotInPast } from '../../utils/formatters';
+import { slotOverlapsPrivateEvent } from '../../utils/privateEventBlocks';
 
 // Nombres de días para mapear Date.getDay() a DayKey
 const DAY_KEYS: DayKey[] = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -176,6 +177,10 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     const disabledTimes = freeDateTimeOverrides?.[dateStr]?.disabledTimes || [];
     return disabledTimes.includes(time);
   }, [scheduleOverrides, freeDateTimeOverrides]);
+
+  const isSlotBlockedByPrivateEvent = useCallback((dateStr: string, time: string): boolean => {
+    return slotOverlapsPrivateEvent(dateStr, time);
+  }, []);
 
   // ✅ VALIDACIÓN LOCAL: Verificar si un slot está bloqueado por restricción de técnica (experienceTypeOverrides)
   // Esto funciona INSTANTÁNEAMENTE sin esperar las API calls de checkSlotAvailability
@@ -589,13 +594,15 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
               const hourState = hourAvailability[hour];
               const isBlockedByFixedClass = isSlotBlockedByFixedClass(selectedDate, hour);
               const isBlockedBySpecialEvent = isSlotBlockedBySpecialEvent(selectedDate, hour);
+              const isBlockedByPrivateEvent = isSlotBlockedByPrivateEvent(selectedDate, hour);
               // ✅ Doble validación: LOCAL (instantánea) + BACKEND (por API)
               const isBlockedByTechRestrictionBackend = hourState?.available === false && (hourState as any)?.blockedReason === 'technique_restriction';
+              const isBlockedByPrivateEventBackend = hourState?.available === false && (hourState as any)?.blockedReason === 'private_event';
               const isBlockedByTechRestrictionLocalCheck = isSlotBlockedByTechRestrictionLocal(selectedDate, hour);
               const isBlockedByTechniqueRestriction = isBlockedByTechRestrictionBackend || isBlockedByTechRestrictionLocalCheck;
-              const isUnavailableByCapacity = hourState ? (hourState.available === false && !isBlockedByTechRestrictionBackend) : false;
+              const isUnavailableByCapacity = hourState ? (hourState.available === false && !isBlockedByTechRestrictionBackend && !isBlockedByPrivateEventBackend) : false;
               const isPastSlotEcuador = isEcuadorSlotInPast(selectedDate, hour);
-              const isUnavailable = isBlockedByFixedClass || isBlockedBySpecialEvent || isUnavailableByCapacity || isBlockedByTechniqueRestriction || isPastSlotEcuador;
+              const isUnavailable = isBlockedByFixedClass || isBlockedBySpecialEvent || isBlockedByPrivateEvent || isBlockedByPrivateEventBackend || isUnavailableByCapacity || isBlockedByTechniqueRestriction || isPastSlotEcuador;
               
               return (
                 <button
@@ -604,6 +611,8 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
                   disabled={checkingAvailability || loadingDayAvailability || isUnavailable}
                   title={isBlockedByFixedClass
                     ? 'Bloqueado por clase fija de torno'
+                    : isBlockedByPrivateEvent || isBlockedByPrivateEventBackend
+                    ? 'Bloqueado por evento privado'
                     : isBlockedBySpecialEvent
                     ? 'Bloqueado por evento'
                     : isBlockedByTechniqueRestriction
@@ -619,7 +628,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
                 >
                   <div className="flex flex-col items-center gap-1">
                     <span>{hour}</span>
-                    {isBlockedByFixedClass || isBlockedBySpecialEvent || isBlockedByTechniqueRestriction ? (
+                    {isBlockedByFixedClass || isBlockedBySpecialEvent || isBlockedByPrivateEvent || isBlockedByPrivateEventBackend || isBlockedByTechniqueRestriction ? (
                       <span className="text-xs font-bold text-red-600">🔒</span>
                     ) : hourState && hourState.capacity && (
                       <SocialBadge 

@@ -674,6 +674,8 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
 
                           const blockedLabel = blockedReason === 'course_conflict'
                             ? 'Bloqueado por curso'
+                            : blockedReason === 'private_event'
+                            ? 'Evento privado'
                             : blockedReason === 'fixed_class_conflict'
                             ? 'Bloqueado por clase fija'
                             : blockedReason === 'potters_overlap'

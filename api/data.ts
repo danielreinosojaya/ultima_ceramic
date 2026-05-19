@@ -53,6 +53,7 @@ import {
     ecuadorSlotStartIso,
     isEcuadorSlotInPast,
 } from '../utils/formatters.js';
+import { slotOverlapsPrivateEvent } from '../utils/privateEventBlocks.js';
 import { checkRateLimit } from './rateLimiter.js';
 import { uploadPhotoToBunny, uploadProofToBunny } from './bunnyUpload.js';
 import { deliverGiftcardToRecipient } from './utils/giftcardDelivery.js';
@@ -721,7 +722,8 @@ const computeSlotAvailability = async (
     requestedTime: string,
     requestedTechnique: string,
     requestedParticipants: number,
-    skipTechRestriction: boolean = false
+    skipTechRestriction: boolean = false,
+    skipPrivateEventBlock: boolean = false
 ) => {
     // ✅ OPTIMIZATION PHASE 2: Buscar bookings que TENGAN SLOTS en la fecha solicitada
     // Con LIMIT 1000 para evitar saturación (traer todos los bookings es ineficiente)
@@ -805,6 +807,22 @@ const computeSlotAvailability = async (
         }
     } else {
         console.log(`[checkSlotAvailability] ⚡ skipTechRestriction=true — bypassing experienceTypeOverrides for ${requestedTechnique}@${normalizedTime}`);
+    }
+
+    if (!skipPrivateEventBlock && slotOverlapsPrivateEvent(requestedDate, normalizedTime)) {
+        const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
+        return {
+            available: false,
+            normalizedTime,
+            blockedReason: 'private_event',
+            capacity: {
+                max: maxCapacity,
+                booked: maxCapacity,
+                available: 0
+            },
+            bookingsCount: 0,
+            message: 'Horario no disponible por evento privado'
+        };
     }
 
     const disabledTimes = freeDateTimeOverrides?.[requestedDate]?.disabledTimes || [];
@@ -1924,9 +1942,24 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             const slotStartMinutes = timeToMinutes(slotTime);
                             const slotEndMinutes = slotStartMinutes + (2 * 60); // 2 horas
 
+                            const hasPrivateEventBlock = slotOverlapsPrivateEvent(dateStr, slotTime);
                             const hasCourseBlock = hasCourseOverlap(dateStr, slotStartMinutes, slotEndMinutes, courseSessionsByDate);
 
-                            if (!hasCourseBlock) {
+                            if (hasPrivateEventBlock) {
+                                const maxCapacity = resolveCapacity(dateStr, requestedTechnique, maxCapacityMap, scheduleOverrides);
+                                const instructor = instructors.find((inst: any) => inst.id === slot.instructorId);
+                                allSlots.push({
+                                    date: dateStr,
+                                    time: slotTime,
+                                    available: 0,
+                                    total: maxCapacity,
+                                    canBook: false,
+                                    instructor: instructor?.name || 'Instructor',
+                                    instructorId: slot.instructorId,
+                                    technique: requestedTechnique,
+                                    blockedReason: 'private_event'
+                                });
+                            } else if (!hasCourseBlock) {
                                 // Contar participantes que se solapan temporalmente con este slot
                                 // IMPORTANTE: Solo contar bookings de LA MISMA TÉCNICA, no de otras
                                 const bookingsOverlapingSlot = bookings.filter((b: any) => {
@@ -2117,6 +2150,9 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
 
                             const courseBlocked = hasCourseOverlap(dateStr, slotStartMinutes, slotEndMinutes, courseSessionsByDate);
                             let blockedReason: string | null = courseBlocked ? 'course_conflict' : null;
+                            if (!blockedReason && slotOverlapsPrivateEvent(dateStr, normalizedTime)) {
+                                blockedReason = 'private_event';
+                            }
 
                             let pottersAvailable = 0;
                             let pottersTotal = 0;
@@ -5943,6 +5979,13 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 const requestedStartMinutes = timeToMinutes(normalizeTime(requestedTime));
                 const requestedEndMinutes = requestedStartMinutes + (2 * 60);
 
+                if (!adminOverride && slotOverlapsPrivateEvent(requestedDate, requestedTime)) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Lo sentimos, ${requestedDate} a las ${requestedTime} no está disponible por un evento privado en el estudio.`
+                    });
+                }
+
                 const courseSessionsByDate = await loadCourseSessionsByDate(requestedDate, requestedDate);
                 if (hasCourseOverlap(requestedDate, requestedStartMinutes, requestedEndMinutes, courseSessionsByDate)) {
                     return res.status(400).json({
@@ -6838,7 +6881,14 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     didAdminReschedule = true;
                 }
 
-                const availability = await computeSlotAvailability(date, time, 'painting', requestedParticipants);
+                const availability = await computeSlotAvailability(
+                    date,
+                    time,
+                    'painting',
+                    requestedParticipants,
+                    false,
+                    isAdminOverride
+                );
                 if (!availability.available) {
                     return res.status(409).json({
                         success: false,
@@ -8655,13 +8705,14 @@ async function addBookingAction(
                 normalizedTime,
                 requestedTechnique,
                 requestedParticipants,
-                skipTechRestriction
+                skipTechRestriction,
+                adminOverride
             );
 
             const blockedReason = (slotAvailability as any)?.blockedReason;
             if (!slotAvailability.available) {
-                if (adminOverride && blockedReason === 'technique_restriction') {
-                    console.log(`[addBookingAction SINGLE_CLASS] 🔓 Admin override: bypassing technique restriction for ${requestedTechnique} on ${slot.date} at ${normalizedTime}`);
+                if (adminOverride && (blockedReason === 'technique_restriction' || blockedReason === 'private_event')) {
+                    console.log(`[addBookingAction SINGLE_CLASS] 🔓 Admin override: bypassing ${blockedReason} for ${requestedTechnique} on ${slot.date} at ${normalizedTime}`);
                 } else {
                 throw new Error(slotAvailability.message || `No hay cupos disponibles para ${requestedTechnique} en ${slot.date} a las ${normalizedTime}`);
                 }
