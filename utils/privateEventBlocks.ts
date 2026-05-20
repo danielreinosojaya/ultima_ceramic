@@ -1,4 +1,4 @@
-import { normalizeSlotTimeHHMM } from './formatters';
+import { normalizeSlotTimeHHMM } from './formatters.js';
 
 /** Duración estándar de una clase (minutos). */
 export const CLASS_DURATION_MINUTES = 120;

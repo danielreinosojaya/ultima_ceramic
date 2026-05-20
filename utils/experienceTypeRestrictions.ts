@@ -1,5 +1,5 @@
 import type { ExperienceTypeOverrides } from '../types';
-import { normalizeSlotTimeHHMM } from './formatters';
+import { normalizeSlotTimeHHMM } from './formatters.js';
 
 const TECH_ALIASES: Record<string, string[]> = {
   hand_modeling: ['hand_modeling', 'molding'],
