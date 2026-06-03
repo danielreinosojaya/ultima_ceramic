@@ -1,4 +1,4 @@
-import { parseLocalDate, normalizeSlotTimeHHMM } from './formatters';
+import { parseLocalDate, normalizeSlotTimeHHMM } from './formatters.js';
 
 /** Cierre del estudio: mar–sáb 20:00, dom 17:00. Clases duran 2 h → último inicio mar–sáb 18:00, dom 15:00. */
 export const LAST_CLASS_START_MINUTES_TUE_SAT = 18 * 60;
