@@ -59,6 +59,10 @@ import {
     isSlotBlockedByExperienceTypeOverride,
     sanitizeExperienceTypeOverrides,
 } from '../utils/experienceTypeRestrictions.js';
+import {
+    isClassStartWithinBusinessHours,
+    getBusinessHoursRejectionMessage,
+} from '../utils/businessHours.js';
 import { checkRateLimit } from './rateLimiter.js';
 import { uploadPhotoToBunny, uploadProofToBunny } from './bunnyUpload.js';
 import { deliverGiftcardToRecipient } from './utils/giftcardDelivery.js';
@@ -131,7 +135,11 @@ const parseBookingFromDB = (dbRow: any): Booking => {
         if (!camelCased.product) {
             // Usar productType para crear fallback mínimo
             const productType = camelCased.productType || 'SINGLE_CLASS';
-            let fallbackName = dbRow.product_name || productTypeFallbackNames[productType] || productType.replace(/_/g, ' ');
+            // CUSTOM_GROUP_EXPERIENCE: nunca usar product_name del JOIN (product_id suele ser null
+            // o apuntar a otro catálogo); el nombre genérico evita mostrar "Modelado a Mano" por error.
+            let fallbackName = productType === 'CUSTOM_GROUP_EXPERIENCE'
+                ? (productTypeFallbackNames[productType] || 'Experiencia Grupal Personalizada')
+                : (dbRow.product_name || productTypeFallbackNames[productType] || productType.replace(/_/g, ' '));
             
             // CRÍTICO: Para SINGLE_CLASS, derivar técnica del product_name
             let fallbackTechnique = productType.includes('WHEEL') ? 'potters_wheel' : 'molding';
@@ -144,6 +152,8 @@ const parseBookingFromDB = (dbRow: any): Booking => {
                 } else if (productNameLower.includes('pintura')) {
                     fallbackTechnique = 'painting';
                 }
+            } else if (productType === 'CUSTOM_GROUP_EXPERIENCE' && dbRow.product_technique) {
+                fallbackTechnique = dbRow.product_technique;
             }
             
             camelCased.product = {
@@ -200,6 +210,9 @@ const parseBookingFromDB = (dbRow: any): Booking => {
 
         // CRÍTICO: Para SINGLE_CLASS, derivar técnica agresivamente desde product.name si technique es NULL
         let derivedTechnique: string | undefined = dbRow.technique || inferredTechniqueFromProduct;
+        if (!derivedTechnique && camelCased.productType === 'CUSTOM_GROUP_EXPERIENCE' && dbRow.product_technique) {
+            derivedTechnique = dbRow.product_technique;
+        }
         if (!derivedTechnique && camelCased.productType === 'SINGLE_CLASS' && camelCased.product) {
             const productNameLower = (camelCased.product.name || '').toLowerCase();
             if (productNameLower.includes('torno')) {
@@ -671,7 +684,6 @@ const getFixedSlotTimesForDate = (
         .map((slot: any) => normalizeTime(slot.time));
 
     if (techniqueKey === 'potters_wheel') {
-        if (dayKey === 'Tuesday') times.push('19:00');
         if (dayKey === 'Wednesday') times.push('11:00');
     }
 
@@ -758,6 +770,23 @@ const computeSlotAvailability = async (
     const requestedEndMinutes = requestedStartMinutes + (2 * 60); // 2 horas
 
     const requestedDayOfWeek = new Date(`${requestedDate}T00:00:00`).getDay();
+
+    if (!isClassStartWithinBusinessHours(requestedDate, normalizedTime)) {
+        const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
+        return {
+            available: false,
+            normalizedTime,
+            blockedReason: 'business_hours',
+            capacity: {
+                max: maxCapacity,
+                booked: maxCapacity,
+                available: 0,
+            },
+            bookingsCount: 0,
+            message: getBusinessHoursRejectionMessage(requestedDate),
+        };
+    }
+
     if (!isSpecialDayNoRules && requestedTechnique === 'painting' && requestedDayOfWeek === 1) {
         const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
         return {
@@ -5191,6 +5220,13 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         error: `No se puede agendar más de 30 días en el pasado. Esta fecha es ${daysDiff} días atrás.`
                     });
                 }
+
+                if (!isClassStartWithinBusinessHours(newSlot.date, newSlot.time)) {
+                    return res.status(400).json({
+                        success: false,
+                        error: getBusinessHoursRejectionMessage(newSlot.date),
+                    });
+                }
                 
                 // 2. Validar 72 horas de anticipación (solo para futuro)
                 if (!isRetroactive) {
@@ -5983,6 +6019,13 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
                 const requestedStartMinutes = timeToMinutes(normalizeTime(requestedTime));
                 const requestedEndMinutes = requestedStartMinutes + (2 * 60);
+
+                if (!isClassStartWithinBusinessHours(requestedDate, requestedTime)) {
+                    return res.status(400).json({
+                        success: false,
+                        error: getBusinessHoursRejectionMessage(requestedDate),
+                    });
+                }
 
                 if (!adminOverride && slotOverlapsPrivateEvent(requestedDate, requestedTime)) {
                     return res.status(400).json({
@@ -8590,6 +8633,10 @@ async function addBookingAction(
             const slotStartMinutes = timeToMinutes(normalizedTime);
             const slotEndMinutes = slotStartMinutes + (2 * 60);
             const dayKey = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date(`${slot.date}T00:00:00`).getDay()];
+
+            if (!isClassStartWithinBusinessHours(slot.date, normalizedTime)) {
+                throw new Error(getBusinessHoursRejectionMessage(slot.date));
+            }
 
             const fixedPottersTimes = getFixedSlotTimesForDate(slot.date, dayKey, availability, scheduleOverrides, 'potters_wheel');
             const fixedPottersMinutes = fixedPottersTimes.map(timeToMinutes);

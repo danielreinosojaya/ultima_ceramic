@@ -6,6 +6,7 @@
 
 import * as dataService from './dataService';
 import type { Product } from '../types';
+import { isClassStartWithinBusinessHours, getBusinessHoursRejectionMessage } from '../utils/businessHours';
 
 export interface ValidationWarning {
   rule: string;
@@ -48,6 +49,15 @@ export async function validateAdminBooking(
         severity: 'warning',
         message: '📅 Domingo: Normalmente no se aceptan reservas en este día. ¿Estás seguro?',
         code: 'SUNDAY_BOOKING'
+      });
+    }
+
+    if (!isClassStartWithinBusinessHours(bookingData.date, bookingData.time)) {
+      warnings.push({
+        rule: 'business_hours',
+        severity: 'error',
+        message: getBusinessHoursRejectionMessage(bookingData.date),
+        code: 'BUSINESS_HOURS',
       });
     }
 

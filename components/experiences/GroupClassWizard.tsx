@@ -499,7 +499,7 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
         <div className="space-y-6">
           <div>
             <h3 className="text-2xl font-bold mb-2">🕐 Elige tu Horario</h3>
-            <p className="text-gray-600">Disponible de 9 AM a 7 PM en intervalos de 30 minutos</p>
+            <p className="text-gray-600">Disponible de 10:00 a 18:00 en intervalos de 30 minutos (cierre del estudio 20:00)</p>
           </div>
 
           {loadingSlots ? (

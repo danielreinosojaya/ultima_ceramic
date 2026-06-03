@@ -8,6 +8,7 @@ import {
   isSlotBlockedByExperienceTypeOverride,
   sanitizeExperienceTypeOverrides,
 } from '../../utils/experienceTypeRestrictions';
+import { isClassStartWithinBusinessHours } from '../../utils/businessHours';
 
 // Nombres de días para mapear Date.getDay() a DayKey
 const DAY_KEYS: DayKey[] = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -149,7 +150,6 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
       slot.technique === 'potters_wheel'
     ).map(slot => slot.time) || [];
     if (technique === 'potters_wheel') {
-      if (dayOfWeek === 2) fixedTornoSlots.push('19:00'); // Martes
       if (dayOfWeek === 3) fixedTornoSlots.push('11:00'); // Miércoles
     }
     return fixedTornoSlots;
@@ -221,7 +221,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     };
 
     if (dayOfWeek === 1 && !hasOverrideForDate) return []; // Lunes cerrado por defecto, excepto en semanas especiales
-    if (dayOfWeek === 1 && isSpecialDayNoRules) return buildSlots(10, 19);
+    if (dayOfWeek === 1 && isSpecialDayNoRules) return buildSlots(10, 18);
     const baseHours = dayOfWeek === 0
       ? buildSlots(10, 15)  // Domingo: último start 15:00 (cierre 17:00 - 2h clase)
       : dayOfWeek === 6
@@ -261,17 +261,22 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     const isSpecialDayNoRules = scheduleOverrides?.[selectedDate]?.disableRules === true;
 
     if (isSpecialDayNoRules) {
-      return candidateHours;
+      return candidateHours.filter(hour => isClassStartWithinBusinessHours(selectedDate, hour));
     }
 
     // Regla: Modelado a Mano (hand_modeling) O Torno (potters_wheel) con 1 persona NO abren el calendario completo.
     // Solo muestran: horarios fijos del calendario O slots ya abiertos por reserva previa de 3+.
     if ((technique === 'hand_modeling' || technique === 'potters_wheel') && participants === 1) {
       const fixedSlots = getFixedSlotsByType(selectedDate, technique);
-      return candidateHours.filter(hour => fixedSlots.includes(hour) || Boolean(hourAvailability[hour]?.openedByLargeGroup));
+      return candidateHours.filter(hour =>
+        (fixedSlots.includes(hour) || Boolean(hourAvailability[hour]?.openedByLargeGroup))
+        && isClassStartWithinBusinessHours(selectedDate, hour)
+      );
     }
 
-    return candidateHours.filter(hour => !isEcuadorSlotInPast(selectedDate, hour));
+    return candidateHours.filter(hour =>
+      !isEcuadorSlotInPast(selectedDate, hour) && isClassStartWithinBusinessHours(selectedDate, hour)
+    );
   }, [selectedDate, technique, participants, getAvailableHours, getFixedSlotsByType, hourAvailability, scheduleOverrides]);
 
   // Validar disponibilidad cuando se selecciona hora

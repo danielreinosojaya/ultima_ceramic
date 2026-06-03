@@ -3313,12 +3313,12 @@ export const generateTimeSlots = (
   // (El 'end' = ÚLTIMO START permitido, NO se genera :30 en esa hora)
   // - Domingo: 10:00-15:00 (último start → clase termina a las 17:00 = cierre)
   // - Lunes: CERRADO
-  // - Martes-Viernes: 10:00-19:00 (último start)
+  // - Martes-Viernes: 10:00-18:00 (último start → clase termina a las 20:00)
   // - Sábado: 10:00-18:00 (último start)
   const hoursPerDay = [
     { start: 10, end: 15, days: [0] },    // Domingo: último start 15:00 (cierre 17:00 - 2h clase)
     // Lunes (1) EXCLUIDO - CERRADO
-    { start: 10, end: 19, days: [2, 3, 4, 5] }, // Martes-Viernes: último start 19:00
+    { start: 10, end: 18, days: [2, 3, 4, 5] }, // Martes-Viernes: último start 18:00
     { start: 10, end: 18, days: [6] }     // Sábado: apertura 10:00, último start 18:00
   ];
 
@@ -3358,8 +3358,8 @@ export const generateTimeSlots = (
 
         // Día especial: desactivar reglas (incluye lunes) y abrir todo el rango comercial
         if (override?.disableRules) {
-            for (let hour = 10; hour <= 19; hour++) {
-                const isLastHour = hour === 19;
+            for (let hour = 10; hour <= 18; hour++) {
+                const isLastHour = hour === 18;
                 const minutesToAdd = isLastHour ? [0] : [0, 30];
                 for (const minute of minutesToAdd) {
                     const startTime = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;

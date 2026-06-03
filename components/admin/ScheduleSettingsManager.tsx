@@ -78,8 +78,8 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
     const buildSpecialDaySlots = useCallback((instructorId: number): AvailableSlot[] => {
         const slots: AvailableSlot[] = [];
 
-        for (let hour = 10; hour <= 19; hour++) {
-            const minutes = hour === 19 ? ['00'] : ['00', '30'];
+        for (let hour = 10; hour <= 18; hour++) {
+            const minutes = hour === 18 ? ['00'] : ['00', '30'];
             for (const min of minutes) {
                 const time = `${String(hour).padStart(2, '0')}:${min}`;
                 slots.push({ time, instructorId, technique: 'potters_wheel' });
@@ -556,7 +556,7 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
                                         <p className="text-sm font-bold text-amber-900">Día especial (desactivar reglas)</p>
                                         <p className="text-xs text-amber-800">
                                             Permite cualquier técnica y horario este día en Single Class y Custom Experience.
-                                            Al activarlo se agregan horarios de 10:00 a 19:00 (cada 30 min) para Torno, Modelado y Pintura.
+                                            Al activarlo se agregan horarios de 10:00 a 18:00 (cada 30 min) para Torno, Modelado y Pintura.
                                         </p>
                                     </div>
                                 </label>
