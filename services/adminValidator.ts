@@ -55,8 +55,8 @@ export async function validateAdminBooking(
     if (!isClassStartWithinBusinessHours(bookingData.date, bookingData.time)) {
       warnings.push({
         rule: 'business_hours',
-        severity: 'error',
-        message: getBusinessHoursRejectionMessage(bookingData.date),
+        severity: 'warning',
+        message: `⏰ ${getBusinessHoursRejectionMessage(bookingData.date)} Los clientes no pueden reservar después de las 18:00; como admin puedes confirmar con override.`,
         code: 'BUSINESS_HOURS',
       });
     }
@@ -208,7 +208,7 @@ async function checkCapacityWithDetail(
 ): Promise<{ available: boolean; availableCapacity: number; maxCapacity: number }> {
   try {
     const response = await fetch(
-      `/api/data?action=checkSlotAvailability&date=${dateStr}&time=${timeStr}&technique=${technique}&participants=${requestedParticipants}`,
+      `/api/data?action=checkSlotAvailability&date=${dateStr}&time=${timeStr}&technique=${technique}&participants=${requestedParticipants}&adminOverride=true`,
       { method: 'GET' }
     );
     

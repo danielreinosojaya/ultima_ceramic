@@ -64,13 +64,12 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
   const [overrideInProgress, setOverrideInProgress] = useState(false);
   // Technique selection for CUSTOM_EXPERIENCE
   const [selectedTechnique, setSelectedTechnique] = useState<'potters_wheel' | 'hand_modeling' | 'painting' | null>(null);
-  // Horarios en intervalos de 30 minutos: último inicio 18:00 (clase termina 20:00)
-  const timeOptions = Array.from({ length: 19 }, (_, i) => {
+  // Horarios admin: 09:00–21:00 (flexibilidad fuera del tope público de 18:00)
+  const timeOptions = Array.from({ length: 25 }, (_, i) => {
     const hour = 9 + Math.floor(i / 2);
     const min = i % 2 === 0 ? '00' : '30';
-    if (hour === 18 && min === '30') return null;
     return `${hour.toString().padStart(2, '0')}:${min}`;
-  }).filter(Boolean) as string[];
+  });
 
   // Función para obtener límites de participantes por tipo de producto
   const getParticipantsRange = (product: Product | null) => {

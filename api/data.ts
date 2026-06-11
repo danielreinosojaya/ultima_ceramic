@@ -742,7 +742,8 @@ const computeSlotAvailability = async (
     requestedTechnique: string,
     requestedParticipants: number,
     skipTechRestriction: boolean = false,
-    skipPrivateEventBlock: boolean = false
+    skipPrivateEventBlock: boolean = false,
+    skipBusinessHoursCheck: boolean = false
 ) => {
     // ✅ OPTIMIZATION PHASE 2: Buscar bookings que TENGAN SLOTS en la fecha solicitada
     // Con LIMIT 1000 para evitar saturación (traer todos los bookings es ineficiente)
@@ -771,7 +772,7 @@ const computeSlotAvailability = async (
 
     const requestedDayOfWeek = new Date(`${requestedDate}T00:00:00`).getDay();
 
-    if (!isClassStartWithinBusinessHours(requestedDate, normalizedTime)) {
+    if (!skipBusinessHoursCheck && !isClassStartWithinBusinessHours(requestedDate, normalizedTime)) {
         const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
         return {
             available: false,
@@ -2386,6 +2387,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     const requestedTechnique = technique as string;
                     const requestedParticipants = parseInt(participants as string);
                     const skipTechRestriction = skipTechParam === 'true';
+                    const skipBusinessHoursCheck = req.query.adminOverride === 'true';
 
                     try {
                         const availability = await computeSlotAvailability(
@@ -2393,7 +2395,9 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             requestedTime,
                             requestedTechnique,
                             requestedParticipants,
-                            skipTechRestriction
+                            skipTechRestriction,
+                            false,
+                            skipBusinessHoursCheck
                         );
 
                         const responseData = {
@@ -5221,7 +5225,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     });
                 }
 
-                if (!isClassStartWithinBusinessHours(newSlot.date, newSlot.time)) {
+                if (!forceAdminReschedule && !isClassStartWithinBusinessHours(newSlot.date, newSlot.time)) {
                     return res.status(400).json({
                         success: false,
                         error: getBusinessHoursRejectionMessage(newSlot.date),
@@ -6020,7 +6024,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 const requestedStartMinutes = timeToMinutes(normalizeTime(requestedTime));
                 const requestedEndMinutes = requestedStartMinutes + (2 * 60);
 
-                if (!isClassStartWithinBusinessHours(requestedDate, requestedTime)) {
+                if (!adminOverride && !isClassStartWithinBusinessHours(requestedDate, requestedTime)) {
                     return res.status(400).json({
                         success: false,
                         error: getBusinessHoursRejectionMessage(requestedDate),
@@ -6935,6 +6939,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     'painting',
                     requestedParticipants,
                     false,
+                    isAdminOverride,
                     isAdminOverride
                 );
                 if (!availability.available) {
@@ -8634,7 +8639,7 @@ async function addBookingAction(
             const slotEndMinutes = slotStartMinutes + (2 * 60);
             const dayKey = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date(`${slot.date}T00:00:00`).getDay()];
 
-            if (!isClassStartWithinBusinessHours(slot.date, normalizedTime)) {
+            if (!adminOverride && !isClassStartWithinBusinessHours(slot.date, normalizedTime)) {
                 throw new Error(getBusinessHoursRejectionMessage(slot.date));
             }
 
@@ -8642,7 +8647,7 @@ async function addBookingAction(
             const fixedPottersMinutes = fixedPottersTimes.map(timeToMinutes);
             const fixedHandTimes = getFixedSlotTimesForDate(slot.date, dayKey, availability, scheduleOverrides, 'molding');
 
-            if (totalParticipants < 3) {
+            if (!adminOverride && totalParticipants < 3) {
                 if (pottersCount > 0 && !fixedPottersTimes.includes(normalizedTime)) {
                     throw new Error('Para 2 personas solo se permiten horarios fijos de torno');
                 }
@@ -8758,12 +8763,13 @@ async function addBookingAction(
                 requestedTechnique,
                 requestedParticipants,
                 skipTechRestriction,
+                adminOverride,
                 adminOverride
             );
 
             const blockedReason = (slotAvailability as any)?.blockedReason;
             if (!slotAvailability.available) {
-                if (adminOverride && (blockedReason === 'technique_restriction' || blockedReason === 'private_event')) {
+                if (adminOverride && (blockedReason === 'technique_restriction' || blockedReason === 'private_event' || blockedReason === 'business_hours')) {
                     console.log(`[addBookingAction SINGLE_CLASS] 🔓 Admin override: bypassing ${blockedReason} for ${requestedTechnique} on ${slot.date} at ${normalizedTime}`);
                 } else {
                 throw new Error(slotAvailability.message || `No hay cupos disponibles para ${requestedTechnique} en ${slot.date} a las ${normalizedTime}`);
