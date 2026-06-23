@@ -489,10 +489,20 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
     };
     
     const handleDeleteBooking = async () => {
-        if (bookingToDelete) {
-            await dataService.deleteBooking(bookingToDelete.id);
+        if (!bookingToDelete) return;
+        try {
+            const result = await dataService.deleteBooking(bookingToDelete.id);
+            if (!result?.success) {
+                throw new Error(result?.error || 'No se pudo eliminar la reserva');
+            }
             adminData.optimisticRemoveBooking(bookingToDelete.id);
             setBookingToDelete(null);
+            setFeedbackMsg('Reserva eliminada correctamente');
+            setFeedbackType('success');
+        } catch (e) {
+            setFeedbackMsg(e instanceof Error ? e.message : 'Error al eliminar reserva');
+            setFeedbackType('error');
+            throw e;
         }
     };
 

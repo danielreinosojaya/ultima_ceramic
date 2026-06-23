@@ -322,7 +322,11 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
         if (!deleteModal.bookingId || !deleteModal.slot) return;
         setDeleteLoading(true);
         try {
-            await dataService.removeBookingSlot(deleteModal.bookingId, deleteModal.slot);
+            const result = await dataService.removeBookingSlot(deleteModal.bookingId, deleteModal.slot);
+            if (!result?.success) {
+                alert(result?.error || 'No se pudo eliminar la clase.');
+                return;
+            }
             // Validar si el cliente queda sin reservas
             const bookingsRestantes = customerBookings.filter(b => {
                 if (b.id !== deleteModal.bookingId) return true;
@@ -344,12 +348,17 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                 });
             }
             setDeleteModal({ open: false, bookingId: null, slot: null });
-            adminData.optimisticRemoveBookingSlot(deleteModal.bookingId, {
-                date: deleteModal.slot.date,
-                time: deleteModal.slot.time
-            });
+            if (result.deleted) {
+                adminData.optimisticRemoveBooking(deleteModal.bookingId);
+            } else {
+                adminData.optimisticRemoveBookingSlot(deleteModal.bookingId, {
+                    date: deleteModal.slot.date,
+                    time: deleteModal.slot.time
+                });
+            }
         } catch (e) {
             console.error('Error deleting slot:', e);
+            alert('Error al eliminar la clase: ' + (e instanceof Error ? e.message : String(e)));
         }
         setDeleteLoading(false);
     };

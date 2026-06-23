@@ -1108,7 +1108,7 @@ export const updateBooking = async (booking: Booking): Promise<{ success: boolea
     }
     return result;
 };
-export const removeBookingSlot = async (bookingId: string, slotToRemove: any): Promise<{ success: boolean }> => {
+export const removeBookingSlot = async (bookingId: string, slotToRemove: any): Promise<{ success: boolean; deleted?: boolean; error?: string }> => {
     const result = await postAction('removeBookingSlot', { bookingId, slotToRemove });
     if (result.success) {
         invalidateBookingsCache();

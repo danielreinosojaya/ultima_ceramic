@@ -5449,10 +5449,14 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 return res.status(404).json({ error: 'Booking not found.' });
             }
             const currentSlots = Array.isArray(bookingRow.slots) ? bookingRow.slots : [];
-            // Remove the slot matching date, time, instructorId
-            const updatedSlots = currentSlots.filter((s: any) => {
-                return !(s.date === slotToRemove.date && s.time === slotToRemove.time && s.instructorId === slotToRemove.instructorId);
-            });
+            // Match by date + time only (same as rescheduleBookingSlot); instructorId may differ in UI vs DB
+            const slotMatches = (s: any) =>
+                s.date === slotToRemove.date &&
+                normalizeTime(String(s.time || '')) === normalizeTime(String(slotToRemove.time || ''));
+            const updatedSlots = currentSlots.filter((s: any) => !slotMatches(s));
+            if (updatedSlots.length === currentSlots.length) {
+                return res.status(404).json({ success: false, error: 'Slot not found in booking.' });
+            }
             if (updatedSlots.length === 0) {
                 // If no slots left, delete the booking
                 await sql`DELETE FROM bookings WHERE id = ${bookingId}`;

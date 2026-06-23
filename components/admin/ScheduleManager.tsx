@@ -181,6 +181,7 @@ import { InvoiceReminderModal } from './InvoiceReminderModal';
 import { MagnifyingGlassIcon } from '../icons/MagnifyingGlassIcon';
 import { CustomerSearchResultsPanel } from './CustomerSearchResultsPanel';
 import { UserGroupIcon } from '../icons/UserGroupIcon';
+import { useAdminData } from '../../context/AdminDataContext';
 
 const colorMap = PALETTE_COLORS.reduce((acc, color) => {
     acc[color.name] = { bg: color.bg.replace('bg-', ''), text: color.text.replace('text-', '') };
@@ -295,6 +296,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
 }) => {
     // Monolingüe español, textos hardcodeados
     const language = 'es-ES';
+    const adminData = useAdminData();
     const [currentDate, setCurrentDate] = useState(getWeekStartDate(initialDate));
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [modalData, setModalData] = useState<{ date: string; time: string; attendees: any[]; instructorId: number; onClose?: () => void } | null>(null);
@@ -721,11 +723,23 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     };
     
     const handleRemoveAttendee = async (bookingId: string) => {
-        if (modalData) {
-            const slotToRemove = { date: modalData.date, time: modalData.time, instructorId: modalData.instructorId };
-            await dataService.removeBookingSlot(bookingId, slotToRemove);
+        if (!modalData) return;
+        const slotToRemove = { date: modalData.date, time: modalData.time };
+        try {
+            const result = await dataService.removeBookingSlot(bookingId, slotToRemove);
+            if (!result?.success) {
+                alert(result?.error || 'No se pudo eliminar la reserva.');
+                return;
+            }
+            if (result.deleted) {
+                adminData.optimisticRemoveBooking(bookingId);
+            } else {
+                adminData.optimisticRemoveBookingSlot(bookingId, slotToRemove);
+            }
             closeAllModals();
             onDataChange();
+        } catch (e) {
+            alert('Error al eliminar la reserva: ' + (e instanceof Error ? e.message : String(e)));
         }
     };
 
