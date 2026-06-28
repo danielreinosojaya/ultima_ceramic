@@ -1342,7 +1342,13 @@ export const deleteBookingsInDateRange = async (startDate: Date, endDate: Date):
     }
     return result;
 };
-export const updateAttendanceStatus = (bookingId: string, slot: any, status: AttendanceStatus): Promise<{ success: boolean }> => postAction('updateAttendanceStatus', { bookingId, slot, status });
+export const updateAttendanceStatus = async (bookingId: string, slot: any, status: AttendanceStatus): Promise<{ success: boolean }> => {
+    const result = await postAction('updateAttendanceStatus', { bookingId, slot, status });
+    if (result?.success !== false) {
+        invalidateBookingsCache();
+    }
+    return result;
+};
 export const deleteBooking = async (bookingId: string): Promise<{ success: boolean }> => {
     const result = await postAction('deleteBooking', { bookingId });
     if (result.success) {

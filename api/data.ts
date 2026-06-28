@@ -5571,6 +5571,12 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         case 'updateAttendanceStatus':
             const updateAttendanceBody = req.body;
             const { bookingId: attendanceId, slot, status } = updateAttendanceBody;
+            if (!attendanceId || !slot?.date || !slot?.time) {
+                return res.status(400).json({ success: false, error: 'bookingId y slot (date, time) son requeridos' });
+            }
+            if (status !== 'attended' && status !== 'no-show') {
+                return res.status(400).json({ success: false, error: 'status debe ser attended o no-show' });
+            }
             const slotIdentifier = `${slot.date}_${slot.time}`;
             
             // 1. Actualizar attendance

@@ -922,6 +922,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 product={{ id: 'placeholder', name: 'Clase', type: 'class', price: 0 } as any}
                 allBookings={appData.bookings}
                 onClose={closeAllModals}
+                onBookingUpdate={onDataChange}
                 onRemoveAttendee={handleRemoveAttendee}
                 onAcceptPayment={handleAcceptPayment}
                 onMarkAsUnpaid={handleMarkAsUnpaid}

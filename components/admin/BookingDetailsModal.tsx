@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { UserInfo, TimeSlot, PaymentDetails, AttendanceStatus, Product, Booking } from '../../types';
 import * as dataService from '../../services/dataService';
 import { UserIcon } from '../icons/UserIcon';
@@ -18,12 +18,12 @@ interface Attendee {
     lastName: string;
     email: string;
     phone?: string;
-    countryCode?: string; // Agregar countryCode como opcional
+    countryCode?: string;
   };
   bookingId: string;
-  bookingCode?: string; // Agregar bookingCode como opcional
-  paymentDetails?: PaymentDetails[]; // Agregar paymentDetails como opcional
-  isPaid?: boolean; // Agregar isPaid como opcional
+  bookingCode?: string;
+  paymentDetails?: PaymentDetails[];
+  isPaid?: boolean;
 }
 
 interface BookingDetailsModalProps {
@@ -34,13 +34,13 @@ interface BookingDetailsModalProps {
   time: string;
   product: Product;
   onBookingUpdate?: () => void;
-  allBookings: Booking[]; // Pass bookings as prop
-  instructorId?: number; // Hacer opcional
-  onRemoveAttendee?: (bookingId: string) => void; // Hacer opcional
-  onAcceptPayment?: (bookingId: string) => void; // Hacer opcional
-  onMarkAsUnpaid?: (bookingId: string) => void; // Hacer opcional
-  onEditAttendee?: (bookingId: string) => void; // Hacer opcional
-  onRescheduleAttendee?: (bookingId: string, slot: TimeSlot, attendeeName: string) => void; // Hacer opcional
+  allBookings: Booking[];
+  instructorId?: number;
+  onRemoveAttendee?: (bookingId: string) => void;
+  onAcceptPayment?: (bookingId: string) => void;
+  onMarkAsUnpaid?: (bookingId: string) => void;
+  onEditAttendee?: (bookingId: string) => void;
+  onRescheduleAttendee?: (bookingId: string, slot: TimeSlot, attendeeName: string) => void;
 }
 
 const formatTimeForInput = (time12h: string): string => {
@@ -48,12 +48,16 @@ const formatTimeForInput = (time12h: string): string => {
     return date.toTimeString().slice(0, 5);
 };
 
+/** undefined = nunca guardado en servidor para este turno */
+type SavedAttendanceMap = Record<string, AttendanceStatus | undefined>;
+
 export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({
   date,
   time,
   attendees,
   instructorId,
   onClose,
+  onBookingUpdate,
   onRemoveAttendee,
   onAcceptPayment,
   onMarkAsUnpaid,
@@ -61,20 +65,18 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({
   onRescheduleAttendee,
   allBookings = [],
 }) => {
-  // Fallbacks para evitar errores si no se pasan como función
   const safeOnEditAttendee = typeof onEditAttendee === 'function' ? onEditAttendee : () => {};
   const safeOnRescheduleAttendee = typeof onRescheduleAttendee === 'function' ? onRescheduleAttendee : () => {};
+
   const [attendanceData, setAttendanceData] = useState<Record<string, AttendanceStatus>>({});
+  const [savedAttendance, setSavedAttendance] = useState<SavedAttendanceMap>({});
   const [isPastClass, setIsPastClass] = useState(false);
-  const [isAttendanceTaken, setIsAttendanceTaken] = useState(false);
+  const [isSavingAttendance, setIsSavingAttendance] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   const slotIdentifier = useMemo(() => `${date}_${time}`, [date, time]);
-  // Fecha en formato español
-  const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString('es-ES', {
-    weekday: 'long', month: 'long', day: 'numeric',
-  });
 
-  // Find the booking object for the first attendee (all attendees share the same booking)
   const [bookingsMap, setBookingsMap] = useState<Record<string, any>>({});
 
   useEffect(() => {
@@ -102,58 +104,150 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({
     };
   }, [date, time, attendees, allBookings]);
 
-  // ...existing code...
-
   useEffect(() => {
-    const init = async () => {
-      const time24h = formatTimeForInput(time);
-      const [hours, minutes] = time24h.split(':').map(Number);
-      const [year, month, day] = date.split('-').map(Number);
-      const sessionDateTime = new Date(year, month - 1, day, hours, minutes);
-      setIsPastClass(sessionDateTime < new Date());
+    const time24h = formatTimeForInput(time);
+    const [hours, minutes] = time24h.split(':').map(Number);
+    const [year, month, day] = date.split('-').map(Number);
+    const sessionDateTime = new Date(year, month - 1, day, hours, minutes);
+    setIsPastClass(sessionDateTime < new Date());
 
-      // Use bookingsMap instead of fetching again
-      const initialAttendance: Record<string, AttendanceStatus> = {};
-      let attendanceTaken = false;
-      attendees.forEach(attendee => {
-          const booking = bookingsMap[attendee.bookingId];
-          const status = booking?.attendance?.[slotIdentifier];
-          if (status) {
-              initialAttendance[attendee.bookingId] = status;
-              attendanceTaken = true;
-          } else {
-              initialAttendance[attendee.bookingId] = 'attended';
-          }
-      });
-      setAttendanceData(initialAttendance);
-      setIsAttendanceTaken(attendanceTaken);
-    };
-    // Only run when we have bookingsMap data
-    if (Object.keys(bookingsMap).length > 0) {
-      init();
-    }
+    const initialAttendance: Record<string, AttendanceStatus> = {};
+    const initialSaved: SavedAttendanceMap = {};
+
+    attendees.forEach(attendee => {
+      const booking = bookingsMap[attendee.bookingId];
+      const status = booking?.attendance?.[slotIdentifier] as AttendanceStatus | undefined;
+      if (status === 'attended' || status === 'no-show') {
+        initialAttendance[attendee.bookingId] = status;
+        initialSaved[attendee.bookingId] = status;
+      } else {
+        initialAttendance[attendee.bookingId] = 'attended';
+        initialSaved[attendee.bookingId] = undefined;
+      }
+    });
+
+    setAttendanceData(initialAttendance);
+    setSavedAttendance(initialSaved);
+    setSaveError(null);
+    setSaveMessage(null);
   }, [date, time, attendees, slotIdentifier, bookingsMap]);
 
+  useEffect(() => {
+    if (!saveMessage) return;
+    const timer = setTimeout(() => setSaveMessage(null), 4000);
+    return () => clearTimeout(timer);
+  }, [saveMessage]);
+
+  const hasUnsavedChanges = useMemo(() => {
+    return attendees.some(attendee => {
+      const saved = savedAttendance[attendee.bookingId];
+      const current = attendanceData[attendee.bookingId];
+      if (saved === undefined) return true;
+      return saved !== current;
+    });
+  }, [attendees, savedAttendance, attendanceData]);
+
   const handleAttendanceChange = (bookingId: string, status: AttendanceStatus) => {
+    setSaveError(null);
     setAttendanceData(prev => ({ ...prev, [bookingId]: status }));
   };
 
-  const handleSaveAttendance = () => {
-    Object.entries(attendanceData).forEach(([bookingId, status]) => {
-        dataService.updateAttendanceStatus(bookingId, { date, time, instructorId }, status as AttendanceStatus);
+  const handleSaveAttendance = useCallback(async () => {
+    const toSave = attendees
+      .map(attendee => {
+        const bookingId = attendee.bookingId;
+        const status = attendanceData[bookingId];
+        const saved = savedAttendance[bookingId];
+        if (saved !== undefined && saved === status) return null;
+        return { bookingId, status };
+      })
+      .filter((entry): entry is { bookingId: string; status: AttendanceStatus } => entry !== null);
+
+    if (toSave.length === 0) return;
+
+    setIsSavingAttendance(true);
+    setSaveError(null);
+    setSaveMessage(null);
+
+    const results = await Promise.allSettled(
+      toSave.map(({ bookingId, status }) =>
+        dataService.updateAttendanceStatus(bookingId, { date, time, instructorId }, status)
+      )
+    );
+
+    const failed: string[] = [];
+    const succeeded: { bookingId: string; status: AttendanceStatus }[] = [];
+
+    results.forEach((result, index) => {
+      const { bookingId, status } = toSave[index];
+      const ok =
+        result.status === 'fulfilled' &&
+        result.value &&
+        result.value.success !== false;
+      if (ok) {
+        succeeded.push({ bookingId, status });
+      } else {
+        failed.push(bookingId);
+      }
     });
-    setIsAttendanceTaken(true);
-    alert("Attendance saved!");
-    onClose();
-  };
+
+    if (succeeded.length > 0) {
+      setSavedAttendance(prev => {
+        const next = { ...prev };
+        succeeded.forEach(({ bookingId, status }) => {
+          next[bookingId] = status;
+        });
+        return next;
+      });
+
+      setBookingsMap(prev => {
+        const next = { ...prev };
+        succeeded.forEach(({ bookingId, status }) => {
+          if (next[bookingId]) {
+            next[bookingId] = {
+              ...next[bookingId],
+              attendance: { ...(next[bookingId].attendance || {}), [slotIdentifier]: status },
+            };
+          }
+        });
+        return next;
+      });
+
+      onBookingUpdate?.();
+    }
+
+    setIsSavingAttendance(false);
+
+    if (failed.length > 0) {
+      const label = failed.length === toSave.length
+        ? 'No se pudo guardar la asistencia. Verifica tu conexión e intenta de nuevo.'
+        : `Se guardaron ${succeeded.length} de ${toSave.length} registros. ${failed.length} fallaron — intenta guardar de nuevo.`;
+      setSaveError(label);
+      return;
+    }
+
+    setSaveMessage(
+      succeeded.length === 1
+        ? 'Asistencia guardada correctamente.'
+        : `Asistencia guardada para ${succeeded.length} asistentes.`
+    );
+  }, [attendees, attendanceData, savedAttendance, date, time, instructorId, slotIdentifier, onBookingUpdate]);
 
   const handleRemoveClick = (bookingId: string, userName: string) => {
     const confirmationMessage = `¿Seguro que quieres eliminar la reserva de ${userName}?`;
     if (window.confirm(confirmationMessage)) {
-      onRemoveAttendee(bookingId);
+      onRemoveAttendee?.(bookingId);
     }
   };
-  
+
+  const getAttendanceSaveState = (bookingId: string): 'saved' | 'pending' | 'unsaved' => {
+    const saved = savedAttendance[bookingId];
+    const current = attendanceData[bookingId];
+    if (saved === undefined) return 'unsaved';
+    if (saved !== current) return 'pending';
+    return 'saved';
+  };
+
   return (
     <div
       className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in"
@@ -163,7 +257,6 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({
         className="bg-brand-surface rounded-xl shadow-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-fade-in-up"
         onClick={(e) => e.stopPropagation()}
       >
-
         {attendees.length > 0 ? (
       <ul className="space-y-3">
       {attendees.map((attendee) => {
@@ -172,6 +265,7 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({
         const attendeeBooking = bookingsMap[attendee.bookingId];
         const participantCount = attendeeBooking?.participants || 1;
         const manualNote = attendeeBooking?.clientNote || attendeeBooking?.manualNote || attendeeBooking?.note || attendeeBooking?.message || attendeeBooking?.comments || null;
+        const attendanceSaveState = getAttendanceSaveState(attendee.bookingId);
 
         return (
           <li key={attendee.bookingId} className="bg-brand-background p-3 rounded-lg">
@@ -199,7 +293,6 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({
                   <PhoneIcon className="w-4 h-4 mr-2 text-brand-secondary" />
                   <span className="text-brand-secondary">{attendee.userInfo.countryCode} {attendee.userInfo.phone}</span>
                 </div>
-                {/* Participant count and manual note inside card */}
                 <div className="mt-2 text-xs font-bold text-brand-secondary">
                   {`Participantes: ${participantCount}`}
                 </div>
@@ -208,7 +301,7 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({
                   <span className="font-bold">Nota: </span>{manualNote}
                   </div>
                 )}
-                <div className={`mt-2 text-xs font-bold px-2 py-0.5 rounded-full inline-block ${attendee.isPaid ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}> 
+                <div className={`mt-2 text-xs font-bold px-2 py-0.5 rounded-full inline-block ${attendee.isPaid ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
                   {attendee.isPaid ? 'Pagado' : 'Pendiente de pago'}
                 </div>
                 {firstPayment && (
@@ -228,11 +321,11 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({
                   <TrashIcon className="w-5 h-5" />
                 </button>
                 {attendee.isPaid ? (
-                  <button onClick={() => onMarkAsUnpaid(attendee.bookingId)} title="Marcar como no pagado" className="p-2 rounded-full text-brand-success hover:bg-green-100 transition-colors">
+                  <button onClick={() => onMarkAsUnpaid?.(attendee.bookingId)} title="Marcar como no pagado" className="p-2 rounded-full text-brand-success hover:bg-green-100 transition-colors">
                     <CurrencyDollarIcon className="w-5 h-5"/>
                   </button>
                 ) : (
-                  <button onClick={() => onAcceptPayment(attendee.bookingId)} title="Aceptar pago" className="p-2 rounded-full text-gray-400 hover:text-brand-success hover:bg-green-100 transition-colors">
+                  <button onClick={() => onAcceptPayment?.(attendee.bookingId)} title="Aceptar pago" className="p-2 rounded-full text-gray-400 hover:text-brand-success hover:bg-green-100 transition-colors">
                     <CurrencyDollarIcon className="w-5 h-5"/>
                   </button>
                 )}
@@ -240,24 +333,35 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({
             </div>
             {isPastClass && (
               <div className="mt-3 pt-3 border-t border-gray-200">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-brand-secondary">Asistencia:</span>
-                  {isAttendanceTaken ? (
-                    <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${attendanceData[attendee.bookingId] === 'attended' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}> 
-                      {attendanceData[attendee.bookingId] === 'attended' ? 'Asistió' : 'No asistió'}
-                    </span>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <span className={`text-sm font-semibold ${attendanceData[attendee.bookingId] === 'no-show' ? 'text-gray-400' : 'text-brand-text'}`}>Asistió</span>
-                      <button
-                        onClick={() => handleAttendanceChange(attendee.bookingId, attendanceData[attendee.bookingId] === 'attended' ? 'no-show' : 'attended')}
-                        className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${attendanceData[attendee.bookingId] === 'attended' ? 'bg-brand-success' : 'bg-gray-300'}`}
-                      >
-                        <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${attendanceData[attendee.bookingId] === 'attended' ? 'translate-x-6' : 'translate-x-1'}`} />
-                      </button>
-                      <span className={`text-sm font-semibold ${attendanceData[attendee.bookingId] === 'attended' ? 'text-gray-400' : 'text-brand-text'}`}>No asistió</span>
-                    </div>
-                  )}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-bold text-brand-secondary">Asistencia:</span>
+                    {attendanceSaveState === 'saved' && (
+                      <span className="text-[10px] font-semibold text-green-700">Guardado</span>
+                    )}
+                    {attendanceSaveState === 'pending' && (
+                      <span className="text-[10px] font-semibold text-amber-700">Cambio sin guardar</span>
+                    )}
+                    {attendanceSaveState === 'unsaved' && (
+                      <span className="text-[10px] font-semibold text-gray-500">Sin registrar</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm font-semibold ${attendanceData[attendee.bookingId] === 'no-show' ? 'text-gray-400' : 'text-brand-text'}`}>Asistió</span>
+                    <button
+                      type="button"
+                      disabled={isSavingAttendance}
+                      onClick={() => handleAttendanceChange(
+                        attendee.bookingId,
+                        attendanceData[attendee.bookingId] === 'attended' ? 'no-show' : 'attended'
+                      )}
+                      aria-label={attendanceData[attendee.bookingId] === 'attended' ? 'Marcar como no asistió' : 'Marcar como asistió'}
+                      className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors disabled:opacity-50 ${attendanceData[attendee.bookingId] === 'attended' ? 'bg-brand-success' : 'bg-gray-300'}`}
+                    >
+                      <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${attendanceData[attendee.bookingId] === 'attended' ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                    <span className={`text-sm font-semibold ${attendanceData[attendee.bookingId] === 'attended' ? 'text-gray-400' : 'text-brand-text'}`}>No asistió</span>
+                  </div>
                 </div>
               </div>
             )}
@@ -269,18 +373,28 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({
           <p className="text-center text-brand-secondary py-4">No hay asistentes</p>
         )}
 
+        {(saveError || saveMessage) && (
+          <div className={`mt-4 px-4 py-3 rounded-lg text-sm font-medium ${saveError ? 'bg-red-50 text-red-800 border border-red-200' : 'bg-green-50 text-green-800 border border-green-200'}`}>
+            {saveError || saveMessage}
+          </div>
+        )}
+
         <div className="mt-6 flex justify-end gap-3">
-           {isPastClass && !isAttendanceTaken && attendees.length > 0 && (
+           {isPastClass && attendees.length > 0 && hasUnsavedChanges && (
              <button
+                type="button"
                 onClick={handleSaveAttendance}
-                className="bg-brand-secondary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-text transition-colors"
+                disabled={isSavingAttendance}
+                className="bg-brand-secondary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-text transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
              >
-                Guardar asistencia
+                {isSavingAttendance ? 'Guardando…' : 'Guardar asistencia'}
              </button>
            )}
           <button
+            type="button"
             onClick={onClose}
-            className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent transition-colors"
+            disabled={isSavingAttendance}
+            className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent transition-colors disabled:opacity-60"
           >
             Cerrar
           </button>
