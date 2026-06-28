@@ -1083,6 +1083,7 @@ export const getGiftcards = async (): Promise<any[]> => {
             balance: typeof g.balance === 'number' ? g.balance : (g.balance ? parseFloat(g.balance) : 0),
             initialValue: typeof g.initialValue === 'number' ? g.initialValue : (g.initial_value ? parseFloat(g.initial_value) : (g.initialValue ? parseFloat(g.initialValue) : null)),
             expiresAt: g.expiresAt || g.expires_at || null,
+            createdAt: g.createdAt || g.created_at || null,
             metadata: g.metadata || g.meta || null,
             giftcardRequestId: g.giftcardRequestId || g.giftcard_request_id || null,
         }));
