@@ -41,6 +41,8 @@ const ValentineRegistrationForm = lazy(() => import('./components/valentine/Vale
 const ValentineSuccess = lazy(() => import('./components/valentine/ValentineSuccess').then(m => ({ default: m.ValentineSuccess })));
 const RumcomBooking = lazy(() => import('./components/rumcom/RumcomBooking').then(m => ({ default: m.RumcomBooking })));
 const RumcomAdmin = lazy(() => import('./components/rumcom/RumcomAdmin').then(m => ({ default: m.RumcomAdmin })));
+const SpecialEventBooking = lazy(() => import('./components/special-events/SpecialEventBooking').then(m => ({ default: m.SpecialEventBooking })));
+const SpecialEventAdmin = lazy(() => import('./components/special-events/SpecialEventAdmin').then(m => ({ default: m.SpecialEventAdmin })));
 import { NotificationProvider } from './context/NotificationContext';
 import { AdminDataProvider } from './context/AdminDataContext';
 import { AuthProvider } from './context/AuthContext';
@@ -48,7 +50,8 @@ import { ConfirmationPage } from './components/ConfirmationPage';
 import { ProofUploadPage } from './components/ProofUploadPage';
 import { OpenStudioModal } from './components/admin/OpenStudioModal';
 import { MyClassesPrompt } from './components/MyClassesPrompt';
-import { EventsBottomSheet, useScrollEventsTrigger } from './components/EventsBottomSheet';
+import { EventsBottomSheet, useScrollEventsTrigger, hasUpcomingEvents } from './components/EventsBottomSheet';
+import { getSpecialEventConfig, SPECIAL_EVENT_CONFIGS } from './config/specialEventConfigs';
 const ClientDashboard = lazy(() => import('./components/ClientDashboard').then(m => ({ default: m.ClientDashboard })));
 
 import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, DeliveryMethod, GiftcardHold, Piece, ExperiencePricing, ExperienceUIState, CourseSchedule, CourseEnrollment, ParticipantTechniqueAssignment, GroupTechnique, AvailableSlot, ClassCapacity, ScheduleOverrides, CapacityMessageSettings, DayKey } from './types';
@@ -98,6 +101,7 @@ const App: React.FC = () => {
     const [adminModule, setAdminModule] = useState<'main' | 'timecards' | null>(null);
     const [adminCode, setAdminCode] = useState<string>('');
     const [view, setView] = useState<AppView>('welcome');
+    const [specialEventSlug, setSpecialEventSlug] = useState<string | null>(null);
     const [bookingDetails, setBookingDetails] = useState<BookingDetails>({ product: null, slots: [], userInfo: null });
     const [confirmedBooking, setConfirmedBooking] = useState<Booking | null>(null);
     const [activeGiftcardHold, setActiveGiftcardHold] = useState<GiftcardHold | null>(null);
@@ -116,7 +120,7 @@ const App: React.FC = () => {
     
     // Events Bottom Sheet state
     const [isEventsModalOpen, setIsEventsModalOpen] = useState(false);
-    const { shouldShowEvents } = useScrollEventsTrigger(true);
+    const { shouldShowEvents } = useScrollEventsTrigger(hasUpcomingEvents());
     
     // COUPLES_EXPERIENCE states
     const [isCouplesExperience, setIsCouplesExperience] = useState(false);
@@ -176,6 +180,26 @@ const App: React.FC = () => {
         if (pathname.includes('/sanvalentin') || href.includes('/sanvalentin') || urlParams.get('sanvalentin') === 'true') {
             setView('valentine_landing');
             return;
+        }
+
+        // Special event admin routes (check BEFORE public booking routes)
+        for (const slug of Object.keys(SPECIAL_EVENT_CONFIGS)) {
+            const adminPath = `/${slug}-admin`;
+            if (pathname.includes(adminPath) || urlParams.get(`${slug}admin`) === 'true') {
+                setSpecialEventSlug(slug);
+                setView('special_event_admin');
+                return;
+            }
+        }
+
+        // Special event booking routes
+        for (const slug of Object.keys(SPECIAL_EVENT_CONFIGS)) {
+            const eventPath = `/${slug}`;
+            if (pathname.includes(eventPath) || urlParams.get(slug) === 'true') {
+                setSpecialEventSlug(slug);
+                setView('special_event_booking');
+                return;
+            }
         }
 
         // Check for Rum-Com admin panel - /rumcomadmin (check BEFORE /rumcom)
@@ -357,8 +381,11 @@ const App: React.FC = () => {
         }
         if (slug === 'rumcom') {
             window.location.href = '/rumcom';
+            return;
         }
-        // Add more event handlers here as needed
+        if (SPECIAL_EVENT_CONFIGS[slug]) {
+            window.location.href = `/${slug}`;
+        }
     };
 
     const handleWelcomeSelect = (userType: 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio' | 'group_class_wizard' | 'single_class_wizard' | 'wheel_course' | 'custom_experience') => {
@@ -522,10 +549,15 @@ const App: React.FC = () => {
                 'painting': 'Pintura de piezas'
             };
             
-            // Use event name for rumcom, otherwise use piece names or technique name
+            // Use event name for special events, otherwise use piece names or technique name
             let pieceName = pricing.pieces.map(p => p.pieceName).join(', ') || techniqueNames[selectedTechnique] || 'Experiencia Cerámica';
+            const specialEventConfig = view === 'special_event_booking' && specialEventSlug
+                ? getSpecialEventConfig(specialEventSlug)
+                : null;
             if (view === 'rumcom_booking') {
                 pieceName = 'Spill the Tea x Rum-Com Club';
+            } else if (specialEventConfig) {
+                pieceName = specialEventConfig.title;
             }
             
             product = {
@@ -540,6 +572,10 @@ const App: React.FC = () => {
                     guidedOption: pricing.guidedOption,
                     technique: selectedTechnique,
                     ...(view === 'rumcom_booking' ? { bookingSource: 'rumcom' } : {}),
+                    ...(specialEventConfig ? {
+                        bookingSource: specialEventConfig.bookingSource,
+                        pricingOptionLabel: (window as any).__specialEventPricingOption?.label,
+                    } : {}),
                 }
             } as any;
         }
@@ -592,7 +628,7 @@ const App: React.FC = () => {
         }
 
         // Events with their own booking page bypass technique restrictions
-        if (view === 'rumcom_booking') {
+        if (view === 'rumcom_booking' || view === 'special_event_booking') {
             (bookingData as any).skipTechRestriction = true;
         }
 
@@ -1231,6 +1267,57 @@ const App: React.FC = () => {
                         onBack={() => setView('welcome')}
                     />
                 );
+
+            case 'special_event_booking': {
+                const eventConfig = specialEventSlug ? getSpecialEventConfig(specialEventSlug) : null;
+                if (!eventConfig) {
+                    return (
+                        <div className="text-center p-10 text-red-500">
+                            Evento no encontrado.
+                        </div>
+                    );
+                }
+                return (
+                    <SpecialEventBooking
+                        config={eventConfig}
+                        onConfirm={(pricing, selectedSlot, selectedTechnique, selectedOption) => {
+                            (window as any).__specialEventPricingOption = selectedOption ?? null;
+                            setTechnique(selectedTechnique);
+                            setExperienceUIState(prev => ({
+                                ...prev,
+                                pricing,
+                                piecesSelected: pricing.pieces,
+                            }));
+                            setBookingDetails(prev => ({
+                                ...prev,
+                                slots: [selectedSlot],
+                                userInfo: null,
+                            }));
+                            setExperienceType('experience');
+                            setIsUserInfoModalOpen(true);
+                        }}
+                        onBack={() => setView('welcome')}
+                        isLoading={experienceUIState.isLoading}
+                    />
+                );
+            }
+
+            case 'special_event_admin': {
+                const adminEventConfig = specialEventSlug ? getSpecialEventConfig(specialEventSlug) : null;
+                if (!adminEventConfig) {
+                    return (
+                        <div className="text-center p-10 text-red-500">
+                            Evento no encontrado.
+                        </div>
+                    );
+                }
+                return (
+                    <SpecialEventAdmin
+                        config={adminEventConfig}
+                        onBack={() => setView('welcome')}
+                    />
+                );
+            }
 
             default:
                 return <WelcomeSelector onSelect={handleWelcomeSelect} />;

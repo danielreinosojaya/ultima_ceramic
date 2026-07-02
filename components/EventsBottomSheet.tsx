@@ -5,7 +5,6 @@ import {
   ArrowRightIcon,
   CalendarIcon,
   ClockIcon,
-  UsersIcon,
 } from '@heroicons/react/24/outline';
 
 type EventCategory = 'experience' | 'course' | 'workshop' | 'open-studio';
@@ -17,17 +16,14 @@ interface SpecialEvent {
   date: string;
   time: string;
   duration: string;
-  spots: number;
-  spotsLeft: number;
   category: EventCategory;
   description: string;
   image: string;
   price: string;
   eventDate: string; // ISO format: YYYY-MM-DD
   url?: string;
-  internalSlug?: string; // For events that navigate within the app (e.g. 'rumcom')
+  internalSlug?: string;
   hideReserveButton?: boolean;
-  hideAvailableSpots?: boolean;
 }
 
 const categoryLabels: Record<EventCategory, string> = {
@@ -53,117 +49,69 @@ interface EventsBottomSheetProps {
 // ── Eventos actuales ──────────────────────────────────────────────────────────
 const SPECIAL_EVENTS: SpecialEvent[] = [
   {
-    id: 'popup-coffee-crew-17-abr',
-    title: 'Pop Up x Coffee Crew',
-    subtitle: 'Entrada libre · Viernes 17 de abril',
-    date: 'Viernes, 17 Abril',
-    time: '15:00',
-    duration: '5 horas',
-    spots: 50,
-    spotsLeft: 50,
+    id: 'desobedecer-al-dolor-16-jul',
+    title: 'Desobedecer al Dolor',
+    subtitle: 'Escritura, poesía y cerámica · Jueves 16 de julio',
+    date: 'Jueves, 16 Julio',
+    time: '10:00',
+    duration: '3 horas',
+    category: 'workshop',
+    description: 'Experiencia guiada por Mayi Gómez y Carolina Massuh: escritura, meditación con aceites esenciales y cerámica para canalizar emociones y darles forma.',
+    image: '/images/events/desobedecer.png',
+    price: '$55 por persona',
+    eventDate: '2026-07-16',
+    internalSlug: 'desobedecer-al-dolor',
+  },
+  {
+    id: 'huella-mascota-21-jul',
+    title: 'Una Huella que Queda para Siempre',
+    subtitle: 'Experiencia con mascotas · Martes 21 de julio',
+    date: 'Martes, 21 Julio',
+    time: '10:00',
+    duration: '10:00 – 18:00',
     category: 'experience',
-    description: 'Una tarde especial con Coffee Crew en el estudio. Ven a explorar nuestra cerámica mientras disfrutas de un buen café. Entrada completamente libre.',
-    image: '/images/events/coffee-crew.jpg',
-    price: 'Entrada libre',
-    eventDate: '2026-04-17',
-    url: 'https://www.instagram.com/p/DWzoajwDltY/?img_index=1',
+    description: 'Plasma la huella de tu compañero de cuatro patas en arcilla. Personalízala con nombre, fecha y detalles. Spot de fotos, marcas auspiciantes y regalitos.',
+    image: '/images/events/perrito.png',
+    price: 'Desde $45',
+    eventDate: '2026-07-21',
+    internalSlug: 'huella-mascota',
+  },
+  {
+    id: 'feria-cidap-alhambra-24-jul',
+    title: 'Feria CIDAP – Alhambra',
+    subtitle: '24 al 26 de julio · Merch y recuerdos para bebés',
+    date: '24 – 26 Julio',
+    time: '10:00',
+    duration: '10:00 – 20:00',
+    category: 'experience',
+    description: 'Stand con merch y precios especiales. Actividad para bebés: marca la manito o piecito en arcilla. Sin reserva — atendemos por orden de llegada. Visítanos temprano.',
+    image: '/images/events/bebe.png',
+    price: 'Por orden de llegada',
+    eventDate: '2026-07-24',
     hideReserveButton: true,
-    hideAvailableSpots: true,
-  },
-  {
-    id: 'aceites-esenciales-19-abr',
-    title: 'Cerámica y Aceites Esenciales',
-    subtitle: 'x Pura Essence · Domingo 19 de abril',
-    date: 'Domingo, 19 Abril',
-    time: '10:00',
-    duration: '2 horas',
-    spots: 12,
-    spotsLeft: 8,
-    category: 'workshop',
-    description: 'Un taller sensorial donde la cerámica se fusiona con los aceites esenciales de Pura Essence y Aceites Esenciales Ecuador. Una experiencia única para cuerpo y mente.',
-    image: '/images/events/aceites-esenciales.jpg',
-    price: '$50 por persona',
-    eventDate: '2026-04-19',
-    url: 'https://www.instagram.com/p/DW6c8SAje2i/?img_index=1',
-  },
-  {
-    id: 'flores-eternas-mama-29-abr',
-    title: 'Flores Eternas para Mamá',
-    subtitle: 'Taller especial · Miércoles 29 de abril',
-    date: 'Miércoles, 29 Abril',
-    time: '10:00',
-    duration: '2 horas',
-    spots: 14,
-    spotsLeft: 10,
-    category: 'workshop',
-    description: 'Crea flores eternas en cerámica como el regalo perfecto para el Día de la Madre. Disponible individual o en pareja, una experiencia llena de amor y creatividad.',
-    image: '/images/events/flores-eternas.jpg',
-    price: 'Desde $70',
-    eventDate: '2026-04-29',
-  },
-  {
-    id: 'spill-the-tea-rum-30-abr',
-    title: 'Spill the Tea x Rum-Com Club',
-    subtitle: 'Colab especial · Jueves 30 de abril',
-    date: 'Jueves, 30 Abril',
-    time: '17:00',
-    duration: '2 horas',
-    spots: 20,
-    spotsLeft: 15,
-    category: 'experience',
-    description: 'Una tarde de conversaciones, cerámica y buena vibra junto al Rum-Com Club. Una colab que no te puedes perder.',
-    image: '/images/events/spill-the-tea.jpg',
-    price: '$45 por persona',
-    eventDate: '2026-04-30',
-    internalSlug: 'rumcom',
-  },
-  {
-    id: 'modelado-jaime-1-may',
-    title: 'Workshop Modelado a Mano',
-    subtitle: 'Con Jaime Aldas de PÁRAMO · Viernes 1 de mayo',
-    date: 'Viernes, 1 Mayo',
-    time: '17:00',
-    duration: '3 horas',
-    spots: 10,
-    spotsLeft: 6,
-    category: 'workshop',
-    description: 'Aprende las técnicas de modelado a mano con el reconocido ceramista Jaime Aldas del colectivo PÁRAMO. Una oportunidad única de aprender de un maestro.',
-    image: '/images/events/modelado-jaime.jpg',
-    price: '$85 por persona',
-    eventDate: '2026-05-01',
-  },
-  {
-    id: 'torno-jaime-3-may',
-    title: 'Workshop Torno Alfarero',
-    subtitle: 'Con Jaime Aldas de PÁRAMO · Domingo 3 de mayo',
-    date: 'Domingo, 3 Mayo',
-    time: '14:00',
-    duration: '3 horas',
-    spots: 8,
-    spotsLeft: 5,
-    category: 'workshop',
-    description: 'Domina el torno alfarero guiado por Jaime Aldas de PÁRAMO. Grupos reducidos para un aprendizaje profundo e íntimo con la arcilla.',
-    image: '/images/events/torno-alfarero.jpg',
-    price: '$120 por persona',
-    eventDate: '2026-05-03',
   },
 ];
 
-// ── Helper: Calcula el evento más próximo (para featured dinámico) ────────────
-function getNextUpcomingEvent(events: SpecialEvent[]): SpecialEvent | undefined {
+// ── Helpers: filtra eventos futuros ─────────────────────────────────────────
+export function getUpcomingEvents(events: SpecialEvent[] = SPECIAL_EVENTS): SpecialEvent[] {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  
-  // Filtrar solo eventos futuros o de hoy
-  const upcomingEvents = events.filter(e => {
+
+  return events.filter(e => {
     const eventDate = new Date(e.eventDate);
     eventDate.setHours(0, 0, 0, 0);
     return eventDate >= today;
   });
-  
+}
+
+export function hasUpcomingEvents(): boolean {
+  return getUpcomingEvents().length > 0;
+}
+
+function getNextUpcomingEvent(events: SpecialEvent[]): SpecialEvent | undefined {
+  const upcomingEvents = getUpcomingEvents(events);
   if (upcomingEvents.length === 0) return undefined;
-  
-  // Retornar el evento con la fecha más cercana
+
   return upcomingEvents.reduce((closest, current) => {
     const currentDate = new Date(current.eventDate);
     const closestDate = new Date(closest.eventDate);
@@ -173,8 +121,6 @@ function getNextUpcomingEvent(events: SpecialEvent[]): SpecialEvent | undefined 
 
 // ── Featured Event Card ────────────────────────────────────────────────────────
 function FeaturedEventCard({ event, onEventClick }: { event: SpecialEvent; onEventClick?: (slug: string) => void }) {
-  const spotsPercent = ((event.spots - event.spotsLeft) / event.spots) * 100;
-  const isAlmostFull = event.spotsLeft <= 3;
   const catColor = categoryColors[event.category];
 
   const handleClick = () => {
@@ -212,14 +158,6 @@ function FeaturedEventCard({ event, onEventClick }: { event: SpecialEvent; onEve
           >
             {categoryLabels[event.category]}
           </span>
-          {isAlmostFull && (
-            <span
-              className="text-xs font-semibold px-3 py-1.5 rounded-full"
-              style={{ background: 'rgba(196,112,78,0.2)', color: '#E8956B', border: '1px solid rgba(196,112,78,0.4)' }}
-            >
-              Solo {event.spotsLeft} lugares
-            </span>
-          )}
         </div>
 
         <div>
@@ -236,12 +174,6 @@ function FeaturedEventCard({ event, onEventClick }: { event: SpecialEvent; onEve
               <ClockIcon className="w-3.5 h-3.5" />
               <span>{event.time} · {event.duration}</span>
             </div>
-            {!event.hideAvailableSpots && (
-              <div className="flex items-center gap-1.5 text-xs" style={{ color: 'rgba(250,245,238,0.8)' }}>
-                <UsersIcon className="w-3.5 h-3.5" />
-                <span>{event.spotsLeft} lugares disponibles</span>
-              </div>
-            )}
           </div>
 
           <div className="flex items-center justify-between">
@@ -258,19 +190,6 @@ function FeaturedEventCard({ event, onEventClick }: { event: SpecialEvent; onEve
               </button>
             )}
           </div>
-
-          <div className="mt-4">
-            <div className="flex justify-between text-xs mb-1.5" style={{ color: 'rgba(250,245,238,0.5)' }}>
-              <span>Disponibilidad</span>
-              <span>{Math.round(spotsPercent)}% ocupado</span>
-            </div>
-            <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(250,245,238,0.1)' }}>
-              <div
-                className="h-full rounded-full transition-all duration-300"
-                style={{ width: `${spotsPercent}%`, background: isAlmostFull ? '#C4704E' : '#6B8C6B' }}
-              />
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -279,7 +198,6 @@ function FeaturedEventCard({ event, onEventClick }: { event: SpecialEvent; onEve
 
 // ── Regular Event Card ─────────────────────────────────────────────────────────
 function RegularEventCard({ event, onEventClick }: { event: SpecialEvent; onEventClick?: (slug: string) => void }) {
-  const isAlmostFull = event.spotsLeft <= 3;
   const catColor = categoryColors[event.category];
 
   const handleClick = () => {
@@ -333,17 +251,14 @@ function RegularEventCard({ event, onEventClick }: { event: SpecialEvent; onEven
 
         <div className="flex items-center justify-between mt-auto">
           <p className="font-bold text-base" style={{ color: '#C4704E' }}>{event.price}</p>
-          {isAlmostFull && (
-            <span className="text-xs font-medium" style={{ color: '#C4704E' }}>
-              Solo {event.spotsLeft} lugares
-            </span>
+          {!event.hideReserveButton && (
+            <button
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95"
+              style={{ background: 'rgba(196,112,78,0.12)', color: '#C4704E', border: '1px solid rgba(196,112,78,0.3)' }}
+            >
+              Reservar
+            </button>
           )}
-          <button
-            className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95"
-            style={{ background: 'rgba(196,112,78,0.12)', color: '#C4704E', border: '1px solid rgba(196,112,78,0.3)' }}
-          >
-            Reservar
-          </button>
         </div>
       </div>
     </div>
@@ -361,9 +276,9 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const sheetRef = useRef<HTMLDivElement>(null);
 
-  // Evento más próximo (dinámico) será el featured
-  const featuredEvent = getNextUpcomingEvent(SPECIAL_EVENTS);
-  const otherEvents = SPECIAL_EVENTS.filter(e => !featuredEvent || e.id !== featuredEvent.id);
+  const upcomingEvents = getUpcomingEvents();
+  const featuredEvent = getNextUpcomingEvent(upcomingEvents);
+  const otherEvents = upcomingEvents.filter(e => !featuredEvent || e.id !== featuredEvent.id);
 
   const filters = [
     { key: 'all', label: 'Todos' },
@@ -508,7 +423,7 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
           className="overflow-y-auto flex-1 p-5"
           style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(196,112,78,0.3) transparent' }}
         >
-          {SPECIAL_EVENTS.length === 0 ? (
+          {upcomingEvents.length === 0 ? (
             <div className="py-16 text-center">
               <p className="text-sm" style={{ color: '#A08060' }}>No hay eventos disponibles por el momento.</p>
             </div>
@@ -539,7 +454,7 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
           style={{ borderTop: '1px solid rgba(196,112,78,0.15)', background: 'rgba(196,112,78,0.03)' }}
         >
           <p className="text-xs" style={{ color: '#A08060' }}>
-            {SPECIAL_EVENTS.length} {SPECIAL_EVENTS.length === 1 ? 'evento disponible' : 'eventos disponibles'}
+            {upcomingEvents.length} {upcomingEvents.length === 1 ? 'evento disponible' : 'eventos disponibles'}
           </p>
           <button
             className="flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95"

@@ -21,6 +21,10 @@
     { "source": "/cuadre", "destination": "/" },
     { "source": "/rumcom", "destination": "/" },
     { "source": "/rumcomadmin", "destination": "/" },
+    { "source": "/desobedecer-al-dolor", "destination": "/" },
+    { "source": "/desobedecer-al-dolor-admin", "destination": "/" },
+    { "source": "/huella-mascota", "destination": "/" },
+    { "source": "/huella-mascota-admin", "destination": "/" },
     { "source": "/alianzas", "destination": "/api/alianzas" },
     { "source": "/api/:path*", "destination": "/api/:path*" }
   ]

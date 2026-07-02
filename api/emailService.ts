@@ -38,11 +38,17 @@ const getProductTypeName = (productType?: string): string => {
   return typeNames[productType || ''] || 'Clase';
 };
 
+import { getSpecialEventDisplayName } from '../config/specialEventConfigs';
+
 // Helper para obtener el nombre del producto/técnica de un booking
 const getBookingDisplayName = (booking: Booking): string => {
-  // 0. Detección especial: Si es una reserva de Rumcom, siempre retornar nombre del evento
-  if ((booking.product?.details as any)?.bookingSource === 'rumcom') {
+  const bookingSource = (booking.product?.details as any)?.bookingSource;
+  if (bookingSource === 'rumcom') {
     return 'Spill the Tea x Rum-Com Club';
+  }
+  const specialEventName = bookingSource ? getSpecialEventDisplayName(bookingSource) : undefined;
+  if (specialEventName) {
+    return specialEventName;
   }
   
   // 1. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
