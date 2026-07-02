@@ -38,7 +38,10 @@ const getProductTypeName = (productType?: string): string => {
   return typeNames[productType || ''] || 'Clase';
 };
 
-import { getSpecialEventDisplayName } from '../config/specialEventConfigs';
+const SPECIAL_EVENT_DISPLAY_NAMES: Record<string, string> = {
+  'desobedecer-al-dolor': 'Desobedecer al Dolor',
+  'huella-mascota': 'Una Huella que Queda para Siempre',
+};
 
 // Helper para obtener el nombre del producto/técnica de un booking
 const getBookingDisplayName = (booking: Booking): string => {
@@ -46,7 +49,7 @@ const getBookingDisplayName = (booking: Booking): string => {
   if (bookingSource === 'rumcom') {
     return 'Spill the Tea x Rum-Com Club';
   }
-  const specialEventName = bookingSource ? getSpecialEventDisplayName(bookingSource) : undefined;
+  const specialEventName = bookingSource ? SPECIAL_EVENT_DISPLAY_NAMES[bookingSource] : undefined;
   if (specialEventName) {
     return specialEventName;
   }
