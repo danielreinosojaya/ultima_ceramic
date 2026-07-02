@@ -328,7 +328,7 @@ import type {
     Delivery, DeliveryStatus, UILabels, RecurringClassSlot, DynamicTimeSlot, SlotDisplayInfo, GroupTechnique, TimeSlot, ExperienceTypeOverrides,
     CorporateEvent, CorporateEventActivityEntry
 } from '../types';
-import { DAY_NAMES, DEFAULT_PRODUCTS } from '../constants';
+import { DAY_NAMES, DEFAULT_PRODUCTS, DEFAULT_POLICIES_TEXT } from '../constants';
 import { getEcuadorToday } from '../utils/formatters';
 
 // --- API Helpers ---
@@ -1753,6 +1753,36 @@ export const getBatchedData = async (keys: string[]): Promise<Record<string, any
     const results = await Promise.all(promises);
     return results.reduce((acc, result) => ({ ...acc, ...result }), {});
 };
+
+// Snapshot local para renderizar la UI de inmediato mientras se hidrata desde la API
+export const getInitialAppData = (): AppData => ({
+    products: [...DEFAULT_PRODUCTS],
+    announcements: [],
+    policies: DEFAULT_POLICIES_TEXT,
+    footerInfo: {
+        whatsapp: '',
+        email: '',
+        instagramHandle: '',
+        address: '',
+        googleMapsLink: '#',
+    },
+    instructors: [],
+    availability: {
+        Sunday: [],
+        Monday: [],
+        Tuesday: [],
+        Wednesday: [],
+        Thursday: [],
+        Friday: [],
+        Saturday: [],
+    },
+    scheduleOverrides: {},
+    classCapacity: { potters_wheel: 0, molding: 0, introductory_class: 0 },
+    capacityMessages: { thresholds: [] },
+    bookings: [],
+    confirmationMessage: { title: '', message: '' },
+    bankDetails: [],
+});
 
 // Función específica para datos esenciales de la app
 export const getEssentialAppData = async () => {

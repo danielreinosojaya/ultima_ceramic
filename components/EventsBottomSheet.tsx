@@ -273,26 +273,11 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
 }) => {
   const [visible, setVisible] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<string>('all');
   const sheetRef = useRef<HTMLDivElement>(null);
 
   const upcomingEvents = getUpcomingEvents();
   const featuredEvent = getNextUpcomingEvent(upcomingEvents);
   const otherEvents = upcomingEvents.filter(e => !featuredEvent || e.id !== featuredEvent.id);
-
-  const filters = [
-    { key: 'all', label: 'Todos' },
-    { key: 'experience', label: 'Experiencias' },
-    { key: 'course', label: 'Cursos' },
-    { key: 'workshop', label: 'Talleres' },
-    { key: 'open-studio', label: 'Open Studio' },
-  ];
-
-  const filteredOther = activeFilter === 'all'
-    ? otherEvents
-    : otherEvents.filter(e => e.category === activeFilter);
-
-  const showFeatured = featuredEvent && (activeFilter === 'all' || activeFilter === featuredEvent.category);
 
   // Animación entrada
   useEffect(() => {
@@ -395,27 +380,6 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
               <XMarkIcon className="w-5 h-5" />
             </button>
           </div>
-
-          {/* Filter tabs */}
-          <div
-            className="relative flex items-center gap-2 mt-4 overflow-x-auto pb-0.5"
-            style={{ scrollbarWidth: 'none' }}
-          >
-            {filters.map(f => (
-              <button
-                key={f.key}
-                onClick={() => setActiveFilter(f.key)}
-                className="flex-shrink-0 text-xs font-semibold px-3.5 py-1.5 rounded-full transition-all duration-200"
-                style={
-                  activeFilter === f.key
-                    ? { background: '#C4704E', color: '#FAF5EE' }
-                    : { background: 'rgba(196,112,78,0.08)', color: '#7A5C45', border: '1px solid rgba(196,112,78,0.15)' }
-                }
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* ── Body ── */}
@@ -429,19 +393,13 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
             </div>
           ) : (
             <div className="space-y-4">
-              {showFeatured && <FeaturedEventCard event={featuredEvent!} onEventClick={onEventClick} />}
+              {featuredEvent && <FeaturedEventCard event={featuredEvent} onEventClick={onEventClick} />}
 
-              {filteredOther.length > 0 && (
+              {otherEvents.length > 0 && (
                 <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
-                  {filteredOther.map(event => (
+                  {otherEvents.map(event => (
                     <RegularEventCard key={event.id} event={event} onEventClick={onEventClick} />
                   ))}
-                </div>
-              )}
-
-              {!showFeatured && filteredOther.length === 0 && (
-                <div className="py-12 text-center">
-                  <p className="text-sm" style={{ color: '#A08060' }}>No hay eventos en esta categoría.</p>
                 </div>
               )}
             </div>

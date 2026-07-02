@@ -56,7 +56,6 @@ const ClientDashboard = lazy(() => import('./components/ClientDashboard').then(m
 
 import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, DeliveryMethod, GiftcardHold, Piece, ExperiencePricing, ExperienceUIState, CourseSchedule, CourseEnrollment, ParticipantTechniqueAssignment, GroupTechnique, AvailableSlot, ClassCapacity, ScheduleOverrides, CapacityMessageSettings, DayKey } from './types';
 import * as dataService from './services/dataService';
-import { DEFAULT_POLICIES_TEXT } from './constants';
 import { slotsRequireNoRefund } from './utils/bookingPolicy';
 import { InstagramIcon } from './components/icons/InstagramIcon';
 import { WhatsAppIcon } from './components/icons/WhatsAppIcon';
@@ -154,8 +153,8 @@ const App: React.FC = () => {
     const [valentineRegistrationId, setValentineRegistrationId] = useState<string | null>(null);
     const [paintingDeliveryId, setPaintingDeliveryId] = useState<string | null>(null);
     
-    const [appData, setAppData] = useState<AppData | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [appData, setAppData] = useState<AppData>(() => dataService.getInitialAppData());
+    const [isHydratingAppData, setIsHydratingAppData] = useState(true);
     const [proofUploadCode, setProofUploadCode] = useState<string | null>(null);
 
     useEffect(() => {
@@ -251,52 +250,45 @@ const App: React.FC = () => {
     }, [view]);
 
     useEffect(() => {
-        const fetchAppData = async () => {
+        const hydrateAppData = async () => {
             try {
-                // Load only essential data for initial render usando batch optimizado
-                console.log('Loading essential app data...');
                 const essentialData = await dataService.getEssentialAppData();
 
-                // Provide safe defaults so the UI doesn't crash when the API is unavailable
                 const safeFooter = {
-                    whatsapp: (essentialData.footerInfo && essentialData.footerInfo.whatsapp) || '',
-                    email: (essentialData.footerInfo && essentialData.footerInfo.email) || '',
-                    instagramHandle: (essentialData.footerInfo && essentialData.footerInfo.instagramHandle) || '',
-                    address: (essentialData.footerInfo && essentialData.footerInfo.address) || '',
-                    googleMapsLink: (essentialData.footerInfo && essentialData.footerInfo.googleMapsLink) || '#',
+                    whatsapp: essentialData.footerInfo?.whatsapp || '',
+                    email: essentialData.footerInfo?.email || '',
+                    instagramHandle: essentialData.footerInfo?.instagramHandle || '',
+                    address: essentialData.footerInfo?.address || '',
+                    googleMapsLink: essentialData.footerInfo?.googleMapsLink || '#',
                 };
 
-                setAppData({
-                    products: essentialData.products || [], 
-                    announcements: essentialData.announcements || [], 
-                    policies: essentialData.policies || DEFAULT_POLICIES_TEXT, 
+                setAppData(prev => ({
+                    ...prev,
+                    products: essentialData.products || prev.products,
+                    announcements: essentialData.announcements || [],
+                    policies: essentialData.policies || prev.policies,
                     footerInfo: safeFooter,
-                    // Initialize empty data structures for lazy loading
-                    instructors: [],
-                    availability: { Sunday: [], Monday: [], Tuesday: [], Wednesday: [], Thursday: [], Friday: [], Saturday: [] },
-                    scheduleOverrides: {},
-                    classCapacity: { potters_wheel: 0, molding: 0, introductory_class: 0 },
-                    capacityMessages: { thresholds: [] },
-                    bookings: [],
-                    confirmationMessage: { title: '', message: '' },
-                    bankDetails: [] as BankDetails[],
-                });
-                
-                console.log('Essential app data loaded successfully');
+                }));
             } catch (error) {
-                console.error("Failed to load initial app data:", error);
-                alert("Error cargando datos: " + (error?.message || error));
+                console.error('Failed to hydrate app data:', error);
             } finally {
-                setLoading(false);
+                setIsHydratingAppData(false);
             }
         };
-        
-        // Use setTimeout to prevent blocking initial render
-        setTimeout(fetchAppData, 0);
+
+        hydrateAppData();
     }, []);
 
-    // Load pieces for experience wizard
+    // Load pieces only when entering experience wizards
     useEffect(() => {
+        const needsPieces = [
+            'piece_experience_wizard',
+            'custom_experience_wizard',
+            'single_class_wizard',
+        ].includes(view);
+
+        if (!needsPieces || pieces.length > 0) return;
+
         const loadPieces = async () => {
             try {
                 const response = await fetch('/api/data?action=listPieces');
@@ -309,7 +301,7 @@ const App: React.FC = () => {
             }
         };
         loadPieces();
-    }, []);
+    }, [view, pieces.length]);
 
     // Check if there are saved bookings and show prompt
     // Solo mostrar si:
@@ -318,7 +310,7 @@ const App: React.FC = () => {
     // 3. Es la primera carga (no fue descartado)
     // 4. No está en una vista diferente ya
     useEffect(() => {
-        if (!hasCheckedMyClasses && !loading && view === 'welcome') {
+        if (!hasCheckedMyClasses && view === 'welcome') {
             const savedClientEmail = localStorage.getItem('clientEmail');
             const clientBookingCode = localStorage.getItem('clientBookingCode');
             const lastBookingId = localStorage.getItem('lastBookingId');
@@ -359,7 +351,7 @@ const App: React.FC = () => {
             checkFutureClasses();
             setHasCheckedMyClasses(true);
         }
-    }, [loading, hasCheckedMyClasses, view]);
+    }, [hasCheckedMyClasses, view]);
 
     // Show Events Bottom Sheet when scroll trigger is activated (only once)
     const eventsModalShownRef = useRef(false);
@@ -807,11 +799,22 @@ const App: React.FC = () => {
 
     const renderView = () => {
         try {
-            if (loading || !appData) {
-                return <div className="text-center p-10">Loading...</div>;
-            }
+            const viewsNeedingFreshData = new Set([
+                'techniques',
+                'packages',
+                'schedule',
+                'summary',
+                'group_experience',
+                'couples_experience',
+            ]);
 
-            console.log("App renderView - current view:", view, "appData available:", !!appData);
+            if (isHydratingAppData && viewsNeedingFreshData.has(view)) {
+                return (
+                    <div className="text-center py-16 text-brand-secondary animate-pulse">
+                        Cargando...
+                    </div>
+                );
+            }
 
         switch (view) {
             case 'giftcard_landing':
@@ -1401,7 +1404,6 @@ const App: React.FC = () => {
         );
     }
 
-    console.log("App - rendering main app, view:", view, "loading:", loading);
     return (
         <AuthProvider>
             <div className="bg-brand-background min-h-screen text-brand-text font-sans flex flex-col">
