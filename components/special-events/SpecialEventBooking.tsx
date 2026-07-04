@@ -160,6 +160,14 @@ export const SpecialEventBooking: React.FC<SpecialEventBookingProps> = ({
                 </div>
               ) : (
                 <div className="bg-[#FAF5EE] rounded-xl p-3 space-y-2">
+                  {tierPricing.tier === 'presale' && (
+                    <span
+                      className="inline-block text-xs font-semibold px-2.5 py-1 rounded-full"
+                      style={{ background: 'rgba(196,112,78,0.15)', color: '#C4704E' }}
+                    >
+                      {tierPricing.tierLabel}
+                    </span>
+                  )}
                   <p className="text-xs text-[#A08060] font-medium">
                     {tierPricing.tier === 'presale' ? 'Precio preventa' : 'Precio'}
                   </p>
@@ -168,7 +176,7 @@ export const SpecialEventBooking: React.FC<SpecialEventBookingProps> = ({
                     <span className="text-sm font-normal text-[#A08060]">por persona</span>
                   </p>
                   {tierPricing.pricingNote && (
-                    <p className="text-xs text-[#7A5C45] leading-relaxed">{tierPricing.pricingNote}</p>
+                    <p className="text-sm text-[#7A5C45] leading-relaxed font-medium">{tierPricing.pricingNote}</p>
                   )}
                 </div>
               )}
@@ -194,6 +202,8 @@ export const SpecialEventBooking: React.FC<SpecialEventBookingProps> = ({
             >
               {config.pricingOptions
                 ? `Reservar — ${resolvedPriceLabel} · $${resolvedPrice}`
+                : tierPricing.tier === 'presale'
+                ? `Reservar preventa $${resolvedPrice} — ${tierPricing.tierLabel.toLowerCase()}`
                 : `Reservar mi lugar — $${resolvedPrice}`}
             </button>
           </>
@@ -233,6 +243,17 @@ export const SpecialEventBooking: React.FC<SpecialEventBookingProps> = ({
                 <div className="flex justify-between py-3 border-b border-gray-100">
                   <span className="text-sm text-[#7A5C45]">Duración</span>
                   <span className="text-sm font-bold text-[#3D2410]">{config.duration}</span>
+                </div>
+                <div className="flex justify-between py-3 border-b border-gray-100">
+                  <span className="text-sm text-[#7A5C45]">Precio</span>
+                  <span className="text-sm font-bold text-[#3D2410] text-right max-w-[60%]">
+                    ${resolvedPrice} por persona
+                    {tierPricing.tier === 'presale' && (
+                      <span className="block text-xs font-normal text-[#A08060] mt-0.5">
+                        {tierPricing.tierLabel}
+                      </span>
+                    )}
+                  </span>
                 </div>
                 <div className="flex justify-between pt-4">
                   <span className="text-base font-bold text-[#3D2410]">Total a pagar</span>

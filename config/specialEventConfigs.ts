@@ -9,6 +9,7 @@ export interface SpecialEventPricingOption {
 
 export interface SpecialEventPricingTier {
   presaleUntil: string; // YYYY-MM-DD inclusive
+  presaleDeadlineLabel: string;
   presalePrice: number;
   regularPrice: number;
 }
@@ -54,6 +55,7 @@ export const SPECIAL_EVENT_CONFIGS: Record<string, SpecialEventConfig> = {
     adminCode: 'DESOBEDECER2026',
     pricingTier: {
       presaleUntil: '2026-07-11',
+      presaleDeadlineLabel: '11 de julio',
       presalePrice: 55,
       regularPrice: 65,
     },
@@ -122,11 +124,12 @@ export function getSpecialEventPricing(
     const isPresale = now <= presaleEnd;
 
     if (isPresale) {
+      const { presaleDeadlineLabel, presalePrice, regularPrice } = config.pricingTier;
       return {
-        price: config.pricingTier.presalePrice,
+        price: presalePrice,
         tier: 'presale',
-        tierLabel: 'Preventa',
-        pricingNote: `Preventa $${config.pricingTier.presalePrice} hasta el 11 de julio. Desde el 12 de julio: $${config.pricingTier.regularPrice}.`,
+        tierLabel: `Preventa hasta el ${presaleDeadlineLabel}`,
+        pricingNote: `Precio preventa de $${presalePrice} válido hasta el ${presaleDeadlineLabel} inclusive. Desde el 12 de julio el precio será $${regularPrice}.`,
       };
     }
 
@@ -134,6 +137,7 @@ export function getSpecialEventPricing(
       price: config.pricingTier.regularPrice,
       tier: 'regular',
       tierLabel: 'Precio regular',
+      pricingNote: `Preventa finalizada. Precio actual: $${config.pricingTier.regularPrice} por persona.`,
     };
   }
 
@@ -145,8 +149,11 @@ export function getSpecialEventPricing(
 }
 
 export function getSpecialEventPriceLabel(config: SpecialEventConfig): string {
-  const { price, tier } = getSpecialEventPricing(config);
-  return tier === 'presale' ? `$${price} preventa` : `$${price} por persona`;
+  const { price, tier, tierLabel } = getSpecialEventPricing(config);
+  if (tier === 'presale') {
+    return `$${price} · ${tierLabel}`;
+  }
+  return `$${price} por persona`;
 }
 
 export function getSpecialEventDisplayName(bookingSource: string): string | undefined {

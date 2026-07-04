@@ -6,7 +6,7 @@ import {
   CalendarIcon,
   ClockIcon,
 } from '@heroicons/react/24/outline';
-import { getSpecialEventConfig, getSpecialEventPriceLabel } from '../config/specialEventConfigs';
+import { getSpecialEventConfig, getSpecialEventPriceLabel, getSpecialEventPricing } from '../config/specialEventConfigs';
 
 type EventCategory = 'experience' | 'course' | 'workshop' | 'open-studio';
 
@@ -34,6 +34,17 @@ function getDisplayPrice(event: SpecialEvent): string {
     }
   }
   return event.price;
+}
+
+function getDisplayPricePrefix(event: SpecialEvent): string {
+  if (event.internalSlug) {
+    const config = getSpecialEventConfig(event.internalSlug);
+    if (config?.pricingTier) {
+      const { tier } = getSpecialEventPricing(config);
+      return tier === 'presale' ? 'Preventa' : 'Precio';
+    }
+  }
+  return 'Desde';
 }
 
 const categoryLabels: Record<EventCategory, string> = {
@@ -67,7 +78,7 @@ const SPECIAL_EVENTS: SpecialEvent[] = [
     category: 'workshop',
     description: 'Experiencia guiada por Mayi Gómez y Carolina Massuh: escritura, meditación con aceites esenciales y cerámica para canalizar emociones y darles forma.',
     image: '/images/events/desobedecer.png',
-    price: '$55 preventa',
+    price: '$55 · preventa hasta el 11 de julio',
     eventDate: '2026-07-16',
     internalSlug: 'desobedecer-al-dolor',
   },
@@ -185,8 +196,8 @@ function FeaturedEventCard({ event, onEventClick }: { event: SpecialEvent; onEve
 
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs mb-1" style={{ color: 'rgba(250,245,238,0.5)' }}>Desde</p>
-              <p className="text-2xl font-bold" style={{ color: '#FAF5EE' }}>{getDisplayPrice(event)}</p>
+              <p className="text-xs mb-1" style={{ color: 'rgba(250,245,238,0.5)' }}>{getDisplayPricePrefix(event)}</p>
+              <p className="text-xl font-bold leading-snug" style={{ color: '#FAF5EE' }}>{getDisplayPrice(event)}</p>
             </div>
             {!event.hideReserveButton && (
               <button
