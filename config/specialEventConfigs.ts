@@ -7,6 +7,12 @@ export interface SpecialEventPricingOption {
   price: number;
 }
 
+export interface SpecialEventPricingTier {
+  presaleUntil: string; // YYYY-MM-DD inclusive
+  presalePrice: number;
+  regularPrice: number;
+}
+
 export interface SpecialEventConfig {
   slug: string;
   bookingSource: string;
@@ -23,6 +29,7 @@ export interface SpecialEventConfig {
   techniqueLabel: string;
   adminCode: string;
   price?: number;
+  pricingTier?: SpecialEventPricingTier;
   pricingOptions?: SpecialEventPricingOption[];
   includes: string[];
   scheduleNote?: string;
@@ -38,14 +45,18 @@ export const SPECIAL_EVENT_CONFIGS: Record<string, SpecialEventConfig> = {
       'Con la guía de Mayi Gómez y Carolina Massuh, transitamos recuerdos y emociones para canalizarlas por medio de la escritura y la cerámica.',
     image: '/images/events/desobedecer.png',
     dateLabel: 'Jueves, 16 Julio 2026',
-    timeLabel: '10:00 AM',
+    timeLabel: '10:00 – 13:00',
     eventDate: '2026-07-16',
     eventTime: '10:00',
     duration: '3 horas',
     technique: 'hand_modeling',
     techniqueLabel: 'Escritura y cerámica',
     adminCode: 'DESOBEDECER2026',
-    price: 55,
+    pricingTier: {
+      presaleUntil: '2026-07-11',
+      presalePrice: 55,
+      regularPrice: 65,
+    },
     includes: [
       'Meditación con aceites esenciales',
       'Materiales incluidos',
@@ -62,10 +73,10 @@ export const SPECIAL_EVENT_CONFIGS: Record<string, SpecialEventConfig> = {
       'Plasma la huella de tu compañero de cuatro patas en arcilla y crea un recuerdo único con su nombre, fecha y detalles especiales.',
     image: '/images/events/perrito.png',
     dateLabel: 'Martes, 21 Julio 2026',
-    timeLabel: '10:00 AM – 6:00 PM',
+    timeLabel: '10:00 – 18:00',
     eventDate: '2026-07-21',
     eventTime: '10:00',
-    duration: 'Horario flexible durante el día',
+    duration: 'Horario flexible',
     technique: 'hand_modeling',
     techniqueLabel: 'Huella en arcilla',
     adminCode: 'HUELLA2026',
@@ -95,6 +106,47 @@ export const SPECIAL_EVENT_CONFIGS: Record<string, SpecialEventConfig> = {
 
 export function getSpecialEventConfig(slug: string): SpecialEventConfig | undefined {
   return SPECIAL_EVENT_CONFIGS[slug];
+}
+
+export function getSpecialEventPricing(
+  config: SpecialEventConfig,
+  now: Date = new Date()
+): {
+  price: number;
+  tier: 'presale' | 'regular';
+  tierLabel: string;
+  pricingNote?: string;
+} {
+  if (config.pricingTier) {
+    const presaleEnd = new Date(`${config.pricingTier.presaleUntil}T23:59:59`);
+    const isPresale = now <= presaleEnd;
+
+    if (isPresale) {
+      return {
+        price: config.pricingTier.presalePrice,
+        tier: 'presale',
+        tierLabel: 'Preventa',
+        pricingNote: `Preventa $${config.pricingTier.presalePrice} hasta el 11 de julio. Desde el 12 de julio: $${config.pricingTier.regularPrice}.`,
+      };
+    }
+
+    return {
+      price: config.pricingTier.regularPrice,
+      tier: 'regular',
+      tierLabel: 'Precio regular',
+    };
+  }
+
+  if (config.price != null) {
+    return { price: config.price, tier: 'regular', tierLabel: 'Precio' };
+  }
+
+  return { price: 0, tier: 'regular', tierLabel: '' };
+}
+
+export function getSpecialEventPriceLabel(config: SpecialEventConfig): string {
+  const { price, tier } = getSpecialEventPricing(config);
+  return tier === 'presale' ? `$${price} preventa` : `$${price} por persona`;
 }
 
 export function getSpecialEventDisplayName(bookingSource: string): string | undefined {

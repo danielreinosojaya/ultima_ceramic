@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { ExperiencePricing, TimeSlot } from '../../types';
 import type { SpecialEventConfig, SpecialEventPricingOption } from '../../config/specialEventConfigs';
+import { getSpecialEventPricing } from '../../config/specialEventConfigs';
 
 export interface SpecialEventBookingProps {
   config: SpecialEventConfig;
@@ -25,10 +26,13 @@ export const SpecialEventBooking: React.FC<SpecialEventBookingProps> = ({
     config.pricingOptions?.[0] ?? null
   );
 
-  const resolvedPrice = config.price ?? selectedOption?.price ?? 0;
+  const tierPricing = getSpecialEventPricing(config);
+  const resolvedPrice = config.pricingOptions
+    ? selectedOption?.price ?? 0
+    : tierPricing.price;
   const resolvedPriceLabel = config.pricingOptions
     ? selectedOption?.label ?? 'Selecciona una opción'
-    : `$${config.price}`;
+    : tierPricing.tierLabel;
 
   const handleReserve = () => {
     if (config.pricingOptions && !selectedOption) return;
@@ -106,7 +110,7 @@ export const SpecialEventBooking: React.FC<SpecialEventBookingProps> = ({
                   <p className="text-sm font-bold text-[#3D2410]">{config.dateLabel}</p>
                 </div>
                 <div className="bg-[#FAF5EE] rounded-xl p-3">
-                  <p className="text-xs text-[#A08060] font-medium">Hora</p>
+                  <p className="text-xs text-[#A08060] font-medium">Horario</p>
                   <p className="text-sm font-bold text-[#3D2410]">{config.timeLabel}</p>
                 </div>
                 <div className="bg-[#FAF5EE] rounded-xl p-3">
@@ -155,12 +159,17 @@ export const SpecialEventBooking: React.FC<SpecialEventBookingProps> = ({
                   })}
                 </div>
               ) : (
-                <div className="bg-[#FAF5EE] rounded-xl p-3">
-                  <p className="text-xs text-[#A08060] font-medium">Precio</p>
+                <div className="bg-[#FAF5EE] rounded-xl p-3 space-y-2">
+                  <p className="text-xs text-[#A08060] font-medium">
+                    {tierPricing.tier === 'presale' ? 'Precio preventa' : 'Precio'}
+                  </p>
                   <p className="text-2xl font-bold text-[#C4704E]">
-                    ${config.price}{' '}
+                    ${resolvedPrice}{' '}
                     <span className="text-sm font-normal text-[#A08060]">por persona</span>
                   </p>
+                  {tierPricing.pricingNote && (
+                    <p className="text-xs text-[#7A5C45] leading-relaxed">{tierPricing.pricingNote}</p>
+                  )}
                 </div>
               )}
             </div>
@@ -210,9 +219,15 @@ export const SpecialEventBooking: React.FC<SpecialEventBookingProps> = ({
                   </div>
                 )}
                 <div className="flex justify-between py-3 border-b border-gray-100">
-                  <span className="text-sm text-[#7A5C45]">Fecha y hora</span>
+                  <span className="text-sm text-[#7A5C45]">Fecha</span>
                   <span className="text-sm font-bold text-[#3D2410] text-right max-w-[60%]">
-                    {config.dateLabel} · {config.timeLabel}
+                    {config.dateLabel}
+                  </span>
+                </div>
+                <div className="flex justify-between py-3 border-b border-gray-100">
+                  <span className="text-sm text-[#7A5C45]">Horario</span>
+                  <span className="text-sm font-bold text-[#3D2410] text-right max-w-[60%]">
+                    {config.timeLabel}
                   </span>
                 </div>
                 <div className="flex justify-between py-3 border-b border-gray-100">

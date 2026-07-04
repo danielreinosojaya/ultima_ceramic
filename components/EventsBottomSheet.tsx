@@ -6,6 +6,7 @@ import {
   CalendarIcon,
   ClockIcon,
 } from '@heroicons/react/24/outline';
+import { getSpecialEventConfig, getSpecialEventPriceLabel } from '../config/specialEventConfigs';
 
 type EventCategory = 'experience' | 'course' | 'workshop' | 'open-studio';
 
@@ -14,8 +15,7 @@ interface SpecialEvent {
   title: string;
   subtitle: string;
   date: string;
-  time: string;
-  duration: string;
+  scheduleLabel: string;
   category: EventCategory;
   description: string;
   image: string;
@@ -24,6 +24,16 @@ interface SpecialEvent {
   url?: string;
   internalSlug?: string;
   hideReserveButton?: boolean;
+}
+
+function getDisplayPrice(event: SpecialEvent): string {
+  if (event.internalSlug) {
+    const config = getSpecialEventConfig(event.internalSlug);
+    if (config?.pricingTier || config?.price != null) {
+      return getSpecialEventPriceLabel(config);
+    }
+  }
+  return event.price;
 }
 
 const categoryLabels: Record<EventCategory, string> = {
@@ -53,12 +63,11 @@ const SPECIAL_EVENTS: SpecialEvent[] = [
     title: 'Desobedecer al Dolor',
     subtitle: 'Escritura, poesía y cerámica · Jueves 16 de julio',
     date: 'Jueves, 16 Julio',
-    time: '10:00',
-    duration: '3 horas',
+    scheduleLabel: '10:00 – 13:00',
     category: 'workshop',
     description: 'Experiencia guiada por Mayi Gómez y Carolina Massuh: escritura, meditación con aceites esenciales y cerámica para canalizar emociones y darles forma.',
     image: '/images/events/desobedecer.png',
-    price: '$55 por persona',
+    price: '$55 preventa',
     eventDate: '2026-07-16',
     internalSlug: 'desobedecer-al-dolor',
   },
@@ -67,8 +76,7 @@ const SPECIAL_EVENTS: SpecialEvent[] = [
     title: 'Una Huella que Queda para Siempre',
     subtitle: 'Experiencia con mascotas · Martes 21 de julio',
     date: 'Martes, 21 Julio',
-    time: '10:00',
-    duration: '10:00 – 18:00',
+    scheduleLabel: '10:00 – 18:00',
     category: 'experience',
     description: 'Plasma la huella de tu compañero de cuatro patas en arcilla. Personalízala con nombre, fecha y detalles. Spot de fotos, marcas auspiciantes y regalitos.',
     image: '/images/events/perrito.png',
@@ -81,8 +89,7 @@ const SPECIAL_EVENTS: SpecialEvent[] = [
     title: 'Feria CIDAP – Alhambra',
     subtitle: '24 al 26 de julio · Merch y recuerdos para bebés',
     date: '24 – 26 Julio',
-    time: '10:00',
-    duration: '10:00 – 20:00',
+    scheduleLabel: '10:00 – 20:00',
     category: 'experience',
     description: 'Stand con merch y precios especiales. Actividad para bebés: marca la manito o piecito en arcilla. Sin reserva — atendemos por orden de llegada. Visítanos temprano.',
     image: '/images/events/bebe.png',
@@ -172,14 +179,14 @@ function FeaturedEventCard({ event, onEventClick }: { event: SpecialEvent; onEve
             </div>
             <div className="flex items-center gap-1.5 text-xs" style={{ color: 'rgba(250,245,238,0.8)' }}>
               <ClockIcon className="w-3.5 h-3.5" />
-              <span>{event.time} · {event.duration}</span>
+              <span>{event.scheduleLabel}</span>
             </div>
           </div>
 
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs mb-1" style={{ color: 'rgba(250,245,238,0.5)' }}>Desde</p>
-              <p className="text-2xl font-bold" style={{ color: '#FAF5EE' }}>{event.price}</p>
+              <p className="text-2xl font-bold" style={{ color: '#FAF5EE' }}>{getDisplayPrice(event)}</p>
             </div>
             {!event.hideReserveButton && (
               <button
@@ -245,12 +252,12 @@ function RegularEventCard({ event, onEventClick }: { event: SpecialEvent; onEven
           </div>
           <div className="flex items-center gap-1.5 text-xs" style={{ color: '#A08060' }}>
             <ClockIcon className="w-3 h-3" />
-            <span>{event.time} · {event.duration}</span>
+            <span>{event.scheduleLabel}</span>
           </div>
         </div>
 
         <div className="flex items-center justify-between mt-auto">
-          <p className="font-bold text-base" style={{ color: '#C4704E' }}>{event.price}</p>
+          <p className="font-bold text-base" style={{ color: '#C4704E' }}>{getDisplayPrice(event)}</p>
           {!event.hideReserveButton && (
             <button
               className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95"
