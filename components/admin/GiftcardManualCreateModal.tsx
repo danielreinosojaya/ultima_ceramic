@@ -1,11 +1,29 @@
 import React, { useState } from 'react';
-import { createGiftcardManual } from '../../services/dataService';
+import { registerPhysicalGiftcard } from '../../services/dataService';
 
 interface GiftcardManualCreateModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSuccess?: () => void;
     adminUser?: string;
+}
+
+const MIN_AMOUNT = 10;
+const MAX_AMOUNT = 500;
+const EXPIRATION_MONTHS = 3;
+
+function normalizeCodeInput(raw: string): string {
+    const trimmed = raw.trim().toUpperCase().replace(/\s+/g, '');
+    if (!trimmed) return '';
+    if (trimmed.startsWith('GC-')) return trimmed;
+    if (trimmed.startsWith('GC')) return `GC-${trimmed.slice(2).replace(/^-/, '')}`;
+    return `GC-${trimmed}`;
+}
+
+function implicitExpirationLabel(from: Date = new Date()): string {
+    const expires = new Date(from);
+    expires.setMonth(expires.getMonth() + EXPIRATION_MONTHS);
+    return expires.toLocaleDateString('es-EC', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps> = ({
@@ -17,22 +35,27 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
-    
-    const [form, setForm] = useState({
-        buyerName: '',
-        buyerEmail: '',
-        recipientName: '',
-        recipientEmail: '',
-        amount: 50,
-        message: ''
-    });
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-        const { name, value } = e.target;
-        setForm(prev => ({
-            ...prev,
-            [name]: name === 'amount' ? Number(value) : value
-        }));
+    const [name, setName] = useState('');
+    const [code, setCode] = useState('');
+    const [amountInput, setAmountInput] = useState('50');
+
+    const implicitExpiresAt = implicitExpirationLabel();
+
+    const parsedAmount = Number(amountInput.replace(/[^0-9.]/g, ''));
+
+    const resetForm = () => {
+        setName('');
+        setCode('');
+        setAmountInput('50');
+        setError(null);
+        setSuccess(false);
+    };
+
+    const handleClose = () => {
+        if (loading) return;
+        resetForm();
+        onClose();
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -42,43 +65,35 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
         setSuccess(false);
 
         try {
-            // Validaciones
-            if (!form.buyerName.trim()) throw new Error('Nombre del comprador es requerido');
-            if (!form.buyerEmail.trim()) throw new Error('Email del comprador es requerido');
-            if (!form.recipientName.trim()) throw new Error('Nombre del destinatario es requerido');
-            if (form.amount < 10 || form.amount > 500) throw new Error('Monto debe estar entre $10 y $500');
+            const trimmedName = name.trim();
+            const normalizedCode = normalizeCodeInput(code);
 
-            const result = await createGiftcardManual(
-                form.buyerName,
-                form.buyerEmail,
-                form.recipientName,
-                form.amount,
-                form.recipientEmail || undefined,
-                undefined,
-                form.message || undefined,
-                adminUser
-            );
+            if (!trimmedName) throw new Error('El nombre es requerido');
+            if (!normalizedCode || normalizedCode === 'GC-') throw new Error('El código es requerido');
+            if (!amountInput.trim()) throw new Error('El valor es requerido');
+            if (!Number.isFinite(parsedAmount) || parsedAmount < MIN_AMOUNT || parsedAmount > MAX_AMOUNT) {
+                throw new Error(`El valor debe estar entre $${MIN_AMOUNT} y $${MAX_AMOUNT}`);
+            }
+
+            const result = await registerPhysicalGiftcard(trimmedName, normalizedCode, parsedAmount, adminUser);
 
             if (result.success) {
                 setSuccess(true);
-                setForm({
-                    buyerName: '',
-                    buyerEmail: '',
-                    recipientName: '',
-                    recipientEmail: '',
-                    amount: 50,
-                    message: ''
-                });
-                
-                // Mostrar código generado
-                if (result.giftcard?.code) {
-                    alert(`✅ Giftcard creada exitosamente!\n\nCódigo: ${result.giftcard.code}\n\nYa puedes escribir este código en la tarjeta física.`);
-                }
-                
-                setTimeout(() => {
-                    onSuccess?.();
-                    onClose();
-                }, 2000);
+                const expiresLabel = result.giftcard?.expiresAt
+                    ? new Date(result.giftcard.expiresAt).toLocaleDateString('es-EC', {
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric',
+                      })
+                    : null;
+
+                window.alert(
+                    `Giftcard física registrada\n\nNombre: ${trimmedName}\nCódigo: ${result.giftcard?.code || normalizedCode}\nValor: $${parsedAmount}\nVence: ${expiresLabel || implicitExpiresAt}`
+                );
+
+                resetForm();
+                onSuccess?.();
+                onClose();
             } else {
                 setError(result.error || 'Error desconocido');
             }
@@ -93,138 +108,102 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
 
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-2xl font-bold text-brand-primary">Crear Giftcard</h2>
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+                <div className="flex justify-between items-center mb-2">
+                    <h2 className="text-2xl font-bold text-brand-primary">Registrar giftcard física</h2>
                     <button
-                        onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 text-2xl"
+                        type="button"
+                        onClick={handleClose}
+                        className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
                         disabled={loading}
+                        aria-label="Cerrar"
                     >
                         ×
                     </button>
                 </div>
 
+                <p className="text-sm text-brand-secondary mb-5">
+                    Nombre, código impreso en la tarjeta y valor. El vencimiento se asigna solo (3 meses desde hoy).
+                </p>
+
                 {success && (
                     <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded-lg">
-                        ✅ Giftcard creada exitosamente
+                        Giftcard registrada correctamente
                     </div>
                 )}
 
                 {error && (
                     <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg">
-                        ❌ {error}
+                        {error}
                     </div>
                 )}
 
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* Buyer Info */}
                     <div>
                         <label className="block text-sm font-semibold text-brand-primary mb-1">
-                            Nombre del Comprador *
+                            Nombre *
                         </label>
                         <input
                             type="text"
-                            name="buyerName"
-                            value={form.buyerName}
-                            onChange={handleChange}
-                            placeholder="Ej: Juan García"
-                            className="w-full px-3 py-2 border border-brand-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
-                            disabled={loading}
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-semibold text-brand-primary mb-1">
-                            Email del Comprador *
-                        </label>
-                        <input
-                            type="email"
-                            name="buyerEmail"
-                            value={form.buyerEmail}
-                            onChange={handleChange}
-                            placeholder="Ej: juan@example.com"
-                            className="w-full px-3 py-2 border border-brand-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
-                            disabled={loading}
-                        />
-                    </div>
-
-                    {/* Recipient Info */}
-                    <div>
-                        <label className="block text-sm font-semibold text-brand-primary mb-1">
-                            Nombre del Destinatario *
-                        </label>
-                        <input
-                            type="text"
-                            name="recipientName"
-                            value={form.recipientName}
-                            onChange={handleChange}
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
                             placeholder="Ej: María López"
                             className="w-full px-3 py-2 border border-brand-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
                             disabled={loading}
+                            autoFocus
                         />
                     </div>
 
                     <div>
                         <label className="block text-sm font-semibold text-brand-primary mb-1">
-                            Email del Destinatario (Opcional)
+                            Código de la tarjeta *
                         </label>
                         <input
-                            type="email"
-                            name="recipientEmail"
-                            value={form.recipientEmail}
-                            onChange={handleChange}
-                            placeholder="Ej: maria@example.com"
-                            className="w-full px-3 py-2 border border-brand-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                            type="text"
+                            value={code}
+                            onChange={(e) => setCode(e.target.value.toUpperCase())}
+                            placeholder="Ej: GC-ABC123"
+                            className="w-full px-3 py-2 border border-brand-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary font-mono tracking-wide"
                             disabled={loading}
                         />
+                        {code.trim() && (
+                            <p className="text-xs text-gray-500 mt-1">
+                                Se registrará como: <span className="font-mono">{normalizeCodeInput(code)}</span>
+                            </p>
+                        )}
                     </div>
 
-                    {/* Amount */}
                     <div>
                         <label className="block text-sm font-semibold text-brand-primary mb-1">
-                            Monto ($) *
+                            Valor ($) *
                         </label>
-                        <select
-                            name="amount"
-                            value={form.amount}
-                            onChange={handleChange}
-                            className="w-full px-3 py-2 border border-brand-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
-                            disabled={loading}
-                        >
-                            <option value={25}>$25</option>
-                            <option value={50}>$50</option>
-                            <option value={75}>$75</option>
-                            <option value={100}>$100</option>
-                            <option value={150}>$150</option>
-                            <option value={200}>$200</option>
-                            <option value={300}>$300</option>
-                            <option value={500}>$500</option>
-                        </select>
-                        <p className="text-xs text-gray-500 mt-1">Rango: $10 - $500</p>
+                        <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                            <input
+                                type="number"
+                                min={MIN_AMOUNT}
+                                max={MAX_AMOUNT}
+                                step={1}
+                                value={amountInput}
+                                onChange={(e) => setAmountInput(e.target.value)}
+                                placeholder="Ej: 100"
+                                className="w-full pl-7 pr-3 py-2 border border-brand-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                                disabled={loading}
+                            />
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">Entre ${MIN_AMOUNT} y ${MAX_AMOUNT}</p>
                     </div>
 
-                    {/* Message */}
-                    <div>
-                        <label className="block text-sm font-semibold text-brand-primary mb-1">
-                            Mensaje (Opcional)
-                        </label>
-                        <textarea
-                            name="message"
-                            value={form.message}
-                            onChange={handleChange}
-                            placeholder="Ej: ¡Espero disfrutes de esta experiencia!"
-                            rows={3}
-                            className="w-full px-3 py-2 border border-brand-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary resize-none"
-                            disabled={loading}
-                        />
+                    <div className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-sm text-gray-600">
+                        <span className="font-medium text-gray-700">Vencimiento:</span>{' '}
+                        {implicitExpiresAt}
+                        <span className="text-xs text-gray-500 ml-1">(automático, 3 meses)</span>
                     </div>
 
-                    {/* Buttons */}
-                    <div className="flex gap-2 mt-6">
+                    <div className="flex gap-2 pt-2">
                         <button
                             type="button"
-                            onClick={onClose}
+                            onClick={handleClose}
                             className="flex-1 px-4 py-2 rounded-lg border border-brand-border text-brand-primary font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50"
                             disabled={loading}
                         >
@@ -235,14 +214,10 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
                             className="flex-1 px-4 py-2 rounded-lg bg-brand-primary text-white font-semibold hover:bg-brand-primary/90 transition-colors disabled:opacity-50"
                             disabled={loading}
                         >
-                            {loading ? 'Creando...' : 'Crear Giftcard'}
+                            {loading ? 'Registrando…' : 'Registrar'}
                         </button>
                     </div>
                 </form>
-
-                <p className="text-xs text-gray-500 mt-4 text-center">
-                    El código se generará automáticamente y se enviará por email
-                </p>
             </div>
         </div>
     );

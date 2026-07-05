@@ -4647,6 +4647,166 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 });
             }
         }
+
+        case 'registerPhysicalGiftcard': {
+            // Admin: registrar giftcard física pre-impresa (nombre + código + valor en tarjeta)
+            if (!checkRateLimit(req, res, 'ip')) {
+                return;
+            }
+
+            const body = req.body || {};
+            const adminUser = req.headers['x-admin-user'] || body.adminUser || 'unknown';
+            const name = String(body.name || '').trim();
+            let code = String(body.code || '').trim().toUpperCase().replace(/\s+/g, '');
+            const amount = Number(body.amount);
+
+            if (!name) {
+                return res.status(400).json({ success: false, error: 'El nombre es requerido' });
+            }
+            if (!code) {
+                return res.status(400).json({ success: false, error: 'El código es requerido' });
+            }
+            if (!code.startsWith('GC-')) {
+                code = code.startsWith('GC') ? `GC-${code.slice(2).replace(/^-/, '')}` : `GC-${code}`;
+            }
+            if (!Number.isFinite(amount) || amount < 10 || amount > 500) {
+                return res.status(400).json({ success: false, error: 'El valor debe estar entre $10 y $500' });
+            }
+
+            try {
+                const { rows: existing } = await sql`SELECT id, balance FROM giftcards WHERE code = ${code} LIMIT 1`;
+                if (existing && existing.length > 0) {
+                    return res.status(409).json({
+                        success: false,
+                        error: `El código ${code} ya está registrado en el sistema`,
+                    });
+                }
+
+                await sql`BEGIN`;
+
+                await sql`
+                    CREATE TABLE IF NOT EXISTS giftcard_requests (
+                        id SERIAL PRIMARY KEY,
+                        buyer_name VARCHAR(100) NOT NULL,
+                        buyer_email VARCHAR(100) NOT NULL,
+                        recipient_name VARCHAR(100) NOT NULL,
+                        recipient_email VARCHAR(100),
+                        recipient_whatsapp VARCHAR(30),
+                        amount NUMERIC NOT NULL,
+                        code VARCHAR(32) NOT NULL,
+                        status VARCHAR(20) DEFAULT 'pending',
+                        created_at TIMESTAMP DEFAULT NOW(),
+                        buyer_message TEXT,
+                        approved_by VARCHAR(100),
+                        approved_at TIMESTAMP,
+                        metadata JSONB
+                    )
+                `;
+
+                const internalEmail = 'fisica@interno.ceramicalma.com';
+                const metadata = {
+                    physical: true,
+                    registeredManually: true,
+                    registeredBy: adminUser,
+                    registeredAt: new Date().toISOString(),
+                };
+
+                const { rows: [request] } = await sql`
+                    INSERT INTO giftcard_requests (
+                        buyer_name, buyer_email, recipient_name, recipient_email,
+                        recipient_whatsapp, amount, code, status, approved_by,
+                        approved_at, metadata
+                    ) VALUES (
+                        ${name},
+                        ${internalEmail},
+                        ${name},
+                        NULL,
+                        NULL,
+                        ${amount},
+                        ${code},
+                        'approved',
+                        ${String(adminUser)},
+                        NOW(),
+                        ${JSON.stringify(metadata)}
+                    )
+                    RETURNING id
+                `;
+
+                await sql`
+                    CREATE TABLE IF NOT EXISTS giftcards (
+                        id SERIAL PRIMARY KEY,
+                        code VARCHAR(32) NOT NULL UNIQUE,
+                        initial_value NUMERIC,
+                        balance NUMERIC,
+                        giftcard_request_id INTEGER,
+                        expires_at TIMESTAMP,
+                        metadata JSONB,
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                `;
+
+                const { rows: [giftcard] } = await sql`
+                    INSERT INTO giftcards (
+                        code, initial_value, balance, giftcard_request_id,
+                        expires_at, metadata
+                    ) VALUES (
+                        ${code},
+                        ${amount},
+                        ${amount},
+                        ${request.id},
+                        NOW() + INTERVAL '3 months',
+                        ${JSON.stringify({ ...metadata, holderName: name })}
+                    )
+                    RETURNING id, code, balance, expires_at
+                `;
+
+                await sql`
+                    CREATE TABLE IF NOT EXISTS giftcard_events (
+                        id SERIAL PRIMARY KEY,
+                        giftcard_request_id INTEGER,
+                        event_type VARCHAR(50),
+                        admin_user VARCHAR(100),
+                        note TEXT,
+                        metadata JSONB,
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                `;
+
+                await sql`
+                    INSERT INTO giftcard_events (
+                        giftcard_request_id, event_type, admin_user,
+                        note, metadata
+                    ) VALUES (
+                        ${request.id},
+                        'registered_physical',
+                        ${String(adminUser)},
+                        ${'Giftcard física registrada: ' + name},
+                        ${JSON.stringify({ code, amount, holderName: name })}
+                    )
+                `;
+
+                await sql`COMMIT`;
+
+                return res.status(200).json({
+                    success: true,
+                    giftcard: {
+                        id: giftcard.id,
+                        code: giftcard.code,
+                        balance: Number(giftcard.balance),
+                        expiresAt: giftcard.expires_at,
+                        requestId: request.id,
+                    },
+                    message: `Giftcard física ${code} registrada`,
+                });
+            } catch (error) {
+                await sql`ROLLBACK`;
+                console.error('registerPhysicalGiftcard error:', error);
+                return res.status(500).json({
+                    success: false,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
+        }
         
         case 'sendTestEmail': {
             // Lightweight test email sender to validate RESEND_API_KEY and EMAIL_FROM at runtime

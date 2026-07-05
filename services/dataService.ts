@@ -128,6 +128,25 @@ export const createGiftcardManual = async (
     }
 };
 
+/** Registra una giftcard física pre-impresa: nombre + código + valor impreso. Vencimiento automático 3 meses. */
+export const registerPhysicalGiftcard = async (
+    name: string,
+    code: string,
+    amount: number,
+    adminUser?: string
+): Promise<{ success: boolean; giftcard?: { id?: number; code?: string; balance?: number; expiresAt?: string }; error?: string }> => {
+    try {
+        const res = await postAction('registerPhysicalGiftcard', { name, code, amount, adminUser });
+        if (res && res.success) {
+            invalidateGiftcardsCache();
+            return { success: true, giftcard: res.giftcard };
+        }
+        return { success: false, error: res?.error || 'No se pudo registrar la giftcard' };
+    } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+};
+
 export const rejectGiftcardRequest = async (
     id: string,
     adminUser: string,
