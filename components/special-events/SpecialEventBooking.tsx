@@ -39,6 +39,19 @@ export const SpecialEventBooking: React.FC<SpecialEventBookingProps> = ({
     setStep('confirm');
   };
 
+  const handleBackToLanding = () => {
+    setStep('landing');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleBack = () => {
+    if (step === 'confirm') {
+      handleBackToLanding();
+      return;
+    }
+    onBack();
+  };
+
   const handleConfirm = () => {
     const pricing: ExperiencePricing = {
       pieces: [],
@@ -73,14 +86,15 @@ export const SpecialEventBooking: React.FC<SpecialEventBookingProps> = ({
         />
 
         <button
-          onClick={onBack}
-          className="absolute top-4 left-4 z-10 px-3 py-2 rounded-lg text-sm font-medium transition-all"
+          type="button"
+          onClick={handleBack}
+          className="absolute top-4 left-4 z-20 px-3 py-2 rounded-lg text-sm font-medium transition-all"
           style={{ background: 'rgba(250,245,238,0.15)', color: '#FAF5EE', backdropFilter: 'blur(8px)' }}
         >
           ← Volver
         </button>
 
-        <div className="relative z-10 p-6 pt-16 flex flex-col justify-end" style={{ minHeight: '340px' }}>
+        <div className="relative z-10 p-6 pt-16 flex flex-col justify-end pointer-events-none" style={{ minHeight: '340px' }}>
           <span
             className="self-start text-xs font-semibold tracking-widest uppercase px-3 py-1.5 rounded-full mb-3"
             style={{ background: '#C4704E', color: '#FAF5EE' }}
@@ -264,7 +278,8 @@ export const SpecialEventBooking: React.FC<SpecialEventBookingProps> = ({
 
             <div className="flex gap-3">
               <button
-                onClick={() => setStep('landing')}
+                type="button"
+                onClick={handleBackToLanding}
                 className="px-5 py-3 rounded-xl border border-gray-300 text-sm font-medium text-[#7A5C45] hover:bg-gray-50 transition-colors"
               >
                 ← Atrás

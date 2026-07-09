@@ -74,6 +74,7 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
     const [optOutBirthday, setOptOutBirthday] = useState(false);
     
     // Invoice state
+    const [needsInvoice, setNeedsInvoice] = useState(false);
     const [invoiceData, setInvoiceData] = useState<InvoiceData>({
         companyName: '', taxId: '', address: '', email: ''
     });
@@ -129,10 +130,12 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
 
         if (!birthday && !optOutBirthday) newErrors.birthday = 'Este campo es obligatorio.';
 
-        if (!invoiceData.companyName.trim()) newErrors.companyName = 'Este campo es obligatorio.';
-        if (!invoiceData.taxId.trim()) newErrors.taxId = 'Este campo es obligatorio.';
-        if (!invoiceData.address.trim()) newErrors.address = 'Este campo es obligatorio.';
-        if (invoiceData.email && !/\S+@\S+\.\S+/.test(invoiceData.email)) newErrors.invoiceEmail = 'El correo electrónico no es válido.';
+        if (needsInvoice) {
+            if (!invoiceData.companyName.trim()) newErrors.companyName = 'Este campo es obligatorio.';
+            if (!invoiceData.taxId.trim()) newErrors.taxId = 'Este campo es obligatorio.';
+            if (!invoiceData.address.trim()) newErrors.address = 'Este campo es obligatorio.';
+            if (invoiceData.email && !/\S+@\S+\.\S+/.test(invoiceData.email)) newErrors.invoiceEmail = 'El correo electrónico no es válido.';
+        }
 
         if (!acceptedPolicies) newErrors.acceptedPolicies = 'Debes aceptar las políticas.';
         if (requiresNoRefundAcceptance && !acceptedNoRefund) newErrors.acceptedNoRefund = 'Debes aceptar la política de no reembolso ni reagendamiento.';
@@ -156,8 +159,10 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
                         countryCode: country.code,
                         birthday: optOutBirthday ? null : birthday
                     },
-                    needsInvoice: true,
-                    invoiceData: { ...invoiceData, email: invoiceData.email || email },
+                    needsInvoice,
+                    invoiceData: needsInvoice
+                        ? { ...invoiceData, email: invoiceData.email || email }
+                        : undefined,
                     acceptedNoRefund: requiresNoRefundAcceptance ? acceptedNoRefund : false
                 }));
             } catch (error) {
@@ -174,10 +179,23 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
     const handleInvoiceDataChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         setInvoiceData(prev => ({ ...prev, [name]: value }));
-    }
-    
-        // El botón solo se deshabilita tras submit exitoso
-        const isSaveDisabled = submitDisabled;
+    };
+
+    const handleInvoiceToggle = (checked: boolean) => {
+        setNeedsInvoice(checked);
+        if (!checked) {
+            setErrors(prev => {
+                const next = { ...prev };
+                delete next.companyName;
+                delete next.taxId;
+                delete next.address;
+                delete next.invoiceEmail;
+                return next;
+            });
+        }
+    };
+
+    const isSaveDisabled = submitDisabled;
 
     return (
         <div
@@ -257,18 +275,39 @@ export const UserInfoModal: React.FC<UserInfoModalProps> = ({ onClose, onSubmit,
 
                     </div>
                     <div className="mt-6 pt-4 border-t border-brand-border space-y-3">
-                        <div className="flex items-start gap-2 bg-blue-50 border-l-4 border-blue-400 p-3 rounded-r-lg text-blue-800">
-                            <InfoCircleIcon className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                            <div>
-                                <h4 className="font-bold text-sm">Facturación Obligatoria</h4>
-                                <p className="text-xs mt-1">Completa los datos para emitir tu factura.</p>
-                            </div>
-                        </div>
-                        <div className="space-y-3 p-3 sm:p-4 border-2 border-brand-border rounded-lg bg-brand-background">
-                            <InputField id="companyName" name="companyName" label="Razón Social o Nombre Completo" value={invoiceData.companyName} onChange={handleInvoiceDataChange} error={errors.companyName} required />
-                            <InputField id="taxId" name="taxId" label="RUC / Cédula" value={invoiceData.taxId} onChange={handleInvoiceDataChange} error={errors.taxId} required />
-                            <InputField id="address" name="address" label="Dirección Fiscal" value={invoiceData.address} onChange={handleInvoiceDataChange} error={errors.address} required />
-                            <InputField id="invoiceEmail" name="email" label="Email de Facturación (opcional)" value={invoiceData.email} onChange={handleInvoiceDataChange} type="email" placeholder="Dejar en blanco para usar el email principal" error={errors.invoiceEmail} />
+                        <div className="border-2 border-brand-border rounded-lg bg-brand-background overflow-hidden">
+                            <label
+                                htmlFor="needs-invoice"
+                                className="flex items-center gap-3 p-3 sm:p-4 cursor-pointer hover:bg-gray-50/80 transition-colors"
+                            >
+                                <input
+                                    id="needs-invoice"
+                                    type="checkbox"
+                                    checked={needsInvoice}
+                                    onChange={(e) => handleInvoiceToggle(e.target.checked)}
+                                    className="h-4 w-4 text-brand-primary border-brand-border rounded focus:ring-brand-primary flex-shrink-0"
+                                />
+                                <div className="flex-1 min-w-0">
+                                    <span className="font-semibold text-sm text-brand-text">Necesito factura</span>
+                                    <p className="text-xs text-brand-secondary mt-0.5">
+                                        Opcional. Marca esta casilla si requieres factura electrónica.
+                                    </p>
+                                </div>
+                                <span
+                                    className={`text-brand-secondary text-lg transition-transform duration-200 flex-shrink-0 ${needsInvoice ? 'rotate-180' : ''}`}
+                                    aria-hidden="true"
+                                >
+                                    ▾
+                                </span>
+                            </label>
+                            {needsInvoice && (
+                                <div className="space-y-3 px-3 sm:px-4 pb-3 sm:pb-4 pt-0 border-t border-brand-border bg-white/60">
+                                    <InputField id="companyName" name="companyName" label="Razón Social o Nombre Completo" value={invoiceData.companyName} onChange={handleInvoiceDataChange} error={errors.companyName} required />
+                                    <InputField id="taxId" name="taxId" label="RUC / Cédula" value={invoiceData.taxId} onChange={handleInvoiceDataChange} error={errors.taxId} required />
+                                    <InputField id="address" name="address" label="Dirección Fiscal" value={invoiceData.address} onChange={handleInvoiceDataChange} error={errors.address} required />
+                                    <InputField id="invoiceEmail" name="email" label="Email de Facturación (opcional)" value={invoiceData.email} onChange={handleInvoiceDataChange} type="email" placeholder="Dejar en blanco para usar el email principal" error={errors.invoiceEmail} />
+                                </div>
+                            )}
                         </div>
                     </div>
                     <div className="mt-6 pt-4 border-t border-brand-border space-y-3">

@@ -376,8 +376,20 @@ const App: React.FC = () => {
             return;
         }
         if (SPECIAL_EVENT_CONFIGS[slug]) {
-            window.location.href = `/${slug}`;
+            setIsEventsModalOpen(false);
+            setSpecialEventSlug(slug);
+            window.history.pushState({}, '', `/${slug}`);
+            setView('special_event_booking');
         }
+    };
+
+    const handleSpecialEventBack = () => {
+        setSpecialEventSlug(null);
+        eventsModalShownRef.current = true;
+        if (window.location.pathname !== '/') {
+            window.history.replaceState({}, '', '/');
+        }
+        setView('welcome');
     };
 
     const handleWelcomeSelect = (userType: 'returning' | 'group_experience' | 'couples_experience' | 'team_building' | 'open_studio' | 'group_class_wizard' | 'single_class_wizard' | 'wheel_course' | 'custom_experience') => {
@@ -1299,7 +1311,7 @@ const App: React.FC = () => {
                             setExperienceType('experience');
                             setIsUserInfoModalOpen(true);
                         }}
-                        onBack={() => setView('welcome')}
+                        onBack={handleSpecialEventBack}
                         isLoading={experienceUIState.isLoading}
                     />
                 );
@@ -1317,7 +1329,7 @@ const App: React.FC = () => {
                 return (
                     <SpecialEventAdmin
                         config={adminEventConfig}
-                        onBack={() => setView('welcome')}
+                        onBack={handleSpecialEventBack}
                     />
                 );
             }

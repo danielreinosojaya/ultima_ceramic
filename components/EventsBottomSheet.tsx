@@ -70,16 +70,16 @@ interface EventsBottomSheetProps {
 // ── Eventos actuales ──────────────────────────────────────────────────────────
 const SPECIAL_EVENTS: SpecialEvent[] = [
   {
-    id: 'desobedecer-al-dolor-16-jul',
+    id: 'desobedecer-al-dolor-19-jul',
     title: 'Desobedecer al Dolor',
-    subtitle: 'Escritura, poesía y cerámica · Jueves 16 de julio',
-    date: 'Jueves, 16 Julio',
+    subtitle: 'Escritura, poesía y cerámica · Domingo 19 de julio',
+    date: 'Domingo, 19 Julio',
     scheduleLabel: '10:00 – 13:00',
     category: 'workshop',
     description: 'Experiencia guiada por Mayi Gómez y Carolina Massuh: escritura, meditación con aceites esenciales y cerámica para canalizar emociones y darles forma.',
     image: '/images/events/desobedecer.png',
     price: '$55 · preventa hasta el 11 de julio',
-    eventDate: '2026-07-16',
+    eventDate: '2026-07-19',
     internalSlug: 'desobedecer-al-dolor',
   },
   {

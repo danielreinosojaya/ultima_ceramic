@@ -45,9 +45,9 @@ export const SPECIAL_EVENT_CONFIGS: Record<string, SpecialEventConfig> = {
     tagline:
       'Con la guía de Mayi Gómez y Carolina Massuh, transitamos recuerdos y emociones para canalizarlas por medio de la escritura y la cerámica.',
     image: '/images/events/desobedecer.png',
-    dateLabel: 'Jueves, 16 Julio 2026',
+    dateLabel: 'Domingo, 19 Julio 2026',
     timeLabel: '10:00 – 13:00',
-    eventDate: '2026-07-16',
+    eventDate: '2026-07-19',
     eventTime: '10:00',
     duration: '3 horas',
     technique: 'hand_modeling',
@@ -89,12 +89,6 @@ export const SPECIAL_EVENT_CONFIGS: Record<string, SpecialEventConfig> = {
         label: '1 huella',
         description: 'Una huella en arcilla personalizada',
         price: 45,
-      },
-      {
-        id: '2-huellas',
-        label: '2 huellas',
-        description: 'Dos huellas (o dos perritos)',
-        price: 55,
       },
     ],
     includes: [
