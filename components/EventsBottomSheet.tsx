@@ -297,12 +297,16 @@ export const EventsBottomSheet: React.FC<EventsBottomSheetProps> = ({
   const featuredEvent = getNextUpcomingEvent(upcomingEvents);
   const otherEvents = upcomingEvents.filter(e => !featuredEvent || e.id !== featuredEvent.id);
 
-  // Animación entrada
+  // Animación entrada / cierre sincronizado con isOpen
   useEffect(() => {
     if (isOpen) {
+      setIsClosing(false);
       const t = setTimeout(() => setVisible(true), 50);
       return () => clearTimeout(t);
     }
+
+    setVisible(false);
+    setIsClosing(false);
   }, [isOpen]);
 
   // Escape key
