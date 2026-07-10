@@ -4649,7 +4649,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         }
 
         case 'registerPhysicalGiftcard': {
-            // Admin: registrar giftcard física pre-impresa (nombre + código + valor en tarjeta)
+            // Admin: registrar giftcard física (nombre + valor; código GC y vencimiento automáticos)
             if (!checkRateLimit(req, res, 'ip')) {
                 return;
             }
@@ -4657,28 +4657,31 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             const body = req.body || {};
             const adminUser = req.headers['x-admin-user'] || body.adminUser || 'unknown';
             const name = String(body.name || '').trim();
-            let code = String(body.code || '').trim().toUpperCase().replace(/\s+/g, '');
             const amount = Number(body.amount);
 
             if (!name) {
                 return res.status(400).json({ success: false, error: 'El nombre es requerido' });
-            }
-            if (!code) {
-                return res.status(400).json({ success: false, error: 'El código es requerido' });
-            }
-            if (!code.startsWith('GC-')) {
-                code = code.startsWith('GC') ? `GC-${code.slice(2).replace(/^-/, '')}` : `GC-${code}`;
             }
             if (!Number.isFinite(amount) || amount < 10 || amount > 500) {
                 return res.status(400).json({ success: false, error: 'El valor debe estar entre $10 y $500' });
             }
 
             try {
-                const { rows: existing } = await sql`SELECT id, balance FROM giftcards WHERE code = ${code} LIMIT 1`;
-                if (existing && existing.length > 0) {
-                    return res.status(409).json({
+                let code = `GC-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+                let attempts = 0;
+                const maxAttempts = 5;
+
+                while (attempts < maxAttempts) {
+                    const { rows: existing } = await sql`SELECT id FROM giftcards WHERE code = ${code} LIMIT 1`;
+                    if (!existing || existing.length === 0) break;
+                    code = `GC-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+                    attempts++;
+                }
+
+                if (attempts >= maxAttempts) {
+                    return res.status(500).json({
                         success: false,
-                        error: `El código ${code} ya está registrado en el sistema`,
+                        error: 'No se pudo generar un código GC único',
                     });
                 }
 

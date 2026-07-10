@@ -12,14 +12,6 @@ const MIN_AMOUNT = 10;
 const MAX_AMOUNT = 500;
 const EXPIRATION_MONTHS = 3;
 
-function normalizeCodeInput(raw: string): string {
-    const trimmed = raw.trim().toUpperCase().replace(/\s+/g, '');
-    if (!trimmed) return '';
-    if (trimmed.startsWith('GC-')) return trimmed;
-    if (trimmed.startsWith('GC')) return `GC-${trimmed.slice(2).replace(/^-/, '')}`;
-    return `GC-${trimmed}`;
-}
-
 function implicitExpirationLabel(from: Date = new Date()): string {
     const expires = new Date(from);
     expires.setMonth(expires.getMonth() + EXPIRATION_MONTHS);
@@ -37,7 +29,6 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
     const [success, setSuccess] = useState(false);
 
     const [name, setName] = useState('');
-    const [code, setCode] = useState('');
     const [amountInput, setAmountInput] = useState('50');
 
     const implicitExpiresAt = implicitExpirationLabel();
@@ -46,7 +37,6 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
 
     const resetForm = () => {
         setName('');
-        setCode('');
         setAmountInput('50');
         setError(null);
         setSuccess(false);
@@ -66,29 +56,28 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
 
         try {
             const trimmedName = name.trim();
-            const normalizedCode = normalizeCodeInput(code);
 
             if (!trimmedName) throw new Error('El nombre es requerido');
-            if (!normalizedCode || normalizedCode === 'GC-') throw new Error('El código es requerido');
             if (!amountInput.trim()) throw new Error('El valor es requerido');
             if (!Number.isFinite(parsedAmount) || parsedAmount < MIN_AMOUNT || parsedAmount > MAX_AMOUNT) {
                 throw new Error(`El valor debe estar entre $${MIN_AMOUNT} y $${MAX_AMOUNT}`);
             }
 
-            const result = await registerPhysicalGiftcard(trimmedName, normalizedCode, parsedAmount, adminUser);
+            const result = await registerPhysicalGiftcard(trimmedName, parsedAmount, adminUser);
 
             if (result.success) {
                 setSuccess(true);
+                const generatedCode = result.giftcard?.code || '';
                 const expiresLabel = result.giftcard?.expiresAt
                     ? new Date(result.giftcard.expiresAt).toLocaleDateString('es-EC', {
                           day: 'numeric',
                           month: 'long',
                           year: 'numeric',
                       })
-                    : null;
+                    : implicitExpiresAt;
 
                 window.alert(
-                    `Giftcard física registrada\n\nNombre: ${trimmedName}\nCódigo: ${result.giftcard?.code || normalizedCode}\nValor: $${parsedAmount}\nVence: ${expiresLabel || implicitExpiresAt}`
+                    `Giftcard física registrada\n\nCódigo: ${generatedCode}\nNombre: ${trimmedName}\nValor: $${parsedAmount}\nVence: ${expiresLabel}\n\nEscribe este código en la tarjeta física.`
                 );
 
                 resetForm();
@@ -123,7 +112,8 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
                 </div>
 
                 <p className="text-sm text-brand-secondary mb-5">
-                    Nombre, código impreso en la tarjeta y valor. El vencimiento se asigna solo (3 meses desde hoy).
+                    Ingresa nombre y valor. El sistema genera el código GC automáticamente y el vencimiento
+                    se asigna solo (3 meses desde hoy).
                 </p>
 
                 {success && (
@@ -156,25 +146,6 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
 
                     <div>
                         <label className="block text-sm font-semibold text-brand-primary mb-1">
-                            Código de la tarjeta *
-                        </label>
-                        <input
-                            type="text"
-                            value={code}
-                            onChange={(e) => setCode(e.target.value.toUpperCase())}
-                            placeholder="Ej: GC-ABC123"
-                            className="w-full px-3 py-2 border border-brand-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary font-mono tracking-wide"
-                            disabled={loading}
-                        />
-                        {code.trim() && (
-                            <p className="text-xs text-gray-500 mt-1">
-                                Se registrará como: <span className="font-mono">{normalizeCodeInput(code)}</span>
-                            </p>
-                        )}
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-semibold text-brand-primary mb-1">
                             Valor ($) *
                         </label>
                         <div className="relative">
@@ -192,6 +163,11 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
                             />
                         </div>
                         <p className="text-xs text-gray-500 mt-1">Entre ${MIN_AMOUNT} y ${MAX_AMOUNT}</p>
+                    </div>
+
+                    <div className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-sm text-gray-600">
+                        <span className="font-medium text-gray-700">Código GC:</span>{' '}
+                        se genera al registrar
                     </div>
 
                     <div className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-sm text-gray-600">
