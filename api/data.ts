@@ -3637,6 +3637,30 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     const initialValue = (typeof g.initial_value === 'number') ? g.initial_value : (g.initial_value ? parseFloat(g.initial_value) : null);
                     const expiresAt = g.expires_at ? new Date(g.expires_at).toISOString() : null;
                     const isExpired = expiresAt ? (new Date() > new Date(expiresAt)) : false;
+
+                    // Enrich with recipient/buyer from linked request (for balance checker UI)
+                    let requestInfo: Record<string, unknown> | undefined;
+                    try {
+                        const requestId = g.giftcard_request_id;
+                        if (requestId) {
+                            const { rows: linkedReq } = await sql`
+                                SELECT recipient_name, recipient_email, buyer_name, buyer_email
+                                FROM giftcard_requests WHERE id = ${requestId} LIMIT 1
+                            `;
+                            if (linkedReq && linkedReq.length > 0) {
+                                const lr = linkedReq[0];
+                                requestInfo = {
+                                    recipientName: lr.recipient_name || '',
+                                    recipientEmail: lr.recipient_email || '',
+                                    buyerName: lr.buyer_name || '',
+                                    buyerEmail: lr.buyer_email || '',
+                                };
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('[validateGiftcard] could not load linked request:', e);
+                    }
+
                     return res.status(200).json({
                         valid: !isExpired,
                         code: g.code,
@@ -3645,7 +3669,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         initialValue: initialValue !== null ? Number(initialValue) : null,
                         expiresAt,
                         status: isExpired ? 'expired' : 'active',
-                        metadata: g.metadata || {}
+                        metadata: g.metadata || {},
+                        ...(requestInfo ? { request: requestInfo } : {}),
                     });
                 }
 

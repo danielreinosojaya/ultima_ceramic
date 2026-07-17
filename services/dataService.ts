@@ -2927,7 +2927,7 @@ export const addSortOrderColumn = async (): Promise<{ success: boolean }> => {
     return result;
 };
 
-// Check giftcard balance by code
+// Check giftcard balance by code (uses validateGiftcard — /api/giftcards does not exist)
 export const checkGiftcardBalance = async (code: string): Promise<{ 
     success: boolean; 
     giftcard?: { 
@@ -2939,13 +2939,48 @@ export const checkGiftcardBalance = async (code: string): Promise<{
     message?: string 
 }> => {
     try {
-        const response = await fetch('/api/giftcards?action=checkBalance', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code })
-        });
-        const data = await response.json();
-        return data;
+        const data = await validateGiftcard(code.trim());
+
+        // Issued giftcard found (active or expired) — API returns numeric balance
+        if (typeof data?.balance === 'number' && (data.giftcardId != null || data.code)) {
+            const req = data.request || {};
+            const meta = data.metadata && typeof data.metadata === 'object' ? data.metadata : {};
+            return {
+                success: true,
+                giftcard: {
+                    balance: Number(data.balance),
+                    beneficiaryName: String(
+                        meta.recipientName || req.recipientName || meta.buyerName || req.buyerName || '—'
+                    ),
+                    beneficiaryEmail: String(
+                        meta.recipientEmail || req.recipientEmail || meta.buyerEmail || req.buyerEmail || '—'
+                    ),
+                    expiresAt: data.expiresAt || '',
+                },
+            };
+        }
+
+        if (data?.reason === 'not_found') {
+            return { success: false, message: 'Giftcard no encontrado' };
+        }
+        if (data?.reason === 'request_found') {
+            const status = (data.request?.status || '').toString();
+            if (status === 'pending') {
+                return { success: false, message: 'Esta giftcard aún está pendiente de aprobación' };
+            }
+            return { success: false, message: 'Giftcard no emitida aún' };
+        }
+        if (data?.reason === 'approved_request_has_issued_code' && data.issuedCode) {
+            return {
+                success: false,
+                message: `Usa el código emitido: ${data.issuedCode}`,
+            };
+        }
+
+        return {
+            success: false,
+            message: data?.error || data?.message || 'Giftcard no encontrado',
+        };
     } catch (error) {
         return { 
             success: false, 
