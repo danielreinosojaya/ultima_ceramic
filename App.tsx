@@ -614,6 +614,11 @@ const App: React.FC = () => {
             bookingData.experiencePricing = experienceUIState.pricing;
         }
 
+        // Clase suelta: siempre 1 participante (evita payloads sin el campo o con valor incorrecto)
+        if (product.type === 'SINGLE_CLASS') {
+            bookingData.participants = 1;
+        }
+
         // Add groupClassMetadata for GROUP_CLASS bookings
         if (product.type === 'GROUP_CLASS') {
             const assignments = (window as any).__groupClassAssignments as ParticipantTechniqueAssignment[] | undefined;

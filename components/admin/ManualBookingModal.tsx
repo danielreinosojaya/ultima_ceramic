@@ -228,7 +228,10 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
       }
       
       if (!selectedSlots.length) throw new Error('Agrega al menos un horario');
-      const participantsCount = commitParticipantsInput(participantsInput);
+      const participantsCount =
+        !isCustomExperience && selectedProduct?.type === 'SINGLE_CLASS'
+          ? 1
+          : commitParticipantsInput(participantsInput);
       if (participantsCount < 1 || participantsCount > 100) {
         throw new Error('Número de participantes debe estar entre 1 y 100');
       }
@@ -286,8 +289,11 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
   const performBookingSubmit = async (adminOverride: boolean, overrideReason: string) => {
     setOverrideInProgress(true);
     try {
-      const participantsCount = commitParticipantsInput(participantsInput);
       const isCustomExperience = selectedProduct === null;
+      const participantsCount =
+        !isCustomExperience && selectedProduct?.type === 'SINGLE_CLASS'
+          ? 1
+          : commitParticipantsInput(participantsInput);
       const firstSlot = selectedSlots[0];
 
       let createdBooking: Booking | null = null;

@@ -8922,20 +8922,27 @@ async function addBookingAction(
 
         if (body.productType === 'SINGLE_CLASS') {
             // ===== VALIDACIÓN PARA SINGLE_CLASS (1 persona) =====
+            // Clase suelta = siempre 1 participante. Normalizar ANTES de validar
+            // (evita fallos por string "1", 2+, null, etc. que llegaban del cliente).
+            const originalParticipants = (body as any).participants;
+            const parsedParticipants = Number.parseInt(String(originalParticipants ?? '1'), 10);
+            if (originalParticipants !== 1 && originalParticipants !== '1' && parsedParticipants !== 1) {
+                console.log(
+                    `[addBookingAction] SINGLE_CLASS: normalizando participants → 1 (recibido: ${JSON.stringify(originalParticipants)}, tipo=${typeof originalParticipants})`
+                );
+            }
+            (body as any).participants = 1;
+            const requestedParticipants = 1;
+
             if (!body.slots || body.slots.length !== 1) {
                 throw new Error('SINGLE_CLASS must have exactly 1 slot');
             }
 
             const slot = body.slots[0];
-            const requestedParticipants = (body as any).participants || 1;
             const requestedTechnique = technique; // Derivada previamente
             const normalizedTime = normalizeTime(slot.time);
             const slotStartMinutes = timeToMinutes(normalizedTime);
             const slotEndMinutes = slotStartMinutes + (2 * 60); // 2 horas
-
-            if (requestedParticipants !== 1) {
-                throw new Error('SINGLE_CLASS debe tener exactamente 1 participante');
-            }
 
             // Validar que no sea lunes (regla de negocio para pintura) - PERO permitir si hay override
             const slotDate = new Date(`${slot.date}T00:00:00`);
@@ -8994,15 +9001,6 @@ async function addBookingAction(
 
             console.log(`[addBookingAction SINGLE_CLASS] ✅ Capacity & rules validated: ${requestedTechnique} on ${slot.date} at ${normalizedTime}, ${slotAvailability.capacity.available} slots available`);
         }
-
-    // 🔒 FAILSAFE: Para SINGLE_CLASS, forzar siempre participants = 1
-    if (body.productType === 'SINGLE_CLASS') {
-      const originalParticipants = (body as any).participants;
-      if (originalParticipants && originalParticipants !== 1) {
-        console.log(`[addBookingAction] SINGLE_CLASS: Forzando participants = 1 (was: ${originalParticipants})`);
-      }
-      (body as any).participants = 1;
-    }
 
     // Calcular reschedule allowance basado en tipo de paquete
     let rescheduleAllowance = 0;
