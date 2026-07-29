@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import * as dataService from '../../services/dataService';
 import { SocialBadge } from '../SocialBadge';
+import { getBusinessStartTimesForDate } from '../../utils/businessHours';
 
 interface DateTimeSelectorProps {
   technique: string;              // 'potters_wheel' | 'hand_modeling' | 'painting'
@@ -66,26 +67,9 @@ export const DateTimeSelector: React.FC<DateTimeSelectorProps> = ({
   // Obtener horarios para la fecha seleccionada
   const timesForSelectedDate = availableSlots.filter(s => s.date === selectedDate);
   
-  // Generar horas disponibles según el día de la semana
+  // Generar horas disponibles según el día / excepciones por fecha
   const getAvailableHours = (dateStr: string): string[] => {
-    const date = parseLocalDate(dateStr);
-    const dayOfWeek = date.getDay();
-
-    const buildSlots = (openStart: number, lastStartHour: number) => {
-      const hours: string[] = [];
-      for (let hour = openStart; hour < lastStartHour; hour++) {
-        for (const min of ['00', '30']) {
-          hours.push(`${String(hour).padStart(2, '0')}:${min}`);
-        }
-      }
-      hours.push(`${String(lastStartHour).padStart(2, '0')}:00`);
-      return hours;
-    };
-
-    if (dayOfWeek === 1) return []; // Lunes cerrado
-    if (dayOfWeek === 0) return buildSlots(10, 15); // Domingo: último start 15:00 (cierre 17:00 - 2h clase)
-    if (dayOfWeek === 6) return buildSlots(10, 18); // Sábado: apertura 10:00, último start 18:00
-    return buildSlots(10, 18); // Martes a Viernes: último start 18:00 (cierre 20:00)
+    return getBusinessStartTimesForDate(dateStr);
   };
 
   const getDaysInMonth = (date: Date) => {

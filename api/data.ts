@@ -62,6 +62,8 @@ import {
 import {
     isClassStartWithinBusinessHours,
     getBusinessHoursRejectionMessage,
+    getBusinessStartTimesForDate,
+    LAST_CLASS_START_BY_DATE,
 } from '../utils/businessHours.js';
 import { checkRateLimit } from './rateLimiter.js';
 import { uploadPhotoToBunny, uploadProofToBunny } from './bunnyUpload.js';
@@ -696,44 +698,6 @@ const isPottersFixedConflict = (candidateStart: number, fixedTimes: number[]) =>
 
     // Bloquear únicamente horarios intermedios que inician DURANTE una clase fija (2h)
     return fixedTimes.some(fixedStart => candidateStart > fixedStart && candidateStart < fixedStart + 120);
-};
-
-const getBusinessHoursForDay = (dayOfWeek: number): string[] => {
-    const hours: string[] = [];
-
-    if (dayOfWeek === 1) return hours; // Lunes cerrado
-
-    // Sábado: 10:00-18:00 (último start 18:00, NO 18:30)
-    if (dayOfWeek === 6) {
-        for (let hour = 10; hour <= 18; hour++) {
-            const mins = hour === 18 ? ['00'] : ['00', '30'];
-            for (const min of mins) {
-                hours.push(`${String(hour).padStart(2, '0')}:${min}`);
-            }
-        }
-        return hours;
-    }
-
-    // Domingo: 10:00-15:00 (último start 15:00 → clase termina a las 17:00 = cierre)
-    if (dayOfWeek === 0) {
-        for (let hour = 10; hour <= 15; hour++) {
-            const mins = hour === 15 ? ['00'] : ['00', '30'];
-            for (const min of mins) {
-                hours.push(`${String(hour).padStart(2, '0')}:${min}`);
-            }
-        }
-        return hours;
-    }
-
-    // Martes-Viernes: 10:00-18:00 (último start 18:00 → clase termina a las 20:00)
-    for (let hour = 10; hour <= 18; hour++) {
-        const mins = hour === 18 ? ['00'] : ['00', '30'];
-        for (const min of mins) {
-            hours.push(`${String(hour).padStart(2, '0')}:${min}`);
-        }
-    }
-
-    return hours;
 };
 
 const computeSlotAvailability = async (
@@ -2174,7 +2138,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         const fixedHandTimes = getFixedSlotTimesForDate(dateStr, dayKey, availability, scheduleOverrides, 'molding');
 
                         // ALWAYS generate ALL candidate times - block individually per rule
-                        const candidateTimes: string[] = getBusinessHoursForDay(currentDate.getDay());
+                        const candidateTimes: string[] = getBusinessStartTimesForDate(dateStr);
 
                         if (candidateTimes.length === 0) continue;
 
@@ -2198,7 +2162,12 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                 pottersTotal = resolveCapacity(dateStr, 'potters_wheel', maxCapacityMap, scheduleOverrides);
 
                                 // Martes (2) y Miércoles (3): torno alfarero último inicio 17:00 (clase 17:00-19:00)
-                                if ((currentDate.getDay() === 2 || currentDate.getDay() === 3) && slotStartMinutes > 17 * 60) {
+                                // Excepción: fechas con último inicio extendido (ej. post-alquiler 18:30).
+                                if (
+                                    (currentDate.getDay() === 2 || currentDate.getDay() === 3)
+                                    && slotStartMinutes > 17 * 60
+                                    && !Object.prototype.hasOwnProperty.call(LAST_CLASS_START_BY_DATE, dateStr)
+                                ) {
                                     pottersBlocked = true;
                                     blockedReason = blockedReason || 'schedule_limit';
                                 }

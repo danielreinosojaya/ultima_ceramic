@@ -349,6 +349,7 @@ import type {
 import { DAY_NAMES, DEFAULT_PRODUCTS, DEFAULT_POLICIES_TEXT } from '../constants';
 import { getEcuadorToday } from '../utils/formatters';
 import { slotOverlapsPrivateEvent } from '../utils/privateEventBlocks';
+import { getMaxClassStartMinutesForDate, getBusinessStartTimesForDate, LAST_CLASS_START_BY_DATE } from '../utils/businessHours';
 
 // --- API Helpers ---
 
@@ -2217,9 +2218,6 @@ const getBookingsForSlot = (date: Date, slot: AvailableSlot, appData: Pick<AppDa
     });
 };
 
-// Domingo: el local cierra a las 17:00 → último slot de inicio permitido: 15:00
-const SUNDAY_LAST_SLOT = '15:00';
-
 export const getAvailableTimesForDate = (date: Date, appData: Pick<AppData, 'availability' | 'scheduleOverrides' | 'classCapacity' | 'bookings'>, technique?: Technique): EnrichedAvailableSlot[] => {
     const dateStr = formatDateToYYYYMMDD(date);
     const dayKey = DAY_NAMES[date.getDay()];
@@ -2232,28 +2230,50 @@ export const getAvailableTimesForDate = (date: Date, appData: Pick<AppData, 'ava
         baseSlots = baseSlots.filter(s => s.technique === technique);
     }
 
+    const toMinutes = (t: string) => {
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + (m || 0);
+    };
+    const normalizeSlotTime = (t: string) => {
+        const [h, m] = t.split(':');
+        return `${h.padStart(2, '0')}:${(m || '00').padStart(2, '0')}`;
+    };
+    const maxStartForDate = getMaxClassStartMinutesForDate(dateStr);
+    const dateOverrideActive = Object.prototype.hasOwnProperty.call(LAST_CLASS_START_BY_DATE, dateStr);
+
     // Filtro domingo: eliminar slots que empiecen después de las 15:00
     // (local cierra 17:00, clases duran 2h → último inicio válido: 15:00)
-    if (date.getDay() === 0) {
-        const toMinutes = (t: string) => {
-            const [h, m] = t.split(':').map(Number);
-            return h * 60 + (m || 0);
-        };
-        baseSlots = baseSlots.filter(s => toMinutes(s.time) <= toMinutes(SUNDAY_LAST_SLOT));
+    if (date.getDay() === 0 && maxStartForDate !== null) {
+        baseSlots = baseSlots.filter(s => toMinutes(s.time) <= maxStartForDate);
     }
 
     // Martes (2) y Miércoles (3): torno alfarero último inicio 17:00, resto 18:00
-    if (date.getDay() === 2 || date.getDay() === 3) {
-        const toMinutes = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0); };
-        baseSlots = baseSlots.filter(s =>
-            s.technique === 'potters_wheel' ? toMinutes(s.time) <= 17 * 60 : toMinutes(s.time) <= 18 * 60
-        );
+    // Excepción: fechas con override de último inicio (ej. 2026-08-05 → 18:30).
+    if ((date.getDay() === 2 || date.getDay() === 3) && maxStartForDate !== null) {
+        baseSlots = baseSlots.filter(s => {
+            if (dateOverrideActive) return toMinutes(s.time) <= maxStartForDate;
+            return s.technique === 'potters_wheel' ? toMinutes(s.time) <= 17 * 60 : toMinutes(s.time) <= 18 * 60;
+        });
     }
 
     // Jueves (4) a Sábado (6): todas las técnicas último inicio 18:00 (clase termina 20:00)
-    if (date.getDay() >= 4 && date.getDay() <= 6) {
-        const toMinutes = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0); };
-        baseSlots = baseSlots.filter(s => toMinutes(s.time) <= 18 * 60);
+    if (date.getDay() >= 4 && date.getDay() <= 6 && maxStartForDate !== null) {
+        baseSlots = baseSlots.filter(s => toMinutes(s.time) <= maxStartForDate);
+    }
+
+    // Si el día tiene último inicio extendido (ej. 18:30), inyectar slots faltantes clonando instructor/técnica del día.
+    if (dateOverrideActive && maxStartForDate !== null && maxStartForDate > 18 * 60) {
+        const eveningTimes = getBusinessStartTimesForDate(dateStr).filter(t => toMinutes(t) > 18 * 60);
+        const techniquesPresent = [...new Set(baseSlots.map(s => s.technique))];
+        for (const tech of techniquesPresent) {
+            const template = [...baseSlots].reverse().find(s => s.technique === tech) || baseSlots[0];
+            if (!template) continue;
+            for (const time of eveningTimes) {
+                if (slotOverlapsPrivateEvent(dateStr, time)) continue;
+                if (baseSlots.some(s => s.technique === tech && normalizeSlotTime(s.time) === normalizeSlotTime(time))) continue;
+                baseSlots.push({ ...template, time });
+            }
+        }
     }
 
     baseSlots = baseSlots.filter(s => !slotOverlapsPrivateEvent(dateStr, s.time));
@@ -3468,6 +3488,12 @@ export const generateTimeSlots = (
         if (override?.slots && override.slots.length > 0) {
             const uniqueTimes = [...new Set(override.slots.map(s => s.time))].sort();
             uniqueTimes.forEach(pushSlot);
+            continue;
+        }
+
+        // Excepción por fecha (ej. 2026-08-05 último inicio 18:30 post-alquiler)
+        if (Object.prototype.hasOwnProperty.call(LAST_CLASS_START_BY_DATE, dateStr)) {
+            getBusinessStartTimesForDate(dateStr).forEach(pushSlot);
             continue;
         }
 

@@ -8,7 +8,7 @@ import {
   isSlotBlockedByExperienceTypeOverride,
   sanitizeExperienceTypeOverrides,
 } from '../../utils/experienceTypeRestrictions';
-import { isClassStartWithinBusinessHours } from '../../utils/businessHours';
+import { isClassStartWithinBusinessHours, getBusinessStartTimesForDate, LAST_CLASS_START_BY_DATE } from '../../utils/businessHours';
 
 // Nombres de días para mapear Date.getDay() a DayKey
 const DAY_KEYS: DayKey[] = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -222,7 +222,11 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
 
     if (dayOfWeek === 1 && !hasOverrideForDate) return []; // Lunes cerrado por defecto, excepto en semanas especiales
     if (dayOfWeek === 1 && isSpecialDayNoRules) return buildSlots(10, 18);
-    const baseHours = dayOfWeek === 0
+
+    // Excepción por fecha (ej. 2026-08-05: último inicio 18:30 tras alquiler)
+    const baseHours = Object.prototype.hasOwnProperty.call(LAST_CLASS_START_BY_DATE, dateStr)
+      ? getBusinessStartTimesForDate(dateStr)
+      : dayOfWeek === 0
       ? buildSlots(10, 15)  // Domingo: último start 15:00 (cierre 17:00 - 2h clase)
       : dayOfWeek === 6
       ? buildSlots(10, 18)  // Sábado: apertura 10:00, último start 18:00
@@ -243,7 +247,12 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     }
     
     // Torno en Martes (2) o Miércoles (3): último inicio 17:00 (clase 17:00-19:00)
-    if (technique === 'potters_wheel' && (dayOfWeek === 2 || dayOfWeek === 3)) {
+    // Excepción: fechas con último inicio extendido (post-alquiler).
+    if (
+      technique === 'potters_wheel'
+      && (dayOfWeek === 2 || dayOfWeek === 3)
+      && !Object.prototype.hasOwnProperty.call(LAST_CLASS_START_BY_DATE, dateStr)
+    ) {
       const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0); };
       const filtered = baseHours.filter(t => toMin(t) <= 17 * 60);
       console.log(`🔒 [Torno Mar/Mié] Filtrado a max 17:00:`, filtered);
