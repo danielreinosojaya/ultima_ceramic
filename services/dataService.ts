@@ -348,6 +348,7 @@ import type {
 } from '../types';
 import { DAY_NAMES, DEFAULT_PRODUCTS, DEFAULT_POLICIES_TEXT } from '../constants';
 import { getEcuadorToday } from '../utils/formatters';
+import { slotOverlapsPrivateEvent } from '../utils/privateEventBlocks';
 
 // --- API Helpers ---
 
@@ -2255,6 +2256,8 @@ export const getAvailableTimesForDate = (date: Date, appData: Pick<AppData, 'ava
         baseSlots = baseSlots.filter(s => toMinutes(s.time) <= 18 * 60);
     }
 
+    baseSlots = baseSlots.filter(s => !slotOverlapsPrivateEvent(dateStr, s.time));
+
     return baseSlots.map(slot => {
         const bookingsForSlot = getBookingsForSlot(date, slot, appData);
         const maxCapacity = override?.capacity ?? (slot.technique === 'molding' ? appData.classCapacity.molding : appData.classCapacity.potters_wheel);
@@ -3424,6 +3427,8 @@ export const generateTimeSlots = (
         const override = scheduleOverrides?.[dateStr];
 
         const pushSlot = (startTime: string) => {
+            if (slotOverlapsPrivateEvent(dateStr, startTime)) return;
+
             const [hour, minute] = startTime.split(':').map(Number);
             const endHour = hour + 2;
             const endTime = `${String(endHour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;

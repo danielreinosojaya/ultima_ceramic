@@ -5419,6 +5419,13 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         error: getBusinessHoursRejectionMessage(newSlot.date),
                     });
                 }
+
+                if (!forceAdminReschedule && slotOverlapsPrivateEvent(newSlot.date, normalizeTime(newSlot.time))) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Lo sentimos, ${newSlot.date} a las ${newSlot.time} no está disponible por un evento privado en el estudio.`,
+                    });
+                }
                 
                 // 2. Validar 72 horas de anticipación (solo para futuro)
                 if (!isRetroactive) {
@@ -8749,6 +8756,19 @@ async function addBookingAction(
       // Si no hay técnica y no se puede derivar, usar fallback
       technique = 'potters_wheel';
       console.log(`[addBookingAction] ADVERTENCIA: technique null, usando fallback "potters_wheel"`);
+    }
+
+    // Bloqueo eventos privados (alquiler de espacio): todas las rutas públicas de reserva
+    if (!adminOverride && body.slots && Array.isArray(body.slots)) {
+      for (const slot of body.slots) {
+        if (!slot?.date || !slot?.time) continue;
+        const normalizedSlotTime = normalizeTime(slot.time);
+        if (slotOverlapsPrivateEvent(slot.date, normalizedSlotTime)) {
+          throw new Error(
+            `Lo sentimos, ${slot.date} a las ${normalizedSlotTime} no está disponible por un evento privado en el estudio.`
+          );
+        }
+      }
     }
 
     if (isCouplesExperience) {

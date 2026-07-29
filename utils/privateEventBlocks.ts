@@ -24,6 +24,12 @@ export const PRIVATE_EVENT_BLOCKS: PrivateEventBlock[] = [
     endTime: '20:00',
     label: 'Evento privado',
   },
+  {
+    date: '2026-08-05',
+    startTime: '15:30',
+    endTime: '18:30',
+    label: 'Alquiler de espacio (evento privado pintura)',
+  },
 ];
 
 function timeToMinutes(time: string): number {
