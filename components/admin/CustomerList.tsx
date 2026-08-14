@@ -120,24 +120,20 @@ const DeliveryBadges: React.FC<{ deliveries?: Delivery[] }> = ({ deliveries }) =
 export const CustomerList: React.FC<CustomerListProps> = ({ customers, onSelectCustomer }) => {
     const [currentPage, setCurrentPage] = React.useState(1);
     const itemsPerPage = 10;
-    
-    console.log('CustomerList - Received customers prop:', customers);
-    console.log('CustomerList - Customers count:', customers.length);
-    console.log('CustomerList - Customers array:', customers);
-    
-    // Calcular paginación
-    const totalPages = Math.ceil(customers.length / itemsPerPage);
+
+    // Al buscar (o cambiar la lista), volver a página 1 para que el resultado global se vea
+    React.useEffect(() => {
+        setCurrentPage(1);
+    }, [customers]);
+
+    const totalPages = Math.max(1, Math.ceil(customers.length / itemsPerPage));
+    React.useEffect(() => {
+        if (currentPage > totalPages) setCurrentPage(1);
+    }, [currentPage, totalPages]);
+
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     const paginatedCustomers = customers.slice(startIndex, endIndex);
-    
-    // Look for Daniel Reinoso specifically
-    const danielCustomer = customers.find(c => 
-        c.userInfo?.firstName?.toLowerCase()?.includes('daniel') ||
-        c.userInfo?.lastName?.toLowerCase()?.includes('reinoso') ||
-        c.email?.toLowerCase()?.includes('daniel')
-    );
-    console.log('CustomerList - Daniel Reinoso found:', danielCustomer);
     
         // --- INTEGRACIÓN GIFT CARD ---
         const renderGiftcardBadge = (customer: any) => {

@@ -11,6 +11,7 @@ import { DeliveryMetrics } from './DeliveryMetrics';
 import { DeliveriesTab } from './DeliveriesTab';
 import { COUNTRIES } from '../../constants';
 import { getClassPackageValidityDays } from '../../utils/classPackageValidity';
+import { customerMatchesSearch } from '../../utils/textSearch';
 
 interface NavigationState {
     tab: AdminTab;
@@ -294,32 +295,91 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
         console.log('CrmDashboard: Loading customers...', searchTerm ? `(search: "${searchTerm}")` : '');
         const term = (searchTerm || '').trim();
 
-        // Con búsqueda: siempre ir al servidor (propCustomers está truncado / sin huérfanos)
+        // Búsqueda GLOBAL en toda la DB (no solo la página visible del CRM)
         if (term.length >= 2) {
             try {
                 setLoading(true);
-                const [fromStandalone, fromPaged] = await Promise.all([
+                const [fromStandalone, fromPaged, allDeliveries] = await Promise.all([
                     dataService.getStandaloneCustomers(term),
                     dataService.getCustomers({ search: term, limit: 100 }),
+                    dataService.getDeliveries().catch(() => [] as any[]),
                 ]);
+
+                const propByEmail = new Map<string, Customer>();
+                (propCustomers || []).forEach((c) => {
+                    const key = (c.email || c.userInfo?.email || '').trim().toLowerCase();
+                    if (key) propByEmail.set(key, c);
+                });
+
+                const bookingsByEmail = new Map<string, Customer>();
+                if (bookings && bookings.length > 0) {
+                    generateCustomersFromBookings(bookings).forEach((c) => {
+                        const key = (c.email || c.userInfo?.email || '').trim().toLowerCase();
+                        if (key) bookingsByEmail.set(key, c);
+                    });
+                }
+
+                const deliveriesByEmail = new Map<string, any[]>();
+                (allDeliveries || []).forEach((d: any) => {
+                    const key = String(d.customerEmail || '').trim().toLowerCase();
+                    if (!key) return;
+                    const list = deliveriesByEmail.get(key) || [];
+                    list.push(d);
+                    deliveriesByEmail.set(key, list);
+                });
+
                 const map = new Map<string, Customer>();
                 const add = (c: Customer) => {
                     const key = (c.email || c.userInfo?.email || '').trim().toLowerCase();
                     if (!key) return;
                     const prev = map.get(key);
+                    const fromProp = propByEmail.get(key);
+                    const fromBookings = bookingsByEmail.get(key);
+                    const hydratedBookings =
+                        (fromBookings?.bookings && fromBookings.bookings.length > 0
+                            ? fromBookings.bookings
+                            : null) ||
+                        (fromProp?.bookings && fromProp.bookings.length > 0
+                            ? fromProp.bookings
+                            : null) ||
+                        (prev?.bookings && prev.bookings.length > 0 ? prev.bookings : null) ||
+                        c.bookings ||
+                        [];
+                    const hydratedDeliveries =
+                        deliveriesByEmail.get(key) ||
+                        fromProp?.deliveries ||
+                        prev?.deliveries ||
+                        c.deliveries ||
+                        [];
+
                     map.set(key, {
                         ...(prev || c),
                         ...c,
                         email: key,
                         userInfo: {
                             ...(prev?.userInfo || {}),
+                            ...(fromProp?.userInfo || {}),
                             ...c.userInfo,
                             email: key,
-                            firstName: c.userInfo?.firstName || prev?.userInfo?.firstName || '',
-                            lastName: c.userInfo?.lastName || prev?.userInfo?.lastName || '',
+                            firstName: c.userInfo?.firstName || fromProp?.userInfo?.firstName || prev?.userInfo?.firstName || '',
+                            lastName: c.userInfo?.lastName || fromProp?.userInfo?.lastName || prev?.userInfo?.lastName || '',
+                            phone: c.userInfo?.phone || fromProp?.userInfo?.phone || prev?.userInfo?.phone || '',
+                            birthday: c.userInfo?.birthday || fromProp?.userInfo?.birthday || prev?.userInfo?.birthday || null,
                         },
-                        totalBookings: Math.max(prev?.totalBookings || 0, c.totalBookings || 0),
-                        totalSpent: Math.max(prev?.totalSpent || 0, c.totalSpent || 0),
+                        bookings: hydratedBookings,
+                        deliveries: hydratedDeliveries,
+                        totalBookings: Math.max(
+                            prev?.totalBookings || 0,
+                            c.totalBookings || 0,
+                            fromBookings?.totalBookings || 0,
+                            hydratedBookings.length
+                        ),
+                        totalSpent: Math.max(prev?.totalSpent || 0, c.totalSpent || 0, fromBookings?.totalSpent || 0),
+                        lastBookingDate:
+                            fromBookings?.lastBookingDate ||
+                            fromProp?.lastBookingDate ||
+                            prev?.lastBookingDate ||
+                            c.lastBookingDate,
                     });
                 };
                 fromStandalone.forEach(add);
@@ -533,23 +593,12 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
             });
         }
         
-        if (searchTerm) {
-            const beforeFilter = filtered.length;
-            const lowercasedTerm = searchTerm.toLowerCase();
-            filtered = filtered.filter(c => {
-                const first = c.userInfo?.firstName?.toLowerCase() ?? '';
-                const last = c.userInfo?.lastName?.toLowerCase() ?? '';
-                const email = (c.userInfo?.email || c.email || '').toLowerCase();
-                const fullName = `${first} ${last}`.trim();
-                return (
-                    first.includes(lowercasedTerm) ||
-                    last.includes(lowercasedTerm) ||
-                    email.includes(lowercasedTerm) ||
-                    fullName.includes(lowercasedTerm) ||
-                    (Array.isArray(c.bookings) && c.bookings.some(b => b?.bookingCode?.toLowerCase?.().includes(lowercasedTerm)))
-                );
-            });
-            void beforeFilter;
+        // Si ya hubo búsqueda server-side (≥2 chars), NO volver a filtrar aquí:
+        // el servidor ya buscó en TODA la base (todas las páginas). Un segundo filtro
+        // local rompía tildes y códigos de reserva.
+        // Con 1 carácter (o mientras espera el debounce), filtrar en memoria sin tildes.
+        if (searchTerm.trim().length > 0 && searchTerm.trim().length < 2) {
+            filtered = filtered.filter((c) => customerMatchesSearch(c, searchTerm));
         }
 
         
@@ -559,6 +608,7 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
             c.email?.toLowerCase().includes('daniel') ||
             c.email?.toLowerCase().includes('reinoso')
         );
+        void danielCustomer;
 
         return filtered;
     }, [customers, searchTerm, filterByClassesRemaining, deliveryFilter]);

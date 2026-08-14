@@ -73,6 +73,7 @@ import {
     areClassPackageSlotsWithinValidity,
     getClassPackageValidityLabel,
 } from '../utils/classPackageValidity.js';
+import { foldSearchText, SQL_ACCENT_FROM, SQL_ACCENT_TO } from '../utils/textSearch.js';
 import {
     isClassStartWithinBusinessHours,
     getBusinessHoursRejectionMessage,
@@ -499,8 +500,9 @@ const generateBookingCode = (): string => {
 };
 
 /**
- * Busca clientes en tabla customers + reservas huérfanas (email en bookings sin fila en customers).
+ * Busca clientes en TODA la tabla customers + reservas huérfanas (no solo la página visible del CRM).
  * También acepta código de reserva (C-ALMA-...). Upsert automático de huérfanos encontrados.
+ * Comparación sin tildes: "Isaias" encuentra "Isaías".
  */
 async function searchCustomersUnified(searchQuery: string, limit = 50): Promise<Array<{
     email: string;
@@ -512,17 +514,28 @@ async function searchCustomersUnified(searchQuery: string, limit = 50): Promise<
 }>> {
     const term = searchQuery.trim();
     if (term.length < 1) return [];
+
+    const folded = foldSearchText(term);
     const searchPattern = `%${term}%`;
+    const foldedPattern = folded ? `%${folded}%` : searchPattern;
     const capped = Math.min(Math.max(limit, 1), 200);
 
+    // translate(...) evita depender de la extensión unaccent en Postgres
     const { rows: fromTable } = await sql`
         SELECT email, first_name, last_name, phone, country_code, birthday
         FROM customers
-        WHERE LOWER(first_name) ILIKE LOWER(${searchPattern})
-           OR LOWER(last_name) ILIKE LOWER(${searchPattern})
-           OR LOWER(email) ILIKE LOWER(${searchPattern})
-           OR LOWER(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, ''))) ILIKE LOWER(${searchPattern})
-           OR LOWER(phone) ILIKE LOWER(${searchPattern})
+        WHERE
+            translate(lower(COALESCE(first_name, '')), ${SQL_ACCENT_FROM}, ${SQL_ACCENT_TO}) LIKE ${foldedPattern}
+            OR translate(lower(COALESCE(last_name, '')), ${SQL_ACCENT_FROM}, ${SQL_ACCENT_TO}) LIKE ${foldedPattern}
+            OR translate(
+                lower(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, ''))),
+                ${SQL_ACCENT_FROM},
+                ${SQL_ACCENT_TO}
+            ) LIKE ${foldedPattern}
+            OR LOWER(email) ILIKE LOWER(${searchPattern})
+            OR translate(lower(COALESCE(email, '')), ${SQL_ACCENT_FROM}, ${SQL_ACCENT_TO}) LIKE ${foldedPattern}
+            OR LOWER(COALESCE(phone, '')) ILIKE LOWER(${searchPattern})
+            OR translate(lower(COALESCE(phone, '')), ${SQL_ACCENT_FROM}, ${SQL_ACCENT_TO}) LIKE ${foldedPattern}
         ORDER BY first_name ASC NULLS LAST, last_name ASC NULLS LAST
         LIMIT ${capped}
     `;
@@ -539,22 +552,21 @@ async function searchCustomersUnified(searchQuery: string, limit = 50): Promise<
         WHERE b.user_info->>'email' IS NOT NULL
           AND TRIM(b.user_info->>'email') <> ''
           AND (
-            LOWER(b.user_info->>'firstName') ILIKE LOWER(${searchPattern})
-            OR LOWER(b.user_info->>'lastName') ILIKE LOWER(${searchPattern})
-            OR LOWER(b.user_info->>'email') ILIKE LOWER(${searchPattern})
-            OR LOWER(CONCAT(COALESCE(b.user_info->>'firstName', ''), ' ', COALESCE(b.user_info->>'lastName', ''))) ILIKE LOWER(${searchPattern})
+            translate(lower(COALESCE(b.user_info->>'firstName', '')), ${SQL_ACCENT_FROM}, ${SQL_ACCENT_TO}) LIKE ${foldedPattern}
+            OR translate(lower(COALESCE(b.user_info->>'lastName', '')), ${SQL_ACCENT_FROM}, ${SQL_ACCENT_TO}) LIKE ${foldedPattern}
+            OR translate(
+                lower(CONCAT(COALESCE(b.user_info->>'firstName', ''), ' ', COALESCE(b.user_info->>'lastName', ''))),
+                ${SQL_ACCENT_FROM},
+                ${SQL_ACCENT_TO}
+            ) LIKE ${foldedPattern}
+            OR LOWER(COALESCE(b.user_info->>'email', '')) ILIKE LOWER(${searchPattern})
+            OR translate(lower(COALESCE(b.user_info->>'email', '')), ${SQL_ACCENT_FROM}, ${SQL_ACCENT_TO}) LIKE ${foldedPattern}
             OR LOWER(COALESCE(b.user_info->>'phone', '')) ILIKE LOWER(${searchPattern})
             OR LOWER(COALESCE(b.booking_code, '')) ILIKE LOWER(${searchPattern})
+            OR translate(lower(COALESCE(b.booking_code, '')), ${SQL_ACCENT_FROM}, ${SQL_ACCENT_TO}) LIKE ${foldedPattern}
           )
         ORDER BY
             LOWER(TRIM(b.user_info->>'email')),
-            CASE
-              WHEN LOWER(b.user_info->>'firstName') ILIKE LOWER(${searchPattern})
-                OR LOWER(b.user_info->>'lastName') ILIKE LOWER(${searchPattern})
-                OR LOWER(CONCAT(COALESCE(b.user_info->>'firstName', ''), ' ', COALESCE(b.user_info->>'lastName', ''))) ILIKE LOWER(${searchPattern})
-                OR LOWER(COALESCE(b.booking_code, '')) ILIKE LOWER(${searchPattern})
-              THEN 0 ELSE 1
-            END,
             b.created_at DESC
         LIMIT ${capped}
     `;

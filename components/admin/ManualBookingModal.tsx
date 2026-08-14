@@ -8,6 +8,7 @@ import { ConfirmAdminOverrideModal } from './ConfirmAdminOverrideModal';
 import { SpaceRentalBookingForm } from './SpaceRentalBookingForm';
 import { COUNTRIES } from '@/constants';
 import { useAdminData } from '../../context/AdminDataContext';
+import { customerMatchesSearch } from '../../utils/textSearch';
 
 interface ManualBookingModalProps {
   isOpen: boolean;
@@ -148,10 +149,9 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
         };
         fromSearch.forEach(add);
         fromStandalone.forEach(add);
-        // También incluir clientes ya cargados en admin (reservas)
+        // También incluir clientes ya cargados en admin (reservas) — sin tildes
         (adminData.customers || []).forEach((c) => {
-          const haystack = `${c.userInfo?.firstName || ''} ${c.userInfo?.lastName || ''} ${c.userInfo?.email || c.email || ''}`.toLowerCase();
-          if (haystack.includes(term.toLowerCase())) add(c);
+          if (customerMatchesSearch(c, term)) add(c);
         });
 
         setSearchResults(Array.from(map.values()).slice(0, 12));

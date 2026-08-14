@@ -418,6 +418,21 @@ Registro ordenado de mejoras implementadas.
 
 ---
 
+## 18. Búsqueda CRM: tildes, pills y búsqueda global
+
+**Qué cambió**
+- Buscar **Isaías** con o sin tilde (`Isaias` / `Isaías`) encuentra al cliente.
+- La búsqueda es **global** (toda la base de clientes), no solo la página del listado donde estés.
+- Al buscar, las pills de clase restante / entrega pendiente **siguen visibles**.
+- Al buscar se vuelve a la **página 1** para que el resultado no quede “escondido” en otra página.
+
+**Dónde se ve**
+- Admin → Clientes (barra de búsqueda).
+
+**Estado:** implementado.
+
+---
+
 ## Pendiente / siguientes
 
 _(Se irán agregando aquí en orden a medida que continúen los cambios.)_
