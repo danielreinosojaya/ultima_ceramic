@@ -38,7 +38,8 @@ export type AppView =
   | 'rumcom_admin'
   | 'special_event_booking'
   | 'special_event_admin'
-  | 'proof_upload';
+  | 'proof_upload'
+  | 'giftcard_redeem_booking';
 export type BookingMode = 'flexible' | 'monthly';
 export type Technique = 'potters_wheel' | 'molding' | 'hand_modeling' | 'painting';
 

@@ -33,9 +33,22 @@ export type GiftcardRequest = {
     metadata?: {
         issuedCode?: string;
         issued_code?: string;
+        scheduled_send_completed?: boolean;
+        scheduled_sent_at?: string;
+        whatsapp_sent_at?: string;
+        deliveryNotice?: {
+            status?: 'sent' | 'failed' | 'skipped' | 'whatsapp_ready' | string;
+            source?: 'cron' | 'admin' | 'approve' | string;
+            method?: 'email' | 'whatsapp' | string;
+            at?: string;
+            error?: string | null;
+            provider?: string | null;
+            providerId?: string | null;
+            seen?: boolean;
+        };
         emailDelivery?: {
             buyer?: { sent: boolean };
-            recipient?: { sent: boolean };
+            recipient?: { sent: boolean; error?: string; provider?: string; providerId?: string };
         };
         voucherUrl?: string;
     };
@@ -96,7 +109,7 @@ export const approveGiftcardRequest = async (
 
 export const createGiftcardManual = async (
     buyerName: string,
-    buyerEmail: string,
+    buyerEmail: string | undefined,
     recipientName: string,
     amount: number,
     recipientEmail?: string,
@@ -107,7 +120,7 @@ export const createGiftcardManual = async (
     try {
         const res = await postAction('createGiftcardManual', {
             buyerName,
-            buyerEmail,
+            buyerEmail: buyerEmail || undefined,
             recipientName,
             amount,
             recipientEmail,
@@ -116,6 +129,7 @@ export const createGiftcardManual = async (
             adminUser
         });
         if (res && res.success) {
+            invalidateGiftcardsCache();
             return {
                 success: true,
                 giftcard: res.giftcard,
@@ -1173,6 +1187,31 @@ export const createGiftcardHold = async (payload: { code?: string; giftcardId?: 
     }
 };
 
+export const applyGiftcardToBooking = async (payload: {
+    bookingCode: string;
+    giftcardCode: string;
+}): Promise<{
+    success: boolean;
+    error?: string;
+    appliedAmount?: number;
+    pendingBalance?: number;
+    giftcardRemaining?: number;
+    isPaid?: boolean;
+    booking?: any;
+}> => {
+    try {
+        const response = await fetch(`/api/data?action=applyGiftcardToBooking`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        return await response.json();
+    } catch (err) {
+        console.error('[dataService.applyGiftcardToBooking] error:', err);
+        return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+};
+
 export const releaseGiftcardHold = async (payload: { holdId: string }): Promise<any> => {
     try {
         const response = await fetch(`/api/data?action=releaseGiftcardHold`, {
@@ -1314,6 +1353,9 @@ export interface BookingPublicInfo {
     isPaid: boolean;
     paymentProofUrl: string | null;
     firstName: string;
+    paidAmount?: number;
+    pendingBalance?: number;
+    giftcardRedeemedAmount?: number;
 }
 
 export const getBookingByCode = async (code: string): Promise<{ success: boolean; booking?: BookingPublicInfo; error?: string }> => {
@@ -3114,7 +3156,7 @@ export const checkGiftcardBalance = async (code: string): Promise<{
 };
 
 // Send giftcard immediately (override scheduling)
-export const sendGiftcardNow = async (requestId: string | number): Promise<{ success: boolean; error?: string }> => {
+export const sendGiftcardNow = async (requestId: string | number): Promise<{ success: boolean; error?: string; message?: string }> => {
     try {
         invalidateGiftcardsCache();
         const response = await fetch('/api/data?action=sendGiftcardNow', {
@@ -3126,6 +3168,19 @@ export const sendGiftcardNow = async (requestId: string | number): Promise<{ suc
         return result;
     } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : 'Error sending giftcard' };
+    }
+};
+
+export const markGiftcardDeliverySeen = async (requestId: string | number): Promise<{ success: boolean }> => {
+    try {
+        const response = await fetch('/api/data?action=markGiftcardDeliverySeen', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requestId }),
+        });
+        return await response.json();
+    } catch {
+        return { success: false };
     }
 };
 

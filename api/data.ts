@@ -81,7 +81,7 @@ import {
 } from '../utils/businessHours.js';
 import { checkRateLimit } from './rateLimiter.js';
 import { uploadPhotoToBunny, uploadProofToBunny } from './bunnyUpload.js';
-import { deliverGiftcardToRecipient } from './utils/giftcardDelivery.js';
+import { deliverGiftcardToRecipient, recordDeliveryNotice } from './utils/giftcardDelivery.js';
 import type {
     Booking,
     ClientNotification,
@@ -2564,7 +2564,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         }
                         const { rows } = await sql`
                             SELECT id, booking_code, status, product, product_type, price, slots,
-                                   payment_proof_url, is_paid, user_info
+                                   payment_proof_url, is_paid, user_info, payment_details, giftcard_redeemed_amount
                             FROM bookings
                             WHERE booking_code = ${bookingCode}
                             LIMIT 1
@@ -2574,6 +2574,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         }
                         const row = rows[0];
                         const parsed = parseBookingFromDB(row);
+                        const paidAmount = (parsed.paymentDetails || []).reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+                        const price = parsed.price || 0;
                         return res.status(200).json({
                             success: true,
                             booking: {
@@ -2583,10 +2585,13 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                 productType: parsed.productType,
                                 productName: parsed.product?.name || parsed.productType || '',
                                 slots: parsed.slots || [],
-                                price: parsed.price || 0,
+                                price,
                                 isPaid: parsed.isPaid || false,
                                 paymentProofUrl: parsed.paymentProofUrl || null,
                                 firstName: parsed.userInfo?.firstName || '',
+                                paidAmount,
+                                pendingBalance: Math.max(0, price - paidAmount),
+                                giftcardRedeemedAmount: Number(parsed.giftcardRedeemedAmount) || 0,
                             }
                         });
                     } catch (error) {
@@ -3974,6 +3979,181 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 return res.status(500).json({ success: false, error: err instanceof Error ? err.message : String(err) });
             }
         }
+
+        case 'applyGiftcardToBooking': {
+            if (!checkRateLimit(req, res, 'ip')) {
+                return;
+            }
+            const body = req.body || {};
+            const bookingCode = String(body.bookingCode || body.booking_code || '').toUpperCase().trim();
+            const giftcardCode = String(body.giftcardCode || body.code || '').trim();
+            if (!bookingCode) {
+                return res.status(400).json({ success: false, error: 'El código de reserva es obligatorio' });
+            }
+            if (!giftcardCode) {
+                return res.status(400).json({ success: false, error: 'El código de gift card es obligatorio' });
+            }
+
+            try {
+                await sql`BEGIN`;
+
+                const { rows: bookingRows } = await sql`
+                    SELECT * FROM bookings WHERE booking_code = ${bookingCode} LIMIT 1 FOR UPDATE
+                `;
+                if (!bookingRows.length) {
+                    await sql`ROLLBACK`;
+                    return res.status(404).json({ success: false, error: 'Reserva no encontrada' });
+                }
+                const bookingRow = bookingRows[0];
+                const status = String(bookingRow.status || 'active');
+                if (status === 'expired') {
+                    await sql`ROLLBACK`;
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Esta pre-reserva expiró. Contáctanos para reactivar el cupo y aplicar la gift card.',
+                    });
+                }
+
+                const parsedBooking = parseBookingFromDB(bookingRow);
+                const currentPayments = Array.isArray(parsedBooking.paymentDetails) ? [...parsedBooking.paymentDetails] : [];
+                const price = Number(parsedBooking.price || bookingRow.price || 0);
+                const alreadyPaid = currentPayments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+                const pending = Math.max(0, price - alreadyPaid);
+                if (pending <= 0.009) {
+                    await sql`ROLLBACK`;
+                    return res.status(400).json({ success: false, error: 'Esta reserva ya está pagada', isPaid: true, pendingBalance: 0 });
+                }
+
+                const { rows: gcRows } = await sql`
+                    SELECT * FROM giftcards WHERE code = ${giftcardCode} LIMIT 1 FOR UPDATE
+                `;
+                if (!gcRows.length) {
+                    await sql`ROLLBACK`;
+                    return res.status(404).json({ success: false, error: 'Gift card no encontrada' });
+                }
+                const giftcardRow = gcRows[0];
+                const expiresAt = giftcardRow.expires_at ? new Date(giftcardRow.expires_at) : null;
+                if (expiresAt && expiresAt < new Date()) {
+                    await sql`ROLLBACK`;
+                    return res.status(400).json({ success: false, error: 'Esta gift card está vencida' });
+                }
+
+                const gid = String(giftcardRow.id);
+                await sql`
+                    DELETE FROM giftcard_holds
+                    WHERE giftcard_id = ${gid} AND expires_at <= NOW()
+                `;
+                const { rows: [holdSumRow] } = await sql`
+                    SELECT COALESCE(SUM(amount), 0) AS total_holds
+                    FROM giftcard_holds
+                    WHERE giftcard_id = ${gid} AND expires_at > NOW()
+                `;
+                const balance = Number(giftcardRow.balance || 0);
+                const totalHolds = Number(holdSumRow?.total_holds || 0);
+                const available = Math.max(0, balance - totalHolds);
+                if (available <= 0.009) {
+                    await sql`ROLLBACK`;
+                    return res.status(400).json({
+                        success: false,
+                        error: totalHolds > 0
+                            ? 'El saldo está retenido en otra reserva. Espera unos minutos o contacta soporte.'
+                            : 'Esta gift card no tiene saldo disponible',
+                        giftcardRemaining: available,
+                    });
+                }
+
+                const appliedAmount = Math.min(available, pending);
+                const newBalance = Number((balance - appliedAmount).toFixed(2));
+                await sql`UPDATE giftcards SET balance = ${newBalance} WHERE id = ${giftcardRow.id}`;
+
+                const paymentId = generatePaymentId();
+                const paymentDetails = [...currentPayments, {
+                    id: paymentId,
+                    amount: appliedAmount,
+                    method: 'Giftcard',
+                    receivedAt: new Date().toISOString(),
+                    giftcardAmount: appliedAmount,
+                    giftcardId: gid,
+                    metadata: { giftcardCode: giftcardRow.code, source: 'client_virtual_redeem' },
+                }];
+                const totalPaid = alreadyPaid + appliedAmount;
+                const isPaid = totalPaid + 0.009 >= price;
+                const prevRedeemed = Number(bookingRow.giftcard_redeemed_amount || parsedBooking.giftcardRedeemedAmount || 0);
+                const newRedeemed = Number((prevRedeemed + appliedAmount).toFixed(2));
+
+                const { rows: [updatedBookingRow] } = await sql`
+                    UPDATE bookings
+                    SET payment_details = ${JSON.stringify(paymentDetails)}::jsonb,
+                        is_paid = ${isPaid},
+                        status = CASE WHEN ${isPaid} THEN 'confirmed' ELSE status END,
+                        giftcard_redeemed_amount = ${newRedeemed},
+                        giftcard_id = ${gid}
+                    WHERE id = ${bookingRow.id}
+                    RETURNING *
+                `;
+
+                try {
+                    await sql`
+                        INSERT INTO giftcard_audit (
+                            id, giftcard_id, event_type, amount, metadata, created_at
+                        ) VALUES (
+                            uuid_generate_v4(),
+                            ${gid},
+                            'redeemed_on_booking',
+                            ${appliedAmount},
+                            ${JSON.stringify({
+                                bookingCode,
+                                bookingId: String(bookingRow.id),
+                                pendingBefore: pending,
+                                pendingAfter: Math.max(0, price - totalPaid),
+                                giftcardRemaining: newBalance,
+                                source: 'applyGiftcardToBooking',
+                            })}::jsonb,
+                            NOW()
+                        )
+                    `;
+                } catch (auditErr) {
+                    console.warn('[applyGiftcardToBooking] audit insert failed:', auditErr);
+                }
+
+                await sql`COMMIT`;
+
+                const updated = parseBookingFromDB(updatedBookingRow);
+                const pendingBalance = Math.max(0, price - totalPaid);
+
+                if (isPaid) {
+                    try {
+                        await emailService.sendPaymentReceiptEmail(updated, paymentDetails[paymentDetails.length - 1]);
+                    } catch (emailErr) {
+                        console.warn('[applyGiftcardToBooking] receipt email failed:', emailErr);
+                    }
+                }
+
+                return res.status(200).json({
+                    success: true,
+                    appliedAmount,
+                    pendingBalance,
+                    giftcardRemaining: newBalance,
+                    isPaid,
+                    booking: {
+                        bookingCode: updated.bookingCode,
+                        status: updated.status,
+                        isPaid: updated.isPaid,
+                        price,
+                        paidAmount: totalPaid,
+                        giftcardRedeemedAmount: newRedeemed,
+                    },
+                });
+            } catch (err) {
+                try { await sql`ROLLBACK`; } catch { /* ignore */ }
+                console.error('[applyGiftcardToBooking] error:', err);
+                return res.status(500).json({
+                    success: false,
+                    error: err instanceof Error ? err.message : 'No se pudo aplicar la gift card',
+                });
+            }
+        }
+
         case 'listGiftcardRequests': {
             // Devuelve todas las solicitudes de giftcard
             try {
@@ -4328,7 +4508,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     // Envío automático al destinatario si no está programado para después
                     if (!scheduledSendAt) {
                         try {
-                            recipientDeliveryResult = await deliverGiftcardToRecipient(updated, code, id);
+                            recipientDeliveryResult = await deliverGiftcardToRecipient(updated, code, id, 'approve');
                             if (recipientDeliveryResult.sent) {
                                 await sql`UPDATE giftcard_requests SET status = 'delivered' WHERE id = ${id}`;
                             } else if (!recipientDeliveryResult.sent) {
@@ -4340,6 +4520,17 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                                 sent: false,
                                 error: recipientErr instanceof Error ? recipientErr.message : String(recipientErr)
                             };
+                            try {
+                                await recordDeliveryNotice(id, {
+                                    status: 'failed',
+                                    source: 'approve',
+                                    method: 'email',
+                                    error: recipientDeliveryResult.error,
+                                    provider: 'resend',
+                                });
+                            } catch (noticeErr) {
+                                console.warn('[approveGiftcardRequest] Could not persist delivery notice:', noticeErr);
+                            }
                         }
                     }
 
@@ -4538,7 +4729,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     return res.status(400).json({ success: false, error: 'La giftcard debe estar aprobada antes de enviar' });
                 }
 
-                const delivery = await deliverGiftcardToRecipient(request, issuedCode, requestId);
+                const delivery = await deliverGiftcardToRecipient(request, issuedCode, requestId, 'admin');
 
                 if (!delivery.sent) {
                     return res.status(400).json({
@@ -4559,11 +4750,49 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     success: true,
                     message: delivery.method === 'whatsapp'
                         ? 'Enlace de WhatsApp generado. Ábrelo desde el panel para enviar al destinatario.'
-                        : 'Giftcard enviada al destinatario por email',
+                        : 'Giftcard enviada al destinatario por email (Resend)',
                     delivery
                 });
             } catch (error) {
                 console.error('[sendGiftcardNow] Error:', error);
+                try {
+                    if (requestId) {
+                        await recordDeliveryNotice(requestId, {
+                            status: 'failed',
+                            source: 'admin',
+                            method: 'email',
+                            error: error instanceof Error ? error.message : String(error),
+                            provider: 'resend',
+                        });
+                    }
+                } catch (noticeErr) {
+                    console.warn('[sendGiftcardNow] Could not persist delivery notice:', noticeErr);
+                }
+                return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+            }
+        }
+
+        case 'markGiftcardDeliverySeen': {
+            const body = req.body || {};
+            const requestId = body.requestId;
+            if (!requestId) {
+                return res.status(400).json({ success: false, error: 'requestId is required' });
+            }
+            try {
+                await sql`
+                    UPDATE giftcard_requests
+                    SET metadata = jsonb_set(
+                        COALESCE(metadata, '{}'::jsonb),
+                        '{deliveryNotice,seen}',
+                        'true'::jsonb,
+                        true
+                    )
+                    WHERE id = ${requestId}
+                      AND metadata ? 'deliveryNotice'
+                `;
+                return res.status(200).json({ success: true });
+            } catch (error) {
+                console.error('[markGiftcardDeliverySeen] Error:', error);
                 return res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
             }
         }
@@ -4578,11 +4807,11 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             const body = req.body || {};
             const adminUser = req.headers['x-admin-user'] || body.adminUser || 'unknown';
             
-            // Validaciones
-            if (!body.buyerName || !body.buyerEmail || !body.recipientName || !body.amount) {
+            // Validaciones: admin puede crear sin pasar por el portal (email del comprador opcional)
+            if (!body.recipientName || !body.amount) {
                 return res.status(400).json({ 
                     success: false, 
-                    error: 'buyerName, buyerEmail, recipientName, amount son requeridos' 
+                    error: 'recipientName y amount son requeridos' 
                 });
             }
             
@@ -4594,18 +4823,17 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             }
             
             try {
-                // Generar código único
-                let code = generateGiftcardCode();
+                const makeGc = () => `GC-${generateGiftcardCode().slice(0, 6)}`;
+                let code = makeGc();
                 let attempts = 0;
                 const maxAttempts = 5;
                 
-                // Asegurar que el código sea único
                 while (attempts < maxAttempts) {
                     const { rows: existing } = await sql`SELECT id FROM giftcards WHERE code = ${code} LIMIT 1`;
                     if (!existing || existing.length === 0) {
-                        break; // Código único encontrado
+                        break;
                     }
-                    code = generateGiftcardCode();
+                    code = makeGc();
                     attempts++;
                 }
                 
@@ -4638,27 +4866,30 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     )
                 `;
                 
-                // 2. Crear solicitud con status 'manual' (bypass approval)
+                // 2. Crear solicitud ya aprobada + código de canje en metadata
+                const gifRef = `GIF-ADM-${code.replace(/^GC-/, '')}`;
                 const { rows: [request] } = await sql`
                     INSERT INTO giftcard_requests (
                         buyer_name, buyer_email, recipient_name, recipient_email, 
                         recipient_whatsapp, amount, code, status, approved_by, 
                         approved_at, metadata
                     ) VALUES (
-                        ${body.buyerName},
-                        ${body.buyerEmail},
+                        ${body.buyerName || 'CeramicAlma'},
+                        ${body.buyerEmail || 'admin@interno.ceramicalma.com'},
                         ${body.recipientName},
                         ${body.recipientEmail || null},
                         ${body.recipientWhatsapp || null},
                         ${body.amount},
-                        ${code},
+                        ${gifRef},
                         'approved',
                         ${String(adminUser)},
                         NOW(),
                         ${JSON.stringify({ 
                             createdManually: true,
                             createdBy: adminUser,
-                            createdAt: new Date().toISOString()
+                            createdAt: new Date().toISOString(),
+                            issuedCode: code,
+                            message: body.message || '',
                         })}
                     )
                     RETURNING id, created_at
@@ -4691,7 +4922,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         NOW() + INTERVAL '3 months',
                         ${JSON.stringify({ 
                             createdManually: true,
-                            createdBy: adminUser
+                            createdBy: adminUser,
+                            holderName: body.recipientName,
                         })}
                     )
                     RETURNING id, code, balance, expires_at
@@ -4726,37 +4958,38 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 
                 await sql`COMMIT`;
                 
-                // 7. Enviar emails
+                const isInternalEmail = (email?: string) =>
+                    !email || email.includes('@interno.ceramicalma.com');
+
                 try {
-                    // Email al comprador
-                    await emailService.sendGiftcardPaymentConfirmedEmail(
-                        body.buyerEmail,
-                        {
-                            buyerName: body.buyerName,
-                            recipientName: body.recipientName,
-                            amount: body.amount,
-                            code: code,
-                            recipientEmail: body.recipientEmail || undefined,
-                            message: body.message || ''
-                        }
-                    );
+                    if (!isInternalEmail(body.buyerEmail)) {
+                        await emailService.sendGiftcardPaymentConfirmedEmail(
+                            body.buyerEmail,
+                            {
+                                buyerName: body.buyerName || 'CeramicAlma',
+                                recipientName: body.recipientName,
+                                amount: body.amount,
+                                code: code,
+                                recipientEmail: body.recipientEmail || undefined,
+                                message: body.message || ''
+                            }
+                        );
+                    }
                     
-                    // Email al destinatario (si tiene)
-                    if (body.recipientEmail) {
+                    if (body.recipientEmail && !isInternalEmail(body.recipientEmail)) {
                         await emailService.sendGiftcardRecipientEmail(
                             body.recipientEmail,
                             {
                                 code: code,
                                 amount: body.amount,
                                 message: body.message || '',
-                                buyerName: body.buyerName,
+                                buyerName: body.buyerName || 'CeramicAlma',
                                 recipientName: body.recipientName
                             }
                         );
                     }
                 } catch (emailError) {
                     console.warn('Error enviando emails de giftcard manual:', emailError);
-                    // No retornar error - giftcard se creó ok
                 }
                 
                 return res.status(200).json({
@@ -4845,6 +5078,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     registeredManually: true,
                     registeredBy: adminUser,
                     registeredAt: new Date().toISOString(),
+                    issuedCode: code,
                 };
 
                 const { rows: [request] } = await sql`
@@ -8914,7 +9148,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 }
                 const { rows } = await sql`
                     SELECT id, booking_code, status, product, product_type, price, slots,
-                           payment_proof_url, is_paid, user_info
+                           payment_proof_url, is_paid, user_info, payment_details, giftcard_redeemed_amount
                     FROM bookings
                     WHERE booking_code = ${bookingCode}
                     LIMIT 1
@@ -8924,6 +9158,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 }
                 const row = rows[0];
                 const parsed = parseBookingFromDB(row);
+                const paidAmount = (parsed.paymentDetails || []).reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+                const price = parsed.price || 0;
                 // Return only safe public fields — no full user PII
                 return res.status(200).json({
                     success: true,
@@ -8934,10 +9170,13 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         productType: parsed.productType,
                         productName: parsed.product?.name || parsed.productType || '',
                         slots: parsed.slots || [],
-                        price: parsed.price || 0,
+                        price,
                         isPaid: parsed.isPaid || false,
                         paymentProofUrl: parsed.paymentProofUrl || null,
                         firstName: parsed.userInfo?.firstName || '',
+                        paidAmount,
+                        pendingBalance: Math.max(0, price - paidAmount),
+                        giftcardRedeemedAmount: Number(parsed.giftcardRedeemedAmount) || 0,
                     }
                 });
             } catch (error) {

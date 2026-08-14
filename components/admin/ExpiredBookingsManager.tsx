@@ -761,6 +761,11 @@ export const ExpiredBookingsManager: React.FC = () => {
                           const n = Array.isArray(booking.paymentDetails) ? booking.paymentDetails.length : 0;
                           const sum = sumPaymentDetails(booking as Booking);
                           const pr = typeof booking.price === 'number' ? booking.price : 0;
+                          const gcAmt = Array.isArray(booking.paymentDetails)
+                            ? booking.paymentDetails
+                                .filter((p) => String(p.method || '').toLowerCase() === 'giftcard')
+                                .reduce((acc, p) => acc + (typeof p.amount === 'number' ? p.amount : 0), 0)
+                            : Number((booking as Booking).giftcardRedeemedAmount) || 0;
                           if (n === 0 && sum <= 0) {
                             return <span className="text-brand-secondary">—</span>;
                           }
@@ -773,6 +778,9 @@ export const ExpiredBookingsManager: React.FC = () => {
                               </div>
                               {pr > 0 && !ok && (
                                 <div className="text-amber-700 font-medium">Falta ${(pr - sum).toFixed(2)}</div>
+                              )}
+                              {gcAmt > 0 && (
+                                <div className="text-violet-700 font-medium">🎁 Gift card ${gcAmt.toFixed(2)}</div>
                               )}
                             </div>
                           );

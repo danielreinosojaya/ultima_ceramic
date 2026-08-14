@@ -7,11 +7,12 @@ import { getClassPackageValidityLabel } from '../utils/classPackageValidity';
 
 interface PackageSelectorProps {
   onSelect: (pkg: Product) => void;
+  onBack: () => void;
   technique: 'potters_wheel' | 'molding' | null;
   products: Product[]; // Recibir productos como prop
 }
 
-export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, technique, products }) => {
+export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, onBack, technique, products }) => {
   // Traducción eliminada, usar texto en español directamente
   const [packages, setPackages] = useState<Product[]>([]);
   const [parejaCard, setParejaCard] = useState<Product | null>(null);
@@ -52,7 +53,12 @@ export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, tech
 
   return (
     <div className="text-center p-6 bg-brand-surface rounded-xl shadow-subtle max-w-5xl mx-auto">
-      <button className="text-brand-secondary hover:text-brand-text mb-4 transition-colors font-semibold text-lg" style={{ background: 'none', border: 'none' }}>
+      <button
+        type="button"
+        onClick={onBack}
+        className="text-brand-secondary hover:text-brand-text mb-4 transition-colors font-semibold text-lg"
+        style={{ background: 'none', border: 'none' }}
+      >
         &larr; Editar Selección
       </button>
       <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-brand-text mb-2">Elige una Técnica</h2>

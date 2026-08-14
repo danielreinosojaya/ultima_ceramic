@@ -15,6 +15,8 @@ import { FEATURE_FLAGS } from '../featureFlags.ts';
 import type { GroupTechnique } from '../types';
 import { uploadPaymentProof } from '../services/dataService';
 import { getClassPackageValidityDescription, getClassPackageValidityLabel } from '../utils/classPackageValidity';
+import { GiftcardApplyToBooking } from './giftcard/GiftcardApplyToBooking';
+import { getBookingPaymentSplit } from '../utils/giftcardPayment';
 
 // Helper para obtener nombre de técnica desde metadata
 const getTechniqueName = (technique: GroupTechnique): string => {
@@ -96,6 +98,11 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
     const [proofUploading, setProofUploading] = useState(false);
     const [proofUploaded, setProofUploaded] = useState(booking.status === 'pending_verification');
     const [proofError, setProofError] = useState<string | null>(null);
+    const [localBooking, setLocalBooking] = useState(booking);
+
+    useEffect(() => {
+        setLocalBooking(booking);
+    }, [booking]);
 
     // � DEBUG: Verificar que booking llegó correctamente a ConfirmationPage
     console.log('✅ ConfirmationPage mounted with booking:', {
@@ -106,14 +113,21 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
         slots: booking?.slots?.length || 0
     });
 
-    const isPackage = booking.product.type === 'CLASS_PACKAGE';
-    const originalPrice = isPackage ? booking.product.price : booking.price;
-    const subtotal = booking.price / (1 + VAT_RATE);
-    const vat = booking.price - subtotal;
+    const isPackage = localBooking.product.type === 'CLASS_PACKAGE';
+    const originalPrice = isPackage ? localBooking.product.price : localBooking.price;
+    const subtotal = localBooking.price / (1 + VAT_RATE);
+    const vat = localBooking.price - subtotal;
     const discount = originalPrice - subtotal;
 
     // Prefer the explicit prop from App; fallback to booking.appliedGiftcardHold if present
-    const appliedHold = appliedGiftcardHold ?? (booking as any).appliedGiftcardHold ?? null;
+    const appliedHold = appliedGiftcardHold ?? (localBooking as any).appliedGiftcardHold ?? null;
+    const paymentSplit = getBookingPaymentSplit(localBooking);
+    const holdExtra =
+        appliedHold && paymentSplit.giftcardApplied < (appliedHold.amount || 0) - 0.009
+            ? Number(appliedHold.amount) || 0
+            : 0;
+    const amountDue = Math.max(0, localBooking.price - paymentSplit.paid - holdExtra);
+    const isFullyPaid = localBooking.isPaid || amountDue <= 0.009;
 
     // Limpiar pre-reservas expiradas cuando se muestra la confirmación
     useEffect(() => {
@@ -363,7 +377,7 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
             </div>
 
             {/* Datos para tu Transferencia - Cuentas Bancarias */}
-            {bankAccounts && bankAccounts.length > 0 && (
+            {!isFullyPaid && bankAccounts && bankAccounts.length > 0 && (
                 <div className="mb-6 bg-white p-6 rounded-lg border-2 border-brand-border shadow-md">
                     <h3 className="text-lg font-bold text-brand-text mb-4 flex items-center gap-2">
                         <BankIcon className="w-6 h-6 text-brand-primary" />
@@ -423,55 +437,98 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                 </div>
             )}
 
-            {/* Giftcard summary block */}
-            {appliedHold && (
+            {/* Giftcard summary */}
+            {(paymentSplit.giftcardApplied > 0.009 || appliedHold || isFullyPaid) && (
                 <div className="mb-6 bg-green-50 border-2 border-green-400 p-5 rounded-lg">
                     <div className="flex items-start gap-3">
                         <span className="text-2xl">🎁</span>
                         <div className="flex-1">
-                            <h4 className="font-bold text-green-900 mb-3">Pago Parcial con Giftcard</h4>
+                            <h4 className="font-bold text-green-900 mb-3">
+                                {isFullyPaid ? 'Pago con gift card / cubierto' : 'Gift card aplicada'}
+                            </h4>
                             <div className="space-y-2 text-sm mb-4">
                                 <div className="flex justify-between items-center">
                                     <span className="text-green-800">Precio total:</span>
-                                    <span className="font-bold text-green-900">{formatPrice(booking.price)}</span>
+                                    <span className="font-bold text-green-900">{formatPrice(localBooking.price)}</span>
                                 </div>
-                                <div className="flex justify-between items-center bg-white p-2 rounded">
-                                    <span className="text-green-700">Cubierto por Giftcard:</span>
-                                    <span className="font-bold text-green-600">{formatPrice(appliedHold.amount || 0)}</span>
-                                </div>
+                                {(paymentSplit.giftcardApplied > 0 || appliedHold) && (
+                                    <div className="flex justify-between items-center bg-white p-2 rounded">
+                                        <span className="text-green-700">Cubierto por gift card:</span>
+                                        <span className="font-bold text-green-600">
+                                            {formatPrice(Math.max(paymentSplit.giftcardApplied, appliedHold?.amount || 0))}
+                                        </span>
+                                    </div>
+                                )}
                                 <div className="border-t border-green-300 pt-2 flex justify-between items-center font-bold">
-                                    <span className="text-green-900">Aún debes pagar:</span>
-                                    <span className={`text-lg ${(booking.price - (appliedHold.amount || 0)) <= 0 ? 'text-green-600' : 'text-orange-600'}`}>
-                                        {formatPrice(Math.max(0, booking.price - (appliedHold.amount || 0)))}
+                                    <span className="text-green-900">{isFullyPaid ? 'Saldo a pagar:' : 'Faltante:'}</span>
+                                    <span className={`text-lg ${isFullyPaid ? 'text-green-600' : 'text-orange-600'}`}>
+                                        {formatPrice(amountDue)}
                                     </span>
                                 </div>
                             </div>
-                            { (booking.price - (appliedHold.amount || 0)) <= 0 ? (
+                            {isFullyPaid ? (
                                 <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-full font-bold text-sm">
                                     <CheckCircleIcon className="w-5 h-5" />
-                                    ¡Reserva completamente pagada!
+                                    ¡Reserva pagada!
                                 </div>
                             ) : (
-                                <p className="text-sm text-green-800"><strong>Importante:</strong> Debes pagar el monto restante ({formatPrice(Math.max(0, booking.price - (appliedHold.amount || 0)))}) para completar tu reserva.</p>
+                                <p className="text-sm text-green-800">
+                                    Transfiere el faltante ({formatPrice(amountDue)}) o aplica otra gift card.
+                                </p>
                             )}
                         </div>
                     </div>
                 </div>
             )}
 
+            {!isFullyPaid && (
+                <div className="mb-5">
+                    <GiftcardApplyToBooking
+                        bookingCode={localBooking.bookingCode}
+                        pendingAmount={amountDue}
+                        onApplied={(result) => {
+                            setLocalBooking((prev) => ({
+                                ...prev,
+                                isPaid: result.isPaid,
+                                status: result.isPaid ? 'confirmed' : prev.status,
+                                giftcardRedeemedAmount: (prev.giftcardRedeemedAmount || 0) + result.appliedAmount,
+                                paymentDetails: [
+                                    ...(prev.paymentDetails || []),
+                                    {
+                                        id: `gc_${Date.now()}`,
+                                        amount: result.appliedAmount,
+                                        method: 'Giftcard',
+                                        receivedAt: new Date().toISOString(),
+                                    },
+                                ],
+                                pendingBalance: result.pendingBalance,
+                            }));
+                        }}
+                    />
+                </div>
+            )}
+
             {/* Próximos pasos (compacto) */}
             <div className="mb-5 bg-brand-background p-4 rounded-lg border border-brand-border">
                 <h3 className="text-sm font-bold text-brand-text mb-3">¿Qué hacer ahora?</h3>
+                {isFullyPaid ? (
+                    <p className="text-sm text-brand-secondary">Tu cupo está confirmado. Guarda tu código <span className="font-mono font-bold text-brand-primary">{localBooking.bookingCode}</span>.</p>
+                ) : (
                 <div className="space-y-3 text-sm">
                     <div className="flex items-start gap-3">
-                        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-primary text-white text-xs font-bold flex-shrink-0">1</span>
-                        <p className="text-brand-secondary"><strong className="text-brand-text">Transfiere {formatPrice(booking.price)}</strong> a cualquiera de las cuentas y usa <span className="font-mono text-brand-primary font-bold">{booking.bookingCode}</span> como referencia.</p>
+                        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-violet-600 text-white text-xs font-bold flex-shrink-0">1</span>
+                        <p className="text-brand-secondary"><strong className="text-brand-text">Redime tu gift card</strong> aquí mismo (código virtual) si la tienes.</p>
                     </div>
                     <div className="flex items-start gap-3">
                         <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-primary text-white text-xs font-bold flex-shrink-0">2</span>
-                        <p className="text-brand-secondary"><strong className="text-brand-text">Sube el comprobante</strong> usando el botón de abajo o el enlace enviado a tu correo.</p>
+                        <p className="text-brand-secondary"><strong className="text-brand-text">Transfiere {formatPrice(amountDue)}</strong> a cualquiera de las cuentas y usa <span className="font-mono text-brand-primary font-bold">{localBooking.bookingCode}</span> como referencia.</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-primary text-white text-xs font-bold flex-shrink-0">3</span>
+                        <p className="text-brand-secondary"><strong className="text-brand-text">Sube el comprobante</strong> si pagaste por transferencia.</p>
                     </div>
                 </div>
+                )}
             </div>
 
             {/* Botón de WhatsApp - solo para dudas */}
@@ -488,14 +545,14 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
             </div>
 
             {/* Upload comprobante de pago */}
-            {booking.id && (
+            {!isFullyPaid && booking.id && (
                 !proofUploaded ? (
                     <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-5">
                         <h4 className="font-bold text-amber-900 mb-1 flex items-center gap-2">
                             <span>📎</span> Sube tu comprobante aquí
                         </h4>
                         <p className="text-sm text-amber-800 mb-3">
-                            También puedes subir tu comprobante directamente. Tu reserva quedará en revisión y <strong>no expirará</strong> mientras validamos tu pago.
+                            Si pagas por transferencia, sube el comprobante. Tu reserva quedará en revisión y <strong>no expirará</strong> mientras validamos tu pago.
                         </p>
                         <label className={`flex flex-col items-center justify-center w-full py-6 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
                             proofUploading ? 'border-amber-300 bg-amber-100 cursor-not-allowed' : 'border-amber-300 hover:border-amber-400 hover:bg-amber-100'

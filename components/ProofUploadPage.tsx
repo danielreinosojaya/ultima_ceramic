@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { getBookingByCode, uploadPaymentProof } from '../services/dataService';
 import type { BookingPublicInfo } from '../services/dataService';
 import { CheckCircleIcon } from './icons/CheckCircleIcon';
+import { GiftcardApplyToBooking } from './giftcard/GiftcardApplyToBooking';
 
 interface ProofUploadPageProps {
     bookingCode: string;
@@ -167,6 +168,10 @@ export const ProofUploadPage: React.FC<ProofUploadPageProps> = ({ bookingCode, o
         }
 
         // upload_ready — the main flow
+        const pending = booking
+            ? Math.max(0, booking.pendingBalance ?? booking.price - (booking.paidAmount || 0))
+            : 0;
+
         return (
             <div>
                 {/* Booking Summary */}
@@ -184,8 +189,8 @@ export const ProofUploadPage: React.FC<ProofUploadPageProps> = ({ bookingCode, o
                                 )}
                             </div>
                             <div className="text-right flex-shrink-0">
-                                <p className="text-xs text-brand-secondary">Total a pagar</p>
-                                <p className="text-2xl font-bold text-brand-primary">${booking.price.toFixed(2)}</p>
+                                <p className="text-xs text-brand-secondary">{pending > 0.009 ? 'Faltante' : 'Total'}</p>
+                                <p className="text-2xl font-bold text-brand-primary">${pending > 0.009 ? pending.toFixed(2) : booking.price.toFixed(2)}</p>
                             </div>
                         </div>
                     </div>
@@ -221,6 +226,31 @@ export const ProofUploadPage: React.FC<ProofUploadPageProps> = ({ bookingCode, o
                         <p className="text-sm text-red-600 mt-3 font-semibold">❌ {proofError}</p>
                     )}
                 </div>
+
+                {booking.status !== 'expired' && pending > 0.009 && (
+                    <div className="mb-6">
+                        <GiftcardApplyToBooking
+                            bookingCode={booking.bookingCode}
+                            pendingAmount={pending}
+                            onApplied={(result) => {
+                                setBooking((prev) =>
+                                    prev
+                                        ? {
+                                              ...prev,
+                                              isPaid: result.isPaid,
+                                              paidAmount: (prev.paidAmount || 0) + result.appliedAmount,
+                                              pendingBalance: result.pendingBalance,
+                                              giftcardRedeemedAmount:
+                                                  (prev.giftcardRedeemedAmount || 0) + result.appliedAmount,
+                                              status: result.isPaid ? 'confirmed' : prev.status,
+                                          }
+                                        : prev
+                                );
+                                if (result.isPaid) setPageStatus('confirmed');
+                            }}
+                        />
+                    </div>
+                )}
 
                 {/* Contact for help */}
                 <p className="text-center text-sm text-brand-secondary">

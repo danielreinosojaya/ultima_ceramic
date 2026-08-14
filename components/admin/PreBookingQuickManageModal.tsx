@@ -137,6 +137,9 @@ export const PreBookingQuickManageModal: React.FC<PreBookingQuickManageModalProp
   const paidSum = sumPayments(currentBooking);
   const priceNum = typeof currentBooking.price === 'number' ? currentBooking.price : parseFloat(String(currentBooking.price)) || 0;
   const balance = Math.round((priceNum - paidSum) * 100) / 100;
+  const giftcardPaid = payments
+    .filter((p) => String(p.method || '').toLowerCase() === 'giftcard')
+    .reduce((acc, p) => acc + (typeof p.amount === 'number' ? p.amount : 0), 0);
 
   const showToast = (type: 'ok' | 'err', text: string) => {
     setMessage({ type, text });
@@ -434,6 +437,9 @@ export const PreBookingQuickManageModal: React.FC<PreBookingQuickManageModalProp
                   </span>
                   {balance > 0.009 && (
                     <span className="px-2 py-1 rounded-md bg-amber-100 text-amber-900 font-semibold">Falta ${balance.toFixed(2)}</span>
+                  )}
+                  {giftcardPaid > 0.009 && (
+                    <span className="px-2 py-1 rounded-md bg-violet-100 text-violet-900 font-semibold">🎁 Gift card ${giftcardPaid.toFixed(2)}</span>
                   )}
                   {balance <= 0.009 && paidSum > 0 && (
                     <span className="px-2 py-1 rounded-md bg-green-100 text-green-800 font-semibold">Cubierto</span>

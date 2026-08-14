@@ -5,12 +5,18 @@ import { useAdminData } from '../../context/AdminDataContext';
 import { GiftcardManualCreateModal } from './GiftcardManualCreateModal';
 import { getEcuadorToday, formatDateToYYYYMMDD } from '../../utils/formatters';
 import { formatEcuadorDateTime, ecuadorLocalToUtcIso, utcIsoToEcuadorParts } from '../../utils/giftcardTimezone';
+import {
+  getGiftcardDeliveryNotice,
+  deliveryNoticeNeedsAttention,
+  deliveryNoticeLabel,
+  deliveryNoticeSourceLabel,
+} from '../../utils/giftcardDeliveryNotice';
 
 const EXPIRING_SOON_DAYS = 30;
 const EXPIRING_URGENT_DAYS = 7;
 
 type ExpirationStatus = 'none' | 'pending' | 'active' | 'soon' | 'urgent' | 'expired';
-type ActiveFilter = 'all' | 'pending_send' | 'with_balance' | 'redeemed' | 'scheduled' | 'expiring_soon' | 'expired';
+type ActiveFilter = 'all' | 'pending_send' | 'with_balance' | 'redeemed' | 'scheduled' | 'expiring_soon' | 'expired' | 'delivery_issue';
 
 function formatShortDate(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -123,6 +129,28 @@ const CodeChip: React.FC<{
   );
 };
 
+const DeliveryPinBadge: React.FC<{
+  req: GiftcardRequest;
+  compact?: boolean;
+}> = ({ req, compact }) => {
+  const notice = getGiftcardDeliveryNotice(req);
+  if (!notice) return compact ? null : <span className="text-xs text-gray-400">—</span>;
+  const vis = deliveryNoticeLabel(notice);
+  const unseen = notice.seen === false && (notice.status === 'sent' || notice.status === 'failed' || notice.status === 'skipped');
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${vis.className} ${
+        unseen ? 'ring-2 ring-offset-1 ring-brand-primary/40' : ''
+      }`}
+      title={notice.error || vis.label}
+    >
+      <span aria-hidden>{vis.pin}</span>
+      {!compact && <span>{vis.label}</span>}
+      {compact && deliveryNoticeNeedsAttention(notice) && <span>{vis.label}</span>}
+    </span>
+  );
+};
+
 const GiftcardsManager: React.FC = () => {
   const adminData = useAdminData();
   const [selected, setSelected] = React.useState<GiftcardRequest | null>(null);
@@ -218,6 +246,11 @@ const GiftcardsManager: React.FC = () => {
     return { expiringSoon, expired };
   }, [adminData.giftcardRequests, issuedGiftcards, getBalanceForRequest]);
 
+  const deliveryIssueRequests = React.useMemo(
+    () => adminData.giftcardRequests.filter(req => deliveryNoticeNeedsAttention(getGiftcardDeliveryNotice(req))),
+    [adminData.giftcardRequests]
+  );
+
   const filteredRequests = React.useMemo(() => {
     const list = adminData.giftcardRequests.filter(req => {
       if (activeFilter === 'all') return true;
@@ -237,6 +270,9 @@ const GiftcardsManager: React.FC = () => {
         const info = getExpirationInfo(req, issuedGiftcards);
         const bal = getBalanceForRequest(req);
         return info.status === 'expired' && bal !== null && bal > 0;
+      }
+      if (activeFilter === 'delivery_issue') {
+        return deliveryNoticeNeedsAttention(getGiftcardDeliveryNotice(req));
       }
       return true;
     });
@@ -271,6 +307,30 @@ const GiftcardsManager: React.FC = () => {
     const redeemCode = getRedeemCode(req);
     const codeToValidate = redeemCode || req.code;
     if (codeToValidate) validateCodeOnDemand(codeToValidate, req.id);
+    const notice = getGiftcardDeliveryNotice(req);
+    if (notice && notice.seen === false) {
+      dataService.markGiftcardDeliverySeen(req.id).catch(() => undefined);
+    }
+  };
+
+  const sendToRecipient = async (req: GiftcardRequest) => {
+    if (!window.confirm(`¿Enviar ahora a ${req.recipientName} por Resend?`)) return;
+    setIsProcessing(true);
+    try {
+      const res = await dataService.sendGiftcardNow(req.id);
+      if (res?.success) {
+        alert('✅ ' + (res.message || 'Enviada. Revisa el pin de entrega.'));
+        adminData.refreshCritical?.();
+        setSelected(null);
+      } else {
+        alert('❌ No se entregó: ' + (res?.error || 'Error de envío'));
+        adminData.refreshCritical?.();
+      }
+    } catch (err) {
+      alert('Error: ' + (err instanceof Error ? err.message : 'error'));
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const filterBtn = (id: ActiveFilter, label: string, count: number) => (
@@ -293,13 +353,13 @@ const GiftcardsManager: React.FC = () => {
       <div className="flex flex-wrap justify-between items-start gap-4">
         <div>
           <h2 className="text-2xl font-bold text-brand-primary">Giftcards</h2>
-          <p className="text-sm text-brand-secondary mt-1">Solicitudes, códigos y vencimientos</p>
+          <p className="text-sm text-brand-secondary mt-1">Crea, aprueba y entrega códigos sin pasar por el portal público</p>
         </div>
         <button
           onClick={() => setShowManualCreateModal(true)}
-          className="px-4 py-2 rounded-full bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors shadow"
+          className="px-5 py-2.5 rounded-full bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors shadow"
         >
-          + Registrar física
+          + Crear gift card
         </button>
       </div>
 
@@ -357,11 +417,27 @@ const GiftcardsManager: React.FC = () => {
         </div>
       )}
 
+      {deliveryIssueRequests.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setActiveFilter('delivery_issue')}
+          className="w-full p-3 rounded-xl border border-red-300 bg-red-50 text-left hover:bg-red-100 transition-colors"
+        >
+          <div className="text-red-900 font-semibold">
+            {deliveryIssueRequests.length} gift card{deliveryIssueRequests.length !== 1 ? 's' : ''} sin entregar o con error
+          </div>
+          <div className="text-xs text-red-700 mt-0.5">
+            El cron o Resend no confirmó el envío. Ábrela y pulsa <strong>Reenviar ahora</strong> para rectificar.
+          </div>
+        </button>
+      )}
+
       {/* Filtros */}
       <div className="flex gap-2 flex-wrap">
         {filterBtn('all', 'Todas', adminData.giftcardRequests.length)}
         {filterBtn('pending_send', 'Por revisar', adminData.giftcardRequests.filter(r => r.status === 'pending').length)}
         {filterBtn('scheduled', 'Programadas', adminData.giftcardRequests.filter((r: any) => r.scheduledSendAt && r.status === 'approved').length)}
+        {filterBtn('delivery_issue', 'Envío fallido', deliveryIssueRequests.length)}
         {filterBtn('with_balance', 'Activas', adminData.giftcardRequests.filter(r => r.status === 'approved' && !(r as any).scheduledSendAt).length)}
         {filterBtn('expiring_soon', 'Por vencer', expirationCounts.expiringSoon)}
         {filterBtn('expired', 'Vencidas', expirationCounts.expired)}
@@ -453,7 +529,7 @@ const GiftcardsManager: React.FC = () => {
           ) : (
             <div className="space-y-3">
               <div className="overflow-x-auto rounded-xl border border-brand-border shadow-sm">
-                <table className="w-full min-w-[880px]">
+                <table className="w-full min-w-[980px]">
                   <thead>
                     <tr className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
                       <th className="px-3 py-3 w-10">
@@ -479,6 +555,7 @@ const GiftcardsManager: React.FC = () => {
                       <th className="px-3 py-3">Códigos</th>
                       <th className="px-3 py-3">Fechas</th>
                       <th className="px-3 py-3 w-28">Estado</th>
+                      <th className="px-3 py-3 w-40">Envío</th>
                       <th className="px-3 py-3 w-24"></th>
                     </tr>
                   </thead>
@@ -490,8 +567,12 @@ const GiftcardsManager: React.FC = () => {
                       const expBadge = expirationBadge(expInfo.status, expInfo.daysLeft);
                       const issuedGc = findIssuedGiftcard(req, issuedGiftcards);
                       const isScheduled = !!(req as any).scheduledSendAt;
+                      const deliveryNotice = getGiftcardDeliveryNotice(req);
+                      const deliveryIssue = deliveryNoticeNeedsAttention(deliveryNotice);
                       const rowTint =
-                        expInfo.status === 'expired' && bal !== null && bal > 0
+                        deliveryIssue
+                          ? 'bg-red-50/80'
+                          : expInfo.status === 'expired' && bal !== null && bal > 0
                           ? 'bg-red-50/60'
                           : (expInfo.status === 'urgent' || expInfo.status === 'soon') && bal !== null && bal > 0
                             ? 'bg-amber-50/40'
@@ -567,7 +648,7 @@ const GiftcardsManager: React.FC = () => {
                               )}
                               {isScheduled && (
                                 <div className="text-xs text-brand-primary pt-0.5">
-                                  Envío: {formatEcuadorDateTime((req as any).scheduledSendAt)}
+                                  Programado: {formatEcuadorDateTime((req as any).scheduledSendAt)}
                                 </div>
                               )}
                             </div>
@@ -590,6 +671,10 @@ const GiftcardsManager: React.FC = () => {
                                 </div>
                               )}
                             </div>
+                          </td>
+
+                          <td className="px-3 py-3 align-top">
+                            <DeliveryPinBadge req={req} />
                           </td>
 
                           <td className="px-3 py-3 align-top">
@@ -724,111 +809,102 @@ const GiftcardsManager: React.FC = () => {
                 <div><span className="text-gray-500">Destinatario:</span> {selected.recipientEmail || selected.recipientWhatsapp || '—'}</div>
               </div>
 
-              {/* Envío programado */}
-              {((selected as any).scheduledSendAt || (selected as any).sendMethod) && (
-                <div className="rounded-lg p-3 border border-brand-primary/20 bg-brand-primary/5 text-sm">
-                  <div className="font-semibold text-brand-primary mb-1">Envío programado</div>
-                  <div>{(selected as any).sendMethod === 'whatsapp' ? 'WhatsApp' : 'Email'}</div>
-                  {(selected as any).scheduledSendAt && (
-                    <div className="font-mono text-xs mt-1">{formatEcuadorDateTime((selected as any).scheduledSendAt)}</div>
-                  )}
-                  <div className="flex gap-2 mt-2">
-                    <button
-                      type="button"
-                      className="px-3 py-1.5 text-xs rounded-lg border border-brand-primary text-brand-primary hover:bg-brand-primary/10"
-                      onClick={() => {
-                        setEditScheduleModal({
-                          isOpen: true,
-                          requestId: selected.id,
-                          currentDate: utcIsoToEcuadorParts((selected as any).scheduledSendAt)?.date || formatDateToYYYYMMDD(getEcuadorToday()),
-                          currentTime: utcIsoToEcuadorParts((selected as any).scheduledSendAt)?.time || '14:00',
-                          recipientName: selected.recipientName,
-                        });
-                      }}
-                    >
-                      Editar programación
-                    </button>
-                    {selected.status === 'approved' && (
-                      <button
-                        type="button"
-                        className="px-3 py-1.5 text-xs rounded-lg bg-brand-primary text-white hover:bg-brand-primary/90"
-                        onClick={async () => {
-                          if (!window.confirm(`¿Enviar ahora a ${selected.recipientName}?`)) return;
-                          setIsProcessing(true);
-                          try {
-                            const res = await dataService.sendGiftcardNow(selected.id);
-                            if (res?.success) {
-                              alert('✅ Enviada');
-                              adminData.refreshCritical?.();
-                              setSelected(null);
-                            } else {
-                              alert('❌ ' + (res?.error || 'Error'));
-                            }
-                          } catch (err) {
-                            alert('Error: ' + (err instanceof Error ? err.message : 'error'));
-                          } finally {
-                            setIsProcessing(false);
-                          }
-                        }}
-                        disabled={isProcessing}
-                      >
-                        Enviar ahora
-                      </button>
+              {/* Pin de entrega (cron / Resend) */}
+              {(() => {
+                const notice = getGiftcardDeliveryNotice(selected);
+                const vis = notice ? deliveryNoticeLabel(notice) : null;
+                const needsFix = deliveryNoticeNeedsAttention(notice);
+                const canRetry = selected.status === 'approved' || selected.status === 'delivered' || needsFix;
+                const waLink = (selected.metadata as any)?.whatsapp_link as string | undefined;
+                return (
+                  <div className={`rounded-xl border p-4 text-sm ${
+                    needsFix ? 'border-red-300 bg-red-50' :
+                    notice?.status === 'sent' ? 'border-emerald-300 bg-emerald-50' :
+                    notice?.status === 'pending_cron' ? 'border-violet-200 bg-violet-50' :
+                    'border-brand-primary/20 bg-brand-primary/5'
+                  }`}>
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <div className="text-xs font-bold uppercase text-gray-500 mb-1">Pin de entrega</div>
+                        {vis ? (
+                          <div className="font-semibold text-brand-text">{vis.pin} {vis.label}</div>
+                        ) : (
+                          <div className="text-brand-secondary">Aún no hay intento de envío al destinatario.</div>
+                        )}
+                      </div>
+                      <DeliveryPinBadge req={selected} />
+                    </div>
+                    {notice && (
+                      <div className="mt-2 space-y-1 text-xs text-brand-secondary">
+                        <div>Origen: {deliveryNoticeSourceLabel(notice)}</div>
+                        {notice.at && <div>Hora: {formatEcuadorDateTime(notice.at)} (Ecuador)</div>}
+                        {notice.provider === 'resend' && (
+                          <div>Proveedor: Resend{notice.providerId ? ` · ID ${notice.providerId}` : ''}</div>
+                        )}
+                        {notice.error && (
+                          <div className="text-red-800 font-medium bg-white/70 rounded-lg p-2 mt-1">
+                            {notice.error}
+                          </div>
+                        )}
+                      </div>
                     )}
+                    {waLink && (
+                      <a
+                        href={waLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-block mt-2 text-xs font-semibold text-sky-800 underline"
+                      >
+                        Abrir WhatsApp para enviar al destinatario
+                      </a>
+                    )}
+                    {((selected as any).scheduledSendAt || (selected as any).sendMethod) && (
+                      <div className="mt-3 pt-3 border-t border-black/5">
+                        <div className="font-semibold text-brand-primary">Programación</div>
+                        <div>{(selected as any).sendMethod === 'whatsapp' ? 'WhatsApp' : 'Email (Resend)'}</div>
+                        {(selected as any).scheduledSendAt && (
+                          <div className="font-mono text-xs mt-1">{formatEcuadorDateTime((selected as any).scheduledSendAt)}</div>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {((selected as any).scheduledSendAt || selected.status === 'approved') && (
+                        <button
+                          type="button"
+                          className="px-3 py-1.5 text-xs rounded-lg border border-brand-primary text-brand-primary hover:bg-brand-primary/10"
+                          onClick={() => {
+                            setEditScheduleModal({
+                              isOpen: true,
+                              requestId: selected.id,
+                              currentDate: utcIsoToEcuadorParts((selected as any).scheduledSendAt)?.date || formatDateToYYYYMMDD(getEcuadorToday()),
+                              currentTime: utcIsoToEcuadorParts((selected as any).scheduledSendAt)?.time || '14:00',
+                              recipientName: selected.recipientName,
+                            });
+                          }}
+                        >
+                          {(selected as any).scheduledSendAt ? 'Editar programación' : 'Programar envío'}
+                        </button>
+                      )}
+                      {canRetry && getRedeemCode(selected) && (
+                        <button
+                          type="button"
+                          className={`px-3 py-1.5 text-xs rounded-lg text-white ${
+                            needsFix ? 'bg-red-700 hover:bg-red-800' : 'bg-brand-primary hover:bg-brand-primary/90'
+                          }`}
+                          onClick={() => sendToRecipient(selected)}
+                          disabled={isProcessing}
+                        >
+                          {needsFix ? 'Reenviar ahora' : 'Enviar ahora'}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
-              {selected.status === 'approved' && !(selected as any).scheduledSendAt && (
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="px-3 py-1.5 text-sm rounded-lg bg-brand-primary text-white hover:bg-brand-primary/90"
-                    onClick={async () => {
-                      if (!window.confirm('¿Enviar ahora al destinatario?')) return;
-                      setIsProcessing(true);
-                      try {
-                        const res = await dataService.sendGiftcardNow(selected.id);
-                        if (res?.success) {
-                          alert('✅ Enviada');
-                          adminData.refreshCritical?.();
-                          setSelected(null);
-                        } else {
-                          alert('❌ ' + (res?.error || 'Error'));
-                        }
-                      } catch (err) {
-                        alert('Error: ' + (err instanceof Error ? err.message : 'error'));
-                      } finally {
-                        setIsProcessing(false);
-                      }
-                    }}
-                    disabled={isProcessing}
-                  >
-                    Enviar ahora al destinatario
-                  </button>
-                  <button
-                    type="button"
-                    className="px-3 py-1.5 text-sm rounded-lg border border-brand-primary text-brand-primary hover:bg-brand-primary/10"
-                    onClick={() => {
-                      setEditScheduleModal({
-                        isOpen: true,
-                        requestId: selected.id,
-                        currentDate: formatDateToYYYYMMDD(getEcuadorToday()),
-                        currentTime: '14:00',
-                        recipientName: selected.recipientName,
-                      });
-                    }}
-                  >
-                    Programar envío
-                  </button>
-                </div>
-              )}
-
-              {selected.metadata?.emailDelivery && (
-                <div className="text-sm">
-                  <span className="text-gray-500">Emails:</span>{' '}
-                  comprador {selected.metadata.emailDelivery.buyer?.sent ? '✓' : '✗'} ·
-                  destinatario {selected.metadata.emailDelivery.recipient?.sent ? '✓' : '✗'}
+              {selected.metadata?.emailDelivery?.buyer && (
+                <div className="text-sm text-brand-secondary">
+                  Correo al comprador: {selected.metadata.emailDelivery.buyer.sent ? 'enviado' : 'no enviado'}
                 </div>
               )}
 

@@ -71,6 +71,7 @@ import { GiftcardConfirmation } from './components/giftcard/GiftcardConfirmation
 import { GiftcardManualPaymentInstructions } from './components/giftcard/GiftcardManualPaymentInstructions';
 import { GiftcardPendingReview } from './components/giftcard/GiftcardPendingReview';
 import { GiftcardBalanceChecker } from './components/giftcard/GiftcardBalanceChecker';
+import { GiftcardRedeemBookingPage } from './components/giftcard/GiftcardRedeemBookingPage';
 
 const App: React.FC = () => {
     const [giftcardPaid, setGiftcardPaid] = useState(false);
@@ -156,6 +157,8 @@ const App: React.FC = () => {
     const [appData, setAppData] = useState<AppData>(() => dataService.getInitialAppData());
     const [isHydratingAppData, setIsHydratingAppData] = useState(true);
     const [proofUploadCode, setProofUploadCode] = useState<string | null>(null);
+    const [giftcardRedeemBookingCode, setGiftcardRedeemBookingCode] = useState<string | null>(null);
+    const [giftcardRedeemPrefillCode, setGiftcardRedeemPrefillCode] = useState<string | null>(null);
 
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
@@ -168,6 +171,25 @@ const App: React.FC = () => {
         if (comprobanteCode) {
             setProofUploadCode(comprobanteCode.toUpperCase().trim());
             setView('proof_upload');
+            return;
+        }
+
+        const giftcardBookingParam = urlParams.get('giftcard') || urlParams.get('redimir');
+        const looksLikeBookingCode = (value: string) => {
+            const v = value.trim().toUpperCase();
+            return v.startsWith('C-') || v.startsWith('ALMA') || v.includes('ALMA') || v.length >= 8;
+        };
+        if (giftcardBookingParam && giftcardBookingParam.toUpperCase() !== 'TRUE' && looksLikeBookingCode(giftcardBookingParam)) {
+            setGiftcardRedeemBookingCode(giftcardBookingParam.toUpperCase().trim());
+            setView('giftcard_redeem_booking');
+            return;
+        }
+        if (pathname.includes('/giftcard/redeem') || href.includes('/giftcard/redeem')) {
+            const bookingFromPath = urlParams.get('booking') || urlParams.get('reserva');
+            const gcCode = urlParams.get('code');
+            if (bookingFromPath) setGiftcardRedeemBookingCode(bookingFromPath.toUpperCase().trim());
+            if (gcCode) setGiftcardRedeemPrefillCode(gcCode.toUpperCase().trim());
+            setView('giftcard_redeem_booking');
             return;
         }
 
@@ -937,7 +959,7 @@ const App: React.FC = () => {
                 if (technique === 'open_studio') return null;
                 // Solo mostrar si es potters_wheel o molding
                 if (technique !== 'potters_wheel' && technique !== 'molding') return <TechniqueSelector onSelect={handleTechniqueSelect} onBack={() => setView('welcome')} products={appData.products} />;
-                return <PackageSelector onSelect={handlePackageSelect} technique={technique} products={appData.products} />;
+                return <PackageSelector onSelect={handlePackageSelect} onBack={() => setView('techniques')} technique={technique} products={appData.products} />;
             case 'schedule':
                 if (!bookingDetails.product || bookingDetails.product.type !== 'CLASS_PACKAGE' || !bookingMode) return <WelcomeSelector onSelect={handleWelcomeSelect} />;
                 return <ScheduleSelector 
@@ -1248,6 +1270,19 @@ const App: React.FC = () => {
                         bookingCode={proofUploadCode || ''}
                         onDone={() => {
                             setProofUploadCode(null);
+                            setView('welcome');
+                        }}
+                    />
+                );
+
+            case 'giftcard_redeem_booking':
+                return (
+                    <GiftcardRedeemBookingPage
+                        bookingCode={giftcardRedeemBookingCode}
+                        prefillGiftcardCode={giftcardRedeemPrefillCode}
+                        onDone={() => {
+                            setGiftcardRedeemBookingCode(null);
+                            setGiftcardRedeemPrefillCode(null);
                             setView('welcome');
                         }}
                     />

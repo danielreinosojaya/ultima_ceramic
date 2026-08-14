@@ -45,6 +45,24 @@ const getProductTypeName = (productType?: string): string => {
   return typeNames[productType || ''] || 'Clase';
 };
 
+function getAppPublicUrl(): string {
+    return process.env.APP_PUBLIC_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://ceramicalma.com');
+}
+
+/** CTA de redención virtual de gift card (pre-reserva / pago pendiente). */
+export function giftcardRedeemEmailBlock(bookingCode: string): string {
+    const redeemLink = `${getAppPublicUrl()}/?giftcard=${encodeURIComponent(bookingCode)}`;
+    return `
+            <div style="background:#F5F3FF;border:2px solid #7C3AED;border-radius:10px;padding:24px;margin:28px 0;text-align:center;">
+                <p style="margin:0 0 6px 0;font-size:15px;font-weight:700;color:#4A4540;">🎁 ¿Tienes una gift card?</p>
+                <p style="margin:0 0 16px 0;font-size:13px;color:#958985;line-height:1.55;">
+                    Puedes <strong>redimirla de forma virtual</strong>: ingresa tu código, vemos el saldo y lo aplicamos a esta reserva.
+                    Si no cubre el total, te indicamos el <strong>faltante</strong> para transferir. Si sobra, el saldo queda en tu gift card para otra visita.
+                </p>
+                <a href="${redeemLink}" style="display:inline-block;background:#7C3AED;color:#fff;padding:12px 32px;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;">Redimir gift card →</a>
+            </div>`;
+}
+
 const SPECIAL_EVENT_DISPLAY_NAMES: Record<string, string> = {
   'desobedecer-al-dolor': 'Desobedecer al Dolor',
   'huella-mascota': 'Una Huella que Queda para Siempre',
@@ -360,6 +378,8 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
                 <a href="${uploadLink}" style="display:inline-block;background:#828E98;color:#fff;padding:12px 32px;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;">Subir Comprobante →</a>
                 <p style="margin:16px 0 0 0;font-size:12px;color:#958985;">Si ya subiste tu comprobante, ignora este correo. Tu reserva está protegida.</p>
             </div>
+
+            ${pendingBalance > 0.009 ? giftcardRedeemEmailBlock(bookingCode) : ''}
 
             ${packageValidityBlock}
 
@@ -1659,6 +1679,8 @@ export const sendCouplesTourConfirmationEmail = async (booking: Booking, bankDet
                 <p style="margin:16px 0 0 0;font-size:12px;color:#958985;">Si ya subiste tu comprobante, ignora este correo. Tu reserva está protegida.</p>
             </div>
 
+            ${giftcardRedeemEmailBlock(bookingCode)}
+
             <!-- Important info -->
             <div style="background: #F4F2F1; border-left: 5px solid #CCBCB2; padding: 24px; margin: 28px 0; border-radius: 8px;">
                 <h3 style="color: #4A4540; margin: 0 0 14px 0; font-size: 16px; font-weight: 700;">📋 Información Importante</h3>
@@ -2538,6 +2560,8 @@ export const sendCustomExperiencePreBookingEmail = async (
                     <p style="margin:16px 0 0 0;font-size:12px;color:#958985;">Si ya subiste tu comprobante, ignora este correo. Tu reserva está protegida.</p>
                 </div>
 
+                ${giftcardRedeemEmailBlock(bookingCode)}
+
                 <!-- Terms & Conditions -->
                 <div style="background: #F4F2F1; border-left: 5px solid #CCBCB2; padding: 24px; margin: 28px 0; border-radius: 8px;">
                     <h3 style="color: #4A4540; margin: 0 0 14px 0; font-size: 16px; font-weight: 700;">🎁 Términos de tu Reserva</h3>
@@ -2733,6 +2757,8 @@ export const sendSpaceRentalConfirmationEmail = async (params: {
                     <p style="margin:0 0 16px 0;font-size:13px;color:#958985;">Así confirmamos tu pago y dejamos todo listo para el evento.</p>
                     <a href="${uploadLink}" style="display:inline-block;background:#828E98;color:#fff;padding:12px 32px;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;">Subir Comprobante →</a>
                 </div>
+
+                ${giftcardRedeemEmailBlock(bookingCode)}
 
                 <p style="color: #958985; font-size: 15px; line-height: 1.7; margin: 28px 0 0 0;">
                     ¿Tienes preguntas? Estamos aquí para ayudarte.
@@ -3399,6 +3425,7 @@ export const sendPaymentReminderEmail = async (booking: Booking, bankDetails: Ba
                 <p style="margin:0 0 16px 0;color:#7C2D12;font-size:13px;">Haz click abajo — tu reserva pasará a <strong>"En Revisión"</strong> y no expirará mientras validamos.</p>
                 <a href="${uploadLink}" style="background:#D95F43;color:#ffffff;padding:12px 32px;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;display:inline-block;">Subir Comprobante →</a>
             </div>
+            ${giftcardRedeemEmailBlock(bookingCode)}
             <p style="margin-top:24px;">¡Esperamos verte pronto en el taller!</p>
             <p>Saludos,<br/>El equipo de CeramicAlma</p>
         </div>
