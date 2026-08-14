@@ -28,7 +28,23 @@ function formatShortDate(iso: string | null | undefined): string {
 }
 
 function getRedeemCode(req: GiftcardRequest): string | null {
-  return req.metadata?.issuedCode || req.metadata?.issued_code || null;
+  const fromMeta = req.metadata?.issuedCode || req.metadata?.issued_code || null;
+  if (fromMeta) return fromMeta;
+  // Física: a veces el código GC quedó en `code` (sin GIF-)
+  if (req.code && /^GC-/i.test(req.code)) return req.code;
+  return null;
+}
+
+function addMonthsIso(iso: string | null | undefined, months: number): string | null {
+  if (!iso) return null;
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return null;
+    d.setMonth(d.getMonth() + months);
+    return d.toISOString();
+  } catch {
+    return null;
+  }
 }
 
 function findIssuedGiftcard(req: GiftcardRequest, giftcards: any[]): any | null {
@@ -37,7 +53,10 @@ function findIssuedGiftcard(req: GiftcardRequest, giftcards: any[]): any | null 
   return giftcards.find((g: any) => {
     if (!g) return false;
     if (g.giftcardRequestId && String(g.giftcardRequestId) === String(req.id)) return true;
-    if (issuedCode && g.code === issuedCode) return true;
+    if (issuedCode && g.code && String(g.code).toUpperCase() === String(issuedCode).toUpperCase()) return true;
+    if (req.code && /^GC-/i.test(req.code) && g.code && String(g.code).toUpperCase() === String(req.code).toUpperCase()) {
+      return true;
+    }
     return false;
   }) || null;
 }
@@ -51,7 +70,12 @@ function getExpirationInfo(req: GiftcardRequest, giftcards: any[]): {
     return { expiresAt: null, daysLeft: null, status: req.status === 'pending' ? 'pending' : 'none' };
   }
   const gc = findIssuedGiftcard(req, giftcards);
-  const expiresAt = gc?.expiresAt || null;
+  // Prefer DB expires_at; if missing (cache / física), 3 meses desde emisión o compra
+  const expiresAt =
+    gc?.expiresAt ||
+    addMonthsIso(gc?.createdAt, 3) ||
+    addMonthsIso(req.createdAt, 3) ||
+    null;
   if (!expiresAt) return { expiresAt: null, daysLeft: null, status: 'none' };
   const exp = new Date(expiresAt);
   const daysLeft = Math.ceil((exp.getTime() - Date.now()) / (1000 * 60 * 60 * 24));

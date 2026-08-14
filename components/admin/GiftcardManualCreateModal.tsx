@@ -180,7 +180,10 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
                         </div>
                         <div className="text-sm text-brand-text space-y-1">
                             <p>Valor: <strong>{formatPrice(created.amount)}</strong></p>
-                            <p>Vence: <strong>{expiresLabel}</strong></p>
+                            <p>
+                                Vence: <strong>{expiresLabel}</strong>
+                                <span className="text-brand-secondary"> (3 meses desde la compra/registro)</span>
+                            </p>
                             {created.emailed ? (
                                 <p className="text-emerald-800">Se envió el código por correo al destinatario.</p>
                             ) : (
@@ -358,7 +361,14 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
                         )}
 
                         <div className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-sm text-gray-600">
-                            Código GC se genera al crear · Vence {implicitExpiresAt} (3 meses)
+                            {mode === 'physical' ? (
+                                <>
+                                    Código GC al registrar · <strong>Vence {implicitExpiresAt}</strong>
+                                    {' '}(3 meses desde hoy, día de la compra/registro)
+                                </>
+                            ) : (
+                                <>Código GC se genera al crear · Vence {implicitExpiresAt} (3 meses)</>
+                            )}
                         </div>
 
                         <div className="flex gap-2 pt-1">

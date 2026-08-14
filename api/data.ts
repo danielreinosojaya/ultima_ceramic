@@ -1362,8 +1362,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     }));
                     console.debug('[API] listGiftcards fetched rows:', rows.length);
                     data = formattedG;
-                    // ✅ OPTIMIZACIÓN: Cache CDN 5 minutos (datos dinámicos)
-                    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+                    // Admin necesita ver vencimiento al instante tras crear (física/digital)
+                    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
                 } catch (err) {
                     console.error('Error listing giftcards:', err);
                     data = [];
@@ -4916,27 +4916,43 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         balance NUMERIC,
                         giftcard_request_id INTEGER,
                         expires_at TIMESTAMP,
+                        status VARCHAR(20) DEFAULT 'active',
                         metadata JSONB,
                         created_at TIMESTAMP DEFAULT NOW()
                     )
                 `;
-                
-                // 4. Crear giftcard emitida
+                try {
+                    await sql`ALTER TABLE giftcards ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active'`;
+                } catch (_) { /* columna ya existe */ }
+
+                // 4. Crear giftcard emitida (incluye status/value/buyer_info: NOT NULL en producción)
+                const buyerInfo = JSON.stringify({
+                    name: body.buyerName || 'CeramicAlma',
+                    email: body.buyerEmail || 'admin@interno.ceramicalma.com',
+                });
+                const recipientInfo = JSON.stringify({
+                    name: body.recipientName || '',
+                    email: body.recipientEmail || '',
+                });
                 const { rows: [giftcard] } = await sql`
                     INSERT INTO giftcards (
-                        code, initial_value, balance, giftcard_request_id, 
-                        expires_at, metadata
+                        code, value, initial_value, balance, giftcard_request_id, 
+                        expires_at, status, metadata, buyer_info, recipient_info
                     ) VALUES (
                         ${code},
                         ${body.amount},
                         ${body.amount},
+                        ${body.amount},
                         ${request.id},
                         NOW() + INTERVAL '3 months',
+                        'active',
                         ${JSON.stringify({ 
                             createdManually: true,
                             createdBy: adminUser,
                             holderName: body.recipientName,
-                        })}
+                        })}::jsonb,
+                        ${buyerInfo}::jsonb,
+                        ${recipientInfo}::jsonb
                     )
                     RETURNING id, code, balance, expires_at
                 `;
@@ -5010,7 +5026,9 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         id: giftcard.id,
                         code: giftcard.code,
                         balance: Number(giftcard.balance),
-                        expiresAt: giftcard.expires_at,
+                        expiresAt: giftcard.expires_at
+                            ? new Date(giftcard.expires_at).toISOString()
+                            : null,
                         requestId: request.id
                     },
                     message: `Giftcard ${code} creada exitosamente`
@@ -5122,22 +5140,30 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         balance NUMERIC,
                         giftcard_request_id INTEGER,
                         expires_at TIMESTAMP,
+                        status VARCHAR(20) DEFAULT 'active',
                         metadata JSONB,
                         created_at TIMESTAMP DEFAULT NOW()
                     )
                 `;
+                try {
+                    await sql`ALTER TABLE giftcards ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active'`;
+                } catch (_) { /* columna ya existe */ }
 
                 const { rows: [giftcard] } = await sql`
                     INSERT INTO giftcards (
-                        code, initial_value, balance, giftcard_request_id,
-                        expires_at, metadata
+                        code, value, initial_value, balance, giftcard_request_id,
+                        expires_at, status, metadata, buyer_info, recipient_info
                     ) VALUES (
                         ${code},
                         ${amount},
                         ${amount},
+                        ${amount},
                         ${request.id},
                         NOW() + INTERVAL '3 months',
-                        ${JSON.stringify({ ...metadata, holderName: name })}
+                        'active',
+                        ${JSON.stringify({ ...metadata, holderName: name })}::jsonb,
+                        ${JSON.stringify({ name, email: internalEmail })}::jsonb,
+                        ${JSON.stringify({ name, email: '' })}::jsonb
                     )
                     RETURNING id, code, balance, expires_at
                 `;
@@ -5175,7 +5201,9 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         id: giftcard.id,
                         code: giftcard.code,
                         balance: Number(giftcard.balance),
-                        expiresAt: giftcard.expires_at,
+                        expiresAt: giftcard.expires_at
+                            ? new Date(giftcard.expires_at).toISOString()
+                            : null,
                         requestId: request.id,
                     },
                     message: `Giftcard física ${code} registrada`,
@@ -5285,11 +5313,12 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 console.debug('[API] repairMissingGiftcards candidates found:', candidates.length);
 
                 // Determine which numeric columns exist in giftcards
-                const { rows: colCheck } = await sql`SELECT column_name FROM information_schema.columns WHERE table_name='giftcards' AND column_name IN ('initial_value','value','balance')`;
+                const { rows: colCheck } = await sql`SELECT column_name FROM information_schema.columns WHERE table_name='giftcards' AND column_name IN ('initial_value','value','balance','status')`;
                 const cols = (colCheck || []).map((c: any) => c.column_name);
                 const hasInitial = cols.includes('initial_value');
                 const hasValue = cols.includes('value');
                 const hasBalance = cols.includes('balance');
+                const hasStatus = cols.includes('status');
 
                 const repaired: any[] = [];
                 const failed: any[] = [];
@@ -5301,33 +5330,62 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                             continue;
                         }
 
+                        const metaJson = JSON.stringify({ repairedBy: 'repairMissingGiftcards', repairedAt: new Date().toISOString(), amount: c.amount });
                         // Attempt insertion with the safest set of columns available
                         let inserted: any = null;
-                        if (hasInitial && hasBalance) {
+                        if (hasInitial && hasBalance && hasStatus) {
+                            const { rows: [r] } = await sql`
+                                INSERT INTO giftcards (code, initial_value, balance, giftcard_request_id, expires_at, status, metadata)
+                                VALUES (${c.issuedCode}, ${c.amount || 0}, ${c.amount || 0}, ${c.id}, NOW() + INTERVAL '3 months', 'active', ${metaJson}::jsonb)
+                                RETURNING *;
+                            `;
+                            inserted = r;
+                        } else if (hasInitial && hasBalance) {
                             const { rows: [r] } = await sql`
                                 INSERT INTO giftcards (code, initial_value, balance, giftcard_request_id, expires_at, metadata)
-                                VALUES (${c.issuedCode}, ${c.amount || 0}, ${c.amount || 0}, ${c.id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ repairedBy: 'repairMissingGiftcards', repairedAt: new Date().toISOString() })}::jsonb)
+                                VALUES (${c.issuedCode}, ${c.amount || 0}, ${c.amount || 0}, ${c.id}, NOW() + INTERVAL '3 months', ${metaJson}::jsonb)
+                                RETURNING *;
+                            `;
+                            inserted = r;
+                        } else if (hasInitial && hasStatus) {
+                            const { rows: [r] } = await sql`
+                                INSERT INTO giftcards (code, initial_value, giftcard_request_id, expires_at, status, metadata)
+                                VALUES (${c.issuedCode}, ${c.amount || 0}, ${c.id}, NOW() + INTERVAL '3 months', 'active', ${metaJson}::jsonb)
                                 RETURNING *;
                             `;
                             inserted = r;
                         } else if (hasInitial) {
                             const { rows: [r] } = await sql`
                                 INSERT INTO giftcards (code, initial_value, giftcard_request_id, expires_at, metadata)
-                                VALUES (${c.issuedCode}, ${c.amount || 0}, ${c.id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ repairedBy: 'repairMissingGiftcards', repairedAt: new Date().toISOString() })}::jsonb)
+                                VALUES (${c.issuedCode}, ${c.amount || 0}, ${c.id}, NOW() + INTERVAL '3 months', ${metaJson}::jsonb)
+                                RETURNING *;
+                            `;
+                            inserted = r;
+                        } else if (hasValue && hasBalance && hasStatus) {
+                            const { rows: [r] } = await sql`
+                                INSERT INTO giftcards (code, value, balance, giftcard_request_id, expires_at, status, metadata)
+                                VALUES (${c.issuedCode}, ${c.amount || 0}, ${c.amount || 0}, ${c.id}, NOW() + INTERVAL '3 months', 'active', ${metaJson}::jsonb)
                                 RETURNING *;
                             `;
                             inserted = r;
                         } else if (hasValue && hasBalance) {
                             const { rows: [r] } = await sql`
                                 INSERT INTO giftcards (code, value, balance, giftcard_request_id, expires_at, metadata)
-                                VALUES (${c.issuedCode}, ${c.amount || 0}, ${c.amount || 0}, ${c.id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ repairedBy: 'repairMissingGiftcards', repairedAt: new Date().toISOString() })}::jsonb)
+                                VALUES (${c.issuedCode}, ${c.amount || 0}, ${c.amount || 0}, ${c.id}, NOW() + INTERVAL '3 months', ${metaJson}::jsonb)
+                                RETURNING *;
+                            `;
+                            inserted = r;
+                        } else if (hasStatus) {
+                            const { rows: [r] } = await sql`
+                                INSERT INTO giftcards (code, giftcard_request_id, expires_at, status, metadata)
+                                VALUES (${c.issuedCode}, ${c.id}, NOW() + INTERVAL '3 months', 'active', ${metaJson}::jsonb)
                                 RETURNING *;
                             `;
                             inserted = r;
                         } else {
                             const { rows: [r] } = await sql`
                                 INSERT INTO giftcards (code, giftcard_request_id, expires_at, metadata)
-                                VALUES (${c.issuedCode}, ${c.id}, NOW() + INTERVAL '3 months', ${JSON.stringify({ repairedBy: 'repairMissingGiftcards', repairedAt: new Date().toISOString(), amount: c.amount })}::jsonb)
+                                VALUES (${c.issuedCode}, ${c.id}, NOW() + INTERVAL '3 months', ${metaJson}::jsonb)
                                 RETURNING *;
                             `;
                             inserted = r;
