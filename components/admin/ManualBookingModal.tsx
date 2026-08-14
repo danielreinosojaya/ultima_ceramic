@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { getEcuadorToday, formatDateToYYYYMMDD } from '../../utils/formatters';
 import type { Product, UserInfo, Customer, TimeSlot, Booking } from '../../types';
 import * as dataService from '../../services/dataService';
 import * as adminValidator from '../../services/adminValidator';
 import type { ValidationResult, ValidationWarning } from '../../services/adminValidator';
 import { ConfirmAdminOverrideModal } from './ConfirmAdminOverrideModal';
+import { SpaceRentalBookingForm } from './SpaceRentalBookingForm';
 import { COUNTRIES } from '@/constants';
 import { useAdminData } from '../../context/AdminDataContext';
 
@@ -26,6 +27,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
   preselectedCustomer
 }) => {
   const adminData = useAdminData();
+  const [manualMode, setManualMode] = useState<'standard' | 'choose' | 'space_rental'>('choose');
   const [productError, setProductError] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(preselectedCustomer || null);
@@ -36,7 +38,18 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
   const [clientNote, setClientNote] = useState('');
   const [selectedSlots, setSelectedSlots] = useState<TimeSlot[]>([]);
   const [submitDisabled, setSubmitDisabled] = useState(false);
-  const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
+  const [searchResults, setSearchResults] = useState<Customer[]>([]);
+  const [isSearchingCustomers, setIsSearchingCustomers] = useState(false);
+  const [showCreateCustomer, setShowCreateCustomer] = useState(false);
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
+  const [createCustomerError, setCreateCustomerError] = useState('');
+  const [newCustomerForm, setNewCustomerForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    countryCode: COUNTRIES[0].code,
+  });
   const [participants, setParticipants] = useState<number>(1);
   /** Texto del input — evita forzar "1" mientras el admin borra para escribir otro número */
   const [participantsInput, setParticipantsInput] = useState('1');
@@ -104,17 +117,56 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
   };
 
   useEffect(() => {
-    // Usar los productos pasados como props
     setProducts(availableProducts);
-    
-    // Obtener customers correctamente usando la función async
-    const fetchCustomers = async () => {
-      const customers = await dataService.getCustomers();
-      console.log('[ManualBookingModal] API getCustomers response:', customers);
-      setAllCustomers(Array.isArray(customers) ? customers : []);
-    };
-    fetchCustomers();
   }, [availableProducts]);
+
+  // Búsqueda de clientes en vivo (server-side) — getCustomers ahora paginado devolvía objeto y el dropdown quedaba vacío
+  useEffect(() => {
+    if (selectedCustomer) return;
+    const term = searchTerm.trim();
+    if (term.length < 2) {
+      setSearchResults([]);
+      setIsSearchingCustomers(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsSearchingCustomers(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const [fromSearch, fromStandalone] = await Promise.all([
+          dataService.getCustomers({ search: term, limit: 30 }),
+          dataService.getStandaloneCustomers(term),
+        ]);
+        if (cancelled) return;
+
+        const map = new Map<string, Customer>();
+        const add = (c: Customer) => {
+          const key = (c.email || c.userInfo?.email || '').trim().toLowerCase();
+          if (!key) return;
+          if (!map.has(key)) map.set(key, { ...c, email: key });
+        };
+        fromSearch.forEach(add);
+        fromStandalone.forEach(add);
+        // También incluir clientes ya cargados en admin (reservas)
+        (adminData.customers || []).forEach((c) => {
+          const haystack = `${c.userInfo?.firstName || ''} ${c.userInfo?.lastName || ''} ${c.userInfo?.email || c.email || ''}`.toLowerCase();
+          if (haystack.includes(term.toLowerCase())) add(c);
+        });
+
+        setSearchResults(Array.from(map.values()).slice(0, 12));
+      } catch {
+        if (!cancelled) setSearchResults([]);
+      } finally {
+        if (!cancelled) setIsSearchingCustomers(false);
+      }
+    }, 280);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [searchTerm, selectedCustomer, adminData.customers]);
 
   // Efecto para manejar el cliente preseleccionado
   useEffect(() => {
@@ -145,15 +197,23 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
       setShowTimePicker(false);
       setProductError('');
       setSearchTerm('');
+      setSearchResults([]);
+      setShowCreateCustomer(false);
+      setCreateCustomerError('');
+      setCreatingCustomer(false);
+      setManualMode('choose');
+      setNewCustomerForm({
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: '',
+        countryCode: COUNTRIES[0].code,
+      });
       setParticipants(1);
       setParticipantsInput('1');
       setValidationResult(null);
       setShowOverrideModal(false);
       setOverrideInProgress(false);
-      setAllCustomers(prev => {
-        console.log('[ManualBookingModal] Reset allCustomers state:', prev);
-        return Array.isArray(prev) ? prev : [];
-      });
       if (preselectedCustomer?.userInfo) {
         setUserInfo({
           firstName: preselectedCustomer.userInfo.firstName || '',
@@ -185,25 +245,69 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
     }
   }, [selectedProduct]);
 
-  const filteredCustomers = useMemo(() => {
-    console.log('[ManualBookingModal] filteredCustomers useMemo - allCustomers:', allCustomers, 'searchTerm:', searchTerm);
-    if (!searchTerm) return [];
-    const safeCustomers = Array.isArray(allCustomers) ? allCustomers : [];
-    return safeCustomers.filter(c =>
-      c?.userInfo?.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c?.userInfo?.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c?.userInfo?.email?.toLowerCase().includes(searchTerm.toLowerCase())
-    ).slice(0, 5);
-  }, [allCustomers, searchTerm]);
-
   const handleSelectCustomer = (customer: Customer) => {
     setSelectedCustomer(customer);
     setUserInfo(customer?.userInfo || { firstName: '', lastName: '', email: '', phone: '', countryCode: COUNTRIES[0].code, birthday: '' });
     setSearchTerm('');
+    setSearchResults([]);
+    setShowCreateCustomer(false);
+    setManualMode('choose');
   };
   const resetCustomerSelection = () => {
     setSelectedCustomer(null);
     setUserInfo({ firstName: '', lastName: '', email: '', phone: '', countryCode: COUNTRIES[0].code, birthday: '' });
+    setManualMode('choose');
+    setSearchTerm('');
+    setSearchResults([]);
+  };
+
+  const openCreateCustomer = () => {
+    const parts = searchTerm.trim().split(/\s+/).filter(Boolean);
+    setNewCustomerForm({
+      firstName: parts[0] || '',
+      lastName: parts.slice(1).join(' ') || '',
+      email: searchTerm.includes('@') ? searchTerm.trim().toLowerCase() : '',
+      phone: '',
+      countryCode: COUNTRIES[0].code,
+    });
+    setCreateCustomerError('');
+    setShowCreateCustomer(true);
+  };
+
+  const handleCreateCustomer = async () => {
+    setCreateCustomerError('');
+    const email = newCustomerForm.email.trim().toLowerCase();
+    const firstName = newCustomerForm.firstName.trim();
+    const lastName = newCustomerForm.lastName.trim();
+    const phone = newCustomerForm.phone.trim();
+    if (!firstName || !lastName) {
+      setCreateCustomerError('Nombre y apellido son obligatorios.');
+      return;
+    }
+    if (!email || !email.includes('@')) {
+      setCreateCustomerError('Indica un email válido.');
+      return;
+    }
+    if (!phone) {
+      setCreateCustomerError('Indica un teléfono.');
+      return;
+    }
+
+    setCreatingCustomer(true);
+    try {
+      const created = await dataService.createCustomer({
+        email,
+        firstName,
+        lastName,
+        phone,
+        countryCode: newCustomerForm.countryCode || COUNTRIES[0].code,
+      });
+      handleSelectCustomer(created);
+    } catch (err: any) {
+      setCreateCustomerError(err?.message || 'No se pudo crear el cliente.');
+    } finally {
+      setCreatingCustomer(false);
+    }
   };
 
   // Validar y mostrar confirmación si hay warnings
@@ -403,31 +507,214 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
         <h2 className="text-2xl font-bold mb-4">Reserva manual</h2>
         {!selectedCustomer && (
           <div className="mb-4">
-            <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Buscar cliente" className="w-full p-2 border rounded-lg" />
-            {filteredCustomers.length > 0 && (
-              <ul className="bg-white border rounded-lg mt-1 shadow-lg max-h-48 overflow-y-auto">
-                {filteredCustomers.map(c => (
-                  <li key={c.email} onClick={() => handleSelectCustomer(c)} className="p-2 hover:bg-gray-100 cursor-pointer">{c.userInfo.firstName} {c.userInfo.lastName} ({c.userInfo.email})</li>
+            <label className="block text-sm font-semibold text-brand-text mb-1">Buscar cliente</label>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={e => {
+                setSearchTerm(e.target.value);
+                setShowCreateCustomer(false);
+              }}
+              placeholder="Nombre, apellido o email (mín. 2 letras)"
+              className="w-full p-2.5 border rounded-lg"
+              autoFocus
+            />
+            {searchTerm.trim().length > 0 && searchTerm.trim().length < 2 && (
+              <p className="text-xs text-brand-secondary mt-1">Escribe al menos 2 caracteres para buscar.</p>
+            )}
+            {isSearchingCustomers && (
+              <p className="text-xs text-brand-secondary mt-2">Buscando…</p>
+            )}
+            {searchResults.length > 0 && (
+              <ul className="bg-white border rounded-lg mt-1 shadow-lg max-h-56 overflow-y-auto z-10 relative">
+                {searchResults.map(c => (
+                  <li
+                    key={c.email || c.userInfo?.email}
+                    onClick={() => handleSelectCustomer(c)}
+                    className="p-2.5 hover:bg-brand-primary/5 cursor-pointer border-b border-gray-100 last:border-0"
+                  >
+                    <div className="font-medium text-brand-text text-sm">
+                      {c.userInfo?.firstName} {c.userInfo?.lastName}
+                    </div>
+                    <div className="text-xs text-brand-secondary">{c.userInfo?.email || c.email}</div>
+                  </li>
                 ))}
               </ul>
             )}
-            {selectedCustomer && (
-              <div className="mt-2 p-2 bg-blue-100 rounded-lg text-sm flex justify-between items-center">
-                <span>Seleccionado: {selectedCustomer.userInfo.firstName} {selectedCustomer.userInfo.lastName}</span>
-                <button onClick={resetCustomerSelection} className="text-red-500 font-bold">X</button>
+            {!isSearchingCustomers && searchTerm.trim().length >= 2 && searchResults.length === 0 && !showCreateCustomer && (
+              <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-sm text-amber-950 font-medium">No encontramos ese cliente.</p>
+                <p className="text-xs text-amber-900/80 mt-0.5">Puedes crearlo aquí sin salir de esta pantalla.</p>
+                <button
+                  type="button"
+                  onClick={openCreateCustomer}
+                  className="mt-2 text-sm font-semibold text-brand-primary hover:underline"
+                >
+                  + Crear cliente nuevo
+                </button>
               </div>
             )}
+            {!showCreateCustomer && searchTerm.trim().length >= 2 && searchResults.length > 0 && (
+              <button
+                type="button"
+                onClick={openCreateCustomer}
+                className="mt-2 text-sm font-semibold text-brand-secondary hover:text-brand-primary"
+              >
+                + El cliente no está en la lista — crear nuevo
+              </button>
+            )}
+
+            {showCreateCustomer && (
+              <div className="mt-3 rounded-2xl border border-brand-border bg-brand-surface p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold text-brand-text">Nuevo cliente</h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateCustomer(false)}
+                    className="text-xs font-semibold text-brand-secondary hover:text-brand-text"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    placeholder="Nombre"
+                    value={newCustomerForm.firstName}
+                    onChange={(e) => setNewCustomerForm((p) => ({ ...p, firstName: e.target.value }))}
+                    className="w-full p-2 border rounded-lg text-sm"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Apellido"
+                    value={newCustomerForm.lastName}
+                    onChange={(e) => setNewCustomerForm((p) => ({ ...p, lastName: e.target.value }))}
+                    className="w-full p-2 border rounded-lg text-sm"
+                  />
+                </div>
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={newCustomerForm.email}
+                  onChange={(e) => setNewCustomerForm((p) => ({ ...p, email: e.target.value }))}
+                  className="w-full p-2 border rounded-lg text-sm"
+                />
+                <div className="grid grid-cols-1 sm:grid-cols-[7rem_1fr] gap-2">
+                  <select
+                    value={newCustomerForm.countryCode}
+                    onChange={(e) => setNewCustomerForm((p) => ({ ...p, countryCode: e.target.value }))}
+                    className="w-full p-2 border rounded-lg text-sm bg-white"
+                  >
+                    {COUNTRIES.map((c) => (
+                      <option key={c.code} value={c.code}>{c.code}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="tel"
+                    placeholder="Teléfono"
+                    value={newCustomerForm.phone}
+                    onChange={(e) => setNewCustomerForm((p) => ({ ...p, phone: e.target.value }))}
+                    className="w-full p-2 border rounded-lg text-sm"
+                  />
+                </div>
+                {createCustomerError && <p className="text-sm text-red-600">{createCustomerError}</p>}
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateCustomer(false)}
+                    className="px-3 py-2 text-sm font-semibold border rounded-lg text-brand-secondary"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCreateCustomer}
+                    disabled={creatingCustomer}
+                    className="px-3 py-2 text-sm font-semibold rounded-lg bg-brand-primary text-white disabled:bg-gray-300"
+                  >
+                    {creatingCustomer ? 'Creando…' : 'Crear y continuar'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4 flex justify-end">
+              <button type="button" onClick={onClose} className="bg-white border text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100">
+                Cancelar
+              </button>
+            </div>
           </div>
         )}
         {selectedCustomer && (
           <div className="mb-4 p-3 bg-gray-100 rounded-lg">
             <h3 className="text-sm font-medium text-gray-700 mb-2">Cliente Seleccionado:</h3>
-            <div className="text-sm text-gray-600">
-              <strong>{selectedCustomer.userInfo?.firstName} {selectedCustomer.userInfo?.lastName}</strong><br />
-              {selectedCustomer.email}
+            <div className="text-sm text-gray-600 flex justify-between items-start gap-2">
+              <div>
+                <strong>{selectedCustomer.userInfo?.firstName} {selectedCustomer.userInfo?.lastName}</strong><br />
+                {selectedCustomer.email || selectedCustomer.userInfo?.email}
+              </div>
+              <button onClick={resetCustomerSelection} className="text-red-500 font-bold text-sm shrink-0" type="button">
+                Cambiar
+              </button>
             </div>
           </div>
         )}
+
+        {selectedCustomer && manualMode === 'choose' && (
+          <div className="space-y-3 mb-2">
+            <p className="text-sm text-brand-secondary">¿Qué quieres agendar?</p>
+            <button
+              type="button"
+              onClick={() => setManualMode('standard')}
+              className="w-full text-left rounded-2xl border border-brand-border p-4 hover:border-brand-primary/40 hover:bg-brand-primary/[0.03] transition-all"
+            >
+              <div className="font-semibold text-brand-text">Clase, paquete o experiencia</div>
+              <div className="text-xs text-brand-secondary mt-1">Clases sueltas, paquetes o experiencia personalizada con técnica.</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setManualMode('space_rental')}
+              className="w-full text-left rounded-2xl border border-brand-primary/25 bg-brand-primary/[0.04] p-4 hover:border-brand-primary/50 transition-all"
+            >
+              <div className="font-semibold text-brand-text">Alquiler de espacio</div>
+              <div className="text-xs text-brand-secondary mt-1">
+                Evento privado. Bloquea todo el taller mientras dure. El cliente recibe un correo al confirmar.
+              </div>
+            </button>
+            <div className="flex justify-end pt-2">
+              <button type="button" onClick={onClose} className="bg-white border text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {selectedCustomer && manualMode === 'space_rental' && (
+          <SpaceRentalBookingForm
+            selectedCustomer={selectedCustomer}
+            onBack={() => setManualMode('choose')}
+            onSuccess={(booking, message) => {
+              if (booking?.id) {
+                adminData.optimisticUpsertBooking(booking);
+              }
+              if (typeof window !== 'undefined') {
+                window.alert(message);
+              }
+              onBookingAdded();
+              onClose();
+            }}
+          />
+        )}
+
+        {selectedCustomer && manualMode === 'standard' && (
+        <>
+        <button
+          type="button"
+          onClick={() => setManualMode('choose')}
+          className="text-sm font-semibold text-brand-secondary hover:text-brand-text mb-3"
+        >
+          ← Cambiar tipo de reserva
+        </button>
         <div className="mb-4">
           <label className="block text-sm font-bold mb-1">Producto o Experiencia</label>
           <div className="space-y-2">
@@ -459,7 +746,8 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
                     seenNames.add(p.name);
                     return true;
                   }
-                  if (p.isActive && (p.type === 'CLASS_PACKAGE' || p.type === 'INTRODUCTORY_CLASS')) {
+                  // INTRODUCTORY_CLASS retirado de venta (producto legacy; historial se conserva)
+                  if (p.isActive && p.type === 'CLASS_PACKAGE') {
                     return true;
                   }
                   return false;
@@ -537,8 +825,17 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
             />
           </div>
           <div>
-            <label className="block text-sm font-bold mb-1">Nota</label>
-            <input type="text" value={clientNote} onChange={e => setClientNote(e.target.value)} className="w-full px-3 py-2 border rounded-lg" />
+            <label className="block text-sm font-bold mb-1">Nota interna</label>
+            <input
+              type="text"
+              value={clientNote}
+              onChange={e => setClientNote(e.target.value)}
+              placeholder="Ej. abono pendiente, niño de 8 años…"
+              className="w-full px-3 py-2 border rounded-lg"
+            />
+            <p className="text-xs text-brand-secondary mt-1">
+              Visible en el detalle del slot y en el PDF del calendario. No se envía al cliente (salvo alquiler de espacio).
+            </p>
           </div>
         </div>
         
@@ -665,6 +962,8 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
           <button type="button" onClick={onClose} className="bg-white border text-brand-secondary font-bold py-2 px-6 rounded-lg hover:bg-gray-100">Cancelar</button>
           <button type="button" onClick={handleValidateAndSubmit} disabled={submitDisabled} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent disabled:bg-gray-400">Guardar</button>
         </div>
+        </>
+        )}
       </div>
 
       {/* Modal de confirmación de override */}

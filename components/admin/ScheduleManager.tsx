@@ -22,7 +22,9 @@ const getProductTypeName = (productType?: string): string => {
     'INTRODUCTORY_CLASS': 'Clase Introductoria',
     'GROUP_CLASS': 'Clase Grupal',
     'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
-    'OPEN_STUDIO': 'Estudio Abierto'
+    'OPEN_STUDIO': 'Estudio Abierto',
+    'SPACE_RENTAL': 'Alquiler de espacio',
+    'CUSTOM_GROUP_EXPERIENCE': 'Experiencia Grupal',
   };
   return typeNames[productType || ''] || 'Clase';
 };
@@ -77,6 +79,12 @@ const getBookingDisplayName = (booking: Booking): string => {
         return PAINTING_UPSELL_LABEL;
     }
 
+    // 0b. Alquiler / espacio privado exclusivo
+    if (booking.productType === 'SPACE_RENTAL' || (booking.product as any)?.isExclusiveSpaceRental) {
+        const hours = (booking.product as any)?.rentalHours || (booking.groupClassMetadata as any)?.rentalHours;
+        return hours ? `Alquiler privado (${hours}h)` : 'Alquiler de espacio';
+    }
+
     // 0. Para experiencia grupal personalizada, priorizar técnica sobre nombre genérico
     if (
         booking.technique &&
@@ -125,6 +133,12 @@ const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): st
   // Slot 100% de upsells de pintura: etiqueta diferenciada
   if (slot.bookings.every(isPaintingUpsell)) {
     return PAINTING_UPSELL_LABEL;
+  }
+
+  // Alquiler / espacio privado
+  if (slot.bookings.some((b) => b.productType === 'SPACE_RENTAL' || (b.product as any)?.isExclusiveSpaceRental)) {
+    const rental = slot.bookings.find((b) => b.productType === 'SPACE_RENTAL' || (b.product as any)?.isExclusiveSpaceRental)!;
+    return getBookingDisplayName(rental);
   }
 
   const firstBooking = slot.bookings[0];
@@ -561,7 +575,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 });
             }
 
-            const introClassProducts = products.filter(p => p.type === 'INTRODUCTORY_CLASS') as IntroductoryClass[];
+            // Solo intros activas (producto legacy suele estar isActive=false → no genera cupos fantasma)
+            const introClassProducts = products.filter(p => p.type === 'INTRODUCTORY_CLASS' && p.isActive) as IntroductoryClass[];
             introClassProducts.forEach(p => {
                 const introSessions = dataService.generateIntroClassSessions(p, { bookings: [] }, { includeFull: true });
                 const sessionsForDay = introSessions.filter(s => s.date === dateStr);

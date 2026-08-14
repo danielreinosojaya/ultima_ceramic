@@ -29,6 +29,7 @@ import {
     TagIcon
 } from '@heroicons/react/24/outline';
 import * as dataService from '../../services/dataService';
+import { formatDate, formatCurrency, normalizeHour } from '../../utils/formatters';
 
 // Helper para obtener nombre de técnica desde metadata
 const getTechniqueName = (technique: GroupTechnique): string => {
@@ -38,20 +39,6 @@ const getTechniqueName = (technique: GroupTechnique): string => {
     'painting': 'Pintura de piezas'
   };
   return names[technique] || technique;
-};
-
-// Helper para traducir productType a nombre legible
-const getProductTypeName = (productType?: string): string => {
-  const typeNames: Record<string, string> = {
-    'SINGLE_CLASS': 'Clase Suelta',
-    'CLASS_PACKAGE': 'Paquete de Clases',
-    'INTRODUCTORY_CLASS': 'Clase Introductoria',
-    'GROUP_CLASS': 'Clase Grupal',
-        'CUSTOM_GROUP_EXPERIENCE': 'Experiencia Grupal Personalizada',
-    'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
-    'OPEN_STUDIO': 'Estudio Abierto'
-  };
-  return typeNames[productType || ''] || 'Clase';
 };
 
 // Detecta upsell de pintura post-clase (cliente pinta SU pieza ya hecha).
@@ -64,6 +51,95 @@ const isPaintingUpsell = (booking: Booking): boolean => {
 };
 
 const PAINTING_UPSELL_LABEL = 'Upsell - pieza ya hecha';
+
+// Helper para traducir productType a nombre legible (categoría de reserva)
+const getProductTypeName = (productType?: string): string => {
+  const typeNames: Record<string, string> = {
+    'SINGLE_CLASS': 'Clase suelta',
+    'CLASS_PACKAGE': 'Paquete de clases',
+    'INTRODUCTORY_CLASS': 'Clase introductoria',
+    'GROUP_CLASS': 'Clase grupal',
+    'CUSTOM_GROUP_EXPERIENCE': 'Experiencia grupal',
+    'CUSTOM_EXPERIENCE': 'Experiencia personalizada',
+    'COUPLES_EXPERIENCE': 'Experiencia en pareja',
+    'OPEN_STUDIO': 'Open Studio',
+    'OPEN_STUDIO_SUBSCRIPTION': 'Suscripción Open Studio',
+    'SPACE_RENTAL': 'Alquiler de espacio',
+    'WHEEL_COURSE': 'Curso de torno',
+  };
+  return typeNames[productType || ''] || 'Reserva';
+};
+
+type BookingCategoryMeta = {
+  label: string;
+  tone: string;
+  short: string;
+};
+
+const getBookingCategory = (booking: Booking): BookingCategoryMeta => {
+  if (isPaintingUpsell(booking)) {
+    return { label: 'Upsell pintura', short: 'Pintura', tone: 'bg-fuchsia-100 text-fuchsia-900 border-fuchsia-200' };
+  }
+  const t = booking.productType;
+  if (t === 'CLASS_PACKAGE') {
+    return { label: 'Paquete de clases', short: 'Paquete', tone: 'bg-indigo-100 text-indigo-900 border-indigo-200' };
+  }
+  if (t === 'SINGLE_CLASS') {
+    return { label: 'Clase suelta', short: 'Suelta', tone: 'bg-sky-100 text-sky-900 border-sky-200' };
+  }
+  if (t === 'SPACE_RENTAL' || (booking.product as any)?.isExclusiveSpaceRental) {
+    return { label: 'Alquiler de espacio', short: 'Alquiler', tone: 'bg-rose-100 text-rose-900 border-rose-200' };
+  }
+  if (t === 'CUSTOM_GROUP_EXPERIENCE' || t === 'CUSTOM_EXPERIENCE' || t === 'GROUP_CLASS') {
+    const exp = (booking as any).groupClassMetadata?.experienceType || (booking.product as any)?.experienceType;
+    if (exp === 'celebration') {
+      return { label: 'Celebración / evento', short: 'Celebración', tone: 'bg-amber-100 text-amber-900 border-amber-200' };
+    }
+    return { label: 'Experiencia grupal', short: 'Experiencia', tone: 'bg-violet-100 text-violet-900 border-violet-200' };
+  }
+  if (t === 'COUPLES_EXPERIENCE') {
+    return { label: 'Experiencia en pareja', short: 'Pareja', tone: 'bg-pink-100 text-pink-900 border-pink-200' };
+  }
+  if (t === 'OPEN_STUDIO' || t === 'OPEN_STUDIO_SUBSCRIPTION') {
+    return { label: 'Open Studio', short: 'Open Studio', tone: 'bg-teal-100 text-teal-900 border-teal-200' };
+  }
+  if (t === 'WHEEL_COURSE') {
+    return { label: 'Curso de torno', short: 'Curso', tone: 'bg-orange-100 text-orange-900 border-orange-200' };
+  }
+  if (t === 'INTRODUCTORY_CLASS') {
+    return { label: 'Clase introductoria', short: 'Intro', tone: 'bg-slate-100 text-slate-800 border-slate-200' };
+  }
+  return { label: getProductTypeName(t), short: 'Reserva', tone: 'bg-gray-100 text-gray-800 border-gray-200' };
+};
+
+const compareSlotsAsc = (a: { date: string; time: string }, b: { date: string; time: string }) => {
+  const d = a.date.localeCompare(b.date);
+  if (d !== 0) return d;
+  return (normalizeHour(a.time) || a.time).localeCompare(normalizeHour(b.time) || b.time);
+};
+
+/** Progreso dentro del paquete / reserva multi-sesión */
+const getPackageSessionLabel = (booking: Booking, slot: { date: string; time: string }): string | null => {
+  const sorted = [...(booking.slots || [])].sort(compareSlotsAsc);
+  const idx = sorted.findIndex(s => s.date === slot.date && s.time === slot.time);
+  if (idx < 0) return null;
+  const scheduledCount = sorted.length;
+  const packageSize =
+    booking.productType === 'CLASS_PACKAGE' && typeof (booking.product as any)?.classes === 'number'
+      ? (booking.product as any).classes
+      : null;
+
+  if (booking.productType === 'CLASS_PACKAGE') {
+    if (packageSize && packageSize > scheduledCount) {
+      return `Sesión ${idx + 1} de ${scheduledCount} agendadas · Paquete de ${packageSize} clases`;
+    }
+    return `Sesión ${idx + 1} de ${scheduledCount} · Paquete`;
+  }
+  if (scheduledCount > 1) {
+    return `Sesión ${idx + 1} de ${scheduledCount}`;
+  }
+  return null;
+};
 
 // Helper para obtener el nombre del producto/técnica de un booking
 const getBookingDisplayName = (booking: Booking): string => {
@@ -101,7 +177,6 @@ const getBookingDisplayName = (booking: Booking): string => {
   // 4. Último fallback: productType
   return getProductTypeName(booking.productType);
 };
-import { formatDate, formatCurrency, normalizeHour } from '../../utils/formatters';
 
 interface CustomerDetailViewProps {
     customer: Customer;
@@ -460,75 +535,107 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
         }
     }, [adminData.instructors.length, adminData.products.length, appData]);
 
-    // Clases pasadas = slots anteriores
+    // Clases pasadas = slots anteriores (más recientes primero)
     const renderPastClassesTab = () => {
         if (bookingsLoading) return <div className="p-8 text-center text-brand-secondary">Cargando clases...</div>;
-        const now = new Date();
+        const todayStr = formatDateToYYYYMMDD(getEcuadorToday());
         const pastSlots = customerBookings
-            .flatMap(booking => booking.slots
-                .filter(slot => new Date(slot.date + 'T00:00:00') < now)
+            .flatMap(booking => (booking.slots || [])
+                .filter(slot => slot.date < todayStr)
                 .map(slot => ({ slot, booking }))
-            );
+            )
+            .sort((a, b) => compareSlotsAsc(b.slot, a.slot)); // más reciente primero
+
         return (
-            <div className="space-y-6">
-                <h3 className="text-lg font-medium">Clases Pasadas</h3>
-                <div className="bg-white shadow overflow-hidden sm:rounded-md">
-                    {pastSlots.length > 0 ? pastSlots.map(({ slot, booking }, idx) => {
+            <div className="space-y-4">
+                <div className="flex flex-wrap items-end justify-between gap-2">
+                    <div>
+                        <h3 className="text-lg font-semibold text-brand-text">Clases pasadas</h3>
+                        <p className="text-sm text-brand-secondary">
+                            Ordenadas de la más reciente a la más antigua. El color indica el tipo de reserva.
+                        </p>
+                    </div>
+                    <span className="text-sm font-medium text-brand-secondary">{pastSlots.length} sesión{pastSlots.length === 1 ? '' : 'es'}</span>
+                </div>
+                <div className="space-y-3">
+                    {pastSlots.length > 0 ? pastSlots.map(({ slot, booking }) => {
                         const isPaid = booking.isPaid;
-                        // Verificar si ESTE slot específico fue reservado con <48hrs
                         const slotDate = new Date(slot.date + 'T00:00:00');
                         const bookingCreatedAt = new Date(booking.createdAt);
                         const hoursDiff = (slotDate.getTime() - bookingCreatedAt.getTime()) / (1000 * 60 * 60);
                         const isNoRefund = hoursDiff < 48;
                         const uniqueKey = `${booking.id}-${slot.date}-${slot.time}`;
+                        const category = getBookingCategory(booking);
+                        const sessionLabel = getPackageSessionLabel(booking, slot);
+                        const techniqueLabel = booking.technique ? getTechniqueName(booking.technique as GroupTechnique) : null;
+
                         return (
-                            <div key={uniqueKey} className={`p-6 border-b last:border-b-0 flex justify-between items-center gap-4 ${isPaid ? '' : 'bg-yellow-50'}`}>
-                                <div>
-                                    <p className="font-bold text-lg text-brand-text mb-1 flex items-center gap-2">
-                                        {getBookingDisplayName(booking)}
+                            <div
+                                key={uniqueKey}
+                                className={`rounded-xl border bg-white p-4 sm:p-5 flex flex-col sm:flex-row sm:justify-between gap-4 ${isPaid ? 'border-brand-border' : 'border-yellow-300 bg-yellow-50/40'}`}
+                            >
+                                <div className="min-w-0 space-y-2">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className={`inline-flex items-center px-2.5 py-0.5 text-xs font-bold rounded-full border ${category.tone}`}>
+                                            {category.label}
+                                        </span>
                                         {!isPaid && (
-                                            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800 ml-2">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 20h.01" /></svg>
+                                            <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
                                                 Pago pendiente
                                             </span>
                                         )}
                                         {isNoRefund && (
-                                            <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 ml-2" title="Reserva <48hrs: No reembolsable ni reagendable">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                            <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-red-100 text-red-800" title="Reservada con menos de 48h">
                                                 No reagendable
                                             </span>
                                         )}
+                                    </div>
+                                    <p className="font-bold text-lg text-brand-text">
+                                        {getBookingDisplayName(booking)}
                                     </p>
-                                    <p className="text-sm text-brand-secondary mb-1">{formatDate(slot.date)} a las {slot.time}</p>
-                                    <p className="text-sm text-brand-secondary mb-1">Código: {booking.bookingCode}</p>
-                                    <p className="text-sm text-brand-secondary mb-1">Tipo: {getBookingDisplayName(booking)}</p>
-                                    <p className="text-sm text-brand-secondary mb-1">Estado: <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${isPaid ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-800'}`}>{isPaid ? 'Finalizada' : 'No pagada'}</span></p>
+                                    {sessionLabel && (
+                                        <p className="text-sm font-semibold text-indigo-800">{sessionLabel}</p>
+                                    )}
+                                    <p className="text-sm text-brand-text">
+                                        <span className="font-medium">{formatDate(slot.date)}</span>
+                                        <span className="text-brand-secondary"> · {slot.time}</span>
+                                    </p>
+                                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-brand-secondary">
+                                        <span>Código: <span className="font-mono text-brand-text">{booking.bookingCode}</span></span>
+                                        {techniqueLabel && <span>Técnica: {techniqueLabel}</span>}
+                                        {booking.participants && booking.participants > 1 && (
+                                            <span>Participantes: {booking.participants}</span>
+                                        )}
+                                        {booking.clientNote && (
+                                            <span className="text-amber-800">Nota: {booking.clientNote}</span>
+                                        )}
+                                    </div>
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex sm:flex-col gap-2 shrink-0">
                                     <button
                                         className={`border px-4 py-2 rounded-lg font-semibold flex items-center gap-2 ${
-                                            isNoRefund 
-                                                ? 'border-gray-300 text-gray-400 cursor-not-allowed' 
+                                            isNoRefund
+                                                ? 'border-gray-300 text-gray-400 cursor-not-allowed'
                                                 : 'border-brand-primary text-brand-primary hover:bg-blue-50'
                                         }`}
                                         onClick={() => !isNoRefund && setState(prev => ({ ...prev, selectedBookingToReschedule: { booking, slot } }))}
                                         disabled={isNoRefund}
                                         title={isNoRefund ? 'Esta reserva no es reagendable (reservada <48hrs)' : 'Reagendar clase'}
                                     >
-                                        <span className="material-icons">schedule</span> Reagendar
+                                        <span className="material-icons text-base">schedule</span> Reagendar
                                     </button>
                                     <button
                                         className="border border-red-500 text-red-600 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 hover:bg-red-50"
                                         onClick={() => setDeleteModal({ open: true, bookingId: booking.id, slot })}
                                         title="Eliminar clase"
                                     >
-                                        <span className="material-icons">delete</span> Eliminar
+                                        <span className="material-icons text-base">delete</span> Eliminar
                                     </button>
                                 </div>
                             </div>
                         );
                     }) : (
-                        <div className="p-6 text-center text-brand-secondary">No hay clases pasadas.</div>
+                        <div className="rounded-xl border border-brand-border bg-white p-6 text-center text-brand-secondary">No hay clases pasadas.</div>
                     )}
                 </div>
                 {state.selectedBookingToReschedule && appData && (
@@ -536,40 +643,30 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                         isOpen={true}
                         onClose={() => setState(prev => ({ ...prev, selectedBookingToReschedule: null }))}
                         onSave={async (newSlot) => {
-                            console.log('[CustomerDetailView-PastClasses] Reschedule initiated:', { 
-                                bookingId: state.selectedBookingToReschedule.booking.id, 
-                                oldSlot: state.selectedBookingToReschedule.slot, 
-                                newSlot 
+                            console.log('[CustomerDetailView-PastClasses] Reschedule initiated:', {
+                                bookingId: state.selectedBookingToReschedule.booking.id,
+                                oldSlot: state.selectedBookingToReschedule.slot,
+                                newSlot
                             });
-                            
-                            // 1. Ejecutar reagendamiento
+
                             const result = await dataService.rescheduleBookingSlot(
-                                state.selectedBookingToReschedule.booking.id, 
-                                state.selectedBookingToReschedule.slot, 
+                                state.selectedBookingToReschedule.booking.id,
+                                state.selectedBookingToReschedule.slot,
                                 newSlot,
-                                true, // forceAdminReschedule: Admin puede reagendar sin restricciones
+                                true,
                                 'admin_user'
                             );
-                            
+
                             console.log('[CustomerDetailView-PastClasses] Reschedule result:', result);
-                            
-                            // 2. Forzar recarga inmediata de datos críticos (bookings y customers)
+
                             if (adminData.refreshCritical) {
-                                console.log('[CustomerDetailView-PastClasses] Forcing critical data refresh...');
                                 adminData.refreshCritical();
                             } else {
-                                // Fallback: usar onDataChange si refreshCritical no está disponible
-                                console.log('[CustomerDetailView-PastClasses] Using onDataChange fallback...');
                                 onDataChange();
                             }
-                            
-                            // 3. Esperar a que los datos se actualicen
+
                             await new Promise(resolve => setTimeout(resolve, 500));
-                            
-                            // 4. Cerrar modal
                             setState(prev => ({ ...prev, selectedBookingToReschedule: null }));
-                            
-                            console.log('[CustomerDetailView-PastClasses] Reschedule complete and modal closed');
                         }}
                         slotInfo={{ slot: state.selectedBookingToReschedule.slot, attendeeName: (customer.userInfo?.firstName || 'Cliente') + ' ' + (customer.userInfo?.lastName || ''), bookingId: state.selectedBookingToReschedule.booking.id }}
                         appData={appData}
@@ -579,19 +676,29 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
         );
     };
 
-    // Clases programadas = todos los slots futuros
+    // Clases programadas = slots futuros (próxima primero)
     const renderScheduledClassesTab = () => {
         if (bookingsLoading) return <div className="p-8 text-center text-brand-secondary">Cargando clases...</div>;
-        const now = new Date();
+        const todayStr = formatDateToYYYYMMDD(getEcuadorToday());
         const scheduledSlots = customerBookings
-            .flatMap(booking => booking.slots
-                .filter(slot => new Date(slot.date + 'T00:00:00') >= now)
+            .flatMap(booking => (booking.slots || [])
+                .filter(slot => slot.date >= todayStr)
                 .map(slot => ({ slot, booking }))
-            );
+            )
+            .sort((a, b) => compareSlotsAsc(a.slot, b.slot)); // próxima primero
+        const nextKey = scheduledSlots[0]
+            ? `${scheduledSlots[0].booking.id}-${scheduledSlots[0].slot.date}-${scheduledSlots[0].slot.time}`
+            : null;
+
         return (
-            <div className="space-y-6">
-                <h3 className="text-lg font-medium">Clases Programadas</h3>
-                <div className="flex justify-end mb-4">
+            <div className="space-y-4">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                        <h3 className="text-lg font-semibold text-brand-text">Clases programadas</h3>
+                        <p className="text-sm text-brand-secondary">
+                            Ordenadas por fecha. La próxima sesión queda marcada para el admin.
+                        </p>
+                    </div>
                     <button
                         className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg shadow hover:bg-indigo-700 transition font-semibold"
                         onClick={() => setState(prev => ({ ...prev, isSchedulingModalOpen: true }))}
@@ -599,62 +706,103 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                         <PlusIcon className="h-5 w-5" /> Agendar clase
                     </button>
                 </div>
-                <div className="bg-white shadow overflow-hidden sm:rounded-md">
-                    {scheduledSlots.length > 0 ? scheduledSlots.map(({ slot, booking }, idx) => {
-                        // Verificar si ESTE slot específico fue reservado con <48hrs
+
+                {scheduledSlots[0] && (
+                    <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-950">
+                        <span className="font-bold">Próxima clase: </span>
+                        {formatDate(scheduledSlots[0].slot.date)} · {scheduledSlots[0].slot.time}
+                        {' · '}
+                        <span className="font-semibold">{getBookingCategory(scheduledSlots[0].booking).label}</span>
+                        {' · '}
+                        {getBookingDisplayName(scheduledSlots[0].booking)}
+                    </div>
+                )}
+
+                <div className="space-y-3">
+                    {scheduledSlots.length > 0 ? scheduledSlots.map(({ slot, booking }) => {
                         const slotDate = new Date(slot.date + 'T00:00:00');
                         const bookingCreatedAt = new Date(booking.createdAt);
                         const hoursDiff = (slotDate.getTime() - bookingCreatedAt.getTime()) / (1000 * 60 * 60);
                         const isNoRefund = hoursDiff < 48;
                         const uniqueKey = `${booking.id}-${slot.date}-${slot.time}`;
+                        const isNext = uniqueKey === nextKey;
+                        const category = getBookingCategory(booking);
+                        const sessionLabel = getPackageSessionLabel(booking, slot);
+                        const techniqueLabel = booking.technique ? getTechniqueName(booking.technique as GroupTechnique) : null;
+
                         return (
-                        <div key={uniqueKey} className="p-6 border-b last:border-b-0 flex justify-between items-center gap-4">
-                            <div>
-                                <p className="font-bold text-lg text-brand-text mb-1 flex items-center gap-2">
-                                    {getBookingDisplayName(booking)}
+                        <div
+                            key={uniqueKey}
+                            className={`rounded-xl border bg-white p-4 sm:p-5 flex flex-col sm:flex-row sm:justify-between gap-4 ${
+                                isNext ? 'border-indigo-400 ring-2 ring-indigo-100' : 'border-brand-border'
+                            }`}
+                        >
+                            <div className="min-w-0 space-y-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {isNext && (
+                                        <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-bold rounded-full bg-indigo-600 text-white">
+                                            Próxima
+                                        </span>
+                                    )}
+                                    <span className={`inline-flex items-center px-2.5 py-0.5 text-xs font-bold rounded-full border ${category.tone}`}>
+                                        {category.label}
+                                    </span>
                                     {!booking.isPaid && (
-                                        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800 ml-2">
-                                            <ExclamationTriangleIcon className="h-4 w-4 text-orange-500" />
-                                            No confirmada por pago
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">
+                                            <ExclamationTriangleIcon className="h-3.5 w-3.5" />
+                                            Sin pago confirmado
                                         </span>
                                     )}
                                     {isNoRefund && (
-                                        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 ml-2" title="Reserva <48hrs: No reembolsable ni reagendable">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                        <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-red-100 text-red-800">
                                             No reagendable
                                         </span>
                                     )}
+                                </div>
+                                <p className="font-bold text-lg text-brand-text">{getBookingDisplayName(booking)}</p>
+                                {sessionLabel && (
+                                    <p className="text-sm font-semibold text-indigo-800">{sessionLabel}</p>
+                                )}
+                                <p className="text-sm text-brand-text">
+                                    <span className="font-medium">{formatDate(slot.date)}</span>
+                                    <span className="text-brand-secondary"> · {slot.time}</span>
                                 </p>
-                                <p className="text-sm text-brand-secondary mb-1">{formatDate(slot.date)} a las {slot.time}</p>
-                                <p className="text-sm text-brand-secondary mb-1">Código: {booking.bookingCode}</p>
-                                <p className="text-sm text-brand-secondary mb-1">Tipo: {getBookingDisplayName(booking)}</p>
-                                <p className="text-sm text-brand-secondary mb-1">Estado: <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Programada</span></p>
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-brand-secondary">
+                                    <span>Código: <span className="font-mono text-brand-text">{booking.bookingCode}</span></span>
+                                    {techniqueLabel && <span>Técnica: {techniqueLabel}</span>}
+                                    {booking.participants && booking.participants > 1 && (
+                                        <span>Participantes: {booking.participants}</span>
+                                    )}
+                                    {booking.clientNote && (
+                                        <span className="text-amber-800">Nota: {booking.clientNote}</span>
+                                    )}
+                                </div>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex sm:flex-col gap-2 shrink-0">
                                 <button
                                     className={`border px-4 py-2 rounded-lg font-semibold flex items-center gap-2 ${
-                                        isNoRefund 
-                                            ? 'border-gray-300 text-gray-400 cursor-not-allowed' 
+                                        isNoRefund
+                                            ? 'border-gray-300 text-gray-400 cursor-not-allowed'
                                             : 'border-brand-primary text-brand-primary hover:bg-blue-50'
                                     }`}
                                     onClick={() => !isNoRefund && setState(prev => ({ ...prev, selectedBookingToReschedule: { booking, slot } }))}
                                     disabled={isNoRefund}
                                     title={isNoRefund ? 'Esta reserva no es reagendable (reservada <48hrs)' : 'Reagendar clase'}
                                 >
-                                    <span className="material-icons">schedule</span> Reagendar
+                                    <span className="material-icons text-base">schedule</span> Reagendar
                                 </button>
                                 <button
                                     className="border border-red-500 text-red-600 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 hover:bg-red-50"
                                     onClick={() => setDeleteModal({ open: true, bookingId: booking.id, slot })}
                                     title="Eliminar clase"
                                 >
-                                    <span className="material-icons">delete</span> Eliminar
+                                    <span className="material-icons text-base">delete</span> Eliminar
                                 </button>
                             </div>
                         </div>
                         );
                     }) : (
-                        <div className="p-6 text-center text-brand-secondary">No hay clases programadas.</div>
+                        <div className="rounded-xl border border-brand-border bg-white p-6 text-center text-brand-secondary">No hay clases programadas.</div>
                     )}
                 </div>
                 {state.selectedBookingToReschedule && appData && (

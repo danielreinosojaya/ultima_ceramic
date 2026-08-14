@@ -283,33 +283,21 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
                 onChange={(e) => {
                   const inputVal = e.target.value;
                   
-                  // Permitir vacío temporalmente
                   if (inputVal === '') {
                     setParticipantsInput('');
                     return;
                   }
                   
-                  // Solo aceptar números
                   if (!/^\d+$/.test(inputVal)) {
                     return;
                   }
                   
-                  const val = parseInt(inputVal);
-                  
-                  // Mínimo 2 personas para experiencias grupales
-                  if (val < 2) {
-                    setParticipantsInput('2');
-                    setParticipants(2);
-                    return;
-                  }
-                  
-                  // Máximo según técnica
+                  const val = parseInt(inputVal, 10);
                   const maxCap = TECHNIQUE_INFO[technique].maxCapacity;
                   
-                  // Actualizar input visualmente
+                  // No forzar mínimo 2 al teclear (permite escribir 11, 12, …)
                   setParticipantsInput(inputVal);
                   
-                  // Actualizar estado solo si es válido
                   if (val >= 2 && val <= maxCap) {
                     setParticipants(val);
                   }
@@ -317,23 +305,34 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
                 onBlur={(e) => {
                   const inputVal = e.target.value;
                   const maxCap = TECHNIQUE_INFO[technique].maxCapacity;
+                  const parsed = parseInt(inputVal, 10);
                   
-                  // Si está vacío, inválido o excede máximo, restaurar al último válido
-                  if (inputVal === '' || parseInt(inputVal) < 1 || parseInt(inputVal) > maxCap) {
-                    setParticipantsInput(participants.toString());
+                  let next = 2;
+                  if (inputVal !== '' && Number.isFinite(parsed)) {
+                    next = Math.min(maxCap, Math.max(2, parsed));
                   } else {
-                    // Asegurar que el valor mostrado coincida con el estado
-                    setParticipantsInput(participants.toString());
+                    next = Math.min(maxCap, Math.max(2, participants));
                   }
+                  
+                  setParticipantsInput(String(next));
+                  setParticipants(next);
                 }}
                 className={`w-20 px-4 py-3 border-2 rounded-lg text-center text-3xl font-bold transition-all ${
                   participantsInput && parseInt(participantsInput) > TECHNIQUE_INFO[technique].maxCapacity
                     ? 'border-red-500 bg-red-50 text-red-600 focus:border-red-500 focus:ring-2 focus:ring-red-200'
+                    : participantsInput && parseInt(participantsInput, 10) === 1
+                    ? 'border-amber-400 bg-amber-50 text-amber-800 focus:border-amber-500 focus:ring-2 focus:ring-amber-200'
                     : 'border-brand-border focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
                 }`}
               />
               <div className="text-gray-600 font-medium">persona{participants !== 1 ? 's' : ''}</div>
             </div>
+            
+            {participantsInput !== '' && parseInt(participantsInput, 10) === 1 && (
+              <p className="text-xs text-amber-700 mt-2 text-center">
+                Mínimo 2 personas. Sigue escribiendo (ej. 11) o deja el campo para ajustar.
+              </p>
+            )}
             
             {/* Mensaje de error si excede máximo */}
             {participantsInput && parseInt(participantsInput) > TECHNIQUE_INFO[technique].maxCapacity && (

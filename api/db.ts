@@ -39,18 +39,53 @@ export async function createCustomer({ email, firstName, lastName, phone, countr
     countryCode?: string;
     birthday?: string;
 }) {
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    if (!normalizedEmail) {
+        throw new Error('Email is required to create a customer');
+    }
     const { rows } = await sql`
         INSERT INTO customers (email, first_name, last_name, phone, country_code, birthday)
-        VALUES (${email}, ${firstName || null}, ${lastName || null}, ${phone || null}, ${countryCode || null}, ${birthday || null})
+        VALUES (
+            ${normalizedEmail},
+            ${firstName || null},
+            ${lastName || null},
+            ${phone || null},
+            ${countryCode || null},
+            ${birthday || null}
+        )
         ON CONFLICT (email) DO UPDATE SET
-            first_name = EXCLUDED.first_name,
-            last_name = EXCLUDED.last_name,
-            phone = EXCLUDED.phone,
-            country_code = EXCLUDED.country_code,
-            birthday = EXCLUDED.birthday
+            first_name = COALESCE(NULLIF(customers.first_name, ''), EXCLUDED.first_name),
+            last_name = COALESCE(NULLIF(customers.last_name, ''), EXCLUDED.last_name),
+            phone = COALESCE(NULLIF(customers.phone, ''), EXCLUDED.phone),
+            country_code = COALESCE(NULLIF(customers.country_code, ''), EXCLUDED.country_code),
+            birthday = COALESCE(customers.birthday, EXCLUDED.birthday)
         RETURNING *;
     `;
     return rows[0];
+}
+
+/** Upsert customer from booking userInfo (non-throwing). */
+export async function ensureCustomerFromUserInfo(userInfo: {
+    email?: string;
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    countryCode?: string;
+    birthday?: string | null;
+} | null | undefined): Promise<void> {
+    if (!userInfo?.email) return;
+    try {
+        await createCustomer({
+            email: userInfo.email,
+            firstName: userInfo.firstName,
+            lastName: userInfo.lastName,
+            phone: userInfo.phone,
+            countryCode: userInfo.countryCode,
+            birthday: userInfo.birthday || undefined,
+        });
+    } catch (err) {
+        console.warn('[ensureCustomerFromUserInfo] Failed to upsert customer:', userInfo.email, err);
+    }
 }
 import { 
     DEFAULT_PRODUCTS, DEFAULT_AVAILABLE_SLOTS_BY_DAY, DEFAULT_INSTRUCTORS, 

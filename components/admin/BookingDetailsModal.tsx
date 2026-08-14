@@ -264,7 +264,16 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({
         const firstPayment = (attendee.paymentDetails || [])[0];
         const attendeeBooking = bookingsMap[attendee.bookingId];
         const participantCount = attendeeBooking?.participants || 1;
-        const manualNote = attendeeBooking?.clientNote || attendeeBooking?.manualNote || attendeeBooking?.note || attendeeBooking?.message || attendeeBooking?.comments || null;
+        const manualNote =
+          attendeeBooking?.clientNote ||
+          (attendeeBooking?.product as any)?.clientNote ||
+          (attendeeBooking as any)?.groupClassMetadata?.clientNote ||
+          (attendeeBooking as any)?.groupMetadata?.clientNote ||
+          (attendeeBooking as any)?.manualNote ||
+          (attendeeBooking as any)?.note ||
+          (attendeeBooking as any)?.message ||
+          (attendeeBooking as any)?.comments ||
+          null;
         const attendanceSaveState = getAttendanceSaveState(attendee.bookingId);
 
         return (

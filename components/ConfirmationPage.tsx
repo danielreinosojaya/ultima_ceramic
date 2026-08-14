@@ -14,6 +14,7 @@ import { useEffect } from 'react';
 import { FEATURE_FLAGS } from '../featureFlags.ts';
 import type { GroupTechnique } from '../types';
 import { uploadPaymentProof } from '../services/dataService';
+import { getClassPackageValidityDescription, getClassPackageValidityLabel } from '../utils/classPackageValidity';
 
 // Helper para obtener nombre de técnica desde metadata
 const getTechniqueName = (technique: GroupTechnique): string => {
@@ -318,6 +319,17 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                         <p>IVA ({(VAT_RATE * 100).toFixed(0)}%): {formatPrice(vat)}</p>
                     </div>
                 </div>
+
+                {isPackage && typeof (booking.product as ClassPackage).classes === 'number' && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-left">
+                        <p className="text-sm font-bold text-amber-900 mb-1">
+                            ⏰ Plazo del paquete: {getClassPackageValidityLabel((booking.product as ClassPackage).classes)}
+                        </p>
+                        <p className="text-xs text-amber-800 leading-relaxed">
+                            {getClassPackageValidityDescription((booking.product as ClassPackage).classes)}
+                        </p>
+                    </div>
+                )}
             </div>
 
             {/* Código de Pre-Reserva */}

@@ -31,7 +31,8 @@ const getProductTypeName = (productType?: string): string => {
     'GROUP_CLASS': 'Clase Grupal',
     'CUSTOM_GROUP_EXPERIENCE': 'Experiencia Grupal Personalizada',
     'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
-    'OPEN_STUDIO': 'Estudio Abierto'
+    'OPEN_STUDIO': 'Estudio Abierto',
+    'SPACE_RENTAL': 'Alquiler de espacio'
   };
   return typeNames[productType || ''] || 'Clase';
 };
@@ -54,16 +55,23 @@ const sumPaymentDetails = (booking: Booking): number => {
   return arr.reduce((acc, p) => acc + (typeof p?.amount === 'number' ? p.amount : 0), 0);
 };
 
+const resolveBookingTechnique = (booking: Booking): GroupTechnique | string | undefined => {
+  const product = booking.product as { technique?: string; details?: { technique?: string } } | undefined;
+  return booking.technique || product?.technique || product?.details?.technique;
+};
+
 // Helper para obtener el nombre del producto/técnica de un booking
 const getBookingDisplayName = (booking: Booking): string => {
   if (isPaintingUpsell(booking)) return PAINTING_UPSELL_LABEL;
 
+  const resolvedTechnique = resolveBookingTechnique(booking);
+  const isCustomExperience =
+    booking.productType === 'CUSTOM_GROUP_EXPERIENCE'
+    || booking.product?.name === 'Experiencia Grupal Personalizada';
+
   // 0. Para experiencia grupal personalizada, priorizar técnica sobre nombre genérico
-  if (
-    booking.technique &&
-    (booking.productType === 'CUSTOM_GROUP_EXPERIENCE' || booking.product?.name === 'Experiencia Grupal Personalizada')
-  ) {
-    return getTechniqueName(booking.technique);
+  if (resolvedTechnique && isCustomExperience) {
+    return getTechniqueName(resolvedTechnique as GroupTechnique);
   }
 
   // 1. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
@@ -85,8 +93,8 @@ const getBookingDisplayName = (booking: Booking): string => {
   }
   
   // 3. Fallback: technique directamente (solo si product.name no existe)
-  if (booking.technique) {
-    return getTechniqueName(booking.technique);
+  if (resolvedTechnique) {
+    return getTechniqueName(resolvedTechnique as GroupTechnique);
   }
   
   // 4. Último fallback: productType

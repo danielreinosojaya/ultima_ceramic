@@ -106,7 +106,15 @@ export const parseBookingFromDB = (dbRow: any): Booking => {
         }
         
         // Incluir client_note y participants explícitamente
-        camelCased.clientNote = dbRow.client_note || null;
+        const noteFromProduct =
+            camelCased.product && typeof camelCased.product === 'object'
+                ? camelCased.product.clientNote
+                : null;
+        const noteFromGroupMeta =
+            camelCased.groupMetadata?.clientNote ||
+            camelCased.groupClassMetadata?.clientNote ||
+            null;
+        camelCased.clientNote = dbRow.client_note || noteFromProduct || noteFromGroupMeta || null;
         camelCased.participants = dbRow.participants !== undefined && dbRow.participants !== null 
             ? parseInt(dbRow.participants, 10) 
             : 1;

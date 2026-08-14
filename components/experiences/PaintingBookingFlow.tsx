@@ -16,6 +16,7 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
   isLoading = false
 }) => {
   const [participants, setParticipants] = useState<number>(1);
+  const [participantsInput, setParticipantsInput] = useState<string>('1');
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [selectedAvailability, setSelectedAvailability] = useState<SlotAvailabilityResult | null>(null);
@@ -123,14 +124,25 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
           <h3 className="font-semibold text-brand-text mb-3">Participantes</h3>
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <input
-              type="number"
-              min={1}
-              max={22}
-              step={1}
-              value={participants}
+              type="text"
+              inputMode="numeric"
+              value={participantsInput}
               onChange={(e) => {
-                const next = Math.max(1, Math.min(22, parseInt(e.target.value || '1', 10)));
-                setParticipants(Number.isNaN(next) ? 1 : next);
+                const raw = e.target.value;
+                if (raw === '') {
+                  setParticipantsInput('');
+                  return;
+                }
+                if (!/^\d+$/.test(raw)) return;
+                setParticipantsInput(raw);
+                const n = parseInt(raw, 10);
+                if (n >= 1 && n <= 22) setParticipants(n);
+              }}
+              onBlur={() => {
+                const n = parseInt(participantsInput, 10);
+                const next = Number.isFinite(n) ? Math.min(22, Math.max(1, n)) : 1;
+                setParticipants(next);
+                setParticipantsInput(String(next));
               }}
               className="appearance-none w-full sm:w-32 px-3 py-2 rounded-lg border border-brand-border text-brand-text font-semibold focus:outline-none focus:ring-2 focus:ring-brand-primary"
               aria-label="Número de participantes"

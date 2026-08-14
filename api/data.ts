@@ -44,7 +44,7 @@ function deepMerge(target: any, source: any): any {
 
 import { randomUUID } from 'crypto';
 import { sql } from '@vercel/postgres';
-import { seedDatabase, ensureTablesExist, createCustomer } from './db.js';
+import { seedDatabase, ensureTablesExist, createCustomer, ensureCustomerFromUserInfo } from './db.js';
 import * as emailService from './emailService.js';
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import {
@@ -53,12 +53,26 @@ import {
     ecuadorSlotStartIso,
     isEcuadorSlotInPast,
 } from '../utils/formatters.js';
-import { slotOverlapsPrivateEvent } from '../utils/privateEventBlocks.js';
+import {
+    slotOverlapsExclusiveSpaceRental,
+    addHoursToTime,
+    getBookingOccupancyMinutes,
+    buildDayOccupancyFromBookings,
+    getConflictsForProposedWindow,
+    timeToMinutes as spaceTimeToMinutes,
+    minutesToHHMM,
+    windowsOverlap,
+} from '../utils/spaceRental.js';
+import { slotOverlapsPrivateEvent, PRIVATE_EVENT_BLOCKS } from '../utils/privateEventBlocks.js';
 import {
     getTechniqueRestrictionForDate,
     isSlotBlockedByExperienceTypeOverride,
     sanitizeExperienceTypeOverrides,
 } from '../utils/experienceTypeRestrictions.js';
+import {
+    areClassPackageSlotsWithinValidity,
+    getClassPackageValidityLabel,
+} from '../utils/classPackageValidity.js';
 import {
     isClassStartWithinBusinessHours,
     getBusinessHoursRejectionMessage,
@@ -129,7 +143,8 @@ const parseBookingFromDB = (dbRow: any): Booking => {
             GROUP_CLASS: 'Clase Grupal',
             COUPLES_EXPERIENCE: 'Experiencia de Parejas',
             OPEN_STUDIO: 'Estudio Abierto',
-            CUSTOM_GROUP_EXPERIENCE: 'Experiencia Grupal Personalizada'
+            CUSTOM_GROUP_EXPERIENCE: 'Experiencia Grupal Personalizada',
+            SPACE_RENTAL: 'Alquiler de espacio',
         };
 
         // ⚡ PHASE 5: `product` field omitted from SELECT for performance
@@ -238,7 +253,16 @@ const parseBookingFromDB = (dbRow: any): Booking => {
         }
 
         // Incluir client_note, participants y technique explícitamente
-        camelCased.clientNote = dbRow.client_note || null;
+        // Fallback: notas guardadas en JSON (alquiler legacy) si la columna está vacía
+        const noteFromProduct =
+            camelCased.product && typeof camelCased.product === 'object'
+                ? camelCased.product.clientNote
+                : null;
+        const noteFromGroupMeta =
+            camelCased.groupMetadata?.clientNote ||
+            camelCased.groupClassMetadata?.clientNote ||
+            null;
+        camelCased.clientNote = dbRow.client_note || noteFromProduct || noteFromGroupMeta || null;
         camelCased.participants = dbRow.participants !== undefined && dbRow.participants !== null 
             ? parseInt(dbRow.participants, 10) 
             : 1;
@@ -473,6 +497,90 @@ const generateBookingCode = (): string => {
     const randomPart = Math.random().toString(36).slice(2, 6).toUpperCase();
     return `${prefix}-${timestamp}${randomPart}`;
 };
+
+/**
+ * Busca clientes en tabla customers + reservas huérfanas (email en bookings sin fila en customers).
+ * También acepta código de reserva (C-ALMA-...). Upsert automático de huérfanos encontrados.
+ */
+async function searchCustomersUnified(searchQuery: string, limit = 50): Promise<Array<{
+    email: string;
+    first_name: string | null;
+    last_name: string | null;
+    phone: string | null;
+    country_code?: string | null;
+    birthday?: string | null;
+}>> {
+    const term = searchQuery.trim();
+    if (term.length < 1) return [];
+    const searchPattern = `%${term}%`;
+    const capped = Math.min(Math.max(limit, 1), 200);
+
+    const { rows: fromTable } = await sql`
+        SELECT email, first_name, last_name, phone, country_code, birthday
+        FROM customers
+        WHERE LOWER(first_name) ILIKE LOWER(${searchPattern})
+           OR LOWER(last_name) ILIKE LOWER(${searchPattern})
+           OR LOWER(email) ILIKE LOWER(${searchPattern})
+           OR LOWER(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, ''))) ILIKE LOWER(${searchPattern})
+           OR LOWER(phone) ILIKE LOWER(${searchPattern})
+        ORDER BY first_name ASC NULLS LAST, last_name ASC NULLS LAST
+        LIMIT ${capped}
+    `;
+
+    const { rows: fromBookings } = await sql`
+        SELECT DISTINCT ON (LOWER(TRIM(b.user_info->>'email')))
+            LOWER(TRIM(b.user_info->>'email')) AS email,
+            NULLIF(TRIM(b.user_info->>'firstName'), '') AS first_name,
+            NULLIF(TRIM(b.user_info->>'lastName'), '') AS last_name,
+            NULLIF(TRIM(b.user_info->>'phone'), '') AS phone,
+            NULLIF(TRIM(b.user_info->>'countryCode'), '') AS country_code,
+            NULLIF(TRIM(b.user_info->>'birthday'), '') AS birthday
+        FROM bookings b
+        WHERE b.user_info->>'email' IS NOT NULL
+          AND TRIM(b.user_info->>'email') <> ''
+          AND (
+            LOWER(b.user_info->>'firstName') ILIKE LOWER(${searchPattern})
+            OR LOWER(b.user_info->>'lastName') ILIKE LOWER(${searchPattern})
+            OR LOWER(b.user_info->>'email') ILIKE LOWER(${searchPattern})
+            OR LOWER(CONCAT(COALESCE(b.user_info->>'firstName', ''), ' ', COALESCE(b.user_info->>'lastName', ''))) ILIKE LOWER(${searchPattern})
+            OR LOWER(COALESCE(b.user_info->>'phone', '')) ILIKE LOWER(${searchPattern})
+            OR LOWER(COALESCE(b.booking_code, '')) ILIKE LOWER(${searchPattern})
+          )
+        ORDER BY
+            LOWER(TRIM(b.user_info->>'email')),
+            CASE
+              WHEN LOWER(b.user_info->>'firstName') ILIKE LOWER(${searchPattern})
+                OR LOWER(b.user_info->>'lastName') ILIKE LOWER(${searchPattern})
+                OR LOWER(CONCAT(COALESCE(b.user_info->>'firstName', ''), ' ', COALESCE(b.user_info->>'lastName', ''))) ILIKE LOWER(${searchPattern})
+                OR LOWER(COALESCE(b.booking_code, '')) ILIKE LOWER(${searchPattern})
+              THEN 0 ELSE 1
+            END,
+            b.created_at DESC
+        LIMIT ${capped}
+    `;
+
+    const byEmail = new Map<string, any>();
+    for (const row of fromTable) {
+        const key = String(row.email || '').trim().toLowerCase();
+        if (key) byEmail.set(key, { ...row, email: key });
+    }
+    for (const row of fromBookings) {
+        const key = String(row.email || '').trim().toLowerCase();
+        if (!key || byEmail.has(key)) continue;
+        byEmail.set(key, { ...row, email: key });
+        // Persist orphan so CRM lists find them next time without booking scan
+        void ensureCustomerFromUserInfo({
+            email: key,
+            firstName: row.first_name || undefined,
+            lastName: row.last_name || undefined,
+            phone: row.phone || undefined,
+            countryCode: row.country_code || undefined,
+            birthday: row.birthday || undefined,
+        });
+    }
+
+    return Array.from(byEmail.values()).slice(0, capped);
+}
 
 // ============ FUNCIONES HELPER COMPARTIDAS PARA DISPONIBILIDAD ============
 // Funciones reutilizables para getAvailableSlots, checkSlotAvailability y createCustomExperienceBooking
@@ -822,6 +930,33 @@ const computeSlotAvailability = async (
             bookingsCount: 0,
             message: 'Horario no disponible por evento privado'
         };
+    }
+
+    // Alquiler / celebración con espacio: bloquea TODAS las técnicas en la ventana real
+    if (!skipPrivateEventBlock) {
+        const exclusiveHit = slotOverlapsExclusiveSpaceRental(
+            requestedDate,
+            normalizedTime,
+            bookings,
+            2 * 60
+        );
+        if (exclusiveHit.overlaps) {
+            const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
+            return {
+                available: false,
+                normalizedTime,
+                blockedReason: 'private_event',
+                capacity: {
+                    max: maxCapacity,
+                    booked: maxCapacity,
+                    available: 0
+                },
+                bookingsCount: 0,
+                message: exclusiveHit.label
+                    ? `Horario no disponible: ${exclusiveHit.label} (espacio privado)`
+                    : 'Horario no disponible por alquiler de espacio privado'
+            };
+        }
     }
 
     const disabledTimes = freeDateTimeOverrides?.[requestedDate]?.disabledTimes || [];
@@ -1529,17 +1664,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         `;
                         queryRows = result.rows;
                     } else if (searchQuery) {
-                        // ⚡ CORRECCIÓN: Crear patrón ANTES del sql`` tag
-                        const searchPattern = `%${searchQuery}%`;
-                        const result = await sql`
-                            SELECT id, email, first_name, last_name, phone
-                            FROM customers
-                            WHERE LOWER(first_name) ILIKE LOWER(${searchPattern})
-                               OR LOWER(last_name) ILIKE LOWER(${searchPattern})
-                               OR LOWER(email) ILIKE LOWER(${searchPattern})
-                            ORDER BY first_name ASC, last_name ASC
-                        `;
-                        queryRows = result.rows;
+                        const matched = await searchCustomersUnified(searchQuery, 200);
+                        queryRows = matched;
                     } else if (fetchAll) {
                         const result = await sql`
                             SELECT id, email, first_name, last_name, phone
@@ -1663,17 +1789,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     let queryRows: any[] = [];
                     
                     if (searchQuery) {
-                        // ⚡ CORRECCIÓN: Crear patrón ANTES del sql`` tag
-                        const searchPattern = `%${searchQuery}%`;
-                        const result = await sql`
-                            SELECT id, email, first_name, last_name, phone
-                            FROM customers
-                            WHERE LOWER(first_name) ILIKE LOWER(${searchPattern})
-                               OR LOWER(last_name) ILIKE LOWER(${searchPattern})
-                               OR LOWER(email) ILIKE LOWER(${searchPattern})
-                            ORDER BY first_name ASC, last_name ASC
-                        `;
-                        queryRows = result.rows;
+                        queryRows = await searchCustomersUnified(searchQuery, 200);
                     } else if (fetchAll) {
                         const result = await sql`
                             SELECT id, email, first_name, last_name, phone
@@ -1711,23 +1827,31 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     break;
                 }
                 case 'getCustomers': {
-                    // 🔧 OPTIMIZADO: Pagination verdadera + campos mínimos
+                    // 🔧 OPTIMIZADO: Pagination verdadera + campos mínimos (+ search opcional)
                     const page = req.query.page ? parseInt(req.query.page as string) : 1;
                     const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
                     const offset = (page - 1) * limit;
+                    const searchQuery = typeof req.query.search === 'string' ? req.query.search.trim() : '';
                     
-                    // ⚡ ESTRATEGIA: Obtener clientes PAGINATED + stats de bookings SIN full payload
-                    const { rows: pageCustomers } = await sql`
-                        SELECT 
-                            id, email, first_name, last_name, phone, country_code, birthday, created_at 
-                        FROM customers 
-                        ORDER BY first_name ASC, last_name ASC
-                        LIMIT ${limit} OFFSET ${offset}
-                    `;
-                    
-                    // Obtener TOTAL sin iterar (más rápido)
-                    const { rows: countResult } = await sql`SELECT COUNT(*) as total FROM customers`;
-                    const totalCustomers = parseInt(countResult[0]?.total || '0');
+                    let pageCustomers: any[] = [];
+                    let totalCustomers = 0;
+
+                    if (searchQuery) {
+                        const matched = await searchCustomersUnified(searchQuery, Math.min(Math.max(limit, 1), 200));
+                        pageCustomers = matched;
+                        totalCustomers = matched.length;
+                    } else {
+                        const { rows } = await sql`
+                            SELECT 
+                                id, email, first_name, last_name, phone, country_code, birthday, created_at 
+                            FROM customers 
+                            ORDER BY first_name ASC, last_name ASC
+                            LIMIT ${limit} OFFSET ${offset}
+                        `;
+                        pageCustomers = rows;
+                        const { rows: countResult } = await sql`SELECT COUNT(*) as total FROM customers`;
+                        totalCustomers = parseInt(countResult[0]?.total || '0');
+                    }
                     
                     // 📊 Obtener stats de bookings SIN cargar payload completo
                     const { rows: bookingStats } = await sql`
@@ -1777,13 +1901,16 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     console.log(`[getCustomers] Page ${page}: ${finalCustomers.length}/${totalCustomers} customers, with ${statsMap.size} having bookings`);
                     
                     // ✅ CACHE: 5 min para data, pero sin stale-while-revalidate en customer list
-                    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-if-error=60');
+                    // Search results should not be cached aggressively
+                    res.setHeader('Cache-Control', searchQuery
+                        ? 'private, no-store'
+                        : 'public, s-maxage=300, stale-if-error=60');
                     data = {
                         customers: finalCustomers,
                         total: totalCustomers,
                         page,
                         limit,
-                        pages: Math.ceil(totalCustomers / limit)
+                        pages: Math.ceil(totalCustomers / Math.max(limit, 1))
                     };
                     break;
                 }
@@ -1941,7 +2068,9 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             const slotStartMinutes = timeToMinutes(slotTime);
                             const slotEndMinutes = slotStartMinutes + (2 * 60); // 2 horas
 
-                            const hasPrivateEventBlock = slotOverlapsPrivateEvent(dateStr, slotTime);
+                            const hasPrivateEventBlock =
+                                slotOverlapsPrivateEvent(dateStr, slotTime) ||
+                                slotOverlapsExclusiveSpaceRental(dateStr, slotTime, bookings, 2 * 60).overlaps;
                             const hasCourseBlock = hasCourseOverlap(dateStr, slotStartMinutes, slotEndMinutes, courseSessionsByDate);
 
                             if (hasPrivateEventBlock) {
@@ -2150,6 +2279,12 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             const courseBlocked = hasCourseOverlap(dateStr, slotStartMinutes, slotEndMinutes, courseSessionsByDate);
                             let blockedReason: string | null = courseBlocked ? 'course_conflict' : null;
                             if (!blockedReason && slotOverlapsPrivateEvent(dateStr, normalizedTime)) {
+                                blockedReason = 'private_event';
+                            }
+                            if (
+                                !blockedReason &&
+                                slotOverlapsExclusiveSpaceRental(dateStr, normalizedTime, bookings, 2 * 60).overlaps
+                            ) {
                                 blockedReason = 'private_event';
                             }
 
@@ -2567,7 +2702,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                             b.participants,
                                             b.group_metadata AS group_class_metadata,
                                             b.technique,
-                                            b.payment_proof_url
+                                            b.payment_proof_url,
+                                            b.client_note
                                         FROM bookings b
                                         LEFT JOIN products p ON p.id = b.product_id
                                         WHERE b.created_at >= ${limitDate.toISOString()}
@@ -2581,7 +2717,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                         queryErrorMessage.includes('group_class_metadata') ||
                                         queryErrorMessage.includes('technique') ||
                                         queryErrorMessage.includes('participants') ||
-                                        queryErrorMessage.includes('payment_proof_url');
+                                        queryErrorMessage.includes('payment_proof_url') ||
+                                        queryErrorMessage.includes('client_note');
 
                                     if (!missingOptionalColumn) {
                                         throw bookingsQueryError;
@@ -2608,7 +2745,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                                 b.attendance,
                                                 b.status,
                                                 b.expires_at,
-                                                b.participants
+                                                b.participants,
+                                                b.client_note
                                             FROM bookings b
                                             LEFT JOIN products p ON p.id = b.product_id
                                             WHERE b.created_at >= ${limitDate.toISOString()}
@@ -2624,7 +2762,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                     } catch (participantsFallbackError: any) {
                                         const participantsFallbackErrorMessage = String(participantsFallbackError?.message || '');
 
-                                        if (!participantsFallbackErrorMessage.includes('participants') && !participantsFallbackErrorMessage.includes('payment_proof_url')) {
+                                        if (!participantsFallbackErrorMessage.includes('participants') && !participantsFallbackErrorMessage.includes('payment_proof_url') && !participantsFallbackErrorMessage.includes('client_note')) {
                                             throw participantsFallbackError;
                                         }
 
@@ -2659,7 +2797,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                             participants: 1,
                                             group_class_metadata: null,
                                             technique: null,
-                                            payment_proof_url: null
+                                            payment_proof_url: null,
+                                            client_note: null
                                         }));
                                     }
                                 }
@@ -5395,6 +5534,30 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         error: `Lo sentimos, ${newSlot.date} a las ${newSlot.time} no está disponible por un evento privado en el estudio.`,
                     });
                 }
+
+                if (!forceAdminReschedule) {
+                    const { rows: rentalRows } = await sql`
+                        SELECT * FROM bookings
+                        WHERE COALESCE(status, 'active') != 'expired'
+                        ORDER BY created_at DESC
+                        LIMIT 1000
+                    `;
+                    const rentalBookings = rentalRows
+                        .map(parseBookingFromDB)
+                        .filter((b) => Array.isArray(b.slots) && b.slots.some((s: any) => s.date === newSlot.date));
+                    const exclusiveHit = slotOverlapsExclusiveSpaceRental(
+                        newSlot.date,
+                        normalizeTime(newSlot.time),
+                        rentalBookings,
+                        2 * 60
+                    );
+                    if (exclusiveHit.overlaps) {
+                        return res.status(400).json({
+                            success: false,
+                            error: `Lo sentimos, ${newSlot.date} a las ${newSlot.time} no está disponible por un alquiler de espacio privado.`,
+                        });
+                    }
+                }
                 
                 // 2. Validar 72 horas de anticipación (solo para futuro)
                 if (!isRetroactive) {
@@ -6178,6 +6341,11 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 const adminOverride = Boolean(req.body.adminOverride);
                 const overrideReason = req.body.overrideReason || '';
                 const violatedRules = req.body.violatedRules || [];
+                const clientNoteRaw = req.body.clientNote;
+                const clientNote =
+                    typeof clientNoteRaw === 'string' && clientNoteRaw.trim()
+                        ? clientNoteRaw.trim()
+                        : null;
 
                 // Validar campos requeridos
                 if (!experienceType || !technique || !date || !time || !participants || !userInfo || !totalPrice) {
@@ -6196,7 +6364,12 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 const requestedTime = time as string;
 
                 const requestedStartMinutes = timeToMinutes(normalizeTime(requestedTime));
-                const requestedEndMinutes = requestedStartMinutes + (2 * 60);
+                const rentalHours =
+                    experienceType === 'celebration' && config?.hours
+                        ? Number(config.hours)
+                        : 2;
+                const requestedEndMinutes = requestedStartMinutes + (rentalHours * 60);
+                const isExclusiveRental = experienceType === 'celebration';
 
                 if (!adminOverride && !isClassStartWithinBusinessHours(requestedDate, requestedTime)) {
                     return res.status(400).json({
@@ -6212,15 +6385,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     });
                 }
 
-                const courseSessionsByDate = await loadCourseSessionsByDate(requestedDate, requestedDate);
-                if (hasCourseOverlap(requestedDate, requestedStartMinutes, requestedEndMinutes, courseSessionsByDate)) {
-                    return res.status(400).json({
-                        success: false,
-                        error: `Lo sentimos, ${requestedDate} a las ${requestedTime} está reservado por un curso.`
-                    });
-                }
-                
-                // Obtener bookings no-expirados que tengan slots en esa fecha
+                // Obtener bookings no-expirados (también para exclusividad de alquiler)
                 const { rows: allBookingsRows } = await sql`
                     SELECT * FROM bookings 
                     WHERE COALESCE(status, 'active') != 'expired'
@@ -6232,6 +6397,48 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     if (!b.slots || !Array.isArray(b.slots)) return false;
                     return b.slots.some((s: any) => s.date === requestedDate);
                 });
+
+                // Bloqueo por alquiler/celebración exclusiva (cualquier técnica)
+                if (!adminOverride) {
+                    const exclusiveHit = slotOverlapsExclusiveSpaceRental(
+                        requestedDate,
+                        requestedTime,
+                        bookingsOnDate,
+                        rentalHours * 60
+                    );
+                    if (exclusiveHit.overlaps) {
+                        return res.status(400).json({
+                            success: false,
+                            error: `Lo sentimos, ${requestedDate} a las ${requestedTime} no está disponible por un alquiler de espacio privado.`
+                        });
+                    }
+                }
+
+                // Si ESTA reserva es exclusiva, no puede solapar con NINGUNA otra reserva del estudio
+                if (!adminOverride && isExclusiveRental) {
+                    for (const booking of bookingsOnDate) {
+                        if (!booking.slots || !Array.isArray(booking.slots)) continue;
+                        for (const s of booking.slots) {
+                            if (s.date !== requestedDate) continue;
+                            const bStart = timeToMinutes(normalizeTime(s.time));
+                            const bEnd = bStart + getBookingOccupancyMinutes(booking);
+                            if (requestedStartMinutes < bEnd && requestedEndMinutes > bStart) {
+                                return res.status(400).json({
+                                    success: false,
+                                    error: `No se puede alquilar el espacio: ya hay una reserva el ${requestedDate} que se solapa con ese horario.`
+                                });
+                            }
+                        }
+                    }
+                }
+
+                const courseSessionsByDate = await loadCourseSessionsByDate(requestedDate, requestedDate);
+                if (hasCourseOverlap(requestedDate, requestedStartMinutes, requestedEndMinutes, courseSessionsByDate)) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Lo sentimos, ${requestedDate} a las ${requestedTime} está reservado por un curso.`
+                    });
+                }
                 
                 // Obtener capacidades/config y horarios (para reglas de horarios fijos)
                 const { availability, scheduleOverrides, classCapacity } = await parseSlotAvailabilitySettings();
@@ -6362,7 +6569,9 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     technique,
                     config,
                     menuSelections: menuSelections || [],
-                    childrenPieces: childrenPieces || []
+                    childrenPieces: childrenPieces || [],
+                    isExclusiveSpaceRental: isExclusiveRental,
+                    rentalHours: isExclusiveRental ? rentalHours : undefined,
                 };
 
                 // Insertar booking en la base de datos
@@ -6381,7 +6590,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         expires_at,
                         booking_mode,
                         product,
-                        group_metadata
+                        group_metadata,
+                        client_note
                     ) VALUES (
                         ${bookingCode},
                         'CUSTOM_GROUP_EXPERIENCE',
@@ -6396,7 +6606,15 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         NOW() + INTERVAL '2 hours',
                         'online',
                         ${JSON.stringify(productDetails)},
-                        ${JSON.stringify({ experienceType, config, menuSelections, childrenPieces })}
+                        ${JSON.stringify({
+                            experienceType,
+                            config,
+                            menuSelections,
+                            childrenPieces,
+                            isExclusiveSpaceRental: isExclusiveRental,
+                            rentalHours: isExclusiveRental ? rentalHours : undefined,
+                        })},
+                        ${clientNote}
                     )
                     RETURNING *
                 `;
@@ -6407,6 +6625,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
                 const newBooking = rows[0];
                 console.log('[createCustomExperienceBooking] Booking created:', bookingCode, 'ID:', newBooking.id);
+
+                await ensureCustomerFromUserInfo(userInfo);
 
                 // 🔓 LOG ADMIN OVERRIDE IF PRESENT
                 if (adminOverride) {
@@ -6475,7 +6695,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 return res.status(200).json({
                     success: true,
                     bookingCode,
-                    booking: toCamelCase(newBooking),
+                    booking: parseBookingFromDB(newBooking),
                     message: 'Pre-reserva creada exitosamente. Revisa tu correo para instrucciones de pago.'
                 });
             } catch (error) {
@@ -6483,6 +6703,335 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 return res.status(500).json({
                     success: false,
                     error: error instanceof Error ? error.message : 'Error al crear la pre-reserva'
+                });
+            }
+        }
+        case 'checkSpaceRentalAvailability': {
+            try {
+                const { date, time, hours } = req.body || {};
+                if (!date || typeof date !== 'string') {
+                    return res.status(400).json({ success: false, error: 'Indica la fecha.' });
+                }
+
+                const rentalHours = time && hours ? Number(hours) : null;
+                const proposed =
+                    time && rentalHours && [2, 3, 4, 5].includes(rentalHours)
+                        ? { startTime: String(time), hours: rentalHours }
+                        : null;
+
+                const { rows: allBookingsRows } = await sql`
+                    SELECT * FROM bookings
+                    WHERE COALESCE(status, 'active') != 'expired'
+                    ORDER BY created_at DESC
+                    LIMIT 1000
+                `;
+                const allBookings = allBookingsRows.map(parseBookingFromDB);
+                const bookingsOnDate = allBookings.filter(
+                    (b) => Array.isArray(b.slots) && b.slots.some((s: any) => s.date === date)
+                );
+
+                let daySchedule = buildDayOccupancyFromBookings(date, bookingsOnDate, proposed);
+
+                for (const block of PRIVATE_EVENT_BLOCKS) {
+                    if (block.date !== date) continue;
+                    const startMinutes = spaceTimeToMinutes(block.startTime);
+                    const endMinutes = spaceTimeToMinutes(block.endTime);
+                    if (Number.isNaN(startMinutes) || Number.isNaN(endMinutes)) continue;
+                    const overlapsProposed = proposed
+                        ? windowsOverlap(
+                              spaceTimeToMinutes(proposed.startTime),
+                              spaceTimeToMinutes(proposed.startTime) + proposed.hours * 60,
+                              startMinutes,
+                              endMinutes
+                          )
+                        : false;
+                    daySchedule.push({
+                        id: `private-${block.startTime}`,
+                        label: block.label || 'Evento privado',
+                        startTime: minutesToHHMM(startMinutes),
+                        endTime: minutesToHHMM(endMinutes),
+                        startMinutes,
+                        endMinutes,
+                        kind: 'private_block',
+                        overlapsProposed,
+                    });
+                }
+
+                const courseSessionsByDate = await loadCourseSessionsByDate(date, date);
+                const courseSessions = courseSessionsByDate?.[date] || [];
+                for (const session of courseSessions) {
+                    const startMinutes = session.startMinutes;
+                    const endMinutes = session.endMinutes;
+                    if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes)) continue;
+                    const overlapsProposed = proposed
+                        ? windowsOverlap(
+                              spaceTimeToMinutes(proposed.startTime),
+                              spaceTimeToMinutes(proposed.startTime) + proposed.hours * 60,
+                              startMinutes,
+                              endMinutes
+                          )
+                        : false;
+                    daySchedule.push({
+                        id: `course-${startMinutes}`,
+                        label: 'Curso de torno',
+                        startTime: minutesToHHMM(startMinutes),
+                        endTime: minutesToHHMM(endMinutes),
+                        startMinutes,
+                        endMinutes,
+                        kind: 'course',
+                        overlapsProposed,
+                    });
+                }
+
+                daySchedule.sort((a, b) => a.startMinutes - b.startMinutes);
+
+                const conflicts = proposed
+                    ? getConflictsForProposedWindow(daySchedule, proposed.startTime, proposed.hours)
+                    : [];
+
+                return res.status(200).json({
+                    success: true,
+                    date,
+                    proposed: proposed
+                        ? {
+                              startTime: proposed.startTime,
+                              endTime: addHoursToTime(proposed.startTime, proposed.hours),
+                              hours: proposed.hours,
+                          }
+                        : null,
+                    available: proposed ? conflicts.length === 0 : null,
+                    conflicts,
+                    daySchedule,
+                });
+            } catch (error) {
+                console.error('[checkSpaceRentalAvailability] Error:', error);
+                return res.status(500).json({
+                    success: false,
+                    error: error instanceof Error ? error.message : 'Error al validar disponibilidad',
+                });
+            }
+        }
+        case 'createSpaceRentalBooking': {
+            try {
+                const {
+                    date,
+                    time,
+                    hours,
+                    participants,
+                    userInfo,
+                    totalPrice,
+                    technique,
+                    clientNote,
+                    adminOverride,
+                } = req.body;
+
+                const rentalHours = Number(hours);
+                if (!date || !time || !userInfo?.email || !userInfo?.firstName || !totalPrice) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Faltan datos: cliente, fecha, hora y precio son obligatorios.',
+                    });
+                }
+                if (![2, 3, 4, 5].includes(rentalHours)) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'La duración debe ser 2, 3, 4 o 5 horas.',
+                    });
+                }
+
+                const participantCount = Math.max(1, parseInt(String(participants || 1), 10) || 1);
+                const requestedStartMinutes = timeToMinutes(normalizeTime(time));
+                const requestedEndMinutes = requestedStartMinutes + rentalHours * 60;
+                const endTime = addHoursToTime(time, rentalHours);
+
+                if (!adminOverride && !isClassStartWithinBusinessHours(date, time)) {
+                    return res.status(400).json({
+                        success: false,
+                        error: getBusinessHoursRejectionMessage(date),
+                    });
+                }
+
+                const { rows: allBookingsRows } = await sql`
+                    SELECT * FROM bookings
+                    WHERE COALESCE(status, 'active') != 'expired'
+                    ORDER BY created_at DESC
+                    LIMIT 1000
+                `;
+                const allBookings = allBookingsRows.map(parseBookingFromDB);
+                const bookingsOnDate = allBookings.filter((b) =>
+                    Array.isArray(b.slots) && b.slots.some((s: any) => s.date === date)
+                );
+
+                // No solapar con evento privado hardcodeado (ventana de clase 2h desde starts que chocan)
+                if (!adminOverride && slotOverlapsPrivateEvent(date, time)) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Ese horario no está disponible por un evento privado ya programado.`,
+                    });
+                }
+
+                // No solapar con otro alquiler/celebración
+                const exclusiveHit = slotOverlapsExclusiveSpaceRental(
+                    date,
+                    time,
+                    bookingsOnDate,
+                    rentalHours * 60
+                );
+                if (!adminOverride && exclusiveHit.overlaps) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Ese horario ya tiene un alquiler o celebración privada. Elige otro.',
+                    });
+                }
+
+                // No solapar con NINGUNA reserva (clases, paquetes, etc.)
+                if (!adminOverride) {
+                    for (const booking of bookingsOnDate) {
+                        if (!booking.slots || !Array.isArray(booking.slots)) continue;
+                        for (const s of booking.slots) {
+                            if (s.date !== date) continue;
+                            const bStart = timeToMinutes(normalizeTime(s.time));
+                            const bEnd = bStart + getBookingOccupancyMinutes(booking);
+                            if (requestedStartMinutes < bEnd && requestedEndMinutes > bStart) {
+                                const who =
+                                    booking.product?.name ||
+                                    `${booking.userInfo?.firstName || ''} ${booking.userInfo?.lastName || ''}`.trim() ||
+                                    'otra reserva';
+                                return res.status(400).json({
+                                    success: false,
+                                    error: `No se puede alquilar: se solapa con “${who}”. Cambia la hora o edita esa reserva primero.`,
+                                });
+                            }
+                        }
+                    }
+                }
+
+                const courseSessionsByDate = await loadCourseSessionsByDate(date, date);
+                if (hasCourseOverlap(date, requestedStartMinutes, requestedEndMinutes, courseSessionsByDate)) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Ese horario está ocupado por un curso.',
+                    });
+                }
+
+                const bookingCode = generateBookingCode();
+                const slot = { date, time };
+                const noteText =
+                    typeof clientNote === 'string' && clientNote.trim() ? clientNote.trim() : null;
+                const productDetails = {
+                    type: 'SPACE_RENTAL',
+                    name: 'Alquiler de espacio',
+                    experienceType: 'celebration',
+                    isExclusiveSpaceRental: true,
+                    rentalHours,
+                    endTime,
+                    technique: technique || null,
+                    config: {
+                        hours: rentalHours,
+                        activeParticipants: participantCount,
+                        guests: 0,
+                    },
+                    clientNote: noteText,
+                };
+                const groupMetadata = {
+                    experienceType: 'celebration',
+                    isExclusiveSpaceRental: true,
+                    rentalHours,
+                    endTime,
+                    config: productDetails.config,
+                    clientNote: noteText,
+                };
+
+                const { rows } = await sql`
+                    INSERT INTO bookings (
+                        booking_code,
+                        product_type,
+                        technique,
+                        slots,
+                        participants,
+                        user_info,
+                        price,
+                        is_paid,
+                        status,
+                        created_at,
+                        expires_at,
+                        booking_mode,
+                        product,
+                        group_metadata,
+                        client_note
+                    ) VALUES (
+                        ${bookingCode},
+                        'SPACE_RENTAL',
+                        ${technique || null},
+                        ${JSON.stringify([slot])},
+                        ${participantCount},
+                        ${JSON.stringify(userInfo)},
+                        ${Number(totalPrice)},
+                        false,
+                        'active',
+                        NOW(),
+                        NULL,
+                        'admin_manual',
+                        ${JSON.stringify(productDetails)},
+                        ${JSON.stringify(groupMetadata)},
+                        ${noteText}
+                    )
+                    RETURNING *
+                `;
+
+                if (!rows?.length) {
+                    throw new Error('No se pudo guardar el alquiler');
+                }
+
+                const newBooking = rows[0];
+                await ensureCustomerFromUserInfo(userInfo);
+
+                // Bank details
+                const { rows: settingsRows } = await sql`SELECT key, value FROM settings WHERE key = 'bankDetails'`;
+                const bankDetailsArray = (settingsRows.find((r) => r.key === 'bankDetails')?.value as BankDetails[]) || [];
+                const fallbackBank: BankDetails = {
+                    bankName: 'Banco Pichincha',
+                    accountHolder: 'Carolina Massuh Morán',
+                    accountNumber: '2100334248',
+                    accountType: 'Cuenta Corriente',
+                    taxId: '0921343935',
+                };
+                const bankDetails = bankDetailsArray.length ? bankDetailsArray : [fallbackBank];
+
+                let emailSent = false;
+                try {
+                    await emailService.sendSpaceRentalConfirmationEmail({
+                        bookingCode,
+                        userInfo,
+                        date,
+                        startTime: time,
+                        endTime,
+                        hours: rentalHours,
+                        participants: participantCount,
+                        totalPrice: Number(totalPrice),
+                        technique: technique || null,
+                        clientNote: noteText,
+                        bankDetails,
+                    });
+                    emailSent = true;
+                } catch (emailError) {
+                    console.error('[createSpaceRentalBooking] Email failed:', emailError);
+                }
+
+                return res.status(200).json({
+                    success: true,
+                    bookingCode,
+                    booking: parseBookingFromDB(newBooking),
+                    emailSent,
+                    message: emailSent
+                        ? 'Alquiler guardado y correo enviado al cliente.'
+                        : 'Alquiler guardado, pero el correo no se pudo enviar. Revisa el email del cliente.',
+                });
+            } catch (error) {
+                console.error('[createSpaceRentalBooking] Error:', error);
+                return res.status(500).json({
+                    success: false,
+                    error: error instanceof Error ? error.message : 'Error al crear el alquiler',
                 });
             }
         }
@@ -8674,6 +9223,7 @@ async function addBookingAction(
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reschedule_history JSONB DEFAULT '[]'::jsonb`;
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS last_reschedule_at TIMESTAMP WITH TIME ZONE`;
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS participants INT DEFAULT 1`;
+      await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS client_note TEXT`;
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS group_metadata JSONB`;
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_proof_url TEXT`;
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_proof_uploaded_at TIMESTAMPTZ`;
@@ -8729,12 +9279,30 @@ async function addBookingAction(
 
     // Bloqueo eventos privados (alquiler de espacio): todas las rutas públicas de reserva
     if (!adminOverride && body.slots && Array.isArray(body.slots)) {
+      const { rows: exclusiveRows } = await sql`
+        SELECT * FROM bookings
+        WHERE COALESCE(status, 'active') != 'expired'
+        ORDER BY created_at DESC
+        LIMIT 1000
+      `;
+      const exclusivePool = exclusiveRows.map(parseBookingFromDB);
       for (const slot of body.slots) {
         if (!slot?.date || !slot?.time) continue;
         const normalizedSlotTime = normalizeTime(slot.time);
         if (slotOverlapsPrivateEvent(slot.date, normalizedSlotTime)) {
           throw new Error(
             `Lo sentimos, ${slot.date} a las ${normalizedSlotTime} no está disponible por un evento privado en el estudio.`
+          );
+        }
+        const exclusiveHit = slotOverlapsExclusiveSpaceRental(
+          slot.date,
+          normalizedSlotTime,
+          exclusivePool.filter((b) => Array.isArray(b.slots) && b.slots.some((s: any) => s.date === slot.date)),
+          2 * 60
+        );
+        if (exclusiveHit.overlaps) {
+          throw new Error(
+            `Lo sentimos, ${slot.date} a las ${normalizedSlotTime} no está disponible por un alquiler de espacio privado.`
           );
         }
       }
@@ -8991,6 +9559,21 @@ async function addBookingAction(
             console.log(`[addBookingAction SINGLE_CLASS] ✅ Capacity & rules validated: ${requestedTechnique} on ${slot.date} at ${normalizedTime}, ${slotAvailability.capacity.available} slots available`);
         }
 
+    // CLASS_PACKAGE: ventanas 4 sem / 2 meses / 3 meses desde la primera clase
+    if (body.productType === 'CLASS_PACKAGE' && Array.isArray(body.slots) && body.slots.length > 0) {
+      const classCount = Number((body.product as any)?.classes) || body.slots.length;
+      const check = areClassPackageSlotsWithinValidity(
+        body.slots.map((s: any) => s.date).filter(Boolean),
+        classCount
+      );
+      if (!check.ok) {
+        throw new Error(
+          `Las clases del paquete deben quedar dentro de ${getClassPackageValidityLabel(classCount)} ` +
+            `desde la primera clase (${check.firstDate}). La última fecha permitida es ${check.endDate}.`
+        );
+      }
+    }
+
     // Calcular reschedule allowance basado en tipo de paquete
     let rescheduleAllowance = 0;
     if (body.productType === 'CLASS_PACKAGE' || body.productType === 'SINGLE_CLASS') {
@@ -9033,11 +9616,17 @@ async function addBookingAction(
       console.log(`[addBooking] GROUP_CLASS: Updated product.name from "${body.product.name}" to "${productName}"`);
     }
 
+    const clientNoteRaw = (body as any).clientNote;
+    const clientNote =
+      typeof clientNoteRaw === 'string' && clientNoteRaw.trim()
+        ? clientNoteRaw.trim()
+        : null;
+
     const { rows: created } = await sql`
       INSERT INTO bookings (
-        booking_code, product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_date, accepted_no_refund, expires_at, status, technique, reschedule_allowance, reschedule_used, reschedule_history, participants, group_metadata
+        booking_code, product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_date, accepted_no_refund, expires_at, status, technique, reschedule_allowance, reschedule_used, reschedule_history, participants, group_metadata, client_note
       ) VALUES (
-        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(finalProduct)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}, NOW() + INTERVAL '2 hours', 'active', ${technique || null}, ${rescheduleAllowance}, 0, '[]'::jsonb, ${(body as any).participants || 1}, ${groupMetadata ? JSON.stringify(groupMetadata) : null}
+        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(finalProduct)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}, NOW() + INTERVAL '2 hours', 'active', ${technique || null}, ${rescheduleAllowance}, 0, '[]'::jsonb, ${(body as any).participants || 1}, ${groupMetadata ? JSON.stringify(groupMetadata) : null}, ${clientNote}
       ) RETURNING *;
     `;
 
@@ -9059,7 +9648,11 @@ async function addBookingAction(
       technique: created[0].technique,
       participants: created[0].participants ? parseInt(created[0].participants, 10) : 1,
       groupClassMetadata: created[0].group_metadata || undefined,
+      clientNote: created[0].client_note || clientNote || undefined,
     };
+
+    // Asegurar fila en customers (si no, el CRM no encuentra al cliente)
+    await ensureCustomerFromUserInfo(body.userInfo as any);
 
     // 🔓 LOG ADMIN OVERRIDE IF PRESENT
     const overrideReason = (body as any).overrideReason || (options?.overrideReason);

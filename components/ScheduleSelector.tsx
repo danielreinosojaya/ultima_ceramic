@@ -9,6 +9,11 @@ import { CapacityIndicator } from './CapacityIndicator.js';
 import { SocialBadge } from './SocialBadge.js';
 import { InstructorTag } from './InstructorTag.js';
 import { DAY_NAMES } from '../constants.js';
+import {
+  getClassPackageValidityDays,
+  getClassPackageValidityLabel,
+  getClassPackageWindowEndDate,
+} from '../utils/classPackageValidity.js';
 
 const formatDateToYYYYMMDD = (d: Date): string => {
     const year = d.getFullYear();
@@ -84,10 +89,11 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
 
   const bookingWindowEndDate = useMemo(() => {
     if (!firstSelectionDate) return null;
-    const endDate = new Date(firstSelectionDate);
-    endDate.setDate(endDate.getDate() + 30);
-    return endDate;
-  }, [firstSelectionDate]);
+    return getClassPackageWindowEndDate(firstSelectionDate, pkg.classes);
+  }, [firstSelectionDate, pkg.classes]);
+
+  const validityLabel = getClassPackageValidityLabel(pkg.classes);
+  const validityDays = getClassPackageValidityDays(pkg.classes);
 
   const { weekDates, scheduleData } = useMemo(() => {
       const startOfWeek = new Date(currentDate);
@@ -192,7 +198,17 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
     <div className="flex flex-col lg:flex-row gap-8">
       <div className="lg:w-2/3">
                 <p className="text-brand-secondary mb-2">
-                  {bookingMode === 'monthly' ? 'Selecciona el horario para tus clases mensuales' : 'Selecciona el horario para tus clases'} <span className="font-bold text-brand-text">{pkg.name}</span>.
+                  {bookingMode === 'monthly' ? 'Selecciona el horario para tus clases' : 'Selecciona el horario para tus clases'} <span className="font-bold text-brand-text">{pkg.name}</span>.
+                  {bookingMode === 'flexible' && (
+                    <span className="block text-sm font-normal text-brand-secondary mt-1">
+                      Paquete de {pkg.classes} clases: debes completarlas en un máximo de <strong>{validityLabel}</strong> ({validityDays} días) desde tu primera clase.
+                    </span>
+                  )}
+                  {bookingMode === 'monthly' && (
+                    <span className="block text-sm font-normal text-brand-secondary mt-1">
+                      Horario fijo: el mismo día y hora durante 4 semanas seguidas.
+                    </span>
+                  )}
                 </p>
                 
                 {/* Enhanced Social Proof Tip - More Visible */}
@@ -226,7 +242,7 @@ export const ScheduleSelector: React.FC<ScheduleSelectorProps> = ({ pkg, onConfi
                 </div>
                 {bookingMode === 'flexible' && firstSelectionDate && bookingWindowEndDate && (
                     <div className="text-xs text-center font-semibold bg-amber-100 text-amber-800 p-2 rounded-md mb-4 animate-fade-in-fast">
-                      {`Puedes seleccionar clases hasta el ${bookingWindowEndDate.toLocaleDateString(language, { month: 'long', day: 'numeric' })}.`}
+                      {`Ventana del paquete (${validityLabel}): puedes seleccionar clases hasta el ${bookingWindowEndDate.toLocaleDateString(language, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}.`}
                     </div>
                 )}
                 <div className="flex justify-between items-center mb-4">

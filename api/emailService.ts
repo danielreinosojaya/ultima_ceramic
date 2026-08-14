@@ -4,6 +4,11 @@ import type { Booking, BankDetails, TimeSlot, PaymentDetails, GroupTechnique } f
 import { sql } from './db.js';
 import { generateAllGiftcardVersions } from './utils/giftcardImageGenerator.js';
 import { parseLocalDate } from '../utils/formatters.js';
+import { addHoursToTime } from '../utils/spaceRental.js';
+import {
+    getClassPackageValidityDescription,
+    getClassPackageValidityLabel,
+} from '../utils/classPackageValidity.js';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_FROM_ADDRESS || 'no-reply@ceramicalma.com';
@@ -33,7 +38,9 @@ const getProductTypeName = (productType?: string): string => {
     'INTRODUCTORY_CLASS': 'Clase Introductoria',
     'GROUP_CLASS': 'Clase Grupal',
     'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
-    'OPEN_STUDIO': 'Estudio Abierto'
+    'OPEN_STUDIO': 'Estudio Abierto',
+    'SPACE_RENTAL': 'Alquiler de espacio',
+    'CUSTOM_GROUP_EXPERIENCE': 'Experiencia Grupal',
   };
   return typeNames[productType || ''] || 'Clase';
 };
@@ -270,6 +277,24 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
         ? `<p style="margin:16px 0 0 0;font-size:12px;color:#9ca3af;border-top:1px solid #f0ede8;padding-top:12px;">⚠️ Esta reserva <strong>no es reembolsable ni reagendable</strong> por haberse realizado con menos de 48h de anticipación.</p>`
         : `<p style="margin:16px 0 0 0;font-size:12px;color:#9ca3af;border-top:1px solid #f0ede8;padding-top:12px;">Puedes cancelar o reagendar sin costo hasta 48 horas antes de tu clase.</p>`;
 
+    const packageClasses =
+        booking.productType === 'CLASS_PACKAGE' && booking.product && 'classes' in booking.product
+            ? Number((booking.product as any).classes) || 0
+            : 0;
+    const packageValidityBlock =
+        packageClasses > 0
+            ? `<div style="background:#FFF8E7;border:1px solid #F0D78C;border-radius:8px;padding:16px;margin:20px 0;">
+                <p style="margin:0 0 6px 0;font-size:14px;font-weight:700;color:#4A4540;">⏰ Plazo de tu paquete (${packageClasses} clases)</p>
+                <p style="margin:0;font-size:13px;color:#6B5F58;line-height:1.55;">
+                  Debes completar todas las clases en un máximo de <strong>${getClassPackageValidityLabel(packageClasses)}</strong> desde tu primera clase.
+                  ${getClassPackageValidityDescription(packageClasses)}
+                </p>
+                <p style="margin:10px 0 0 0;font-size:12px;color:#958985;">
+                  Referencia: 4 clases → 4 semanas · 8 clases → 2 meses · 12 clases → 3 meses.
+                </p>
+              </div>`
+            : '';
+
     const html = `
     <div style="font-family: 'Cardo', serif; max-width: 600px; margin: 0 auto; background: #FFFFFF; padding: 0; border-radius: 12px; overflow: hidden; border: 1px solid #D1D0C6;">
         
@@ -336,6 +361,8 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
                 <p style="margin:16px 0 0 0;font-size:12px;color:#958985;">Si ya subiste tu comprobante, ignora este correo. Tu reserva está protegida.</p>
             </div>
 
+            ${packageValidityBlock}
+
             ${policyBlock}
         </div>
 
@@ -365,6 +392,16 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
 
 // Envía el recibo de pago al cliente
 export const sendPaymentReceiptEmail = async (booking: Booking, payment: PaymentDetails) => {
+    const isSpaceRental =
+        booking.productType === 'SPACE_RENTAL' ||
+        (booking.product as any)?.type === 'SPACE_RENTAL' ||
+        (booking.product as any)?.isExclusiveSpaceRental === true ||
+        (booking.groupClassMetadata as any)?.isExclusiveSpaceRental === true;
+
+    if (isSpaceRental) {
+        return sendSpaceRentalPaymentConfirmedEmail(booking, payment);
+    }
+
     const { userInfo, bookingCode, product, slots } = booking;
     const subject = `¡Confirmación de Pago para tu reserva en CeramicAlma! (Código: ${bookingCode})`;
 
@@ -418,12 +455,28 @@ export const sendPaymentReceiptEmail = async (booking: Booking, payment: Payment
         </div>
     ` : '';
 
+    const packageClassesPay =
+        booking.productType === 'CLASS_PACKAGE' && product && 'classes' in product
+            ? Number((product as any).classes) || 0
+            : 0;
+    const packageValidityHtml =
+        packageClassesPay > 0
+            ? `<div style="background-color: #FFF8E7; border-left: 4px solid #D97706; padding: 15px; margin-top: 20px; border-radius: 8px;">
+                <p style="margin: 0; color: #92400E; font-weight: bold;">⏰ Plazo de tu paquete (${packageClassesPay} clases)</p>
+                <p style="margin: 8px 0 0 0; color: #78350F; font-size: 14px;">
+                  Completa todas tus clases en un máximo de <strong>${getClassPackageValidityLabel(packageClassesPay)}</strong> desde tu primera clase.
+                  (4 clases → 4 semanas · 8 → 2 meses · 12 → 3 meses)
+                </p>
+              </div>`
+            : '';
+
     const html = `
         <div style="font-family: Arial, sans-serif; color: #333;">
             <h2>¡Hola, ${userInfo.firstName}!</h2>
             <p>Hemos recibido tu pago y tu reserva para <strong>${productName}</strong> está oficialmente confirmada.</p>
             <p style="font-size: 20px; font-weight: bold; color: #16A34A; margin: 20px 0;">¡Tu plaza está asegurada!</p>
             ${slotsHtml}
+            ${packageValidityHtml}
             <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; margin-top: 20px;">
                 <h3 style="color: #D95F43;">Detalles del Pago</h3>
                 <p><strong>Código de Reserva:</strong> ${bookingCode}</p>
@@ -1707,7 +1760,7 @@ export const sendPackageRenewalReminderEmail = async (
 
             <div style="background-color: #F0FDF4; border-left: 4px solid #22C55E; padding: 15px; margin: 20px 0; border-radius: 8px;">
                 <p style="margin: 0; color: #166534; font-size: 14px;">
-                    <strong>💡 Tip:</strong> Los paquetes no son reembolsables, así que asegúrate de usar todas tus clases antes de que expire tu suscripción.
+                    <strong>💡 Tip:</strong> Los paquetes no son reembolsables. Completa tus clases dentro del plazo desde la primera clase (4 → 4 semanas · 8 → 2 meses · 12 → 3 meses).
                 </p>
             </div>
 
@@ -2527,6 +2580,353 @@ export const sendCustomExperiencePreBookingEmail = async (
     await logEmailEvent(userInfo.email, 'custom-experience-prebooking', 'email', status, bookingCode);
 
     console.info('[emailService] Custom experience pre-booking email sent to', userInfo.email);
+    return result;
+};
+
+/**
+ * Email de confirmación de alquiler de espacio (evento privado).
+ * Estilo alineado con pre-reservas / experiencias grupales.
+ */
+export const sendSpaceRentalConfirmationEmail = async (params: {
+    bookingCode: string;
+    userInfo: { firstName: string; lastName?: string; email: string };
+    date: string;
+    startTime: string;
+    endTime: string;
+    hours: number;
+    participants: number;
+    totalPrice: number;
+    technique?: string | null;
+    clientNote?: string | null;
+    bankDetails: BankDetails | BankDetails[];
+}) => {
+    const {
+        bookingCode,
+        userInfo,
+        date,
+        startTime,
+        endTime,
+        hours,
+        participants,
+        totalPrice,
+        technique,
+        clientNote,
+        bankDetails,
+    } = params;
+
+    const d = parseLocalDate(date);
+    const formattedDate = d.toLocaleDateString('es-ES', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+    });
+
+    const techniqueNames: Record<string, string> = {
+        potters_wheel: 'Torno Alfarero',
+        hand_modeling: 'Modelado a Mano',
+        painting: 'Pintura de piezas',
+    };
+    const techniqueLabel = technique ? techniqueNames[technique] || technique : null;
+
+    const subject = `Alquiler de espacio confirmado · ${bookingCode}`;
+    const appUrl = process.env.APP_PUBLIC_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://ceramicalma.com');
+    const uploadLink = `${appUrl}/?comprobante=${encodeURIComponent(bookingCode)}`;
+
+    const accounts = Array.isArray(bankDetails) ? bankDetails : [bankDetails];
+    const accountsHtml = accounts.map(acc => `
+        <div style="background: white; border: 1px solid #D1D0C6; border-radius: 6px; padding: 16px; margin-bottom: 12px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 12px;">
+                <div>
+                    <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Banco</p>
+                    <p style="margin: 0; font-size: 15px; font-weight: 600; color: #4A4540;">${acc.bankName}</p>
+                </div>
+                <div>
+                    <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Tipo Cuenta</p>
+                    <p style="margin: 0; font-size: 15px; font-weight: 600; color: #4A4540;">${acc.accountType}</p>
+                </div>
+            </div>
+            <div style="margin-bottom: 12px;">
+                <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Titular</p>
+                <p style="margin: 0; font-size: 14px; color: #4A4540;">${acc.accountHolder}</p>
+            </div>
+            <div style="margin-bottom: 12px;">
+                <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Número de Cuenta</p>
+                <p style="margin: 0; font-size: 16px; font-family: 'Courier New', monospace; font-weight: 700; color: #828E98; letter-spacing: 1px; background: #F4F2F1; padding: 8px 12px; border-radius: 4px;">${acc.accountNumber}</p>
+            </div>
+            <div>
+                <p style="margin: 0 0 4px 0; font-size: 11px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Cédula</p>
+                <p style="margin: 0; font-size: 14px; color: #4A4540;">${acc.taxId}</p>
+            </div>
+        </div>
+    `).join('');
+
+    const html = `
+        <div style="font-family: 'Cardo', serif; max-width: 600px; margin: 0 auto; background: #FFFFFF; padding: 0;">
+            <div style="background: linear-gradient(135deg, #828E98 0%, #6B7A86 100%); text-align: center; padding: 40px 20px; color: white;">
+                <h1 style="font-size: 32px; margin: 0 0 8px 0; font-weight: 700; letter-spacing: -0.5px;">Ceramicalma</h1>
+                <p style="font-size: 14px; margin: 0; opacity: 0.9; font-style: italic;">Alquiler de espacio · Evento privado</p>
+            </div>
+
+            <div style="padding: 40px 30px;">
+                <h2 style="color: #828E98; font-size: 24px; margin: 0 0 20px 0; font-weight: 700;">Tu alquiler está registrado</h2>
+
+                <p style="color: #4A4540; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">Hola <strong>${userInfo.firstName}</strong>,</p>
+
+                <p style="color: #958985; font-size: 15px; line-height: 1.7; margin: 0 0 28px 0;">
+                    Hemos reservado el taller en exclusivo para tu evento. Durante ese horario el espacio es privado:
+                    no se programan otras clases ni actividades.
+                </p>
+
+                <div style="background: #F4F2F1; border-left: 5px solid #828E98; padding: 24px; margin: 28px 0; border-radius: 8px;">
+                    <h3 style="color: #828E98; margin: 0 0 16px 0; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Detalles del alquiler</h3>
+                    <table style="width: 100%; color: #4A4540; font-size: 14px;">
+                        <tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600; width: 40%;">Código:</td>
+                            <td style="padding: 10px 0; font-family: 'Courier New', monospace; letter-spacing: 0.5px; color: #828E98; font-weight: 700;">${bookingCode}</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600;">Fecha:</td>
+                            <td style="padding: 10px 0;">${formattedDate}</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600;">Horario:</td>
+                            <td style="padding: 10px 0;">${startTime} – ${endTime} (${hours} hora${hours === 1 ? '' : 's'})</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600;">Personas:</td>
+                            <td style="padding: 10px 0;">${participants} persona(s)</td>
+                        </tr>
+                        ${techniqueLabel ? `<tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600;">Actividad:</td>
+                            <td style="padding: 10px 0;">${techniqueLabel}</td>
+                        </tr>` : ''}
+                        ${clientNote ? `<tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600;">Notas:</td>
+                            <td style="padding: 10px 0;">${clientNote}</td>
+                        </tr>` : ''}
+                    </table>
+                    <div style="margin-top: 20px; padding-top: 16px; border-top: 2px solid #D1D0C6;">
+                        <p style="margin: 0; font-size: 24px; color: #828E98; font-weight: 700; text-align: right;">
+                            $${Number(totalPrice).toFixed(2)}
+                        </p>
+                    </div>
+                </div>
+
+                <div style="background: linear-gradient(135deg, rgba(204, 188, 178, 0.08) 0%, transparent 100%); border: 2px solid #D1D0C6; padding: 24px; margin: 28px 0; border-radius: 8px;">
+                    <h3 style="color: #828E98; margin: 0 0 16px 0; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Instrucciones de pago</h3>
+                    <p style="color: #4A4540; font-size: 14px; margin: 0 0 18px 0; line-height: 1.6;">
+                        Realiza tu transferencia bancaria a cualquiera de nuestras cuentas:
+                    </p>
+                    ${accountsHtml}
+                    <div style="margin-top: 20px; padding: 16px; background: white; border: 2px solid #828E98; border-radius: 8px; text-align: center;">
+                        <p style="margin: 0 0 6px 0; font-size: 12px; color: #828E98; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Monto a transferir</p>
+                        <p style="margin: 0; font-size: 28px; color: #828E98; font-weight: 700;">$${Number(totalPrice).toFixed(2)}</p>
+                    </div>
+                    <p style="color: #4A4540; font-size: 13px; margin: 16px 0 0 0; line-height: 1.6;">
+                        <strong>Importante:</strong> Usa tu código <strong>${bookingCode}</strong> como referencia en la transferencia.
+                    </p>
+                </div>
+
+                <div style="background:#fff7f5;border:2px solid #828E98;border-radius:10px;padding:24px;margin:28px 0;text-align:center;">
+                    <p style="margin:0 0 6px 0;font-size:15px;font-weight:700;color:#4A4540;">¿Ya pagaste? Sube tu comprobante</p>
+                    <p style="margin:0 0 16px 0;font-size:13px;color:#958985;">Así confirmamos tu pago y dejamos todo listo para el evento.</p>
+                    <a href="${uploadLink}" style="display:inline-block;background:#828E98;color:#fff;padding:12px 32px;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;">Subir Comprobante →</a>
+                </div>
+
+                <p style="color: #958985; font-size: 15px; line-height: 1.7; margin: 28px 0 0 0;">
+                    ¿Tienes preguntas? Estamos aquí para ayudarte.
+                </p>
+            </div>
+
+            <div style="background: #F4F2F1; border-top: 1px solid #D1D0C6; padding: 24px 30px; text-align: center;">
+                <p style="color: #4A4540; font-size: 14px; margin: 0 0 12px 0;">
+                    <strong>¿Preguntas? Contáctanos</strong><br/>
+                    <span style="font-size: 13px; color: #958985;">
+                        📧 cmassuh@ceramicalma.com<br/>
+                        📱 +593 98 581 3327
+                    </span>
+                </p>
+                <p style="color: #958985; font-size: 12px; margin: 14px 0 0 0; font-style: italic;">
+                    El equipo de Ceramicalma
+                </p>
+            </div>
+        </div>
+    `;
+
+    const result = await sendEmail(userInfo.email, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(userInfo.email, 'space-rental-confirmation', 'email', status, bookingCode);
+    console.info('[emailService] Space rental confirmation email sent to', userInfo.email, bookingCode, status);
+    return result;
+};
+
+/**
+ * Email de pago confirmado para alquiler de espacio.
+ * Misma línea visual que el correo de registro (espera de pago).
+ */
+export const sendSpaceRentalPaymentConfirmedEmail = async (
+    booking: Booking,
+    payment: PaymentDetails
+) => {
+    const { userInfo, bookingCode, slots, participants } = booking;
+    const slot = slots?.[0];
+    const date = slot?.date || '';
+    const startTime = slot?.time || '';
+
+    const product = booking.product as any;
+    const meta = (booking.groupClassMetadata || (booking as any).group_metadata || {}) as any;
+    const config = product?.config || meta?.config || {};
+    const hours = Number(product?.rentalHours ?? config?.hours ?? meta?.rentalHours ?? 2) || 2;
+    const endTime =
+        product?.endTime ||
+        meta?.endTime ||
+        (startTime ? addHoursToTime(startTime, hours) : '');
+
+    const technique = booking.technique || product?.technique || null;
+    const techniqueNames: Record<string, string> = {
+        potters_wheel: 'Torno Alfarero',
+        hand_modeling: 'Modelado a Mano',
+        painting: 'Pintura de piezas',
+    };
+    const techniqueLabel = technique ? techniqueNames[technique] || technique : null;
+
+    const paymentAmount = typeof payment.amount === 'number' ? payment.amount : parseFloat(String(payment.amount));
+    const giftcardAmount = payment.giftcardAmount
+        ? typeof payment.giftcardAmount === 'number'
+            ? payment.giftcardAmount
+            : parseFloat(String(payment.giftcardAmount))
+        : 0;
+
+    const timeZone = 'America/Guayaquil';
+    let fechaPago: string;
+    if (payment.receivedAt && new Date(payment.receivedAt).toString() !== 'Invalid Date') {
+        const zonedDate = toZonedTime(new Date(payment.receivedAt), timeZone);
+        fechaPago = format(zonedDate, 'd/M/yyyy', { timeZone });
+    } else {
+        const zonedDate = toZonedTime(new Date(), timeZone);
+        fechaPago = format(zonedDate, 'd/M/yyyy', { timeZone });
+    }
+
+    let formattedDate = date;
+    if (date) {
+        try {
+            formattedDate = parseLocalDate(date).toLocaleDateString('es-ES', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+            });
+        } catch {
+            /* keep raw */
+        }
+    }
+
+    const subject = `Pago recibido · Alquiler de espacio · ${bookingCode}`;
+
+    const html = `
+        <div style="font-family: 'Cardo', serif; max-width: 600px; margin: 0 auto; background: #FFFFFF; padding: 0;">
+            <div style="background: linear-gradient(135deg, #828E98 0%, #6B7A86 100%); text-align: center; padding: 40px 20px; color: white;">
+                <h1 style="font-size: 32px; margin: 0 0 8px 0; font-weight: 700; letter-spacing: -0.5px;">Ceramicalma</h1>
+                <p style="font-size: 14px; margin: 0; opacity: 0.9; font-style: italic;">Alquiler de espacio · Evento privado</p>
+            </div>
+
+            <div style="padding: 40px 30px;">
+                <h2 style="color: #828E98; font-size: 24px; margin: 0 0 20px 0; font-weight: 700;">Tu alquiler está confirmado</h2>
+
+                <p style="color: #4A4540; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">Hola <strong>${userInfo.firstName}</strong>,</p>
+
+                <p style="color: #958985; font-size: 15px; line-height: 1.7; margin: 0 0 20px 0;">
+                    Recibimos tu pago. El taller queda reservado en exclusivo para tu evento:
+                    ese horario es privado y no se programan otras clases ni actividades.
+                </p>
+
+                <div style="background: linear-gradient(135deg, rgba(34, 149, 104, 0.12) 0%, rgba(130, 142, 152, 0.08) 100%); border: 2px solid #6B9B7F; border-radius: 10px; padding: 18px 20px; margin: 0 0 28px 0; text-align: center;">
+                    <p style="margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: #3D6B52;">Pago recibido</p>
+                    <p style="margin: 8px 0 0 0; font-size: 22px; font-weight: 700; color: #2F5A42;">Espacio privado asegurado</p>
+                </div>
+
+                <div style="background: #F4F2F1; border-left: 5px solid #828E98; padding: 24px; margin: 28px 0; border-radius: 8px;">
+                    <h3 style="color: #828E98; margin: 0 0 16px 0; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Detalles del alquiler</h3>
+                    <table style="width: 100%; color: #4A4540; font-size: 14px;">
+                        <tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600; width: 40%;">Código:</td>
+                            <td style="padding: 10px 0; font-family: 'Courier New', monospace; letter-spacing: 0.5px; color: #828E98; font-weight: 700;">${bookingCode}</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600;">Fecha:</td>
+                            <td style="padding: 10px 0;">${formattedDate}</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600;">Horario:</td>
+                            <td style="padding: 10px 0;">${startTime}${endTime ? ` – ${endTime}` : ''} (${hours} hora${hours === 1 ? '' : 's'})</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600;">Personas:</td>
+                            <td style="padding: 10px 0;">${participants || 1} persona(s)</td>
+                        </tr>
+                        ${techniqueLabel ? `<tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600;">Actividad:</td>
+                            <td style="padding: 10px 0;">${techniqueLabel}</td>
+                        </tr>` : ''}
+                    </table>
+                </div>
+
+                <div style="background: linear-gradient(135deg, rgba(204, 188, 178, 0.08) 0%, transparent 100%); border: 2px solid #D1D0C6; padding: 24px; margin: 28px 0; border-radius: 8px;">
+                    <h3 style="color: #828E98; margin: 0 0 16px 0; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Detalles del pago</h3>
+                    <table style="width: 100%; color: #4A4540; font-size: 14px;">
+                        <tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600; width: 40%;">Monto pagado:</td>
+                            <td style="padding: 10px 0; font-weight: 700; color: #828E98;">$${paymentAmount.toFixed(2)}</td>
+                        </tr>
+                        ${giftcardAmount > 0 ? `<tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600;">Giftcard:</td>
+                            <td style="padding: 10px 0;">-$${giftcardAmount.toFixed(2)}</td>
+                        </tr>` : ''}
+                        <tr style="border-bottom: 1px solid #D1D0C6;">
+                            <td style="padding: 10px 0; font-weight: 600;">Método:</td>
+                            <td style="padding: 10px 0;">${payment.method}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px 0; font-weight: 600;">Fecha de pago:</td>
+                            <td style="padding: 10px 0;">${fechaPago}</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div style="background: #F4F2F1; border-left: 5px solid #CCBCB2; padding: 24px; margin: 28px 0; border-radius: 8px;">
+                    <h3 style="color: #4A4540; margin: 0 0 14px 0; font-size: 16px; font-weight: 700;">Sobre tu evento privado</h3>
+                    <ul style="color: #4A4540; font-size: 14px; margin: 0; padding-left: 20px; line-height: 1.8;">
+                        <li style="margin-bottom: 6px;">El espacio está reservado solo para tu grupo en ese horario</li>
+                        <li style="margin-bottom: 6px;">Cambios de fecha sujetos a disponibilidad</li>
+                        <li>Si necesitas ajustar algo, escríbenos con tu código <strong>${bookingCode}</strong></li>
+                    </ul>
+                </div>
+
+                <p style="color: #958985; font-size: 15px; line-height: 1.7; margin: 28px 0 0 0;">
+                    ¡Nos vemos en el taller para tu evento!
+                </p>
+            </div>
+
+            <div style="background: #F4F2F1; border-top: 1px solid #D1D0C6; padding: 24px 30px; text-align: center;">
+                <p style="color: #4A4540; font-size: 14px; margin: 0 0 12px 0;">
+                    <strong>¿Preguntas? Contáctanos</strong><br/>
+                    <span style="font-size: 13px; color: #958985;">
+                        📧 cmassuh@ceramicalma.com<br/>
+                        📱 +593 98 581 3327
+                    </span>
+                </p>
+                <p style="color: #958985; font-size: 12px; margin: 14px 0 0 0; font-style: italic;">
+                    El equipo de Ceramicalma
+                </p>
+            </div>
+        </div>
+    `;
+
+    const result = await sendEmail(userInfo.email, subject, html);
+    const status = result && 'sent' in result ? (result.sent ? 'sent' : 'failed') : 'unknown';
+    await logEmailEvent(userInfo.email, 'space-rental-payment-confirmed', 'email', status, bookingCode);
+    console.info('[emailService] Space rental payment confirmed email sent to', userInfo.email, bookingCode, status);
     return result;
 };
 

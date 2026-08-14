@@ -3,6 +3,7 @@ import type { Product, OpenStudioSubscription } from '../types';
 // Traducción eliminada, usar texto en español directamente
 import { KeyIcon } from './icons/KeyIcon';
 import { SparklesIcon } from './icons/SparklesIcon';
+import { getClassPackageValidityLabel } from '../utils/classPackageValidity';
 
 interface PackageSelectorProps {
   onSelect: (pkg: Product) => void;
@@ -61,7 +62,10 @@ export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, tech
         <SparklesIcon className="w-8 h-8 text-brand-accent flex-shrink-0 mt-1" />
         <div>
           <h3 className="font-bold text-brand-text text-lg">Más Clases, Más Ahorro</h3>
-          <p className="text-sm text-brand-secondary mt-1">Comprometerse con un paquete te ayuda a crear una rutina y ofrece un descuento significativo por clase.</p>
+          <p className="text-sm text-brand-secondary mt-1">
+            Comprometerse con un paquete te ayuda a crear una rutina y ofrece un descuento significativo por clase.
+            Plazos: <strong>4 clases → 4 semanas</strong>, <strong>8 clases → 2 meses</strong>, <strong>12 clases → 3 meses</strong> (desde tu primera clase).
+          </p>
         </div>
       </div>
 
@@ -97,6 +101,9 @@ export const PackageSelector: React.FC<PackageSelectorProps> = ({ onSelect, tech
                    </div>
                   <div className="bg-brand-background/80 p-3 rounded-md text-center mb-4">
                         <p className="font-bold text-brand-text">${pricePerClass.toFixed(2)} <span className="font-normal text-brand-secondary">por clase</span></p>
+                        <p className="text-xs text-brand-secondary mt-1">
+                          Completar en máx. <strong>{getClassPackageValidityLabel(pkg.classes)}</strong>
+                        </p>
                   </div>
                   <p className="text-brand-secondary text-sm flex-grow min-h-[3.5rem]">{pkg.description}</p>
                   <button className="mt-4 sm:mt-6 bg-brand-primary text-white font-bold py-3 px-6 rounded-lg w-full hover:opacity-90 transition-opacity duration-300 h-11 sm:h-12">

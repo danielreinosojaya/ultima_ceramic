@@ -10,6 +10,7 @@ import { OpenStudioView } from './OpenStudioView';
 import { DeliveryMetrics } from './DeliveryMetrics';
 import { DeliveriesTab } from './DeliveriesTab';
 import { COUNTRIES } from '../../constants';
+import { getClassPackageValidityDays } from '../../utils/classPackageValidity';
 
 interface NavigationState {
     tab: AdminTab;
@@ -59,17 +60,30 @@ const getRemainingClassesInfo = (customer: Customer): RemainingClassesInfo | nul
         
         const firstClassDate = Array.isArray(booking.slots) ? booking.slots.map(getSlotDateTime).sort((a,b) => a.getTime() - b.getTime())[0] : undefined;
         if (!firstClassDate) return false;
+
+        const classCount =
+            booking.product && 'classes' in booking.product && typeof (booking.product as ClassPackage).classes === 'number'
+                ? (booking.product as ClassPackage).classes
+                : booking.slots.length;
         
         const expiryDate = new Date(firstClassDate);
-        expiryDate.setDate(expiryDate.getDate() + 30);
+        expiryDate.setDate(expiryDate.getDate() + getClassPackageValidityDays(classCount));
         
         return now < expiryDate;
 
     }).sort((a, b) => {
+        const classesA =
+            a.product && 'classes' in a.product && typeof (a.product as ClassPackage).classes === 'number'
+                ? (a.product as ClassPackage).classes
+                : (Array.isArray(a.slots) ? a.slots.length : 4);
+        const classesB =
+            b.product && 'classes' in b.product && typeof (b.product as ClassPackage).classes === 'number'
+                ? (b.product as ClassPackage).classes
+                : (Array.isArray(b.slots) ? b.slots.length : 4);
         const expiryA = new Date(Array.isArray(a.slots) && a.slots.length > 0 ? a.slots.map(getSlotDateTime).sort((c, d) => c.getTime() - d.getTime())[0] : new Date());
-        expiryA.setDate(expiryA.getDate() + 30);
+        expiryA.setDate(expiryA.getDate() + getClassPackageValidityDays(classesA));
         const expiryB = new Date(Array.isArray(b.slots) && b.slots.length > 0 ? b.slots.map(getSlotDateTime).sort((c, d) => c.getTime() - d.getTime())[0] : new Date());
-        expiryB.setDate(expiryB.getDate() + 30);
+        expiryB.setDate(expiryB.getDate() + getClassPackageValidityDays(classesB));
         return expiryA.getTime() - expiryB.getTime();
     });
     
@@ -278,9 +292,48 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
     // se ha movido a una función `useCallback` que se ejecutará solo cuando `bookings` cambie.
     const loadCustomers = useCallback(async (searchTerm?: string) => {
         console.log('CrmDashboard: Loading customers...', searchTerm ? `(search: "${searchTerm}")` : '');
-        console.log('PropCustomers available:', propCustomers?.length || 0);
-        console.log('Bookings available:', bookings?.length || 0);
-        
+        const term = (searchTerm || '').trim();
+
+        // Con búsqueda: siempre ir al servidor (propCustomers está truncado / sin huérfanos)
+        if (term.length >= 2) {
+            try {
+                setLoading(true);
+                const [fromStandalone, fromPaged] = await Promise.all([
+                    dataService.getStandaloneCustomers(term),
+                    dataService.getCustomers({ search: term, limit: 100 }),
+                ]);
+                const map = new Map<string, Customer>();
+                const add = (c: Customer) => {
+                    const key = (c.email || c.userInfo?.email || '').trim().toLowerCase();
+                    if (!key) return;
+                    const prev = map.get(key);
+                    map.set(key, {
+                        ...(prev || c),
+                        ...c,
+                        email: key,
+                        userInfo: {
+                            ...(prev?.userInfo || {}),
+                            ...c.userInfo,
+                            email: key,
+                            firstName: c.userInfo?.firstName || prev?.userInfo?.firstName || '',
+                            lastName: c.userInfo?.lastName || prev?.userInfo?.lastName || '',
+                        },
+                        totalBookings: Math.max(prev?.totalBookings || 0, c.totalBookings || 0),
+                        totalSpent: Math.max(prev?.totalSpent || 0, c.totalSpent || 0),
+                    });
+                };
+                fromStandalone.forEach(add);
+                fromPaged.forEach(add);
+                setCustomers(Array.from(map.values()));
+            } catch (error) {
+                console.error('CrmDashboard: Error in server search:', error);
+                setCustomers([]);
+            } finally {
+                setLoading(false);
+            }
+            return;
+        }
+
         // Use propCustomers if available, otherwise combine standalone + booking customers
         if (propCustomers && propCustomers.length > 0) {
             console.log('CrmDashboard: Using propCustomers');
@@ -292,21 +345,16 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
         try {
             console.log('CrmDashboard: Loading standalone customers and merging with booking customers');
             
-            // ⚡ Si hay búsqueda, hacer fetch server-side en TODA la DB
-            // Caso contrario, cargar inicial optimizada (100)
             const standaloneCustomers = await dataService.getStandaloneCustomers(searchTerm);
             console.log('CrmDashboard: Standalone customers loaded:', standaloneCustomers.length);
             
-            // Get customers from bookings
             const customersFromBookings = bookings && bookings.length > 0 
                 ? generateCustomersFromBookings(bookings) 
                 : [];
             console.log('CrmDashboard: Customers from bookings:', customersFromBookings.length);
             
-            // Merge customers: prioritize booking customers (they have more data), then add standalone without bookings
             const customerMap = new Map<string, Customer>();
             
-            // Base con standalone (fuente confiable para firstName/lastName)
             standaloneCustomers.forEach(standaloneCustomer => {
                 const key = (standaloneCustomer.email || standaloneCustomer.userInfo?.email || '').trim().toLowerCase();
                 if (!key) return;
@@ -320,7 +368,6 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
                 });
             });
 
-            // Enriquecer con bookings preservando nombres existentes
             customersFromBookings.forEach(customer => {
                 const key = (customer.email || customer.userInfo?.email || '').trim().toLowerCase();
                 if (!key) return;
@@ -489,12 +536,20 @@ const CrmDashboard: React.FC<CrmDashboardProps> = ({
         if (searchTerm) {
             const beforeFilter = filtered.length;
             const lowercasedTerm = searchTerm.toLowerCase();
-            filtered = filtered.filter(c => 
-                (c.userInfo?.firstName?.toLowerCase().includes(lowercasedTerm) ?? false) ||
-                (c.userInfo?.lastName?.toLowerCase().includes(lowercasedTerm) ?? false) ||
-                (c.userInfo?.email?.toLowerCase().includes(lowercasedTerm) ?? false) ||
-                (Array.isArray(c.bookings) && c.bookings.some(b => b?.bookingCode?.toLowerCase?.().includes(lowercasedTerm)))
-            );
+            filtered = filtered.filter(c => {
+                const first = c.userInfo?.firstName?.toLowerCase() ?? '';
+                const last = c.userInfo?.lastName?.toLowerCase() ?? '';
+                const email = (c.userInfo?.email || c.email || '').toLowerCase();
+                const fullName = `${first} ${last}`.trim();
+                return (
+                    first.includes(lowercasedTerm) ||
+                    last.includes(lowercasedTerm) ||
+                    email.includes(lowercasedTerm) ||
+                    fullName.includes(lowercasedTerm) ||
+                    (Array.isArray(c.bookings) && c.bookings.some(b => b?.bookingCode?.toLowerCase?.().includes(lowercasedTerm)))
+                );
+            });
+            void beforeFilter;
         }
 
         

@@ -255,7 +255,10 @@ export const DEFAULT_AVAILABLE_SLOTS_BY_DAY: Record<DayKey, AvailableSlot[]> = {
 export const DEFAULT_POLICIES_TEXT = `Políticas de Cancelación y Reprogramación:
 - Se requiere un aviso de al menos 72 horas para reprogramar una clase sin penalización.
 - Las cancelaciones con menos de 72 horas de antelación no son reembolsables.
-- Los paquetes de clases tienen una validez de 30 días desde la fecha de la primera clase agendada.
+- Los paquetes de clases deben completarse desde la fecha de la primera clase agendada:
+  · Paquete de 4 clases: máximo 4 semanas.
+  · Paquete de 8 clases: máximo 2 meses.
+  · Paquete de 12 clases: máximo 3 meses.
 
 Proceso de Devoluciones:
 - No se realizan devoluciones monetarias una vez comprado un paquete o clase.

@@ -5,6 +5,7 @@ import { CalendarIcon } from './icons/CalendarIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { SINGLE_CLASS_PRICE, VAT_RATE } from '../constants';
 import { formatDate } from '../utils/formatters';
+import { getClassPackageValidityDescription, getClassPackageValidityLabel } from '../utils/classPackageValidity';
 
 interface BookingSidebarProps {
   product: Product;
@@ -89,6 +90,10 @@ return (
               ? `Te faltan ${classesRemaining} clases por seleccionar`
               : 'Todas las clases seleccionadas'
             }
+            </p>
+            <p className="text-xs text-brand-secondary mt-2 leading-relaxed">
+              Plazo: <strong>{getClassPackageValidityLabel(pkg.classes)}</strong> desde la primera clase.
+              {' '}{getClassPackageValidityDescription(pkg.classes)}
             </p>
         </div>
 

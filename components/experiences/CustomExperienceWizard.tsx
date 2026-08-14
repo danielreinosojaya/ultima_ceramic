@@ -26,6 +26,8 @@ interface CustomExperienceWizardProps {
   pieces: Piece[];
   onConfirm: (booking: CustomExperienceBooking) => void;
   onBack: () => void;
+  onGoToIndividualClasses?: () => void;
+  onGoToPackages?: () => void;
   isLoading?: boolean;
   onShowPolicies: () => void;
 }
@@ -157,6 +159,8 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
   pieces,
   onConfirm,
   onBack,
+  onGoToIndividualClasses,
+  onGoToPackages,
   isLoading = false,
   onShowPolicies,
 }) => {
@@ -333,9 +337,8 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
 
         {/* Selección de Técnica */}
         <div>
-          <label className="block text-sm font-semibold text-brand-text mb-3 flex items-center">
+          <label className="block text-sm font-semibold text-brand-text mb-3">
             Técnica de Cerámica
-            <Tooltip text="Todos los participantes harán la misma técnica." />
           </label>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -376,17 +379,54 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
             {isCelebration ? 'Participantes Activos (harán cerámica)' : 'Número de Participantes'}
           </label>
           
-          {/* Advertencia para experiencias no-celebración */}
+          {/* Nota para experiencias no-celebración */}
           {!isCelebration && (
-            <div className="bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-4 mb-4">
-              <div className="flex items-start gap-3">
-                <span className="text-xl">👥</span>
+            <div className="relative overflow-hidden rounded-2xl border border-brand-primary/10 bg-gradient-to-br from-brand-primary/[0.06] via-white to-brand-accent/[0.05] p-4 sm:p-5 mb-4 shadow-[0_1px_0_rgba(0,0,0,0.03)]">
+              <div className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-brand-primary/[0.06]" />
+              <div className="relative space-y-3.5">
                 <div>
-                  <p className="font-semibold text-blue-900">Experiencia Grupal</p>
-                  <p className="text-sm text-blue-700 mt-1">
-                    ⚠️ <strong>Mínimo 2 personas</strong> - Estas experiencias son para grupos. Si vienes solo, elige una clase individual.
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-primary/70 mb-1.5">
+                    Experiencia grupal
+                  </p>
+                  <p className="text-sm text-brand-text leading-relaxed">
+                    Mínimo <span className="font-semibold text-brand-primary">2 personas</span>.
+                    Todos hacen la misma técnica, y la reserva queda a nombre de quien completa el formulario.
                   </p>
                 </div>
+
+                {(onGoToIndividualClasses || onGoToPackages) && (
+                  <div className="pt-1 border-t border-brand-primary/10">
+                    <p className="text-xs text-brand-secondary mb-2.5">
+                      ¿Llegaste aquí por equivocación?
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {onGoToIndividualClasses && (
+                        <button
+                          type="button"
+                          onClick={onGoToIndividualClasses}
+                          className="group inline-flex items-center gap-1.5 rounded-full border border-brand-border/80 bg-white/80 px-3.5 py-1.5 text-xs font-medium text-brand-text shadow-sm backdrop-blur-sm transition-all duration-200 hover:border-brand-primary/40 hover:bg-white hover:text-brand-primary hover:shadow-md"
+                        >
+                          Clase individual
+                          <span className="translate-x-0 text-brand-primary/50 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-brand-primary" aria-hidden>
+                            →
+                          </span>
+                        </button>
+                      )}
+                      {onGoToPackages && (
+                        <button
+                          type="button"
+                          onClick={onGoToPackages}
+                          className="group inline-flex items-center gap-1.5 rounded-full border border-brand-border/80 bg-white/80 px-3.5 py-1.5 text-xs font-medium text-brand-text shadow-sm backdrop-blur-sm transition-all duration-200 hover:border-brand-primary/40 hover:bg-white hover:text-brand-primary hover:shadow-md"
+                        >
+                          Paquete de clases
+                          <span className="translate-x-0 text-brand-primary/50 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-brand-primary" aria-hidden>
+                            →
+                          </span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -398,37 +438,24 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
             onChange={(e) => {
               const inputVal = e.target.value;
               
-              // Permitir vacío temporalmente
+              // Permitir vacío temporalmente mientras escribe
               if (inputVal === '') {
                 setParticipantsInput('');
                 return;
               }
               
-              // Solo aceptar números
+              // Solo dígitos; no forzar mínimo aquí (si no, no se puede escribir 11, 12, etc.)
               if (!/^\d+$/.test(inputVal)) {
                 return;
               }
               
-              const val = parseInt(inputVal);
+              const val = parseInt(inputVal, 10);
               const maxCap = state.technique ? TECHNIQUES.find((t) => t.id === state.technique)?.maxCapacity || 22 : 22;
-              
-              // VALIDACIÓN: Mínimo 2 personas para experiencias no-celebración
               const minParticipants = isCelebration ? 1 : 2;
-              if (val < minParticipants) {
-                setParticipantsInput(minParticipants.toString());
-                setState((prev) => ({
-                  ...prev,
-                  config: isCelebration
-                    ? { ...(prev.config as CelebrationConfig), activeParticipants: minParticipants }
-                    : { participants: minParticipants },
-                }));
-                return;
-              }
               
-              // Actualizar input visualmente
               setParticipantsInput(inputVal);
               
-              // Actualizar estado solo si es válido
+              // Actualizar estado solo cuando el número ya es válido completo
               if (val >= minParticipants && val <= maxCap) {
                 setState((prev) => ({
                   ...prev,
@@ -442,31 +469,41 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
               const inputVal = e.target.value;
               const maxCap = state.technique ? TECHNIQUES.find((t) => t.id === state.technique)?.maxCapacity || 22 : 22;
               const minParticipants = isCelebration ? 1 : 2;
+              const parsed = parseInt(inputVal, 10);
               
-              // Si está vacío, inválido, por debajo del mínimo o excede máximo, restaurar al último válido
-              if (inputVal === '' || parseInt(inputVal) < minParticipants || parseInt(inputVal) > maxCap) {
-                const currentVal = state.config
-                  ? isCelebration
-                    ? (state.config as CelebrationConfig).activeParticipants || minParticipants
-                    : (state.config as CeramicOnlyConfig).participants || minParticipants
-                  : minParticipants;
-                setParticipantsInput(currentVal.toString());
-              } else {
-                // Asegurar que el valor mostrado coincida con el estado
-                const currentVal = state.config
-                  ? isCelebration
-                    ? (state.config as CelebrationConfig).activeParticipants || minParticipants
-                    : (state.config as CeramicOnlyConfig).participants || minParticipants
-                  : minParticipants;
-                setParticipantsInput(currentVal.toString());
+              let next = minParticipants;
+              if (inputVal !== '' && Number.isFinite(parsed)) {
+                next = Math.min(maxCap, Math.max(minParticipants, parsed));
+              } else if (state.config) {
+                next = isCelebration
+                  ? (state.config as CelebrationConfig).activeParticipants || minParticipants
+                  : (state.config as CeramicOnlyConfig).participants || minParticipants;
+                next = Math.min(maxCap, Math.max(minParticipants, next));
               }
+              
+              setParticipantsInput(String(next));
+              setState((prev) => ({
+                ...prev,
+                config: isCelebration
+                  ? { ...(prev.config as CelebrationConfig), activeParticipants: next }
+                  : { participants: next },
+              }));
             }}
             className={`w-full sm:w-32 px-4 py-3 border-2 rounded-lg text-center text-2xl font-bold transition-all ${
               state.technique && participantsInput && parseInt(participantsInput) > (TECHNIQUES.find((t) => t.id === state.technique)?.maxCapacity || 22)
                 ? 'border-red-500 bg-red-50 text-red-600 focus:border-red-500 focus:ring-2 focus:ring-red-200'
+                : participantsInput && parseInt(participantsInput, 10) > 0 && parseInt(participantsInput, 10) < (isCelebration ? 1 : 2)
+                ? 'border-amber-400 bg-amber-50 text-amber-800 focus:border-amber-500 focus:ring-2 focus:ring-amber-200'
                 : 'border-brand-border focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20'
             }`}
           />
+          
+          {/* Aviso suave mientras escribe un valor bajo el mínimo (aún no enviado) */}
+          {!isCelebration && participantsInput !== '' && parseInt(participantsInput, 10) === 1 && (
+            <p className="text-xs text-amber-700 mt-2">
+              Mínimo 2 personas. Sigue escribiendo (ej. 11) o deja el campo para ajustar.
+            </p>
+          )}
           
           {/* Mensaje de error si excede máximo */}
           {state.technique && participantsInput && parseInt(participantsInput) > (TECHNIQUES.find((t) => t.id === state.technique)?.maxCapacity || 22) && (

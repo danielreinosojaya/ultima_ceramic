@@ -467,18 +467,7 @@ export const ScheduleSettingsManager: React.FC<ScheduleSettingsManagerProps> = (
                                 className="w-full p-2 border rounded-lg"
                             />
                         </div>
-                        <div>
-                            <label htmlFor="introductory_class-capacity" className="block text-sm font-bold text-brand-secondary mb-1">
-                                Clase Introductoria
-                            </label>
-                            <input
-                                id="introductory_class-capacity"
-                                type="number"
-                                value={defaultCapacity.introductory_class || ''}
-                                onChange={(e) => setDefaultCapacity(c => ({...c, introductory_class: parseInt(e.target.value, 10) || 0 }))}
-                                className="w-full p-2 border rounded-lg"
-                            />
-                        </div>
+                        {/* Capacidad "Clase Introductoria" oculta: producto retirado. Se conserva en defaultCapacity al guardar. */}
                     </div>
                     <div className="flex items-center justify-end gap-4 mt-4">
                         <button onClick={handleSaveDefaultCapacity} className="bg-brand-primary text-white font-bold py-2 px-6 rounded-lg hover:bg-brand-accent">

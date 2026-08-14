@@ -10,6 +10,7 @@ import { UserPlusIcon } from '../icons/UserPlusIcon';
 import { DocumentDownloadIcon } from '../icons/DocumentDownloadIcon';
 import { CalendarClearIcon } from '../icons/CalendarClearIcon';
 import { AcceptPaymentModal } from './AcceptPaymentModal';
+import { isExclusiveSpaceRentalBooking } from '../../utils/spaceRental';
 
 type AttendeeInfo = { userInfo: UserInfo; bookingId: string; isPaid: boolean; bookingCode?: string; paymentDetails?: PaymentDetails[] };
 type SlotInfo = { attendees: AttendeeInfo[]; instructorId: number; };
@@ -210,6 +211,12 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
             const isCorporateDay = hasBookings && Object.values(bookingsByDate[dateStr]).some(slotInfo =>
               (slotInfo as SlotInfo).attendees.some((att) => att.bookingId && dayBookingsSource.find((b) => b.id === att.bookingId && b.corporateEventId))
             );
+            const isSpaceRentalDay = hasBookings && Object.values(bookingsByDate[dateStr]).some(slotInfo =>
+              (slotInfo as SlotInfo).attendees.some((att) => {
+                const b = dayBookingsSource.find((x) => x.id === att.bookingId);
+                return b ? isExclusiveSpaceRentalBooking(b) : false;
+              })
+            );
             return (
               <div 
                 key={day}
@@ -219,7 +226,9 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
                   onClick={() => onDateSelect(date)}
                   className={`w-full aspect-square border rounded-md flex flex-col items-center justify-center text-sm font-semibold transition-all duration-200 p-1 group
                     ${hasBookings
-                      ? isCorporateDay
+                      ? isSpaceRentalDay
+                        ? 'bg-rose-100 hover:bg-rose-200 border-rose-300 cursor-pointer'
+                        : isCorporateDay
                         ? 'bg-violet-100 hover:bg-violet-200 border-violet-300 cursor-pointer'
                         : isGroupClassDay
                         ? 'bg-blue-100 hover:bg-blue-200 cursor-pointer'
@@ -228,7 +237,10 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
                   `}
                 >
                   <span className="transition-transform duration-200 group-hover:scale-110">{day}</span>
-                  {hasBookings && <div className={`w-2 h-2 rounded-full mt-1 ${hasUnpaidBookings ? 'border-2 border-brand-accent bg-white' : 'bg-brand-accent'}`}></div>}
+                  {isSpaceRentalDay && (
+                    <span className="text-[9px] leading-none mt-0.5 font-bold text-rose-700 uppercase tracking-wide">Privado</span>
+                  )}
+                  {hasBookings && !isSpaceRentalDay && <div className={`w-2 h-2 rounded-full mt-1 ${hasUnpaidBookings ? 'border-2 border-brand-accent bg-white' : 'bg-brand-accent'}`}></div>}
                 </button>
               </div>
             );

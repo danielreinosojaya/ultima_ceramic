@@ -65,6 +65,7 @@ export const ScheduleReportModal: React.FC<ScheduleReportModalProps> = ({ isOpen
             unpaid: 'Pendiente',
             classProgress: 'Clase #',
             singleClassLabel: 'Clase única',
+            notes: 'Notas',
             paymentLegend:
                 '«Pago / saldo»: al generar el PDF se cargan los abonos reales desde el servidor. Pagado con monto; Pendiente con total o saldo; Abono + Saldo si hay pagos parciales.',
             depositLabel: 'Abono',

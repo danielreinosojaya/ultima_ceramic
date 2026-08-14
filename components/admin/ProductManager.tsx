@@ -46,8 +46,27 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [productIdToUpdateImage, setProductIdToUpdateImage] = useState<string | null>(null);
 
+  const retiringIntroRef = useRef(false);
+
+  // Soft-retire any active INTRODUCTORY_CLASS (producto legacy sin venta).
+  // No borra filas: las reservas históricas siguen referenciando el product_id.
+  useEffect(() => {
+    if (retiringIntroRef.current) return;
+    const activeIntros = products.filter((p) => p.type === 'INTRODUCTORY_CLASS' && p.isActive);
+    if (activeIntros.length === 0) return;
+    retiringIntroRef.current = true;
+    const updatedProducts = products.map((p) =>
+      p.type === 'INTRODUCTORY_CLASS' ? { ...p, isActive: false } : p
+    );
+    void dataService.updateProducts(updatedProducts).then(() => onDataChange());
+  }, [products, onDataChange]);
+
   const handleStatusToggle = async (id: string) => {
-    // Usar productos actuales en lugar de hacer nueva request
+    const target = products.find((p) => p.id === id);
+    // No reactivar clase introductoria (retirada de venta)
+    if (target?.type === 'INTRODUCTORY_CLASS' && !target.isActive) {
+      return;
+    }
     const updatedProducts = products.map((p) =>
       p.id === id ? { ...p, isActive: !p.isActive } : p
     );
@@ -94,14 +113,16 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
   };
 
   const handleSaveIntroClass = async (classData: Omit<IntroductoryClass, 'id' | 'isActive' | 'type'>, id?: string) => {
-  // Usar productos actuales en lugar de hacer nueva request
-  let updatedProducts;
-  if (id) {
-    updatedProducts = products.map(p => (p.id === id && p.type === 'INTRODUCTORY_CLASS' ? { ...p, ...classData } : p));
-  } else {
-    const newProduct: Product = { ...classData, id: `ic_${Date.now()}_${Math.random().toString(36).slice(2,8)}`, isActive: true, type: 'INTRODUCTORY_CLASS' };
-    updatedProducts = [...products, newProduct];
-  }
+    // Solo edición de legado (siempre inactivo). No crear nuevas clases introductorias.
+    if (!id) {
+      setIsIntroClassModalOpen(false);
+      return;
+    }
+    const updatedProducts = products.map((p) =>
+      p.id === id && p.type === 'INTRODUCTORY_CLASS'
+        ? { ...p, ...classData, isActive: false }
+        : p
+    );
     await dataService.updateProducts(updatedProducts);
     onDataChange();
     setIsIntroClassModalOpen(false);
@@ -136,6 +157,9 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
   };
 
   const handleDuplicateProduct = async (productToDuplicate: Product) => {
+    if (productToDuplicate.type === 'INTRODUCTORY_CLASS') {
+      return; // Producto retirado: no duplicar
+    }
     const newProduct: Product = {
       ...productToDuplicate,
       id: `dup_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
@@ -143,7 +167,6 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
       isActive: false,
     };
 
-    // Usar productos actuales en lugar de hacer nueva request
     const updatedProducts = [...products, newProduct];
     await dataService.updateProducts(updatedProducts);
     onDataChange();
@@ -272,12 +295,12 @@ export const ProductManager: React.FC<ProductManagerProps> = ({ products, onData
   };
   
   const handleCreateNew = (type: Product['type']) => {
+  if (type === 'INTRODUCTORY_CLASS') {
+    return; // Producto retirado: no crear nuevas
+  }
   if (type === 'CLASS_PACKAGE') {
     setClassPackageToEdit(null);
     setIsClassPackageModalOpen(true);
-  } else if (type === 'INTRODUCTORY_CLASS') {
-    setIntroClassToEdit(null);
-    setIsIntroClassModalOpen(true);
   } else if (type === 'OPEN_STUDIO_SUBSCRIPTION') {
     setOpenStudioToEdit(null);
     setIsOpenStudioModalOpen(true);
@@ -418,12 +441,6 @@ return (
             </button>
             <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-md shadow-lg z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none group-hover:pointer-events-auto">
                 <button 
-                  onClick={() => handleCreateNew('INTRODUCTORY_CLASS')} 
-                  className="block w-full text-left px-4 py-3 text-sm text-brand-text hover:bg-gray-100"
-                >
-                  Clase Introductoria
-                </button>
-                <button 
                   onClick={() => handleCreateNew('CLASS_PACKAGE')} 
                   className="block w-full text-left px-4 py-3 text-sm text-brand-text hover:bg-gray-100"
                 >
@@ -465,6 +482,7 @@ return (
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {products
+              .filter((p) => p.type !== 'INTRODUCTORY_CLASS')
               .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
               .map((product, index) => (
               <tr key={product.id}>
@@ -494,7 +512,11 @@ return (
                       {product.isActive ? <ToggleRightIcon className="w-10 h-10 text-brand-success" /> : <ToggleLeftIcon className="w-10 h-10 text-gray-400" />}
                     </button>
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${product.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                      {product.isActive ? 'Activo' : 'Inactivo'}
+                      {product.type === 'INTRODUCTORY_CLASS'
+                        ? 'Retirado'
+                        : product.isActive
+                          ? 'Activo'
+                          : 'Inactivo'}
                     </span>
                   </div>
                 </td>

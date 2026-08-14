@@ -688,7 +688,6 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings
                         <select value={productTypeFilter} onChange={e => setProductTypeFilter(e.target.value)} className="text-sm p-1 border rounded-md" title="Filtrar por tipo de producto">
                             <option value="all">Todos los productos</option>
                             <option value="classPackage">Paquete de clases</option>
-                            <option value="introClass">Clase introductoria</option>
                             <option value="openStudio">Open Studio</option>
                         </select>
                         <select value={paymentMethodFilter} onChange={e => setPaymentMethodFilter(e.target.value)} className="text-sm p-1 border rounded-md" title="Filtrar por método de pago">

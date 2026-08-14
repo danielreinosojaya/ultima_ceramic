@@ -1198,6 +1198,14 @@ const App: React.FC = () => {
                             setView('confirmation');
                         }}
                         onBack={() => setView('welcome')}
+                        onGoToIndividualClasses={() => {
+                            setExperienceType('individual');
+                            setView('single_class_wizard');
+                        }}
+                        onGoToPackages={() => {
+                            setExperienceType(null);
+                            setView('techniques');
+                        }}
                         isLoading={false}
                         onShowPolicies={() => setIsPolicyModalOpen(true)}
                     />
@@ -1494,7 +1502,15 @@ const App: React.FC = () => {
                 <PolicyModal onClose={() => setIsPolicyModalOpen(false)} policiesText={appData.policies} />
             )}
             {isBookingTypeModalOpen && (
-                <BookingTypeModal onClose={() => setIsBookingTypeModalOpen(false)} onSelect={handleBookingTypeSelect} />
+                <BookingTypeModal
+                  onClose={() => setIsBookingTypeModalOpen(false)}
+                  onSelect={handleBookingTypeSelect}
+                  packageClasses={
+                    bookingDetails.product?.type === 'CLASS_PACKAGE'
+                      ? bookingDetails.product.classes
+                      : 4
+                  }
+                />
             )}
             {isClassInfoModalOpen && bookingDetails.product && (
                 <ClassInfoModal product={bookingDetails.product} onConfirm={handleClassInfoConfirm} onClose={() => setIsClassInfoModalOpen(false)} />

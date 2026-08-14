@@ -913,11 +913,23 @@ export const deleteProduct = async (id: string): Promise<{ success: boolean }> =
 // Bookings - working version
 
 // Bookings - working version
-export const getCustomers = async (): Promise<Customer[]> => {
+export const getCustomers = async (opts?: { page?: number; limit?: number; search?: string }): Promise<Customer[]> => {
   try {
-    const response = await fetch('/api/data?action=getCustomers');
-    const customers = await response.json();
-    return Array.isArray(customers) ? customers : [];
+    const page = opts?.page ?? 1;
+    const limit = opts?.limit ?? 500;
+    const params = new URLSearchParams({
+      action: 'getCustomers',
+      page: String(page),
+      limit: String(limit),
+    });
+    if (opts?.search?.trim()) {
+      params.set('search', opts.search.trim());
+    }
+    const response = await fetch(`/api/data?${params.toString()}`);
+    const payload = await response.json();
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.customers)) return payload.customers;
+    return [];
   } catch {
     return [];
   }
@@ -998,6 +1010,95 @@ export const createCustomExperienceBooking = async (
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Error al crear la reserva',
+        };
+    }
+};
+
+/** Alquiler de espacio privado (admin) — bloquea todo el taller y envía email al cliente */
+export const createSpaceRentalBooking = async (
+    payload: Record<string, unknown>
+): Promise<{ success: boolean; booking?: Booking | null; emailSent?: boolean; message?: string; error?: string; bookingCode?: string }> => {
+    try {
+        const response = await fetch('/api/data?action=createSpaceRentalBooking', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            return {
+                success: false,
+                error: result.error || 'No se pudo crear el alquiler',
+            };
+        }
+        invalidateBookingsCache();
+        const booking = result.booking ? parseBooking(result.booking) : null;
+        return {
+            success: true,
+            booking,
+            emailSent: Boolean(result.emailSent),
+            message: result.message,
+            bookingCode: result.bookingCode,
+        };
+    } catch (error) {
+        console.error('[createSpaceRentalBooking] Error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error al crear el alquiler',
+        };
+    }
+};
+
+export type SpaceRentalAvailabilityResult = {
+    success: boolean;
+    date?: string;
+    proposed?: { startTime: string; endTime: string; hours: number } | null;
+    available?: boolean | null;
+    conflicts?: Array<{
+        id: string;
+        label: string;
+        subtitle?: string;
+        startTime: string;
+        endTime: string;
+        kind: string;
+    }>;
+    daySchedule?: Array<{
+        id: string;
+        label: string;
+        subtitle?: string;
+        startTime: string;
+        endTime: string;
+        kind: string;
+        overlapsProposed?: boolean;
+    }>;
+    error?: string;
+};
+
+/** Validación en vivo de solapes para alquiler de espacio */
+export const checkSpaceRentalAvailability = async (payload: {
+    date: string;
+    time?: string;
+    hours?: number;
+}): Promise<SpaceRentalAvailabilityResult> => {
+    try {
+        const response = await fetch('/api/data?action=checkSpaceRentalAvailability', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            return {
+                success: false,
+                error: result.error || 'No se pudo validar el horario',
+            };
+        }
+        return result;
+    } catch (error) {
+        console.error('[checkSpaceRentalAvailability] Error:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Error al validar disponibilidad',
         };
     }
 };
@@ -2382,7 +2483,7 @@ export const getFutureCapacityMetrics = async (days: number): Promise<{ totalCap
             }
         }
 
-        const introClasses = products.filter(p => p.type === 'INTRODUCTORY_CLASS') as IntroductoryClass[];
+        const introClasses = products.filter(p => p.type === 'INTRODUCTORY_CLASS' && p.isActive) as IntroductoryClass[];
         introClasses.forEach(p => {
             const sessions = generateIntroClassSessions(p, { bookings }, { generationLimitInDays: days });
             sessions.filter(s => s.date === dateStr).forEach(s => {

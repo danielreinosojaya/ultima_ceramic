@@ -1,10 +1,12 @@
 import React from 'react';
 import type { BookingMode } from '../types';
-// ...existing code...
+import { getClassPackageValidityLabel } from '../utils/classPackageValidity';
 
 interface BookingTypeModalProps {
   onSelect: (mode: BookingMode) => void;
   onClose: () => void;
+  /** Número de clases del paquete (para textos de validez) */
+  packageClasses?: number;
 }
 
 const OptionCard: React.FC<{
@@ -25,8 +27,9 @@ const OptionCard: React.FC<{
     </div>
 );
 
-export const BookingTypeModal: React.FC<BookingTypeModalProps> = ({ onSelect, onClose }) => {
-  // Traducción eliminada, usar texto en español directamente
+export const BookingTypeModal: React.FC<BookingTypeModalProps> = ({ onSelect, onClose, packageClasses = 4 }) => {
+  const classes = packageClasses || 4;
+  const validityLabel = getClassPackageValidityLabel(classes);
 
   return (
     <div
@@ -39,19 +42,21 @@ export const BookingTypeModal: React.FC<BookingTypeModalProps> = ({ onSelect, on
       >
         <div className="text-center mb-8">
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-brand-accent mb-2">¿Cómo quieres agendar tus clases?</h2>
-          <p className="text-brand-secondary text-sm sm:text-base md:text-xl">Elige la opción que mejor se adapte a tu horario.</p>
+          <p className="text-brand-secondary text-sm sm:text-base md:text-xl">
+            Paquete de {classes} clases · plazo máximo: <strong>{validityLabel}</strong> desde tu primera clase.
+          </p>
         </div>
 
         <div className="grid md:grid-cols-2 gap-4 sm:gap-6 md:gap-8">
           <OptionCard 
-            title="Horario Fijo Mensual"
-            description="Asiste a clase el mismo día y a la misma hora durante 4 semanas seguidas. Perfecto para crear una rutina."
+            title="Horario Fijo"
+            description={`Asiste el mismo día y a la misma hora durante 4 semanas seguidas (ideal para el paquete de 4). Perfecto para crear una rutina.`}
             onSelect={() => onSelect('monthly')}
             buttonText="Seleccionar"
           />
           <OptionCard 
             title="Horario Flexible"
-            description="Elige 4 fechas y horas de clase disponibles en un período de 30 días. Flexibilidad total."
+            description={`Elige tus ${classes} fechas y horas dentro de un máximo de ${validityLabel} desde la primera clase. Más holgura para organizar tu agenda.`}
             onSelect={() => onSelect('flexible')}
             buttonText="Seleccionar"
           />

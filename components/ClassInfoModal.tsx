@@ -6,6 +6,7 @@ import { InfoCircleIcon } from './icons/InfoCircleIcon.js';
 import { PaintBrushIcon } from './icons/PaintBrushIcon.js';
 import { KeyIcon } from './icons/KeyIcon.js';
 import { CheckCircleIcon } from './icons/CheckCircleIcon.js';
+import { getClassPackageValidityDescription, getClassPackageValidityLabel } from '../utils/classPackageValidity.js';
 
 
 interface ClassInfoModalProps {
@@ -108,11 +109,26 @@ export const ClassInfoModal: React.FC<ClassInfoModalProps> = ({ product, onConfi
     
     // Default for ClassPackage and IntroductoryClass
     if ('details' in product) {
+      const isPackage = product.type === 'CLASS_PACKAGE';
+      const packageClasses = isPackage && 'classes' in product ? (product as any).classes : null;
       return (
         <>
           <InfoDetail icon={<ClockIcon className="w-6 h-6" />} label="Duración">
               <p>{product.details.duration}</p>
           </InfoDetail>
+          {isPackage && packageClasses && (
+            <InfoDetail icon={<InfoCircleIcon className="w-6 h-6" />} label="Plazo para completar el paquete">
+              <p>
+                Máximo <strong>{getClassPackageValidityLabel(packageClasses)}</strong> desde tu primera clase.
+              </p>
+              <p className="text-sm mt-1">{getClassPackageValidityDescription(packageClasses)}</p>
+              <ul className="list-disc list-inside text-sm mt-2 space-y-0.5">
+                <li>Paquete de 4 → 4 semanas</li>
+                <li>Paquete de 8 → 2 meses</li>
+                <li>Paquete de 12 → 3 meses</li>
+              </ul>
+            </InfoDetail>
+          )}
            <InfoDetail icon={<SparklesIcon className="w-6 h-6" />} label="Actividades">
               <ul className="list-disc list-inside space-y-1">
                   {product.details.activities.map((activity, index) => <li key={index}>{activity}</li>)}

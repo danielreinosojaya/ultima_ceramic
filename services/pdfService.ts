@@ -208,6 +208,8 @@ interface ScheduleReportPdfTranslations {
     unpaid: string;
     classProgress: string;  // Column header "Clase #"
     singleClassLabel: string; // Label for non-package bookings
+    /** Columna de notas internas de la reserva (admin) */
+    notes?: string;
     /** Texto pequeño bajo el encabezado del PDF explicando la columna de pago (opcional) */
     paymentLegend?: string;
     /** Etiqueta "Abono" / cobrado parcial (opcional) */
@@ -648,6 +650,7 @@ export const generateScheduleReportPDF = (
           const sortedTimes = Object.keys(reportData[dateStr]).sort();
           sortedTimes.forEach(time => {
               const attendees = reportData[dateStr][time];
+              const notesHeader = translations.notes || 'Notas';
               (doc as any).autoTable({
                   startY: currentY,
                   head: [[
@@ -656,7 +659,8 @@ export const generateScheduleReportPDF = (
                       'Asistentes',
                       translations.package,
                       translations.classProgress,
-                      translations.paymentStatus
+                      translations.paymentStatus,
+                      notesHeader
                   ]],
                   body: attendees.map(b => [
                       '', // Empty first column for grouping
@@ -664,7 +668,8 @@ export const generateScheduleReportPDF = (
                       typeof b.participants === 'number' ? b.participants : 1,
                       getBookingDisplayName(b),
                       getClassProgress(b, dateStr, time, translations.singleClassLabel),
-                      formatScheduleReportPaymentCell(b, translations, language)
+                      formatScheduleReportPaymentCell(b, translations, language),
+                      (b.clientNote && String(b.clientNote).trim()) || '—'
                   ]),
                   theme: 'grid',
                   headStyles: {
@@ -674,16 +679,17 @@ export const generateScheduleReportPDF = (
                       halign: 'center'
                   },
                   columnStyles: {
-                      0: { halign: 'center', cellWidth: 20 },
-                      2: { halign: 'center', cellWidth: 20 },
-                      3: { cellWidth: 40 },
-                      4: { halign: 'center', cellWidth: 20 },
-                      5: { halign: 'left', cellWidth: 48, overflow: 'linebreak' as const }
+                      0: { halign: 'center', cellWidth: 16 },
+                      2: { halign: 'center', cellWidth: 16 },
+                      3: { cellWidth: 32 },
+                      4: { halign: 'center', cellWidth: 16 },
+                      5: { halign: 'left', cellWidth: 36, overflow: 'linebreak' as const },
+                      6: { halign: 'left', cellWidth: 38, overflow: 'linebreak' as const, fontSize: 8 }
                   },
                   styles: {
                       font: 'helvetica',
-                      fontSize: 9,
-                      cellPadding: 2,
+                      fontSize: 8,
+                      cellPadding: 1.5,
                       valign: 'middle'
                   },
                   margin: { left: pageMargin, right: pageMargin }
