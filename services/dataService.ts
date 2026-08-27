@@ -109,24 +109,27 @@ export const approveGiftcardRequest = async (
 
 export const createGiftcardManual = async (
     buyerName: string,
-    buyerEmail: string | undefined,
+    buyerEmail: string,
     recipientName: string,
     amount: number,
-    recipientEmail?: string,
+    recipientEmail: string,
     recipientWhatsapp?: string,
     message?: string,
-    adminUser?: string
+    adminUser?: string,
+    options?: { scheduledSendAt?: string | null; sendMethod?: string }
 ): Promise<{ success: boolean; giftcard?: any; error?: string; message?: string }> => {
     try {
         const res = await postAction('createGiftcardManual', {
             buyerName,
-            buyerEmail: buyerEmail || undefined,
+            buyerEmail,
             recipientName,
             amount,
             recipientEmail,
             recipientWhatsapp,
             message,
-            adminUser
+            adminUser,
+            scheduledSendAt: options?.scheduledSendAt || null,
+            sendMethod: options?.sendMethod || 'email',
         });
         if (res && res.success) {
             invalidateGiftcardsCache();

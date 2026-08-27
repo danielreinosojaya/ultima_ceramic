@@ -4810,7 +4810,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
         }
         
         case 'createGiftcardManual': {
-            // Admin panel: crear giftcard manualmente sin pasar por solicitud
+            // Admin panel: crear giftcard en nombre del cliente (mismas reglas que el portal)
             // Rate limit: 5 requests/minuto por IP
             if (!checkRateLimit(req, res, 'ip')) {
                 return;
@@ -4818,13 +4818,33 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             
             const body = req.body || {};
             const adminUser = req.headers['x-admin-user'] || body.adminUser || 'unknown';
-            
-            // Validaciones: admin puede crear sin pasar por el portal (email del comprador opcional)
-            if (!body.recipientName || !body.amount) {
-                return res.status(400).json({ 
-                    success: false, 
-                    error: 'recipientName y amount son requeridos' 
+            const buyerName = typeof body.buyerName === 'string' ? body.buyerName.trim() : '';
+            const buyerEmail = typeof body.buyerEmail === 'string' ? body.buyerEmail.trim() : '';
+            const recipientName = typeof body.recipientName === 'string' ? body.recipientName.trim() : '';
+            const recipientEmail = typeof body.recipientEmail === 'string' ? body.recipientEmail.trim() : '';
+            const recipientWhatsapp = typeof body.recipientWhatsapp === 'string' ? body.recipientWhatsapp.trim() : '';
+            const message = typeof body.message === 'string' ? body.message.trim() : '';
+            const scheduledSendAt = body.scheduledSendAt || null;
+            const sendMethod = body.sendMethod || (recipientEmail ? 'email' : null);
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+            if (!buyerName || !buyerEmail || !recipientName || !body.amount) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Remitente, correo del cliente, destinatario y monto son requeridos',
                 });
+            }
+            if (!emailRegex.test(buyerEmail)) {
+                return res.status(400).json({ success: false, error: 'Correo del cliente inválido' });
+            }
+            if (!recipientEmail || !emailRegex.test(recipientEmail)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Email del destinatario es requerido y debe ser válido',
+                });
+            }
+            if (!message) {
+                return res.status(400).json({ success: false, error: 'El mensaje es requerido' });
             }
             
             if (typeof body.amount !== 'number' || body.amount < 10 || body.amount > 500) {
@@ -4832,6 +4852,19 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     success: false, 
                     error: 'amount debe estar entre $10 y $500' 
                 });
+            }
+
+            if (scheduledSendAt) {
+                const scheduledDate = new Date(scheduledSendAt);
+                if (Number.isNaN(scheduledDate.getTime())) {
+                    return res.status(400).json({ success: false, error: 'Fecha de programación inválida' });
+                }
+                if (scheduledDate.getTime() <= Date.now()) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'La programación debe ser una fecha/hora futura',
+                    });
+                }
             }
             
             try {
@@ -4872,28 +4905,38 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         status VARCHAR(20) DEFAULT 'pending',
                         created_at TIMESTAMP DEFAULT NOW(),
                         buyer_message TEXT,
+                        send_method VARCHAR(20),
+                        scheduled_send_at TIMESTAMP,
                         approved_by VARCHAR(100),
                         approved_at TIMESTAMP,
                         metadata JSONB
                     )
                 `;
+                try {
+                    await sql`ALTER TABLE giftcard_requests ADD COLUMN IF NOT EXISTS buyer_message TEXT`;
+                    await sql`ALTER TABLE giftcard_requests ADD COLUMN IF NOT EXISTS send_method VARCHAR(20)`;
+                    await sql`ALTER TABLE giftcard_requests ADD COLUMN IF NOT EXISTS scheduled_send_at TIMESTAMP`;
+                } catch (_) { /* columnas ya existen */ }
                 
                 // 2. Crear solicitud ya aprobada + código de canje en metadata
                 const gifRef = `GIF-ADM-${code.replace(/^GC-/, '')}`;
                 const { rows: [request] } = await sql`
                     INSERT INTO giftcard_requests (
                         buyer_name, buyer_email, recipient_name, recipient_email, 
-                        recipient_whatsapp, amount, code, status, approved_by, 
-                        approved_at, metadata
+                        recipient_whatsapp, amount, code, status, buyer_message,
+                        send_method, scheduled_send_at, approved_by, approved_at, metadata
                     ) VALUES (
-                        ${body.buyerName || 'CeramicAlma'},
-                        ${body.buyerEmail || 'admin@interno.ceramicalma.com'},
-                        ${body.recipientName},
-                        ${body.recipientEmail || null},
-                        ${body.recipientWhatsapp || null},
+                        ${buyerName},
+                        ${buyerEmail},
+                        ${recipientName},
+                        ${recipientEmail},
+                        ${recipientWhatsapp || null},
                         ${body.amount},
                         ${gifRef},
                         'approved',
+                        ${message},
+                        ${sendMethod},
+                        ${scheduledSendAt},
                         ${String(adminUser)},
                         NOW(),
                         ${JSON.stringify({ 
@@ -4901,7 +4944,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                             createdBy: adminUser,
                             createdAt: new Date().toISOString(),
                             issuedCode: code,
-                            message: body.message || '',
+                            message,
                         })}
                     )
                     RETURNING id, created_at
@@ -4927,12 +4970,12 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
                 // 4. Crear giftcard emitida (incluye status/value/buyer_info: NOT NULL en producción)
                 const buyerInfo = JSON.stringify({
-                    name: body.buyerName || 'CeramicAlma',
-                    email: body.buyerEmail || 'admin@interno.ceramicalma.com',
+                    name: buyerName,
+                    email: buyerEmail,
                 });
                 const recipientInfo = JSON.stringify({
-                    name: body.recipientName || '',
-                    email: body.recipientEmail || '',
+                    name: recipientName,
+                    email: recipientEmail,
                 });
                 const { rows: [giftcard] } = await sql`
                     INSERT INTO giftcards (
@@ -4949,7 +4992,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         ${JSON.stringify({ 
                             createdManually: true,
                             createdBy: adminUser,
-                            holderName: body.recipientName,
+                            holderName: recipientName,
                         })}::jsonb,
                         ${buyerInfo}::jsonb,
                         ${recipientInfo}::jsonb
@@ -4980,42 +5023,69 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         'created_manually',
                         ${String(adminUser)},
                         'Giftcard creada manualmente desde admin panel',
-                        ${JSON.stringify({ code, amount: body.amount })}
+                        ${JSON.stringify({
+                            code,
+                            amount: body.amount,
+                            scheduledSendAt,
+                            sendMethod,
+                        })}
                     )
                 `;
                 
                 await sql`COMMIT`;
-                
-                const isInternalEmail = (email?: string) =>
-                    !email || email.includes('@interno.ceramicalma.com');
 
+                let recipientSent = false;
                 try {
-                    if (!isInternalEmail(body.buyerEmail)) {
-                        await emailService.sendGiftcardPaymentConfirmedEmail(
-                            body.buyerEmail,
-                            {
-                                buyerName: body.buyerName || 'CeramicAlma',
-                                recipientName: body.recipientName,
-                                amount: body.amount,
-                                code: code,
-                                recipientEmail: body.recipientEmail || undefined,
-                                message: body.message || ''
-                            }
+                    let schedulingInfo = '';
+                    if (scheduledSendAt) {
+                        const ecLabel = new Date(scheduledSendAt).toLocaleString('es-EC', {
+                            timeZone: 'America/Guayaquil',
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false,
+                        });
+                        schedulingInfo = `Será enviada el ${ecLabel} (hora Ecuador) vía ${sendMethod === 'whatsapp' ? 'WhatsApp' : 'Email'}.`;
+                    } else {
+                        // Envío inmediato al destinatario (mismo pipeline que aprobación)
+                        const deliveryRequest = {
+                            buyer_name: buyerName,
+                            buyer_email: buyerEmail,
+                            buyer_message: message,
+                            recipient_name: recipientName,
+                            recipient_email: recipientEmail,
+                            recipient_whatsapp: recipientWhatsapp || null,
+                            amount: body.amount,
+                            send_method: sendMethod || 'email',
+                            metadata: { issuedCode: code },
+                        };
+                        const delivery = await deliverGiftcardToRecipient(
+                            deliveryRequest,
+                            code,
+                            request.id,
+                            'admin'
                         );
+                        recipientSent = !!delivery.sent;
+                        if (recipientSent) {
+                            await sql`UPDATE giftcard_requests SET status = 'delivered' WHERE id = ${request.id}`;
+                        } else if (delivery.error) {
+                            console.warn('[createGiftcardManual] Recipient delivery failed:', delivery.error);
+                        }
                     }
-                    
-                    if (body.recipientEmail && !isInternalEmail(body.recipientEmail)) {
-                        await emailService.sendGiftcardRecipientEmail(
-                            body.recipientEmail,
-                            {
-                                code: code,
-                                amount: body.amount,
-                                message: body.message || '',
-                                buyerName: body.buyerName || 'CeramicAlma',
-                                recipientName: body.recipientName
-                            }
-                        );
-                    }
+
+                    await emailService.sendGiftcardPaymentConfirmedEmail(buyerEmail, {
+                        buyerName,
+                        recipientName,
+                        amount: body.amount,
+                        code,
+                        recipientEmail,
+                        message,
+                        schedulingInfo: schedulingInfo || undefined,
+                        scheduledSendAt: scheduledSendAt || null,
+                        recipientAlreadySent: recipientSent,
+                    });
                 } catch (emailError) {
                     console.warn('Error enviando emails de giftcard manual:', emailError);
                 }
@@ -5029,9 +5099,13 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         expiresAt: giftcard.expires_at
                             ? new Date(giftcard.expires_at).toISOString()
                             : null,
-                        requestId: request.id
+                        requestId: request.id,
+                        scheduledSendAt: scheduledSendAt || null,
+                        emailed: recipientSent,
                     },
-                    message: `Giftcard ${code} creada exitosamente`
+                    message: scheduledSendAt
+                        ? `Giftcard ${code} creada y programada`
+                        : `Giftcard ${code} creada exitosamente`
                 });
                 
             } catch (error) {

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { createGiftcardManual, registerPhysicalGiftcard } from '../../services/dataService';
-import { formatPrice } from '../../utils/formatters';
+import { formatPrice, getEcuadorToday, formatDateToYYYYMMDD } from '../../utils/formatters';
+import { ecuadorLocalToUtcIso, formatEcuadorDateTime } from '../../utils/giftcardTimezone';
 
 interface GiftcardManualCreateModalProps {
     isOpen: boolean;
@@ -12,6 +13,7 @@ interface GiftcardManualCreateModalProps {
 const MIN_AMOUNT = 10;
 const MAX_AMOUNT = 500;
 const EXPIRATION_MONTHS = 3;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PRESETS = [
     { amount: 45, label: 'Modelado' },
     { amount: 55, label: 'Torno' },
@@ -20,6 +22,19 @@ const PRESETS = [
 ];
 
 type Mode = 'digital' | 'physical';
+type DeliveryTiming = 'now' | 'scheduled';
+
+function ecuadorNowTimeHHMM(): string {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'America/Guayaquil',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    }).formatToParts(new Date());
+    const hour = parts.find((p) => p.type === 'hour')?.value || '14';
+    const minute = parts.find((p) => p.type === 'minute')?.value || '00';
+    return `${hour}:${minute}`;
+}
 
 function implicitExpirationLabel(from: Date = new Date()): string {
     const expires = new Date(from);
@@ -41,6 +56,7 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
         amount: number;
         expiresAt?: string;
         emailed: boolean;
+        scheduledSendAt?: string | null;
     } | null>(null);
     const [copied, setCopied] = useState(false);
 
@@ -51,10 +67,13 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
     const [message, setMessage] = useState('');
     const [buyerName, setBuyerName] = useState('');
     const [buyerEmail, setBuyerEmail] = useState('');
-    const [showBuyer, setShowBuyer] = useState(false);
+    const [deliveryTiming, setDeliveryTiming] = useState<DeliveryTiming>('now');
+    const [sendDate, setSendDate] = useState(() => formatDateToYYYYMMDD(getEcuadorToday()));
+    const [sendTime, setSendTime] = useState(() => ecuadorNowTimeHHMM());
 
     const implicitExpiresAt = implicitExpirationLabel();
     const parsedAmount = Number(amountInput.replace(/[^0-9.]/g, ''));
+    const todayStr = formatDateToYYYYMMDD(getEcuadorToday());
 
     const resetForm = () => {
         setMode('digital');
@@ -65,7 +84,9 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
         setMessage('');
         setBuyerName('');
         setBuyerEmail('');
-        setShowBuyer(false);
+        setDeliveryTiming('now');
+        setSendDate(formatDateToYYYYMMDD(getEcuadorToday()));
+        setSendTime(ecuadorNowTimeHHMM());
         setError(null);
         setCreated(null);
         setCopied(false);
@@ -110,22 +131,52 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
                     emailed: false,
                 });
             } else {
+                const sender = buyerName.trim();
+                const clientEmail = buyerEmail.trim();
+                const toEmail = recipientEmail.trim();
+                const note = message.trim();
+
+                if (!sender) throw new Error('El remitente (quien envía) es obligatorio');
+                if (!clientEmail || !EMAIL_REGEX.test(clientEmail)) {
+                    throw new Error('El correo del cliente (quien envía) es obligatorio y debe ser válido');
+                }
+                if (!toEmail || !EMAIL_REGEX.test(toEmail)) {
+                    throw new Error('El email del destinatario es obligatorio y debe ser válido');
+                }
+                if (!note) throw new Error('El mensaje es obligatorio');
+
+                let scheduledSendAt: string | null = null;
+                if (deliveryTiming === 'scheduled') {
+                    if (!sendDate || !sendTime) {
+                        throw new Error('Indica fecha y hora de envío');
+                    }
+                    scheduledSendAt = ecuadorLocalToUtcIso(sendDate, sendTime);
+                    if (new Date(scheduledSendAt).getTime() <= Date.now()) {
+                        throw new Error('La programación debe ser una fecha/hora futura (hora Ecuador)');
+                    }
+                }
+
                 const result = await createGiftcardManual(
-                    buyerName.trim() || 'CeramicAlma',
-                    buyerEmail.trim() || undefined,
+                    sender,
+                    clientEmail,
                     name,
                     parsedAmount,
-                    recipientEmail.trim() || undefined,
+                    toEmail,
                     recipientWhatsapp.trim() || undefined,
-                    message.trim() || undefined,
-                    adminUser
+                    note,
+                    adminUser,
+                    {
+                        scheduledSendAt,
+                        sendMethod: 'email',
+                    }
                 );
                 if (!result.success) throw new Error(result.error || 'No se pudo crear');
                 setCreated({
                     code: result.giftcard?.code || '',
                     amount: parsedAmount,
                     expiresAt: result.giftcard?.expiresAt,
-                    emailed: Boolean(recipientEmail.trim()),
+                    emailed: Boolean(result.giftcard?.emailed),
+                    scheduledSendAt: result.giftcard?.scheduledSendAt || scheduledSendAt,
                 });
             }
             onSuccess?.();
@@ -162,7 +213,9 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
                     </button>
                 </div>
                 <p className="text-sm text-brand-secondary mb-4">
-                    Sin pasar por el portal del cliente. El código GC se genera al instante y ya se puede canjear.
+                    {mode === 'digital'
+                        ? 'Flujo de atención al cliente: mismas reglas que el portal. Remitente y correos obligatorios.'
+                        : 'Sin pasar por el portal del cliente. El código GC se genera al instante y ya se puede canjear.'}
                 </p>
 
                 {created ? (
@@ -184,13 +237,17 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
                                 Vence: <strong>{expiresLabel}</strong>
                                 <span className="text-brand-secondary"> (3 meses desde la compra/registro)</span>
                             </p>
-                            {created.emailed ? (
+                            {created.scheduledSendAt ? (
+                                <p className="text-amber-800">
+                                    Envío programado: <strong>{formatEcuadorDateTime(created.scheduledSendAt)}</strong> (hora Ecuador).
+                                </p>
+                            ) : created.emailed ? (
                                 <p className="text-emerald-800">Se envió el código por correo al destinatario.</p>
                             ) : (
                                 <p className="text-brand-secondary">
                                     {mode === 'physical'
                                         ? 'Escríbelo en la tarjeta física y entrégala.'
-                                        : 'Compártelo por WhatsApp o en persona. El cliente lo redime en la reserva.'}
+                                        : 'Código emitido. Revisa el envío en el detalle si el correo no salió.'}
                                 </p>
                             )}
                         </div>
@@ -240,6 +297,38 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
                             </div>
                         )}
 
+                        {mode === 'digital' && (
+                            <div className="grid sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-sm font-semibold text-brand-primary mb-1">
+                                        Remitente (quien envía) *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={buyerName}
+                                        onChange={(e) => setBuyerName(e.target.value)}
+                                        placeholder="Nombre del cliente"
+                                        className="w-full px-3 py-2 border border-brand-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                                        disabled={loading}
+                                        autoFocus
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-brand-primary mb-1">
+                                        Correo del cliente *
+                                    </label>
+                                    <input
+                                        type="email"
+                                        value={buyerEmail}
+                                        onChange={(e) => setBuyerEmail(e.target.value)}
+                                        placeholder="cliente@email.com"
+                                        className="w-full px-3 py-2 border border-brand-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                                        disabled={loading}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
                         <div>
                             <label className="block text-sm font-semibold text-brand-primary mb-1">
                                 {mode === 'physical' ? 'Nombre en la tarjeta *' : 'Para quién *'}
@@ -251,7 +340,7 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
                                 placeholder="Ej: María López"
                                 className="w-full px-3 py-2 border border-brand-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
                                 disabled={loading}
-                                autoFocus
+                                autoFocus={mode === 'physical'}
                             />
                         </div>
 
@@ -294,13 +383,13 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
                             <>
                                 <div>
                                     <label className="block text-sm font-semibold text-brand-primary mb-1">
-                                        Email del destinatario (opcional)
+                                        Email del destinatario *
                                     </label>
                                     <input
                                         type="email"
                                         value={recipientEmail}
                                         onChange={(e) => setRecipientEmail(e.target.value)}
-                                        placeholder="Si lo llenas, le enviamos el código"
+                                        placeholder="destinatario@email.com"
                                         className="w-full px-3 py-2 border border-brand-border rounded-lg"
                                         disabled={loading}
                                     />
@@ -320,43 +409,79 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-semibold text-brand-primary mb-1">
-                                        Mensaje (opcional)
+                                        Mensaje *
                                     </label>
                                     <textarea
                                         value={message}
                                         onChange={(e) => setMessage(e.target.value)}
                                         rows={2}
+                                        placeholder="Mensaje que verá el destinatario en la gift card"
                                         className="w-full px-3 py-2 border border-brand-border rounded-lg"
                                         disabled={loading}
                                     />
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowBuyer((v) => !v)}
-                                    className="text-xs font-semibold text-brand-primary hover:underline"
-                                >
-                                    {showBuyer ? 'Ocultar datos de quien pagó' : '¿Quién pagó? (opcional, si no es el estudio)'}
-                                </button>
-                                {showBuyer && (
-                                    <div className="grid sm:grid-cols-2 gap-3">
+
+                                <fieldset className="space-y-3 rounded-lg border border-brand-border p-3">
+                                    <legend className="px-1 text-sm font-semibold text-brand-primary">
+                                        ¿Cuándo se envía? *
+                                    </legend>
+                                    <label className="flex items-center gap-2 cursor-pointer text-sm text-brand-text">
                                         <input
-                                            type="text"
-                                            value={buyerName}
-                                            onChange={(e) => setBuyerName(e.target.value)}
-                                            placeholder="Nombre de quien pagó"
-                                            className="px-3 py-2 border border-brand-border rounded-lg"
+                                            type="radio"
+                                            name="deliveryTiming"
+                                            checked={deliveryTiming === 'now'}
+                                            onChange={() => setDeliveryTiming('now')}
                                             disabled={loading}
+                                            className="accent-brand-primary"
                                         />
+                                        Enviar ahora
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer text-sm text-brand-text">
                                         <input
-                                            type="email"
-                                            value={buyerEmail}
-                                            onChange={(e) => setBuyerEmail(e.target.value)}
-                                            placeholder="Email de quien pagó"
-                                            className="px-3 py-2 border border-brand-border rounded-lg"
+                                            type="radio"
+                                            name="deliveryTiming"
+                                            checked={deliveryTiming === 'scheduled'}
+                                            onChange={() => setDeliveryTiming('scheduled')}
                                             disabled={loading}
+                                            className="accent-brand-primary"
                                         />
-                                    </div>
-                                )}
+                                        Programar envío
+                                    </label>
+                                    {deliveryTiming === 'scheduled' && (
+                                        <div className="space-y-3 rounded-lg bg-brand-primary/5 border border-brand-primary/30 p-3">
+                                            <div>
+                                                <label className="block text-sm font-semibold text-brand-secondary mb-1">
+                                                    Fecha de envío
+                                                </label>
+                                                <input
+                                                    type="date"
+                                                    value={sendDate}
+                                                    min={todayStr}
+                                                    onChange={(e) => setSendDate(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-brand-border rounded-lg bg-white"
+                                                    disabled={loading}
+                                                    required
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-semibold text-brand-secondary mb-1">
+                                                    Hora (Ecuador)
+                                                </label>
+                                                <input
+                                                    type="time"
+                                                    value={sendTime}
+                                                    onChange={(e) => setSendTime(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-brand-border rounded-lg bg-white"
+                                                    disabled={loading}
+                                                    required
+                                                />
+                                                <p className="text-xs text-brand-secondary mt-1">
+                                                    Hora Ecuador ahora: <strong>{ecuadorNowTimeHHMM()}</strong>
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </fieldset>
                             </>
                         )}
 
@@ -367,7 +492,12 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
                                     {' '}(3 meses desde hoy, día de la compra/registro)
                                 </>
                             ) : (
-                                <>Código GC se genera al crear · Vence {implicitExpiresAt} (3 meses)</>
+                                <>
+                                    Código GC al crear · Vence {implicitExpiresAt} (3 meses)
+                                    {deliveryTiming === 'scheduled'
+                                        ? ' · El destinatario recibe el correo en la fecha programada'
+                                        : ' · El destinatario recibe el correo al crear'}
+                                </>
                             )}
                         </div>
 
@@ -385,7 +515,13 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
                                 className="flex-1 px-4 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 disabled:opacity-50"
                                 disabled={loading}
                             >
-                                {loading ? 'Creando…' : mode === 'physical' ? 'Registrar física' : 'Crear y emitir código'}
+                                {loading
+                                    ? 'Creando…'
+                                    : mode === 'physical'
+                                      ? 'Registrar física'
+                                      : deliveryTiming === 'scheduled'
+                                        ? 'Crear y programar'
+                                        : 'Crear y enviar'}
                             </button>
                         </div>
                     </form>
