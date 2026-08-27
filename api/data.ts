@@ -4831,11 +4831,11 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
             if (!buyerName || !buyerEmail || !recipientName || !body.amount) {
                 return res.status(400).json({
                     success: false,
-                    error: 'Remitente, correo del cliente, destinatario y monto son requeridos',
+                    error: 'Remitente, correo del remitente, destinatario y monto son requeridos',
                 });
             }
             if (!emailRegex.test(buyerEmail)) {
-                return res.status(400).json({ success: false, error: 'Correo del cliente inválido' });
+                return res.status(400).json({ success: false, error: 'Correo del remitente inválido' });
             }
             if (!recipientEmail || !emailRegex.test(recipientEmail)) {
                 return res.status(400).json({

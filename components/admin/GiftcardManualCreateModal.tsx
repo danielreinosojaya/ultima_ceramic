@@ -138,7 +138,7 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
 
                 if (!sender) throw new Error('El remitente (quien envía) es obligatorio');
                 if (!clientEmail || !EMAIL_REGEX.test(clientEmail)) {
-                    throw new Error('El correo del cliente (quien envía) es obligatorio y debe ser válido');
+                    throw new Error('El correo del remitente es obligatorio y debe ser válido');
                 }
                 if (!toEmail || !EMAIL_REGEX.test(toEmail)) {
                     throw new Error('El email del destinatario es obligatorio y debe ser válido');
@@ -214,7 +214,7 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
                 </div>
                 <p className="text-sm text-brand-secondary mb-4">
                     {mode === 'digital'
-                        ? 'Flujo de atención al cliente: mismas reglas que el portal. Remitente y correos obligatorios.'
+                        ? 'Flujo de atención al cliente: mismas reglas que el portal. Remitente, destinatario y sus correos son obligatorios.'
                         : 'Sin pasar por el portal del cliente. El código GC se genera al instante y ya se puede canjear.'}
                 </p>
 
@@ -315,13 +315,13 @@ export const GiftcardManualCreateModal: React.FC<GiftcardManualCreateModalProps>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-semibold text-brand-primary mb-1">
-                                        Correo del cliente *
+                                        Correo del remitente *
                                     </label>
                                     <input
                                         type="email"
                                         value={buyerEmail}
                                         onChange={(e) => setBuyerEmail(e.target.value)}
-                                        placeholder="cliente@email.com"
+                                        placeholder="remitente@email.com"
                                         className="w-full px-3 py-2 border border-brand-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
                                         disabled={loading}
                                     />
