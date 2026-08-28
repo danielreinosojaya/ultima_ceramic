@@ -24,6 +24,11 @@ CREATE INDEX IF NOT EXISTS idx_bookings_status_created
 CREATE INDEX IF NOT EXISTS idx_bookings_created 
   ON bookings(created_at DESC);
 
+-- Occupancy (when the class happens), used by calendar + capacity
+CREATE INDEX IF NOT EXISTS idx_bookings_occupancy
+  ON bookings (last_slot_date, first_slot_date)
+  WHERE first_slot_date IS NOT NULL;
+
 -- =============================================
 -- 3. ÍNDICE DELIVERIES: Status + Scheduled Date
 -- =============================================

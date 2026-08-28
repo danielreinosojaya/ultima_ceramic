@@ -362,9 +362,8 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
     const allProducts = adminData.products;
     const allBookings = adminData.bookings;
 
-    // ⚡ FIX: customer.bookings es siempre [] por optimización de performance (Phase 6b).
-    // adminData.bookings solo carga últimos 30 días, excluyendo reservas antiguas.
-    // Solución: fetch dedicado on-demand al abrir el detalle de cliente, sin límite de días.
+    // customer.bookings es [] (Phase 6b). El dump del calendario ahora es por ocupación
+    // (fecha de clase), no por created_at; igual se pide el historial completo del cliente.
     const _customerEmail = (customer.userInfo?.email || customer.email || '').toLowerCase().trim();
     const [fetchedBookings, setFetchedBookings] = useState<Booking[] | null>(null);
     const [bookingsLoading, setBookingsLoading] = useState(false);

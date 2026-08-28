@@ -26,6 +26,14 @@ export function formatDateToYYYYMMDD(d: Date): string {
     return `${year}-${month}-${day}`;
 }
 
+/** Normaliza slot.date (YYYY-MM-DD o ISO) a clave de calendario YYYY-MM-DD. */
+export function slotDateKey(value: unknown): string {
+    if (value == null) return '';
+    const raw = typeof value === 'string' ? value : String(value);
+    const match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+    return match ? match[1] : raw.slice(0, 10);
+}
+
 export const ECUADOR_TZ = 'America/Guayaquil';
 /** Ecuador fijo UTC−5 (sin horario de verano). */
 const ECUADOR_UTC_OFFSET_HOURS = 5;

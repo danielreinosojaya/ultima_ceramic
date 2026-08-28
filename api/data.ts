@@ -75,6 +75,15 @@ import {
 } from '../utils/classPackageValidity.js';
 import { foldSearchText, SQL_ACCENT_FROM, SQL_ACCENT_TO } from '../utils/textSearch.js';
 import {
+    ensureOccupancySchema,
+    fetchBookingsOverlappingDate,
+    fetchBookingsOverlappingRange,
+    fetchCalendarOccupancyRows,
+    resolveOccupancyWindow,
+    searchCalendarOccupancyRows,
+    slotDateKey,
+} from './shared/occupancy.js';
+import {
     isClassStartWithinBusinessHours,
     getBusinessHoursRejectionMessage,
     getBusinessStartTimesForDate,
@@ -829,21 +838,10 @@ const computeSlotAvailability = async (
     skipPrivateEventBlock: boolean = false,
     skipBusinessHoursCheck: boolean = false
 ) => {
-    // ✅ OPTIMIZATION PHASE 2: Buscar bookings que TENGAN SLOTS en la fecha solicitada
-    // Con LIMIT 1000 para evitar saturación (traer todos los bookings es ineficiente)
-    // Excluimos bookings expirados (no deben contar para capacidad)
-    const bookingsResult = await sql`
-        SELECT * FROM bookings 
-        WHERE COALESCE(status, 'active') != 'expired'
-        ORDER BY created_at DESC
-        LIMIT 1000
-    `;
-
-    // Filtrar en memoria: solo bookings que tengan slots en la fecha solicitada
-    const allBookings = bookingsResult.rows.map(parseBookingFromDB);
-    const bookings = allBookings.filter(booking => {
+    const occupancyRows = await fetchBookingsOverlappingDate(requestedDate, { excludeExpired: true });
+    const bookings = occupancyRows.map(parseBookingFromDB).filter((booking) => {
         if (!booking.slots || !Array.isArray(booking.slots)) return false;
-        return booking.slots.some((s: any) => s.date === requestedDate);
+        return booking.slots.some((s: any) => slotDateKey(s.date) === requestedDate);
     });
 
     const { scheduleOverrides, classCapacity, freeDateTimeOverrides, experienceTypeOverrides } = await parseSlotAvailabilitySettings();
@@ -1978,6 +1976,20 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     break;
                 }
 
+                case 'searchCalendarBookings': {
+                    const searchQ = typeof req.query.q === 'string' ? req.query.q : '';
+                    try {
+                        const rows = await searchCalendarOccupancyRows(searchQ);
+                        const parsed = rows.map(parseBookingFromDB).filter(Boolean);
+                        res.setHeader('Cache-Control', 'private, no-store');
+                        data = parsed;
+                    } catch (searchErr) {
+                        console.error('[searchCalendarBookings] Error:', searchErr);
+                        return res.status(500).json({ success: false, error: 'No se pudo buscar reservas' });
+                    }
+                    break;
+                }
+
                 case 'getAvailableSlots': {
                     // Endpoint inteligente para experiencias personalizadas
                     const { technique, participants, startDate, daysAhead } = req.query;
@@ -1996,48 +2008,28 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
 
                     console.log(`[getAvailableSlots] Searching: technique=${requestedTechnique}, participants=${requestedParticipants}, from=${searchStartDate.toISOString().split('T')[0]}, days=${searchDays}`);
 
-                    // ⚡ CRÍTICO: NO filtrar por created_at en query — bookings pueden ser creados hace meses con slots en el futuro
-                    // OPTIMIZACIÓN: Agregar LIMIT 2000 para evitar traer TODOS los bookings indefinidamente
-                    // Una reserva creada hace 3 meses para una fecha futura DEBE considerarse (pero con limit)
-                    
-                    const totalBookingsCheck = await sql`
-                        SELECT COUNT(*) as count FROM bookings
-                    `;
-                    const totalCount = totalBookingsCheck.rows[0]?.count || 0;
-                    if (totalCount > 2000) {
-                        console.warn(`[getAvailableSlots] ⚠️ ${totalCount} total bookings in DB - performance may degrade. Consider archiving old bookings.`);
-                    }
-                    
-                    // Obtener datos necesarios - con LIMIT para evitar saturación
-                    const [bookingsResult, instructorsResult] = await Promise.all([
-                        sql`
-                            SELECT * FROM bookings 
-                            ORDER BY created_at DESC
-                            LIMIT 2000
-                        `,
+                    const rangeStart = new Date(searchStartDate);
+                    rangeStart.setDate(rangeStart.getDate() - 1);
+                    const rangeEnd = new Date(searchStartDate);
+                    rangeEnd.setDate(rangeEnd.getDate() + searchDays + 1);
+                    const rangeStartStr = rangeStart.toISOString().split('T')[0];
+                    const rangeEndStr = rangeEnd.toISOString().split('T')[0];
+
+                    const [occupancyRows, instructorsResult] = await Promise.all([
+                        fetchBookingsOverlappingRange(rangeStartStr, rangeEndStr, { excludeExpired: true }),
                         sql`SELECT * FROM instructors ORDER BY name ASC`
                     ]);
 
-                    const allBookings = bookingsResult.rows.map(parseBookingFromDB);
+                    const allBookings = occupancyRows.map(parseBookingFromDB);
                     const instructors = instructorsResult.rows.map(toCamelCase);
-                    
-                    // Filtrar bookings que tengan slots dentro del rango de búsqueda
-                    const rangeStart = new Date(searchStartDate);
-                    rangeStart.setDate(rangeStart.getDate() - 1); // 1 día buffer antes
-                    const rangeEnd = new Date(searchStartDate);
-                    rangeEnd.setDate(rangeEnd.getDate() + searchDays + 1); // 1 día buffer después
-                    
-                    const rangeStartStr = rangeStart.toISOString().split('T')[0];
-                    const rangeEndStr = rangeEnd.toISOString().split('T')[0];
-                    
-                    const bookings = allBookings.filter(booking => {
+                    const bookings = allBookings.filter((booking) => {
                         if (!booking.slots || !Array.isArray(booking.slots)) return false;
                         return booking.slots.some((s: any) => {
-                            const slotDate = s.date;
+                            const slotDate = slotDateKey(s.date);
                             return slotDate >= rangeStartStr && slotDate <= rangeEndStr;
                         });
                     });
-                    
+
                     console.log(`[getAvailableSlots] Filtered ${bookings.length} bookings with slots in range (out of ${allBookings.length} total)`);
 
                     const courseSessionsByDate = await loadCourseSessionsByDate(rangeStartStr, rangeEndStr);
@@ -2229,29 +2221,25 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     const searchStartDate = startDate ? new Date(startDate as string) : new Date();
                     const searchDays = daysAhead ? parseInt(daysAhead as string, 10) : 60;
 
-                    const [bookingsResult, instructorsResult] = await Promise.all([
-                        sql`
-                            SELECT * FROM bookings
-                            ORDER BY created_at DESC
-                        `,
-                        sql`SELECT * FROM instructors ORDER BY name ASC`
-                    ]);
-
-                    const allBookings = bookingsResult.rows.map(parseBookingFromDB);
-                    const instructors = instructorsResult.rows.map(toCamelCase);
-
                     const rangeStart = new Date(searchStartDate);
                     rangeStart.setDate(rangeStart.getDate() - 1);
                     const rangeEnd = new Date(searchStartDate);
                     rangeEnd.setDate(rangeEnd.getDate() + searchDays + 1);
-
                     const rangeStartStr = rangeStart.toISOString().split('T')[0];
                     const rangeEndStr = rangeEnd.toISOString().split('T')[0];
+
+                    const [occupancyRows, instructorsResult] = await Promise.all([
+                        fetchBookingsOverlappingRange(rangeStartStr, rangeEndStr, { excludeExpired: true }),
+                        sql`SELECT * FROM instructors ORDER BY name ASC`
+                    ]);
+
+                    const allBookings = occupancyRows.map(parseBookingFromDB);
+                    const instructors = instructorsResult.rows.map(toCamelCase);
 
                     const bookings = allBookings.filter(booking => {
                         if (!booking.slots || !Array.isArray(booking.slots)) return false;
                         return booking.slots.some((s: any) => {
-                            const slotDate = s.date;
+                            const slotDate = slotDateKey(s.date);
                             return slotDate >= rangeStartStr && slotDate <= rangeEndStr;
                         });
                     });
@@ -2686,155 +2674,32 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     data = [];
                 }
                         } else if (key === 'bookings') {
-                                // ⚡ PHASE 5 FINAL OPTIMIZATION: Partial SELECT sin campo `product` (10-20 KB por booking)
-                                // Omitir `product`, `payment_details`, `attendance` → ~85% payload reduction
-                                // Lazy load detalles solo cuando se abre modal de pagos/detalles
-                                const daysLimit = parseInt(req.query.daysLimit as string) || 30;
-                                const limitDate = new Date();
-                                limitDate.setDate(limitDate.getDate() - daysLimit);
-                
-                                // ⚡ PERFORMANCE FIX: Removed expensive EXISTS subquery that was checking every booking's slots
-                                // Now relies on daysLimit to filter recent bookings (most active bookings are recent)
-                                // If you need future slots from old bookings, increase daysLimit query param
+                                // Occupancy dump: classes that HAPPEN in the window, not rows created recently.
+                                // Optional ?from=YYYY-MM-DD&to=YYYY-MM-DD; default is past 60 / next 365 days
+                                // plus recently created pre-reservas without slots.
+                                const fromParam = typeof req.query.from === 'string' ? req.query.from : undefined;
+                                const toParam = typeof req.query.to === 'string' ? req.query.to : undefined;
+                                const occupancyWindow = resolveOccupancyWindow({ from: fromParam, to: toParam });
                                 let bookings: any[] = [];
                                 try {
-                                    const { rows } = await sql`
-                                        SELECT 
-                                            b.id,
-                                            b.product_id,
-                                            b.product_type,
-                                            p.name AS product_name,
-                                            b.product->>'technique' AS product_technique,
-                                            b.slots,
-                                            b.user_info,
-                                            b.created_at,
-                                            b.is_paid,
-                                            b.price,
-                                            b.booking_mode,
-                                            b.booking_code,
-                                            b.booking_date,
-                                            b.attendance,
-                                            b.status,
-                                            b.expires_at,
-                                            b.participants,
-                                            b.group_metadata AS group_class_metadata,
-                                            b.technique,
-                                            b.payment_proof_url,
-                                            b.client_note
-                                        FROM bookings b
-                                        LEFT JOIN products p ON p.id = b.product_id
-                                        WHERE b.created_at >= ${limitDate.toISOString()}
-                                        ORDER BY b.created_at DESC
-                                        LIMIT 500
-                                    `;
-                                    bookings = rows;
-                                } catch (bookingsQueryError: any) {
-                                    const queryErrorMessage = String(bookingsQueryError?.message || '');
-                                    const missingOptionalColumn =
-                                        queryErrorMessage.includes('group_class_metadata') ||
-                                        queryErrorMessage.includes('technique') ||
-                                        queryErrorMessage.includes('participants') ||
-                                        queryErrorMessage.includes('payment_proof_url') ||
-                                        queryErrorMessage.includes('client_note');
-
-                                    if (!missingOptionalColumn) {
-                                        throw bookingsQueryError;
-                                    }
-
-                                    console.warn('API: bookings query fallback due to missing optional column(s):', queryErrorMessage);
-
-                                    try {
-                                        const { rows } = await sql`
-                                            SELECT 
-                                                b.id,
-                                                b.product_id,
-                                                b.product_type,
-                                                p.name AS product_name,
-                                                b.product->>'technique' AS product_technique,
-                                                b.slots,
-                                                b.user_info,
-                                                b.created_at,
-                                                b.is_paid,
-                                                b.price,
-                                                b.booking_mode,
-                                                b.booking_code,
-                                                b.booking_date,
-                                                b.attendance,
-                                                b.status,
-                                                b.expires_at,
-                                                b.participants,
-                                                b.client_note
-                                            FROM bookings b
-                                            LEFT JOIN products p ON p.id = b.product_id
-                                            WHERE b.created_at >= ${limitDate.toISOString()}
-                                            ORDER BY b.created_at DESC
-                                            LIMIT 500
-                                        `;
-                                        bookings = rows.map((row: any) => ({
-                                            ...row,
-                                            group_class_metadata: null,
-                                            technique: null,
-                                            payment_proof_url: null
-                                        }));
-                                    } catch (participantsFallbackError: any) {
-                                        const participantsFallbackErrorMessage = String(participantsFallbackError?.message || '');
-
-                                        if (!participantsFallbackErrorMessage.includes('participants') && !participantsFallbackErrorMessage.includes('payment_proof_url') && !participantsFallbackErrorMessage.includes('client_note')) {
-                                            throw participantsFallbackError;
-                                        }
-
-                                        console.warn('API: bookings fallback without participants due to missing participants column:', participantsFallbackErrorMessage);
-
-                                        const { rows } = await sql`
-                                            SELECT 
-                                                b.id,
-                                                b.product_id,
-                                                b.product_type,
-                                                p.name AS product_name,
-                                                b.product->>'technique' AS product_technique,
-                                                b.slots,
-                                                b.user_info,
-                                                b.created_at,
-                                                b.is_paid,
-                                                b.price,
-                                                b.booking_mode,
-                                                b.booking_code,
-                                                b.booking_date,
-                                                b.attendance,
-                                                b.status,
-                                                b.expires_at
-                                            FROM bookings b
-                                            LEFT JOIN products p ON p.id = b.product_id
-                                            WHERE b.created_at >= ${limitDate.toISOString()}
-                                            ORDER BY b.created_at DESC
-                                            LIMIT 500
-                                        `;
-                                        bookings = rows.map((row: any) => ({
-                                            ...row,
-                                            participants: 1,
-                                            group_class_metadata: null,
-                                            technique: null,
-                                            payment_proof_url: null,
-                                            client_note: null
-                                        }));
-                                    }
+                                    bookings = await fetchCalendarOccupancyRows(occupancyWindow.from, occupancyWindow.to, occupancyWindow.slotlessSince);
+                                } catch (bookingsQueryError) {
+                                    console.error('API: occupancy bookings query failed:', bookingsQueryError);
+                                    throw bookingsQueryError;
                                 }
-                                console.log(`API: Loaded ${bookings.length} bookings from last ${daysLimit} days (OMITTED: product, payment_details)`);
-                
+                                console.log(`API: Loaded ${bookings.length} bookings by occupancy ${occupancyWindow.from}..${occupancyWindow.to} (slotless since ${occupancyWindow.slotlessSince})`);
+
                 if (bookings.length === 0) {
-                    console.warn('API: No bookings found in database');
+                    console.warn('API: No bookings found in occupancy window');
                     data = [];
                 } else {
-                    // Parse bookings properly using parseBookingFromDB
                     const processedBookings = bookings
                         .map(parseBookingFromDB)
                         .filter(Boolean);
-                    
+
                     console.log(`API: Successfully processed ${processedBookings.length} bookings out of ${bookings.length} raw bookings`);
                     data = processedBookings;
                 }
-                // ✅ CACHE STRATEGY: Cache CDN 30 segundos para balance entre performance y freshness
-                // Permite updates rápidos después de mutations sin sacrificar totalmente CDN
                 res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
             } else if (key === 'customers') {
                 // ⚡ PHASE 6b EXTREME OPTIMIZATION: Aggregate-only, no full booking objects
@@ -5914,15 +5779,10 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 }
 
                 if (!forceAdminReschedule) {
-                    const { rows: rentalRows } = await sql`
-                        SELECT * FROM bookings
-                        WHERE COALESCE(status, 'active') != 'expired'
-                        ORDER BY created_at DESC
-                        LIMIT 1000
-                    `;
+                    const rentalRows = await fetchBookingsOverlappingDate(newSlot.date, { excludeExpired: true });
                     const rentalBookings = rentalRows
                         .map(parseBookingFromDB)
-                        .filter((b) => Array.isArray(b.slots) && b.slots.some((s: any) => s.date === newSlot.date));
+                        .filter((b) => Array.isArray(b.slots) && b.slots.some((s: any) => slotDateKey(s.date) === newSlot.date));
                     const exclusiveHit = slotOverlapsExclusiveSpaceRental(
                         newSlot.date,
                         normalizeTime(newSlot.time),
@@ -6763,17 +6623,12 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     });
                 }
 
-                // Obtener bookings no-expirados (también para exclusividad de alquiler)
-                const { rows: allBookingsRows } = await sql`
-                    SELECT * FROM bookings 
-                    WHERE COALESCE(status, 'active') != 'expired'
-                    ORDER BY created_at DESC
-                    LIMIT 1000
-                `;
+                // Obtener bookings no-expirados que ocupan esa fecha (también para exclusividad de alquiler)
+                const allBookingsRows = await fetchBookingsOverlappingDate(requestedDate, { excludeExpired: true });
                 const allBookings = allBookingsRows.map(parseBookingFromDB);
                 const bookingsOnDate = allBookings.filter(b => {
                     if (!b.slots || !Array.isArray(b.slots)) return false;
-                    return b.slots.some((s: any) => s.date === requestedDate);
+                    return b.slots.some((s: any) => slotDateKey(s.date) === requestedDate);
                 });
 
                 // Bloqueo por alquiler/celebración exclusiva (cualquier técnica)
@@ -7097,15 +6952,10 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         ? { startTime: String(time), hours: rentalHours }
                         : null;
 
-                const { rows: allBookingsRows } = await sql`
-                    SELECT * FROM bookings
-                    WHERE COALESCE(status, 'active') != 'expired'
-                    ORDER BY created_at DESC
-                    LIMIT 1000
-                `;
+                const allBookingsRows = await fetchBookingsOverlappingDate(date, { excludeExpired: true });
                 const allBookings = allBookingsRows.map(parseBookingFromDB);
                 const bookingsOnDate = allBookings.filter(
-                    (b) => Array.isArray(b.slots) && b.slots.some((s: any) => s.date === date)
+                    (b) => Array.isArray(b.slots) && b.slots.some((s: any) => slotDateKey(s.date) === date)
                 );
 
                 let daySchedule = buildDayOccupancyFromBookings(date, bookingsOnDate, proposed);
@@ -7229,15 +7079,10 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     });
                 }
 
-                const { rows: allBookingsRows } = await sql`
-                    SELECT * FROM bookings
-                    WHERE COALESCE(status, 'active') != 'expired'
-                    ORDER BY created_at DESC
-                    LIMIT 1000
-                `;
+                const allBookingsRows = await fetchBookingsOverlappingDate(date, { excludeExpired: true });
                 const allBookings = allBookingsRows.map(parseBookingFromDB);
                 const bookingsOnDate = allBookings.filter((b) =>
-                    Array.isArray(b.slots) && b.slots.some((s: any) => s.date === date)
+                    Array.isArray(b.slots) && b.slots.some((s: any) => slotDateKey(s.date) === date)
                 );
 
                 // No solapar con evento privado hardcodeado (ventana de clase 2h desde starts que chocan)
@@ -9094,6 +8939,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS group_metadata JSONB`;
                 await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_proof_url TEXT`;
                 await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_proof_uploaded_at TIMESTAMPTZ`;
+                await ensureOccupancySchema();
                 console.log('[applyBookingMigrations] ✅ All booking columns ensured');
                 return res.status(200).json({ success: true, message: 'Booking migrations applied successfully' });
             } catch (error) {
@@ -9610,6 +9456,7 @@ async function addBookingAction(
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS group_metadata JSONB`;
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_proof_url TEXT`;
       await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_proof_uploaded_at TIMESTAMPTZ`;
+      await ensureOccupancySchema();
     } catch (e) {
       console.warn('[ADD BOOKING] Could not add columns (may already exist):', e);
     }
@@ -9662,12 +9509,13 @@ async function addBookingAction(
 
     // Bloqueo eventos privados (alquiler de espacio): todas las rutas públicas de reserva
     if (!adminOverride && body.slots && Array.isArray(body.slots)) {
-      const { rows: exclusiveRows } = await sql`
-        SELECT * FROM bookings
-        WHERE COALESCE(status, 'active') != 'expired'
-        ORDER BY created_at DESC
-        LIMIT 1000
-      `;
+      const slotDates = body.slots
+        .map((s: any) => slotDateKey(s?.date))
+        .filter((d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d))
+        .sort();
+      const exclusiveRows = slotDates.length
+        ? await fetchBookingsOverlappingRange(slotDates[0], slotDates[slotDates.length - 1], { excludeExpired: true })
+        : [];
       const exclusivePool = exclusiveRows.map(parseBookingFromDB);
       for (const slot of body.slots) {
         if (!slot?.date || !slot?.time) continue;
@@ -9680,7 +9528,7 @@ async function addBookingAction(
         const exclusiveHit = slotOverlapsExclusiveSpaceRental(
           slot.date,
           normalizedSlotTime,
-          exclusivePool.filter((b) => Array.isArray(b.slots) && b.slots.some((s: any) => s.date === slot.date)),
+          exclusivePool.filter((b) => Array.isArray(b.slots) && b.slots.some((s: any) => slotDateKey(s.date) === slotDateKey(slot.date))),
           2 * 60
         );
         if (exclusiveHit.overlaps) {

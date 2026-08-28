@@ -459,7 +459,7 @@ const getCachedData = <T>(key: string): T | null => {
     
     const duration = ['products', 'instructors', 'policies'].includes(key) 
         ? CRITICAL_CACHE_DURATION 
-        : key === 'bookings' 
+        : key === 'bookings' || key.startsWith('bookings:')
         ? BOOKINGS_CACHE_DURATION
         : CACHE_DURATION;
     
@@ -497,8 +497,12 @@ let lastMutationTimestamp = 0;
 export const invalidateBookingsCache = (): void => {
     console.log('[Cache] Invalidating bookings cache only');
     clearCache('bookings');
-    lastMutationTimestamp = Date.now(); // Update timestamp para cache-busting
-    // ✅ NO invalida: customers, products, instructors, giftcards
+    for (const cacheKey of Array.from(cache.keys())) {
+        if (String(cacheKey).startsWith('bookings:')) {
+            cache.delete(cacheKey);
+        }
+    }
+    lastMutationTimestamp = Date.now();
 };
 
 export const invalidateCustomersCache = (): void => {
@@ -952,18 +956,35 @@ export const getCustomers = async (opts?: { page?: number; limit?: number; searc
   }
 };
 
-export const getBookings = async (): Promise<Booking[]> => {
+export const getBookings = async (opts?: { from?: string; to?: string }): Promise<Booking[]> => {
     try {
-        // Agregar cache-busting timestamp si hubo mutation reciente
         const cacheBuster = lastMutationTimestamp > 0 ? `&_t=${lastMutationTimestamp}` : '';
-        const rawBookings = await getData<any[]>(`bookings${cacheBuster}`);
+        const from = opts?.from;
+        const to = opts?.to;
+        const ranged = !!(from && to);
+        const cacheKey = ranged ? `bookings:${from}:${to}` : 'bookings';
+
+        let rawBookings: any[] | null = null;
+        if (!ranged) {
+            rawBookings = await getData<any[]>(`bookings${cacheBuster}`);
+        } else {
+            if (!cacheBuster) {
+                const cached = getCachedData<any[]>(cacheKey);
+                if (cached) rawBookings = cached;
+            }
+            if (!rawBookings) {
+                const url = `/api/data?key=bookings&from=${encodeURIComponent(from!)}&to=${encodeURIComponent(to!)}${cacheBuster}`;
+                const fetched = await fetchData(url);
+                rawBookings = Array.isArray(fetched) ? fetched : [];
+                setCachedData(cacheKey, rawBookings);
+            }
+        }
         
         if (!rawBookings || !Array.isArray(rawBookings)) {
             console.warn('getBookings: No bookings data received, returning empty array');
             return [];
         }
         
-        // Filter out null/undefined values before processing
         const validBookings = rawBookings.filter(booking => {
             if (!booking || typeof booking !== 'object') {
                 return false;
@@ -971,7 +992,6 @@ export const getBookings = async (): Promise<Booking[]> => {
             return true;
         });
         
-        // Parse bookings
         const parsedBookings: Booking[] = [];
         
         validBookings.forEach((booking, index) => {
@@ -989,6 +1009,19 @@ export const getBookings = async (): Promise<Booking[]> => {
         return parsedBookings;
     } catch (error) {
         console.error('getBookings: Error:', error);
+        return [];
+    }
+};
+
+export const searchCalendarBookings = async (query: string): Promise<Booking[]> => {
+    const term = query.trim();
+    if (term.length < 2) return [];
+    try {
+        const rows = await fetchData(`/api/data?action=searchCalendarBookings&q=${encodeURIComponent(term)}`);
+        if (!Array.isArray(rows)) return [];
+        return rows.map((row: any) => parseBooking(row)).filter(Boolean) as Booking[];
+    } catch (error) {
+        console.error('searchCalendarBookings: Error:', error);
         return [];
     }
 };

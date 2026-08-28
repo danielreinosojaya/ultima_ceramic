@@ -183,7 +183,7 @@ const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): st
 };
 // import { useLanguage } from '../../context/LanguageContext';
 import { DAY_NAMES, PALETTE_COLORS } from '../../constants.js';
-import { getEcuadorToday, formatDateToYYYYMMDD as getEcuadorDateStr } from '../../utils/formatters';
+import { getEcuadorToday, formatDateToYYYYMMDD as getEcuadorDateStr, slotDateKey } from '../../utils/formatters';
 import { InstructorTag } from '../InstructorTag';
 import { BookingDetailsModal } from './BookingDetailsModal';
 import { generateWeeklySchedulePDF } from '../../services/pdfService';
@@ -312,6 +312,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     const language = 'es-ES';
     const adminData = useAdminData();
     const [currentDate, setCurrentDate] = useState(getWeekStartDate(initialDate));
+    const [weekOccupancy, setWeekOccupancy] = useState<Booking[]>([]);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [modalData, setModalData] = useState<{ date: string; time: string; attendees: any[]; instructorId: number; onClose?: () => void } | null>(null);
     const [showUnpaidOnly, setShowUnpaidOnly] = useState(false);
@@ -440,6 +441,37 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         setCurrentDate(getWeekStartDate(initialDate));
     }, [initialDate]);
 
+    const weekRange = useMemo(() => {
+        const start = getWeekStartDate(currentDate);
+        const end = new Date(start);
+        end.setDate(end.getDate() + 6);
+        return { from: formatDateToYYYYMMDD(start), to: formatDateToYYYYMMDD(end) };
+    }, [currentDate]);
+
+    useEffect(() => {
+        let alive = true;
+        dataService.getBookings({ from: weekRange.from, to: weekRange.to })
+            .then((rows) => {
+                if (alive) setWeekOccupancy(Array.isArray(rows) ? rows : []);
+            })
+            .catch((err) => {
+                console.error('[ScheduleManager] occupancy week fetch failed', err);
+                if (alive) setWeekOccupancy([]);
+            });
+        return () => { alive = false; };
+    }, [weekRange.from, weekRange.to]);
+
+    const bookingsForSchedule = useMemo(() => {
+        const byId = new Map<string, Booking>();
+        for (const b of appData.bookings || []) {
+            if (b?.id) byId.set(b.id, b);
+        }
+        for (const b of weekOccupancy) {
+            if (b?.id) byId.set(b.id, b);
+        }
+        return Array.from(byId.values());
+    }, [appData.bookings, weekOccupancy]);
+
     const { weekDates, scheduleData } = useMemo(() => {
         const startOfWeek = new Date(currentDate);
         startOfWeek.setHours(0, 0, 0, 0);
@@ -459,7 +491,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             return `${y}-${m}-${day}`;
         }));
 
-        const { instructors, bookings, products, availability, scheduleOverrides, classCapacity } = appData;
+        const { instructors, products, availability, scheduleOverrides, classCapacity } = appData;
+        const bookings = bookingsForSchedule;
         
         const scheduleMap: ScheduleData = new Map();
         instructors.forEach(i => scheduleMap.set(i.id, { instructor: i, schedule: {} }));
@@ -468,7 +501,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
 
         // Step 1: Populate slots from all bookings for the current week.
         for (const booking of bookings) {
-            for (const slot of booking.slots) {
+            const bookingSlots = Array.isArray(booking.slots) ? booking.slots : [];
+            for (const slot of bookingSlots) {
                 if (!slot.date || !slot.time) {
                     continue;
                 }
@@ -478,17 +512,17 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
 
                 // Check if slot date falls within the current week (string-based, timezone-safe)
                 // This avoids the DST/precision edge case where Sunday midnight === endOfWeek timestamp
-                const inCurrentWeek = weekDateSet.has(slot.date);
+                const dateStr = slotDateKey(slot.date);
+                const inCurrentWeek = weekDateSet.has(dateStr);
                 if (!inCurrentWeek) {
                     continue;
                 }
 
                 // Parse slot date for day-of-week capacity calculations
-                const slotDate = new Date(slot.date + "T00:00:00");
+                const slotDate = new Date(dateStr + "T00:00:00");
                 if (isNaN(slotDate.getTime())) {
                     continue;
                 }
-                    const dateStr = slot.date;
                     const normalizedTime = normalizeTime(slot.time);
                     
                     // CRÍTICO: Derivar técnica priorizando product.name (más confiable para históricos)
@@ -511,7 +545,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                         }
                         
                         // Determine capacity
-                        const overrideForDate = scheduleOverrides[slot.date];
+                        const overrideForDate = scheduleOverrides[dateStr];
                         if (overrideForDate?.capacity) {
                             slotCapacity = overrideForDate.capacity;
                         } else if (booking.productType === 'INTRODUCTORY_CLASS' && 'schedulingRules' in booking.product) {
@@ -628,7 +662,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         });
 
         return { weekDates: dates, scheduleData: scheduleMap };
-    }, [currentDate, appData]);
+    }, [currentDate, appData, bookingsForSchedule]);
     
     const calculateTotalParticipants = (bookings: Booking[]): number => {
         let count = 0;
@@ -798,7 +832,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     generateWeeklySchedulePDF(weekDates, dataToExport, language, showUnpaidOnly, subtitle);
     };
     
-    const handleSearch = (e: React.FormEvent) => {
+    const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!searchTerm.trim()) {
             setIsSearchPanelOpen(false);
@@ -806,9 +840,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             return;
         }
         const lowercasedTerm = searchTerm.toLowerCase();
-        const customers = dataService.generateCustomersFromBookings(appData.bookings);
-        
-        const foundCustomer = customers.find(customer => {
+        const matchCustomer = (customer: Customer) => {
             const userInfo = customer.userInfo;
             return (
                 userInfo.firstName.toLowerCase().includes(lowercasedTerm) ||
@@ -816,9 +848,16 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 userInfo.email.toLowerCase().includes(lowercasedTerm) ||
                 customer.bookings.some(b => b.bookingCode?.toLowerCase().includes(lowercasedTerm))
             );
-        });
+        };
+        const localCustomers = dataService.generateCustomersFromBookings(bookingsForSchedule);
+        let foundCustomer = localCustomers.find(matchCustomer) || null;
+        if (!foundCustomer) {
+            const remote = await dataService.searchCalendarBookings(searchTerm);
+            const remoteCustomers = dataService.generateCustomersFromBookings(remote);
+            foundCustomer = remoteCustomers.find(matchCustomer) || remoteCustomers[0] || null;
+        }
 
-        setSearchCustomer(foundCustomer || null);
+        setSearchCustomer(foundCustomer);
         setIsSearchPanelOpen(true);
     };
 
@@ -833,7 +872,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         
         const firstSlot = booking.slots.sort((a,b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))[0];
         if (firstSlot && firstSlot.date && firstSlot.time) {
-            const firstSlotDate = new Date(firstSlot.date + 'T00:00:00');
+            const firstSlotDate = new Date(slotDateKey(firstSlot.date) + 'T00:00:00');
             setCurrentDate(getWeekStartDate(firstSlotDate));
             setBookingToHighlight(booking);
             setIsSearchPanelOpen(false);
