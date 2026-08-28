@@ -362,8 +362,8 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
     const allProducts = adminData.products;
     const allBookings = adminData.bookings;
 
-    // customer.bookings es [] (Phase 6b). El dump del calendario ahora es por ocupación
-    // (fecha de clase), no por created_at; igual se pide el historial completo del cliente.
+    // ⚡ FIX: customer.bookings es siempre [] por optimización de performance (Phase 6b).
+    // El calendario carga reservas recientes; el detalle pide el historial completo del cliente.
     const _customerEmail = (customer.userInfo?.email || customer.email || '').toLowerCase().trim();
     const [fetchedBookings, setFetchedBookings] = useState<Booking[] | null>(null);
     const [bookingsLoading, setBookingsLoading] = useState(false);

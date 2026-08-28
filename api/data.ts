@@ -2820,6 +2820,103 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                     }
                                 }
                                 console.log(`API: Loaded ${bookings.length} bookings from last ${daysLimit} days (OMITTED: product, payment_details)`);
+
+                                // Supplement: clases futuras de reservas creadas hace más de daysLimit
+                                // (p.ej. experiencia grupal agendada con meses de antelación).
+                                // Filtra fechas en JS: jsonb_array_elements falla si algún slots no es array JSON válido.
+                                try {
+                                    const occFrom = new Date();
+                                    occFrom.setDate(occFrom.getDate() - 7);
+                                    const occTo = new Date();
+                                    occTo.setDate(occTo.getDate() + 400);
+                                    const occFromStr = occFrom.toISOString().slice(0, 10);
+                                    const occToStr = occTo.toISOString().slice(0, 10);
+                                    const monthLikes = Array.from({ length: 16 }, (_, i) => {
+                                        const monthDate = new Date(occFrom.getFullYear(), occFrom.getMonth() + i, 1);
+                                        const year = monthDate.getFullYear();
+                                        const month = String(monthDate.getMonth() + 1).padStart(2, '0');
+                                        return `%${year}-${month}%`;
+                                    });
+                                    const { rows: olderRows } = await sql`
+                                        SELECT
+                                            b.id,
+                                            b.product_id,
+                                            b.product_type,
+                                            p.name AS product_name,
+                                            b.product->>'technique' AS product_technique,
+                                            b.slots,
+                                            b.user_info,
+                                            b.created_at,
+                                            b.is_paid,
+                                            b.price,
+                                            b.booking_mode,
+                                            b.booking_code,
+                                            b.booking_date,
+                                            b.attendance,
+                                            b.status,
+                                            b.expires_at,
+                                            b.participants,
+                                            b.group_metadata AS group_class_metadata,
+                                            b.technique,
+                                            b.payment_proof_url,
+                                            b.client_note
+                                        FROM bookings b
+                                        LEFT JOIN products p ON p.id = b.product_id
+                                        WHERE b.created_at < ${limitDate.toISOString()}
+                                          AND COALESCE(b.status, 'active') NOT IN ('expired', 'cancelled')
+                                          AND b.slots IS NOT NULL
+                                          AND b.slots::text <> '[]'
+                                          AND b.slots::text <> 'null'
+                                          AND (
+                                            b.slots::text LIKE ${monthLikes[0]}
+                                            OR b.slots::text LIKE ${monthLikes[1]}
+                                            OR b.slots::text LIKE ${monthLikes[2]}
+                                            OR b.slots::text LIKE ${monthLikes[3]}
+                                            OR b.slots::text LIKE ${monthLikes[4]}
+                                            OR b.slots::text LIKE ${monthLikes[5]}
+                                            OR b.slots::text LIKE ${monthLikes[6]}
+                                            OR b.slots::text LIKE ${monthLikes[7]}
+                                            OR b.slots::text LIKE ${monthLikes[8]}
+                                            OR b.slots::text LIKE ${monthLikes[9]}
+                                            OR b.slots::text LIKE ${monthLikes[10]}
+                                            OR b.slots::text LIKE ${monthLikes[11]}
+                                            OR b.slots::text LIKE ${monthLikes[12]}
+                                            OR b.slots::text LIKE ${monthLikes[13]}
+                                            OR b.slots::text LIKE ${monthLikes[14]}
+                                            OR b.slots::text LIKE ${monthLikes[15]}
+                                          )
+                                        ORDER BY b.created_at DESC
+                                        LIMIT 800
+                                    `;
+                                    const seen = new Set(bookings.map((row: any) => String(row.id)));
+                                    let addedUpcoming = 0;
+                                    for (const row of olderRows) {
+                                        if (seen.has(String(row.id))) continue;
+                                        let slots = row.slots;
+                                        if (typeof slots === 'string') {
+                                            try {
+                                                slots = JSON.parse(slots);
+                                            } catch {
+                                                continue;
+                                            }
+                                        }
+                                        if (!Array.isArray(slots)) continue;
+                                        const inWindow = slots.some((s: any) => {
+                                            const d = String(s?.date || '').slice(0, 10);
+                                            return d >= occFromStr && d <= occToStr;
+                                        });
+                                        if (!inWindow) continue;
+                                        bookings.push(row);
+                                        seen.add(String(row.id));
+                                        addedUpcoming += 1;
+                                    }
+                                    if (addedUpcoming > 0) {
+                                        console.log(`API: Added ${addedUpcoming} older bookings with upcoming slots`);
+                                    }
+                                } catch (occupancySupplementError) {
+                                    console.warn('API: upcoming-slot supplement skipped:', occupancySupplementError);
+                                }
+
                 
                 if (bookings.length === 0) {
                     console.warn('API: No bookings found in database');

@@ -33,40 +33,10 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isClearScheduleModalOpen, setIsClearScheduleModalOpen] = useState(false);
   const [corporateMonthFilter, setCorporateMonthFilter] = useState(false);
-  const [monthOccupancy, setMonthOccupancy] = useState<Booking[]>([]);
-
-  useEffect(() => {
-    const y = currentDate.getFullYear();
-    const m = currentDate.getMonth();
-    const from = `${y}-${String(m + 1).padStart(2, '0')}-01`;
-    const lastDay = new Date(y, m + 1, 0).getDate();
-    const to = `${y}-${String(m + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-    let alive = true;
-    dataService.getBookings({ from, to })
-      .then((rows) => {
-        if (alive) setMonthOccupancy(Array.isArray(rows) ? rows : []);
-      })
-      .catch((err) => {
-        console.error('[CalendarOverview] occupancy month fetch failed', err);
-        if (alive) setMonthOccupancy([]);
-      });
-    return () => { alive = false; };
-  }, [currentDate]);
-
-  const bookingsForMonth = useMemo(() => {
-    const byId = new Map<string, Booking>();
-    for (const b of bookings || []) {
-      if (b?.id) byId.set(b.id, b);
-    }
-    for (const b of monthOccupancy) {
-      if (b?.id) byId.set(b.id, b);
-    }
-    return Array.from(byId.values());
-  }, [bookings, monthOccupancy]);
 
   const { bookingsByDate, unpaidDates } = useMemo(() => {
-    console.log('CalendarOverview processing bookings:', bookingsForMonth?.length || 0);
-    const list = corporateMonthFilter ? bookingsForMonth.filter((b) => b.corporateEventId) : bookingsForMonth;
+    console.log('CalendarOverview processing bookings:', bookings?.length || 0);
+    const list = corporateMonthFilter ? (bookings || []).filter((b) => b.corporateEventId) : bookings || [];
     if (!list || list.length === 0) {
       console.log('No bookings to process');
       return { bookingsByDate: {}, unpaidDates: new Set<string>() };
@@ -120,7 +90,7 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
     
     console.log('Final bookingsByDate:', Object.keys(acc).length, 'dates with bookings');
     return { bookingsByDate: acc, unpaidDates: unpaid };
-  }, [bookingsForMonth, corporateMonthFilter]);
+  }, [bookings, corporateMonthFilter]);
   
   const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
   const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
@@ -155,7 +125,7 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
           isOpen={isManualBookingModalOpen}
           onClose={() => setIsManualBookingModalOpen(false)}
           onBookingAdded={handleManualBookingAdded}
-          existingBookings={bookingsForMonth}
+          existingBookings={bookings}
           availableProducts={products}
         />
       )}

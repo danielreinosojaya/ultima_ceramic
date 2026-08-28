@@ -184,7 +184,6 @@ const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): st
 // import { useLanguage } from '../../context/LanguageContext';
 import { DAY_NAMES, PALETTE_COLORS } from '../../constants.js';
 import { getEcuadorToday, formatDateToYYYYMMDD as getEcuadorDateStr, slotDateKey } from '../../utils/formatters';
-import { InstructorTag } from '../InstructorTag';
 import { BookingDetailsModal } from './BookingDetailsModal';
 import { generateWeeklySchedulePDF } from '../../services/pdfService';
 import { DocumentDownloadIcon } from '../icons/DocumentDownloadIcon';
@@ -219,6 +218,40 @@ type EnrichedSlot = {
 };
 
 type ScheduleData = Map<number, { instructor: Instructor, schedule: Record<string, EnrichedSlot[]> }>;
+
+type DayBookingRow = {
+    booking: Booking;
+    time: string;
+    instructorId: number;
+    slot: EnrichedSlot;
+};
+
+const collectBookingsForDay = (slots: EnrichedSlot[]): DayBookingRow[] => {
+    const seen = new Set<string>();
+    const rows: DayBookingRow[] = [];
+    for (const slot of slots) {
+        for (const booking of slot.bookings || []) {
+            if (booking.status === 'expired' || booking.status === 'cancelled') continue;
+            const key = `${booking.id}-${normalizeTime(slot.time)}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            rows.push({
+                booking,
+                time: slot.time,
+                instructorId: slot.instructorId,
+                slot,
+            });
+        }
+    }
+    rows.sort((a, b) => {
+        const byTime = normalizeTime(a.time).localeCompare(normalizeTime(b.time));
+        if (byTime !== 0) return byTime;
+        const nameA = `${a.booking.userInfo?.lastName || ''} ${a.booking.userInfo?.firstName || ''}`;
+        const nameB = `${b.booking.userInfo?.lastName || ''} ${b.booking.userInfo?.firstName || ''}`;
+        return nameA.localeCompare(nameB, 'es');
+    });
+    return rows;
+};
 
 const formatDateToYYYYMMDD = (d: Date): string => {
     if (isNaN(d.getTime())) return 'Invalid Date';
@@ -312,11 +345,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     const language = 'es-ES';
     const adminData = useAdminData();
     const [currentDate, setCurrentDate] = useState(getWeekStartDate(initialDate));
-    const [weekOccupancy, setWeekOccupancy] = useState<Booking[]>([]);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [modalData, setModalData] = useState<{ date: string; time: string; attendees: any[]; instructorId: number; onClose?: () => void } | null>(null);
-    const [showUnpaidOnly, setShowUnpaidOnly] = useState(false);
-    const [showCorporateOnly, setShowCorporateOnly] = useState(false);
     const [now, setNow] = useState(new Date());
     const [bookingToHighlight, setBookingToHighlight] = useState<Booking | null>(null);
         // Handlers for BookingDetailsModal
@@ -441,37 +471,6 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         setCurrentDate(getWeekStartDate(initialDate));
     }, [initialDate]);
 
-    const weekRange = useMemo(() => {
-        const start = getWeekStartDate(currentDate);
-        const end = new Date(start);
-        end.setDate(end.getDate() + 6);
-        return { from: formatDateToYYYYMMDD(start), to: formatDateToYYYYMMDD(end) };
-    }, [currentDate]);
-
-    useEffect(() => {
-        let alive = true;
-        dataService.getBookings({ from: weekRange.from, to: weekRange.to })
-            .then((rows) => {
-                if (alive) setWeekOccupancy(Array.isArray(rows) ? rows : []);
-            })
-            .catch((err) => {
-                console.error('[ScheduleManager] occupancy week fetch failed', err);
-                if (alive) setWeekOccupancy([]);
-            });
-        return () => { alive = false; };
-    }, [weekRange.from, weekRange.to]);
-
-    const bookingsForSchedule = useMemo(() => {
-        const byId = new Map<string, Booking>();
-        for (const b of appData.bookings || []) {
-            if (b?.id) byId.set(b.id, b);
-        }
-        for (const b of weekOccupancy) {
-            if (b?.id) byId.set(b.id, b);
-        }
-        return Array.from(byId.values());
-    }, [appData.bookings, weekOccupancy]);
-
     const { weekDates, scheduleData } = useMemo(() => {
         const startOfWeek = new Date(currentDate);
         startOfWeek.setHours(0, 0, 0, 0);
@@ -491,8 +490,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             return `${y}-${m}-${day}`;
         }));
 
-        const { instructors, products, availability, scheduleOverrides, classCapacity } = appData;
-        const bookings = bookingsForSchedule;
+        const { instructors, bookings, products, availability, scheduleOverrides, classCapacity } = appData;
         
         const scheduleMap: ScheduleData = new Map();
         instructors.forEach(i => scheduleMap.set(i.id, { instructor: i, schedule: {} }));
@@ -662,7 +660,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         });
 
         return { weekDates: dates, scheduleData: scheduleMap };
-    }, [currentDate, appData, bookingsForSchedule]);
+    }, [currentDate, appData]);
     
     const calculateTotalParticipants = (bookings: Booking[]): number => {
         let count = 0;
@@ -827,12 +825,10 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     };
 
     const handleDownloadPdf = () => {
-    const dataToExport = showUnpaidOnly ? filteredScheduleData : scheduleData;
-    const subtitle = showUnpaidOnly ? 'Solo reservas no pagadas' : undefined;
-    generateWeeklySchedulePDF(weekDates, dataToExport, language, showUnpaidOnly, subtitle);
+    generateWeeklySchedulePDF(weekDates, scheduleData, language, false);
     };
     
-    const handleSearch = async (e: React.FormEvent) => {
+    const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
         if (!searchTerm.trim()) {
             setIsSearchPanelOpen(false);
@@ -840,7 +836,9 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             return;
         }
         const lowercasedTerm = searchTerm.toLowerCase();
-        const matchCustomer = (customer: Customer) => {
+        const customers = dataService.generateCustomersFromBookings(appData.bookings);
+        
+        const foundCustomer = customers.find(customer => {
             const userInfo = customer.userInfo;
             return (
                 userInfo.firstName.toLowerCase().includes(lowercasedTerm) ||
@@ -848,16 +846,9 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 userInfo.email.toLowerCase().includes(lowercasedTerm) ||
                 customer.bookings.some(b => b.bookingCode?.toLowerCase().includes(lowercasedTerm))
             );
-        };
-        const localCustomers = dataService.generateCustomersFromBookings(bookingsForSchedule);
-        let foundCustomer = localCustomers.find(matchCustomer) || null;
-        if (!foundCustomer) {
-            const remote = await dataService.searchCalendarBookings(searchTerm);
-            const remoteCustomers = dataService.generateCustomersFromBookings(remote);
-            foundCustomer = remoteCustomers.find(matchCustomer) || remoteCustomers[0] || null;
-        }
+        });
 
-        setSearchCustomer(foundCustomer);
+        setSearchCustomer(foundCustomer || null);
         setIsSearchPanelOpen(true);
     };
 
@@ -889,70 +880,65 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
 
     const weekStart = weekDates[0];
     const weekEnd = weekDates[6];
-    
-    const filteredScheduleData = useMemo(() => {
-        let base = scheduleData;
-        if (showUnpaidOnly) {
-            const unpaidMap: ScheduleData = new Map();
-            for (const [instructorId, data] of scheduleData.entries()) {
-                const newSchedule: Record<string, EnrichedSlot[]> = {};
-                let instructorHasUnpaid = false;
-                for (const [dateStr, slots] of Object.entries(data.schedule)) {
-                    const slotsArr = Array.isArray(slots) ? slots : [];
-                    const slotsWithUnpaid = slotsArr
-                        .map((slot) => ({
-                            ...slot,
-                            bookings: slot.bookings.filter((b) => !b.isPaid),
-                        }))
-                        .filter((slot) => slot.bookings.length > 0);
 
-                    if (slotsWithUnpaid.length > 0) {
-                        newSchedule[dateStr] = slotsWithUnpaid;
-                        instructorHasUnpaid = true;
-                    }
-                }
-                if (instructorHasUnpaid) {
-                    unpaidMap.set(instructorId, { ...data, schedule: newSchedule });
-                }
+    const bookingsByDate = useMemo(() => {
+        const map: Record<string, DayBookingRow[]> = {};
+        for (const date of weekDates) {
+            const dateStr = formatDateToYYYYMMDD(date);
+            const slotsForDay: EnrichedSlot[] = [];
+            for (const { schedule } of scheduleData.values()) {
+                slotsForDay.push(...(schedule[dateStr] || []));
             }
-            base = unpaidMap;
+            map[dateStr] = collectBookingsForDay(slotsForDay);
         }
-        if (!showCorporateOnly) {
-            return base;
-        }
-        const corpMap: ScheduleData = new Map();
-        for (const [instructorId, data] of base.entries()) {
-            const newSchedule: Record<string, EnrichedSlot[]> = {};
-            let hasAny = false;
-            for (const [dateStr, slots] of Object.entries(data.schedule)) {
-                const slotsArr = Array.isArray(slots) ? slots : [];
-                const corpSlots = slotsArr
-                    .map((slot) => ({
-                        ...slot,
-                        bookings: slot.bookings.filter((b) => Boolean(b.corporateEventId)),
-                    }))
-                    .filter((slot) => slot.bookings.length > 0);
-                if (corpSlots.length > 0) {
-                    newSchedule[dateStr] = corpSlots;
-                    hasAny = true;
-                }
-            }
-            if (hasAny) {
-                corpMap.set(instructorId, { ...data, schedule: newSchedule });
-            }
-        }
-        return corpMap;
-    }, [showUnpaidOnly, showCorporateOnly, scheduleData]);
+        return map;
+    }, [weekDates, scheduleData]);
 
-    const hasVisibleSlotsInFilter = useMemo(() => {
-        if (!showUnpaidOnly) return true;
-        for (const { schedule } of filteredScheduleData.values()) {
-            for (const slots of Object.values(schedule)) {
-                if ((slots as any[]).length > 0) return true;
-            }
-        }
-        return false;
-    }, [showUnpaidOnly, filteredScheduleData]);
+    const renderDayBookingCard = (dateStr: string, row: DayBookingRow) => {
+        const { booking, time, instructorId, slot } = row;
+        const instructor = appData.instructors.find(i => i.id === instructorId);
+        const isHighlighted = bookingToHighlight?.id === booking.id;
+        const isGroupClass = booking.productType === 'GROUP_CLASS' || booking.productType === 'CUSTOM_GROUP_EXPERIENCE';
+        const isCorporate = Boolean(booking.corporateEventId);
+        const participants = booking.participants ?? 1;
+        const name = `${booking.userInfo?.firstName || ''} ${booking.userInfo?.lastName || ''}`.trim() || 'Sin nombre';
+        const color = colorMap[instructor?.colorScheme || ''] || colorMap[defaultColorName];
+        const bgColor = isCorporate ? 'bg-violet-100' : isGroupClass ? 'bg-blue-100' : booking.isPaid ? 'bg-green-100' : `bg-${color.bg}`;
+        const borderColor = isCorporate ? 'border-violet-500' : isGroupClass ? 'border-blue-400' : `border-${color.text}/50`;
+        const slotForClick: EnrichedSlot = { ...slot, time, bookings: [booking] };
+
+        return (
+            <button
+                key={`${booking.id}-${normalizeTime(time)}`}
+                type="button"
+                onClick={() => handleShiftClick(dateStr, slotForClick)}
+                aria-label={`${time} ${name}`}
+                className={`w-full text-left p-2 rounded-md shadow-sm border-l-4 ${bgColor} ${borderColor} hover:shadow-md transition-shadow relative overflow-hidden ${isHighlighted ? 'animate-pulse-border' : ''}`}
+            >
+                {!booking.isPaid && <div className="absolute inset-0 unpaid-booking-stripe opacity-70"></div>}
+                <div className="relative z-10">
+                    <div className={`font-bold text-xs text-${isCorporate ? 'violet-900' : isGroupClass ? 'blue-800' : color.text} flex items-center gap-1 flex-wrap`}>
+                        {time}
+                        {isCorporate && (
+                            <span className="text-[10px] font-bold uppercase bg-violet-200 text-violet-900 px-1 rounded">Corp</span>
+                        )}
+                        {isGroupClass && <UserGroupIcon className="w-3.5 h-3.5" />}
+                    </div>
+                    <div className="text-xs font-semibold text-gray-900 mt-0.5 truncate">{name}</div>
+                    <div className="text-[11px] text-gray-600 mt-0.5 truncate">
+                        {getBookingDisplayName(booking)}
+                        {participants > 1 ? ` · ${participants} pers.` : ''}
+                    </div>
+                    {instructor && appData.instructors.length > 1 && (
+                        <div className="text-[10px] text-gray-500 mt-0.5 truncate">{instructor.name}</div>
+                    )}
+                    {!booking.isPaid && (
+                        <div className="text-[11px] font-bold text-brand-primary mt-0.5">sin pagar</div>
+                    )}
+                </div>
+            </button>
+        );
+    };
 
     const isTodayInView = weekDates.some(d => formatDateToYYYYMMDD(d) === todayStr);
 
@@ -1118,126 +1104,47 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             return null;
         })()}
 
-        <div className="flex flex-wrap justify-end gap-4 mb-4">
-            <label className="flex items-center gap-2 cursor-pointer text-sm font-semibold text-brand-secondary">
-                 <div className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${showUnpaidOnly ? 'bg-brand-primary' : 'bg-gray-200'}`}>
-                    <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${showUnpaidOnly ? 'translate-x-6' : 'translate-x-1'}`}/>
-                </div>
-                <input type="checkbox" checked={showUnpaidOnly} onChange={() => setShowUnpaidOnly(!showUnpaidOnly)} className="hidden" />
-                Mostrar solo reservas no pagadas
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer text-sm font-semibold text-brand-secondary">
-                 <div className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${showCorporateOnly ? 'bg-violet-600' : 'bg-gray-200'}`}>
-                    <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${showCorporateOnly ? 'translate-x-6' : 'translate-x-1'}`}/>
-                </div>
-                <input type="checkbox" checked={showCorporateOnly} onChange={() => setShowCorporateOnly(!showCorporateOnly)} className="hidden" />
-                Solo eventos corporativos
-            </label>
-        </div>
-
         {/* --- DESKTOP VIEW --- */}
         <div className="hidden lg:block border border-gray-200 rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
                  <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
-                            <th scope="col" className="sticky left-0 bg-gray-50 z-10 px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-48">
-                                Instructor
-                            </th>
                             {weekDates.map(date => {
                                 const isToday = formatDateToYYYYMMDD(date) === todayStr;
+                                const dateStr = formatDateToYYYYMMDD(date);
+                                const count = (bookingsByDate[dateStr] || []).length;
                                 return (
                                 <th key={date.toISOString()} scope="col" className={`px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider w-1/7 transition-colors ${isToday ? 'bg-brand-primary/10' : ''}`}>
                                     {date.toLocaleDateString(language, { weekday: 'short' })}
                                     <span className="block font-normal text-lg text-gray-900">{date.getDate()}</span>
+                                    <span className="block font-normal normal-case text-[11px] text-gray-500 mt-0.5">
+                                        {count} {count === 1 ? 'reserva' : 'reservas'}
+                                    </span>
                                 </th>
                             )})}
                         </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                       {[...filteredScheduleData.values()].map(({ instructor, schedule }, instructorIndex) => (
-                            <tr key={instructor.id} className="divide-x divide-gray-200">
-                                <th scope="row" className="sticky left-0 bg-white px-4 py-3 text-left w-48 align-top">
-                                    <div className="flex items-center gap-2">
-                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm bg-${colorMap[instructor.colorScheme]?.bg || colorMap[defaultColorName].bg} text-${colorMap[instructor.colorScheme]?.text || colorMap[defaultColorName].text}`}> 
-                                            {instructor.name.charAt(0)}
-                                        </div>
-                                        <div>
-                                            <div className="font-bold text-sm text-brand-text">{instructor.name}</div>
-                                        </div>
-                                    </div>
-                                </th>
+                    <tbody className="bg-white">
+                            <tr className="divide-x divide-gray-200">
                                 {weekDates.map(date => {
                                     const dateStr = formatDateToYYYYMMDD(date);
                                     const isToday = dateStr === todayStr;
-                                    const slots = schedule[dateStr] || [];
+                                    const dayBookings = bookingsByDate[dateStr] || [];
                                     return (
                                         <td key={dateStr} className={`px-2 py-2 align-top w-1/7 min-h-[100px] relative transition-colors ${isToday ? 'bg-brand-primary/5' : ''}`}>
                                             <div className="space-y-2">
-                                                {slots.map((slot, slotIndex) => {
-                                                    const totalParticipants = calculateTotalParticipants(slot.bookings);
-                                                    const unpaidBookingsCount = slot.bookings.filter(b => !b.isPaid).length;
-                                                    const hasUnpaidBookings = unpaidBookingsCount > 0;
-                                                    const isHighlighted = bookingToHighlight && slot.bookings.some(b => b.id === bookingToHighlight.id);
-                                                    const isGroupClass = slot.bookings.some(b => b.productType === 'GROUP_CLASS');
-                                                    const isCorporateSlot = slot.bookings.some(b => b.corporateEventId);
-                                                    const hasPaidBooking = slot.bookings.some(b => b.isPaid);
-                                                    const isEmptySlot = slot.bookings.length === 0;
-                                                    const bgColor = isEmptySlot
-                                                        ? 'bg-gray-50'
-                                                        : isCorporateSlot
-                                                        ? 'bg-violet-100'
-                                                        : isGroupClass
-                                                        ? 'bg-blue-100'
-                                                        : hasPaidBooking
-                                                        ? 'bg-green-100'
-                                                        : `bg-${colorMap[instructor.colorScheme]?.bg || colorMap[defaultColorName].bg}`;
-                                                    const borderColor = isCorporateSlot
-                                                        ? 'border-violet-500'
-                                                        : isGroupClass
-                                                        ? 'border-blue-400'
-                                                        : `border-${colorMap[instructor.colorScheme]?.text || colorMap[defaultColorName].text}/50`;
-                                                    const slotKey = `${slot.date}-${normalizeTime(slot.time)}-${slot.instructorId}-${slotIndex}`;
-                                                    return (
-                                                        <button 
-                                                            key={slotKey} 
-                                                            onClick={() => handleShiftClick(dateStr, slot)}
-                                                            aria-label={hasUnpaidBookings ? 'Slot no pagado' : 'Slot'}
-                                                            className={`w-full text-left p-2 rounded-md shadow-sm border-l-4 ${bgColor} ${borderColor} hover:shadow-md transition-shadow relative overflow-hidden ${isHighlighted ? 'animate-pulse-border' : ''}`}> 
-                                                            {hasUnpaidBookings && <div className="absolute inset-0 unpaid-booking-stripe opacity-70"></div>}
-                                                            <div className="relative z-10">
-                                                                <div className={`font-bold text-xs text-${isCorporateSlot ? 'violet-900' : isGroupClass ? 'blue-800' : colorMap[instructor.colorScheme]?.text || colorMap[defaultColorName].text} flex items-center gap-1 flex-wrap`}>
-                                                                    {slot.time}
-                                                                    {isCorporateSlot && (
-                                                                        <span className="text-[10px] font-bold uppercase bg-violet-200 text-violet-900 px-1 rounded">Corp</span>
-                                                                    )}
-                                                                    {isGroupClass && <UserGroupIcon className="w-3.5 h-3.5" />}
-                                                                </div>
-                                                                <div className="text-xs font-semibold text-gray-800 mt-1 truncate">
-                                                                    {getSlotDisplayName(slot)}
-                                                                </div>
-                                                                <div className="text-xs text-gray-600 mt-1">
-                                                                    {totalParticipants}/{slot.capacity} booked
-                                                                    {hasUnpaidBookings && <span className="font-bold text-brand-primary ml-1">({unpaidBookingsCount} sin pagar)</span>}
-                                                                </div>
-                                                            </div>
-                                                        </button>
-                                                    );
-                                                })}
+                                                {dayBookings.map(row => renderDayBookingCard(dateStr, row))}
+                                                {dayBookings.length === 0 && (
+                                                    <div className="text-[11px] text-gray-400 text-center py-4">Sin reservas</div>
+                                                )}
                                             </div>
                                         </td>
                                     );
                                 })}
                             </tr>
-                       ))}
                     </tbody>
                 </table>
-                    {/* Mensaje si no hay slots visibles en el filtro */}
-                    {/* {hasVisibleSlotsInFilter ? null : (
-                        <div className="text-center py-10 text-brand-secondary">
-                            {t('admin.weeklyView.noUnpaidFound')}
-                        </div>
-                    )} */}
             </div>
         </div>
         
@@ -1265,77 +1172,20 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 </nav>
             </div>
 
-            <div className="space-y-6">
-                {[...filteredScheduleData.values()].map(({ instructor, schedule }) => {
+            <div className="space-y-2">
+                {(() => {
                     const selectedDate = weekDates[selectedDayIndex];
                     const dateStr = formatDateToYYYYMMDD(selectedDate);
-                    const slots = schedule[dateStr] || [];
-
-                    if (slots.length === 0) return null;
-
-                    return (
-                        <div key={instructor.id}>
-                            <InstructorTag instructorId={instructor.id} instructors={appData.instructors} />
-                            <div className="space-y-2 mt-2 border-l-2 pl-4 ml-3 border-gray-200">
-                                {slots.map((slot, slotIndex) => {
-                                    const totalParticipants = calculateTotalParticipants(slot.bookings);
-                                    const unpaidBookingsCount = slot.bookings.filter(b => !b.isPaid).length;
-                                    const hasUnpaidBookings = unpaidBookingsCount > 0;
-                                    const isHighlighted = bookingToHighlight && slot.bookings.some(b => b.id === bookingToHighlight.id);
-                                    const isGroupClass = slot.bookings.some(b => b.productType === 'GROUP_CLASS');
-                                    const isCorporateSlot = slot.bookings.some(b => b.corporateEventId);
-                                    const hasPaidBooking = slot.bookings.some(b => b.isPaid);
-                                    const bgColor = isCorporateSlot ? 'bg-violet-100' : isGroupClass ? 'bg-blue-100' : hasPaidBooking ? 'bg-green-50' : 'bg-white';
-                                    const borderColor = isCorporateSlot ? 'border-violet-500' : isGroupClass ? 'border-blue-400' : 'border-gray-200';
-                                    const slotKey = `${slot.date}-${normalizeTime(slot.time)}-${slot.instructorId}-${slotIndex}`;
-                                    return (
-                                        <button
-                                            key={slotKey}
-                                            onClick={() => handleShiftClick(dateStr, slot)}
-                                            aria-label={hasUnpaidBookings ? 'Slot no pagado' : 'Slot'}
-                                            className={`w-full text-left p-3 rounded-lg shadow-sm ${bgColor} hover:shadow-md transition-shadow relative overflow-hidden border ${borderColor} ${isHighlighted ? 'animate-pulse-border' : ''}`}
-                                        >
-                                            {hasUnpaidBookings && <div className="absolute inset-0 unpaid-booking-stripe opacity-70"></div>}
-                                            <div className="relative z-10">
-                                                <div className="flex justify-between items-start">
-                                                    <div>
-                                                        <div className="font-bold text-sm text-brand-text flex items-center gap-1 flex-wrap">{slot.time}
-                                                        {isCorporateSlot && (
-                                                            <span className="text-[10px] font-bold uppercase bg-violet-200 text-violet-900 px-1 rounded">Corp</span>
-                                                        )}
-                                                        {isGroupClass && <UserGroupIcon className="w-3.5 h-3.5 text-blue-800" />}
-                                                        </div>
-                                                        <div className="text-xs font-semibold text-gray-600 mt-1 truncate">{getSlotDisplayName(slot)}</div>
-                                                    </div>
-                                                    <div className={`text-xs font-bold px-2 py-0.5 rounded-full ${totalParticipants >= slot.capacity ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}> 
-                                                        {totalParticipants}/{slot.capacity}
-                                                    </div>
-                                                </div>
-                                                {hasUnpaidBookings && 
-                                                    <div className="text-xs text-brand-primary font-bold mt-2">
-                                                        {unpaidBookingsCount} sin pagar
-                                                    </div>
-                                                }
-                                            </div>
-                                        </button>
-                                    );
-                                })}
+                    const dayBookings = bookingsByDate[dateStr] || [];
+                    if (dayBookings.length === 0) {
+                        return (
+                            <div className="text-center py-10 text-brand-secondary">
+                                Sin reservas este día.
                             </div>
-                        </div>
-                    );
-                })}
-
-                {!hasVisibleSlotsInFilter && (
-                    <div className="text-center py-10 text-brand-secondary">
-                        No se encontraron reservas no pagadas.
-                    </div>
-                )}
-                
-                {![...filteredScheduleData.values()].some(({ schedule }) => (schedule[formatDateToYYYYMMDD(weekDates[selectedDayIndex])] || []).length > 0) && (
-                  <div className="text-center py-10 text-brand-secondary">
-                    No classes scheduled for this day.
-                  </div>
-                )}
+                        );
+                    }
+                    return dayBookings.map(row => renderDayBookingCard(dateStr, row));
+                })()}
             </div>
         </div>
       </div>
