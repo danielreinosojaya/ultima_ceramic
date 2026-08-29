@@ -883,16 +883,55 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
 
     const bookingsByDate = useMemo(() => {
         const map: Record<string, DayBookingRow[]> = {};
-        for (const date of weekDates) {
-            const dateStr = formatDateToYYYYMMDD(date);
-            const slotsForDay: EnrichedSlot[] = [];
-            for (const { schedule } of scheduleData.values()) {
-                slotsForDay.push(...(schedule[dateStr] || []));
+        const weekDateSet = new Set(weekDates.map((d) => formatDateToYYYYMMDD(d)));
+        for (const dateStr of weekDateSet) {
+            map[dateStr] = [];
+        }
+        const seen = new Set<string>();
+        const fallbackInstructorId = appData.instructors[0]?.id || 1;
+
+        for (const booking of appData.bookings || []) {
+            const status = String(booking.status || 'active').toLowerCase();
+            if (status === 'cancelled') continue;
+            if (status === 'expired' && !isPaintingUpsell(booking)) continue;
+
+            const slots = Array.isArray(booking.slots) ? booking.slots : [];
+            for (const slot of slots) {
+                if (!slot?.date || !slot?.time) continue;
+                const dateStr = slotDateKey(slot.date);
+                if (!weekDateSet.has(dateStr)) continue;
+                const key = `${booking.id}-${dateStr}-${normalizeTime(slot.time)}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                const instructorId = slot.instructorId || fallbackInstructorId;
+                map[dateStr].push({
+                    booking,
+                    time: slot.time,
+                    instructorId,
+                    slot: {
+                        date: dateStr,
+                        time: slot.time,
+                        product: booking.product,
+                        bookings: [booking],
+                        capacity: 1,
+                        instructorId,
+                        isOverride: false,
+                    },
+                });
             }
-            map[dateStr] = collectBookingsForDay(slotsForDay);
+        }
+
+        for (const dateStr of Object.keys(map)) {
+            map[dateStr].sort((a, b) => {
+                const byTime = normalizeTime(a.time).localeCompare(normalizeTime(b.time));
+                if (byTime !== 0) return byTime;
+                const nameA = `${a.booking.userInfo?.lastName || ''} ${a.booking.userInfo?.firstName || ''}`;
+                const nameB = `${b.booking.userInfo?.lastName || ''} ${b.booking.userInfo?.firstName || ''}`;
+                return nameA.localeCompare(nameB, 'es');
+            });
         }
         return map;
-    }, [weekDates, scheduleData]);
+    }, [weekDates, appData.bookings, appData.instructors]);
 
     const renderDayBookingCard = (dateStr: string, row: DayBookingRow) => {
         const { booking, time, instructorId, slot } = row;

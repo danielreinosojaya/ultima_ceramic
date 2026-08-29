@@ -40,6 +40,7 @@ export default async function handler(req: any, res: any) {
               AND is_paid = false
               AND expires_at IS NOT NULL
               AND expires_at < NOW()
+              AND COALESCE(product->>'kind', '') <> 'painting_upsell'
             RETURNING
                 id,
                 booking_code,

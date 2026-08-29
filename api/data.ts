@@ -192,6 +192,9 @@ const parseBookingFromDB = (dbRow: any): Booking => {
                     technique: fallbackTechnique
                 }
             };
+            if (dbRow.product_kind) {
+                camelCased.product.kind = dbRow.product_kind;
+            }
         } else if (typeof camelCased.product === 'string') {
             // En caso de que sea string (no debería pasar con PHASE 5, pero por seguridad)
             try {
@@ -200,6 +203,10 @@ const parseBookingFromDB = (dbRow: any): Booking => {
                 console.error('Error parsing product JSON:', e);
                 camelCased.product = null; // Fallback a null, será rellenado en línea anterior
             }
+        }
+
+        if (dbRow.product_kind && camelCased.product && typeof camelCased.product === 'object' && !camelCased.product.kind) {
+            camelCased.product.kind = dbRow.product_kind;
         }
         
         // Parse slots from JSON string
@@ -1942,6 +1949,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             b.product_type,
                             p.name AS product_name,
                             b.product->>'technique' AS product_technique,
+                            b.product->>'kind' AS product_kind,
                             b.slots,
                             b.user_info,
                             b.created_at,
@@ -2705,6 +2713,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                             b.product_type,
                                             p.name AS product_name,
                                             b.product->>'technique' AS product_technique,
+                                            b.product->>'kind' AS product_kind,
                                             b.slots,
                                             b.user_info,
                                             b.created_at,
@@ -2751,6 +2760,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                                 b.product_type,
                                                 p.name AS product_name,
                                                 b.product->>'technique' AS product_technique,
+                                                b.product->>'kind' AS product_kind,
                                                 b.slots,
                                                 b.user_info,
                                                 b.created_at,
@@ -2792,6 +2802,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                                 b.product_type,
                                                 p.name AS product_name,
                                                 b.product->>'technique' AS product_technique,
+                                                b.product->>'kind' AS product_kind,
                                                 b.slots,
                                                 b.user_info,
                                                 b.created_at,
@@ -2844,6 +2855,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                             b.product_type,
                                             p.name AS product_name,
                                             b.product->>'technique' AS product_technique,
+                                            b.product->>'kind' AS product_kind,
                                             b.slots,
                                             b.user_info,
                                             b.created_at,
@@ -2863,7 +2875,10 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                         FROM bookings b
                                         LEFT JOIN products p ON p.id = b.product_id
                                         WHERE b.created_at < ${limitDate.toISOString()}
-                                          AND COALESCE(b.status, 'active') NOT IN ('expired', 'cancelled')
+                                          AND (
+                                            COALESCE(b.status, 'active') NOT IN ('expired', 'cancelled')
+                                            OR b.product->>'kind' = 'painting_upsell'
+                                          )
                                           AND b.slots IS NOT NULL
                                           AND b.slots::text <> '[]'
                                           AND b.slots::text <> 'null'
@@ -9084,6 +9099,7 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     WHERE status = 'active' 
                       AND is_paid = false 
                       AND expires_at < NOW()
+                      AND COALESCE(product->>'kind', '') <> 'painting_upsell'
                     RETURNING id, booking_code, user_info
                 `;
                 
@@ -10102,11 +10118,16 @@ async function addBookingAction(
         ? clientNoteRaw.trim()
         : null;
 
+    const isPaintingUpsellBooking = (finalProduct as any)?.kind === 'painting_upsell';
+    const expiresAt = isPaintingUpsellBooking
+        ? null
+        : new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+
     const { rows: created } = await sql`
       INSERT INTO bookings (
         booking_code, product_id, product_type, slots, user_info, created_at, is_paid, price, booking_mode, product, booking_date, accepted_no_refund, expires_at, status, technique, reschedule_allowance, reschedule_used, reschedule_history, participants, group_metadata, client_note
       ) VALUES (
-        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(finalProduct)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}, NOW() + INTERVAL '2 hours', 'active', ${technique || null}, ${rescheduleAllowance}, 0, '[]'::jsonb, ${(body as any).participants || 1}, ${groupMetadata ? JSON.stringify(groupMetadata) : null}, ${clientNote}
+        ${newBookingCode}, ${body.productId}, ${body.productType}, ${JSON.stringify(body.slots)}, ${JSON.stringify(body.userInfo)}, NOW(), ${body.isPaid}, ${body.price}, ${body.bookingMode}, ${JSON.stringify(finalProduct)}, ${body.bookingDate}, ${(body as any).acceptedNoRefund || false}, ${expiresAt}, 'active', ${technique || null}, ${rescheduleAllowance}, 0, '[]'::jsonb, ${(body as any).participants || 1}, ${groupMetadata ? JSON.stringify(groupMetadata) : null}, ${clientNote}
       ) RETURNING *;
     `;
 
