@@ -35,13 +35,16 @@ export interface CreativeCategory {
 }
 
 export const CREATIVE_CATEGORIES: CreativeCategory[] = [
-  { id: 'ceramics', label: 'Cerámica', subtitle: 'Pintar piezas, modelado o torno' },
-  { id: 'charm_bar', label: 'Charm Bar', subtitle: 'Llaveros, pulseras, collares o cases' },
-  { id: 'tote_bag', label: 'Tote Bag', subtitle: 'Pintura o patches' },
-  { id: 'canvas', label: 'Canvas', subtitle: 'Pintura en lienzo' },
-  { id: 'brush', label: 'Cepillo', subtitle: 'Personaliza tu cepillo' },
+  { id: 'ceramics', label: 'Cerámica', subtitle: 'Pintar, modelar o torno. Para ti o con más gente.' },
+  { id: 'charm_bar', label: 'Charm Bar', subtitle: 'Llaveros, pulseras, collares o cases. Para ti o un grupo.' },
+  { id: 'tote_bag', label: 'Tote Bag', subtitle: 'Pintura o patches. Para ti o un grupo.' },
+  { id: 'canvas', label: 'Canvas', subtitle: 'Pintura en lienzo. Para ti o un grupo.' },
+  { id: 'brush', label: 'Cepillo', subtitle: 'Personaliza tu cepillo. Para ti o un grupo.' },
   { id: 'leather_journal', label: 'Leather Journal', subtitle: 'Grupos de 4 o más' },
 ];
+
+const TABLE_MAX = 22;
+const WHEEL_MAX = 8;
 
 export const CREATIVE_SKUS: CreativeSku[] = [
   {
@@ -53,7 +56,7 @@ export const CREATIVE_SKUS: CreativeSku[] = [
     vatMode: 'included',
     capacityTechnique: 'painting',
     minParticipants: 1,
-    maxParticipants: 1,
+    maxParticipants: TABLE_MAX,
     pricePrefix: 'desde',
   },
   {
@@ -65,7 +68,7 @@ export const CREATIVE_SKUS: CreativeSku[] = [
     vatMode: 'plus',
     capacityTechnique: 'hand_modeling',
     minParticipants: 1,
-    maxParticipants: 1,
+    maxParticipants: TABLE_MAX,
   },
   {
     id: 'ceramics_potters_wheel',
@@ -76,7 +79,7 @@ export const CREATIVE_SKUS: CreativeSku[] = [
     vatMode: 'plus',
     capacityTechnique: 'potters_wheel',
     minParticipants: 1,
-    maxParticipants: 1,
+    maxParticipants: WHEEL_MAX,
   },
   {
     id: 'charm_keychain',
@@ -87,7 +90,7 @@ export const CREATIVE_SKUS: CreativeSku[] = [
     vatMode: 'plus',
     capacityTechnique: 'hand_modeling',
     minParticipants: 1,
-    maxParticipants: 1,
+    maxParticipants: TABLE_MAX,
     showsExtrasNote: true,
   },
   {
@@ -99,7 +102,7 @@ export const CREATIVE_SKUS: CreativeSku[] = [
     vatMode: 'plus',
     capacityTechnique: 'hand_modeling',
     minParticipants: 1,
-    maxParticipants: 1,
+    maxParticipants: TABLE_MAX,
     showsExtrasNote: true,
   },
   {
@@ -111,7 +114,7 @@ export const CREATIVE_SKUS: CreativeSku[] = [
     vatMode: 'plus',
     capacityTechnique: 'hand_modeling',
     minParticipants: 1,
-    maxParticipants: 1,
+    maxParticipants: TABLE_MAX,
     showsExtrasNote: true,
   },
   {
@@ -123,7 +126,7 @@ export const CREATIVE_SKUS: CreativeSku[] = [
     vatMode: 'plus',
     capacityTechnique: 'hand_modeling',
     minParticipants: 1,
-    maxParticipants: 1,
+    maxParticipants: TABLE_MAX,
     showsExtrasNote: true,
   },
   {
@@ -135,7 +138,7 @@ export const CREATIVE_SKUS: CreativeSku[] = [
     vatMode: 'plus',
     capacityTechnique: 'hand_modeling',
     minParticipants: 1,
-    maxParticipants: 1,
+    maxParticipants: TABLE_MAX,
     showsExtrasNote: true,
   },
   {
@@ -147,7 +150,7 @@ export const CREATIVE_SKUS: CreativeSku[] = [
     vatMode: 'plus',
     capacityTechnique: 'hand_modeling',
     minParticipants: 1,
-    maxParticipants: 1,
+    maxParticipants: TABLE_MAX,
     includesNote: 'Incluye 8 patches',
     showsExtrasNote: true,
   },
@@ -160,7 +163,7 @@ export const CREATIVE_SKUS: CreativeSku[] = [
     vatMode: 'plus',
     capacityTechnique: 'hand_modeling',
     minParticipants: 1,
-    maxParticipants: 1,
+    maxParticipants: TABLE_MAX,
   },
   {
     id: 'brush',
@@ -171,7 +174,7 @@ export const CREATIVE_SKUS: CreativeSku[] = [
     vatMode: 'plus',
     capacityTechnique: 'hand_modeling',
     minParticipants: 1,
-    maxParticipants: 1,
+    maxParticipants: TABLE_MAX,
     showsExtrasNote: true,
   },
   {
@@ -203,11 +206,12 @@ export function totalPriceCharged(sku: CreativeSku, participants: number): numbe
 
 export function formatSkuPriceLabel(sku: CreativeSku): string {
   const unit = unitPriceCharged(sku);
+  const perPerson = sku.maxParticipants > 1 ? ' / persona' : '';
   if (sku.vatMode === 'included') {
     const prefix = sku.pricePrefix === 'desde' ? 'Desde ' : '';
-    return `${prefix}$${formatMoney(unit)} (IVA incluido)`;
+    return `${prefix}$${formatMoney(unit)} (IVA incluido)${perPerson}`;
   }
-  return `$${formatMoney(sku.basePrice)} + IVA`;
+  return `$${formatMoney(sku.basePrice)} + IVA${perPerson}`;
 }
 
 export function formatMoney(amount: number): string {
@@ -224,4 +228,9 @@ export function getCreativeSku(id: string): CreativeSku | undefined {
 
 export function categoryNeedsOptionStep(categoryId: CreativeCategoryId): boolean {
   return skusForCategory(categoryId).length > 1;
+}
+
+/** Preguntar cuántas personas si se puede reservar más de una. */
+export function skuNeedsParticipantsStep(sku: CreativeSku): boolean {
+  return sku.maxParticipants > 1;
 }

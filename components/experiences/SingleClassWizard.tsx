@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { GroupTechnique, TimeSlot, Piece, ExperiencePricing, AppData } from '../../types';
 import * as dataService from '../../services/dataService';
 import { parseLocalDate, getEcuadorDateYmd, isEcuadorSlotInPast } from '../../utils/formatters';
@@ -11,6 +11,7 @@ import {
   categoryNeedsOptionStep,
   formatMoney,
   formatSkuPriceLabel,
+  skuNeedsParticipantsStep,
   skusForCategory,
   totalPriceCharged,
   unitPriceCharged,
@@ -49,7 +50,7 @@ function parseLocalDateStr(dateStr: string): Date {
 
 /**
  * Experiencias creativas — misma tubería que Clases Sueltas.
- * Categoría → opción (si aplica) → personas (solo leather) → horario → confirmación.
+ * Categoría → opción (si aplica) → personas → horario → confirmación.
  */
 export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
   availableSlots = [],
@@ -75,9 +76,8 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
   const [loadingScheduleSlots, setLoadingScheduleSlots] = useState(false);
 
   const technique: GroupTechnique = sku?.capacityTechnique || 'hand_modeling';
-  // Clase suelta: solo torno 1 persona se limita a horarios fijos / grupos 3+.
-  // Modelado a mano 1 persona puede elegir cualquier horario con cupo.
-  const restrictToFixedSchedule = technique === 'potters_wheel' && participants === 1;
+  // Torno con 1-2 personas: solo horarios fijos / slots abiertos por 3+.
+  const restrictToFixedSchedule = technique === 'potters_wheel' && participants < 3;
 
   // Prefill cerámica desde deep-link de técnica (si viene)
   useEffect(() => {
@@ -93,7 +93,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
       setCategoryId('ceramics');
       setSku(match);
       setParticipants(match.minParticipants);
-      setStep('date');
+      setStep(skuNeedsParticipantsStep(match) ? 'participants' : 'date');
     }
   }, [initialTechnique, sku]);
 
@@ -248,6 +248,15 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
     });
   }, [sku, participants]);
 
+  const previousRestrictRef = useRef(restrictToFixedSchedule);
+  useEffect(() => {
+    if (previousRestrictRef.current !== restrictToFixedSchedule) {
+      setSelectedSlot(null);
+      setSelectedDate('');
+    }
+    previousRestrictRef.current = restrictToFixedSchedule;
+  }, [restrictToFixedSchedule]);
+
   useEffect(() => {
     if (restrictToFixedSchedule) {
       const newCache: Record<string, any> = {};
@@ -323,8 +332,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
       const only = options[0];
       setSku(only);
       setParticipants(only.minParticipants);
-      if (only.minParticipants > 1) setStep('participants');
-      else setStep('date');
+      setStep(skuNeedsParticipantsStep(only) ? 'participants' : 'date');
     } else {
       setStep('option');
     }
@@ -335,7 +343,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
     setParticipants(next.minParticipants);
     setSelectedSlot(null);
     setError('');
-    if (next.minParticipants > 1) setStep('participants');
+    if (skuNeedsParticipantsStep(next)) setStep('participants');
     else setStep('date');
   };
 
@@ -383,7 +391,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
       return;
     }
     if (step === 'date') {
-      if (sku && sku.minParticipants > 1) setStep('participants');
+      if (sku && skuNeedsParticipantsStep(sku)) setStep('participants');
       else if (categoryId && categoryNeedsOptionStep(categoryId)) setStep('option');
       else {
         setStep('category');
@@ -411,7 +419,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
   const stepOrder: Step[] = useMemo(() => {
     const steps: Step[] = ['category'];
     if (categoryId && categoryNeedsOptionStep(categoryId)) steps.push('option');
-    if (sku && sku.minParticipants > 1) steps.push('participants');
+    if (sku && skuNeedsParticipantsStep(sku)) steps.push('participants');
     steps.push('date', 'confirmation');
     return steps;
   }, [categoryId, sku]);
@@ -481,7 +489,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
         <div className="space-y-6">
           <div>
             <h3 className="text-2xl font-bold text-brand-text mb-2">¿Qué quieres hacer?</h3>
-            <p className="text-brand-secondary">Elige una experiencia</p>
+            <p className="text-brand-secondary">Elige una actividad. En el siguiente paso dices si vas sola o con más gente.</p>
           </div>
           <div className="space-y-3">
             {CREATIVE_CATEGORIES.map((cat) => (
@@ -544,11 +552,39 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
       {step === 'participants' && sku && (
         <div className="space-y-6">
           <div>
-            <h3 className="text-2xl font-bold text-brand-text mb-2">¿Cuántas personas?</h3>
-            <p className="text-brand-secondary">
-              {sku.label} · mínimo {sku.minParticipants}
-            </p>
+            <h3 className="text-2xl font-bold text-brand-text mb-2">¿Cuántas personas van?</h3>
+            <p className="text-brand-secondary">{sku.label}</p>
           </div>
+
+          {sku.minParticipants < 3 && (
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                aria-pressed={participants === 1}
+                onClick={() => setParticipants(Math.max(sku.minParticipants, 1))}
+                className={`min-h-[52px] rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all ${
+                  participants === 1
+                    ? 'border-brand-primary bg-brand-primary text-white shadow-md'
+                    : 'border-gray-200 bg-white text-brand-secondary hover:border-brand-primary/40'
+                }`}
+              >
+                Solo yo
+              </button>
+              <button
+                type="button"
+                aria-pressed={participants === 2}
+                onClick={() => setParticipants(Math.min(sku.maxParticipants, Math.max(sku.minParticipants, 2)))}
+                className={`min-h-[52px] rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all ${
+                  participants === 2
+                    ? 'border-brand-primary bg-brand-primary text-white shadow-md'
+                    : 'border-gray-200 bg-white text-brand-secondary hover:border-brand-primary/40'
+                }`}
+              >
+                Somos 2
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center justify-center gap-4">
             <button
               type="button"
@@ -568,10 +604,19 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
               +
             </button>
           </div>
+          <p className="text-center text-xs text-brand-secondary">
+            {sku.minParticipants > 1
+              ? `Mínimo ${sku.minParticipants} · máximo ${sku.maxParticipants}`
+              : `Máximo ${sku.maxParticipants}`}
+          </p>
           <p className="text-center text-brand-secondary text-sm">
             Total: ${formatMoney(totalPriceCharged(sku, participants))}
             {sku.vatMode === 'plus' ? ' (IVA incluido en el total)' : ''}
           </p>
+          <div className="rounded-xl border border-brand-border bg-brand-surface p-4 text-sm text-brand-secondary leading-relaxed">
+            Tú haces la reserva. Confirmaciones, recordatorios y notificaciones llegan a tu correo.
+            El resto del grupo no necesita cuenta.
+          </div>
           {error && <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg">{error}</div>}
         </div>
       )}
@@ -610,11 +655,12 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
             <div className="space-y-5">
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                 <p className="font-semibold text-amber-900 text-sm">
-                  {technique === 'potters_wheel' ? 'Torno individual' : 'Modelado individual'}
+                  Torno: horarios de clase
                 </p>
                 <p className="text-amber-800 text-xs mt-1 leading-relaxed">
-                  Solo aparecen fechas y horarios donde sí puedes unirte: clases fijas del calendario
-                  {technique === 'potters_wheel' ? ' de torno' : ''} o un grupo de 3+ que ya abrió ese slot.
+                  Con {participants === 1 ? '1 persona' : '2 personas'} solo aparecen horarios fijos de torno,
+                  o un slot que ya abrió un grupo de 3+.
+                  Si son 3 o más, pueden abrir cualquier horario con cupo.
                 </p>
               </div>
 
@@ -1089,6 +1135,9 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
               <span className="text-brand-secondary">Personas</span>
               <span className="font-semibold text-brand-text">{participants}</span>
             </div>
+            <p className="text-xs text-brand-secondary -mt-2">
+              Las notificaciones llegan a quien reserva (siguiente paso: tus datos).
+            </p>
             <div className="flex justify-between pb-4 border-b border-brand-border">
               <span className="text-brand-secondary">Precio</span>
               <span className="font-semibold text-brand-text text-right">

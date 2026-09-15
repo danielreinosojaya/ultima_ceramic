@@ -16,7 +16,6 @@ import type {
 } from '../../types';
 import { SPACE_HOURLY_PRICING, CUSTOM_EXPERIENCE_TECHNIQUES as TECHNIQUES, TECHNIQUE_PRICES } from '../../types';
 import { InfoCircleIcon } from '../icons/InfoCircleIcon';
-import { CheckCircleIcon } from '../icons/CheckCircleIcon';
 import { FreeDateTimePicker } from './FreeDateTimePicker';
 import type { AvailableSlotResult, SlotAvailabilityResult } from '../../services/dataService';
 import { UserInfoModal } from '../UserInfoModal';
@@ -170,9 +169,9 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
 
   // ============ STATE ============
   const [state, setState] = useState<CustomExperienceWizardState>({
-    experienceType: null,
+    experienceType: 'celebration',
     technique: null,
-    config: null,
+    config: { activeParticipants: 2, guests: 0, hours: 2, hasChildren: false, childrenCount: 0 } as CelebrationConfig,
     menuItems: [],
     selectedTimeSlot: null,
     pricing: null,
@@ -190,7 +189,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
   const [slotAvailability, setSlotAvailability] = useState<SlotAvailabilityResult | null>(null);
 
   // Steps configuration
-  const STEP_TITLES = ['Tipo', 'Configurar', 'Fecha', 'Datos', 'Confirmar'];
+  const STEP_TITLES = ['Evento', 'Fecha', 'Datos'];
 
   // ============ AUTO SCROLL EFFECT ============
   useEffect(() => {
@@ -200,123 +199,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
     });
   }, [state.currentStep]);
 
-  // ============ STEP 1: Tipo de Actividad ============
-  const renderStepActivityType = () => {
-    return (
-      <div className="space-y-6 animate-fade-in-up">
-        <div className="text-center mb-8">
-          <h2 className="text-3xl sm:text-4xl font-bold text-brand-text mb-3">
-            ¿Qué tipo de experiencia buscas?
-          </h2>
-          <p className="text-brand-secondary text-sm sm:text-base">
-            Elige entre una actividad de cerámica o una celebración completa
-          </p>
-        </div>
-
-        {/* Option Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Solo Cerámica */}
-          <button
-            onClick={() => {
-              setState((prev) => ({ 
-                ...prev, 
-                experienceType: 'ceramic_only',
-                config: { participants: 2 } // Inicializar con mínimo 2 personas
-              }));
-              handleNext();
-            }}
-            className="group bg-white border-2 border-brand-border rounded-2xl p-6 sm:p-8 hover:border-brand-primary hover:shadow-lifted transition-all duration-300 text-left active:scale-[0.98]"
-          >
-            <div className="flex items-start gap-4 mb-4">
-              <div className="text-5xl">🎨</div>
-              <div className="flex-1">
-                <h3 className="text-xl sm:text-2xl font-bold text-brand-text mb-2">
-                  Solo Cerámica
-                </h3>
-                <p className="text-sm text-brand-secondary">
-                  Actividad de cerámica pura. Todos eligen la misma técnica.
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-2 mt-4 border-t border-brand-border pt-4">
-              <div className="flex items-center gap-2 text-sm text-brand-text">
-                <CheckCircleIcon className="w-4 h-4 text-brand-success" />
-                <span>Torno, Modelado o Pintado</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-brand-text">
-                <CheckCircleIcon className="w-4 h-4 text-brand-success" />
-                <span>Hasta 22 personas</span>
-              </div>
-            </div>
-
-            <div className="mt-6 text-center">
-              <span className="inline-block bg-brand-primary text-white px-6 py-3 rounded-xl font-semibold group-hover:bg-brand-accent transition-colors">
-                Elegir →
-              </span>
-            </div>
-          </button>
-
-          {/* Celebración */}
-          <button
-            onClick={() => {
-              setState((prev) => ({ 
-                ...prev, 
-                experienceType: 'celebration',
-                config: { activeParticipants: 2, guests: 0, hours: 2, hasChildren: false, childrenCount: 0 } as CelebrationConfig
-              }));
-              handleNext();
-            }}
-            className="group bg-white border-2 border-brand-border rounded-2xl p-6 sm:p-8 hover:border-brand-primary hover:shadow-lifted transition-all duration-300 text-left active:scale-[0.98]"
-          >
-            <div className="flex items-start gap-4 mb-4">
-              <div className="text-5xl">🎉</div>
-              <div className="flex-1">
-                <h3 className="text-xl sm:text-2xl font-bold text-brand-text mb-2">
-                  Celebración
-                </h3>
-                <p className="text-sm text-brand-secondary">
-                  Evento completo con cerámica, invitados, decoración y alquiler de espacio.
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-2 mt-4 border-t border-brand-border pt-4">
-              <div className="flex items-center gap-2 text-sm text-brand-text">
-                <CheckCircleIcon className="w-4 h-4 text-brand-success" />
-                <span>Todo lo de "Solo Cerámica"</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-brand-text">
-                <CheckCircleIcon className="w-4 h-4 text-brand-success" />
-                <span>Invitados sin actividad</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-brand-text">
-                <CheckCircleIcon className="w-4 h-4 text-brand-success" />
-                <span>Traer decoración, comida y torta</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-brand-text">
-                <CheckCircleIcon className="w-4 h-4 text-brand-success" />
-                <span>Actividad especial para niños</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-brand-text">
-                <CheckCircleIcon className="w-4 h-4 text-brand-success" />
-                <span>Alquiler del espacio por hora: $75/h (L-J) o $100/h (V-D) + IVA</span>
-              </div>
-            </div>
-
-            <div className="mt-6 text-center">
-              <span className="inline-block bg-brand-primary text-white px-6 py-3 rounded-xl font-semibold group-hover:bg-brand-accent transition-colors">
-                Elegir →
-              </span>
-            </div>
-          </button>
-        </div>
-
-      </div>
-    );
-  };
-
-  // ============ STEP 2: Configuración ============
+  // ============ STEP 1: Configuración del evento ============
   const renderStepConfiguration = () => {
     if (!state.experienceType) return null;
 
@@ -326,19 +209,29 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
       <div className="space-y-8 animate-fade-in-up">
         <div className="text-center mb-6">
           <h2 className="text-2xl sm:text-3xl font-bold text-brand-text mb-2">
-            Configura tu Experiencia
+            Arma tu evento
           </h2>
           <p className="text-brand-secondary text-sm">
-            {isCelebration
-              ? 'Define participantes, invitados y opciones del evento'
-              : 'Elige la técnica y número de participantes'}
+            Espacio, invitados y qué van a hacer.
           </p>
+          {onGoToIndividualClasses && (
+            <p className="text-sm text-brand-secondary mt-3">
+              ¿Solo una actividad, sin evento?{' '}
+              <button
+                type="button"
+                onClick={onGoToIndividualClasses}
+                className="font-semibold text-brand-primary hover:underline"
+              >
+                Ver actividades
+              </button>
+            </p>
+          )}
         </div>
 
-        {/* Selección de Técnica */}
+        {/* Qué van a hacer en el evento */}
         <div>
           <label className="block text-sm font-semibold text-brand-text mb-3">
-            Técnica de Cerámica
+            Qué van a hacer
           </label>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -363,9 +256,8 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                 >
                   <div className="text-3xl mb-2">{tech.icon}</div>
                   <h4 className="font-bold text-brand-text mb-1">{tech.name}</h4>
-                  <p className="text-xs text-brand-secondary mb-2">{tech.description}</p>
                   <p className="text-xs font-semibold text-brand-primary">
-                    Máx. {tech.maxCapacity} personas
+                    Máx. {tech.maxCapacity}
                   </p>
                 </button>
               );
@@ -386,18 +278,18 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
               <div className="relative space-y-3.5">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-primary/70 mb-1.5">
-                    Experiencia grupal
+                    Evento a medida
                   </p>
                   <p className="text-sm text-brand-text leading-relaxed">
                     Mínimo <span className="font-semibold text-brand-primary">2 personas</span>.
-                    Todos hacen la misma técnica, y la reserva queda a nombre de quien completa el formulario.
+                    Armamos la visita con ustedes; no es una actividad del listado.
                   </p>
                 </div>
 
                 {(onGoToIndividualClasses || onGoToPackages) && (
                   <div className="pt-1 border-t border-brand-primary/10">
                     <p className="text-xs text-brand-secondary mb-2.5">
-                      ¿Llegaste aquí por equivocación?
+                      ¿Quieren una actividad del listado para 1 o más personas?
                     </p>
                     <div className="flex flex-wrap gap-2">
                       {onGoToIndividualClasses && (
@@ -406,7 +298,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
                           onClick={onGoToIndividualClasses}
                           className="group inline-flex items-center gap-1.5 rounded-full border border-brand-border/80 bg-white/80 px-3.5 py-1.5 text-xs font-medium text-brand-text shadow-sm backdrop-blur-sm transition-all duration-200 hover:border-brand-primary/40 hover:bg-white hover:text-brand-primary hover:shadow-md"
                         >
-                          Clase individual
+                          Ver actividades
                           <span className="translate-x-0 text-brand-primary/50 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-brand-primary" aria-hidden>
                             →
                           </span>
@@ -1042,7 +934,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
     const isCelebration = state.experienceType === 'celebration';
     
     // Validation logic
-    if (state.currentStep === 2) {
+    if (state.currentStep === 1) {
       if (!state.technique) {
         setState((prev) => ({ ...prev, error: 'Por favor selecciona una técnica' }));
         return;
@@ -1075,7 +967,7 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
 
     setState((prev) => ({
       ...prev,
-      currentStep: Math.min(prev.currentStep + 1, 4) as any,
+      currentStep: Math.min(prev.currentStep + 1, 3) as any,
       error: null,
     }));
   };
@@ -1194,19 +1086,18 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-6 sm:py-8">
       {/* Progress Indicator */}
-      <ProgressIndicator currentStep={state.currentStep} totalSteps={4} stepTitles={STEP_TITLES} />
+      <ProgressIndicator currentStep={state.currentStep} totalSteps={3} stepTitles={STEP_TITLES} />
 
-      {/* Step Content - Solo mostrar contenedor si NO es Step 4 */}
-      {state.currentStep !== 4 && (
+      {/* Step Content - Solo mostrar contenedor si NO es datos */}
+      {state.currentStep !== 3 && (
         <div className="bg-brand-surface rounded-2xl shadow-subtle p-6 sm:p-8 mb-6">
-          {state.currentStep === 1 && renderStepActivityType()}
-          {state.currentStep === 2 && renderStepConfiguration()}
-          {state.currentStep === 3 && renderStepDateTime()}
+          {state.currentStep === 1 && renderStepConfiguration()}
+          {state.currentStep === 2 && renderStepDateTime()}
         </div>
       )}
       
-      {/* UserInfoModal - Renderizado como overlay completo en Step 4 */}
-      {state.currentStep === 4 && (
+      {/* UserInfoModal - Renderizado como overlay completo */}
+      {state.currentStep === 3 && (
         <UserInfoModal
           onClose={handlePrevious}
           onSubmit={handleUserInfoSubmit}
@@ -1215,8 +1106,8 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
         />
       )}
 
-      {/* Navigation Buttons - Ocultar en Step 4 porque el modal tiene sus propios botones */}
-      {state.currentStep > 1 && state.currentStep !== 4 && (
+      {/* Navigation Buttons - Ocultar en datos porque el modal tiene sus propios botones */}
+      {state.currentStep !== 3 && (
         <div className="flex gap-4">
           <button
             onClick={handlePrevious}
@@ -1225,25 +1116,20 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
           >
             ← Atrás
           </button>
-          {state.currentStep < 5 && (
+          {state.currentStep < 3 && (
             <button
               onClick={handleNext}
               disabled={isLoading || (() => {
-                // Validar participantes en Step 2
-                if (state.currentStep === 2 && state.technique) {
+                if (state.currentStep === 1) {
+                  if (!state.technique) return true;
                   const maxCap = TECHNIQUES.find((t) => t.id === state.technique)?.maxCapacity || 22;
                   const currentParticipants = state.config
-                    ? state.experienceType === 'celebration'
-                      ? (state.config as CelebrationConfig).activeParticipants || 0
-                      : (state.config as CeramicOnlyConfig).participants || 0
+                    ? (state.config as CelebrationConfig).activeParticipants || 0
                     : 0;
                   return currentParticipants > maxCap || currentParticipants < 1;
                 }
-                // Validar fecha/hora y disponibilidad en Step 3
-                if (state.currentStep === 3) {
-                  // Debe tener fecha, hora y disponibilidad confirmada
+                if (state.currentStep === 2) {
                   if (!selectedDate || !selectedTime || !slotAvailability) return true;
-                  // No permitir si no hay disponibilidad
                   if (!slotAvailability.available) return true;
                 }
                 return false;

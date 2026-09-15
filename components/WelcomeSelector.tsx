@@ -26,63 +26,58 @@ const ChoiceCard: React.FC<{
 );
 
 export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) => {
-  const options = [
-    {
-      title: 'Experiencia Personalizada',
-      subtitle: 'Reune a tu grupo y disena la clase perfecta con la tecnica que prefieran.',
-      buttonText: FEATURE_FLAGS.EXPERIENCIA_PERSONALIZADA ? 'Crear Experiencia' : 'Proximamente',
-      onClick: () => onSelect('custom_experience'),
-      disabled: !FEATURE_FLAGS.EXPERIENCIA_PERSONALIZADA
-    },
-    {
-      title: 'Experiencias creativas',
-      subtitle: 'Reserva una actividad. Elige qué hacer y tu horario.',
-      buttonText: FEATURE_FLAGS.CLASES_SUELTAS ? 'Reservar' : 'Proximamente',
-      onClick: () => onSelect('single_class_wizard'),
-      disabled: !FEATURE_FLAGS.CLASES_SUELTAS
-    },
+  const secondaryOptions = [
     {
       title: 'Paquetes de Clases',
       subtitle: 'Continua tu practica con paquetes de varias clases.',
       buttonText: 'Ver Paquetes',
-      onClick: () => onSelect('returning')
+      onClick: () => onSelect('returning'),
+      disabled: false,
     },
     {
       title: 'Open Studio',
       subtitle: 'Accede al taller para trabajar en tus proyectos personales.',
       buttonText: 'Ir a Open Studio',
-      onClick: () => onSelect('open_studio')
+      onClick: () => onSelect('open_studio'),
+      disabled: false,
     },
     {
       title: 'Curso de Torno',
       subtitle: '6 horas de instruccion - Grupos reducidos - Certificado incluido',
       buttonText: FEATURE_FLAGS.CURSO_TORNO ? 'Ver Curso' : 'Proximamente',
       onClick: () => onSelect('wheel_course'),
-      disabled: !FEATURE_FLAGS.CURSO_TORNO
-    }
+      disabled: !FEATURE_FLAGS.CURSO_TORNO,
+    },
   ];
 
   return (
     <div className="text-center px-4 py-6 sm:p-6 md:p-8 bg-transparent animate-fade-in-up max-w-6xl mx-auto w-full">
-      <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif font-bold text-brand-text mb-1.5 sm:mb-2">
+      <h2 className="text-2xl sm:text-3xl md:text-4xl font-serif font-bold text-brand-text mb-8 sm:mb-10">
         Bienvenido a Ceramicalma
       </h2>
-      <p className="text-sm sm:text-base md:text-lg text-brand-secondary mb-6 sm:mb-8">
-        Elige la experiencia que mejor se adapta a lo que buscas.
-      </p>
 
-      <div className="flex items-center justify-center gap-2 text-sm text-gray-600 mb-6">
-        <div className="flex -space-x-2">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-400 border-2 border-white" />
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-red-400 border-2 border-white" />
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-400 to-pink-400 border-2 border-white" />
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-purple-400 border-2 border-white" />
-        </div>
-        <span className="font-medium">+247 personas celebraron este mes</span>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 md:gap-6 mb-10">
+        <ChoiceCard
+          title="Actividad"
+          subtitle="Cerámica, canvas, charm bar. Para ti o un grupo."
+          buttonText={FEATURE_FLAGS.CLASES_SUELTAS ? 'Ver actividades' : 'Proximamente'}
+          onClick={() => onSelect('single_class_wizard')}
+          disabled={!FEATURE_FLAGS.CLASES_SUELTAS}
+        />
+        <ChoiceCard
+          title="Evento"
+          subtitle="Cumpleaños o el evento que quieras armar."
+          buttonText={FEATURE_FLAGS.EXPERIENCIA_PERSONALIZADA ? 'Armar evento' : 'Proximamente'}
+          onClick={() => onSelect('custom_experience')}
+          disabled={!FEATURE_FLAGS.EXPERIENCIA_PERSONALIZADA}
+        />
       </div>
 
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500 mb-4">
+        También puedes
+      </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 md:gap-6">
-        {options.map(option => (
+        {secondaryOptions.map((option) => (
           <ChoiceCard
             key={option.title}
             title={option.title}
@@ -94,7 +89,6 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
         ))}
       </div>
 
-      {/* Scroll Trigger for Events Bottom Sheet */}
       <div id="events-scroll-trigger" className="h-4 w-full" aria-hidden="true" />
     </div>
   );
