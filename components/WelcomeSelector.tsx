@@ -35,9 +35,9 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
       disabled: !FEATURE_FLAGS.EXPERIENCIA_PERSONALIZADA
     },
     {
-      title: 'Clases Sueltas',
-      subtitle: 'Una sola clase para 1 persona. Prueba cualquier técnica sin compromiso.',
-      buttonText: FEATURE_FLAGS.CLASES_SUELTAS ? 'Reservar Clase' : 'Proximamente',
+      title: 'Experiencias creativas',
+      subtitle: 'Reserva una actividad. Elige qué hacer y tu horario.',
+      buttonText: FEATURE_FLAGS.CLASES_SUELTAS ? 'Reservar' : 'Proximamente',
       onClick: () => onSelect('single_class_wizard'),
       disabled: !FEATURE_FLAGS.CLASES_SUELTAS
     },
