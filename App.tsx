@@ -575,8 +575,12 @@ const App: React.FC = () => {
                 'painting': 'Pintura de piezas'
             };
             
-            // Use event name for special events, otherwise use piece names or technique name
-            let pieceName = pricing.pieces.map(p => p.pieceName).join(', ') || techniqueNames[selectedTechnique] || 'Experiencia Cerámica';
+            // Prefer creative experience display name when present
+            let pieceName =
+                experienceUIState.productDisplayName ||
+                pricing.pieces.map(p => p.pieceName).join(', ') ||
+                techniqueNames[selectedTechnique] ||
+                'Experiencia Cerámica';
             const specialEventConfig = view === 'special_event_booking' && specialEventSlug
                 ? getSpecialEventConfig(specialEventSlug)
                 : null;
@@ -597,12 +601,35 @@ const App: React.FC = () => {
                     pieces: pricing.pieces,
                     guidedOption: pricing.guidedOption,
                     technique: selectedTechnique,
+                    ...(experienceUIState.serviceKind
+                        ? { serviceKind: experienceUIState.serviceKind, bookingSource: 'creative_experiences' }
+                        : {}),
                     ...(view === 'rumcom_booking' ? { bookingSource: 'rumcom' } : {}),
                     ...(specialEventConfig ? {
                         bookingSource: specialEventConfig.bookingSource,
                         pricingOptionLabel: (window as any).__specialEventPricingOption?.label,
                     } : {}),
                 }
+            } as any;
+        }
+
+        // Enrich existing creative product with display name / serviceKind if missing
+        if (
+            product &&
+            product.type === 'SINGLE_CLASS' &&
+            experienceUIState.productDisplayName &&
+            !(product.details as any)?.serviceKind &&
+            experienceUIState.serviceKind
+        ) {
+            product = {
+                ...product,
+                name: experienceUIState.productDisplayName,
+                details: {
+                    ...(product.details as any),
+                    serviceKind: experienceUIState.serviceKind,
+                    bookingSource: 'creative_experiences',
+                    technique: technique || (product.details as any)?.technique,
+                },
             } as any;
         }
 
@@ -636,9 +663,13 @@ const App: React.FC = () => {
             bookingData.experiencePricing = experienceUIState.pricing;
         }
 
-        // Clase suelta: siempre 1 participante (evita payloads sin el campo o con valor incorrecto)
+        // Clase suelta / experiencias creativas: 1 por defecto; Leather Journal (u otros) usan participants del wizard
         if (product.type === 'SINGLE_CLASS') {
-            bookingData.participants = 1;
+            const creativeParticipants = experienceUIState.participants;
+            bookingData.participants =
+                typeof creativeParticipants === 'number' && creativeParticipants >= 1
+                    ? creativeParticipants
+                    : 1;
         }
 
         // Add groupClassMetadata for GROUP_CLASS bookings
@@ -1167,17 +1198,36 @@ const App: React.FC = () => {
                             : []
                         }
                         appData={appData}
-                        onConfirm={(pricing: ExperiencePricing, selectedSlot: TimeSlot | null, selectedTechnique: GroupTechnique) => {
+                        onConfirm={(pricing: ExperiencePricing, selectedSlot: TimeSlot | null, selectedTechnique: GroupTechnique, meta) => {
                             setTechnique(selectedTechnique);
                             setExperienceUIState(prev => ({
                                 ...prev,
                                 pricing,
-                                piecesSelected: pricing.pieces
+                                piecesSelected: pricing.pieces,
+                                participants: meta.participants,
+                                serviceKind: meta.serviceKind,
+                                productDisplayName: meta.productName,
                             }));
                             setBookingDetails(prev => ({
                                 ...prev,
                                 slots: selectedSlot ? [selectedSlot] : [],
-                                userInfo: null // Will be filled by user info modal
+                                userInfo: null,
+                                product: {
+                                    id: `creative-${meta.skuId}`,
+                                    name: meta.productName,
+                                    type: 'SINGLE_CLASS' as any,
+                                    price: pricing.total,
+                                    classes: 1,
+                                    description: meta.productName,
+                                    isActive: true,
+                                    details: {
+                                        technique: selectedTechnique,
+                                        serviceKind: meta.serviceKind,
+                                        bookingSource: 'creative_experiences',
+                                        duration: '2 horas',
+                                        durationHours: 2,
+                                    },
+                                } as any,
                             }));
                             setExperienceType('experience');
                             setIsUserInfoModalOpen(true);

@@ -819,6 +819,93 @@ const getFixedSlotTimesForDate = (
     return Array.from(new Set(times)).sort();
 };
 
+const techniquesCompeteForCapacity = (requestedTechnique: string, bookingTechnique: string | undefined): boolean => {
+    if (isHandWorkTechnique(requestedTechnique) && isHandWorkTechnique(bookingTechnique)) return true;
+    if (isHandWorkTechnique(requestedTechnique) && !bookingTechnique) return true;
+    if (!isHandWorkTechnique(requestedTechnique) && bookingTechnique === requestedTechnique) return true;
+    if (!isHandWorkTechnique(requestedTechnique) && !bookingTechnique) return true;
+    return false;
+};
+
+const evaluatePublicExperienceSlot = (params: {
+    dateStr: string;
+    slotTime: string;
+    instructorId?: number;
+    requestedTechnique: string;
+    requestedParticipants: number;
+    bookings: any[];
+    instructors: any[];
+    scheduleOverrides: any;
+    maxCapacityMap: Record<string, number>;
+    courseSessionsByDate: Record<string, { startMinutes: number; endMinutes: number }[]>;
+    openedByLargeGroup?: boolean;
+}) => {
+    const {
+        dateStr,
+        slotTime,
+        instructorId,
+        requestedTechnique,
+        requestedParticipants,
+        bookings,
+        instructors,
+        scheduleOverrides,
+        maxCapacityMap,
+        courseSessionsByDate,
+        openedByLargeGroup = false,
+    } = params;
+
+    const slotStartMinutes = timeToMinutes(slotTime);
+    const slotEndMinutes = slotStartMinutes + (2 * 60);
+    const instructor = instructors.find((inst: any) => inst.id === instructorId);
+    const maxCapacity = resolveCapacity(dateStr, requestedTechnique, maxCapacityMap, scheduleOverrides);
+
+    const base = {
+        date: dateStr,
+        time: slotTime,
+        instructor: instructor?.name || 'Instructor',
+        instructorId: instructorId || 0,
+        technique: requestedTechnique,
+        openedByLargeGroup,
+        total: maxCapacity,
+    };
+
+    const hasPrivateEventBlock =
+        slotOverlapsPrivateEvent(dateStr, slotTime) ||
+        slotOverlapsExclusiveSpaceRental(dateStr, slotTime, bookings, 2 * 60).overlaps;
+    if (hasPrivateEventBlock) {
+        return { ...base, available: 0, canBook: false, blockedReason: 'private_event' };
+    }
+
+    if (hasCourseOverlap(dateStr, slotStartMinutes, slotEndMinutes, courseSessionsByDate)) {
+        return { ...base, available: 0, canBook: false, blockedReason: 'course_conflict' };
+    }
+
+    const bookingsOverlapingSlot = bookings.filter((b: any) => {
+        if (!b.slots || !Array.isArray(b.slots)) return false;
+        const bookingTechnique = deriveBookingTechnique(b);
+        if (!techniquesCompeteForCapacity(requestedTechnique, bookingTechnique)) return false;
+        return b.slots.some((s: any) => {
+            if (s.date !== dateStr) return false;
+            const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
+            const bookingEndMinutes = bookingStartMinutes + (2 * 60);
+            return hasTimeOverlap(slotStartMinutes, slotEndMinutes, bookingStartMinutes, bookingEndMinutes);
+        });
+    });
+
+    let bookedParticipants = bookingsOverlapingSlot.reduce((sum: number, b: any) => sum + (b.participants || 1), 0);
+    if (requestedTechnique === 'potters_wheel' && bookedParticipants === 0) {
+        bookedParticipants = 1;
+    }
+
+    const availableCapacity = maxCapacity - bookedParticipants;
+    return {
+        ...base,
+        available: Math.max(0, availableCapacity),
+        canBook: availableCapacity >= requestedParticipants,
+        blockedReason: null,
+    };
+};
+
 const isPottersFixedConflict = (candidateStart: number, fixedTimes: number[]) => {
     // Si coincide exactamente con un inicio fijo, SIEMPRE permitir
     if (fixedTimes.includes(candidateStart)) return false;
@@ -2056,6 +2143,42 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
 
                     const allSlots: any[] = []; // TODOS los slots (disponibles e indisponibles)
                     const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                    const slotKeys = new Set<string>();
+                    const normalizedSlotTechnique = slotTechniqueKey(requestedTechnique);
+                    const fixedTechniqueKey = requestedTechnique === 'potters_wheel' ? 'potters_wheel' : 'molding';
+                    const includeOpenedByLargeGroup =
+                        requestedParticipants === 1 &&
+                        (requestedTechnique === 'potters_wheel' || requestedTechnique === 'hand_modeling');
+
+                    const pushEvaluatedSlot = (
+                        dateStr: string,
+                        slotTime: string,
+                        instructorId: number | undefined,
+                        openedByLargeGroup = false
+                    ) => {
+                        const key = `${dateStr}|${slotTime}`;
+                        if (slotKeys.has(key)) {
+                            if (openedByLargeGroup) {
+                                const existing = allSlots.find((s: any) => s.date === dateStr && s.time === slotTime);
+                                if (existing) existing.openedByLargeGroup = true;
+                            }
+                            return;
+                        }
+                        slotKeys.add(key);
+                        allSlots.push(evaluatePublicExperienceSlot({
+                            dateStr,
+                            slotTime,
+                            instructorId,
+                            requestedTechnique,
+                            requestedParticipants,
+                            bookings,
+                            instructors,
+                            scheduleOverrides,
+                            maxCapacityMap,
+                            courseSessionsByDate,
+                            openedByLargeGroup,
+                        }));
+                    };
 
                     // Iterar sobre cada día
                     for (let i = 0; i < searchDays; i++) {
@@ -2074,130 +2197,46 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         }
 
                         const baseSlots = hasOverride ? override.slots : availability[dayKey];
-                        if (!baseSlots || baseSlots.length === 0) continue;
+                        const timesToEvaluate = new Map<string, number | undefined>();
 
-                        baseSlots.forEach((slot: any) => {
-                            // Verificar si el slot es de la técnica solicitada
-                            // IMPORTANTE: Solo contar overlaps de LA MISMA TÉCNICA, no de otras técnicas
-                            const normalizedSlotTechnique = slotTechniqueKey(requestedTechnique);
-                            if (slot.technique !== normalizedSlotTechnique) return;
+                        if (baseSlots && baseSlots.length > 0) {
+                            baseSlots.forEach((slot: any) => {
+                                if (slot.technique !== normalizedSlotTechnique) return;
+                                timesToEvaluate.set(normalizeTime(slot.time), slot.instructorId);
+                            });
+                        }
 
-                            const slotTime = normalizeTime(slot.time);
-                            
-                            // Calcular rango horario de este slot (2 horas de duración)
-                            const slotStartMinutes = timeToMinutes(slotTime);
-                            const slotEndMinutes = slotStartMinutes + (2 * 60); // 2 horas
-
-                            const hasPrivateEventBlock =
-                                slotOverlapsPrivateEvent(dateStr, slotTime) ||
-                                slotOverlapsExclusiveSpaceRental(dateStr, slotTime, bookings, 2 * 60).overlaps;
-                            const hasCourseBlock = hasCourseOverlap(dateStr, slotStartMinutes, slotEndMinutes, courseSessionsByDate);
-
-                            if (hasPrivateEventBlock) {
-                                const maxCapacity = resolveCapacity(dateStr, requestedTechnique, maxCapacityMap, scheduleOverrides);
-                                const instructor = instructors.find((inst: any) => inst.id === slot.instructorId);
-                                allSlots.push({
-                                    date: dateStr,
-                                    time: slotTime,
-                                    available: 0,
-                                    total: maxCapacity,
-                                    canBook: false,
-                                    instructor: instructor?.name || 'Instructor',
-                                    instructorId: slot.instructorId,
-                                    technique: requestedTechnique,
-                                    blockedReason: 'private_event'
+                        if (requestedTechnique === 'potters_wheel' || requestedTechnique === 'hand_modeling') {
+                            getFixedSlotTimesForDate(dateStr, dayKey, availability, scheduleOverrides, fixedTechniqueKey)
+                                .forEach((time) => {
+                                    if (!timesToEvaluate.has(time)) timesToEvaluate.set(time, undefined);
                                 });
-                            } else if (!hasCourseBlock) {
-                                // Contar participantes que se solapan temporalmente con este slot
-                                // IMPORTANTE: Solo contar bookings de LA MISMA TÉCNICA, no de otras
-                                const bookingsOverlapingSlot = bookings.filter((b: any) => {
-                                    if (!b.slots || !Array.isArray(b.slots)) return false;
-                                    
-                                    // ===== DERIVAR TÉCNICA REAL DEL BOOKING =====
-                                    // Priorizar product.name para derivar técnica (datos más confiables)
-                                    let bookingTechnique: string | undefined;
-                                    const productName = b.product?.name?.toLowerCase() || '';
-                                    
-                                    if (productName.includes('pintura')) {
-                                        bookingTechnique = 'painting';
-                                    } else if (productName.includes('torno')) {
-                                        bookingTechnique = 'potters_wheel';
-                                    } else if (productName.includes('modelado')) {
-                                        bookingTechnique = 'hand_modeling';
-                                    } else {
-                                        bookingTechnique = b.technique || (b.product?.details as any)?.technique;
-                                    }
-                                    
-                                    // Para handwork (painting, modeling), verificar si comparten capacidad
-                                    const isHandWork = (tech: string | undefined) => 
-                                        tech === 'molding' || tech === 'painting' || tech === 'hand_modeling';
-                                    
-                                    if (isHandWork(requestedTechnique) && isHandWork(bookingTechnique)) {
-                                        // Handwork comparte capacidad entre sí
-                                    } else if (bookingTechnique !== requestedTechnique) {
-                                        return false; // Técnicas diferentes, no contar
-                                    }
-                                    
-                                    return b.slots.some((s: any) => {
-                                        if (s.date !== dateStr) return false;
-                                        
-                                        // Calcular rango horario del booking (también 2 horas)
-                                        const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
-                                        const bookingEndMinutes = bookingStartMinutes + (2 * 60); // 2 horas
-                                        
-                                        // Verificar si hay overlap temporal
-                                        return hasTimeOverlap(slotStartMinutes, slotEndMinutes, bookingStartMinutes, bookingEndMinutes);
-                                    });
-                                });
+                        }
 
-                                // Sumar participantes que solapan
-                                let bookedParticipants = bookingsOverlapingSlot.reduce((sum: number, b: any) => {
-                                    return sum + (b.participants || 1);
-                                }, 0);
+                        if (timesToEvaluate.size === 0) continue;
 
-                                // 🔒 REGLA CRÍTICA: Para torno en horarios pre-establecidos, asumir MÍNIMO 1 persona
-                                // Esto previene que se reserve en slots intermedios (9:30) cuando hay clase fija a las 9:00
-                                // incluso si esa clase aún no tiene estudiantes registrados en la base de datos
-                                if (requestedTechnique === 'potters_wheel' && bookedParticipants === 0) {
-                                    bookedParticipants = 1; // Asumir siempre 1 persona mínimo
-                                    console.log(`🔒 [getAvailableSlots] Torno ${slotTime}: asumiendo 1 persona mínimo (clase pre-establecida)`);
-                                }
+                        timesToEvaluate.forEach((instructorId, slotTime) => {
+                            pushEvaluatedSlot(dateStr, slotTime, instructorId);
+                        });
+                    }
 
-                                // Capacidad máxima del slot (override válido o fallback por técnica)
-                                const maxCapacity = resolveCapacity(dateStr, requestedTechnique, maxCapacityMap, scheduleOverrides);
-                                const availableCapacity = maxCapacity - bookedParticipants;
-                                const canBook = availableCapacity >= requestedParticipants;
+                    // 1 persona: también ofrecer horarios ya abiertos por un grupo de 3+ en el mismo slot
+                    if (includeOpenedByLargeGroup) {
+                        bookings.forEach((booking: any) => {
+                            const status = booking.status || 'active';
+                            if (status === 'expired' || status === 'cancelled') return;
+                            if ((booking.participants || 0) < 3) return;
+                            if (!booking.slots || !Array.isArray(booking.slots)) return;
+                            const bookingTechnique = deriveBookingTechnique(booking);
+                            if (!techniquesCompeteForCapacity(requestedTechnique, bookingTechnique)) return;
 
-                                const instructor = instructors.find((inst: any) => inst.id === slot.instructorId);
-                                
-                                allSlots.push({
-                                    date: dateStr,
-                                    time: slotTime,
-                                    available: Math.max(0, availableCapacity),
-                                    total: maxCapacity,
-                                    canBook,
-                                    instructor: instructor?.name || 'Instructor',
-                                    instructorId: slot.instructorId,
-                                    technique: requestedTechnique,
-                                    blockedReason: null
-                                });
-                            } else {
-                                // Slot bloqueado por curso
-                                const maxCapacity = resolveCapacity(dateStr, requestedTechnique, maxCapacityMap, scheduleOverrides);
-                                const instructor = instructors.find((inst: any) => inst.id === slot.instructorId);
-                                
-                                allSlots.push({
-                                    date: dateStr,
-                                    time: slotTime,
-                                    available: 0,
-                                    total: maxCapacity,
-                                    canBook: false,
-                                    instructor: instructor?.name || 'Instructor',
-                                    instructorId: slot.instructorId,
-                                    technique: requestedTechnique,
-                                    blockedReason: 'course_conflict'
-                                });
-                            }
+                            booking.slots.forEach((s: any) => {
+                                const slotDate = s.date;
+                                if (!slotDate || slotDate < rangeStartStr || slotDate > rangeEndStr) return;
+                                const slotTime = normalizeTime(s.time);
+                                if (!slotTime) return;
+                                pushEvaluatedSlot(slotDate, slotTime, s.instructorId, true);
+                            });
                         });
                     }
 
@@ -9739,38 +9778,47 @@ async function addBookingAction(
     console.log(`[addBookingAction] productType=${body.productType}, technique=${technique} (from body.technique=${(body as any).technique}, from product.details=${body.product && (body.product as any).details ? (body.product as any).details.technique : 'N/A'})`);
 
     // FIX: Derivar technique desde product.name para garantizar consistencia
+    // Experiencias creativas: confiar en technique del body (serviceKind / capacityTechnique).
+    // No sobrescribir por nombre (ej. "Pintura en Canvas" no debe forzar painting/torno por keyword).
     const productName = body.product?.name || '';
     const normalizedProductName = productName.toLowerCase();
-    
-    // Mapeo de nombres de producto -> técnica válida
-    const productToTechnique: Record<string, string> = {
-      'pintura de piezas': 'painting',
-      'pintura': 'painting',
-      'torno alfarero': 'potters_wheel',
-      'torno': 'potters_wheel',
-      'modelado a mano': 'hand_modeling',
-      'modelado': 'hand_modeling',
-      'clase grupal': 'potters_wheel',
-      'clase grupal (mixto)': 'potters_wheel', // fallback para mixto
-    };
-    
-    // Encontrar técnica correcta basada en product.name
-    let correctTechnique: string | null = null;
-    for (const [name, tech] of Object.entries(productToTechnique)) {
-      if (normalizedProductName.includes(name)) {
-        correctTechnique = tech;
-        break;
+    const bookingSource = (body.product as any)?.details?.bookingSource;
+    const isCreativeExperience = bookingSource === 'creative_experiences';
+
+    if (!isCreativeExperience) {
+      // Mapeo de nombres de producto -> técnica válida
+      const productToTechnique: Record<string, string> = {
+        'pintura de piezas': 'painting',
+        'pintura': 'painting',
+        'torno alfarero': 'potters_wheel',
+        'torno': 'potters_wheel',
+        'modelado a mano': 'hand_modeling',
+        'modelado': 'hand_modeling',
+        'clase grupal': 'potters_wheel',
+        'clase grupal (mixto)': 'potters_wheel', // fallback para mixto
+      };
+      
+      // Encontrar técnica correcta basada en product.name
+      let correctTechnique: string | null = null;
+      for (const [name, tech] of Object.entries(productToTechnique)) {
+        if (normalizedProductName.includes(name)) {
+          correctTechnique = tech;
+          break;
+        }
       }
-    }
-    
-    // Validar y corregir técnica si hay inconsistencia
-    if (correctTechnique && technique !== correctTechnique) {
-      console.log(`[addBookingAction] CORRECCIÓN: technique "${technique}" → "${correctTechnique}" basado en product.name="${productName}"`);
-      technique = correctTechnique;
+      
+      // Validar y corregir técnica si hay inconsistencia
+      if (correctTechnique && technique !== correctTechnique) {
+        console.log(`[addBookingAction] CORRECCIÓN: technique "${technique}" → "${correctTechnique}" basado en product.name="${productName}"`);
+        technique = correctTechnique;
+      } else if (!technique) {
+        // Si no hay técnica y no se puede derivar, usar fallback
+        technique = 'potters_wheel';
+        console.log(`[addBookingAction] ADVERTENCIA: technique null, usando fallback "potters_wheel"`);
+      }
     } else if (!technique) {
-      // Si no hay técnica y no se puede derivar, usar fallback
-      technique = 'potters_wheel';
-      console.log(`[addBookingAction] ADVERTENCIA: technique null, usando fallback "potters_wheel"`);
+      technique = (body.product as any)?.details?.technique || 'hand_modeling';
+      console.log(`[addBookingAction] creative_experiences sin technique; usando "${technique}"`);
     }
 
     // Bloqueo eventos privados (alquiler de espacio): todas las rutas públicas de reserva

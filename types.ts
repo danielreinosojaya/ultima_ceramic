@@ -866,6 +866,10 @@ export interface ExperienceUIState {
   pricing?: ExperiencePricing;
   isLoading: boolean;
   error?: string;
+  /** Experiencias creativas / clase suelta: cupos a reservar */
+  participants?: number;
+  serviceKind?: string;
+  productDisplayName?: string;
 }
 
 // 10. Confirmation Status Response

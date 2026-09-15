@@ -1,65 +1,108 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { GroupTechnique, TimeSlot, Piece, ExperiencePricing, AppData } from '../../types';
 import * as dataService from '../../services/dataService';
-import { parseLocalDate } from '../../utils/formatters';
+import { parseLocalDate, getEcuadorDateYmd, isEcuadorSlotInPast } from '../../utils/formatters';
 import { SocialBadge } from '../SocialBadge';
+import {
+  enumerateFixedScheduleDays,
+} from '../../utils/fixedScheduleSlots';
+import {
+  CREATIVE_CATEGORIES,
+  categoryNeedsOptionStep,
+  formatMoney,
+  formatSkuPriceLabel,
+  skusForCategory,
+  totalPriceCharged,
+  unitPriceCharged,
+  type CreativeCategoryId,
+  type CreativeSku,
+} from '../../config/creativeExperiences';
+
+export interface CreativeBookingMeta {
+  serviceKind: string;
+  productName: string;
+  participants: number;
+  skuId: string;
+}
 
 export interface SingleClassWizardProps {
   pieces: Piece[];
   availableSlots?: TimeSlot[];
   appData?: AppData;
   initialTechnique?: GroupTechnique;
-  onConfirm: (pricing: ExperiencePricing, selectedSlot: TimeSlot | null, technique: GroupTechnique) => void;
+  onConfirm: (
+    pricing: ExperiencePricing,
+    selectedSlot: TimeSlot | null,
+    technique: GroupTechnique,
+    meta: CreativeBookingMeta
+  ) => void;
   onBack: () => void;
   isLoading?: boolean;
 }
 
-type Step = 'technique' | 'date' | 'confirmation';
+type Step = 'category' | 'option' | 'participants' | 'date' | 'confirmation';
+
+function parseLocalDateStr(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
 
 /**
- * SingleClassWizard - Flujo para reservar UNA SOLA CLASE
- * No permite grupos - es para 1 persona únicamente
- * Pasos: Técnica → Fecha/Hora → Confirmación
- * 
- * IMPORTANTE: Las piezas se eligen en el taller, no en la reserva.
- * Para pintura, se muestra costo mínimo de $25.
+ * Experiencias creativas — misma tubería que Clases Sueltas.
+ * Categoría → opción (si aplica) → personas (solo leather) → horario → confirmación.
  */
 export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
-  pieces: initialPieces,
   availableSlots = [],
-  appData,
   initialTechnique,
   onConfirm,
   onBack,
-  isLoading = false
+  isLoading = false,
 }) => {
-  const participants = 1; // SIEMPRE 1 persona para Clase Suelta
-  const [step, setStep] = useState<Step>('technique');
-  const [technique, setTechnique] = useState<GroupTechnique>(initialTechnique || 'hand_modeling');
+  const [step, setStep] = useState<Step>('category');
+  const [categoryId, setCategoryId] = useState<CreativeCategoryId | null>(null);
+  const [sku, setSku] = useState<CreativeSku | null>(null);
+  const [participants, setParticipants] = useState(1);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [pricing, setPricing] = useState<ExperiencePricing | null>(null);
   const [error, setError] = useState<string>('');
-  const [loadingPricing, setLoadingPricing] = useState(false);
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [slotAvailabilityCache, setSlotAvailabilityCache] = useState<Record<string, any>>({});
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [availability, setAvailability] = useState<Record<string, any> | null>(null);
   const [scheduleOverrides, setScheduleOverrides] = useState<Record<string, any>>({});
+  const [scheduleSlots, setScheduleSlots] = useState<dataService.AvailableSlotResult[]>([]);
+  const [loadingScheduleSlots, setLoadingScheduleSlots] = useState(false);
 
+  const technique: GroupTechnique = sku?.capacityTechnique || 'hand_modeling';
+  // Clase suelta: solo torno 1 persona se limita a horarios fijos / grupos 3+.
+  // Modelado a mano 1 persona puede elegir cualquier horario con cupo.
+  const restrictToFixedSchedule = technique === 'potters_wheel' && participants === 1;
+
+  // Prefill cerámica desde deep-link de técnica (si viene)
   useEffect(() => {
-    if (initialTechnique) {
-      setTechnique(initialTechnique);
+    if (!initialTechnique || sku) return;
+    const map: Partial<Record<GroupTechnique, string>> = {
+      painting: 'ceramics_painting',
+      hand_modeling: 'ceramics_hand_modeling',
+      potters_wheel: 'ceramics_potters_wheel',
+    };
+    const matchId = map[initialTechnique];
+    const match = matchId ? skusForCategory('ceramics').find((s) => s.id === matchId) : undefined;
+    if (match) {
+      setCategoryId('ceramics');
+      setSku(match);
+      setParticipants(match.minParticipants);
+      setStep('date');
     }
-  }, [initialTechnique]);
+  }, [initialTechnique, sku]);
 
-  // Cargar horarios fijos del calendario Y verificar disponibilidad en PARALELO
   useEffect(() => {
     const loadData = async () => {
       try {
         const [availabilityResult, scheduleOverridesResult] = await Promise.all([
           dataService.getAvailability(),
-          dataService.getScheduleOverrides()
+          dataService.getScheduleOverrides(),
         ]);
         setAvailability(availabilityResult);
         setScheduleOverrides(scheduleOverridesResult || {});
@@ -70,287 +113,736 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
     loadData();
   }, []);
 
-  const TECHNIQUE_INFO = {
-    hand_modeling: {
-      label: 'Modelado a Mano',
-      desc: 'Crea una pieza con tus manos',
-      price: 45
-    },
-    potters_wheel: {
-      label: 'Torno Alfarero',
-      desc: 'Técnica tradicional que requiere coordinación y precisión',
-      price: 55
-    },
-    painting: {
-      label: 'Pintura de Piezas',
-      desc: 'Pinta piezas pre-moldeadas. La pieza se elige en el taller.',
-      price: 25  // Precio mínimo - las piezas se eligen en el taller
-    }
-  };
-
-  // Initialize selected date with first available date
   useEffect(() => {
-    if (availableSlots.length > 0 && !selectedDate) {
-      const uniqueDates = [...new Set(availableSlots.map(s => s.date))].sort();
-      if (uniqueDates.length > 0) {
-        setSelectedDate(uniqueDates[0]);
-      }
+    if (availableSlots.length > 0 && !selectedDate && !restrictToFixedSchedule) {
+      const uniqueDates = [...new Set(availableSlots.map((s) => s.date))].sort();
+      if (uniqueDates.length > 0) setSelectedDate(uniqueDates[0]);
     }
-  }, [availableSlots, selectedDate]);
+  }, [availableSlots, selectedDate, restrictToFixedSchedule]);
 
-  // Verificar disponibilidad dinámicamente cuando fecha o técnica cambian
   useEffect(() => {
+    if (step !== 'date' || !sku || !restrictToFixedSchedule) return;
+
+    let cancelled = false;
+    setLoadingScheduleSlots(true);
+
+    dataService
+      .getAvailableSlotsForExperience({
+        technique,
+        participants,
+        startDate: getEcuadorDateYmd(),
+        daysAhead: 90,
+      })
+      .then(async (slots) => {
+        if (cancelled) return;
+        let bookable = (slots || []).filter(
+          (s) => s.canBook && !isEcuadorSlotInPast(s.date, s.time)
+        );
+
+        const fallbackDays = enumerateFixedScheduleDays(technique, availability, scheduleOverrides, 90);
+        if (bookable.length === 0 && fallbackDays.length > 0) {
+          const candidates = fallbackDays
+            .flatMap((day) => day.times.map((time) => ({ date: day.date, time })))
+            .slice(0, 80);
+
+          const checks = await Promise.allSettled(
+            candidates.map((c) =>
+              dataService.checkSlotAvailability(c.date, c.time, technique, participants)
+            )
+          );
+          if (cancelled) return;
+
+          bookable = candidates.flatMap((c, index) => {
+            const result = checks[index];
+            if (result.status !== 'fulfilled') return [];
+            const val = result.value;
+            if (!val) return [];
+            if (isEcuadorSlotInPast(c.date, c.time)) return [];
+            if (!val.fetchError && !val.available) return [];
+            return [{
+              date: c.date,
+              time: c.time,
+              available: val.capacity?.available ?? 8,
+              total: val.capacity?.max ?? 8,
+              canBook: true,
+              instructor: 'Instructor',
+              instructorId: 0,
+              technique,
+              openedByLargeGroup: val.openedByLargeGroup ?? false,
+            }];
+          });
+
+          const checksFailed = checks.every((result) => result.status !== 'fulfilled');
+          if (bookable.length === 0 && checksFailed) {
+            bookable = candidates
+              .filter((c) => !isEcuadorSlotInPast(c.date, c.time))
+              .map((c) => ({
+                date: c.date,
+                time: c.time,
+                available: 8,
+                total: 8,
+                canBook: true,
+                instructor: 'Instructor',
+                instructorId: 0,
+                technique,
+              }));
+          }
+        }
+
+        if (cancelled) return;
+        setScheduleSlots(bookable);
+
+        const uniqueDates = [...new Set(bookable.map((s) => s.date))].sort();
+        if (uniqueDates.length > 0) {
+          setSelectedDate((prev) => (prev && uniqueDates.includes(prev) ? prev : uniqueDates[0]));
+          const first = parseLocalDateStr(uniqueDates[0]);
+          setCurrentMonth(new Date(first.getFullYear(), first.getMonth(), 1));
+        } else {
+          setSelectedDate('');
+        }
+      })
+      .catch((err) => {
+        console.error('[SingleClassWizard] Error loading individual slots:', err);
+        if (cancelled) return;
+        const fallbackDays = enumerateFixedScheduleDays(technique, availability, scheduleOverrides, 90);
+        setScheduleSlots(
+          fallbackDays.flatMap((day) =>
+            day.times.map((time) => ({
+              date: day.date,
+              time,
+              available: 8,
+              total: 8,
+              canBook: true,
+              instructor: 'Instructor',
+              instructorId: 0,
+              technique,
+            }))
+          )
+        );
+        if (fallbackDays.length > 0) {
+          setSelectedDate((prev) =>
+            prev && fallbackDays.some((d) => d.date === prev) ? prev : fallbackDays[0].date
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingScheduleSlots(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [step, sku, technique, participants, restrictToFixedSchedule, availability, scheduleOverrides]);
+
+  useEffect(() => {
+    if (!sku) {
+      setPricing(null);
+      return;
+    }
+    const total = totalPriceCharged(sku, participants);
+    setPricing({
+      pieces: [],
+      guidedOption: 'none',
+      subtotalPieces: total,
+      total,
+    });
+  }, [sku, participants]);
+
+  useEffect(() => {
+    if (restrictToFixedSchedule) {
+      const newCache: Record<string, any> = {};
+      scheduleSlots.forEach((slot) => {
+        newCache[`${slot.date}-${slot.time}`] = {
+          available: slot.available,
+          total: slot.total,
+          canBook: slot.canBook,
+          message: slot.canBook ? 'Disponible' : 'Sin cupos',
+          openedByLargeGroup: slot.openedByLargeGroup ?? false,
+        };
+      });
+      setSlotAvailabilityCache(newCache);
+      setCheckingAvailability(false);
+      return;
+    }
+
     const verifySlotAvailability = async () => {
-      if (!selectedDate) return;
-      
+      if (!selectedDate || !sku) return;
+
       setCheckingAvailability(true);
-      const slotsForDate = availableSlots.filter(s => s.date === selectedDate);
-      const allTimes = [...new Set(slotsForDate.map(s => s.time))].sort();
-      
-      // Verificar cada horario en PARALELO en lugar de secuencial
+      const slotsForDate = availableSlots.filter((s) => s.date === selectedDate);
+      const allTimes = [...new Set(slotsForDate.map((s) => s.time))].sort();
+
       const results = await Promise.allSettled(
-        allTimes.map(time =>
+        allTimes.map((time) =>
           dataService.checkSlotAvailability(selectedDate, time, technique, participants)
         )
       );
-      
+
       const newCache: Record<string, any> = {};
       results.forEach((result, index) => {
         const time = allTimes[index];
         const slotKey = `${selectedDate}-${time}`;
-        
         if (result.status === 'fulfilled') {
           newCache[slotKey] = {
             available: result.value.capacity?.available ?? 0,
             total: result.value.capacity?.max ?? 22,
             canBook: result.value.available,
             message: result.value.message,
-            openedByLargeGroup: result.value.openedByLargeGroup ?? false
+            openedByLargeGroup: result.value.openedByLargeGroup ?? false,
           };
         } else {
-          console.warn(`Error checking ${slotKey}:`, result.reason);
           newCache[slotKey] = {
             available: 0,
             total: 22,
             canBook: false,
             message: 'Error verificando disponibilidad',
-            openedByLargeGroup: false
+            openedByLargeGroup: false,
           };
         }
       });
-      
+
       setSlotAvailabilityCache(newCache);
       setCheckingAvailability(false);
     };
-    
+
     verifySlotAvailability();
-  }, [selectedDate, technique, availableSlots, participants]);
+  }, [selectedDate, technique, availableSlots, participants, sku, restrictToFixedSchedule, scheduleSlots]);
 
-  // Calculate pricing when technique changes
-  useEffect(() => {
-    calculatePricing();
-  }, [technique]);
+  const categoryOptions = useMemo(
+    () => (categoryId ? skusForCategory(categoryId) : []),
+    [categoryId]
+  );
 
-  const calculatePricing = async () => {
-    setLoadingPricing(true);
-    try {
-      const basePricePerPerson = TECHNIQUE_INFO[technique].price;
-      const total = basePricePerPerson * participants;
-      
-      setPricing({
-        pieces: [],
-        guidedOption: 'none',
-        subtotalPieces: total,
-        total
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error calculando precio');
-    } finally {
-      setLoadingPricing(false);
+  const selectCategory = (id: CreativeCategoryId) => {
+    setCategoryId(id);
+    setSku(null);
+    setSelectedSlot(null);
+    setError('');
+    const options = skusForCategory(id);
+    if (options.length === 1) {
+      const only = options[0];
+      setSku(only);
+      setParticipants(only.minParticipants);
+      if (only.minParticipants > 1) setStep('participants');
+      else setStep('date');
+    } else {
+      setStep('option');
     }
   };
 
+  const selectSku = (next: CreativeSku) => {
+    setSku(next);
+    setParticipants(next.minParticipants);
+    setSelectedSlot(null);
+    setError('');
+    if (next.minParticipants > 1) setStep('participants');
+    else setStep('date');
+  };
+
   const handleNext = () => {
-    if (step === 'technique') {
+    if (step === 'participants') {
+      if (!sku || participants < sku.minParticipants) {
+        setError(`Mínimo ${sku?.minParticipants || 4} personas`);
+        return;
+      }
+      if (sku && participants > sku.maxParticipants) {
+        setError(`Máximo ${sku.maxParticipants} personas`);
+        return;
+      }
       setError('');
       setStep('date');
-    } else if (step === 'date') {
+      return;
+    }
+    if (step === 'date') {
+      if (!selectedSlot) {
+        setError('Selecciona un horario');
+        return;
+      }
       setError('');
       setStep('confirmation');
     }
   };
 
   const handleBack = () => {
-    const stepOrder: Step[] = ['technique', 'date', 'confirmation'];
-    const currentIdx = stepOrder.indexOf(step);
-    
-    // Si es el primer paso, regresar al welcome
-    if (currentIdx === 0) {
+    if (step === 'category') {
       onBack();
-    } else if (currentIdx > 0) {
-      setStep(stepOrder[currentIdx - 1]);
-    }
-  };
-
-  const handleConfirm = async () => {
-    if (!pricing) {
-      setError('Error calculando precio');
       return;
     }
-    if (!selectedSlot) {
-      setError('Por favor selecciona un horario');
+    if (step === 'option') {
+      setStep('category');
+      setCategoryId(null);
       return;
     }
-    try {
-      onConfirm(pricing, selectedSlot, technique);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al confirmar');
+    if (step === 'participants') {
+      if (categoryId && categoryNeedsOptionStep(categoryId)) setStep('option');
+      else {
+        setStep('category');
+        setCategoryId(null);
+        setSku(null);
+      }
+      return;
     }
+    if (step === 'date') {
+      if (sku && sku.minParticipants > 1) setStep('participants');
+      else if (categoryId && categoryNeedsOptionStep(categoryId)) setStep('option');
+      else {
+        setStep('category');
+        setCategoryId(null);
+        setSku(null);
+      }
+      return;
+    }
+    if (step === 'confirmation') setStep('date');
   };
 
-  // Pasos: Técnica → Fecha → Confirmación (3 pasos)
-  const validSteps: Step[] = ['technique', 'date', 'confirmation'];
-  const currentStepIndex = validSteps.indexOf(step);
-  const progressPercent = (currentStepIndex / (validSteps.length - 1)) * 100;
+  const handleConfirm = () => {
+    if (!pricing || !sku || !selectedSlot) {
+      setError('Revisa actividad y horario');
+      return;
+    }
+    onConfirm(pricing, selectedSlot, technique, {
+      serviceKind: sku.id,
+      productName: sku.label,
+      participants,
+      skuId: sku.id,
+    });
+  };
+
+  const stepOrder: Step[] = useMemo(() => {
+    const steps: Step[] = ['category'];
+    if (categoryId && categoryNeedsOptionStep(categoryId)) steps.push('option');
+    if (sku && sku.minParticipants > 1) steps.push('participants');
+    steps.push('date', 'confirmation');
+    return steps;
+  }, [categoryId, sku]);
+
+  const currentStepIndex = Math.max(0, stepOrder.indexOf(step));
+  const progressPercent =
+    stepOrder.length <= 1 ? 0 : (currentStepIndex / (stepOrder.length - 1)) * 100;
+
+  const showExtrasNote = !!sku?.showsExtrasNote;
+  const isPaintingPieces = sku?.id === 'ceramics_painting';
+
+  const localFixedDays = useMemo(() => {
+    if (!restrictToFixedSchedule) return [];
+    return enumerateFixedScheduleDays(technique, availability, scheduleOverrides, 90);
+  }, [restrictToFixedSchedule, technique, availability, scheduleOverrides]);
+
+  const bookableByDate = useMemo(() => {
+    const grouped: Record<string, dataService.AvailableSlotResult[]> = {};
+    scheduleSlots.forEach((slot) => {
+      if (!grouped[slot.date]) grouped[slot.date] = [];
+      grouped[slot.date].push(slot);
+    });
+    Object.values(grouped).forEach((slots) => slots.sort((a, b) => a.time.localeCompare(b.time)));
+    return grouped;
+  }, [scheduleSlots]);
+
+  const bookableDates = useMemo(() => Object.keys(bookableByDate).sort(), [bookableByDate]);
+
+  const upcomingBookableDates = useMemo(() => bookableDates.slice(0, 8), [bookableDates]);
+
+  const selectTimeSlot = (date: string, time: string) => {
+    setSelectedDate(date);
+    setSelectedSlot({ date, time, instructorId: 0 });
+    setError('');
+  };
 
   return (
     <div className="w-full max-w-2xl mx-auto px-4 py-8">
-      {/* Progress Bar */}
-      {step !== 'technique' && (
+      {step !== 'category' && (
         <div className="mb-8">
           <div className="flex justify-between text-sm text-gray-600 mb-2">
-            <span>Paso {currentStepIndex + 1} de {validSteps.length}</span>
+            <span>
+              Paso {currentStepIndex + 1} de {stepOrder.length}
+            </span>
             <span>{Math.round(progressPercent)}%</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div
               className="bg-brand-primary h-2 rounded-full transition-all duration-300"
               style={{ width: `${progressPercent}%` }}
-            ></div>
+            />
           </div>
         </div>
       )}
 
-      {/* Step: Select Technique */}
-      {step === 'technique' && (
+      {/* Notas globales (una vez al inicio) */}
+      {step === 'category' && (
+        <div className="mb-6 space-y-3">
+          <div className="rounded-xl border border-brand-border bg-brand-surface p-4 text-sm text-brand-secondary">
+            Cada reserva dura máximo <span className="font-semibold text-brand-text">2 horas</span>.
+            Gracias por tu puntualidad: así el taller puede atender a todos con orden.
+          </div>
+        </div>
+      )}
+
+      {step === 'category' && (
         <div className="space-y-6">
           <div>
-            <h3 className="text-2xl font-bold mb-2">¿Qué técnica te interesa?</h3>
-            <p className="text-gray-600">Elige la técnica que quieres practicar en tu clase</p>
-            <p className="mt-2 text-sm font-semibold text-brand-primary">Solo 1 persona por reserva</p>
+            <h3 className="text-2xl font-bold text-brand-text mb-2">¿Qué quieres hacer?</h3>
+            <p className="text-brand-secondary">Elige una experiencia</p>
           </div>
-
           <div className="space-y-3">
-            {(['hand_modeling', 'potters_wheel', 'painting'] as GroupTechnique[]).map((tech) => (
+            {CREATIVE_CATEGORIES.map((cat) => (
               <button
-                key={tech}
-                onClick={() => setTechnique(tech)}
-                className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
-                  technique === tech
+                key={cat.id}
+                type="button"
+                onClick={() => selectCategory(cat.id)}
+                className="w-full p-4 rounded-xl border-2 border-gray-200 hover:border-brand-primary/40 bg-brand-surface text-left transition-all shadow-subtle hover:shadow-lifted"
+              >
+                <div className="font-semibold text-lg text-brand-text">{cat.label}</div>
+                <div className="text-sm text-brand-secondary mt-1">{cat.subtitle}</div>
+              </button>
+            ))}
+          </div>
+          {error && <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg">{error}</div>}
+        </div>
+      )}
+
+      {step === 'option' && categoryId && (
+        <div className="space-y-6">
+          <div>
+            <h3 className="text-2xl font-bold text-brand-text mb-2">Elige tu opción</h3>
+            <p className="text-brand-secondary">
+              {CREATIVE_CATEGORIES.find((c) => c.id === categoryId)?.label}
+            </p>
+          </div>
+          <div className="space-y-3">
+            {categoryOptions.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => selectSku(option)}
+                className={`w-full p-4 rounded-xl border-2 transition-all text-left ${
+                  sku?.id === option.id
                     ? 'border-brand-primary bg-brand-primary/5'
-                    : 'border-gray-200 hover:border-gray-300'
+                    : 'border-gray-200 hover:border-gray-300 bg-brand-surface'
                 }`}
               >
-                <div className="flex justify-between items-start">
+                <div className="flex justify-between items-start gap-3">
                   <div>
-                    <div className="font-bold text-lg">{TECHNIQUE_INFO[tech].label}</div>
-                    <div className="text-sm text-gray-600">{TECHNIQUE_INFO[tech].desc}</div>
+                    <div className="font-semibold text-lg text-brand-text">{option.label}</div>
+                    {option.shortDesc && (
+                      <div className="text-sm text-brand-secondary mt-1">{option.shortDesc}</div>
+                    )}
+                    {option.includesNote && (
+                      <div className="text-xs text-brand-secondary mt-1">{option.includesNote}</div>
+                    )}
                   </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-brand-primary">${TECHNIQUE_INFO[tech].price}</div>
+                  <div className="text-right text-brand-primary font-semibold whitespace-nowrap">
+                    {formatSkuPriceLabel(option)}
                   </div>
                 </div>
               </button>
             ))}
           </div>
-
-          {technique === 'painting' && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-              <p className="font-semibold mb-2">💡 Costo de la Pieza</p>
-              <p>El precio mostrado ($25) es el costo mínimo de la pieza. En el taller podrás elegir entre diferentes piezas con sus respectivos precios.</p>
-            </div>
-          )}
-
           {error && <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg">{error}</div>}
         </div>
       )}
 
-
-
-      {/* Step: Date & Time Selection */}
-      {step === 'date' && (
+      {step === 'participants' && sku && (
         <div className="space-y-6">
           <div>
-            <h3 className="text-2xl font-bold mb-2">🕐 Elige tu Horario</h3>
-            <p className="text-gray-600">Selecciona la fecha y hora de tu clase</p>
+            <h3 className="text-2xl font-bold text-brand-text mb-2">¿Cuántas personas?</h3>
+            <p className="text-brand-secondary">
+              {sku.label} · mínimo {sku.minParticipants}
+            </p>
+          </div>
+          <div className="flex items-center justify-center gap-4">
+            <button
+              type="button"
+              className="w-12 h-12 rounded-xl border border-brand-border text-xl font-bold disabled:opacity-40"
+              disabled={participants <= sku.minParticipants}
+              onClick={() => setParticipants((p) => Math.max(sku.minParticipants, p - 1))}
+            >
+              −
+            </button>
+            <div className="text-3xl font-bold text-brand-text w-16 text-center">{participants}</div>
+            <button
+              type="button"
+              className="w-12 h-12 rounded-xl border border-brand-border text-xl font-bold disabled:opacity-40"
+              disabled={participants >= sku.maxParticipants}
+              onClick={() => setParticipants((p) => Math.min(sku.maxParticipants, p + 1))}
+            >
+              +
+            </button>
+          </div>
+          <p className="text-center text-brand-secondary text-sm">
+            Total: ${formatMoney(totalPriceCharged(sku, participants))}
+            {sku.vatMode === 'plus' ? ' (IVA incluido en el total)' : ''}
+          </p>
+          {error && <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg">{error}</div>}
+        </div>
+      )}
+
+      {step === 'date' && sku && (
+        <div className="space-y-6">
+          <div>
+            <h3 className="text-2xl font-bold text-brand-text mb-2">Elige tu horario</h3>
+            <p className="text-brand-secondary">{sku.label}</p>
+            {participants === 1 ? (
+              <p className="mt-2 text-sm font-semibold text-brand-primary">1 persona</p>
+            ) : (
+              <p className="mt-2 text-sm font-semibold text-brand-primary">{participants} personas</p>
+            )}
           </div>
 
-          {/* Mensaje informativo solo para Torno con 1 persona */}
-          {technique === 'potters_wheel' && participants === 1 && !(selectedDate && scheduleOverrides?.[selectedDate]?.disableRules === true) && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-              <div className="flex items-start gap-3">
-                <span className="text-xl">ℹ️</span>
-                <div>
-                  <p className="font-semibold text-amber-900 text-sm">
-                    Torno Alfarero: horarios del calendario
-                  </p>
-                  <p className="text-amber-700 text-xs mt-1">
-                    Para 1 persona solo verás horarios fijos del calendario (torno).
-                    También aparecerán horarios si ya existe una reserva abierta de <strong>3+ personas</strong> en ese mismo slot.
-                  </p>
-                </div>
-              </div>
+          <div className="rounded-xl border border-brand-border bg-brand-surface p-4 text-sm text-brand-secondary">
+            Cada reserva dura máximo <span className="font-semibold text-brand-text">2 horas</span>.
+            Gracias por tu puntualidad.
+          </div>
+
+          {isPaintingPieces && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              <p className="font-semibold mb-1">Desde $25 (IVA incluido)</p>
+              <p>Es el mínimo. En el taller eliges la pieza; si cuesta más, pagas la diferencia ahí.</p>
             </div>
           )}
 
-          {availableSlots.length > 0 ? (
+          {showExtrasNote && (
+            <div className="rounded-lg border border-brand-border bg-brand-primary/5 p-4 text-sm text-brand-secondary">
+              El precio incluye lo básico. Charms, patches u otros extras se pagan en el local al terminar.
+            </div>
+          )}
+
+          {restrictToFixedSchedule ? (
+            <div className="space-y-5">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                <p className="font-semibold text-amber-900 text-sm">
+                  {technique === 'potters_wheel' ? 'Torno individual' : 'Modelado individual'}
+                </p>
+                <p className="text-amber-800 text-xs mt-1 leading-relaxed">
+                  Solo aparecen fechas y horarios donde sí puedes unirte: clases fijas del calendario
+                  {technique === 'potters_wheel' ? ' de torno' : ''} o un grupo de 3+ que ya abrió ese slot.
+                </p>
+              </div>
+
+              {loadingScheduleSlots ? (
+                <div className="flex flex-col items-center justify-center gap-3 py-10 bg-gray-50 rounded-2xl">
+                  <div className="animate-spin w-8 h-8 border-2 border-brand-primary border-t-transparent rounded-full" />
+                  <p className="text-sm text-gray-600 text-center px-4">Buscando horarios disponibles…</p>
+                  {localFixedDays.length > 0 && (
+                    <p className="text-xs text-gray-500">
+                      Hay {localFixedDays.length} fecha{localFixedDays.length === 1 ? '' : 's'} de clase en el calendario
+                    </p>
+                  )}
+                </div>
+              ) : bookableDates.length === 0 ? (
+                <div className="text-center py-10 px-4 bg-gray-50 rounded-2xl">
+                  <p className="font-semibold text-gray-700">No hay clase individual disponible ahora</p>
+                  <p className="text-sm text-gray-500 mt-2 leading-relaxed">
+                    En los próximos días no hay horarios fijos con cupo, ni grupos de 3+ a los que unirte.
+                    Prueba más adelante o escribe por WhatsApp.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  <div>
+                    <h4 className="text-sm font-bold text-brand-text mb-3">Próximos horarios</h4>
+                    <div className="space-y-3">
+                      {upcomingBookableDates.map((date) => {
+                        const slots = bookableByDate[date] || [];
+                        const isDateSelected = selectedDate === date;
+                        return (
+                          <div
+                            key={date}
+                            className={`rounded-2xl border p-3 sm:p-4 ${
+                              isDateSelected ? 'border-brand-primary bg-brand-primary/5' : 'border-gray-200 bg-white'
+                            }`}
+                          >
+                            <div className="text-sm font-semibold text-brand-text capitalize mb-2">
+                              {parseLocalDateStr(date).toLocaleDateString('es-ES', {
+                                weekday: 'long',
+                                day: 'numeric',
+                                month: 'long',
+                              })}
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {slots.map((slot) => {
+                                const isSelected =
+                                  selectedSlot?.date === slot.date && selectedSlot?.time === slot.time;
+                                return (
+                                  <button
+                                    key={`${slot.date}-${slot.time}`}
+                                    type="button"
+                                    onClick={() => selectTimeSlot(slot.date, slot.time)}
+                                    className={`min-h-[44px] min-w-[76px] px-3 rounded-xl border-2 font-bold text-sm transition-all ${
+                                      isSelected
+                                        ? 'border-brand-primary bg-gradient-to-br from-brand-primary to-brand-accent text-white shadow-md'
+                                        : 'border-gray-200 bg-white text-gray-800 hover:border-brand-primary'
+                                    }`}
+                                  >
+                                    <span className="block">{slot.time}</span>
+                                    {slot.openedByLargeGroup && (
+                                      <span className={`block text-[10px] font-medium ${isSelected ? 'text-white/90' : 'text-brand-secondary'}`}>
+                                        Grupo abierto
+                                      </span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {bookableDates.length > upcomingBookableDates.length && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        Hay más fechas: usa el calendario para ver el resto.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="bg-white border border-gray-200 rounded-2xl p-3 sm:p-5">
+                    <div className="flex items-center justify-between mb-4">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newDate = new Date(currentMonth);
+                          newDate.setMonth(newDate.getMonth() - 1);
+                          setCurrentMonth(newDate);
+                        }}
+                        className="min-h-[44px] min-w-[44px] p-2 rounded-lg hover:bg-gray-100 text-gray-600"
+                        aria-label="Mes anterior"
+                      >
+                        ←
+                      </button>
+                      <h3 className="text-base sm:text-xl font-bold text-brand-text capitalize text-center px-2">
+                        {currentMonth.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newDate = new Date(currentMonth);
+                          newDate.setMonth(newDate.getMonth() + 1);
+                          setCurrentMonth(newDate);
+                        }}
+                        className="min-h-[44px] min-w-[44px] p-2 rounded-lg hover:bg-gray-100 text-gray-600"
+                        aria-label="Mes siguiente"
+                      >
+                        →
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-7 gap-1 mb-2">
+                      {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map((d) => (
+                        <div key={d} className="text-center text-[10px] sm:text-xs font-bold text-gray-500 py-1">
+                          {d}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-7 gap-1">
+                      {(() => {
+                        const availableDatesSet = new Set(bookableDates);
+                        const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay();
+                        const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
+                        const cells = [];
+                        for (let i = 0; i < firstDay; i++) {
+                          cells.push(<div key={`empty-${i}`} />);
+                        }
+                        for (let day = 1; day <= daysInMonth; day++) {
+                          const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                          const isAvailable = availableDatesSet.has(dateStr);
+                          const isSelected = selectedDate === dateStr;
+                          cells.push(
+                            <button
+                              key={day}
+                              type="button"
+                              onClick={() => {
+                                if (!isAvailable) return;
+                                setSelectedDate(dateStr);
+                                setSelectedSlot(null);
+                              }}
+                              disabled={!isAvailable}
+                              className={`min-h-[40px] sm:min-h-[44px] rounded-xl font-semibold text-sm transition-all ${
+                                isSelected && isAvailable
+                                  ? 'bg-gradient-to-br from-brand-primary to-brand-accent text-white shadow-md'
+                                  : isAvailable
+                                    ? 'bg-brand-primary/10 text-brand-text hover:bg-brand-primary/20'
+                                    : 'bg-transparent text-gray-300 cursor-not-allowed'
+                              }`}
+                            >
+                              {day}
+                            </button>
+                          );
+                        }
+                        return cells;
+                      })()}
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-3 text-center">
+                      Los días en color tienen clase individual. El resto no está disponible.
+                    </p>
+                  </div>
+
+                  {selectedDate &&
+                    bookableByDate[selectedDate] &&
+                    !upcomingBookableDates.includes(selectedDate) && (
+                    <div>
+                      <div className="text-sm font-bold text-gray-700 capitalize mb-3">
+                        {parseLocalDateStr(selectedDate).toLocaleDateString('es-ES', {
+                          weekday: 'long',
+                          day: 'numeric',
+                          month: 'long',
+                        })}
+                      </div>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                        {bookableByDate[selectedDate].map((slot) => {
+                          const isSelected =
+                            selectedSlot?.time === slot.time && selectedSlot?.date === slot.date;
+                          return (
+                            <button
+                              key={slot.time}
+                              type="button"
+                              onClick={() => selectTimeSlot(slot.date, slot.time)}
+                              className={`min-h-[52px] rounded-xl border-2 font-bold text-sm transition-all ${
+                                isSelected
+                                  ? 'border-brand-primary bg-gradient-to-br from-brand-primary to-brand-accent text-white shadow-md'
+                                  : 'border-gray-200 bg-white text-gray-800 hover:border-brand-primary'
+                              }`}
+                            >
+                              {slot.time}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : availableSlots.length > 0 ? (
             <div className="space-y-6">
-              {/* Calendar Month Navigation */}
               {(() => {
-                const uniqueDates = [...new Set(availableSlots.map(s => s.date))].sort();
+                const uniqueDates = [...new Set(availableSlots.map((s) => s.date))].sort();
                 const allMonths: { key: string; dates: string[]; date: Date }[] = [];
-                
-                // Helper para parsear fechas en zona horaria local, no UTC
-                const parseLocalDate = (dateStr: string): Date => {
-                  const [year, month, day] = dateStr.split('-').map(Number);
-                  return new Date(year, month - 1, day);
-                };
-                
                 const groupedByMonth: Record<string, string[]> = {};
-                uniqueDates.forEach(date => {
-                  const d = parseLocalDate(date);
+                uniqueDates.forEach((date) => {
+                  const d = parseLocalDateStr(date);
                   const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
                   if (!groupedByMonth[monthKey]) groupedByMonth[monthKey] = [];
                   groupedByMonth[monthKey].push(date);
                 });
-
                 Object.entries(groupedByMonth).forEach(([monthKey, dates]) => {
                   const [year, month] = monthKey.split('-').map(Number);
-                  allMonths.push({
-                    key: monthKey,
-                    dates,
-                    date: new Date(year, month - 1, 1)
-                  });
+                  allMonths.push({ key: monthKey, dates, date: new Date(year, month - 1, 1) });
                 });
-
                 const currentMonthKey = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
-                const currentMonthData = allMonths.find(m => m.key === currentMonthKey);
-                
+                const currentMonthData = allMonths.find((m) => m.key === currentMonthKey);
                 const canGoPrev = currentMonth > new Date();
-                const canGoNext = allMonths.some(m => m.date > currentMonth);
+                const canGoNext = allMonths.some((m) => m.date > currentMonth);
 
                 return (
                   <div>
-                    {/* Month Navigation */}
                     <div className="flex items-center justify-between mb-5">
                       <button
+                        type="button"
                         onClick={() => {
                           const newDate = new Date(currentMonth);
                           newDate.setMonth(newDate.getMonth() - 1);
                           setCurrentMonth(newDate);
                         }}
                         disabled={!canGoPrev}
-                        className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600 hover:text-brand-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 disabled:opacity-40"
                       >
                         ←
                       </button>
@@ -358,58 +850,55 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                         {currentMonth.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}
                       </h3>
                       <button
+                        type="button"
                         onClick={() => {
                           const newDate = new Date(currentMonth);
                           newDate.setMonth(newDate.getMonth() + 1);
                           setCurrentMonth(newDate);
                         }}
                         disabled={!canGoNext}
-                        className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600 hover:text-brand-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 disabled:opacity-40"
                       >
                         →
                       </button>
                     </div>
 
-                    {/* Calendar Grid for Current Month */}
                     {currentMonthData ? (
                       <div>
                         <div className="grid grid-cols-7 gap-1.5 mb-3">
-                          {/* Day headers */}
-                          {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(d => (
-                            <div key={d} className="text-center text-xs font-bold text-gray-500 py-1">{d}</div>
+                          {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map((d) => (
+                            <div key={d} className="text-center text-xs font-bold text-gray-500 py-1">
+                              {d}
+                            </div>
                           ))}
                         </div>
-
                         <div className="grid grid-cols-7 gap-1.5">
-                          {/* Calendar grid */}
                           {(() => {
-                            const parseLocalDate = (dateStr: string): Date => {
-                              const [year, month, day] = dateStr.split('-').map(Number);
-                              return new Date(year, month - 1, day);
-                            };
-                            
                             const dates = currentMonthData.dates;
-                            // Calculate firstDay based on the 1st of the month, NOT the first available date
-                            const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+                            const firstDayOfMonth = new Date(
+                              currentMonth.getFullYear(),
+                              currentMonth.getMonth(),
+                              1
+                            );
                             const firstDay = firstDayOfMonth.getDay();
                             const availableDatesSet = new Set(dates);
                             const cells = [];
-                            
-                            // Empty cells before first day of month
                             for (let i = 0; i < firstDay; i++) {
                               cells.push(<div key={`empty-${i}`} />);
                             }
-                            
-                            // All days in month grid
-                            const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
+                            const daysInMonth = new Date(
+                              currentMonth.getFullYear(),
+                              currentMonth.getMonth() + 1,
+                              0
+                            ).getDate();
                             for (let day = 1; day <= daysInMonth; day++) {
                               const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                               const isAvailable = availableDatesSet.has(dateStr);
                               const isSelected = selectedDate === dateStr;
-                              
                               cells.push(
                                 <button
                                   key={day}
+                                  type="button"
                                   onClick={() => {
                                     if (isAvailable) {
                                       setSelectedDate(dateStr);
@@ -421,128 +910,125 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                                     isSelected && isAvailable
                                       ? 'bg-gradient-to-br from-brand-primary to-brand-accent text-white shadow-lg scale-105'
                                       : !isAvailable
-                                      ? 'bg-transparent text-gray-300 cursor-not-allowed'
-                                      : 'bg-gray-50 text-brand-text hover:bg-brand-primary/10 hover:scale-105 border border-transparent hover:border-brand-primary/20'
+                                        ? 'bg-transparent text-gray-300 cursor-not-allowed'
+                                        : 'bg-gray-50 text-brand-text hover:bg-brand-primary/10 border border-transparent hover:border-brand-primary/20'
                                   }`}
                                 >
                                   {day}
                                 </button>
                               );
                             }
-                            
                             return cells;
                           })()}
                         </div>
                       </div>
                     ) : (
                       <div className="text-center py-6 bg-gray-50 rounded-lg">
-                        <p className="text-gray-600">No hay fechas disponibles este mes</p>
+                        <p className="text-gray-600">No hay fechas este mes</p>
                       </div>
                     )}
                   </div>
                 );
               })()}
 
-              {/* Time Grid for Selected Date */}
               {selectedDate && (
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <div className="text-sm font-bold text-gray-700 uppercase tracking-wide">
-                      ⏰ {(() => {
-                        const [year, month, day] = selectedDate.split('-').map(Number);
-                        const date = new Date(year, month - 1, day);
-                        return date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
-                      })()}
+                      {parseLocalDateStr(selectedDate).toLocaleDateString('es-ES', {
+                        weekday: 'long',
+                        day: 'numeric',
+                        month: 'long',
+                      })}
                     </div>
                     {checkingAvailability && (
-                      <div className="text-xs text-gray-500 flex items-center gap-1">
-                        <div className="w-3 h-3 rounded-full bg-brand-primary animate-pulse"></div>
-                        Verificando disponibilidad...
-                      </div>
+                      <div className="text-xs text-gray-500">Verificando…</div>
                     )}
                   </div>
-                  
-                  {(() => {
-                    const slotsForDate = availableSlots.filter(s => s.date === selectedDate);
-                    let allTimes = [...new Set(slotsForDate.map(s => s.time))].sort();
 
+                  {(() => {
+                    const slotsForDate = availableSlots.filter((s) => s.date === selectedDate);
+                    let allTimes = [...new Set(slotsForDate.map((s) => s.time))].sort();
                     const overrideForDate = scheduleOverrides?.[selectedDate];
                     const isSpecialDayNoRules = overrideForDate?.disableRules === true;
 
-                    // ===== VALIDACIÓN SINGLE_CLASS SOLO PARA TORNO =====
-                    // Torno (potters_wheel) con 1 persona:
-                    // Solo mostrar horarios fijos del calendario o slots abiertos por 3+
-                    // Modelado y Pintura con 1 persona: mostrar TODOS los horarios disponibles
-                    // Guard: solo filtrar si ya tenemos availability Y no estamos cargando cache
-                    if (!isSpecialDayNoRules && technique === 'potters_wheel' && participants === 1 && availability && !checkingAvailability) {
+                    if (
+                      !isSpecialDayNoRules &&
+                      technique === 'potters_wheel' &&
+                      participants === 1 &&
+                      availability &&
+                      !checkingAvailability
+                    ) {
                       const date = parseLocalDate(selectedDate);
-                      const dayOfWeek = date.getDay();
-                      const dayKeys = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                      const dayKey = dayKeys[dayOfWeek] as any;
-                      
-                      // Obtener horarios fijos del calendario para torno
+                      const dayKeys = [
+                        'Sunday',
+                        'Monday',
+                        'Tuesday',
+                        'Wednesday',
+                        'Thursday',
+                        'Friday',
+                        'Saturday',
+                      ];
+                      const dayKey = dayKeys[date.getDay()] as string;
                       const slotsForRules = overrideForDate?.slots ?? availability[dayKey] ?? [];
-                      const fixedSlots = slotsForRules.filter((s: any) => s.technique === 'potters_wheel').map((s: any) => s.time) || [];
-                      
-                      console.log(`[SingleClassWizard] Filtering potters_wheel on ${selectedDate}: fixedSlots=`, fixedSlots);
-                      
-                      // Filtrar: solo mostrar horarios fijos del calendario O slots abiertos por 3+
-                      allTimes = allTimes.filter(time => {
+                      const fixedSlots =
+                        slotsForRules
+                          .filter((s: any) => s.technique === 'potters_wheel')
+                          .map((s: any) => s.time) || [];
+                      allTimes = allTimes.filter((time) => {
                         const slotKey = `${selectedDate}-${time}`;
                         const isFixedSlot = fixedSlots.includes(time);
-                        const cacheEntry = slotAvailabilityCache[slotKey];
-                        const isOpenedByLargeGroup = cacheEntry?.openedByLargeGroup === true;
-                        const shouldShow = isFixedSlot || isOpenedByLargeGroup;
-                        console.log(`  ${time}: fixed=${isFixedSlot}, openedBy3+=${isOpenedByLargeGroup}, show=${shouldShow}`);
-                        return shouldShow;
+                        const isOpenedByLargeGroup =
+                          slotAvailabilityCache[slotKey]?.openedByLargeGroup === true;
+                        return isFixedSlot || isOpenedByLargeGroup;
                       });
                     }
+
                     if (allTimes.length === 0) {
                       return (
                         <div className="text-center py-6 bg-gray-50 rounded-lg">
-                          <p className="text-gray-600">No hay horarios disponibles para este día</p>
+                          <p className="text-gray-600">No hay horarios este día</p>
                         </div>
                       );
                     }
 
                     return (
                       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
-                        {allTimes.map(time => {
+                        {allTimes.map((time) => {
                           const slotKey = `${selectedDate}-${time}`;
                           const slotInfo = slotAvailabilityCache[slotKey];
-                          const isSelected = selectedSlot?.time === time && selectedSlot?.date === selectedDate;
-                          
-                          // Usar valores del cache de verificación dinámica
+                          const isSelected =
+                            selectedSlot?.time === time && selectedSlot?.date === selectedDate;
                           const available = slotInfo?.available ?? 22;
                           const total = slotInfo?.total ?? 22;
-                          const canBook = slotInfo?.canBook ?? (available > 0);
-                          
+                          const canBook = slotInfo?.canBook ?? available >= participants;
+
                           return (
                             <button
                               key={time}
+                              type="button"
                               onClick={() => {
                                 if (canBook) {
                                   setSelectedSlot({
                                     date: selectedDate,
-                                    time: time,
-                                    instructorId: 0
+                                    time,
+                                    instructorId: 0,
                                   });
                                 }
                               }}
                               disabled={!canBook}
-                              title={canBook ? 'Disponible' : 'Sin cupos'}
                               className={`relative p-3.5 rounded-xl border-2 font-bold text-sm transition-all ${
                                 isSelected
                                   ? 'border-brand-primary bg-gradient-to-br from-brand-primary to-brand-accent text-white shadow-lg scale-105'
                                   : canBook
-                                  ? 'border-gray-200 bg-white text-gray-700 hover:border-brand-primary hover:bg-brand-primary/5 hover:scale-105'
-                                  : 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
+                                    ? 'border-gray-200 bg-white text-gray-700 hover:border-brand-primary hover:bg-brand-primary/5'
+                                    : 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
                               }`}
                             >
                               <div className="flex flex-col items-center gap-1">
                                 <span>{time}</span>
                                 {canBook && (
-                                  <SocialBadge 
+                                  <SocialBadge
                                     currentCount={total - available}
                                     maxCapacity={total}
                                     variant="compact"
@@ -560,101 +1046,116 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
             </div>
           ) : (
             <div className="text-center py-12 bg-gray-50 rounded-lg">
-              <p className="text-3xl mb-2">📭</p>
               <p className="text-gray-600">No hay horarios disponibles</p>
             </div>
           )}
 
-          {/* Selected Time Display */}
           {selectedSlot && (
             <div className="bg-gradient-to-r from-green-50 to-green-100 p-4 rounded-lg border-2 border-green-400">
-              <div className="text-xs font-bold text-green-700 uppercase">✓ Horario Confirmado</div>
+              <div className="text-xs font-bold text-green-700 uppercase">Horario elegido</div>
               <div className="text-xl font-bold text-gray-800 mt-2">
-                🕐 {selectedSlot.time} • {(() => {
-                  const [year, month, day] = selectedSlot.date.split('-').map(Number);
-                  const date = new Date(year, month - 1, day);
-                  return date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
-                })()}
+                {selectedSlot.time} ·{' '}
+                {parseLocalDateStr(selectedSlot.date).toLocaleDateString('es-ES', {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long',
+                })}
               </div>
               <div className="text-xs text-gray-600 mt-1">Duración: 2 horas</div>
             </div>
           )}
 
-          {error && <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg border-l-4 border-red-500">{error}</div>}
+          {error && (
+            <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg border-l-4 border-red-500">
+              {error}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Step: Confirmation */}
-      {step === 'confirmation' && pricing && (
+      {step === 'confirmation' && pricing && sku && (
         <div className="space-y-6">
           <div>
-            <h3 className="text-2xl font-bold mb-2">✓ Confirma tu Clase Suelta</h3>
-            <p className="text-gray-600">Revisa los detalles de tu reserva</p>
+            <h3 className="text-2xl font-bold text-brand-text mb-2">Confirma tu reserva</h3>
+            <p className="text-brand-secondary">Revisa los detalles</p>
           </div>
 
-          <div className="bg-white p-6 rounded-lg border border-gray-200 space-y-4">
-            <div className="flex justify-between pb-4 border-b">
-              <span className="text-gray-600">Técnica:</span>
-              <span className="font-bold">{TECHNIQUE_INFO[technique].label}</span>
+          <div className="bg-white p-6 rounded-xl border border-brand-border space-y-4 shadow-subtle">
+            <div className="flex justify-between pb-4 border-b border-brand-border">
+              <span className="text-brand-secondary">Actividad</span>
+              <span className="font-semibold text-brand-text text-right">{sku.label}</span>
             </div>
-
-            <div className="flex justify-between pb-4 border-b">
-              <span className="text-gray-600">Cantidad de Personas:</span>
-              <span className="font-bold">1 (Clase Suelta)</span>
+            <div className="flex justify-between pb-4 border-b border-brand-border">
+              <span className="text-brand-secondary">Personas</span>
+              <span className="font-semibold text-brand-text">{participants}</span>
             </div>
-
-            <div className="flex justify-between pb-4 border-b">
-              <span className="text-gray-600">Precio:</span>
-              <span className="font-bold">${TECHNIQUE_INFO[technique].price}</span>
+            <div className="flex justify-between pb-4 border-b border-brand-border">
+              <span className="text-brand-secondary">Precio</span>
+              <span className="font-semibold text-brand-text text-right">
+                {sku.vatMode === 'included'
+                  ? formatSkuPriceLabel(sku)
+                  : `${formatSkuPriceLabel(sku)} → $${formatMoney(unitPriceCharged(sku))}/persona`}
+              </span>
             </div>
-
-            {technique === 'painting' && (
-              <div className="flex justify-between pb-4 border-b text-sm text-amber-700 bg-amber-50 p-3 rounded">
-                <span>Nota:</span>
-                <span className="text-right">La pieza final se elige en el taller</span>
+            {isPaintingPieces && (
+              <div className="text-sm text-amber-800 bg-amber-50 p-3 rounded-lg">
+                La pieza final se elige en el taller.
               </div>
             )}
-
-            <div className="flex justify-between pb-4 border-b">
-              <span className="text-gray-600">Horario:</span>
-              <span className="font-bold">{selectedSlot?.time} • {(() => {
-                const date = parseLocalDate(selectedSlot?.date || '');
-                return date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
-              })()}</span>
+            {showExtrasNote && (
+              <div className="text-sm text-brand-secondary bg-brand-primary/5 p-3 rounded-lg">
+                Extras (charms, patches adicionales, etc.) se pagan en el local.
+              </div>
+            )}
+            <div className="flex justify-between pb-4 border-b border-brand-border">
+              <span className="text-brand-secondary">Horario</span>
+              <span className="font-semibold text-brand-text text-right">
+                {selectedSlot?.time} ·{' '}
+                {parseLocalDate(selectedSlot?.date || '').toLocaleDateString('es-ES', {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long',
+                })}
+              </span>
             </div>
-
-            <div className="flex justify-between text-lg font-bold pt-4 text-blue-600">
-              <span>Total a Pagar:</span>
-              <span className="text-2xl">${pricing.total}</span>
+            <div className="flex justify-between pt-2 text-brand-primary">
+              <span className="font-bold">Total</span>
+              <span className="text-2xl font-bold">${formatMoney(pricing.total)}</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Navigation Buttons */}
       <div className="flex gap-4 mt-8">
         <button
+          type="button"
           onClick={handleBack}
           disabled={isLoading}
-          className="px-6 py-3 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 font-medium transition-colors"
+          className="px-6 py-3 rounded-xl border border-brand-border text-brand-text hover:bg-brand-surface disabled:opacity-50 font-semibold"
         >
           ← Atrás
         </button>
-        {step !== 'confirmation' ? (
+        {step === 'category' || step === 'option' ? null : step !== 'confirmation' ? (
           <button
+            type="button"
             onClick={handleNext}
-            disabled={isLoading || (step === 'date' && !selectedSlot)}
-            className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium transition-colors"
+            disabled={
+              isLoading ||
+              (step === 'date' && !selectedSlot) ||
+              (step === 'participants' && (!sku || participants < sku.minParticipants))
+            }
+            className="flex-1 px-6 py-3 bg-brand-primary text-white rounded-xl hover:opacity-90 disabled:opacity-50 font-semibold"
           >
             Siguiente →
           </button>
         ) : (
           <button
+            type="button"
             onClick={handleConfirm}
             disabled={isLoading || !selectedSlot}
-            className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium transition-colors"
+            className="flex-1 px-6 py-3 bg-brand-primary text-white rounded-xl hover:opacity-90 disabled:opacity-50 font-semibold"
           >
-            {isLoading ? 'Procesando...' : 'Confirmar Clase'}
+            {isLoading ? 'Procesando…' : 'Continuar'}
           </button>
         )}
       </div>

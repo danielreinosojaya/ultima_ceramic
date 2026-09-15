@@ -1778,6 +1778,7 @@ export interface AvailableSlotResult {
     instructorId: number;       // ID del instructor
     technique: string;          // Técnica del slot
     blockedReason?: string | null;  // 'course_conflict' si está bloqueado por curso
+    openedByLargeGroup?: boolean;
 }
 
 export interface GroupClassSlotResult extends AvailableSlotResult {

@@ -9,6 +9,7 @@ import {
   sanitizeExperienceTypeOverrides,
 } from '../../utils/experienceTypeRestrictions';
 import { isClassStartWithinBusinessHours, getBusinessStartTimesForDate, LAST_CLASS_START_BY_DATE } from '../../utils/businessHours';
+import { enumerateFixedScheduleDays } from '../../utils/fixedScheduleSlots';
 
 // Nombres de días para mapear Date.getDay() a DayKey
 const DAY_KEYS: DayKey[] = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -383,6 +384,30 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
 
   const monthDays = getDaysInMonth(currentMonth);
   const monthName = currentMonth.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+  const restrictCalendarToFixedDays =
+    (technique === 'potters_wheel' && participants < 3) ||
+    (technique === 'hand_modeling' && participants === 1);
+  const allFixedDays = useMemo(
+    () =>
+      restrictCalendarToFixedDays
+        ? enumerateFixedScheduleDays(technique, availability, scheduleOverrides, 90)
+        : [],
+    [restrictCalendarToFixedDays, technique, availability, scheduleOverrides]
+  );
+  const upcomingFixedDays = allFixedDays.slice(0, 6);
+
+  useEffect(() => {
+    if (!restrictCalendarToFixedDays || allFixedDays.length === 0) return;
+    const monthKey = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
+    const monthHasSlots = allFixedDays.some((d) => d.date.startsWith(monthKey));
+    if (!monthHasSlots) {
+      const first = parseLocalDate(allFixedDays[0].date);
+      setCurrentMonth(new Date(first.getFullYear(), first.getMonth(), 1));
+    }
+    if (!selectedDate) {
+      onSelectDate(allFixedDays[0].date);
+    }
+  }, [restrictCalendarToFixedDays, allFixedDays, selectedDate]);
 
   const isMonday = (day: number) => {
     if (technique !== 'painting') return false;
@@ -406,6 +431,18 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     return dateStr < getEcuadorDateYmd();
   };
 
+  const dateHasSelectableIndividualSlots = (day: number) => {
+    const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    if (scheduleOverrides?.[dateStr]?.disableRules) return true;
+    if (technique === 'potters_wheel' && participants < 3) {
+      return getAvailableHours(dateStr).some((hour) => !isEcuadorSlotInPast(dateStr, hour));
+    }
+    if (technique === 'hand_modeling' && participants === 1) {
+      return getFixedSlotsByType(dateStr, technique).some((hour) => !isEcuadorSlotInPast(dateStr, hour));
+    }
+    return true;
+  };
+
   const handleMonthChange = (direction: 'prev' | 'next') => {
     const newMonth = new Date(currentMonth);
     if (direction === 'prev') {
@@ -417,7 +454,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   };
 
   const handleDayClick = (day: number) => {
-    if (isMonday(day) || isPastDate(day)) return;
+    if (isMonday(day) || isPastDate(day) || !dateHasSelectableIndividualSlots(day)) return;
     
     const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     onSelectDate(dateStr);
@@ -450,6 +487,35 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
 
   return (
     <div className="space-y-5 animate-fade-in-up">
+      {restrictCalendarToFixedDays && upcomingFixedDays.length > 0 && (
+        <div className="space-y-2">
+          <h4 className="text-sm font-bold text-brand-text">Próximos horarios</h4>
+          <div className="space-y-2">
+            {upcomingFixedDays.map((day) => (
+              <button
+                key={day.date}
+                type="button"
+                onClick={() => onSelectDate(day.date)}
+                className={`w-full min-h-[44px] text-left rounded-xl border px-3 py-2.5 transition-all ${
+                  selectedDate === day.date
+                    ? 'border-brand-primary bg-brand-primary/5'
+                    : 'border-gray-200 bg-white'
+                }`}
+              >
+                <div className="text-sm font-semibold text-brand-text capitalize">
+                  {parseLocalDate(day.date).toLocaleDateString('es-ES', {
+                    weekday: 'short',
+                    day: 'numeric',
+                    month: 'short',
+                  })}
+                </div>
+                <div className="text-xs text-gray-500 mt-0.5">{day.times.join(' · ')}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Calendario */}
       <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
         <div className="flex items-center justify-between mb-5">
@@ -483,7 +549,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
             const isPast = isPastDate(day);
             const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const isSelected = selectedDate === dateStr;
-            const isDisabled = isMonday_ || isPast;
+            const isDisabled = isMonday_ || isPast || !dateHasSelectableIndividualSlots(day);
             
             return (
               <button
@@ -503,6 +569,12 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
             );
           })}
         </div>
+        {restrictCalendarToFixedDays && (
+          <p className="text-[11px] text-gray-500 mt-3 text-center leading-relaxed">
+            Solo puedes elegir los días marcados: hay horario fijo
+            {technique === 'potters_wheel' ? ' de torno' : ' de modelado'} o un grupo de 3+ ya abrió el slot.
+          </p>
+        )}
       </div>
 
       {/* Selector de hora con validación */}
