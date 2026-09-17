@@ -30,27 +30,14 @@ import {
 } from '@heroicons/react/24/outline';
 import * as dataService from '../../services/dataService';
 import { formatDate, formatCurrency, normalizeHour } from '../../utils/formatters';
-
-// Helper para obtener nombre de técnica desde metadata
-const getTechniqueName = (technique: GroupTechnique): string => {
-  const names: Record<GroupTechnique, string> = {
-    'potters_wheel': 'Torno Alfarero',
-    'hand_modeling': 'Modelado a Mano',
-    'painting': 'Pintura de piezas'
-  };
-  return names[technique] || technique;
-};
-
-// Detecta upsell de pintura post-clase (cliente pinta SU pieza ya hecha).
-const isPaintingUpsell = (booking: Booking): boolean => {
-    const product = booking.product as any;
-    return product?.kind === 'painting_upsell'
-        || (booking.productType === 'CUSTOM_GROUP_EXPERIENCE'
-            && booking.technique === 'painting'
-            && (booking as any).productId === 'painting_service');
-};
-
-const PAINTING_UPSELL_LABEL = 'Upsell - pieza ya hecha';
+import {
+    getBookingDisplayName,
+    getBookingParticipantCount,
+    formatParticipantsLabel,
+    isCreativeExperienceBooking,
+    isPaintingUpsell,
+    getTechniqueDisplayName,
+} from '../../utils/bookingDisplay';
 
 // Helper para traducir productType a nombre legible (categoría de reserva)
 const getProductTypeName = (productType?: string): string => {
@@ -79,6 +66,9 @@ type BookingCategoryMeta = {
 const getBookingCategory = (booking: Booking): BookingCategoryMeta => {
   if (isPaintingUpsell(booking)) {
     return { label: 'Upsell pintura', short: 'Pintura', tone: 'bg-fuchsia-100 text-fuchsia-900 border-fuchsia-200' };
+  }
+  if (isCreativeExperienceBooking(booking)) {
+    return { label: 'Experiencia', short: 'Exp.', tone: 'bg-emerald-100 text-emerald-900 border-emerald-200' };
   }
   const t = booking.productType;
   if (t === 'CLASS_PACKAGE') {
@@ -139,43 +129,6 @@ const getPackageSessionLabel = (booking: Booking, slot: { date: string; time: st
     return `Sesión ${idx + 1} de ${scheduledCount}`;
   }
   return null;
-};
-
-// Helper para obtener el nombre del producto/técnica de un booking
-const getBookingDisplayName = (booking: Booking): string => {
-    if (isPaintingUpsell(booking)) return PAINTING_UPSELL_LABEL;
-
-    // 0. Para experiencia grupal personalizada, priorizar técnica sobre nombre genérico
-    if (
-        booking.technique &&
-        (booking.productType === 'CUSTOM_GROUP_EXPERIENCE' || booking.product?.name === 'Experiencia Grupal Personalizada')
-    ) {
-        return getTechniqueName(booking.technique);
-    }
-
-  // 1. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
-  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
-    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
-    const uniqueTechniques = [...new Set(techniques)];
-    if (uniqueTechniques.length === 1) {
-      return getTechniqueName(uniqueTechniques[0]);
-    }
-    return 'Clase Grupal (mixto)';
-  }
-  
-  // 2. Prioridad: product.name (es la fuente más confiable)
-  const productName = booking.product?.name;
-  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
-    return productName;
-  }
-  
-  // 3. Fallback: technique directamente (solo si product.name no existe)
-  if (booking.technique) {
-    return getTechniqueName(booking.technique);
-  }
-  
-  // 4. Último fallback: productType
-  return getProductTypeName(booking.productType);
 };
 
 interface CustomerDetailViewProps {
@@ -566,7 +519,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                         const uniqueKey = `${booking.id}-${slot.date}-${slot.time}`;
                         const category = getBookingCategory(booking);
                         const sessionLabel = getPackageSessionLabel(booking, slot);
-                        const techniqueLabel = booking.technique ? getTechniqueName(booking.technique as GroupTechnique) : null;
+                        const techniqueLabel = booking.technique ? getTechniqueDisplayName(booking.technique as GroupTechnique) : null;
 
                         return (
                             <div
@@ -590,7 +543,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                         )}
                                     </div>
                                     <p className="font-bold text-lg text-brand-text">
-                                        {getBookingDisplayName(booking)}
+                                        {getBookingDisplayName(booking, 'admin')}
                                     </p>
                                     {sessionLabel && (
                                         <p className="text-sm font-semibold text-indigo-800">{sessionLabel}</p>
@@ -601,10 +554,8 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                     </p>
                                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-brand-secondary">
                                         <span>Código: <span className="font-mono text-brand-text">{booking.bookingCode}</span></span>
-                                        {techniqueLabel && <span>Técnica: {techniqueLabel}</span>}
-                                        {booking.participants && booking.participants > 1 && (
-                                            <span>Participantes: {booking.participants}</span>
-                                        )}
+                                        {techniqueLabel && !isCreativeExperienceBooking(booking) && <span>Técnica: {techniqueLabel}</span>}
+                                        <span>{formatParticipantsLabel(getBookingParticipantCount(booking))}</span>
                                         {booking.clientNote && (
                                             <span className="text-amber-800">Nota: {booking.clientNote}</span>
                                         )}
@@ -711,9 +662,9 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                         <span className="font-bold">Próxima clase: </span>
                         {formatDate(scheduledSlots[0].slot.date)} · {scheduledSlots[0].slot.time}
                         {' · '}
-                        <span className="font-semibold">{getBookingCategory(scheduledSlots[0].booking).label}</span>
+                        {getBookingDisplayName(scheduledSlots[0].booking, 'admin')}
                         {' · '}
-                        {getBookingDisplayName(scheduledSlots[0].booking)}
+                        {formatParticipantsLabel(getBookingParticipantCount(scheduledSlots[0].booking))}
                     </div>
                 )}
 
@@ -727,7 +678,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                         const isNext = uniqueKey === nextKey;
                         const category = getBookingCategory(booking);
                         const sessionLabel = getPackageSessionLabel(booking, slot);
-                        const techniqueLabel = booking.technique ? getTechniqueName(booking.technique as GroupTechnique) : null;
+                        const techniqueLabel = booking.technique ? getTechniqueDisplayName(booking.technique as GroupTechnique) : null;
 
                         return (
                         <div
@@ -758,7 +709,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                         </span>
                                     )}
                                 </div>
-                                <p className="font-bold text-lg text-brand-text">{getBookingDisplayName(booking)}</p>
+                                <p className="font-bold text-lg text-brand-text">{getBookingDisplayName(booking, 'admin')}</p>
                                 {sessionLabel && (
                                     <p className="text-sm font-semibold text-indigo-800">{sessionLabel}</p>
                                 )}
@@ -768,10 +719,8 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                                 </p>
                                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-brand-secondary">
                                     <span>Código: <span className="font-mono text-brand-text">{booking.bookingCode}</span></span>
-                                    {techniqueLabel && <span>Técnica: {techniqueLabel}</span>}
-                                    {booking.participants && booking.participants > 1 && (
-                                        <span>Participantes: {booking.participants}</span>
-                                    )}
+                                    {techniqueLabel && !isCreativeExperienceBooking(booking) && <span>Técnica: {techniqueLabel}</span>}
+                                    <span>{formatParticipantsLabel(getBookingParticipantCount(booking))}</span>
                                     {booking.clientNote && (
                                         <span className="text-amber-800">Nota: {booking.clientNote}</span>
                                     )}
@@ -893,7 +842,7 @@ function CustomerDetailView({ customer, onBack, onDataChange, invoiceRequests, s
                             </div>
                             <div className="flex-1">
                                 <p className="font-bold text-xl text-brand-text mb-1 flex items-center gap-2">
-                                    {getBookingDisplayName(booking)}
+                                    {getBookingDisplayName(booking, 'admin')}
                                     <span className="inline-flex items-center px-2 py-1 text-sm font-semibold rounded bg-green-50 text-green-700 ml-2">
                                         ${formatCurrency(payment.amount).replace('€', '')}
                                     </span>

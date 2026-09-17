@@ -1,6 +1,6 @@
 import { Resend } from 'resend';
 import { toZonedTime, format } from 'date-fns-tz';
-import type { Booking, BankDetails, TimeSlot, PaymentDetails, GroupTechnique } from '../types.js';
+import type { Booking, BankDetails, TimeSlot, PaymentDetails } from '../types.js';
 import { sql } from './db.js';
 import { generateAllGiftcardVersions } from './utils/giftcardImageGenerator.js';
 import { parseLocalDate } from '../utils/formatters.js';
@@ -13,6 +13,14 @@ import {
     PIECE_HOLD_MONTHS,
     formatPieceHoldDeadlineEs,
 } from '../utils/deliveryDateCalculator.js';
+import {
+    getBookingDisplayName,
+    getBookingDurationLabel,
+    getBookingParticipantCount,
+    formatParticipantsLabel,
+    formatPriceBreakdown,
+    formatMoneyAmount,
+} from '../utils/bookingDisplay.js';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_FROM_ADDRESS || 'no-reply@ceramicalma.com';
@@ -23,31 +31,6 @@ export const AVAILABLE_FROM_EMAILS = {
   DEFAULT: fromEmail,
   ALIANZA: alianzaEmail
 } as const;
-
-// Helper para obtener nombre de técnica desde metadata
-const getTechniqueName = (technique: GroupTechnique): string => {
-  const names: Record<GroupTechnique, string> = {
-    'potters_wheel': 'Torno Alfarero',
-    'hand_modeling': 'Modelado a Mano',
-    'painting': 'Pintura de piezas'
-  };
-  return names[technique] || technique;
-};
-
-// Helper para traducir productType a nombre legible
-const getProductTypeName = (productType?: string): string => {
-  const typeNames: Record<string, string> = {
-    'SINGLE_CLASS': 'Clase Suelta',
-    'CLASS_PACKAGE': 'Paquete de Clases',
-    'INTRODUCTORY_CLASS': 'Clase Introductoria',
-    'GROUP_CLASS': 'Clase Grupal',
-    'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
-    'OPEN_STUDIO': 'Estudio Abierto',
-    'SPACE_RENTAL': 'Alquiler de espacio',
-    'CUSTOM_GROUP_EXPERIENCE': 'Experiencia Grupal',
-  };
-  return typeNames[productType || ''] || 'Clase';
-};
 
 function getAppPublicUrl(): string {
     return process.env.APP_PUBLIC_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://ceramicalma.com');
@@ -66,49 +49,6 @@ export function giftcardRedeemEmailBlock(bookingCode: string): string {
                 <a href="${redeemLink}" style="display:inline-block;background:#7C3AED;color:#fff;padding:12px 32px;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;">Redimir gift card →</a>
             </div>`;
 }
-
-const SPECIAL_EVENT_DISPLAY_NAMES: Record<string, string> = {
-  'desobedecer-al-dolor': 'Desobedecer al Dolor',
-  'huella-mascota': 'Una Huella que Queda para Siempre',
-};
-
-// Helper para obtener el nombre del producto/técnica de un booking
-const getBookingDisplayName = (booking: Booking): string => {
-  const bookingSource = (booking.product?.details as any)?.bookingSource;
-  if (bookingSource === 'rumcom') {
-    return 'Spill the Tea x Rum-Com Club';
-  }
-  const specialEventName = bookingSource ? SPECIAL_EVENT_DISPLAY_NAMES[bookingSource] : undefined;
-  if (specialEventName) {
-    return specialEventName;
-  }
-  
-  // 1. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
-  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
-    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
-    const uniqueTechniques = [...new Set(techniques)];
-    
-    if (uniqueTechniques.length === 1) {
-      return getTechniqueName(uniqueTechniques[0]);
-    } else {
-      return `Clase Grupal (mixto)`;
-    }
-  }
-  
-  // 2. Prioridad: product.name (es la fuente más confiable)
-  const productName = booking.product?.name;
-  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
-    return productName;
-  }
-  
-  // 3. Fallback: technique directamente (solo si product.name no existe)
-  if (booking.technique) {
-    return getTechniqueName(booking.technique as GroupTechnique);
-  }
-  
-  // 4. Último fallback: productType
-  return getProductTypeName(booking.productType);
-};
 
 export const isEmailServiceConfigured = (): { configured: boolean; reason?: string } => {
     if (!resend) return { configured: false, reason: 'Missing RESEND_API_KEY' };
@@ -256,6 +196,10 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
     const totalPaid = paymentDetails?.reduce((sum: number, p: any) => sum + (p.amount || 0), 0) || 0;
     const pendingBalance = Math.max(0, numericPrice - totalPaid);
     const productName = getBookingDisplayName(booking);
+    const participantCount = getBookingParticipantCount(booking);
+    const participantLabel = formatParticipantsLabel(participantCount);
+    const durationLabel = getBookingDurationLabel(booking);
+    const priceBreakdown = formatPriceBreakdown(numericPrice, participantCount);
     
     const slotInfo = slots && slots.length > 0 ? (() => {
         const slot = slots[0];
@@ -354,11 +298,12 @@ export const sendPreBookingConfirmationEmail = async (booking: Booking, bankDeta
                     </tr>` : ''}
                     <tr style="border-bottom: 1px solid #D1D0C6;">
                         <td style="padding: 10px 0; font-weight: 600;">👥 Participantes:</td>
-                        <td style="padding: 10px 0;">${booking.participants || 1} persona(s) · Duración: 2 h</td>
+                        <td style="padding: 10px 0;">${participantLabel} · Duración: ${durationLabel}</td>
                     </tr>
                 </table>
                 <div style="margin-top: 20px; padding-top: 16px; border-top: 2px solid #D1D0C6; text-align: right;">
-                    <p style="margin: 0; font-size: 24px; color: #828E98; font-weight: 700;">$${numericPrice.toFixed(2)}</p>
+                    ${priceBreakdown ? `<p style="margin: 0 0 6px 0; font-size: 13px; color: #958985;">${priceBreakdown}</p>` : ''}
+                    <p style="margin: 0; font-size: 24px; color: #828E98; font-weight: 700;">$${formatMoneyAmount(numericPrice)}</p>
                     ${giftcardBlock}
                 </div>
             </div>
@@ -452,13 +397,20 @@ export const sendPaymentReceiptEmail = async (booking: Booking, payment: Payment
            <p><strong>Saldo restante:</strong> $${(paymentAmount - giftcardAmount).toFixed(2)}</p>`
         : '';
 
-    // Obtener nombre del producto/técnica
+    // Obtener nombre del producto/técnica y desglose
     const productName = getBookingDisplayName(booking);
+    const participantCount = getBookingParticipantCount(booking);
+    const participantLabel = formatParticipantsLabel(participantCount);
+    const durationLabel = getBookingDurationLabel(booking);
+    const priceForBreakdown = Number.isFinite(paymentAmount) ? paymentAmount : Number(booking.price) || 0;
+    const priceBreakdown = formatPriceBreakdown(priceForBreakdown, participantCount);
 
     // Formatear información de fecha/hora de las clases
     const slotsHtml = slots && slots.length > 0 ? `
         <div style="background-color: #f0f9ff; border-left: 4px solid #0EA5E9; padding: 15px; margin-top: 20px; border-radius: 8px;">
             <p style="margin: 0; color: #0369A1; font-weight: bold;">📅 ${slots.length > 1 ? 'Tus Clases Programadas' : 'Tu Clase Programada'}</p>
+            <p style="margin: 8px 0 0 0; color: #0c4a6e; font-weight: bold;">${productName}</p>
+            <p style="margin: 4px 0 0 0; color: #0369A1; font-size: 14px;">${participantLabel} · Duración: ${durationLabel}</p>
             <table style="margin-top: 10px; width: 100%; border-collapse: collapse;">
                 ${slots.map((slot, index) => {
                     const slotDate = new Date(slot.date + 'T00:00:00').toLocaleDateString('es-ES', { 
@@ -504,7 +456,10 @@ export const sendPaymentReceiptEmail = async (booking: Booking, payment: Payment
             <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; margin-top: 20px;">
                 <h3 style="color: #D95F43;">Detalles del Pago</h3>
                 <p><strong>Código de Reserva:</strong> ${bookingCode}</p>
-                <p><strong>Monto Pagado:</strong> $${paymentAmount.toFixed(2)}</p>
+                <p><strong>Actividad:</strong> ${productName}</p>
+                <p><strong>Participantes:</strong> ${participantLabel}</p>
+                ${priceBreakdown ? `<p><strong>Desglose:</strong> ${priceBreakdown}</p>` : ''}
+                <p><strong>Monto Pagado:</strong> $${formatMoneyAmount(paymentAmount)}</p>
                 ${giftcardInfo}
                 <p><strong>Método:</strong> ${payment.method}</p>
                 <p><strong>Fecha de Pago:</strong> ${fechaPago}</p>
@@ -535,12 +490,16 @@ export const sendPaymentReceiptEmail = async (booking: Booking, payment: Payment
 export const sendClassReminderEmail = async (booking: Booking, slot: TimeSlot) => {
     const { userInfo } = booking;
     const classDate = new Date(slot.date + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    const productName = getBookingDisplayName(booking);
+    const participantLabel = formatParticipantsLabel(getBookingParticipantCount(booking));
     const subject = `Recordatorio: Tu clase en CeramicAlma es mañana`;
     const html = `
          <div style="font-family: Arial, sans-serif; color: #333;">
             <h2>¡Hola, ${userInfo.firstName}!</h2>
             <p>Este es un recordatorio amistoso de que tienes una clase programada en CeramicAlma para mañana.</p>
             <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; margin-top: 20px; text-align: center;">
+                <p style="font-size: 16px; margin: 0 0 8px 0; color: #0c4a6e;"><strong>${productName}</strong></p>
+                <p style="font-size: 14px; margin: 0 0 8px 0; color: #64748b;">${participantLabel}</p>
                 <p style="font-size: 18px; margin: 0;"><strong>${classDate}</strong></p>
                 <p style="font-size: 24px; font-weight: bold; color: #D95F43; margin: 10px 0;">${slot.time}</p>
             </div>
@@ -3379,6 +3338,9 @@ export const sendPaymentReminderEmail = async (booking: Booking, bankDetails: Ba
     const { userInfo, bookingCode, price, slots } = booking;
     const numericPrice = typeof price === 'number' ? price : parseFloat(String(price));
     const productName = getBookingDisplayName(booking);
+    const participantCount = getBookingParticipantCount(booking);
+    const participantLabel = formatParticipantsLabel(participantCount);
+    const priceBreakdown = formatPriceBreakdown(numericPrice, participantCount);
     const appUrl = process.env.APP_PUBLIC_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://ceramicalma.com');
     const uploadLink = `${appUrl}/?comprobante=${encodeURIComponent(bookingCode)}`;
     const subject = `⚠️ RECORDATORIO: Tu reserva vence pronto - ${bookingCode} | CeramicAlma`;
@@ -3407,7 +3369,9 @@ export const sendPaymentReminderEmail = async (booking: Booking, bankDetails: Ba
             <p>Te recordamos que tienes una pre-reserva activa que <strong>vencerá en las próximas horas</strong>.
             Si no realizas el pago a tiempo, tu lugar quedará disponible para otros clientes.</p>
             ${slotsText ? `<p>📅 Clase agendada: <strong>${slotsText}</strong></p>` : ''}
-            <p>Monto a pagar: <strong style="font-size:18px;color:#D95F43;">$${numericPrice.toFixed(2)}</strong></p>
+            <p>Actividad: <strong>${productName}</strong> · ${participantLabel}</p>
+            ${priceBreakdown ? `<p>Desglose: <strong>${priceBreakdown}</strong></p>` : ''}
+            <p>Monto a pagar: <strong style="font-size:18px;color:#D95F43;">$${formatMoneyAmount(numericPrice)}</strong></p>
             <p>Realiza una transferencia bancaria con los siguientes datos y envía el comprobante por <strong>WhatsApp</strong>:</p>
             <table style="width:100%;border-collapse:collapse;background:#f9fafb;border-radius:8px;overflow:hidden;margin-top:8px;">
                 <thead>

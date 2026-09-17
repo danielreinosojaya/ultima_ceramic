@@ -1,84 +1,9 @@
 import React, { useState } from 'react';
-import type { Booking, AppData, TimeSlot, GroupTechnique } from '../types';
+import type { Booking, AppData, TimeSlot } from '../types';
 import { RescheduleClientFlow } from './RescheduleClientFlow';
 import { formatDate } from '../utils/formatters';
 import { CalendarIcon, ClockIcon } from '@heroicons/react/24/outline';
-
-// Helper para obtener nombre de técnica desde metadata
-const getTechniqueName = (technique: GroupTechnique | string): string => {
-    const names: Record<string, string> = {
-    'potters_wheel': 'Torno Alfarero',
-    'hand_modeling': 'Modelado a Mano',
-        'painting': 'Pintura de piezas',
-        'molding': 'Modelado a Mano'
-  };
-  return names[technique] || technique;
-};
-
-// Helper para traducir productType a nombre legible
-const getProductTypeName = (productType?: string): string => {
-  const typeNames: Record<string, string> = {
-    'SINGLE_CLASS': 'Clase Suelta',
-    'CLASS_PACKAGE': 'Paquete de Clases',
-    'INTRODUCTORY_CLASS': 'Clase Introductoria',
-    'GROUP_CLASS': 'Clase Grupal',
-        'CUSTOM_GROUP_EXPERIENCE': 'Experiencia Grupal Personalizada',
-    'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
-    'OPEN_STUDIO': 'Estudio Abierto'
-  };
-  return typeNames[productType || ''] || 'Clase';
-};
-
-// Helper para obtener el nombre del producto/técnica de un booking
-// CRÍTICO: Para SINGLE_CLASS, SIEMPRE mostrar técnica, nunca "Clase Suelta"
-// NOTA: La diferenciación "Upsell - pieza ya hecha" se aplica solo en vistas
-// del admin. Aquí (cliente) se muestra siempre "Pintura de piezas".
-const getBookingDisplayName = (booking: Booking): string => {
-    // 0. Para SINGLE_CLASS, SIEMPRE mostrar técnica
-    if (booking.productType === 'SINGLE_CLASS') {
-        if (booking.technique) {
-            return getTechniqueName(booking.technique as any);
-        }
-        // Fallback: derivar de product.name
-        const productName = booking.product?.name?.toLowerCase() || '';
-        if (productName.includes('torno')) return 'Torno Alfarero';
-        if (productName.includes('modelado')) return 'Modelado a Mano';
-        if (productName.includes('pintura')) return 'Pintura de piezas';
-        return 'Clase';
-    }
-
-    // 1. Para experiencia grupal personalizada, priorizar técnica sobre nombre genérico
-    if (
-        booking.technique &&
-        (booking.productType === 'CUSTOM_GROUP_EXPERIENCE' || booking.product?.name === 'Experiencia Grupal Personalizada')
-    ) {
-        return getTechniqueName(booking.technique);
-    }
-
-  // 2. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
-  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
-    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
-    const uniqueTechniques = [...new Set(techniques)];
-    if (uniqueTechniques.length === 1) {
-      return getTechniqueName(uniqueTechniques[0]);
-    }
-    return 'Clase Grupal (mixto)';
-  }
-  
-  // 3. Prioridad: product.name (es la fuente más confiable)
-  const productName = booking.product?.name;
-  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
-    return productName;
-  }
-  
-  // 4. Fallback: technique directamente (solo si product.name no existe)
-  if (booking.technique) {
-    return getTechniqueName(booking.technique);
-  }
-  
-  // 5. Último fallback: productType
-  return getProductTypeName(booking.productType);
-};
+import { getBookingDisplayName, getBookingParticipantCount, formatParticipantsLabel } from '../utils/bookingDisplay';
 
 interface ClientBookingsViewProps {
     bookings: Booking[];
@@ -162,7 +87,7 @@ export const ClientBookingsView: React.FC<ClientBookingsViewProps> = ({ bookings
                                             {getBookingDisplayName(classCard.booking)}
                                         </h3>
                                         <p className="text-sm text-brand-secondary mt-1">
-                                            Código: {classCard.booking.bookingCode}
+                                            Código: {classCard.booking.bookingCode} · {formatParticipantsLabel(getBookingParticipantCount(classCard.booking))}
                                         </p>
                                     </div>
                                     <span className="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-semibold">

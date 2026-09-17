@@ -17,67 +17,32 @@ import { uploadPaymentProof } from '../services/dataService';
 import { getClassPackageValidityDescription, getClassPackageValidityLabel } from '../utils/classPackageValidity';
 import { GiftcardApplyToBooking } from './giftcard/GiftcardApplyToBooking';
 import { getBookingPaymentSplit } from '../utils/giftcardPayment';
+import {
+    getBookingDisplayName,
+    getTechniqueDisplayName,
+    isCreativeExperienceBooking,
+    getBookingParticipantCount,
+    formatParticipantsLabel,
+    formatPriceBreakdown,
+    getBookingDurationLabel,
+} from '../utils/bookingDisplay';
 
-// Helper para obtener nombre de técnica desde metadata
-const getTechniqueName = (technique: GroupTechnique): string => {
-  const names: Record<GroupTechnique, string> = {
-    'potters_wheel': 'Torno Alfarero',
-    'hand_modeling': 'Modelado a Mano',
-    'painting': 'Pintura de piezas'
-  };
-  return names[technique] || technique;
-};
+/** Solo mostrar "Técnica" si el cliente eligió torno/modelado/pintura, no el código interno. */
+const getCustomerFacingTechniqueLabel = (booking: Booking): string | null => {
+    if (!booking.technique || isCreativeExperienceBooking(booking)) return null;
 
-// Helper para traducir productType a nombre legible
-const getProductTypeName = (productType?: string): string => {
-  const typeNames: Record<string, string> = {
-    'SINGLE_CLASS': 'Clase Suelta',
-    'CLASS_PACKAGE': 'Paquete de Clases',
-    'INTRODUCTORY_CLASS': 'Clase Introductoria',
-    'GROUP_CLASS': 'Clase Grupal',
-    'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
-    'OPEN_STUDIO': 'Estudio Abierto'
-  };
-  return typeNames[productType || ''] || 'Clase';
-};
+    const typesWhereTechniqueIsAChoice = new Set([
+        'COUPLES_EXPERIENCE',
+        'CUSTOM_GROUP_EXPERIENCE',
+        'GROUP_CLASS',
+        'CLASS_PACKAGE',
+    ]);
+    if (!typesWhereTechniqueIsAChoice.has(booking.productType || '')) return null;
 
-// Helper para obtener el nombre del producto/técnica de un booking
-// NOTA: La diferenciación "Upsell - pieza ya hecha" se aplica solo en vistas
-// del admin. Aquí (página de confirmación del cliente) se muestra "Pintura de piezas".
-const getBookingDisplayName = (booking: Booking): string => {
-    // 0. Para experiencia grupal personalizada, priorizar técnica sobre nombre genérico
-    if (
-        booking.technique &&
-        (booking.productType === 'CUSTOM_GROUP_EXPERIENCE' || booking.product?.name === 'Experiencia Grupal Personalizada')
-    ) {
-    return getTechniqueName(booking.technique);
-  }
-  
-  // 1. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
-  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
-    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
-    const uniqueTechniques = [...new Set(techniques)];
-    
-    if (uniqueTechniques.length === 1) {
-      return getTechniqueName(uniqueTechniques[0]);
-    } else {
-      return `Clase Grupal (mixto)`;
-    }
-  }
-  
-  // 2. Prioridad: product.name (es la fuente más confiable)
-  const productName = booking.product?.name;
-  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
-    return productName;
-  }
-  
-  // 3. Fallback: technique directamente (solo si product.name no existe)
-  if (booking.technique) {
-    return getTechniqueName(booking.technique);
-  }
-  
-  // 4. Último fallback: productType
-  return getProductTypeName(booking.productType);
+    const label = getTechniqueDisplayName(booking.technique as GroupTechnique);
+    const experienceName = getBookingDisplayName(booking);
+    if (experienceName && label && experienceName.toLowerCase() === label.toLowerCase()) return null;
+    return label;
 };
 
 interface ConfirmationPageProps {
@@ -128,6 +93,11 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
             : 0;
     const amountDue = Math.max(0, localBooking.price - paymentSplit.paid - holdExtra);
     const isFullyPaid = localBooking.isPaid || amountDue <= 0.009;
+    const techniqueLabel = getCustomerFacingTechniqueLabel(localBooking);
+    const participantCount = getBookingParticipantCount(localBooking);
+    const participantLabel = formatParticipantsLabel(participantCount);
+    const durationLabel = getBookingDurationLabel(localBooking);
+    const priceBreakdown = formatPriceBreakdown(localBooking.price, participantCount);
 
     // Limpiar pre-reservas expiradas cuando se muestra la confirmación
     useEffect(() => {
@@ -192,9 +162,6 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
         reader.readAsDataURL(file);
     };
     
-    const whatsappParticipants = typeof booking.participants === 'number' && booking.participants > 0
-        ? `${booking.participants} ${booking.participants === 1 ? 'persona' : 'personas'}`
-        : 'personas por confirmar';
     const whatsappSlot = booking.slots && booking.slots.length > 0 ? booking.slots[0] : null;
     const whatsappDate = whatsappSlot?.date
         ? (() => {
@@ -206,7 +173,7 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
     const whatsappTime = whatsappSlot?.time ? ` (${whatsappSlot.time})` : '';
     const whatsappActivity = getBookingDisplayName(booking);
 
-    const whatsappMessage = `¡Hola! Tengo una pregunta sobre mi reserva con código *${booking.bookingCode}* — *${whatsappActivity}* el *${whatsappDate}${whatsappTime}*.`;
+    const whatsappMessage = `¡Hola! Tengo una pregunta sobre mi reserva con código *${booking.bookingCode}* — *${whatsappActivity}* para *${participantLabel}* el *${whatsappDate}${whatsappTime}*.`;
     const whatsappLink = `https://wa.me/${footerInfo.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(whatsappMessage)}`;
     
     const handleDownloadTicket = async () => {
@@ -306,20 +273,19 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                         
                         <div>
                             <p className="text-xs text-brand-secondary font-semibold mb-1">👥 Participantes</p>
-                            <p className="text-sm font-bold text-brand-text">{booking.participants || 1} {(booking.participants || 1) === 1 ? 'persona' : 'personas'}</p>
+                            <p className="text-sm font-bold text-brand-text">{participantLabel}</p>
                         </div>
                         
                         <div>
                             <p className="text-xs text-brand-secondary font-semibold mb-1">⏱️ Duración</p>
-                            <p className="text-sm font-bold text-brand-text">2 horas</p>
+                            <p className="text-sm font-bold text-brand-text">{durationLabel}</p>
                         </div>
                     </div>
                     
-                    {/* Técnica si está disponible */}
-                    {(booking as any).technique && (
+                    {techniqueLabel && (
                         <div className="pt-2">
-                            <p className="text-xs text-brand-secondary font-semibold mb-1">🎨 Técnica</p>
-                            <p className="text-sm font-bold text-brand-text capitalize">{(booking as any).technique}</p>
+                            <p className="text-xs text-brand-secondary font-semibold mb-1">Técnica</p>
+                            <p className="text-sm font-bold text-brand-text">{techniqueLabel}</p>
                         </div>
                     )}
                 </div>
@@ -328,6 +294,9 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                 <div className="bg-gradient-to-r from-brand-primary/5 to-brand-accent/5 border-2 border-brand-primary rounded-lg p-5 text-center mb-4">
                     <p className="text-xs font-semibold text-brand-secondary uppercase tracking-wider mb-2">Monto a Pagar</p>
                     <p className="text-5xl font-bold text-brand-primary mb-1">{formatPrice(booking.price)}</p>
+                    {priceBreakdown && (
+                        <p className="text-sm font-semibold text-brand-text mb-1">{priceBreakdown}</p>
+                    )}
                     <div className="text-xs text-brand-secondary space-y-1">
                         <p>Subtotal: {formatPrice(subtotal)}</p>
                         <p>IVA ({(VAT_RATE * 100).toFixed(0)}%): {formatPrice(vat)}</p>

@@ -1,165 +1,28 @@
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import type { Booking, FooterInfo, Product, Instructor, OpenStudioSubscription, GroupTechnique } from '../types';
+import type { Booking, FooterInfo, Product, Instructor, OpenStudioSubscription } from '../types';
 import * as dataService from './dataService';
 import { DAY_NAMES } from '@/constants';
+import {
+  getBookingDisplayName,
+  getBookingParticipantCount,
+  isPaintingUpsell,
+  PAINTING_UPSELL_LABEL,
+  isGenericProductName,
+} from '../utils/bookingDisplay';
 
 // The `import 'jspdf-autotable';` statement is sufficient to load the necessary type augmentations.
 
-// Helper para obtener nombre de técnica desde metadata
-const getTechniqueName = (technique: GroupTechnique | string): string => {
-  const names: Record<string, string> = {
-    'potters_wheel': 'Torno Alfarero',
-    'hand_modeling': 'Modelado a Mano',
-    'painting': 'Pintura de piezas',
-    'molding': 'Modelado a Mano'
-  };
-  return names[technique] || technique;
-};
-
-// Helper para traducir productType a nombre legible
-const getProductTypeName = (productType?: string): string => {
-  const typeNames: Record<string, string> = {
-    'SINGLE_CLASS': 'Clase Suelta',
-    'CLASS_PACKAGE': 'Paquete de Clases',
-    'INTRODUCTORY_CLASS': 'Clase Introductoria',
-    'GROUP_CLASS': 'Clase Grupal',
-    'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
-    'OPEN_STUDIO': 'Estudio Abierto',
-    'CUSTOM_GROUP_EXPERIENCE': 'Experiencia Grupal Personalizada'
-  };
-  return typeNames[productType || ''] || 'Clase';
-};
-
-// Detecta si un booking corresponde al upsell de pintura post-clase
-// (cliente vuelve a pintar SU propia pieza ya hecha en una clase anterior).
-// Marcado explícitamente desde schedulePaintingBooking con product.kind.
-const isPaintingUpsell = (booking: Booking): boolean => {
-  const product = booking.product as any;
-  return product?.kind === 'painting_upsell'
-    || (booking.productType === 'CUSTOM_GROUP_EXPERIENCE'
-        && booking.technique === 'painting'
-        && booking.productId === 'painting_service');
-};
-
-// Etiqueta amigable para distinguir las dos pinturas en displays:
-//   - Upsell: el cliente trae SU pieza (la que hizo en una clase previa)
-//   - Resto:  pintura de pieza nueva (catálogo / experiencia personalizada)
-const PAINTING_UPSELL_LABEL = 'Upsell - pieza ya hecha';
-
-// Helper para obtener el nombre del producto/técnica de un booking
-// CRÍTICO: Para SINGLE_CLASS, SIEMPRE mostrar técnica, nunca "Clase Suelta"
-const getBookingDisplayName = (booking: Booking): string => {
-  // 0a. Upsell de pintura post-clase: etiqueta explícita y diferenciada
-  if (isPaintingUpsell(booking)) {
-    return PAINTING_UPSELL_LABEL;
-  }
-
-  // 0. CRÍTICO: Para SINGLE_CLASS, SIEMPRE priorizar técnica (nunca "Clase Suelta")
-  if (booking.productType === 'SINGLE_CLASS') {
-    if (booking.technique) {
-      return getTechniqueName(booking.technique as GroupTechnique);
-    }
-    // Fallback: derivar de product.name
-    const productName = booking.product?.name?.toLowerCase() || '';
-    if (productName.includes('torno')) return 'Torno Alfarero';
-    if (productName.includes('modelado')) return 'Modelado a Mano';
-    if (productName.includes('pintura')) return 'Pintura de piezas';
-    // Último fallback para SINGLE_CLASS sin identificador
-    return 'Clase';
-  }
-
-  // 1. Para experiencia grupal personalizada, priorizar técnica sobre nombre genérico
-  if (
-    booking.technique &&
-    (booking.productType === 'CUSTOM_GROUP_EXPERIENCE' || booking.product?.name === 'Experiencia Grupal Personalizada')
-  ) {
-    return getTechniqueName(booking.technique as GroupTechnique);
-  }
-
-  // 2. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
-  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
-    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
-    const uniqueTechniques = [...new Set(techniques)];
-    
-    if (uniqueTechniques.length === 1) {
-      return getTechniqueName(uniqueTechniques[0]);
-    } else {
-      return `Clase Grupal (mixto)`;
-    }
-  }
-  
-  // 3. Prioridad: product.name (es la fuente más confiable para otros tipos)
-  const productName = booking.product?.name;
-  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
-    return productName;
-  }
-  
-  // 4. Fallback: technique directamente (solo si product.name no existe)
-  if (booking.technique) {
-    return getTechniqueName(booking.technique as GroupTechnique);
-  }
-  
-  // 5. Último fallback: productType
-  return getProductTypeName(booking.productType);
-};
-
-// Helper para obtener el nombre del producto/técnica de un slot
-// CRÍTICO: Para SINGLE_CLASS, mostrar técnica en lugar de "Clase Suelta"
 const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): string => {
-  // 0a. Si TODOS los bookings del slot son upsells de pintura, etiquetar como tal.
-  //     Si el slot mezcla upsell con otras pinturas, fallback a "Pintura de piezas"
-  //     (lo decide el resto del flujo de prioridades).
   if (slot.bookings.length > 0 && slot.bookings.every(isPaintingUpsell)) {
     return PAINTING_UPSELL_LABEL;
   }
-
-  // 0. CRÍTICO: Para SINGLE_CLASS con técnica, mostrar técnica
-  const singleClassWithTechnique = slot.bookings.find(
-    b => b.technique && b.productType === 'SINGLE_CLASS'
-  );
-  if (singleClassWithTechnique?.technique) {
-    return getTechniqueName(singleClassWithTechnique.technique as GroupTechnique);
+  if (slot.bookings.length > 0) {
+    return getBookingDisplayName(slot.bookings[0], 'admin');
   }
-
-  // 1. Para experiencia grupal personalizada, priorizar técnica
-  const customBookingWithTechnique = slot.bookings.find(
-    b => b.technique && (b.productType === 'CUSTOM_GROUP_EXPERIENCE' || b.product?.name === 'Experiencia Grupal Personalizada')
-  );
-  if (customBookingWithTechnique?.technique) {
-    return getTechniqueName(customBookingWithTechnique.technique as GroupTechnique);
-  }
-
-  // 2. Si hay bookings con groupClassMetadata, usar la primera técnica encontrada
-  for (const booking of slot.bookings) {
-    if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
-      const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
-      const uniqueTechniques = [...new Set(techniques)];
-      
-      if (uniqueTechniques.length === 1) {
-        return getTechniqueName(uniqueTechniques[0]);
-      } else {
-        return `Clase Grupal (mixto)`;
-      }
-    }
-  }
-  
-  // 3. Prioridad: product.name (fuente más confiable)
   const productName = slot.product?.name;
-  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown') {
-    return productName;
-  }
-  
-  // 4. Fallback: technique del primer booking (si product.name no existe)
-  for (const booking of slot.bookings) {
-    if (booking.technique) {
-      return getTechniqueName(booking.technique as GroupTechnique);
-    }
-  }
-  
-  // 5. Último fallback: productType
-  const firstBooking = slot.bookings[0];
-  return firstBooking ? getProductTypeName(firstBooking.productType) : 'Clase';
+  if (productName && !isGenericProductName(productName)) return productName;
+  return 'Clase';
 };
 
 interface PdfTranslations {
@@ -665,8 +528,8 @@ export const generateScheduleReportPDF = (
                   body: attendees.map(b => [
                       '', // Empty first column for grouping
                       `${b.userInfo.firstName} ${b.userInfo.lastName}`,
-                      typeof b.participants === 'number' ? b.participants : 1,
-                      getBookingDisplayName(b),
+                      getBookingParticipantCount(b),
+                      getBookingDisplayName(b, 'admin'),
                       getClassProgress(b, dateStr, time, translations.singleClassLabel),
                       formatScheduleReportPaymentCell(b, translations, language),
                       (b.clientNote && String(b.clientNote).trim()) || '—'

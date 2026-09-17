@@ -1,33 +1,11 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import type { Instructor, Booking, IntroductoryClass, Product, EditableBooking, RescheduleSlotInfo, PaymentDetails, AppData, InvoiceRequest, AdminTab, Customer, ClassPackage, EnrichedAvailableSlot, SingleClass, GroupClass, DayKey, AvailableSlot, ClassCapacity, Technique, GroupTechnique } from '../../types';
 import * as dataService from '../../services/dataService';
-
-// Helper para obtener nombre de técnica desde metadata
-// FIX: Acepta tanto Technique como GroupTechnique para mayor flexibilidad
-const getTechniqueName = (technique: GroupTechnique | Technique | string): string => {
-  const names: Record<string, string> = {
-    'potters_wheel': 'Torno Alfarero',
-    'hand_modeling': 'Modelado a Mano',
-    'painting': 'Pintura de piezas',
-        'molding': 'Modelado a Mano'
-  };
-  return names[technique] || technique;
-};
-
-// Helper para traducir productType a nombre legible
-const getProductTypeName = (productType?: string): string => {
-  const typeNames: Record<string, string> = {
-    'SINGLE_CLASS': 'Clase Suelta',
-    'CLASS_PACKAGE': 'Paquete de Clases',
-    'INTRODUCTORY_CLASS': 'Clase Introductoria',
-    'GROUP_CLASS': 'Clase Grupal',
-    'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
-    'OPEN_STUDIO': 'Estudio Abierto',
-    'SPACE_RENTAL': 'Alquiler de espacio',
-    'CUSTOM_GROUP_EXPERIENCE': 'Experiencia Grupal',
-  };
-  return typeNames[productType || ''] || 'Clase';
-};
+import {
+    getBookingDisplayName,
+    getBookingParticipantCount,
+    isPaintingUpsell,
+} from '../../utils/bookingDisplay';
 
 // Helper para extraer la técnica subyacente de un booking
 // Unifica: "Clase suelta torno" + "Torno Alfarero" + "Clase intro torno" → "potters_wheel"
@@ -60,127 +38,6 @@ const getUnderlyingTechnique = (booking: Booking): string => {
   return booking.productType || 'unknown';
 };
 
-// Detecta el upsell de pintura post-clase (cliente pinta SU pieza ya hecha).
-// Marcado explícitamente desde schedulePaintingBooking con product.kind.
-const isPaintingUpsell = (booking: Booking): boolean => {
-    const product = booking.product as any;
-    return product?.kind === 'painting_upsell'
-        || (booking.productType === 'CUSTOM_GROUP_EXPERIENCE'
-            && booking.technique === 'painting'
-            && (booking as any).productId === 'painting_service');
-};
-
-const PAINTING_UPSELL_LABEL = 'Upsell - pieza ya hecha';
-
-// Helper para obtener el nombre display de un booking
-const getBookingDisplayName = (booking: Booking): string => {
-    // 0a. Upsell de pintura post-clase: etiqueta diferenciada
-    if (isPaintingUpsell(booking)) {
-        return PAINTING_UPSELL_LABEL;
-    }
-
-    // 0b. Alquiler / espacio privado exclusivo
-    if (booking.productType === 'SPACE_RENTAL' || (booking.product as any)?.isExclusiveSpaceRental) {
-        const hours = (booking.product as any)?.rentalHours || (booking.groupClassMetadata as any)?.rentalHours;
-        return hours ? `Alquiler privado (${hours}h)` : 'Alquiler de espacio';
-    }
-
-    // 0. Para experiencia grupal personalizada, priorizar técnica sobre nombre genérico
-    if (
-        booking.technique &&
-        (booking.productType === 'CUSTOM_GROUP_EXPERIENCE' || booking.product?.name === 'Experiencia Grupal Personalizada')
-    ) {
-        return getTechniqueName(booking.technique);
-    }
-
-  // 1. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
-  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
-    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
-    const uniqueTechniques = [...new Set(techniques)];
-    if (uniqueTechniques.length === 1) {
-      return getTechniqueName(uniqueTechniques[0]);
-    }
-    return 'Clase Grupal (mixto)';
-  }
-  
-    // 2. Prioridad: product.name (es la fuente más confiable, excepto nombre genérico ya manejado arriba)
-  const productName = booking.product?.name;
-  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
-    return productName;
-  }
-  
-  // 3. Fallback: technique directamente (solo si product.name no existe)
-  if (booking.technique) {
-    return getTechniqueName(booking.technique);
-  }
-  
-  // 4. Último fallback: productType
-  return getProductTypeName(booking.productType);
-};
-
-// Helper para obtener el nombre display de un slot
-// CRÍTICO: Para SINGLE_CLASS, SIEMPRE mostrar técnica, nunca "Clase Suelta"
-const getSlotDisplayName = (slot: { product: Product; bookings: Booking[] }): string => {
-  if (slot.bookings.length === 0) {
-    // Slot vacío, usar producto del slot
-    const productName = slot.product?.name;
-    if (!productName || productName === 'Unknown Product' || productName === 'Unknown') {
-      return 'Clase';
-    }
-    return productName;
-  }
-
-  // Slot 100% de upsells de pintura: etiqueta diferenciada
-  if (slot.bookings.every(isPaintingUpsell)) {
-    return PAINTING_UPSELL_LABEL;
-  }
-
-  // Alquiler / espacio privado
-  if (slot.bookings.some((b) => b.productType === 'SPACE_RENTAL' || (b.product as any)?.isExclusiveSpaceRental)) {
-    const rental = slot.bookings.find((b) => b.productType === 'SPACE_RENTAL' || (b.product as any)?.isExclusiveSpaceRental)!;
-    return getBookingDisplayName(rental);
-  }
-
-  const firstBooking = slot.bookings[0];
-  
-  // CRÍTICO: Para SINGLE_CLASS, SIEMPRE mostrar técnica (nunca "Clase Suelta")
-  if (firstBooking.productType === 'SINGLE_CLASS') {
-    if (firstBooking.technique) {
-      return getTechniqueName(firstBooking.technique);
-    }
-    // Fallback: derivar de product.name
-    const productName = firstBooking.product?.name?.toLowerCase() || '';
-    if (productName.includes('torno')) return 'Torno Alfarero';
-    if (productName.includes('modelado')) return 'Modelado a Mano';
-    if (productName.includes('pintura')) return 'Pintura de piezas';
-    // Último fallback para SINGLE_CLASS sin identificador
-    return 'Clase';
-  }
-  
-  // Para experiencias personalizadas, usar técnica
-  if ((firstBooking.productType === 'CUSTOM_GROUP_EXPERIENCE' || firstBooking.product?.name === 'Experiencia Grupal Personalizada') && firstBooking.technique) {
-    return getTechniqueName(firstBooking.technique);
-  }
-  
-  // Para otros tipos, priorizar product.name
-  const productName = firstBooking.product?.name;
-  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
-    return productName;
-  }
-  
-  // Si product.name no está disponible, usar la técnica subyacente
-  const technique = getUnderlyingTechnique(firstBooking);
-  
-  // Mapear técnica a nombre display unificado
-  if (technique === 'potters_wheel') return 'Torno Alfarero';
-  if (technique === 'hand_modeling') return 'Modelado a Mano';
-  if (technique === 'painting') return 'Pintura de piezas';
-  if (technique === 'molding') return 'Modelado';
-  if (technique === 'mixed') return 'Clase Grupal (mixto)';
-  
-  // Último fallback
-  return getBookingDisplayName(firstBooking);
-};
 // import { useLanguage } from '../../context/LanguageContext';
 import { DAY_NAMES, PALETTE_COLORS } from '../../constants.js';
 import { getEcuadorToday, formatDateToYYYYMMDD as getEcuadorDateStr, slotDateKey } from '../../utils/formatters';
@@ -667,11 +524,13 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         for (const b of bookings) {
             // CRÍTICO: Usar booking.participants si está disponible (reserva manual con N asistentes)
             // Fallback a minParticipants del producto solo si booking.participants no existe
-            const participantCount = b.participants ?? (
-                b.product.type === 'GROUP_CLASS' && 'minParticipants' in b.product 
-                    ? b.product.minParticipants 
-                    : 1
-            );
+            const participantCount = Math.max(
+                b.participants || 0,
+                Number.parseInt(String((b.product as any)?.details?.participants ?? ''), 10) || 0,
+                b.product.type === 'GROUP_CLASS' && 'minParticipants' in b.product
+                    ? Number(b.product.minParticipants) || 0
+                    : 0
+            ) || 1;
             count += participantCount;
         }
         return count;
@@ -939,7 +798,6 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         const isHighlighted = bookingToHighlight?.id === booking.id;
         const isGroupClass = booking.productType === 'GROUP_CLASS' || booking.productType === 'CUSTOM_GROUP_EXPERIENCE';
         const isCorporate = Boolean(booking.corporateEventId);
-        const participants = booking.participants ?? 1;
         const name = `${booking.userInfo?.firstName || ''} ${booking.userInfo?.lastName || ''}`.trim() || 'Sin nombre';
         const color = colorMap[instructor?.colorScheme || ''] || colorMap[defaultColorName];
         const bgColor = isCorporate ? 'bg-violet-100' : isGroupClass ? 'bg-blue-100' : booking.isPaid ? 'bg-green-100' : `bg-${color.bg}`;
@@ -965,8 +823,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                     </div>
                     <div className="text-xs font-semibold text-gray-900 mt-0.5 truncate">{name}</div>
                     <div className="text-[11px] text-gray-600 mt-0.5 truncate">
-                        {getBookingDisplayName(booking)}
-                        {participants > 1 ? ` · ${participants} pers.` : ''}
+                        {getBookingDisplayName(booking, 'admin')}
+                        {` · ${getBookingParticipantCount(booking)} pers.`}
                     </div>
                     {instructor && appData.instructors.length > 1 && (
                         <div className="text-[10px] text-gray-500 mt-0.5 truncate">{instructor.name}</div>
@@ -1113,7 +971,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                     {pendingBookingsWithoutSlots.slice(0, 3).map(b => (
                                         <div key={b.id} className="text-xs text-amber-900 bg-white bg-opacity-50 p-2 rounded flex items-center justify-between">
                                             <span>
-                                                <strong>{b.bookingCode}</strong> · {b.userInfo.firstName} {b.userInfo.lastName} · {getBookingDisplayName(b)}
+                                                <strong>{b.bookingCode}</strong> · {b.userInfo.firstName} {b.userInfo.lastName} · {getBookingDisplayName(b, 'admin')}
                                             </span>
                                             <button
                                                 onClick={() => {

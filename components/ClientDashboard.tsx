@@ -1,73 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import type { Booking, GroupTechnique } from '../types';
+import type { Booking } from '../types';
 import * as dataService from '../services/dataService';
 import { ClientBookingsView } from './ClientBookingsView';
 import { ClientLogin } from './ClientLogin';
 import { ClientSessionOptions } from './ClientSessionOptions';
 import { CreateSessionForm } from './CreateSessionForm';
 import { useAuth } from '../context/AuthContext';
-
-// Helper para obtener nombre de técnica desde metadata
-const getTechniqueName = (technique: GroupTechnique): string => {
-  const names: Record<GroupTechnique, string> = {
-    'potters_wheel': 'Torno Alfarero',
-    'hand_modeling': 'Modelado a Mano',
-    'painting': 'Pintura de piezas'
-  };
-  return names[technique] || technique;
-};
-
-// Helper para traducir productType a nombre legible
-const getProductTypeName = (productType?: string): string => {
-  const typeNames: Record<string, string> = {
-    'SINGLE_CLASS': 'Clase Suelta',
-    'CLASS_PACKAGE': 'Paquete de Clases',
-    'INTRODUCTORY_CLASS': 'Clase Introductoria',
-    'GROUP_CLASS': 'Clase Grupal',
-        'CUSTOM_GROUP_EXPERIENCE': 'Experiencia Grupal Personalizada',
-    'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
-    'OPEN_STUDIO': 'Estudio Abierto'
-  };
-  return typeNames[productType || ''] || 'Clase';
-};
-
-// Helper para obtener el nombre del producto/técnica de un booking
-// NOTA: La diferenciación "Upsell - pieza ya hecha" se aplica solo en vistas
-// del admin. Aquí (cliente) se muestra siempre "Pintura de piezas" para no
-// exponer jerga interna al usuario final.
-const getBookingDisplayName = (booking: Booking): string => {
-    // 0. Para experiencia grupal personalizada, priorizar técnica sobre nombre genérico
-    if (
-        booking.technique &&
-        (booking.productType === 'CUSTOM_GROUP_EXPERIENCE' || booking.product?.name === 'Experiencia Grupal Personalizada')
-    ) {
-        return getTechniqueName(booking.technique);
-    }
-
-  // 1. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
-  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
-    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
-    const uniqueTechniques = [...new Set(techniques)];
-    if (uniqueTechniques.length === 1) {
-      return getTechniqueName(uniqueTechniques[0]);
-    }
-    return 'Clase Grupal (mixto)';
-  }
-  
-  // 2. Prioridad: product.name (es la fuente más confiable)
-  const productName = booking.product?.name;
-  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
-    return productName;
-  }
-  
-  // 3. Fallback: technique directamente (solo si product.name no existe)
-  if (booking.technique) {
-    return getTechniqueName(booking.technique);
-  }
-  
-  // 4. Último fallback: productType
-  return getProductTypeName(booking.productType);
-};
+import { getBookingDisplayName, formatParticipantsLabel, getBookingParticipantCount } from '../utils/bookingDisplay';
 
 interface ClientDashboardProps {
     onClose?: () => void;
@@ -230,6 +169,9 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ onClose }) => 
                             >
                                 <p className="font-semibold text-brand-text">
                                     {getBookingDisplayName(booking)}
+                                </p>
+                                <p className="text-sm text-brand-secondary mt-1">
+                                    {formatParticipantsLabel(getBookingParticipantCount(booking))}
                                 </p>
                                 {booking.bookingDate && (
                                     <p className="text-sm text-brand-secondary mt-1">
