@@ -59,7 +59,7 @@ export const WelcomeSelector: React.FC<WelcomeSelectorProps> = ({ onSelect }) =>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 md:gap-6 mb-10">
         <ChoiceCard
           title="Actividad"
-          subtitle="Cerámica, canvas, charm bar. Para ti o un grupo."
+          subtitle="Cerámica, canvas, charm bar, tote, cepillo y más. Para ti o un grupo."
           buttonText={FEATURE_FLAGS.CLASES_SUELTAS ? 'Ver actividades' : 'Proximamente'}
           onClick={() => onSelect('single_class_wizard')}
           disabled={!FEATURE_FLAGS.CLASES_SUELTAS}

@@ -7,10 +7,15 @@ import {
   enumerateFixedScheduleDays,
 } from '../../utils/fixedScheduleSlots';
 import {
-  CREATIVE_CATEGORIES,
+  CATALOG_HOME_ITEMS,
+  CATALOG_INTRO,
   categoryNeedsOptionStep,
   formatMoney,
   formatSkuPriceLabel,
+  getCategoryDisplay,
+  getCreativeCategory,
+  getCreativeSku,
+  getSkuDisplay,
   skuNeedsParticipantsStep,
   skusForCategory,
   totalPriceCharged,
@@ -18,6 +23,7 @@ import {
   type CreativeCategoryId,
   type CreativeSku,
 } from '../../config/creativeExperiences';
+import { CreativeCatalogCard } from './CreativeCatalogCard';
 
 export interface CreativeBookingMeta {
   serviceKind: string;
@@ -62,6 +68,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
   const [step, setStep] = useState<Step>('category');
   const [categoryId, setCategoryId] = useState<CreativeCategoryId | null>(null);
   const [sku, setSku] = useState<CreativeSku | null>(null);
+  const [pickedSkuFromHome, setPickedSkuFromHome] = useState(false);
   const [participants, setParticipants] = useState(1);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>('');
@@ -78,6 +85,10 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
   const technique: GroupTechnique = sku?.capacityTechnique || 'hand_modeling';
   // Torno con 1-2 personas: solo horarios fijos / slots abiertos por 3+.
   const restrictToFixedSchedule = technique === 'potters_wheel' && participants < 3;
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [step]);
 
   // Prefill cerámica desde deep-link de técnica (si viene)
   useEffect(() => {
@@ -326,6 +337,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
     setCategoryId(id);
     setSku(null);
     setSelectedSlot(null);
+    setPickedSkuFromHome(false);
     setError('');
     const options = skusForCategory(id);
     if (options.length === 1) {
@@ -338,10 +350,12 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
     }
   };
 
-  const selectSku = (next: CreativeSku) => {
+  const selectSku = (next: CreativeSku, fromHome = false) => {
     setSku(next);
+    setCategoryId(next.categoryId);
     setParticipants(next.minParticipants);
     setSelectedSlot(null);
+    setPickedSkuFromHome(fromHome);
     setError('');
     if (skuNeedsParticipantsStep(next)) setStep('participants');
     else setStep('date');
@@ -379,10 +393,16 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
     if (step === 'option') {
       setStep('category');
       setCategoryId(null);
+      setPickedSkuFromHome(false);
       return;
     }
     if (step === 'participants') {
-      if (categoryId && categoryNeedsOptionStep(categoryId)) setStep('option');
+      if (pickedSkuFromHome) {
+        setStep('category');
+        setCategoryId(null);
+        setSku(null);
+        setPickedSkuFromHome(false);
+      } else if (categoryId && categoryNeedsOptionStep(categoryId)) setStep('option');
       else {
         setStep('category');
         setCategoryId(null);
@@ -392,11 +412,12 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
     }
     if (step === 'date') {
       if (sku && skuNeedsParticipantsStep(sku)) setStep('participants');
-      else if (categoryId && categoryNeedsOptionStep(categoryId)) setStep('option');
+      else if (!pickedSkuFromHome && categoryId && categoryNeedsOptionStep(categoryId)) setStep('option');
       else {
         setStep('category');
         setCategoryId(null);
         setSku(null);
+        setPickedSkuFromHome(false);
       }
       return;
     }
@@ -418,11 +439,11 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
 
   const stepOrder: Step[] = useMemo(() => {
     const steps: Step[] = ['category'];
-    if (categoryId && categoryNeedsOptionStep(categoryId)) steps.push('option');
+    if (!pickedSkuFromHome && categoryId && categoryNeedsOptionStep(categoryId)) steps.push('option');
     if (sku && skuNeedsParticipantsStep(sku)) steps.push('participants');
     steps.push('date', 'confirmation');
     return steps;
-  }, [categoryId, sku]);
+  }, [categoryId, sku, pickedSkuFromHome]);
 
   const currentStepIndex = Math.max(0, stepOrder.indexOf(step));
   const progressPercent =
@@ -430,6 +451,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
 
   const showExtrasNote = !!sku?.showsExtrasNote;
   const isPaintingPieces = sku?.id === 'ceramics_painting';
+  const skuDisplay = sku ? getSkuDisplay(sku) : null;
 
   const localFixedDays = useMemo(() => {
     if (!restrictToFixedSchedule) return [];
@@ -475,34 +497,62 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
         </div>
       )}
 
-      {/* Notas globales (una vez al inicio) */}
-      {step === 'category' && (
-        <div className="mb-6 space-y-3">
-          <div className="rounded-xl border border-brand-border bg-brand-surface p-4 text-sm text-brand-secondary">
-            Cada reserva dura máximo <span className="font-semibold text-brand-text">2 horas</span>.
-            Gracias por tu puntualidad: así el taller puede atender a todos con orden.
-          </div>
-        </div>
-      )}
-
       {step === 'category' && (
         <div className="space-y-6">
+          <div className="overflow-hidden rounded-2xl border border-brand-border bg-brand-surface shadow-subtle">
+            <img
+              src={CATALOG_INTRO.imageUrl}
+              alt={CATALOG_INTRO.headline}
+              className="h-44 sm:h-56 w-full object-cover"
+            />
+            <div className="p-4 sm:p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-secondary">Catálogo</p>
+              <h3 className="text-2xl font-bold text-brand-text mt-1">{CATALOG_INTRO.headline}</h3>
+              <p className="text-brand-secondary mt-2">{CATALOG_INTRO.tagline}</p>
+              <p className="text-xs text-brand-secondary mt-3">
+                {CATALOG_INTRO.location} · {CATALOG_INTRO.instagram}
+              </p>
+            </div>
+          </div>
           <div>
             <h3 className="text-2xl font-bold text-brand-text mb-2">¿Qué quieres hacer?</h3>
-            <p className="text-brand-secondary">Elige una actividad. En el siguiente paso dices si vas sola o con más gente.</p>
+            <p className="text-brand-secondary">
+              Elige una experiencia. Después nos dices si vas sola o con más gente.
+            </p>
           </div>
-          <div className="space-y-3">
-            {CREATIVE_CATEGORIES.map((cat) => (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => selectCategory(cat.id)}
-                className="w-full p-4 rounded-xl border-2 border-gray-200 hover:border-brand-primary/40 bg-brand-surface text-left transition-all shadow-subtle hover:shadow-lifted"
-              >
-                <div className="font-semibold text-lg text-brand-text">{cat.label}</div>
-                <div className="text-sm text-brand-secondary mt-1">{cat.subtitle}</div>
-              </button>
-            ))}
+          <div className="space-y-4">
+            {CATALOG_HOME_ITEMS.map((item) => {
+              if (item.type === 'sku') {
+                const homeSku = getCreativeSku(item.skuId);
+                if (!homeSku) return null;
+                return (
+                  <CreativeCatalogCard
+                    key={homeSku.id}
+                    display={getSkuDisplay(homeSku)}
+                    priceLabel={formatSkuPriceLabel(homeSku)}
+                    onClick={() => selectSku(homeSku, true)}
+                  />
+                );
+              }
+              const category = getCreativeCategory(item.categoryId);
+              if (!category) return null;
+              const categorySkus = skusForCategory(category.id);
+              const cheapest = categorySkus.reduce<CreativeSku | undefined>((best, current) => {
+                if (!best) return current;
+                return unitPriceCharged(current) < unitPriceCharged(best) ? current : best;
+              }, undefined);
+              const priceLabel = cheapest
+                ? (categorySkus.length > 1 ? `Desde ${formatSkuPriceLabel(cheapest).replace(/^Desde /, '')}` : formatSkuPriceLabel(cheapest))
+                : undefined;
+              return (
+                <CreativeCatalogCard
+                  key={category.id}
+                  display={getCategoryDisplay(category)}
+                  priceLabel={priceLabel}
+                  onClick={() => selectCategory(category.id)}
+                />
+              );
+            })}
           </div>
           {error && <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg">{error}</div>}
         </div>
@@ -513,36 +563,18 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
           <div>
             <h3 className="text-2xl font-bold text-brand-text mb-2">Elige tu opción</h3>
             <p className="text-brand-secondary">
-              {CREATIVE_CATEGORIES.find((c) => c.id === categoryId)?.label}
+              {getCreativeCategory(categoryId)?.label}
             </p>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {categoryOptions.map((option) => (
-              <button
+              <CreativeCatalogCard
                 key={option.id}
-                type="button"
+                display={getSkuDisplay(option)}
+                priceLabel={formatSkuPriceLabel(option)}
+                selected={sku?.id === option.id}
                 onClick={() => selectSku(option)}
-                className={`w-full p-4 rounded-xl border-2 transition-all text-left ${
-                  sku?.id === option.id
-                    ? 'border-brand-primary bg-brand-primary/5'
-                    : 'border-gray-200 hover:border-gray-300 bg-brand-surface'
-                }`}
-              >
-                <div className="flex justify-between items-start gap-3">
-                  <div>
-                    <div className="font-semibold text-lg text-brand-text">{option.label}</div>
-                    {option.shortDesc && (
-                      <div className="text-sm text-brand-secondary mt-1">{option.shortDesc}</div>
-                    )}
-                    {option.includesNote && (
-                      <div className="text-xs text-brand-secondary mt-1">{option.includesNote}</div>
-                    )}
-                  </div>
-                  <div className="text-right text-brand-primary font-semibold whitespace-nowrap">
-                    {formatSkuPriceLabel(option)}
-                  </div>
-                </div>
-              </button>
+              />
             ))}
           </div>
           {error && <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg">{error}</div>}
@@ -554,6 +586,11 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
           <div>
             <h3 className="text-2xl font-bold text-brand-text mb-2">¿Cuántas personas van?</h3>
             <p className="text-brand-secondary">{sku.label}</p>
+            {skuDisplay && (
+              <p className="mt-1 text-sm text-brand-secondary">
+                Duración: {skuDisplay.duration} · {skuDisplay.schedule}
+              </p>
+            )}
           </div>
 
           {sku.minParticipants < 3 && (
@@ -634,7 +671,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
           </div>
 
           <div className="rounded-xl border border-brand-border bg-brand-surface p-4 text-sm text-brand-secondary">
-            Cada reserva dura máximo <span className="font-semibold text-brand-text">2 horas</span>.
+            Esta experiencia dura <span className="font-semibold text-brand-text">{skuDisplay?.duration || 'hasta 2 horas'}</span>.
             Gracias por tu puntualidad.
           </div>
 
@@ -1107,7 +1144,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                   month: 'long',
                 })}
               </div>
-              <div className="text-xs text-gray-600 mt-1">Duración: 2 horas</div>
+              <div className="text-xs text-gray-600 mt-1">Duración: {skuDisplay?.duration || 'hasta 2 horas'}</div>
             </div>
           )}
 
@@ -1127,10 +1164,28 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
           </div>
 
           <div className="bg-white p-6 rounded-xl border border-brand-border space-y-4 shadow-subtle">
+            {skuDisplay?.imageUrl && (
+              <img
+                src={skuDisplay.imageUrl}
+                alt={sku.label}
+                className="w-full h-40 object-cover rounded-xl"
+              />
+            )}
             <div className="flex justify-between pb-4 border-b border-brand-border">
               <span className="text-brand-secondary">Actividad</span>
               <span className="font-semibold text-brand-text text-right">{sku.label}</span>
             </div>
+            {skuDisplay?.includes && (
+              <p className="text-sm text-brand-secondary -mt-2">
+                <span className="font-semibold text-brand-text">Incluye: </span>
+                {skuDisplay.includes}
+              </p>
+            )}
+            {skuDisplay?.important && (
+              <div className="text-sm text-amber-800 bg-amber-50 p-3 rounded-lg">
+                {skuDisplay.important}
+              </div>
+            )}
             <div className="flex justify-between pb-4 border-b border-brand-border">
               <span className="text-brand-secondary">Personas</span>
               <span className="font-semibold text-brand-text">{participants}</span>
