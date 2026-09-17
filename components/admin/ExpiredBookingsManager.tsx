@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import type { AppData, Booking, GroupTechnique } from '../../types';
+import type { AppData, Booking } from '../../types';
 import * as dataService from '../../services/dataService';
 import { addPaymentToBooking, extendBookingExpiry, cancelPreBooking, sendPaymentReminder, rejectPaymentProof, invalidateBookingsCache } from '../../services/dataService';
 import { useAdminData } from '../../context/AdminDataContext';
 import { PreBookingQuickManageModal } from './PreBookingQuickManageModal';
 import { fetchWithAbort } from '../../utils/fetchWithAbort';
+import { getBookingDisplayName } from '../../utils/bookingDisplay';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { XIcon } from '../icons/XIcon';
@@ -12,93 +13,11 @@ import { CheckIcon } from '../icons/CheckIcon';
 import { ChevronUpIcon } from '../icons/ChevronUpIcon';
 import { ChevronDownIcon } from '../icons/ChevronDownIcon';
 
-// Helper para obtener nombre de técnica desde metadata
-const getTechniqueName = (technique: GroupTechnique): string => {
-  const names: Record<GroupTechnique, string> = {
-    'potters_wheel': 'Torno Alfarero',
-    'hand_modeling': 'Modelado a Mano',
-    'painting': 'Pintura de piezas'
-  };
-  return names[technique] || technique;
-};
-
-// Helper para traducir productType a nombre legible
-const getProductTypeName = (productType?: string): string => {
-  const typeNames: Record<string, string> = {
-    'SINGLE_CLASS': 'Clase Suelta',
-    'CLASS_PACKAGE': 'Paquete de Clases',
-    'INTRODUCTORY_CLASS': 'Clase Introductoria',
-    'GROUP_CLASS': 'Clase Grupal',
-    'CUSTOM_GROUP_EXPERIENCE': 'Experiencia Grupal Personalizada',
-    'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
-    'OPEN_STUDIO': 'Estudio Abierto',
-    'SPACE_RENTAL': 'Alquiler de espacio'
-  };
-  return typeNames[productType || ''] || 'Clase';
-};
-
-// Detecta upsell de pintura post-clase (cliente pinta SU pieza ya hecha).
-const isPaintingUpsell = (booking: Booking): boolean => {
-  const product = booking.product as any;
-  return product?.kind === 'painting_upsell'
-    || (booking.productType === 'CUSTOM_GROUP_EXPERIENCE'
-        && booking.technique === 'painting'
-        && (booking as any).productId === 'painting_service');
-};
-
-const PAINTING_UPSELL_LABEL = 'Upsell - pieza ya hecha';
-
 // Suma de montos en payment_details
 const sumPaymentDetails = (booking: Booking): number => {
   const arr = booking.paymentDetails;
   if (!Array.isArray(arr)) return 0;
   return arr.reduce((acc, p) => acc + (typeof p?.amount === 'number' ? p.amount : 0), 0);
-};
-
-const resolveBookingTechnique = (booking: Booking): GroupTechnique | string | undefined => {
-  const product = booking.product as { technique?: string; details?: { technique?: string } } | undefined;
-  return booking.technique || product?.technique || product?.details?.technique;
-};
-
-// Helper para obtener el nombre del producto/técnica de un booking
-const getBookingDisplayName = (booking: Booking): string => {
-  if (isPaintingUpsell(booking)) return PAINTING_UPSELL_LABEL;
-
-  const resolvedTechnique = resolveBookingTechnique(booking);
-  const isCustomExperience =
-    booking.productType === 'CUSTOM_GROUP_EXPERIENCE'
-    || booking.product?.name === 'Experiencia Grupal Personalizada';
-
-  // 0. Para experiencia grupal personalizada, priorizar técnica sobre nombre genérico
-  if (resolvedTechnique && isCustomExperience) {
-    return getTechniqueName(resolvedTechnique as GroupTechnique);
-  }
-
-  // 1. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
-  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
-    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
-    const uniqueTechniques = [...new Set(techniques)];
-    
-    if (uniqueTechniques.length === 1) {
-      return getTechniqueName(uniqueTechniques[0]);
-    } else {
-      return `Clase Grupal (mixto)`;
-    }
-  }
-  
-  // 2. Prioridad: product.name (es la fuente más confiable)
-  const productName = booking.product?.name;
-  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
-    return productName;
-  }
-  
-  // 3. Fallback: technique directamente (solo si product.name no existe)
-  if (resolvedTechnique) {
-    return getTechniqueName(resolvedTechnique as GroupTechnique);
-  }
-  
-  // 4. Último fallback: productType
-  return getProductTypeName(booking.productType);
 };
 
 interface ExpiredBooking extends Booking {
@@ -229,7 +148,7 @@ export const ExpiredBookingsManager: React.FC = () => {
         const confirmedBooking = bookingsRef.current.find(b => b.id === confirmedBookingId);
         if (confirmedBooking) {
           const clientName = `${confirmedBooking.userInfo?.firstName || ''} ${confirmedBooking.userInfo?.lastName || ''}`.trim();
-          const productName = getBookingDisplayName(confirmedBooking);
+          const productName = getBookingDisplayName(confirmedBooking, 'admin');
           const slot = confirmedBooking.slots?.[0];
           const dateStr = slot?.date
             ? new Date(slot.date + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
@@ -754,7 +673,7 @@ export const ExpiredBookingsManager: React.FC = () => {
                         {booking.userInfo?.firstName} {booking.userInfo?.lastName}
                       </td>
                       <td className="px-4 py-3 text-xs text-brand-secondary">{booking.userInfo?.email}</td>
-                      <td className="px-4 py-3 text-sm text-brand-text">{getBookingDisplayName(booking)}</td>
+                      <td className="px-4 py-3 text-sm text-brand-text">{getBookingDisplayName(booking, 'admin')}</td>
                       <td className="px-4 py-3 font-bold text-brand-primary text-right">${booking.price?.toFixed(2)}</td>
                       <td className="px-4 py-3 text-right text-xs">
                         {(() => {
