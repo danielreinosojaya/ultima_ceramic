@@ -606,13 +606,18 @@ const App: React.FC = () => {
             bookingData.experiencePricing = experienceUIState.pricing;
         }
 
-        // Clase suelta / experiencias creativas: 1 por defecto; Leather Journal (u otros) usan participants del wizard
+        // Clase suelta histórica = 1. Experiencias creativas: N del wizard (también en product.details).
         if (product.type === 'SINGLE_CLASS') {
-            const creativeParticipants = experienceUIState.participants;
-            bookingData.participants =
-                typeof creativeParticipants === 'number' && creativeParticipants >= 1
-                    ? creativeParticipants
-                    : 1;
+            const fromState = experienceUIState.participants;
+            const fromDetails = (product as any)?.details?.participants;
+            const parsed = Number.parseInt(String(fromState ?? fromDetails ?? ''), 10);
+            bookingData.participants = Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
+            if ((product as any).details && typeof (product as any).details === 'object') {
+                (product as any).details = {
+                    ...(product as any).details,
+                    participants: bookingData.participants,
+                };
+            }
         }
 
         // Add groupClassMetadata for GROUP_CLASS bookings
@@ -1167,6 +1172,7 @@ const App: React.FC = () => {
                                         technique: selectedTechnique,
                                         serviceKind: meta.serviceKind,
                                         bookingSource: 'creative_experiences',
+                                        participants: meta.participants,
                                         duration: '2 horas',
                                         durationHours: 2,
                                     },

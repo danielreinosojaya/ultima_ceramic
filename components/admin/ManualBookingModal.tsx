@@ -19,6 +19,16 @@ interface ManualBookingModalProps {
   preselectedCustomer?: Customer;
 }
 
+function catalogSingleClassForcesOnePerson(product: Product | null): boolean {
+  if (!product || product.type !== 'SINGLE_CLASS') return false;
+  const details = (product as any).details || {};
+  const isCreative =
+    details.bookingSource === 'creative_experiences' ||
+    Boolean(details.serviceKind) ||
+    String(product.id || '').startsWith('creative-');
+  return !isCreative;
+}
+
 export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ 
   isOpen, 
   onClose, 
@@ -333,7 +343,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
       
       if (!selectedSlots.length) throw new Error('Agrega al menos un horario');
       const participantsCount =
-        !isCustomExperience && selectedProduct?.type === 'SINGLE_CLASS'
+        !isCustomExperience && catalogSingleClassForcesOnePerson(selectedProduct)
           ? 1
           : commitParticipantsInput(participantsInput);
       if (participantsCount < 1 || participantsCount > 100) {
@@ -395,7 +405,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
     try {
       const isCustomExperience = selectedProduct === null;
       const participantsCount =
-        !isCustomExperience && selectedProduct?.type === 'SINGLE_CLASS'
+        !isCustomExperience && catalogSingleClassForcesOnePerson(selectedProduct)
           ? 1
           : commitParticipantsInput(participantsInput);
       const firstSlot = selectedSlots[0];

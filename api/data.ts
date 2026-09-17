@@ -235,6 +235,9 @@ const parseBookingFromDB = (dbRow: any): Booking => {
                 camelCased.groupClassMetadata = undefined;
             }
         }
+        if (!camelCased.groupClassMetadata && camelCased.groupMetadata) {
+            camelCased.groupClassMetadata = camelCased.groupMetadata;
+        }
         
         const inferredTechniqueFromProduct =
             dbRow.product_technique ||
@@ -278,9 +281,20 @@ const parseBookingFromDB = (dbRow: any): Booking => {
             camelCased.groupClassMetadata?.clientNote ||
             null;
         camelCased.clientNote = dbRow.client_note || noteFromProduct || noteFromGroupMeta || null;
-        camelCased.participants = dbRow.participants !== undefined && dbRow.participants !== null 
-            ? parseInt(dbRow.participants, 10) 
-            : 1;
+        const columnParticipants = dbRow.participants !== undefined && dbRow.participants !== null
+            ? parseInt(dbRow.participants, 10)
+            : NaN;
+        const detailsParticipants = parseInt(
+            String(
+                (camelCased.product && typeof camelCased.product === 'object'
+                    ? camelCased.product.details?.participants
+                    : undefined) ?? camelCased.productDetailsParticipants ?? ''
+            ),
+            10
+        );
+        const resolvedColumn = Number.isFinite(columnParticipants) && columnParticipants >= 1 ? columnParticipants : 1;
+        const resolvedDetails = Number.isFinite(detailsParticipants) && detailsParticipants >= 1 ? detailsParticipants : 0;
+        camelCased.participants = Math.max(resolvedColumn, resolvedDetails);
         camelCased.technique = derivedTechnique || undefined;
         camelCased.corporateEventId = dbRow.corporate_event_id
             ? String(dbRow.corporate_event_id)
@@ -722,25 +736,61 @@ const hasCourseOverlap = (
     return sessions.some(session => hasTimeOverlap(startMinutes, endMinutes, session.startMinutes, session.endMinutes));
 };
 
+const parsePositiveInt = (value: any): number | null => {
+    const n = Number.parseInt(String(value ?? ''), 10);
+    return Number.isFinite(n) && n >= 1 ? n : null;
+};
+
+const isCreativeExperienceBooking = (booking: any): boolean => {
+    const details = booking?.product?.details || {};
+    return details.bookingSource === 'creative_experiences' || Boolean(details.serviceKind);
+};
+
+/** Personas que ocupan cupo real (asistentes), no el número de reservas. */
+const getBookingOccupancyCount = (booking: any): number => {
+    if (booking?.productType === 'GROUP_CLASS') {
+        const assignments =
+            booking.groupClassMetadata?.techniqueAssignments ||
+            booking.groupMetadata?.techniqueAssignments;
+        if (assignments?.length) return assignments.length;
+    }
+    const candidates = [
+        parsePositiveInt(booking?.participants),
+        parsePositiveInt(booking?.product?.details?.participants),
+        parsePositiveInt(booking?.groupClassMetadata?.totalParticipants),
+        parsePositiveInt(booking?.groupMetadata?.totalParticipants),
+    ].filter((n): n is number => n !== null);
+    if (candidates.length > 0) return Math.max(...candidates);
+    const minFromProduct = parsePositiveInt(
+        booking?.product && typeof booking.product === 'object' ? booking.product.minParticipants : undefined
+    );
+    return minFromProduct ?? 1;
+};
+
+const techniqueFromStoredFields = (booking: any): string | undefined => {
+    const details = booking?.product?.details || {};
+    const t = booking?.technique || details.technique || details.capacityTechnique;
+    if (t === 'potters_wheel') return 'potters_wheel';
+    if (t === 'molding' || t === 'hand_modeling') return 'hand_modeling';
+    if (t === 'painting') return 'painting';
+    return undefined;
+};
+
 const deriveBookingTechnique = (booking: any): string | undefined => {
+    // Experiencias creativas: el nombre visible ("Pintura en Canvas") no define el cupo.
+    if (isCreativeExperienceBooking(booking)) {
+        return techniqueFromStoredFields(booking) || 'hand_modeling';
+    }
+
     const productName = (booking.product?.name || '').toLowerCase();
 
     if (productName.includes('pintura') || productName.includes('painting')) return 'painting';
     if (productName.includes('torno') || productName.includes('wheel') || productName.includes('potter')) return 'potters_wheel';
-    if (productName.includes('modelado') || productName.includes('molding') || productName.includes('hand')) return 'hand_modeling';
+    if (productName.includes('modelado') || productName.includes('molding')) return 'hand_modeling';
 
-    // Check technique field directly on booking
-    if (booking.technique === 'potters_wheel') return 'potters_wheel';
-    if (booking.technique === 'molding' || booking.technique === 'hand_modeling') return 'hand_modeling';
-    if (booking.technique === 'painting') return 'painting';
+    const fromFields = techniqueFromStoredFields(booking);
+    if (fromFields) return fromFields;
 
-    // Check product.details.technique
-    const detailsTechnique = booking.product?.details?.technique;
-    if (detailsTechnique === 'potters_wheel') return 'potters_wheel';
-    if (detailsTechnique === 'molding' || detailsTechnique === 'hand_modeling') return 'hand_modeling';
-    if (detailsTechnique === 'painting') return 'painting';
-
-    // Check product type for introductory classes (usually potters_wheel)
     const productType = booking.productType || booking.product?.type;
     if (productType === 'INTRODUCTORY_CLASS') return 'potters_wheel';
     if (productType === 'WHEEL_COURSE') return 'potters_wheel';
@@ -755,8 +805,11 @@ const getGroupClassBookingCounts = (booking: any) => {
     let potters = 0;
     let handWork = 0;
 
-    if (booking.productType === 'GROUP_CLASS' && booking.groupClassMetadata?.techniqueAssignments?.length) {
-        booking.groupClassMetadata.techniqueAssignments.forEach((assignment: any) => {
+    const assignments =
+        booking.groupClassMetadata?.techniqueAssignments ||
+        booking.groupMetadata?.techniqueAssignments;
+    if (booking.productType === 'GROUP_CLASS' && assignments?.length) {
+        assignments.forEach((assignment: any) => {
             if (assignment.technique === 'potters_wheel') {
                 potters += 1;
             } else {
@@ -767,12 +820,7 @@ const getGroupClassBookingCounts = (booking: any) => {
     }
 
     const bookingTechnique = deriveBookingTechnique(booking);
-    const participantCount = booking.participants
-        ?? booking.groupClassMetadata?.totalParticipants
-        ?? (typeof booking.product === 'object' && 'minParticipants' in booking.product
-            ? (booking.product as any).minParticipants
-            : undefined)
-        ?? 1;
+    const participantCount = getBookingOccupancyCount(booking);
 
     if (bookingTechnique === 'potters_wheel') {
         potters = participantCount;
@@ -785,6 +833,11 @@ const getGroupClassBookingCounts = (booking: any) => {
     }
 
     return { potters, handWork };
+};
+
+const occupancyForRequestedTechnique = (booking: any, requestedTechnique: string): number => {
+    const { potters, handWork } = getGroupClassBookingCounts(booking);
+    return isHandWorkTechnique(requestedTechnique) ? handWork : potters;
 };
 
 const getFixedSlotTimesForDate = (
@@ -887,19 +940,19 @@ const evaluatePublicExperienceSlot = (params: {
         return { ...base, available: 0, canBook: false, blockedReason: 'course_conflict' };
     }
 
-    const bookingsOverlapingSlot = bookings.filter((b: any) => {
-        if (!b.slots || !Array.isArray(b.slots)) return false;
-        const bookingTechnique = deriveBookingTechnique(b);
-        if (!techniquesCompeteForCapacity(requestedTechnique, bookingTechnique)) return false;
-        return b.slots.some((s: any) => {
+    let bookedParticipants = 0;
+    for (const b of bookings) {
+        if (!b.slots || !Array.isArray(b.slots)) continue;
+        const occupancy = occupancyForRequestedTechnique(b, requestedTechnique);
+        if (occupancy <= 0) continue;
+        const overlaps = b.slots.some((s: any) => {
             if (s.date !== dateStr) return false;
             const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
             const bookingEndMinutes = bookingStartMinutes + (2 * 60);
             return hasTimeOverlap(slotStartMinutes, slotEndMinutes, bookingStartMinutes, bookingEndMinutes);
         });
-    });
-
-    let bookedParticipants = bookingsOverlapingSlot.reduce((sum: number, b: any) => sum + (b.participants || 1), 0);
+        if (overlaps) bookedParticipants += occupancy;
+    }
     if (requestedTechnique === 'potters_wheel' && bookedParticipants === 0) {
         bookedParticipants = 1;
     }
@@ -1111,41 +1164,9 @@ const computeSlotAvailability = async (
     for (const booking of bookings) {
         if (!booking.slots || !Array.isArray(booking.slots)) continue;
 
-        let bookingTechnique: string | undefined;
-        const productName = booking.product?.name?.toLowerCase() || '';
+        const occupancy = occupancyForRequestedTechnique(booking, requestedTechnique);
+        if (occupancy <= 0) continue;
 
-        if (productName.includes('pintura')) {
-            bookingTechnique = 'painting';
-        } else if (productName.includes('torno')) {
-            bookingTechnique = 'potters_wheel';
-        } else if (productName.includes('modelado')) {
-            bookingTechnique = 'hand_modeling';
-        } else {
-            bookingTechnique = booking.technique || (booking.product?.details as any)?.technique;
-        }
-
-        const isHandWork = (tech: string | undefined) => 
-            tech === 'molding' || tech === 'painting' || tech === 'hand_modeling';
-        const isHandWorkGroup = isHandWork(requestedTechnique);
-        const isBookingHandWorkGroup = isHandWork(bookingTechnique);
-
-        let techniquesMatch = false;
-        if (isHandWorkGroup && isBookingHandWorkGroup) {
-            techniquesMatch = true;
-        } else if (isHandWorkGroup && !bookingTechnique) {
-            techniquesMatch = true;
-        } else if (!isHandWorkGroup && bookingTechnique === requestedTechnique) {
-            techniquesMatch = true;
-        } else if (!isHandWorkGroup && !bookingTechnique) {
-            techniquesMatch = true;
-        }
-
-        if (!techniquesMatch) {
-            continue;
-        }
-
-        // FIX: contar participantes UNA SOLA VEZ por booking (no por cada slot solapado)
-        const participantCount = booking.participants || 1;
         let bookingHasOverlap = false;
         let bookingHasExactMatch = false;
         let exactMatchSlot: any = null;
@@ -1169,25 +1190,23 @@ const computeSlotAvailability = async (
         }
 
         if (bookingHasOverlap) {
-            overlappingParticipants += participantCount;
+            overlappingParticipants += occupancy;
             if (bookingHasExactMatch) {
-                exactMatchParticipants += participantCount;
+                exactMatchParticipants += occupancy;
             }
         }
 
-        const overlapInfo = exactMatchSlot;
-
-        if (overlapInfo) {
+        if (exactMatchSlot) {
             bookingsInSlot.push({
                 id: booking.id,
-                participants: participantCount,
+                participants: occupancy,
                 userInfo: { 
                     name: booking.userInfo?.firstName 
                         ? `${booking.userInfo.firstName} ${booking.userInfo.lastName || ''}`.trim()
                         : 'Unknown'
                 },
                 isPaid: booking.isPaid,
-                bookingTechnique: bookingTechnique || 'unknown',
+                bookingTechnique: deriveBookingTechnique(booking) || 'unknown',
                 requestedTechnique: requestedTechnique
             });
         }
@@ -2091,7 +2110,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         });
                     }
 
-                    const requestedParticipants = parseInt(participants as string);
+                    const requestedParticipants = Math.max(1, parseInt(participants as string, 10) || 1);
                     const requestedTechnique = technique as string;
                     const searchStartDate = startDate ? new Date(startDate as string) : new Date();
                     const searchDays = daysAhead ? parseInt(daysAhead as string) : 60;
@@ -2154,7 +2173,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     const normalizedSlotTechnique = slotTechniqueKey(requestedTechnique);
                     const fixedTechniqueKey = requestedTechnique === 'potters_wheel' ? 'potters_wheel' : 'molding';
                     const includeOpenedByLargeGroup =
-                        requestedParticipants === 1 &&
+                        requestedParticipants < 3 &&
                         (requestedTechnique === 'potters_wheel' || requestedTechnique === 'hand_modeling');
 
                     const pushEvaluatedSlot = (
@@ -2232,7 +2251,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         bookings.forEach((booking: any) => {
                             const status = booking.status || 'active';
                             if (status === 'expired' || status === 'cancelled') return;
-                            if ((booking.participants || 0) < 3) return;
+                            if (getBookingOccupancyCount(booking) < 3) return;
                             if (!booking.slots || !Array.isArray(booking.slots)) return;
                             const bookingTechnique = deriveBookingTechnique(booking);
                             if (!techniquesCompeteForCapacity(requestedTechnique, bookingTechnique)) return;
@@ -2555,7 +2574,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                     const requestedDate = date as string;
                     const requestedTime = time as string;
                     const requestedTechnique = technique as string;
-                    const requestedParticipants = parseInt(participants as string);
+                    const requestedParticipants = Math.max(1, parseInt(participants as string, 10) || 1);
                     const skipTechRestriction = skipTechParam === 'true';
                     const skipBusinessHoursCheck = req.query.adminOverride === 'true';
 
@@ -6981,50 +7000,16 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 const maxCapacityMap = getMaxCapacityMap(classCapacity);
                 const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
                 
-                // Contar participantes que solapan temporalmente
+                // Contar asistentes reales que solapan (cupo de mesa/torno)
                 let overlappingParticipants = 0;
                 let openedByLargeGroupExactMatch = false;
                 
                 for (const booking of bookingsOnDate) {
                     if (!booking.slots || !Array.isArray(booking.slots)) continue;
-                    
-                    // ===== DERIVAR TÉCNICA REAL DEL BOOKING =====
-                    // Priorizar product.name para derivar técnica (datos más confiables)
-                    let bookingTechnique: string | undefined;
-                    const productName = booking.product?.name?.toLowerCase() || '';
-                    
-                    if (productName.includes('pintura')) {
-                        bookingTechnique = 'painting';
-                    } else if (productName.includes('torno')) {
-                        bookingTechnique = 'potters_wheel';
-                    } else if (productName.includes('modelado')) {
-                        bookingTechnique = 'hand_modeling';
-                    } else {
-                        bookingTechnique = booking.technique || (booking.product?.details as any)?.technique;
-                    }
-                    
-                    // Definir grupos de técnicas que comparten capacidad
-                    const isHandWork = (tech: string | undefined) => 
-                        tech === 'molding' || tech === 'painting' || tech === 'hand_modeling';
-                    const isHandWorkGroup = isHandWork(requestedTechnique);
-                    const isBookingHandWorkGroup = isHandWork(bookingTechnique);
-                    
-                    // Determinar si la técnica del booking compite por capacidad
-                    let techniquesMatch = false;
-                    if (isHandWorkGroup && isBookingHandWorkGroup) {
-                        techniquesMatch = true;
-                    } else if (isHandWorkGroup && !bookingTechnique) {
-                        techniquesMatch = true;
-                    } else if (!isHandWorkGroup && bookingTechnique === requestedTechnique) {
-                        techniquesMatch = true;
-                    } else if (!isHandWorkGroup && !bookingTechnique) {
-                        techniquesMatch = true;
-                    }
-                    
-                    if (!techniquesMatch) continue;
-                    
-                    // FIX: contar participantes UNA SOLA VEZ por booking (no por cada slot solapado)
-                    const participantCount = booking.participants || 1;
+
+                    const occupancy = occupancyForRequestedTechnique(booking, requestedTechnique);
+                    if (occupancy <= 0) continue;
+
                     let bHasOverlap = false;
                     let bHasExactMatch = false;
 
@@ -7046,10 +7031,10 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     }
 
                     if (bHasOverlap) {
-                        overlappingParticipants += participantCount;
-                        console.log(`[createCustomExperienceBooking] OVERLAP: booking with ${participantCount} participants`);
+                        overlappingParticipants += occupancy;
+                        console.log(`[createCustomExperienceBooking] OVERLAP: booking with ${occupancy} participants`);
 
-                        if (bHasExactMatch && participantCount >= 3) {
+                        if (bHasExactMatch && occupancy >= 3) {
                             openedByLargeGroupExactMatch = true;
                         }
                     }
@@ -8116,8 +8101,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
 
                 const isPaid = paintingStatus === 'paid' || paintingStatus === 'scheduled';
 
-                return res.status(200).json({
-                    success: true,
+                return res.status(200).json({ 
+                    success: true, 
                     isPaid,
                     canSchedule: true,
                     payOnDay: !isPaid,
@@ -9824,7 +9809,8 @@ async function addBookingAction(
     const productName = body.product?.name || '';
     const normalizedProductName = productName.toLowerCase();
     const bookingSource = (body.product as any)?.details?.bookingSource;
-    const isCreativeExperience = bookingSource === 'creative_experiences';
+    const serviceKind = (body.product as any)?.details?.serviceKind;
+    const isCreativeExperience = bookingSource === 'creative_experiences' || Boolean(serviceKind);
 
     if (!isCreativeExperience) {
       // Mapeo de nombres de producto -> técnica válida
@@ -10063,18 +10049,40 @@ async function addBookingAction(
         }
 
         if (body.productType === 'SINGLE_CLASS') {
-            // ===== VALIDACIÓN PARA SINGLE_CLASS (1 persona) =====
-            // Clase suelta = siempre 1 participante. Normalizar ANTES de validar
-            // (evita fallos por string "1", 2+, null, etc. que llegaban del cliente).
-            const originalParticipants = (body as any).participants;
-            const parsedParticipants = Number.parseInt(String(originalParticipants ?? '1'), 10);
-            if (originalParticipants !== 1 && originalParticipants !== '1' && parsedParticipants !== 1) {
+            // ===== VALIDACIÓN PARA SINGLE_CLASS =====
+            // Clase suelta histórica = 1 persona.
+            // Experiencias creativas (cepillo, canvas, charm bar, etc.) usan el mismo
+            // productType pero el wizard cobra y reserva N participantes.
+            const originalParticipants = (body as any).participants
+                ?? (body.product as any)?.details?.participants;
+            const fromBody = parsePositiveInt((body as any).participants);
+            const fromDetails = parsePositiveInt((body.product as any)?.details?.participants);
+            const parsedParticipants = isCreativeExperience
+                ? Math.max(fromBody ?? 1, fromDetails ?? 1)
+                : (fromBody ?? 1);
+            const safeParsed = Number.isFinite(parsedParticipants) && parsedParticipants >= 1
+                ? parsedParticipants
+                : 1;
+            const maxParticipants = isCreativeExperience
+                ? (technique === 'potters_wheel' ? 8 : 22)
+                : 1;
+            const requestedParticipants = Math.min(maxParticipants, safeParsed);
+            if (requestedParticipants !== safeParsed || (!isCreativeExperience && safeParsed !== 1)) {
                 console.log(
-                    `[addBookingAction] SINGLE_CLASS: normalizando participants → 1 (recibido: ${JSON.stringify(originalParticipants)}, tipo=${typeof originalParticipants})`
+                    `[addBookingAction] SINGLE_CLASS: participants ${JSON.stringify(originalParticipants)} → ${requestedParticipants} (creative=${isCreativeExperience})`
                 );
             }
-            (body as any).participants = 1;
-            const requestedParticipants = 1;
+            (body as any).participants = requestedParticipants;
+
+            if (isCreativeExperience && body.product && typeof body.product === 'object') {
+                body.product = {
+                    ...body.product,
+                    details: {
+                        ...((body.product as any).details || {}),
+                        participants: requestedParticipants,
+                    },
+                };
+            }
 
             if (!body.slots || body.slots.length !== 1) {
                 throw new Error('SINGLE_CLASS must have exactly 1 slot');
@@ -10123,10 +10131,10 @@ async function addBookingAction(
                 }
             }
 
-            // REGLA ESPECIAL: Solo para Torno (potters_wheel) con 1 persona
+            // REGLA ESPECIAL: Torno (potters_wheel) con 1–2 personas
             // Solo se permite si: (a) es horario fijo del calendario, O (b) fue abierto por reserva 3+
-            // Modelado a Mano y Pintura con 1 persona: cualquier horario disponible está permitido
-            if (!adminOverride && !isSpecialDayNoRules && requestedTechnique === 'potters_wheel' && requestedParticipants === 1) {
+            // Modelado a Mano y Pintura: cualquier horario disponible está permitido
+            if (!adminOverride && !isSpecialDayNoRules && requestedTechnique === 'potters_wheel' && requestedParticipants < 3) {
                 const dayKey = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
                 
                 const fixedSlots = getFixedSlotTimesForDate(slot.date, dayKey, availability, scheduleOverrides, 'potters_wheel');
@@ -10135,13 +10143,13 @@ async function addBookingAction(
 
                 if (!isFixedScheduleSlot && !isOpenedByLargeGroup) {
                     throw new Error(
-                        `Torno Alfarero: Para 1 persona, solo puedes reservar horarios fijos del calendario o slots ya abiertos por un grupo de 3+ personas. ` +
+                        `Torno Alfarero: Para ${requestedParticipants === 1 ? '1 persona' : '2 personas'}, solo puedes reservar horarios fijos del calendario o slots ya abiertos por un grupo de 3+ personas. ` +
                         `El horario ${normalizedTime} no cumple estas condiciones.`
                     );
                 }
             }
 
-            console.log(`[addBookingAction SINGLE_CLASS] ✅ Capacity & rules validated: ${requestedTechnique} on ${slot.date} at ${normalizedTime}, ${slotAvailability.capacity.available} slots available`);
+            console.log(`[addBookingAction SINGLE_CLASS] ✅ Capacity & rules validated: ${requestedTechnique} on ${slot.date} at ${normalizedTime}, ${requestedParticipants} participante(s), ${slotAvailability.capacity.available} slots available`);
         }
 
     // CLASS_PACKAGE: ventanas 4 sem / 2 meses / 3 meses desde la primera clase
