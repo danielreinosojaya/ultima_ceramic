@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import type { Delivery } from '../../types';
+import { daysUntilReadyExpiration } from '../../utils/deliveryDateCalculator';
 
 interface DeliveryDashboardProps {
     deliveries: Delivery[];
@@ -27,14 +28,9 @@ export const DeliveryDashboard: React.FC<DeliveryDashboardProps> = ({
                 criticalCount++;
             }
             
-            // Warning: listas para recoger próximas a expirar (≤30 días)
+            // Warning: listas para recoger próximas a expirar (≤30 días del plazo de 3 meses)
             if (delivery.readyAt && delivery.status !== 'completed') {
-                const readyDate = new Date(delivery.readyAt);
-                const expirationDate = new Date(readyDate);
-                expirationDate.setDate(expirationDate.getDate() + 60);
-                const msPerDay = 1000 * 60 * 60 * 24;
-                const daysUntilExpiration = Math.ceil((expirationDate.getTime() - today.getTime()) / msPerDay);
-                
+                const daysUntilExpiration = daysUntilReadyExpiration(delivery.readyAt);
                 if (daysUntilExpiration <= 30) {
                     warningCount++;
                 }

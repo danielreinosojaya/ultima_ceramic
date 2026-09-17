@@ -3019,7 +3019,15 @@ export const updatePaintingStatus = async (
 // 🔴 Validar que el cliente haya pagado el servicio de pintura
 export const checkPaintingPaymentStatus = async (
     deliveryId: string
-): Promise<{ success: boolean; isPaid: boolean; canSchedule?: boolean; payOnDay?: boolean; error?: string }> => {
+): Promise<{
+    success: boolean;
+    isPaid: boolean;
+    canSchedule?: boolean;
+    payOnDay?: boolean;
+    scheduleUntil?: string | null;
+    expired?: boolean;
+    error?: string;
+}> => {
     try {
         const result = await postAction('checkPaintingPaymentStatus', { deliveryId });
         if (result.success) {
@@ -3028,12 +3036,16 @@ export const checkPaintingPaymentStatus = async (
                 isPaid: result.isPaid ?? false,
                 canSchedule: result.canSchedule ?? result.isPaid ?? false,
                 payOnDay: result.payOnDay === true,
+                scheduleUntil: result.scheduleUntil ?? null,
+                expired: result.expired === true,
             };
         }
         return {
             success: false,
             isPaid: false,
             canSchedule: false,
+            scheduleUntil: result.scheduleUntil ?? null,
+            expired: result.expired === true,
             error: result.error || 'No se pudo verificar el estado de la entrega'
         };
     } catch (error) {

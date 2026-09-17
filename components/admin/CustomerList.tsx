@@ -1,6 +1,7 @@
 import React from 'react';
 import type { AugmentedCustomer, RemainingClassesInfo } from './CrmDashboard';
 import type { Delivery } from '../../types';
+import { daysUntilReadyExpiration } from '../../utils/deliveryDateCalculator';
 import { GiftIcon } from '../icons/GiftIcon';
 
 interface CustomerListProps {
@@ -43,7 +44,6 @@ const DeliveryBadges: React.FC<{ deliveries?: Delivery[] }> = ({ deliveries }) =
 
     // Helper function to detect critical deliveries
     const isCritical = (delivery: Delivery): boolean => {
-        const msPerDay = 1000 * 60 * 60 * 24;
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
@@ -56,16 +56,9 @@ const DeliveryBadges: React.FC<{ deliveries?: Delivery[] }> = ({ deliveries }) =
             }
         }
 
-        // CRITICAL 2 & 3: Ready exists and within 30 days or already expired
+        // CRITICAL 2 & 3: Ready exists and within 30 days or already expired (3 meses)
         if (delivery.readyAt && delivery.status !== 'completed') {
-            const readyDate = new Date(delivery.readyAt);
-            const expirationDate = new Date(readyDate);
-            expirationDate.setDate(expirationDate.getDate() + 60);
-            
-            const nowTime = new Date().getTime();
-            const daysUntilExpiration = Math.ceil((expirationDate.getTime() - nowTime) / msPerDay);
-            
-            // Within 30 days OR already expired
+            const daysUntilExpiration = daysUntilReadyExpiration(delivery.readyAt);
             if (daysUntilExpiration <= 30) {
                 return true;
             }

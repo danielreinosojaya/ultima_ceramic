@@ -73,6 +73,13 @@ import {
     areClassPackageSlotsWithinValidity,
     getClassPackageValidityLabel,
 } from '../utils/classPackageValidity.js';
+import {
+    PIECE_HOLD_MONTHS,
+    formatPieceHoldDeadlineEs,
+    hasPieceHoldExpired,
+    isYmdAfterPieceHoldDeadline,
+    getPieceHoldDeadlineYmd,
+} from '../utils/deliveryDateCalculator.js';
 import { foldSearchText, SQL_ACCENT_FROM, SQL_ACCENT_TO } from '../utils/textSearch.js';
 import {
     isClassStartWithinBusinessHours,
@@ -8049,6 +8056,8 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 const wantsPainting = Boolean((delivery as any).wants_painting);
                 const paintingStatus = (delivery as any).painting_status;
                 const readyAt = (delivery as any).ready_at ?? null;
+                const scheduleUntil = readyAt ? getPieceHoldDeadlineYmd(String(readyAt)) : null;
+                const holdExpired = readyAt ? hasPieceHoldExpired(String(readyAt)) : false;
 
                 // Verificar que el cliente tiene painting habilitado
                 if (!wantsPainting) {
@@ -8093,13 +8102,27 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     });
                 }
 
+                if (holdExpired) {
+                    const deadlineLabel = formatPieceHoldDeadlineEs(String(readyAt));
+                    return res.status(400).json({
+                        success: false,
+                        isPaid: paintingStatus === 'paid' || paintingStatus === 'scheduled',
+                        canSchedule: false,
+                        expired: true,
+                        scheduleUntil,
+                        error: `El plazo de ${PIECE_HOLD_MONTHS} meses para agendar la pintura de esta pieza concluyó el ${deadlineLabel}. Escríbenos por WhatsApp y con gusto te orientamos.`
+                    });
+                }
+
                 const isPaid = paintingStatus === 'paid' || paintingStatus === 'scheduled';
 
-                return res.status(200).json({ 
-                    success: true, 
+                return res.status(200).json({
+                    success: true,
                     isPaid,
                     canSchedule: true,
                     payOnDay: !isPaid,
+                    scheduleUntil,
+                    expired: false,
                 });
 
             } catch (error: any) {
@@ -8297,6 +8320,24 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 
                 if (currentPaintingStatus !== 'paid' && currentPaintingStatus !== 'deferred') {
                     return res.status(400).json({ error: 'Invalid painting service status. Please contact support.' });
+                }
+
+                const readyAtForHold =
+                    (delivery as any).ready_at ?? (delivery as any).readyAt ?? null;
+                if (!isAdminOverride && readyAtForHold) {
+                    const deadlineLabel = formatPieceHoldDeadlineEs(String(readyAtForHold));
+                    if (hasPieceHoldExpired(String(readyAtForHold))) {
+                        return res.status(400).json({
+                            success: false,
+                            error: `El plazo de ${PIECE_HOLD_MONTHS} meses para agendar la pintura de esta pieza concluyó el ${deadlineLabel}. Escríbenos por WhatsApp y con gusto te orientamos.`
+                        });
+                    }
+                    if (isYmdAfterPieceHoldDeadline(String(date), String(readyAtForHold))) {
+                        return res.status(400).json({
+                            success: false,
+                            error: `Puedes agendar tu sesión de pintura hasta el ${deadlineLabel} (${PIECE_HOLD_MONTHS} meses desde que te avisamos). Elige una fecha dentro de ese plazo, por favor.`
+                        });
+                    }
                 }
 
                 const paintingPaidAt =

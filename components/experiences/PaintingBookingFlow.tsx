@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import type { SlotAvailabilityResult, Delivery } from '../../services/dataService';
+import type { SlotAvailabilityResult } from '../../services/dataService';
 import { FreeDateTimePicker } from './FreeDateTimePicker';
 import * as dataService from '../../services/dataService';
 import { parseLocalDate, isEcuadorSlotInPast } from '../../utils/formatters';
@@ -25,11 +25,36 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string>('');
   const [isValidatingPayment, setIsValidatingPayment] = useState(false);
+  const [scheduleUntil, setScheduleUntil] = useState<string | null>(null);
+  const [holdExpired, setHoldExpired] = useState(false);
 
   useEffect(() => {
     setSelectedTime(null);
     setSelectedAvailability(null);
   }, [participants, selectedDate]);
+
+  useEffect(() => {
+    if (!deliveryId) return;
+    let cancelled = false;
+    dataService.checkPaintingPaymentStatus(deliveryId).then((result) => {
+      if (cancelled) return;
+      if (result.scheduleUntil) setScheduleUntil(result.scheduleUntil);
+      if (result.expired) {
+        setHoldExpired(true);
+      }
+    }).catch(() => {
+      // El flujo sigue; se valida de nuevo al confirmar.
+    });
+    return () => { cancelled = true; };
+  }, [deliveryId]);
+
+  const scheduleUntilLabel = scheduleUntil
+    ? parseLocalDate(scheduleUntil).toLocaleDateString('es-ES', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      })
+    : null;
 
   const handleConfirm = async () => {
     if (!selectedDate || !selectedTime) {
@@ -42,6 +67,10 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
     }
     if (selectedDate && selectedTime && isEcuadorSlotInPast(selectedDate, selectedTime)) {
       setError('Ese horario ya pasó (hora Ecuador). Elige una fecha y hora futuras.');
+      return;
+    }
+    if (scheduleUntil && selectedDate > scheduleUntil) {
+      setError(`Puedes agendar tu sesión hasta el ${scheduleUntilLabel}. Elige una fecha dentro de ese plazo, por favor.`);
       return;
     }
     if (!deliveryId) {
@@ -111,6 +140,25 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
         <p className="text-brand-secondary mt-1">Selecciona participantes y horario disponible.</p>
       </div>
 
+      {scheduleUntilLabel && !holdExpired && (
+        <div className="mb-6 rounded-2xl border border-[#E8D9CC] bg-[#FBF6F1] px-5 py-5 text-center">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#9A7B6A]">Hasta cuándo puedes agendar</p>
+          <p className="mt-1 text-2xl font-bold text-[#D95F43] leading-snug">{scheduleUntilLabel}</p>
+          <p className="mt-3 text-sm text-[#5C514C] leading-relaxed">
+            Tienes 3 meses a partir del aviso del taller. Pasada esa fecha, con mucho cariño te pedimos entender que ya no podremos guardar el espacio de pintura para esta pieza.
+          </p>
+        </div>
+      )}
+
+      {holdExpired && (
+        <div className="mb-6 rounded-2xl border border-[#E8D9CC] bg-[#FBF6F1] px-5 py-5 text-center">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#9A7B6A]">Plazo concluido</p>
+          <p className="mt-2 text-sm text-[#5C514C] leading-relaxed">
+            El plazo de 3 meses para agendar la pintura de esta pieza ya concluyó{scheduleUntilLabel ? ` (${scheduleUntilLabel})` : ''}. Escríbenos por WhatsApp y con gusto te orientamos.
+          </p>
+        </div>
+      )}
+
       {!deliveryId && (
         <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4">
           <p className="text-amber-800 font-semibold">
@@ -119,6 +167,7 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
         </div>
       )}
 
+      {!holdExpired && (
       <div className="grid gap-6">
         <div className="bg-white border border-brand-border rounded-xl p-4">
           <h3 className="font-semibold text-brand-text mb-3">Participantes</h3>
@@ -162,6 +211,7 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
             participants={participants}
             selectedDate={selectedDate}
             selectedTime={selectedTime}
+            maxDate={scheduleUntil}
             onSelectDate={(date) => {
               setSelectedDate(date);
               setSelectedTime(null);
@@ -175,7 +225,10 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
             }}
           />
         </div>
+      </div>
+      )}
 
+      <div className="grid gap-6 mt-6">
         {successMessage && (
           <div className="bg-green-50 border border-green-200 rounded-xl p-4">
             <p className="text-green-800 font-semibold">{successMessage}</p>
@@ -203,7 +256,7 @@ export const PaintingBookingFlow: React.FC<PaintingBookingFlowProps> = ({
           >
             ← Atrás
           </button>
-          {!successMessage && (
+          {!successMessage && !holdExpired && (
             <button
               type="button"
               onClick={handleConfirm}

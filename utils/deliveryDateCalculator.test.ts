@@ -3,7 +3,9 @@ import {
   calculateReadyExpiration, 
   getScheduledDateStatus,
   getReadyExpirationStatus,
-  isCriticallyUrgent 
+  isCriticallyUrgent,
+  PIECE_HOLD_MONTHS,
+  getPieceHoldDeadlineYmd,
 } from './deliveryDateCalculator';
 
 // Test: daysUntilDate
@@ -16,13 +18,14 @@ console.log(`Today (${today}):`, daysUntilDate(today), '(expected: 0)');
 console.log(`Tomorrow (${tomorrow}):`, daysUntilDate(tomorrow), '(expected: 1)');
 console.log(`Yesterday (${yesterday}):`, daysUntilDate(yesterday), '(expected: -1)');
 
-// Test: calculateReadyExpiration
+// Test: calculateReadyExpiration (3 calendar months)
 console.log('\n=== Testing calculateReadyExpiration ===');
 const readyDate = today;
 const expiration = calculateReadyExpiration(readyDate);
 const daysUntilExp = daysUntilDate(expiration);
 console.log(`Ready: ${readyDate}, Expires: ${expiration}`);
-console.log(`Days until expiration: ${daysUntilExp} (expected: 60)`);
+console.log(`Days until expiration: ${daysUntilExp} (expected: ~${PIECE_HOLD_MONTHS * 30}, 3 calendar months)`);
+console.log(`Deadline YMD: ${getPieceHoldDeadlineYmd(readyDate)}`);
 
 // Test: getScheduledDateStatus
 console.log('\n=== Testing getScheduledDateStatus ===');
@@ -47,12 +50,22 @@ const criticalScheduled = {
 };
 console.log('Past scheduled date (pending):', isCriticallyUrgent(criticalScheduled), '(expected: true)');
 
-const criticalReady = {
+const readyToday = {
   scheduledDate: tomorrow,
   readyAt: today,
   status: 'ready'
 };
-console.log('Ready + 60 days expiring soon:', isCriticallyUrgent(criticalReady), '(expected: true since expires in 60 days)');
+console.log('Ready today (3 months left):', isCriticallyUrgent(readyToday), '(expected: false)');
+
+const almostExpiredReady = new Date();
+almostExpiredReady.setMonth(almostExpiredReady.getMonth() - 3);
+almostExpiredReady.setDate(almostExpiredReady.getDate() + 10);
+const criticalReady = {
+  scheduledDate: tomorrow,
+  readyAt: almostExpiredReady.toISOString(),
+  status: 'ready'
+};
+console.log('Ready ~3 months ago minus 10 days:', isCriticallyUrgent(criticalReady), '(expected: true)');
 
 const normal = {
   scheduledDate: tomorrow,

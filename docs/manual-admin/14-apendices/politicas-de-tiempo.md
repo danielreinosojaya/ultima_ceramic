@@ -42,6 +42,8 @@ Todas las horas son **hora local del negocio (Ecuador)** salvo que gerencia indi
 | Regla | Valor |
 |-------|-------|
 | Atrasada | Fecha programada pasada + estado pending |
+| Agendar pintura | **3 meses** desde el correo «pieza lista para pintar» |
+| Recoger pieza | **3 meses** desde el correo «lista para retirar» |
 
 ## Admin vs cliente
 

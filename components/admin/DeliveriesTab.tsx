@@ -6,6 +6,7 @@ import { NewLegacyCustomerDeliveryModal } from './NewLegacyCustomerDeliveryModal
 import { LegacyPaintingRegistrationModal } from './LegacyPaintingRegistrationModal';
 import * as dataService from '../../services/dataService';
 import { formatDate } from '../../utils/formatters';
+import { daysUntilReadyExpiration } from '../../utils/deliveryDateCalculator';
 import { useAdminData } from '../../context/AdminDataContext';
 
 interface DeliveriesTabProps {
@@ -168,13 +169,8 @@ export const DeliveriesTab: React.FC<DeliveriesTabProps> = ({ customers, onDataC
             today.setHours(0, 0, 0, 0);
             const daysUntil = Math.ceil((scheduled.getTime() - today.getTime()) / msPerDay);
             
-            const daysUntilExpiration = delivery.readyAt 
-                ? (() => {
-                    const readyDate = new Date(delivery.readyAt);
-                    const expirationDate = new Date(readyDate);
-                    expirationDate.setDate(expirationDate.getDate() + 60);
-                    return Math.ceil((expirationDate.getTime() - new Date().getTime()) / msPerDay);
-                })()
+            const daysUntilExpiration = delivery.readyAt
+                ? daysUntilReadyExpiration(delivery.readyAt)
                 : null;
 
             return [

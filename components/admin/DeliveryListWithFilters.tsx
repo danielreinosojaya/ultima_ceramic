@@ -10,10 +10,10 @@ import 'jspdf-autotable';
 import * as dataService from '../../services/dataService';
 import { useAdminData } from '../../context/AdminDataContext';
 import { isoToEcuadorYmdAndTime } from '../../utils/formatters';
+import { daysUntilReadyExpiration } from '../../utils/deliveryDateCalculator';
 
 // Helper function to detect critical deliveries
 const isCritical = (delivery: Delivery): boolean => {
-    const msPerDay = 1000 * 60 * 60 * 24;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -26,16 +26,9 @@ const isCritical = (delivery: Delivery): boolean => {
         }
     }
 
-    // CRITICAL 2 & 3: Ready exists and within 30 days or already expired (política de retiro)
+    // CRITICAL 2 & 3: Ready exists and within 30 days or already expired (política de retiro: 3 meses)
     if (delivery.readyAt && delivery.status !== 'completed') {
-        const readyDate = new Date(delivery.readyAt);
-        const expirationDate = new Date(readyDate);
-        expirationDate.setDate(expirationDate.getDate() + 60);
-        
-        const nowTime = new Date().getTime();
-        const daysUntilExpiration = Math.ceil((expirationDate.getTime() - nowTime) / msPerDay);
-        
-        // Within 30 days OR already expired
+        const daysUntilExpiration = daysUntilReadyExpiration(delivery.readyAt);
         if (daysUntilExpiration <= 30) {
             return true;
         }
@@ -1262,11 +1255,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                 {/* TIPO 2: Ready date + retiro countdown */}
                                 {delivery.readyAt && (
                                     (() => {
-                                        const readyDate = new Date(delivery.readyAt);
-                                        const expirationDate = new Date(readyDate);
-                                        expirationDate.setDate(expirationDate.getDate() + 60);
-                                        const nowTime = new Date().getTime();
-                                        const daysUntilExpiration = Math.ceil((expirationDate.getTime() - nowTime) / (1000 * 60 * 60 * 24));
+                                        const daysUntilExpiration = daysUntilReadyExpiration(delivery.readyAt);
                                         const isExpiringSoon = daysUntilExpiration <= 30 && daysUntilExpiration > 0;
                                         const isExpired = daysUntilExpiration <= 0;
                                         
@@ -1277,7 +1266,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                                 </div>
                                                 {isExpired ? (
                                                     <div className="inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-red-100 text-red-800 font-semibold text-xs sm:text-sm border border-red-300 ml-2">
-                                                        🟠 EXPIRADA (60 días vencidos)
+                                                        🟠 EXPIRADA (3 meses vencidos)
                                                     </div>
                                                 ) : isExpiringSoon ? (
                                                     <div className="inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-orange-100 text-orange-800 font-semibold text-xs sm:text-sm border border-orange-300 ml-2">
@@ -1629,7 +1618,7 @@ export const DeliveryListWithFilters: React.FC<DeliveryListWithFiltersProps> = (
                                 )}
                             </button>
                             <div className="hidden group-hover:block absolute bottom-full left-0 mb-3 bg-gray-900/95 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap z-[100] backdrop-blur-sm">
-                                Marca como "LISTA PARA RECOGER" para iniciar el conteo de 60 días
+                                Marca como "LISTA PARA RECOGER" para iniciar el conteo de 3 meses
                                 <div className="absolute top-full left-3 w-2 h-2 bg-gray-900/95 transform rotate-45"></div>
                             </div>
                         </div>

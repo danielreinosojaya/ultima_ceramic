@@ -23,6 +23,8 @@ interface FreeDateTimePickerProps {
   participants: number;
   /** Horarios base por día de la semana (opcional, se carga automáticamente si no se proporciona) */
   availability?: Record<DayKey, AvailableSlot[]>;
+  /** YYYY-MM-DD inclusive. Fechas posteriores quedan deshabilitadas. */
+  maxDate?: string | null;
 }
 
 export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
@@ -32,7 +34,8 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   onSelectTime,
   technique,
   participants,
-  availability: propAvailability
+  availability: propAvailability,
+  maxDate = null
 }) => {
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [checkingAvailability, setCheckingAvailability] = useState(false);
@@ -431,6 +434,12 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     return dateStr < getEcuadorDateYmd();
   };
 
+  const isAfterMaxDate = (day: number) => {
+    if (!maxDate) return false;
+    const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return dateStr > maxDate;
+  };
+
   const dateHasSelectableIndividualSlots = (day: number) => {
     const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     if (scheduleOverrides?.[dateStr]?.disableRules) return true;
@@ -454,7 +463,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   };
 
   const handleDayClick = (day: number) => {
-    if (isMonday(day) || isPastDate(day) || !dateHasSelectableIndividualSlots(day)) return;
+    if (isMonday(day) || isPastDate(day) || isAfterMaxDate(day) || !dateHasSelectableIndividualSlots(day)) return;
     
     const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     onSelectDate(dateStr);
@@ -547,9 +556,10 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
                             if (day === null) return <div key={`empty-${index}`}></div>;
             const isMonday_ = isMonday(day);
             const isPast = isPastDate(day);
+            const isBeyondHold = isAfterMaxDate(day);
             const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const isSelected = selectedDate === dateStr;
-            const isDisabled = isMonday_ || isPast || !dateHasSelectableIndividualSlots(day);
+            const isDisabled = isMonday_ || isPast || isBeyondHold || !dateHasSelectableIndividualSlots(day);
             
             return (
               <button

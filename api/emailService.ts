@@ -9,6 +9,10 @@ import {
     getClassPackageValidityDescription,
     getClassPackageValidityLabel,
 } from '../utils/classPackageValidity.js';
+import {
+    PIECE_HOLD_MONTHS,
+    formatPieceHoldDeadlineEs,
+} from '../utils/deliveryDateCalculator.js';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_FROM_ADDRESS || 'no-reply@ceramicalma.com';
@@ -807,6 +811,36 @@ export const sendGiftcardRecipientEmail = async (
 };
 
 
+const buildPieceHoldNoticeHtml = (kind: 'paint' | 'pickup', fromIso: string): string => {
+    const deadlineLabel = formatPieceHoldDeadlineEs(fromIso);
+    const title = kind === 'paint' ? 'Hasta cuándo puedes agendar' : 'Hasta cuándo puedes recoger';
+    const lead =
+        kind === 'paint'
+            ? `Tienes <strong>${PIECE_HOLD_MONTHS} meses</strong> a partir de hoy para reservar tu sesión de pintura.`
+            : `A partir de hoy tienes <strong>${PIECE_HOLD_MONTHS} meses</strong> para pasar por el taller a recoger tu pieza.`;
+    const close =
+        kind === 'paint'
+            ? 'Pasada esa fecha, con mucho cariño te pedimos entender que ya no podremos guardar el espacio de pintura para esta pieza.'
+            : 'Si no fuera posible recogerla dentro de ese tiempo, lamentablemente no podremos seguir resguardándola. Gracias por tu comprensión.';
+
+    return `
+            <div style="margin: 28px 0; padding: 28px 22px; background: #FBF6F1; border: 1px solid #E8D9CC; border-radius: 16px; text-align: center;">
+                <p style="margin: 0 0 10px 0; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: #9A7B6A; font-weight: 700;">
+                    ${title}
+                </p>
+                <p style="margin: 0; font-size: 28px; line-height: 1.25; font-weight: 700; color: #D95F43;">
+                    ${deadlineLabel}
+                </p>
+                <p style="margin: 14px auto 0 auto; max-width: 440px; font-size: 15px; line-height: 1.65; color: #5C514C;">
+                    ${lead}
+                </p>
+                <p style="margin: 10px auto 0 auto; max-width: 440px; font-size: 14px; line-height: 1.65; color: #7A6F69;">
+                    ${close}
+                </p>
+            </div>
+    `;
+};
+
 // --- Delivery emails ---
 export const sendDeliveryCreatedEmail = async (customerEmail: string, customerName: string, delivery: { description?: string | null; scheduledDate: string; }) => {
     console.log('[sendDeliveryCreatedEmail] Starting email send to:', customerEmail);
@@ -1032,17 +1066,9 @@ export const sendDeliveryReadyEmail = async (customerEmail: string, customerName
     
     // Email estándar para pickup (sin pintura)
     const readyDate = new Date(delivery.readyAt);
-    const expirationDate = new Date(readyDate);
-    expirationDate.setMonth(expirationDate.getMonth() + 2);
     
     const formattedReadyDate = readyDate.toLocaleDateString('es-ES', { 
         weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-    });
-    
-    const formattedExpirationDate = expirationDate.toLocaleDateString('es-ES', { 
         year: 'numeric', 
         month: 'long', 
         day: 'numeric' 
@@ -1063,15 +1089,7 @@ export const sendDeliveryReadyEmail = async (customerEmail: string, customerName
                 <p style="margin: 10px 0; color: #065F46;">Listas desde: ${formattedReadyDate}</p>
             </div>
 
-            <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                <h3 style="color: #92400E; margin-top: 0;">⏰ Importante - Plazo de Recogida</h3>
-                <p style="margin: 10px 0; color: #78350F; font-size: 15px;">
-                    Tus piezas estarán disponibles para recoger hasta el <strong style="color: #D97706;">${formattedExpirationDate}</strong> (2 meses desde hoy).
-                </p>
-                <p style="margin: 10px 0; color: #78350F; font-size: 14px;">
-                    ⚠️ Después de esta fecha, no podremos garantizar su disponibilidad.
-                </p>
-            </div>
+            ${buildPieceHoldNoticeHtml('pickup', delivery.readyAt)}
 
             <div style="background-color: #f9fafb; border: 1px solid #E5E7EB; padding: 20px; margin: 20px 0; border-radius: 8px;">
                 <p style="margin: 0; font-weight: bold; color: #374151;">📍 Dirección del Taller</p>
@@ -1182,6 +1200,8 @@ export const sendDeliveryReadyForPaintingEmail = async (
                 <p style="margin: 10px 0; font-size: 16px; text-align: center;"><strong>${displayDescription}</strong></p>
                 <p style="margin: 10px 0; color: #6B5F58; text-align: center;">Lista desde: ${formattedReadyDate}</p>
             </div>
+
+            ${buildPieceHoldNoticeHtml('paint', delivery.readyAt)}
 
             ${paymentReminderHtml}
 
@@ -1471,16 +1491,9 @@ export const sendPaintedPieceReadyForPickupEmail = async (
     console.log('[sendPaintedPieceReadyForPickupEmail] Starting email send to:', customerEmail);
 
     const readyDate = new Date(delivery.readyAt);
-    const expirationDate = new Date(readyDate);
-    expirationDate.setMonth(expirationDate.getMonth() + 2);
 
     const formattedReadyDate = readyDate.toLocaleDateString('es-ES', {
         weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    });
-    const formattedExpirationDate = expirationDate.toLocaleDateString('es-ES', {
         year: 'numeric',
         month: 'long',
         day: 'numeric'
@@ -1501,15 +1514,7 @@ export const sendPaintedPieceReadyForPickupEmail = async (
                 <p style="margin: 5px 0; color: #6B5F58; font-size: 14px;">Lista desde: ${formattedReadyDate}</p>
             </div>
 
-            <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                <h3 style="color: #92400E; margin-top: 0;">⏰ Plazo de Recogida</h3>
-                <p style="margin: 10px 0; color: #78350F; font-size: 15px;">
-                    Tu pieza estará disponible hasta el <strong style="color: #D97706;">${formattedExpirationDate}</strong> (2 meses).
-                </p>
-                <p style="margin: 10px 0; color: #78350F; font-size: 14px;">
-                    ⚠️ Después de esta fecha no podemos garantizar su disponibilidad.
-                </p>
-            </div>
+            ${buildPieceHoldNoticeHtml('pickup', delivery.readyAt)}
 
             <div style="background-color: #F4F2F1; border-left: 4px solid #CCBCB2; padding: 20px; margin: 20px 0; border-radius: 8px;">
                 <p style="margin: 0; color: #4A4540; font-weight: bold;">🕐 Horario de Recogida</p>
