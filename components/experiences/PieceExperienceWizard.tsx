@@ -3,6 +3,7 @@ import type { Piece, SelectedPiece, ExperiencePricing, TimeSlot, GroupTechnique 
 import type { AvailableSlotResult } from '../../services/dataService';
 import * as dataService from '../../services/dataService';
 import { DateTimeSelector } from './DateTimeSelector';
+import { useNavigationSubStep } from '../../hooks/useAppNavigationHistory';
 
 export interface PieceExperienceWizardProps {
   pieces: Piece[];
@@ -22,6 +23,7 @@ export const PieceExperienceWizard: React.FC<PieceExperienceWizardProps> = ({
   const wizardRef = useRef<HTMLDivElement>(null);
   const participantsSection = useRef<HTMLDivElement>(null);
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  useNavigationSubStep(step, (next) => setStep(next));
   const [technique, setTechnique] = useState<GroupTechnique>('hand_modeling');
   const [participants, setParticipants] = useState<number>(2);
   const [participantsInput, setParticipantsInput] = useState<string>('2');

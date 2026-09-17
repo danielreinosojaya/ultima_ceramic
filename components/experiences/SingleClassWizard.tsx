@@ -24,6 +24,7 @@ import {
   type CreativeSku,
 } from '../../config/creativeExperiences';
 import { CatalogSlide, CreativeCatalogCard } from './CreativeCatalogCard';
+import { useNavigationSubStep } from '../../hooks/useAppNavigationHistory';
 
 export interface CreativeBookingMeta {
   serviceKind: string;
@@ -66,6 +67,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
   isLoading = false,
 }) => {
   const [step, setStep] = useState<Step>('category');
+  useNavigationSubStep(step, (next) => setStep(next));
   const [categoryId, setCategoryId] = useState<CreativeCategoryId | null>(null);
   const [sku, setSku] = useState<CreativeSku | null>(null);
   const [pickedSkuFromHome, setPickedSkuFromHome] = useState(false);

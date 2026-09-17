@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { GroupClassConfig, TimeSlot, ParticipantTechniqueAssignment, GroupTechnique, Piece, AppData } from '../../types';
 import { GROUP_CLASS_CAPACITY } from '../../types';
 import * as dataService from '../../services/dataService';
+import { useNavigationSubStep } from '../../hooks/useAppNavigationHistory';
 
 export interface GroupClassWizardProps {
   config: GroupClassConfig;
@@ -23,6 +24,7 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
   isLoading = false
 }) => {
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+  useNavigationSubStep(step, (next) => setStep(next));
   const [totalParticipants, setTotalParticipants] = useState<number>(2);
   const [participantAssignments, setParticipantAssignments] = useState<ParticipantTechniqueAssignment[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);

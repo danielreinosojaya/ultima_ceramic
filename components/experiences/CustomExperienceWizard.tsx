@@ -20,6 +20,7 @@ import { FreeDateTimePicker } from './FreeDateTimePicker';
 import type { AvailableSlotResult, SlotAvailabilityResult } from '../../services/dataService';
 import { UserInfoModal } from '../UserInfoModal';
 import { parseLocalDate } from '../../utils/formatters';
+import { useNavigationSubStep } from '../../hooks/useAppNavigationHistory';
 
 interface CustomExperienceWizardProps {
   pieces: Piece[];
@@ -178,6 +179,9 @@ export const CustomExperienceWizard: React.FC<CustomExperienceWizardProps> = ({
     currentStep: 1,
     isLoading: false,
     error: null,
+  });
+  useNavigationSubStep(state.currentStep, (next) => {
+    setState(prev => ({ ...prev, currentStep: next as CustomExperienceWizardState['currentStep'] }));
   });
 
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);

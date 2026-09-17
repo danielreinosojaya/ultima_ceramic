@@ -52,6 +52,12 @@ import { OpenStudioModal } from './components/admin/OpenStudioModal';
 import { MyClassesPrompt } from './components/MyClassesPrompt';
 import { EventsBottomSheet, useScrollEventsTrigger, hasUpcomingEvents } from './components/EventsBottomSheet';
 import { getSpecialEventConfig, SPECIAL_EVENT_CONFIGS } from './config/specialEventConfigs';
+import {
+    parseInitialRoute,
+    useAppNavigationHistory,
+    NavigationSubStepProvider,
+    type AppModalId,
+} from './hooks/useAppNavigationHistory';
 const ClientDashboard = lazy(() => import('./components/ClientDashboard').then(m => ({ default: m.ClientDashboard })));
 
 import type { AppView, Product, Booking, BookingDetails, TimeSlot, Technique, UserInfo, BookingMode, AppData, DeliveryMethod, GiftcardHold, Piece, ExperiencePricing, ExperienceUIState, CourseSchedule, CourseEnrollment, ParticipantTechniqueAssignment, GroupTechnique, AvailableSlot, ClassCapacity, ScheduleOverrides, CapacityMessageSettings, DayKey } from './types';
@@ -80,7 +86,8 @@ const App: React.FC = () => {
     const [selectedDelivery, setSelectedDelivery] = useState<DeliveryMethod | null>(null);
     const [giftcardBuyerEmail, setGiftcardBuyerEmail] = useState<string>('');
     const [showGiftcardBanner, setShowGiftcardBanner] = useState(true);
-    const [prefillTechnique, setPrefillTechnique] = useState<GroupTechnique | null>(null);
+    const [boot] = useState(parseInitialRoute);
+    const [prefillTechnique, setPrefillTechnique] = useState<GroupTechnique | null>(boot.prefillTechnique);
     // Modal informativo de Open Studio usando ClassInfoModal
     const handleOpenStudioInfoModalClose = () => {
         setIsOpenStudioModalOpen(false);
@@ -95,13 +102,13 @@ const App: React.FC = () => {
     const [isOpenStudioModalOpen, setIsOpenStudioModalOpen] = useState(false);
     const [openStudioProduct, setOpenStudioProduct] = useState<Product | null>(null);
     // Traducciones eliminadas, usar texto en español directamente
-    const [isAdmin, setIsAdmin] = useState(false);
-    const [isCashierMode, setIsCashierMode] = useState(false);
-    const [isClientDeliveryMode, setIsClientDeliveryMode] = useState(false);
-    const [adminModule, setAdminModule] = useState<'main' | 'timecards' | null>(null);
-    const [adminCode, setAdminCode] = useState<string>('');
-    const [view, setView] = useState<AppView>('welcome');
-    const [specialEventSlug, setSpecialEventSlug] = useState<string | null>(null);
+    const [isAdmin, setIsAdmin] = useState(boot.isAdmin);
+    const [isCashierMode, setIsCashierMode] = useState(boot.isCashierMode);
+    const [isClientDeliveryMode, setIsClientDeliveryMode] = useState(boot.isClientDeliveryMode);
+    const [adminModule, setAdminModule] = useState<'main' | 'timecards' | null>(boot.adminModule);
+    const [adminCode, setAdminCode] = useState<string>(boot.adminCode);
+    const [view, setView] = useState<AppView>(boot.view);
+    const [specialEventSlug, setSpecialEventSlug] = useState<string | null>(boot.specialEventSlug);
     const [bookingDetails, setBookingDetails] = useState<BookingDetails>({ product: null, slots: [], userInfo: null });
     const [confirmedBooking, setConfirmedBooking] = useState<Booking | null>(null);
     const [activeGiftcardHold, setActiveGiftcardHold] = useState<GiftcardHold | null>(null);
@@ -152,120 +159,58 @@ const App: React.FC = () => {
     
     // VALENTINE 2026 states
     const [valentineRegistrationId, setValentineRegistrationId] = useState<string | null>(null);
-    const [paintingDeliveryId, setPaintingDeliveryId] = useState<string | null>(null);
+    const [paintingDeliveryId, setPaintingDeliveryId] = useState<string | null>(boot.paintingDeliveryId);
     
     const [appData, setAppData] = useState<AppData>(() => dataService.getInitialAppData());
     const [isHydratingAppData, setIsHydratingAppData] = useState(true);
-    const [proofUploadCode, setProofUploadCode] = useState<string | null>(null);
-    const [giftcardRedeemBookingCode, setGiftcardRedeemBookingCode] = useState<string | null>(null);
-    const [giftcardRedeemPrefillCode, setGiftcardRedeemPrefillCode] = useState<string | null>(null);
+    const [proofUploadCode, setProofUploadCode] = useState<string | null>(boot.proofUploadCode);
+    const [giftcardRedeemBookingCode, setGiftcardRedeemBookingCode] = useState<string | null>(boot.giftcardRedeemBookingCode);
+    const [giftcardRedeemPrefillCode, setGiftcardRedeemPrefillCode] = useState<string | null>(boot.giftcardRedeemPrefillCode);
 
     useEffect(() => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const pathname = window.location.pathname;
-        const href = window.location.href;
-
-        // Check for proof upload recovery page — /?comprobante=CODE
-        // Must be first so it takes priority over all other routes
-        const comprobanteCode = urlParams.get('comprobante');
-        if (comprobanteCode) {
-            setProofUploadCode(comprobanteCode.toUpperCase().trim());
-            setView('proof_upload');
-            return;
-        }
-
-        const giftcardBookingParam = urlParams.get('giftcard') || urlParams.get('redimir');
-        const looksLikeBookingCode = (value: string) => {
-            const v = value.trim().toUpperCase();
-            return v.startsWith('C-') || v.startsWith('ALMA') || v.includes('ALMA') || v.length >= 8;
-        };
-        if (giftcardBookingParam && giftcardBookingParam.toUpperCase() !== 'TRUE' && looksLikeBookingCode(giftcardBookingParam)) {
-            setGiftcardRedeemBookingCode(giftcardBookingParam.toUpperCase().trim());
-            setView('giftcard_redeem_booking');
-            return;
-        }
-        if (pathname.includes('/giftcard/redeem') || href.includes('/giftcard/redeem')) {
-            const bookingFromPath = urlParams.get('booking') || urlParams.get('reserva');
-            const gcCode = urlParams.get('code');
-            if (bookingFromPath) setGiftcardRedeemBookingCode(bookingFromPath.toUpperCase().trim());
-            if (gcCode) setGiftcardRedeemPrefillCode(gcCode.toUpperCase().trim());
-            setView('giftcard_redeem_booking');
-            return;
-        }
-
-        // Limpiar flags de eventos viejos del localStorage (migración)
         localStorage.removeItem('eventsModalDismissed');
         localStorage.removeItem('eventsModalShown');
-
-        // Check for Valentine registration page - /sanvalentin or ?sanvalentin=true
-        if (pathname.includes('/sanvalentin') || href.includes('/sanvalentin') || urlParams.get('sanvalentin') === 'true') {
-            setView('valentine_landing');
-            return;
-        }
-
-        // Special event admin routes (check BEFORE public booking routes)
-        for (const slug of Object.keys(SPECIAL_EVENT_CONFIGS)) {
-            const adminPath = `/${slug}-admin`;
-            if (pathname.includes(adminPath) || urlParams.get(`${slug}admin`) === 'true') {
-                setSpecialEventSlug(slug);
-                setView('special_event_admin');
-                return;
-            }
-        }
-
-        // Special event booking routes
-        for (const slug of Object.keys(SPECIAL_EVENT_CONFIGS)) {
-            const eventPath = `/${slug}`;
-            if (pathname.includes(eventPath) || urlParams.get(slug) === 'true') {
-                setSpecialEventSlug(slug);
-                setView('special_event_booking');
-                return;
-            }
-        }
-
-        // Check for Rum-Com admin panel - /rumcomadmin (check BEFORE /rumcom)
-        if (pathname.includes('/rumcomadmin') || urlParams.get('rumcomadmin') === 'true') {
-            setView('rumcom_admin');
-            return;
-        }
-
-        // Check for Rum-Com event booking page - /rumcom
-        if (pathname.includes('/rumcom') || urlParams.get('rumcom') === 'true') {
-            setView('rumcom_booking');
-            return;
-        }
-
-        // Check for cashier mode - supports both /cuadre and ?cuadre=true
-        if (pathname.includes('/cuadre') || href.includes('/cuadre') || urlParams.get('cuadre') === 'true') {
-            setIsCashierMode(true);
-            return;
-        }
-
-        const bookingParam = urlParams.get('booking') || urlParams.get('product');
-        const techniqueParam = urlParams.get('technique');
-        if (bookingParam === 'painting' || techniqueParam === 'painting') {
-            setPrefillTechnique('painting');
-            setPaintingDeliveryId(urlParams.get('deliveryId'));
-            setView('painting_booking');
-            return;
-        }
-
-        if (urlParams.get('admin') === 'true') {
-            setIsAdmin(true);
-            const code = urlParams.get('code');
-            if (code) setAdminCode(code);
-        }
-        if (urlParams.get('clientMode') === 'delivery') {
-            setIsClientDeliveryMode(true);
-        }
-        const moduleParam = urlParams.get('module');
-        if (moduleParam === 'timecards') {
-            setAdminModule('timecards');
-            // Si accede al módulo de timecards, usar código por defecto si no está especificado
-            const code = urlParams.get('code') || 'ADMIN2025';
-            setAdminCode(code);
-        }
     }, []);
+
+    const activeModal: AppModalId = isPolicyModalOpen
+        ? 'policy'
+        : isUserInfoModalOpen
+            ? 'userInfo'
+            : isBookingTypeModalOpen
+                ? 'bookingType'
+                : isClassInfoModalOpen
+                    ? 'classInfo'
+                    : isCouplesTourModalOpen
+                        ? 'couplesTour'
+                        : isOpenStudioModalOpen
+                            ? 'openStudio'
+                            : showMyClassesPrompt
+                                ? 'myClassesPrompt'
+                                : isEventsModalOpen
+                                    ? 'events'
+                                    : null;
+
+    const restoreModal = useCallback((modal: AppModalId) => {
+        setIsPolicyModalOpen(modal === 'policy');
+        setIsUserInfoModalOpen(modal === 'userInfo');
+        setIsBookingTypeModalOpen(modal === 'bookingType');
+        setIsClassInfoModalOpen(modal === 'classInfo');
+        setIsCouplesTourModalOpen(modal === 'couplesTour');
+        setIsOpenStudioModalOpen(modal === 'openStudio');
+        setShowMyClassesPrompt(modal === 'myClassesPrompt');
+        setIsEventsModalOpen(modal === 'events');
+    }, []);
+
+    const { subStepContext } = useAppNavigationHistory({
+        view,
+        setView,
+        specialEventSlug,
+        setSpecialEventSlug,
+        activeModal,
+        restoreModal,
+        couplesTechnique,
+        setCouplesTechnique,
+    });
 
     useEffect(() => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -391,7 +336,9 @@ const App: React.FC = () => {
     // Handler for event clicks in the bottom sheet
     const handleEventClick = (slug: string) => {
         if (slug === 'sanvalentin') {
+            setIsEventsModalOpen(false);
             setView('valentine_landing');
+            return;
         }
         if (slug === 'rumcom') {
             window.location.href = '/rumcom';
@@ -400,7 +347,6 @@ const App: React.FC = () => {
         if (SPECIAL_EVENT_CONFIGS[slug]) {
             setIsEventsModalOpen(false);
             setSpecialEventSlug(slug);
-            window.history.pushState({}, '', `/${slug}`);
             setView('special_event_booking');
         }
     };
@@ -408,9 +354,6 @@ const App: React.FC = () => {
     const handleSpecialEventBack = () => {
         setSpecialEventSlug(null);
         eventsModalShownRef.current = true;
-        if (window.location.pathname !== '/') {
-            window.history.replaceState({}, '', '/');
-        }
         setView('welcome');
     };
 
@@ -1515,6 +1458,7 @@ const App: React.FC = () => {
     }
 
     return (
+        <NavigationSubStepProvider value={subStepContext}>
         <AuthProvider>
             <div className="bg-brand-background min-h-screen text-brand-text font-sans flex flex-col">
                 <Header 
@@ -1633,6 +1577,7 @@ const App: React.FC = () => {
             />
             </div>
         </AuthProvider>
+        </NavigationSubStepProvider>
     );
 };
 
