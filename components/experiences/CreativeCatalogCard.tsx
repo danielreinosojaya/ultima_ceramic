@@ -1,6 +1,23 @@
 import React from 'react';
 import type { CreativeDisplay } from '../../config/creativeExperiences';
 
+/** Lámina vertical del catálogo: se ve entera, sin recorte, acotada al viewport. */
+export const CatalogSlide: React.FC<{
+  src: string;
+  alt: string;
+  compact?: boolean;
+}> = ({ src, alt, compact = false }) => (
+  <div className="flex items-center justify-center bg-brand-background">
+    <img
+      src={src}
+      alt={alt}
+      className={`mx-auto block h-auto w-auto max-w-full object-contain object-center ${
+        compact ? 'max-h-[min(42vh,20rem)]' : 'max-h-[min(70vh,38rem)]'
+      }`}
+    />
+  </div>
+);
+
 interface CreativeCatalogCardProps {
   display: CreativeDisplay;
   priceLabel?: string;
@@ -21,13 +38,7 @@ export const CreativeCatalogCard: React.FC<CreativeCatalogCardProps> = ({
       selected ? 'border-brand-primary' : 'border-gray-200 hover:border-brand-primary/40'
     }`}
   >
-    <div className="relative h-48 sm:h-56 overflow-hidden bg-brand-background">
-      <img
-        src={display.imageUrl}
-        alt={display.label}
-        className="h-full w-full object-cover object-bottom"
-      />
-    </div>
+    <CatalogSlide src={display.imageUrl} alt={display.label} />
     <div className="p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <h4 className="text-lg sm:text-xl font-semibold text-brand-text leading-snug">

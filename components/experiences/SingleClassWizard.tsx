@@ -23,7 +23,7 @@ import {
   type CreativeCategoryId,
   type CreativeSku,
 } from '../../config/creativeExperiences';
-import { CreativeCatalogCard } from './CreativeCatalogCard';
+import { CatalogSlide, CreativeCatalogCard } from './CreativeCatalogCard';
 
 export interface CreativeBookingMeta {
   serviceKind: string;
@@ -500,24 +500,17 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
       {step === 'category' && (
         <div className="space-y-6">
           <div className="overflow-hidden rounded-2xl border border-brand-border bg-brand-surface shadow-subtle">
-            <img
-              src={CATALOG_INTRO.imageUrl}
-              alt={CATALOG_INTRO.headline}
-              className="h-44 sm:h-56 w-full object-cover"
-            />
+            <CatalogSlide src={CATALOG_INTRO.imageUrl} alt={CATALOG_INTRO.headline} />
             <div className="p-4 sm:p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-secondary">Catálogo</p>
               <h3 className="text-2xl font-bold text-brand-text mt-1">{CATALOG_INTRO.headline}</h3>
               <p className="text-brand-secondary mt-2">{CATALOG_INTRO.tagline}</p>
-              <p className="text-xs text-brand-secondary mt-3">
-                {CATALOG_INTRO.location} · {CATALOG_INTRO.instagram}
-              </p>
             </div>
           </div>
           <div>
             <h3 className="text-2xl font-bold text-brand-text mb-2">¿Qué quieres hacer?</h3>
             <p className="text-brand-secondary">
-              Elige una experiencia. Después nos dices si vas sola o con más gente.
+              Elige una experiencia. Después dices si vienes con más gente.
             </p>
           </div>
           <div className="space-y-4">
@@ -1165,11 +1158,9 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
 
           <div className="bg-white p-6 rounded-xl border border-brand-border space-y-4 shadow-subtle">
             {skuDisplay?.imageUrl && (
-              <img
-                src={skuDisplay.imageUrl}
-                alt={sku.label}
-                className="w-full h-40 object-cover rounded-xl"
-              />
+              <div className="overflow-hidden rounded-xl">
+                <CatalogSlide src={skuDisplay.imageUrl} alt={sku.label} compact />
+              </div>
             )}
             <div className="flex justify-between pb-4 border-b border-brand-border">
               <span className="text-brand-secondary">Actividad</span>

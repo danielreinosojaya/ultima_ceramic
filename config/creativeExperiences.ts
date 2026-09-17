@@ -66,8 +66,6 @@ export const CATALOG_INTRO = {
   headline: 'Nuevas experiencias creativas',
   tagline: 'No necesitas experiencia previa, solo ganas de crear.',
   imageUrl: '/images/experiences/cover.jpg',
-  location: 'Km 2,5 vía Samborondón · Sol Plaza, Local #7',
-  instagram: '@ceramicalma.ec',
 };
 
 export const CREATIVE_CATEGORIES: CreativeCategory[] = [
