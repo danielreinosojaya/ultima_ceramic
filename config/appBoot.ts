@@ -5,4 +5,4 @@
  *
  * Flip this single value and redeploy to restore or cut access.
  */
-export const APP_BOOT_OK = false;
+export const APP_BOOT_OK = true;
