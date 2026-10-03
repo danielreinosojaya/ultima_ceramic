@@ -11,6 +11,7 @@
  */
 
 import { sql } from '@vercel/postgres';
+import { rejectIfBootBlocked } from './shared/runtimeGuard.js';
 
 // ============================================
 // TIPOS
@@ -562,6 +563,8 @@ export default async function handler(req: any, res: any) {
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
+
+  if (rejectIfBootBlocked(res)) return;
 
   try {
     switch (action) {

@@ -1,0 +1,15 @@
+---
+description: Reversible app boot gate (generic load failure)
+alwaysApply: true
+---
+
+# App boot gate
+
+There is a reversible access cut via `config/appBoot.ts` → `APP_BOOT_OK`.
+
+- `false` (current intent when unpaid): frontend shows `BootFailure` (generic "No se pudo abrir esta página" / `ERR_FAILED`). Main APIs return 503 via `api/shared/runtimeGuard.ts`.
+- `true`: normal app. Set this and redeploy when access should be restored.
+
+Do not add payment language, vendor branding, or “admin paused” messaging to the failure UI. Keep the screen looking like a plain load failure.
+
+Related files: `config/appBoot.ts`, `components/BootFailure.tsx`, `index.tsx`, `api/shared/runtimeGuard.ts`.

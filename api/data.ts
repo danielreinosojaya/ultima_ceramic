@@ -47,6 +47,7 @@ import { sql } from '@vercel/postgres';
 import { seedDatabase, ensureTablesExist, createCustomer, ensureCustomerFromUserInfo } from './db.js';
 import * as emailService from './emailService.js';
 import { VercelRequest, VercelResponse } from '@vercel/node';
+import { rejectIfBootBlocked } from './shared/runtimeGuard.js';
 import {
     generatePaymentId,
     generateGiftcardCode,
@@ -1270,6 +1271,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
+
+    if (rejectIfBootBlocked(res)) return;
 
     // Validate database connection early - check multiple possible env var names
     const dbUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL || process.env.POSTGRES_PRISMA_URL;

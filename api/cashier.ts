@@ -1,4 +1,5 @@
 import { sql } from '@vercel/postgres';
+import { rejectIfBootBlocked } from './shared/runtimeGuard.js';
 
 export const runtime = 'nodejs';
 
@@ -31,6 +32,8 @@ export default async function handler(req: any, res: any) {
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
+
+  if (rejectIfBootBlocked(res)) return;
 
   const { action } = req.query;
 

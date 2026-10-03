@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { sql } from '@vercel/postgres';
 import jwt from 'jsonwebtoken';
+import { rejectIfBootBlocked } from './shared/runtimeGuard.js';
 
 // Environment variables
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
@@ -29,6 +30,8 @@ const CODE_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
  * - ?action=verify-recovery - Verify recovery code
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+    if (rejectIfBootBlocked(res)) return;
+
     const action = req.query.action as string;
 
     if (!action) {
