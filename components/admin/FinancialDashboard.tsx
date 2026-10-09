@@ -1,997 +1,838 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Chart from 'chart.js/auto';
 import Papa from 'papaparse';
-import type { Booking, Product, PaymentDetails, AdminTab, InvoiceRequest, GroupTechnique } from '../../types.js';
+import type { Booking, PaymentDetails, AdminTab, InvoiceRequest } from '../../types.js';
 import * as dataService from '../../services/dataService.js';
 import { AcceptPaymentModal } from './AcceptPaymentModal.js';
-import { CurrencyDollarIcon } from '../icons/CurrencyDollarIcon.js';
-import { UserIcon } from '../icons/UserIcon.js';
 import { InvoiceReminderModal } from './InvoiceReminderModal.js';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal.js';
-import { TrashIcon } from '../icons/TrashIcon.js';
-import { CalendarIcon } from '../icons/CalendarIcon.js';
 import { EditPaymentModal } from './EditPaymentModal';
 import { useAdminData } from '../../context/AdminDataContext';
+import {
+  buildSnapshot,
+  clientName,
+  filterMovements,
+  formatDelta,
+  formatMoney,
+  CATEGORY_LABEL,
+  formatStudioDate,
+  getPeriodWindow,
+  inRange,
+  openBalances,
+  asDate,
+  type DayBucket,
+  type PeriodKey,
+  type SaleCategory,
+} from './financeModel.js';
 
-// Helper para obtener nombre de técnica desde metadata
-const getTechniqueName = (technique: GroupTechnique): string => {
-  const names: Record<GroupTechnique, string> = {
-    'potters_wheel': 'Torno Alfarero',
-    'hand_modeling': 'Modelado a Mano',
-    'painting': 'Pintura de piezas'
-  };
-  return names[technique] || technique;
-};
-
-// Helper para traducir productType a nombre legible
-const getProductTypeName = (productType?: string): string => {
-  const typeNames: Record<string, string> = {
-    'SINGLE_CLASS': 'Clase Suelta',
-    'CLASS_PACKAGE': 'Paquete de Clases',
-    'INTRODUCTORY_CLASS': 'Clase Introductoria',
-    'GROUP_CLASS': 'Clase Grupal',
-        'CUSTOM_GROUP_EXPERIENCE': 'Experiencia Grupal Personalizada',
-    'COUPLES_EXPERIENCE': 'Experiencia de Parejas',
-    'OPEN_STUDIO': 'Estudio Abierto'
-  };
-  return typeNames[productType || ''] || 'Clase';
-};
-
-// Detecta upsell de pintura post-clase (cliente pinta SU pieza ya hecha).
-// Permite separar este upsell del resto de pinturas en los reportes financieros.
-const isPaintingUpsell = (booking: Booking): boolean => {
-    const product = booking.product as any;
-    return product?.kind === 'painting_upsell'
-        || (booking.productType === 'CUSTOM_GROUP_EXPERIENCE'
-            && booking.technique === 'painting'
-            && (booking as any).productId === 'painting_service');
-};
-
-const PAINTING_UPSELL_LABEL = 'Upsell - pieza ya hecha';
-
-// Helper para obtener el nombre del producto/técnica de un booking
-const getBookingDisplayName = (booking: Booking): string => {
-    if (isPaintingUpsell(booking)) return PAINTING_UPSELL_LABEL;
-
-    // 0. Para experiencia grupal personalizada, priorizar técnica sobre nombre genérico
-    if (
-        booking.technique &&
-        (booking.productType === 'CUSTOM_GROUP_EXPERIENCE' || booking.product?.name === 'Experiencia Grupal Personalizada')
-    ) {
-        return getTechniqueName(booking.technique);
-    }
-
-  // 1. Si tiene groupClassMetadata con techniqueAssignments (GROUP_CLASS)
-  if (booking.groupClassMetadata?.techniqueAssignments && booking.groupClassMetadata.techniqueAssignments.length > 0) {
-    const techniques = booking.groupClassMetadata.techniqueAssignments.map(a => a.technique);
-    const uniqueTechniques = [...new Set(techniques)];
-    
-    if (uniqueTechniques.length === 1) {
-      return getTechniqueName(uniqueTechniques[0]);
-    } else {
-      return `Clase Grupal (mixto)`;
-    }
-  }
-  
-  // 2. Prioridad: product.name (es la fuente más confiable)
-  const productName = booking.product?.name;
-  if (productName && productName !== 'Unknown Product' && productName !== 'Unknown' && productName !== null) {
-    return productName;
-  }
-  
-  // 3. Fallback: technique directamente (solo si product.name no existe)
-  if (booking.technique) {
-    return getTechniqueName(booking.technique);
-  }
-  
-  // 4. Último fallback: productType
-  return getProductTypeName(booking.productType);
-};
-
-
-type FilterPeriod = 'today' | 'week' | 'month' | 'custom';
-type FinancialTab = 'summary' | 'pending' | 'capacity';
-type PendingSubTab = 'all' | 'packages' | 'openStudio';
+type FinanceView = 'summary' | 'open';
+type OpenScope = 'all' | 'period';
+type OpenSort = 'amount' | 'expires' | 'recent';
 
 interface NavigationState {
-    tab: AdminTab;
-    targetId: string;
+  tab: AdminTab;
+  targetId: string;
 }
+
 interface FinancialDashboardProps {
-    bookings: Booking[];
-    invoiceRequests: InvoiceRequest[];
-    onDataChange: () => void;
-    setNavigateTo: React.Dispatch<React.SetStateAction<NavigationState | null>>;
+  bookings: Booking[];
+  invoiceRequests: InvoiceRequest[];
+  onDataChange: () => void;
+  setNavigateTo: React.Dispatch<React.SetStateAction<NavigationState | null>>;
 }
 
-const getDatesForPeriod = (period: FilterPeriod, customRange: { start: string, end: string }): { startDate: Date, endDate: Date } => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    let endDate = new Date(today);
-    endDate.setHours(23, 59, 59, 999);
+const PERIODS: { id: PeriodKey; label: string }[] = [
+  { id: 'today', label: 'Hoy' },
+  { id: 'week', label: 'Semana' },
+  { id: 'month', label: 'Mes' },
+  { id: 'lastMonth', label: 'Mes pasado' },
+];
 
-    let startDate = new Date(today);
+const PAGE_SIZE = 12;
 
-    switch (period) {
-        case 'today':
-            break;
-        case 'week':
-            // Week starts on Sunday
-            const dayOfWeek = today.getDay();
-            startDate.setDate(today.getDate() - dayOfWeek);
-            endDate = new Date(startDate);
-            endDate.setDate(startDate.getDate() + 6);
-            endDate.setHours(23, 59, 59, 999);
-            break;
-        case 'month':
-            startDate = new Date(today.getFullYear(), today.getMonth(), 1);
-            endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-            endDate.setHours(23, 59, 59, 999);
-            break;
-        case 'custom':
-            startDate = customRange.start ? new Date(customRange.start + 'T00:00:00') : new Date(0);
-            endDate = customRange.end ? new Date(customRange.end + 'T23:59:59') : new Date();
-            break;
-    }
-    return { startDate, endDate };
+const toneClass = (tone: 'up' | 'down' | 'flat') => {
+  if (tone === 'up') return 'text-green-700';
+  if (tone === 'down') return 'text-red-700';
+  return 'text-brand-secondary';
 };
 
-const KPICard: React.FC<{ title: string; value: string | number; subtext?: string; }> = ({ title, value, subtext }) => (
-    <div className="bg-brand-background p-4 rounded-lg">
-        <h3 className="text-sm font-semibold text-brand-secondary">{title}</h3>
-        <p className="text-3xl font-bold text-brand-text mt-1">{value}</p>
-        {subtext && <p className="text-xs text-brand-secondary mt-1">{subtext}</p>}
+export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({
+  bookings: allBookings,
+  invoiceRequests,
+  onDataChange,
+  setNavigateTo,
+}) => {
+  const adminData = useAdminData();
+  const [view, setView] = useState<FinanceView>('summary');
+  const [period, setPeriod] = useState<PeriodKey>('month');
+  const [customRange, setCustomRange] = useState({ start: '', end: '' });
+  const [showCustom, setShowCustom] = useState(false);
+  const [category, setCategory] = useState<SaleCategory | 'all'>('all');
+  const [query, setQuery] = useState('');
+  const [focusDayKey, setFocusDayKey] = useState<string | null>(null);
+  const [productFocus, setProductFocus] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [openScope, setOpenScope] = useState<OpenScope>('all');
+  const [openSort, setOpenSort] = useState<OpenSort>('amount');
+  const [openQuery, setOpenQuery] = useState('');
+  const [openPage, setOpenPage] = useState(1);
+
+  const [bookingToPay, setBookingToPay] = useState<Booking | null>(null);
+  const [bookingForReminder, setBookingForReminder] = useState<Booking | null>(null);
+  const [isInvoiceReminderOpen, setIsInvoiceReminderOpen] = useState(false);
+  const [bookingToDelete, setBookingToDelete] = useState<Booking | null>(null);
+  const [bookingToViewDates, setBookingToViewDates] = useState<Booking | null>(null);
+  const [paymentToEdit, setPaymentToEdit] = useState<{ payment: PaymentDetails; bookingId: string; index: number } | null>(null);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const chartRef = useRef<HTMLCanvasElement>(null);
+  const chartClickRef = useRef<(key: string) => void>(() => {});
+
+  const windowRange = useMemo(() => getPeriodWindow(period, customRange), [period, customRange]);
+
+  const categoryOptions = useMemo(() => {
+    if (!windowRange.ready) return [];
+    return buildSnapshot(allBookings, windowRange.current, 'all').categories.filter((row) => row.sold > 0);
+  }, [allBookings, windowRange]);
+
+  const activeCategory: SaleCategory | 'all' = category === 'all' || categoryOptions.some((row) => row.category === category)
+    ? category
+    : 'all';
+
+  const snapshot = useMemo(() => {
+    if (!windowRange.ready) return null;
+    return buildSnapshot(allBookings, windowRange.current, activeCategory);
+  }, [allBookings, windowRange, activeCategory]);
+
+  const previousTotals = useMemo(() => {
+    if (!windowRange.ready) return null;
+    return buildSnapshot(allBookings, windowRange.previous, activeCategory);
+  }, [allBookings, windowRange, activeCategory]);
+
+  const openRows = useMemo(() => openBalances(allBookings), [allBookings]);
+  const openTotal = roundList(openRows.reduce((sum, row) => sum + row.pending, 0));
+
+  const focusDay = snapshot?.days.find((day) => day.key === focusDayKey) || null;
+
+  const visibleMovements = useMemo(() => {
+    if (!snapshot) return [];
+    return filterMovements(snapshot.movements, { query, day: focusDay, product: productFocus });
+  }, [snapshot, query, focusDay, productFocus]);
+
+  const movementTotal = roundList(visibleMovements.reduce((sum, movement) => sum + movement.amount, 0));
+  const movementPages = Math.max(1, Math.ceil(visibleMovements.length / PAGE_SIZE));
+  const movementPage = Math.min(page, movementPages);
+  const pagedMovements = visibleMovements.slice((movementPage - 1) * PAGE_SIZE, movementPage * PAGE_SIZE);
+
+  const visibleOpen = useMemo(() => {
+    const q = openQuery.trim().toLowerCase();
+    let rows = openRows.filter((row) => {
+      if (openScope === 'period') {
+        if (!windowRange.ready) return false;
+        const created = asDate(row.booking.createdAt);
+        if (!created || !inRange(created, windowRange.current)) return false;
+      }
+      if (!q) return true;
+      const haystack = [
+        clientName(row.booking),
+        row.booking.userInfo?.email,
+        row.booking.bookingCode,
+        row.productName,
+      ].join(' ').toLowerCase();
+      return haystack.includes(q);
+    });
+    rows = [...rows].sort((a, b) => {
+      if (openSort === 'expires') {
+        const ae = asDate(a.booking.expiresAt)?.getTime() ?? Number.POSITIVE_INFINITY;
+        const be = asDate(b.booking.expiresAt)?.getTime() ?? Number.POSITIVE_INFINITY;
+        return ae - be;
+      }
+      if (openSort === 'recent') {
+        return (asDate(b.booking.createdAt)?.getTime() || 0) - (asDate(a.booking.createdAt)?.getTime() || 0);
+      }
+      return b.pending - a.pending;
+    });
+    return rows;
+  }, [openRows, openQuery, openScope, openSort, windowRange]);
+
+  const openPages = Math.max(1, Math.ceil(visibleOpen.length / PAGE_SIZE));
+  const safeOpenPage = Math.min(openPage, openPages);
+  const pagedOpen = visibleOpen.slice((safeOpenPage - 1) * PAGE_SIZE, safeOpenPage * PAGE_SIZE);
+  const visibleOpenTotal = roundList(visibleOpen.reduce((sum, row) => sum + row.pending, 0));
+
+  chartClickRef.current = (key: string) => {
+    setFocusDayKey((current) => (current === key ? null : key));
+    setPage(1);
+  };
+
+  useEffect(() => {
+    if (view !== 'summary' || !snapshot || !chartRef.current || snapshot.collected <= 0) return;
+    const existing = Chart.getChart(chartRef.current);
+    if (existing) existing.destroy();
+    const ctx = chartRef.current.getContext('2d');
+    if (!ctx) return;
+
+    const chart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: snapshot.days.map((day) => day.label),
+        datasets: [{
+          label: 'Cobrado',
+          data: snapshot.days.map((day) => day.amount),
+          backgroundColor: snapshot.days.map((day) => {
+            if (focusDayKey === day.key) return '#4A4540';
+            return day.amount > 0 ? '#828E98' : '#E4E2DC';
+          }),
+          borderRadius: 6,
+          maxBarThickness: 28,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 280 },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (item) => formatMoney(Number(item.raw) || 0),
+            },
+          },
+        },
+        onClick: (_event, elements) => {
+          const index = elements[0]?.index;
+          if (index === undefined) return;
+          const day = snapshot.days[index];
+          if (day) chartClickRef.current(day.key);
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: '#958985', maxRotation: 0, autoSkip: true, font: { size: 11 } } },
+          y: {
+            beginAtZero: true,
+            grid: { color: '#F4F2F1' },
+            ticks: { color: '#958985', font: { size: 11 }, callback: (value) => `$${value}` },
+          },
+        },
+      },
+    });
+
+    return () => {
+      chart.destroy();
+    };
+  }, [view, snapshot, focusDayKey]);
+
+  useEffect(() => {
+    if (!feedback) return;
+    const timer = window.setTimeout(() => setFeedback(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [feedback]);
+
+  const choosePeriod = (next: PeriodKey) => {
+    setPeriod(next);
+    if (next !== 'custom') setShowCustom(false);
+    setFocusDayKey(null);
+    setProductFocus(null);
+    setPage(1);
+  };
+
+  const chooseCategory = (next: SaleCategory | 'all') => {
+    setCategory(next);
+    setProductFocus(null);
+    setFocusDayKey(null);
+    setPage(1);
+  };
+
+  const exportCsv = () => {
+    const rows = visibleMovements.map((movement) => ({
+      Fecha: formatStudioDate(movement.date),
+      Cliente: clientName(movement.booking),
+      Email: movement.booking.userInfo?.email || '',
+      Codigo: movement.booking.bookingCode || '',
+      Clase: movement.productName,
+      Tipo: CATEGORY_LABEL[movement.category],
+      Metodo: movement.methodLabel,
+      Cobrado: movement.amount.toFixed(2),
+    }));
+    const csv = Papa.unparse(rows, { quotes: true });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute('download', 'finanzas.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleAcceptPaymentClick = (booking: Booking) => {
+    const pendingInvoice = invoiceRequests.find((request) => request.bookingId === booking.id && request.status === 'Pending');
+    if (pendingInvoice) {
+      setBookingForReminder(booking);
+      setIsInvoiceReminderOpen(true);
+      return;
+    }
+    setBookingToPay(booking);
+  };
+
+  const handleDeleteBooking = async () => {
+    if (!bookingToDelete) return;
+    const result = await dataService.deleteBooking(bookingToDelete.id) as { success: boolean; error?: string };
+    if (!result?.success) {
+      const message = result?.error || 'No se pudo eliminar la reserva';
+      setFeedback({ type: 'error', text: message });
+      throw new Error(message);
+    }
+    adminData.optimisticRemoveBooking(bookingToDelete.id);
+    setFeedback({ type: 'success', text: 'Reserva eliminada' });
+  };
+
+  const handleGoToInvoicing = () => {
+    if (!bookingForReminder) return;
+    const request = invoiceRequests.find((item) => item.bookingId === bookingForReminder.id);
+    if (request) setNavigateTo({ tab: 'invoicing', targetId: request.id });
+    setIsInvoiceReminderOpen(false);
+    setBookingForReminder(null);
+  };
+
+  const notes = snapshot ? buildNotes(snapshot) : [];
+  const soldDelta = snapshot && previousTotals ? formatDelta(snapshot.sold, previousTotals.sold, windowRange.previous.shortLabel) : null;
+  const collectedDelta = snapshot && previousTotals ? formatDelta(snapshot.collected, previousTotals.collected, windowRange.previous.shortLabel) : null;
+  const otherOpen = snapshot ? roundList(Math.max(0, openTotal - snapshot.pendingOfPeriod)) : 0;
+  const maxProduct = snapshot?.topProducts[0]?.sold || 1;
+  const maxMethod = snapshot?.methods[0]?.amount || 1;
+
+  return (
+    <div>
+      {bookingToViewDates && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md relative">
+            <button className="absolute top-3 right-3 text-brand-secondary text-xl leading-none" onClick={() => setBookingToViewDates(null)} aria-label="Cerrar" type="button">×</button>
+            <h3 className="text-lg font-bold mb-4 text-brand-text">Fechas de la reserva</h3>
+            {bookingToViewDates.slots?.length ? (
+              <ul className="space-y-2">
+                {bookingToViewDates.slots.map((slot, index) => (
+                  <li key={`${slot.date}-${slot.time}-${index}`} className="text-brand-text">
+                    {new Date(`${slot.date}T12:00:00`).toLocaleDateString('es-EC', { year: 'numeric', month: 'short', day: 'numeric' })} · {slot.time}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-brand-secondary">Esta reserva todavía no tiene fechas.</p>
+            )}
+          </div>
+        </div>
+      )}
+      {bookingToPay && (
+        <AcceptPaymentModal isOpen={!!bookingToPay} onClose={() => setBookingToPay(null)} booking={bookingToPay} onDataChange={onDataChange} />
+      )}
+      {isInvoiceReminderOpen && (
+        <InvoiceReminderModal
+          isOpen={isInvoiceReminderOpen}
+          onClose={() => setIsInvoiceReminderOpen(false)}
+          onProceed={() => {
+            if (bookingForReminder) setBookingToPay(bookingForReminder);
+            setIsInvoiceReminderOpen(false);
+            setBookingForReminder(null);
+          }}
+          onGoToInvoicing={handleGoToInvoicing}
+        />
+      )}
+      {bookingToDelete && (
+        <DeleteConfirmationModal
+          isOpen={!!bookingToDelete}
+          onClose={() => setBookingToDelete(null)}
+          onConfirm={handleDeleteBooking}
+          title="¿Eliminar reserva?"
+          message={`Se eliminará la reserva de ${clientName(bookingToDelete)}. Esta acción no se puede deshacer.`}
+        />
+      )}
+      {paymentToEdit && (
+        <EditPaymentModal
+          isOpen={!!paymentToEdit}
+          payment={paymentToEdit.payment}
+          paymentIndex={paymentToEdit.index}
+          bookingId={paymentToEdit.bookingId}
+          onClose={() => setPaymentToEdit(null)}
+          onSave={async (updated) => {
+            const identifier = paymentToEdit.payment.id || paymentToEdit.index;
+            await dataService.updatePaymentDetails(paymentToEdit.bookingId, identifier, updated);
+            adminData.optimisticUpdateBookingPayment(paymentToEdit.bookingId, identifier, updated);
+            setPaymentToEdit(null);
+          }}
+        />
+      )}
+
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between mb-5">
+        <div>
+          <h2 className="text-2xl font-serif text-brand-text">Finanzas</h2>
+          <p className="text-sm text-brand-secondary mt-1">
+            {windowRange.ready ? (
+              <>
+                <span className="text-brand-text font-semibold">{windowRange.current.label}</span>
+                <span> · comparado con {windowRange.previous.label}</span>
+              </>
+            ) : 'Elige el inicio y el fin del rango'}
+          </p>
+        </div>
+        <div className="inline-flex rounded-full bg-brand-background p-1 self-start" role="tablist" aria-label="Vista">
+          <button type="button" onClick={() => setView('summary')} className={viewButtonClass(view === 'summary')} role="tab" aria-selected={view === 'summary'}>Resumen</button>
+          <button
+            type="button"
+            onClick={() => { setView('open'); setOpenScope('all'); }}
+            className={viewButtonClass(view === 'open')}
+            role="tab"
+            aria-selected={view === 'open'}
+          >
+            Por cobrar{openTotal > 0 ? ` · ${formatMoney(openTotal)}` : ''}
+          </button>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        {PERIODS.map((item) => (
+          <button key={item.id} type="button" onClick={() => choosePeriod(item.id)} className={chipClass(period === item.id)} aria-pressed={period === item.id}>
+            {item.label}
+          </button>
+        ))}
+        <button type="button" onClick={() => setShowCustom((open) => !open)} className={chipClass(period === 'custom' || showCustom)} aria-pressed={period === 'custom'}>
+          Fechas
+        </button>
+      </div>
+
+      {(showCustom || period === 'custom') && (
+        <div className="flex flex-wrap items-center gap-2 mb-5">
+          <label className="text-sm text-brand-secondary">
+            Desde
+            <input
+              type="date"
+              value={customRange.start}
+              onChange={(event) => {
+                const start = event.target.value;
+                setCustomRange((current) => ({ ...current, start }));
+                if (start && customRange.end) {
+                  setPeriod('custom');
+                  setFocusDayKey(null);
+                  setPage(1);
+                }
+              }}
+              className="ml-2 text-sm p-1.5 border border-brand-border rounded-md text-brand-text"
+            />
+          </label>
+          <label className="text-sm text-brand-secondary">
+            Hasta
+            <input
+              type="date"
+              value={customRange.end}
+              onChange={(event) => {
+                const end = event.target.value;
+                setCustomRange((current) => ({ ...current, end }));
+                if (customRange.start && end) {
+                  setPeriod('custom');
+                  setFocusDayKey(null);
+                  setPage(1);
+                }
+              }}
+              className="ml-2 text-sm p-1.5 border border-brand-border rounded-md text-brand-text"
+            />
+          </label>
+        </div>
+      )}
+
+      {view === 'summary' && snapshot && (
+        <div className="animate-fade-in">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+            <Metric
+              label="Vendido"
+              hint="Reservas creadas en este periodo"
+              value={formatMoney(snapshot.sold)}
+              detail={snapshot.bookingCount > 0 ? `${snapshot.bookingCount} reservas · ticket ${formatMoney(snapshot.averageTicket)}` : 'Sin reservas creadas'}
+              delta={soldDelta?.text}
+              tone={soldDelta?.tone}
+            />
+            <Metric
+              label="Cobrado"
+              hint="Pagos que entraron en este periodo"
+              value={formatMoney(snapshot.collected)}
+              delta={collectedDelta?.text}
+              tone={collectedDelta?.tone}
+            />
+            <button
+              type="button"
+              onClick={() => { setView('open'); setOpenScope('period'); setOpenPage(1); }}
+              className="text-left bg-white border border-brand-border rounded-xl p-4 hover:border-brand-primary transition-colors"
+            >
+              <p className="text-sm font-semibold text-brand-secondary">Por cobrar</p>
+              <p className="text-xs text-brand-secondary mt-0.5">Saldo de las reservas de este periodo</p>
+              <p className="text-3xl font-bold text-brand-text mt-2 tabular-nums">{formatMoney(snapshot.pendingOfPeriod)}</p>
+              <p className="text-xs mt-2 text-brand-secondary">
+                {otherOpen > 0 ? `También hay ${formatMoney(otherOpen)} de otras fechas` : 'Nada pendiente de otras fechas'}
+              </p>
+            </button>
+          </div>
+
+          {notes.length > 0 && (
+            <div className="mb-4 space-y-1">
+              {notes.map((note) => (
+                <p key={note} className="text-sm text-brand-secondary">{note}</p>
+              ))}
+            </div>
+          )}
+
+          {categoryOptions.length > 0 && (
+            <div className="mb-5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-brand-secondary mb-2">Vendido por tipo</p>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                <button type="button" onClick={() => chooseCategory('all')} className={`${chipClass(activeCategory === 'all')} shrink-0`} aria-pressed={activeCategory === 'all'}>
+                  Todas · {formatMoney(categoryOptions.reduce((sum, row) => sum + row.sold, 0))}
+                </button>
+                {categoryOptions.map((row) => (
+                  <button key={row.category} type="button" onClick={() => chooseCategory(row.category)} className={`${chipClass(activeCategory === row.category)} shrink-0`} aria-pressed={activeCategory === row.category}>
+                    {row.label} · {formatMoney(row.sold)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {snapshot.sold === 0 && snapshot.collected === 0 ? (
+            <div className="bg-white border border-brand-border rounded-xl p-8 text-center">
+              <p className="text-brand-text font-semibold">Nada vendido ni cobrado en este periodo</p>
+              {openTotal > 0 && (
+                <button type="button" onClick={() => setView('open')} className="mt-3 text-sm font-semibold text-brand-primary underline">
+                  Hay {formatMoney(openTotal)} por cobrar de otras fechas
+                </button>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-4">
+                <section className="lg:col-span-3 bg-white border border-brand-border rounded-xl p-4">
+                  <div className="flex items-baseline justify-between gap-3 mb-3">
+                    <h3 className="font-semibold text-brand-text">Dinero cobrado por día</h3>
+                    <p className="text-xs text-brand-secondary">Toca una barra para ver esos cobros</p>
+                  </div>
+                  {snapshot.collected > 0 ? (
+                    <div className="relative h-56">
+                      <canvas ref={chartRef} />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-brand-secondary py-10 text-center">
+                      Hay ventas en este periodo, pero el dinero entró en otras fechas.
+                    </p>
+                  )}
+                </section>
+
+                <section className="lg:col-span-2 bg-white border border-brand-border rounded-xl p-4">
+                  <h3 className="font-semibold text-brand-text mb-3">Más vendidas</h3>
+                  {snapshot.topProducts.length === 0 ? (
+                    <p className="text-sm text-brand-secondary">Sin ventas en este periodo.</p>
+                  ) : (
+                    <ul className="space-y-3">
+                      {snapshot.topProducts.map((product) => {
+                        const active = productFocus === product.name;
+                        return (
+                          <li key={product.name}>
+                            <button
+                              type="button"
+                              onClick={() => { setProductFocus(active ? null : product.name); setPage(1); }}
+                              className={`w-full text-left rounded-lg px-2 py-1.5 ${active ? 'bg-brand-background' : 'hover:bg-brand-background/70'}`}
+                              aria-pressed={active}
+                            >
+                              <div className="flex items-baseline justify-between gap-3">
+                                <span className="text-sm font-semibold text-brand-text truncate">{product.name}</span>
+                                <span className="text-sm font-bold text-brand-text tabular-nums shrink-0">{formatMoney(product.sold)}</span>
+                              </div>
+                              <div className="mt-1.5 h-1.5 rounded-full bg-brand-background">
+                                <div className="h-1.5 rounded-full bg-brand-primary" style={{ width: `${Math.max(6, (product.sold / maxProduct) * 100)}%` }} />
+                              </div>
+                              <p className="text-xs text-brand-secondary mt-1">{product.count} {product.count === 1 ? 'reserva' : 'reservas'}</p>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+
+                  {snapshot.methods.length > 0 && (
+                    <div className="mt-5 pt-4 border-t border-brand-border">
+                      <h3 className="font-semibold text-brand-text mb-3">Cómo se pagó</h3>
+                      <ul className="space-y-2.5">
+                        {snapshot.methods.map((method) => (
+                          <li key={method.label}>
+                            <div className="flex items-baseline justify-between gap-3 text-sm">
+                              <span className="text-brand-text">{method.label}</span>
+                              <span className="font-semibold tabular-nums text-brand-text">{formatMoney(method.amount)}</span>
+                            </div>
+                            <div className="mt-1 h-1.5 rounded-full bg-brand-background">
+                              <div className="h-1.5 rounded-full bg-brand-accent" style={{ width: `${Math.max(6, (method.amount / maxMethod) * 100)}%` }} />
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </section>
+              </div>
+
+              <section className="bg-white border border-brand-border rounded-xl p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
+                  <div>
+                    <h3 className="font-semibold text-brand-text">Cobros</h3>
+                    <p className="text-xs text-brand-secondary mt-0.5">{visibleMovements.length} {visibleMovements.length === 1 ? 'pago' : 'pagos'} · {formatMoney(movementTotal)}</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="search"
+                      value={query}
+                      onChange={(event) => { setQuery(event.target.value); setPage(1); }}
+                      placeholder="Buscar cliente, código o clase"
+                      className="text-sm px-3 py-1.5 border border-brand-border rounded-lg w-full sm:w-64"
+                      aria-label="Buscar cobros"
+                    />
+                    <button type="button" onClick={exportCsv} disabled={visibleMovements.length === 0} className="text-sm font-semibold bg-brand-primary text-white px-3 py-1.5 rounded-lg disabled:opacity-40">
+                      Exportar
+                    </button>
+                  </div>
+                </div>
+
+                {(focusDay || productFocus) && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {focusDay && (
+                      <button type="button" onClick={() => setFocusDayKey(null)} className="text-xs font-semibold bg-brand-background text-brand-text px-2.5 py-1 rounded-full">
+                        {focusDay.label} ×
+                      </button>
+                    )}
+                    {productFocus && (
+                      <button type="button" onClick={() => setProductFocus(null)} className="text-xs font-semibold bg-brand-background text-brand-text px-2.5 py-1 rounded-full">
+                        {productFocus} ×
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {pagedMovements.length === 0 ? (
+                  <p className="text-sm text-brand-secondary py-8 text-center">No hay cobros con este filtro.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full">
+                      <thead>
+                        <tr className="text-left text-xs uppercase tracking-wide text-brand-secondary border-b border-brand-border">
+                          <th className="py-2 pr-3 font-semibold">Fecha</th>
+                          <th className="py-2 pr-3 font-semibold">Cliente</th>
+                          <th className="py-2 pr-3 font-semibold">Clase</th>
+                          <th className="py-2 pr-3 font-semibold">Cómo</th>
+                          <th className="py-2 pr-3 font-semibold text-right">Cobrado</th>
+                          <th className="py-2 font-semibold text-right"> </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pagedMovements.map((movement) => (
+                          <tr key={movement.key} className="border-b border-brand-background last:border-0">
+                            <td className="py-2.5 pr-3 text-sm text-brand-text whitespace-nowrap" title={movement.dateAssumed ? 'El pago no tenía fecha. Se usa la fecha de la reserva.' : undefined}>
+                              {formatStudioDate(movement.date)}
+                            </td>
+                            <td className="py-2.5 pr-3 text-sm">
+                              <button type="button" onClick={() => setNavigateTo({ tab: 'customers', targetId: movement.booking.userInfo?.email || '' })} className="font-semibold text-brand-text hover:underline text-left">
+                                {clientName(movement.booking)}
+                              </button>
+                              <div className="text-xs text-brand-secondary">{movement.booking.bookingCode}</div>
+                            </td>
+                            <td className="py-2.5 pr-3 text-sm text-brand-text">{movement.productName}</td>
+                            <td className="py-2.5 pr-3 text-sm text-brand-secondary">{movement.methodLabel}</td>
+                            <td className="py-2.5 pr-3 text-sm font-bold text-brand-text text-right tabular-nums whitespace-nowrap">{formatMoney(movement.amount)}</td>
+                            <td className="py-2.5 text-right">
+                              {movement.payment && (
+                                <button type="button" onClick={() => setPaymentToEdit({ payment: movement.payment!, bookingId: movement.booking.id, index: movement.paymentIndex })} className="text-xs font-semibold text-brand-primary hover:underline">
+                                  Editar
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {visibleMovements.length > PAGE_SIZE && (
+                  <Pager page={movementPage} pages={movementPages} onPage={setPage} />
+                )}
+              </section>
+            </>
+          )}
+        </div>
+      )}
+
+      {view === 'summary' && !windowRange.ready && (
+        <div className="bg-white border border-brand-border rounded-xl p-8 text-center text-brand-secondary">
+          Elige desde y hasta para ver ese rango.
+        </div>
+      )}
+
+      {view === 'open' && (
+        <div className="animate-fade-in">
+          <div className="bg-white border border-brand-border rounded-xl p-4 mb-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm text-brand-secondary">{openScope === 'period' && windowRange.ready ? `De ${windowRange.current.label}` : 'Todo lo que falta por cobrar'}</p>
+              <p className="text-3xl font-bold text-brand-text tabular-nums mt-1">{formatMoney(visibleOpenTotal)}</p>
+              <p className="text-xs text-brand-secondary mt-1">{visibleOpen.length} {visibleOpen.length === 1 ? 'reserva' : 'reservas'}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => { setOpenScope('all'); setOpenPage(1); }} className={chipClass(openScope === 'all')} aria-pressed={openScope === 'all'}>Todo lo abierto</button>
+              <button type="button" onClick={() => { setOpenScope('period'); setOpenPage(1); }} className={chipClass(openScope === 'period')} aria-pressed={openScope === 'period'}>De este periodo</button>
+            </div>
+          </div>
+
+          <div className="bg-white border border-brand-border rounded-xl p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+              <input
+                type="search"
+                value={openQuery}
+                onChange={(event) => { setOpenQuery(event.target.value); setOpenPage(1); }}
+                placeholder="Buscar cliente o código"
+                className="text-sm px-3 py-1.5 border border-brand-border rounded-lg w-full sm:w-64"
+                aria-label="Buscar por cobrar"
+              />
+              <label className="text-sm text-brand-secondary">
+                Orden
+                <select
+                  value={openSort}
+                  onChange={(event) => { setOpenSort(event.target.value as OpenSort); setOpenPage(1); }}
+                  className="ml-2 text-sm p-1.5 border border-brand-border rounded-lg text-brand-text"
+                >
+                  <option value="amount">Mayor saldo</option>
+                  <option value="expires">Vence antes</option>
+                  <option value="recent">Más recientes</option>
+                </select>
+              </label>
+            </div>
+
+            {openScope === 'period' && !windowRange.ready ? (
+              <p className="text-sm text-brand-secondary py-10 text-center">Elige las fechas del periodo para ver ese saldo.</p>
+            ) : pagedOpen.length === 0 ? (
+              <p className="text-sm text-brand-secondary py-10 text-center">No hay saldos pendientes.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full">
+                  <thead>
+                    <tr className="text-left text-xs uppercase tracking-wide text-brand-secondary border-b border-brand-border">
+                      <th className="py-2 pr-3 font-semibold">Cliente</th>
+                      <th className="py-2 pr-3 font-semibold">Clase</th>
+                      <th className="py-2 pr-3 font-semibold text-right">Precio</th>
+                      <th className="py-2 pr-3 font-semibold text-right">Pagado</th>
+                      <th className="py-2 pr-3 font-semibold text-right">Falta</th>
+                      <th className="py-2 pr-3 font-semibold">Plazo</th>
+                      <th className="py-2 font-semibold text-right"> </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pagedOpen.map((row) => {
+                      const expires = asDate(row.booking.expiresAt);
+                      const remaining = expires ? expires.getTime() - Date.now() : null;
+                      return (
+                        <tr key={row.booking.id} className="border-b border-brand-background last:border-0">
+                          <td className="py-2.5 pr-3 text-sm">
+                            <div className="font-semibold text-brand-text">{clientName(row.booking)}</div>
+                            <div className="text-xs text-brand-secondary">{row.booking.bookingCode}</div>
+                          </td>
+                          <td className="py-2.5 pr-3 text-sm text-brand-text">
+                            {row.productName}
+                            {(!row.booking.slots || row.booking.slots.length === 0) && (
+                              <div className="text-xs text-brand-secondary">Sin fechas</div>
+                            )}
+                          </td>
+                          <td className="py-2.5 pr-3 text-sm text-right tabular-nums text-brand-text">{formatMoney(row.price)}</td>
+                          <td className="py-2.5 pr-3 text-sm text-right tabular-nums text-brand-secondary">{formatMoney(row.paid)}</td>
+                          <td className="py-2.5 pr-3 text-sm text-right tabular-nums font-bold text-brand-text">{formatMoney(row.pending)}</td>
+                          <td className="py-2.5 pr-3 text-sm whitespace-nowrap">
+                            <Deadline remaining={remaining} />
+                          </td>
+                          <td className="py-2.5 text-right whitespace-nowrap">
+                            <div className="inline-flex gap-2">
+                              <button type="button" onClick={() => handleAcceptPaymentClick(row.booking)} className="text-xs font-semibold text-green-800 bg-green-50 px-2 py-1 rounded-md">Cobrar</button>
+                              <button type="button" onClick={() => setNavigateTo({ tab: 'customers', targetId: row.booking.userInfo?.email || '' })} className="text-xs font-semibold text-brand-text bg-brand-background px-2 py-1 rounded-md">Cliente</button>
+                              {!!row.booking.slots?.length && (
+                                <button type="button" onClick={() => setBookingToViewDates(row.booking)} className="text-xs font-semibold text-brand-text bg-brand-background px-2 py-1 rounded-md">Fechas</button>
+                              )}
+                              <button type="button" onClick={() => setBookingToDelete(row.booking)} className="text-xs font-semibold text-red-700 px-2 py-1">Eliminar</button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {visibleOpen.length > PAGE_SIZE && <Pager page={safeOpenPage} pages={openPages} onPage={setOpenPage} />}
+          </div>
+        </div>
+      )}
+
+      {feedback && (
+        <div className={`mt-4 p-3 rounded-lg text-sm font-semibold ${feedback.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`} role="status">
+          {feedback.text}
+        </div>
+      )}
     </div>
+  );
+};
+
+function roundList(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function buildNotes(snapshot: { collectedFromEarlier: number; collectedFromLater: number; paidOutsidePeriod: number }): string[] {
+  const notes: string[] = [];
+  if (snapshot.collectedFromEarlier > 0.009) {
+    notes.push(`De lo cobrado, ${formatMoney(snapshot.collectedFromEarlier)} es de reservas creadas antes de este periodo.`);
+  }
+  if (snapshot.collectedFromLater > 0.009) {
+    notes.push(`De lo cobrado, ${formatMoney(snapshot.collectedFromLater)} es de reservas creadas después.`);
+  }
+  if (snapshot.paidOutsidePeriod > 0.009) {
+    notes.push(`De lo vendido, ${formatMoney(snapshot.paidOutsidePeriod)} se cobró en otras fechas.`);
+  }
+  return notes;
+}
+
+function chipClass(active: boolean): string {
+  return `px-3 py-1.5 text-sm font-semibold rounded-full transition-colors ${active ? 'bg-brand-text text-white' : 'bg-white text-brand-text border border-brand-border hover:bg-brand-background'}`;
+}
+
+function viewButtonClass(active: boolean): string {
+  return `px-3 py-1.5 text-sm font-semibold rounded-full ${active ? 'bg-white text-brand-text shadow-sm' : 'text-brand-secondary'}`;
+}
+
+const Metric: React.FC<{ label: string; hint: string; value: string; detail?: string; delta?: string; tone?: 'up' | 'down' | 'flat' }> = ({
+  label, hint, value, detail, delta, tone = 'flat',
+}) => (
+  <div className="bg-white border border-brand-border rounded-xl p-4">
+    <p className="text-sm font-semibold text-brand-secondary">{label}</p>
+    <p className="text-xs text-brand-secondary mt-0.5">{hint}</p>
+    <p className="text-3xl font-bold text-brand-text mt-2 tabular-nums">{value}</p>
+    {detail && <p className="text-xs mt-2 text-brand-secondary">{detail}</p>}
+    {delta && <p className={`text-xs mt-1 ${toneClass(tone)}`}>{delta}</p>}
+  </div>
 );
 
-const CapacityHealthView: React.FC = () => {
-    // Idioma fijo español
-    const [metrics, setMetrics] = useState({ totalCapacity: 0, bookedSlots: 0 });
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        const fetchMetrics = async () => {
-            const fetchedMetrics = await dataService.getFutureCapacityMetrics(30);
-            setMetrics(fetchedMetrics);
-            setLoading(false);
-        };
-        fetchMetrics();
-    }, []);
-
-    const occupancy = metrics.totalCapacity > 0 ? (metrics.bookedSlots / metrics.totalCapacity) * 100 : 0;
-    
-    let progressBarColor = 'bg-green-500';
-    if (occupancy > 85) {
-        progressBarColor = 'bg-red-500';
-    } else if (occupancy > 60) {
-        progressBarColor = 'bg-yellow-500';
-    }
-
-    if (loading) {
-        return <div>Cargando datos de capacidad...</div>;
-    }
-
-        return (
-            <div className="animate-fade-in">
-                <p className="text-brand-secondary mb-6">Salud de la capacidad de clases</p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <KPICard title="Capacidad total" value={metrics.totalCapacity} />
-                    <KPICard title="Clases reservadas" value={metrics.bookedSlots} />
-                    <KPICard title="Ocupación" value={`${occupancy.toFixed(1)}%`} />
-                </div>
-                <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                        <h3 className="font-bold text-brand-text mb-2">Ocupación</h3>
-                        <div className="w-full bg-gray-200 rounded-full h-4 relative overflow-hidden">
-                                <div 
-                                        className={`${progressBarColor} h-4 rounded-full transition-all duration-500 ease-out`} 
-                                        style={{ width: `${occupancy}%` }}
-                                ></div>
-                        </div>
-                        <div className="flex justify-between text-xs font-semibold text-gray-500 mt-1">
-                                <span>0%</span>
-                                <span>50%</span>
-                                <span>100%</span>
-                        </div>
-                </div>
-            </div>
-        );
+const Deadline: React.FC<{ remaining: number | null }> = ({ remaining }) => {
+  if (remaining === null) return <span className="text-brand-secondary">Sin plazo</span>;
+  if (remaining <= 0) return <span className="font-semibold text-red-700">Plazo vencido</span>;
+  const minutes = Math.floor(remaining / 60000);
+  if (minutes < 120) return <span className="font-semibold text-amber-800">Vence en {minutes} min</span>;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return <span className="text-brand-text">Vence en {hours} h</span>;
+  const days = Math.floor(hours / 24);
+  return <span className="text-brand-secondary">Vence en {days} días</span>;
 };
 
-export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ bookings: allBookings, invoiceRequests, onDataChange, setNavigateTo }) => {
-    const adminData = useAdminData();
-    // Feedback state
-    const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
-    const [feedbackType, setFeedbackType] = useState<'success' | 'error' | null>(null);
-    const [loadingBulk, setLoadingBulk] = useState(false);
-    // Pagination state
-    const [currentPage, setCurrentPage] = useState(1);
-    const [rowsPerPage, setRowsPerPage] = useState(10);
-    // Bulk selection state
-    const [selectedBookings, setSelectedBookings] = useState<string[]>([]);
-    const [paymentToEdit, setPaymentToEdit] = useState<{ payment: PaymentDetails, bookingId: string, index: number } | null>(null);
-
-    // Idioma fijo español
-    const language = 'es-ES';
-    const [activeTab, setActiveTab] = useState<FinancialTab>('summary');
-    const [pendingSubTab, setPendingSubTab] = useState<PendingSubTab>('all');
-
-    // State for Summary Tab
-    const [summaryPeriod, setSummaryPeriod] = useState<FilterPeriod>('month');
-    const [summaryCustomRange, setSummaryCustomRange] = useState({ start: '', end: '' });
-    // Advanced filters
-    const [productTypeFilter, setProductTypeFilter] = useState<string>('all');
-    const [paymentMethodFilter, setPaymentMethodFilter] = useState<string>('all');
-    const [bookingStatusFilter, setBookingStatusFilter] = useState<string>('all');
-    const [giftcardFilter, setGiftcardFilter] = useState<string>('all');
-
-    // State for Pending Tab
-    const [pendingPeriod, setPendingPeriod] = useState<FilterPeriod>('month');
-    const [pendingCustomRange, setPendingCustomRange] = useState({ start: '', end: '' });
-
-    // State for action modals
-    const [bookingToPay, setBookingToPay] = useState<Booking | null>(null);
-    const [isInvoiceReminderOpen, setIsInvoiceReminderOpen] = useState(false);
-    const [bookingForReminder, setBookingForReminder] = useState<Booking | null>(null);
-    const [bookingToDelete, setBookingToDelete] = useState<Booking | null>(null);
-        // Modal para ver fechas reservadas
-        const [bookingToViewDates, setBookingToViewDates] = useState<Booking | null>(null);
-
-    // Formato de fecha fijo en español
-    const formatDate = (dateInput: Date | string | undefined | null, options: Intl.DateTimeFormatOptions = {}) => {
-        if (!dateInput) return '---';
-        const date = new Date(dateInput);
-        if (isNaN(date.getTime()) || date.getTime() === 0) return '---';
-        // Hardcode Spanish format
-        return date.toLocaleDateString('es-ES', { ...options });
-    };
-
-    // CORRECCIÓN: Filtrar las reservas por la fecha del pago, no la fecha de la reserva.
-    const summaryBookings = useMemo(() => {
-        const { startDate, endDate } = getDatesForPeriod(summaryPeriod, summaryCustomRange);
-        
-        console.log('[FinancialDashboard] Summary filter - Date range:', { 
-            startDate: startDate.toISOString(), 
-            endDate: endDate.toISOString(),
-            period: summaryPeriod 
-        });
-        
-        let filtered = allBookings.filter(b => {
-            if (!b.isPaid || !b.paymentDetails) {
-                console.log('[FinancialDashboard] Filtering out booking (not paid or no paymentDetails):', b.bookingCode, { isPaid: b.isPaid, hasPaymentDetails: !!b.paymentDetails });
-                return false;
-            }
-            // Verificar si alguno de los pagos se recibió en el rango de fechas
-            const hasPaymentInRange = b.paymentDetails.some(p => {
-                const receivedAt = new Date(p.receivedAt!);
-                if (isNaN(receivedAt.getTime())) {
-                    console.log('[FinancialDashboard] Invalid receivedAt date:', p.receivedAt);
-                    return false;
-                }
-                const inRange = receivedAt >= startDate && receivedAt <= endDate;
-                console.log('[FinancialDashboard] Checking payment:', { 
-                    bookingCode: b.bookingCode, 
-                    receivedAt: receivedAt.toISOString(), 
-                    inRange,
-                    method: p.method,
-                    giftcardAmount: p.giftcardAmount 
-                });
-                return inRange;
-            });
-            return hasPaymentInRange;
-        });
-        
-        console.log('[FinancialDashboard] Filtered bookings before advanced filters:', filtered.length);
-        
-        // Advanced filters
-        if (productTypeFilter !== 'all') {
-            filtered = filtered.filter(b => b.product?.type === productTypeFilter);
-        }
-        if (paymentMethodFilter !== 'all') {
-            filtered = filtered.filter(b => b.paymentDetails?.some(p => p.method === paymentMethodFilter));
-        }
-        if (bookingStatusFilter !== 'all') {
-            filtered = filtered.filter(b => {
-                if (bookingStatusFilter === 'paid') return b.isPaid;
-                if (bookingStatusFilter === 'pending') return !b.isPaid;
-                return true;
-            });
-        }
-        if (giftcardFilter !== 'all') {
-            filtered = filtered.filter(b => b.paymentDetails?.some(p => (giftcardFilter === 'giftcard' ? (p.giftcardAmount || p.giftcardId) : !(p.giftcardAmount || p.giftcardId))));
-        }
-        
-        console.log('[FinancialDashboard] Final filtered bookings:', filtered.length);
-        return filtered;
-    }, [summaryPeriod, summaryCustomRange, allBookings, productTypeFilter, paymentMethodFilter, bookingStatusFilter, giftcardFilter]);
-
-
-    const { pendingPackageBookings, pendingOpenStudioBookings } = useMemo(() => {
-        // CORREGIDO: Mostrar TODAS las reservas impagas de paquetes/clases, 
-        // incluyendo pre-reservas sin slots asignados (pendientes de coordinación)
-        const packages = allBookings.filter(b => {
-            return !b.isPaid && b.productType !== 'OPEN_STUDIO_SUBSCRIPTION';
-            // ELIMINADO el filtro: && Array.isArray(b.slots) && b.slots.length > 0
-            // Las pre-reservas sin fechas también son pendientes de pago válidos
-        }).sort((a,b) => (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0));
-
-        // Mostrar todas las reservas impagas de Open Studio, sin filtrar por slots
-        const openStudio = allBookings.filter(b => {
-            return !b.isPaid && b.productType === 'OPEN_STUDIO_SUBSCRIPTION';
-        }).sort((a,b) => (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0));
-
-        console.log('[FinancialDashboard] Pending bookings calculated:', {
-            totalUnpaidPackages: packages.length,
-            withSlots: packages.filter(b => Array.isArray(b.slots) && b.slots.length > 0).length,
-            withoutSlots: packages.filter(b => !Array.isArray(b.slots) || b.slots.length === 0).length,
-            openStudio: openStudio.length
-        });
-
-        return { pendingPackageBookings: packages, pendingOpenStudioBookings: openStudio };
-    }, [allBookings]); // Remove date dependencies since pending payments should show all unpaid bookings
-    
-    const pendingBookingsToDisplay = pendingSubTab === 'packages'
-        ? pendingPackageBookings
-        : pendingSubTab === 'openStudio'
-            ? pendingOpenStudioBookings
-            : [...pendingPackageBookings, ...pendingOpenStudioBookings].sort((a, b) => (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0));
-    // Pagination logic
-    const totalRows = pendingBookingsToDisplay.length;
-    const totalPages = Math.ceil(totalRows / rowsPerPage);
-    const paginatedBookings = pendingBookingsToDisplay.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
-
-    // CORRECCIÓN: Calcular el valor total sumando todos los pagos, no el precio de la reserva.
-    const kpis = useMemo(() => {
-        let totalRevenue = 0;
-        let lastBookingPaymentDate: Date | null = null;
-        
-        summaryBookings.forEach(booking => {
-            if (booking.paymentDetails) {
-                booking.paymentDetails.forEach(p => {
-                    const receivedAt = new Date(p.receivedAt!);
-                    totalRevenue += p.amount;
-                    if (!lastBookingPaymentDate || receivedAt > lastBookingPaymentDate) {
-                        lastBookingPaymentDate = receivedAt;
-                    }
-                });
-            }
-        });
-
-        return {
-            totalValue: `$${totalRevenue.toFixed(2)}`,
-            totalBookings: summaryBookings.length,
-            lastBookingDate: lastBookingPaymentDate ? formatDate(lastBookingPaymentDate, { month: 'short', day: 'numeric', year: 'numeric' }) : '---',
-        };
-    }, [summaryBookings]);
-
-    // Chart logic
-    const lineChartRef = useRef<HTMLCanvasElement>(null);
-    const doughnutChartRef = useRef<HTMLCanvasElement>(null);
-    const paymentMethodChartRef = useRef<HTMLCanvasElement>(null);
-
-    useEffect(() => {
-        if (activeTab !== 'summary' || !lineChartRef.current || !doughnutChartRef.current || !paymentMethodChartRef.current) return;
-    
-        const charts = [lineChartRef, doughnutChartRef, paymentMethodChartRef];
-        charts.forEach(ref => {
-            if (ref.current) {
-                const chartInstance = Chart.getChart(ref.current);
-                if (chartInstance) {
-                    chartInstance.destroy();
-                }
-            }
-        });
-
-        const lineCtx = lineChartRef.current.getContext('2d');
-        const doughnutCtx = doughnutChartRef.current.getContext('2d');
-        const paymentMethodCtx = paymentMethodChartRef.current.getContext('2d');
-
-        if (!lineCtx || !doughnutCtx || !paymentMethodCtx) return;
-
-        // Line Chart Data
-        const revenueByDate = summaryBookings.reduce((acc: Record<string, number>, b: Booking) => {
-            if (!b.paymentDetails) return acc;
-            b.paymentDetails.forEach(p => {
-                const date = new Date(p.receivedAt!).toISOString().split('T')[0];
-                acc[date] = (acc[date] || 0) + (p.amount || 0);
-            });
-            return acc;
-        }, {});
-        
-        const sortedDates = Object.keys(revenueByDate).sort();
-        
-        new Chart(lineCtx, {
-            type: 'line', data: {
-                labels: sortedDates.map(d => new Date(d + 'T12:00:00').toLocaleDateString(language, { month: 'short', day: 'numeric' })),
-                datasets: [{ label: 'Ingresos totales', data: sortedDates.map(date => revenueByDate[date]), borderColor: '#828E98', backgroundColor: 'rgba(130, 142, 152, 0.2)', fill: true, tension: 0.3 }]
-            }
-        });
-
-        // Doughnut Chart Data - Revenue by Package
-        const revenueByPackage = summaryBookings.reduce((acc: Record<string, number>, b: Booking) => {
-            if (!b.product || !b.paymentDetails) return acc;
-            const key = getBookingDisplayName(b);
-            acc[key] = (acc[key] || 0) + b.paymentDetails.reduce((sum, p) => sum + p.amount, 0);
-            return acc;
-        }, {} as Record<string, number>);
-        
-        new Chart(doughnutCtx, {
-            type: 'doughnut', data: {
-                labels: Object.keys(revenueByPackage),
-                datasets: [{ data: Object.values(revenueByPackage), backgroundColor: ['#828E98', '#958985', '#CCBCB2', '#4A4540', '#D1D0C6'], borderColor: '#fff', borderWidth: 2 }]
-            }, options: { responsive: true, maintainAspectRatio: false }
-        });
-
-        // Doughnut Chart Data - Revenue by Payment Method
-        const paymentMethodData = summaryBookings.reduce((acc: Record<string, number>, b: Booking) => {
-            if (!b.paymentDetails) return acc;
-            b.paymentDetails.forEach(p => {
-                const method = p.method || 'Manual';
-                acc[method] = (acc[method] || 0) + (p.amount || 0);
-            });
-            return acc;
-        }, {});
-
-        new Chart(paymentMethodCtx, {
-            type: 'doughnut', data: {
-                labels: Object.keys(paymentMethodData),
-                datasets: [{ data: Object.values(paymentMethodData), backgroundColor: ['#828E98', '#958985', '#CCBCB2', '#4A4540'], borderColor: '#fff', borderWidth: 2 }]
-            }, options: { responsive: true, maintainAspectRatio: false }
-        });
-
-    }, [summaryBookings, language, activeTab]);
-
-    const exportToCSV = () => {
-        const headers = ['Fecha', 'Cliente', 'Paquete', 'Monto'];
-        const rows = summaryBookings.map(b => ({
-            [headers[0]]: formatDate(b.paymentDetails?.[0].receivedAt, {}),
-            [headers[1]]: `${b.userInfo?.firstName} ${b.userInfo?.lastName}`,
-            [headers[2]]: getBookingDisplayName(b),
-            [headers[3]]: (b.paymentDetails?.[0]?.amount || 0).toFixed(2)
-        }));
-        const csv = Papa.unparse(rows, { quotes: true });
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.setAttribute('download', 'reporte_financiero.csv');
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
-    
-    const handleAcceptPaymentClick = (booking: Booking) => {
-        const pendingInvoiceRequest = invoiceRequests.find(
-            req => req.bookingId === booking.id && req.status === 'Pending'
-        );
-
-        if (pendingInvoiceRequest) {
-            setBookingForReminder(booking);
-            setIsInvoiceReminderOpen(true);
-        } else {
-            setBookingToPay(booking);
-        }
-    };
-
-    const handleConfirmPayment = async (details: Omit<PaymentDetails, 'receivedAt'>) => {
-        if (bookingToPay) {
-            // Add receivedAt as now for PaymentDetails
-            const payment: PaymentDetails = {
-                ...details,
-                receivedAt: new Date().toISOString()
-            };
-            const res = await dataService.addPaymentToBooking(bookingToPay.id, payment);
-            if (res?.success && res.booking) {
-                adminData.optimisticUpsertBooking(res.booking);
-            } else {
-                adminData.refreshCritical();
-            }
-            setBookingToPay(null);
-        }
-    };
-    
-    const handleDeleteBooking = async () => {
-        if (!bookingToDelete) return;
-        try {
-            const result = await dataService.deleteBooking(bookingToDelete.id);
-            if (!result?.success) {
-                throw new Error(result?.error || 'No se pudo eliminar la reserva');
-            }
-            adminData.optimisticRemoveBooking(bookingToDelete.id);
-            setBookingToDelete(null);
-            setFeedbackMsg('Reserva eliminada correctamente');
-            setFeedbackType('success');
-        } catch (e) {
-            setFeedbackMsg(e instanceof Error ? e.message : 'Error al eliminar reserva');
-            setFeedbackType('error');
-            throw e;
-        }
-    };
-
-    const handleGoToInvoicing = () => {
-        if (!bookingForReminder) return;
-        const request = invoiceRequests.find(req => req.bookingId === bookingForReminder.id);
-        if (request) {
-            setNavigateTo({ tab: 'invoicing', targetId: request.id });
-        }
-        setIsInvoiceReminderOpen(false);
-        setBookingForReminder(null);
-    };
-
-    const handleProceedWithPayment = () => {
-        if (bookingForReminder) {
-            setBookingToPay(bookingForReminder);
-        }
-        setIsInvoiceReminderOpen(false);
-        setBookingForReminder(null);
-    };
-    
-    const TabButton: React.FC<{ isActive: boolean, onClick: () => void, children: React.ReactNode }> = ({ isActive, onClick, children }) => (
-      <button
-        onClick={onClick}
-        className={`px-1 py-4 text-sm font-semibold border-b-2 ${isActive ? 'border-brand-primary text-brand-primary' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
-      >
-        {children}
-      </button>
-    );
-
-    const handleSelectBooking = (id: string) => {
-        setSelectedBookings(selected => selected.includes(id) ? selected.filter(bid => bid !== id) : [...selected, id]);
-    };
-    const handleSelectAll = () => {
-        if (selectedBookings.length === paginatedBookings.length) {
-            setSelectedBookings([]);
-        }
-    };
-    const handleBulkDelete = async () => {
-        setLoadingBulk(true);
-        try {
-            for (const id of selectedBookings) {
-                await dataService.deleteBooking(id);
-                adminData.optimisticRemoveBooking(id);
-            }
-            setSelectedBookings([]);
-            setFeedbackMsg('Reservas eliminadas correctamente');
-            setFeedbackType('success');
-        } catch (e) {
-            setFeedbackMsg('Error al eliminar reservas');
-            setFeedbackType('error');
-        }
-        setLoadingBulk(false);
-    };
-    const handleBulkAcceptPayment = async () => {
-        setLoadingBulk(true);
-        try {
-            for (const id of selectedBookings) {
-                await dataService.acceptPaymentForBooking(id);
-                adminData.optimisticPatchBooking(id, { isPaid: true } as any);
-            }
-            setSelectedBookings([]);
-            setFeedbackMsg('Pagos aceptados correctamente');
-            setFeedbackType('success');
-        } catch (e) {
-            setFeedbackMsg('Error al aceptar pagos');
-            setFeedbackType('error');
-        }
-        setLoadingBulk(false);
-    };
-    const handleBulkSendReminder = async () => {
-        setLoadingBulk(true);
-        try {
-            for (const id of selectedBookings) {
-                await dataService.sendReminderForBooking(id);
-            }
-            setSelectedBookings([]);
-            setFeedbackMsg('Recordatorios enviados correctamente');
-            setFeedbackType('success');
-        } catch (e) {
-            setFeedbackMsg('Error al enviar recordatorios');
-            setFeedbackType('error');
-        }
-        setLoadingBulk(false);
-    };
-
-        return (
-        <div>
-            {/* Modal para ver fechas reservadas */}
-            {bookingToViewDates && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-                    <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md relative animate-fade-in">
-                        <button className="absolute top-2 right-2 text-gray-500 hover:text-gray-700" onClick={() => setBookingToViewDates(null)} aria-label="Cerrar">
-                            &times;
-                        </button>
-                        <h3 className="text-lg font-bold mb-4 text-brand-text">Fechas pre-seleccionadas</h3>
-                        {(bookingToViewDates.slots && bookingToViewDates.slots.length > 0) ? (
-                                                        <ul className="list-disc pl-5">
-                                                                {bookingToViewDates.slots.map((slot, idx) => {
-                                                                    // Fix: use T12:00:00 to avoid timezone offset
-                                                                    const localDate = new Date(slot.date + 'T12:00:00');
-                                                                    return (
-                                                                        <li key={idx} className="mb-2 text-brand-secondary">
-                                                                            {localDate.toLocaleDateString(language, { year: 'numeric', month: 'short', day: 'numeric' })} @ {slot.time}
-                                                                        </li>
-                                                                    );
-                                                                })}
-                                                        </ul>
-                        ) : (
-                            <p className="text-brand-secondary">No hay fechas pre-seleccionadas para esta reserva.</p>
-                        )}
-                    </div>
-                </div>
-            )}
-            {bookingToPay && (
-                <AcceptPaymentModal
-                    isOpen={!!bookingToPay}
-                    onClose={() => setBookingToPay(null)}
-                    booking={bookingToPay}
-                    onDataChange={onDataChange}
-                />
-            )}
-            {isInvoiceReminderOpen && (
-                <InvoiceReminderModal
-                    isOpen={isInvoiceReminderOpen}
-                    onClose={() => setIsInvoiceReminderOpen(false)}
-                    onProceed={handleProceedWithPayment}
-                    onGoToInvoicing={handleGoToInvoicing}
-                />
-            )}
-            {bookingToDelete && (
-                <DeleteConfirmationModal
-                    isOpen={!!bookingToDelete}
-                    onClose={() => setBookingToDelete(null)}
-                    onConfirm={handleDeleteBooking}
-                    title="¿Eliminar reserva?"
-                    message={`¿Estás seguro que deseas eliminar la reserva de ${bookingToDelete.userInfo.firstName} ${bookingToDelete.userInfo.lastName}? Esta acción no se puede deshacer.`}
-                />
-            )}
-                        {paymentToEdit && (
-                            <EditPaymentModal
-                                isOpen={!!paymentToEdit}
-                                payment={paymentToEdit.payment}
-                                paymentIndex={paymentToEdit.index}
-                                bookingId={paymentToEdit.bookingId}
-                                onClose={() => setPaymentToEdit(null)}
-                                onSave={async (updated) => {
-                                    // Prefer paymentId if available, fallback to index
-                                    const identifier = paymentToEdit.payment.id || paymentToEdit.index;
-                                    await dataService.updatePaymentDetails(paymentToEdit.bookingId, identifier, updated);
-                                    adminData.optimisticUpdateBookingPayment(paymentToEdit.bookingId, identifier, updated);
-                                    setPaymentToEdit(null);
-                                }}
-                            />
-                        )}
-            <h2 className="text-2xl font-serif text-brand-text mb-2">Panel financiero</h2>
-            <div className="border-b border-gray-200 mb-6">
-                <nav className="-mb-px flex space-x-6" aria-label="Tabs">
-                    <TabButton isActive={activeTab === 'summary'} onClick={() => setActiveTab('summary')}>
-                        {'Resumen de ingresos'}
-                    </TabButton>
-                        <TabButton isActive={activeTab === 'pending'} onClick={() => setActiveTab('pending')}>
-                            {'Pre-reservas Pendientes'}
-                        </TabButton>
-                    <TabButton isActive={activeTab === 'capacity'} onClick={() => setActiveTab('capacity')}>
-                        {'Salud de capacidad'}
-                    </TabButton>
-                </nav>
-            </div>
-            {activeTab === 'summary' && (
-                <div className="animate-fade-in">
-                    <p className="text-brand-secondary mb-6">Resumen de ingresos y pagos recibidos</p>
-                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6 flex items-center gap-2 flex-wrap">
-                        <button onClick={() => setSummaryPeriod('today')} className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors ${summaryPeriod === 'today' ? 'bg-brand-primary text-white' : 'bg-white hover:bg-brand-background'}`}>Hoy</button>
-                        <button onClick={() => setSummaryPeriod('week')} className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors ${summaryPeriod === 'week' ? 'bg-brand-primary text-white' : 'bg-white hover:bg-brand-background'}`}>Semana</button>
-                        <button onClick={() => setSummaryPeriod('month')} className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors ${summaryPeriod === 'month' ? 'bg-brand-primary text-white' : 'bg-white hover:bg-brand-background'}`}>Mes</button>
-                        <div className="flex items-center gap-2">
-                            <input type="date" value={summaryCustomRange.start} onChange={e => {setSummaryCustomRange(c => ({...c, start: e.target.value})); setSummaryPeriod('custom');}} className="text-sm p-1 border rounded-md"/>
-                            <span className="text-sm">to</span>
-                            <input type="date" value={summaryCustomRange.end} onChange={e => {setSummaryCustomRange(c => ({...c, end: e.target.value})); setSummaryPeriod('custom');}} className="text-sm p-1 border rounded-md"/>
-                        </div>
-                        {/* Advanced filters */}
-                        <select value={productTypeFilter} onChange={e => setProductTypeFilter(e.target.value)} className="text-sm p-1 border rounded-md" title="Filtrar por tipo de producto">
-                            <option value="all">Todos los productos</option>
-                            <option value="classPackage">Paquete de clases</option>
-                            <option value="openStudio">Open Studio</option>
-                        </select>
-                        <select value={paymentMethodFilter} onChange={e => setPaymentMethodFilter(e.target.value)} className="text-sm p-1 border rounded-md" title="Filtrar por método de pago">
-                            <option value="all">Todos los métodos</option>
-                            <option value="manual">Manual</option>
-                            <option value="card">Tarjeta</option>
-                            <option value="transfer">Transferencia</option>
-                        </select>
-                        <select value={bookingStatusFilter} onChange={e => setBookingStatusFilter(e.target.value)} className="text-sm p-1 border rounded-md" title="Filtrar por estado de reserva">
-                            <option value="all">Todos los estados</option>
-                            <option value="paid">Pagado</option>
-                            <option value="pending">Pendiente</option>
-                        </select>
-                        <select value={giftcardFilter} onChange={e => setGiftcardFilter(e.target.value)} className="text-sm p-1 border rounded-md" title="Filtrar por pagos con giftcard">
-                            <option value="all">Todos</option>
-                            <option value="giftcard">Solo giftcard</option>
-                            <option value="no-giftcard">Sin giftcard</option>
-                        </select>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                         <div title={'Valor total de vida del cliente'}>
-                             <KPICard title={'Valor total'} value={kpis.totalValue} />
-                         </div>
-                         <div title={'Total de reservas'}>
-                             <KPICard title={'Reservas totales'} value={kpis.totalBookings} />
-                         </div>
-                         <div title={'Última reserva'}>
-                             <KPICard title={'Última reserva'} value={kpis.lastBookingDate} />
-                         </div>
-                    </div>
-                    {summaryBookings.length > 0 ? (
-                        <>
-                            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
-                                <h3 className="font-bold text-brand-text mb-2">Ingresos a lo largo del tiempo</h3>
-                                <canvas ref={lineChartRef}></canvas>
-                            </div>
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                                <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200"><h3 className="font-bold text-brand-text mb-2">Ingresos por paquete</h3><div className="relative h-64"><canvas ref={doughnutChartRef}></canvas></div></div>
-                                <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200"><h3 className="font-bold text-brand-text mb-2">Ingresos por método de pago</h3><div className="relative h-64"><canvas ref={paymentMethodChartRef}></canvas></div></div>
-                            </div>
-                            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                                <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-brand-text">Reporte detallado</h3><button onClick={exportToCSV} className="text-sm font-semibold bg-brand-primary text-white py-1 px-3 rounded-md hover:bg-brand-accent transition-colors">Exportar CSV</button></div>
-                                                                <div className="overflow-x-auto"><table className="min-w-full divide-y divide-gray-200"><thead className="bg-brand-background"><tr><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">Fecha</th><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">Cliente</th><th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase">Paquete</th><th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase">Monto</th><th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase">Editar</th></tr></thead><tbody className="bg-white divide-y divide-gray-200">{summaryBookings.map(b => (
-                                                                    b.paymentDetails?.map((p, idx) => (
-                                                                        <tr key={b.id + '-' + idx}>
-                                                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{formatDate(p.receivedAt, {})}</td>
-                                                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{b.userInfo?.firstName} {b.userInfo?.lastName}</td>
-                                                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text">{getBookingDisplayName(b)}</td>
-                                                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-semibold">${(p.amount || 0).toFixed(2)}
-                                                                                {(p.giftcardAmount || p.giftcardId) && (
-                                                                                    <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-indigo-50 text-indigo-700 ml-2">
-                                                                                        Giftcard: ${((p.giftcardAmount || 0)).toFixed(2)}
-                                                                                        {p.giftcardId ? ` · ID:${p.giftcardId}` : ''}
-                                                                                    </span>
-                                                                                )}
-                                                                            </td>
-                                                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right">
-                                                                                <button className="bg-brand-primary text-white px-2 py-1 rounded text-xs" onClick={() => setPaymentToEdit({ payment: p, bookingId: b.id, index: idx })}>Editar pago</button>
-                                                                            </td>
-                                                                        </tr>
-                                                                    ))
-                                                                ))}</tbody></table></div>
-                            </div>
-                        </>
-                    ) : (
-                        <div className="text-center py-12 bg-white rounded-lg shadow-sm border border-gray-200"><p className="text-brand-secondary">No hay datos disponibles.</p></div>
-                    )}
-                </div>
-            )}
-            {activeTab === 'pending' && (
-                <div className="animate-fade-in">
-                    <p className="text-brand-secondary mb-6">Rastrea y gestiona todas las pre-reservas pendientes de pago.</p>
-                    
-                    {/* KPI Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                        <KPICard 
-                            title="Pre-reservas Totales" 
-                            value={pendingPackageBookings.length + pendingOpenStudioBookings.length}
-                            subtext="Pendientes de pago"
-                        />
-                        <KPICard 
-                            title="Monto en Espera" 
-                            value={`$${(pendingPackageBookings.reduce((sum, b) => sum + (b.pendingBalance || 0), 0) + pendingOpenStudioBookings.reduce((sum, b) => sum + (b.pendingBalance || 0), 0)).toFixed(2)}`}
-                            subtext="Total a cobrar"
-                        />
-                        <KPICard 
-                            title="Urgentes (< 1h)" 
-                            value={pendingPackageBookings.filter(b => b.expiresAt && new Date(b.expiresAt).getTime() - new Date().getTime() < 3600000).length}
-                            subtext="Próximas a expirar"
-                        />
-                        <KPICard 
-                            title="Con Giftcard" 
-                            value={pendingPackageBookings.filter(b => b.giftcardApplied).length}
-                            subtext="Pago parcial"
-                        />
-                    </div>
-
-                    {/* Search & Advanced Filters */}
-                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
-                        <div className="space-y-4">
-                            {/* Search Bar */}
-                            <input 
-                                type="text" 
-                                placeholder="🔍 Buscar por nombre, email o código de reserva..." 
-                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
-                                onChange={(e) => {
-                                    // Implementar lógica de búsqueda
-                                }}
-                            />
-                            
-                            {/* Filter Buttons */}
-                            <div className="flex flex-wrap gap-2 items-center">
-                                <span className="text-sm font-semibold text-brand-secondary">Filtrar por:</span>
-                                <button className="px-3 py-1 text-sm font-semibold rounded-full bg-red-100 text-red-800 hover:bg-red-200 transition-colors">
-                                    Críticas (&lt; 30 min)
-                                </button>
-                                <button className="px-3 py-1 text-sm font-semibold rounded-full bg-yellow-100 text-yellow-800 hover:bg-yellow-200 transition-colors">
-                                    Próximas a expirar
-                                </button>
-                                <button className="px-3 py-1 text-sm font-semibold rounded-full bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors">
-                                    Con Giftcard
-                                </button>
-                                <button className="px-3 py-1 text-sm font-semibold rounded-full bg-purple-100 text-purple-800 hover:bg-purple-200 transition-colors">
-                                    Sin fechas
-                                </button>
-                                <button className="px-3 py-1 text-sm font-semibold rounded-full border-2 border-gray-300 text-gray-800 hover:bg-gray-50 transition-colors">
-                                    Limpiar filtros
-                                </button>
-                            </div>
-
-                            {/* Sort & View Options */}
-                            <div className="flex gap-4 items-center justify-between">
-                                <div className="flex gap-2">
-                                    <label className="text-sm font-semibold text-brand-secondary">Ordenar por:</label>
-                                    <select className="px-3 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary">
-                                        <option>Más recientes primero</option>
-                                        <option>Más antiguos primero</option>
-                                        <option>Mayor monto pendiente</option>
-                                        <option>Menor tiempo restante</option>
-                                    </select>
-                                </div>
-                                <div className="flex gap-2">
-                                    <label className="text-sm font-semibold text-brand-secondary">Ver:</label>
-                                    <select
-                                        value={pendingSubTab}
-                                        onChange={e => { setPendingSubTab(e.target.value as PendingSubTab); setCurrentPage(1); }}
-                                        className="px-3 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary"
-                                    >
-                                        <option value="all">Todos</option>
-                                        <option value="packages">Paquetes de clases</option>
-                                        <option value="openStudio">Open Studio</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                         <div className="mb-4 flex gap-2 items-center flex-wrap">
-                             <button onClick={handleBulkAcceptPayment} disabled={selectedBookings.length === 0} className="px-3 py-1.5 text-sm font-semibold rounded-md bg-green-100 text-green-800 hover:bg-green-200 disabled:opacity-50 transition-colors">✓ Aceptar pagos ({selectedBookings.length})</button>
-                             <button onClick={handleBulkSendReminder} disabled={selectedBookings.length === 0} className="px-3 py-1.5 text-sm font-semibold rounded-md bg-yellow-100 text-yellow-800 hover:bg-yellow-200 disabled:opacity-50 transition-colors">📧 Enviar recordatorio ({selectedBookings.length})</button>
-                             <button onClick={handleBulkDelete} disabled={selectedBookings.length === 0} className="px-3 py-1.5 text-sm font-semibold rounded-md bg-red-100 text-red-800 hover:bg-red-200 disabled:opacity-50 transition-colors">🗑️ Eliminar ({selectedBookings.length})</button>
-                             <span className="ml-auto text-xs text-brand-secondary font-semibold">Seleccionados: {selectedBookings.length} / {paginatedBookings.length}</span>
-                         </div>
-                         <div className="overflow-x-auto" role="region" aria-label="Tabla de reservas pendientes">
-                            {loadingBulk && (
-                                <div className="absolute inset-0 bg-white bg-opacity-60 flex items-center justify-center z-10">
-                                    <span className="text-brand-primary font-bold">Cargando...</span>
-                                </div>
-                            )}
-                            <table className="min-w-full divide-y divide-gray-200" role="table">
-                                <thead className="bg-brand-background" role="rowgroup">
-                                    <tr role="row">
-                                        <th className="px-2 py-2" role="columnheader"><input type="checkbox" checked={selectedBookings.length === paginatedBookings.length && paginatedBookings.length > 0} onChange={handleSelectAll} aria-label="Seleccionar todos" /></th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider cursor-pointer hover:bg-gray-200" role="columnheader">📅 Fecha</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">👤 Cliente</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">📦 Producto</th>
-                                        <th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">💰 Monto</th>
-                                        <th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">⏳ Vence en</th>
-                                        <th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">Pendiente</th>
-                                        <th className="px-4 py-2 text-right text-xs font-medium text-brand-secondary uppercase tracking-wider" role="columnheader">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200" role="rowgroup">
-                                    {paginatedBookings.length > 0 ? paginatedBookings.map(b => {
-                                        const timeUntilExpire = b.expiresAt ? new Date(b.expiresAt).getTime() - new Date().getTime() : null;
-                                        const isUrgent = timeUntilExpire && timeUntilExpire < 1800000; // < 30 min
-                                        const isCritical = timeUntilExpire && timeUntilExpire < 600000; // < 10 min
-                                        
-                                        return (
-                                        <tr key={b.id} className={`transition-colors ${isCritical ? 'bg-red-50' : isUrgent ? 'bg-yellow-50' : 'hover:bg-gray-50'}`} role="row">
-                                            <td className="px-2 py-2" role="cell"><input type="checkbox" checked={selectedBookings.includes(b.id)} onChange={() => handleSelectBooking(b.id)} aria-label={`Seleccionar reserva ${b.id}`} /></td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text font-medium" role="cell">{formatDate(b.createdAt, { year: 'numeric', month: 'short', day: 'numeric'})}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm" role="cell">
-                                                <div className="font-semibold text-brand-text">{b.userInfo?.firstName} {b.userInfo?.lastName}</div>
-                                                <div className="text-xs text-brand-secondary">{b.userInfo?.email}</div>
-                                            </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text" role="cell">
-                                                {getBookingDisplayName(b)}
-                                                {(!Array.isArray(b.slots) || b.slots.length === 0) && (
-                                                    <span className="inline-flex items-center px-2 py-1 ml-2 text-xs font-semibold rounded bg-amber-100 text-amber-800" title="Sin fechas asignadas aún">
-                                                        ⏳ Sin fechas
-                                                    </span>
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-bold" role="cell">
-                                                ${(b.price || 0).toFixed(2)}
-                                                {b.giftcardApplied && (
-                                                    <div className="text-xs text-indigo-700 font-semibold mt-1">-${(b.giftcardRedeemedAmount || 0).toFixed(2)}</div>
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-right" role="cell">
-                                                {b.expiresAt ? (
-                                                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-bold ${isCritical ? 'bg-red-100 text-red-800' : isUrgent ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
-                                                        {timeUntilExpire && timeUntilExpire > 0 
-                                                            ? `${Math.floor(timeUntilExpire / 60000)}m` 
-                                                            : '⚠️ Expirado'}
-                                                    </span>
-                                                ) : '---'}
-                                            </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-brand-text text-right font-bold" role="cell">
-                                                <span className="text-red-600">${(b.pendingBalance || 0).toFixed(2)}</span>
-                                            </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-right" role="cell">
-                                                <div className="flex items-center justify-end gap-1.5">
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); setNavigateTo({ tab: 'customers', targetId: b.userInfo.email }); }}
-                                                        title="Ver Perfil"
-                                                        className="flex items-center gap-1 bg-gray-100 text-gray-800 text-xs font-bold py-1 px-2 rounded hover:bg-gray-200 transition-colors"
-                                                        tabIndex={0}
-                                                        aria-label="Ver perfil del cliente"
-                                                    >
-                                                        <UserIcon className="w-4 h-4" />
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); handleAcceptPaymentClick(b); }}
-                                                        className="flex items-center gap-1 bg-green-100 text-green-800 text-xs font-bold py-1 px-2 rounded hover:bg-green-200 transition-colors"
-                                                        tabIndex={0}
-                                                           aria-label="Aceptar pago"
-                                                    >
-                                                        <CurrencyDollarIcon className="w-4 h-4" />
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); setBookingToViewDates(b); }}
-                                                        className="flex items-center gap-1 bg-blue-100 text-blue-800 text-xs font-bold py-1 px-2 rounded hover:bg-blue-200 transition-colors"
-                                                        tabIndex={0}
-                                                        aria-label="Ver Fechas"
-                                                    >
-                                                        <CalendarIcon className="w-4 h-4" />
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); setBookingToDelete(b); }}
-                                                        title="Eliminar"
-                                                        className="flex items-center gap-1 bg-red-100 text-red-800 text-xs font-bold py-1 px-2 rounded hover:bg-red-200 transition-colors"
-                                                        tabIndex={0}
-                                                        aria-label="Eliminar reserva"
-                                                    >
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        );
-                                    }) : (
-                                        <tr role="row">
-                                            <td colSpan={8} className="text-center py-10 text-brand-secondary" role="cell">
-                                                ✨ ¡Excelente! No hay reservas pendientes
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                            {/* Pagination controls */}
-                            <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-200">
-                                <div className="flex gap-2 items-center">
-                                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1 rounded bg-gray-100 text-gray-800 disabled:opacity-50 hover:bg-gray-200 transition-colors text-sm font-semibold" tabIndex={0} aria-label="Página anterior">
-                                        ← Anterior
-                                    </button>
-                                    <span className="text-sm font-semibold text-brand-secondary">Página {currentPage} de {totalPages}</span>
-                                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1 rounded bg-gray-100 text-gray-800 disabled:opacity-50 hover:bg-gray-200 transition-colors text-sm font-semibold" tabIndex={0} aria-label="Página siguiente">
-                                        Siguiente →
-                                    </button>
-                                </div>
-                                <div className="flex gap-2 items-center">
-                                    <span className="text-sm font-semibold text-brand-secondary">Filas por página:</span>
-                                    <select value={rowsPerPage} onChange={e => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="text-sm p-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary" aria-label="Filas por página"> 
-                                        <option value={10}>10</option>
-                                        <option value={25}>25</option>
-                                        <option value={50}>50</option>
-                                        <option value={100}>100</option>
-                                    </select>
-                                </div>
-                            </div>
-                            {/* Feedback message */}
-                            {feedbackMsg && (
-                                <div className={`mt-4 p-3 rounded-lg text-sm font-bold ${feedbackType === 'success' ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200'}`} role="alert">
-                                    {feedbackMsg}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-            {activeTab === 'capacity' && <CapacityHealthView />}
-        </div>
-    );
-}
+const Pager: React.FC<{ page: number; pages: number; onPage: (page: number) => void }> = ({ page, pages, onPage }) => (
+  <div className="flex items-center justify-between mt-4 pt-3 border-t border-brand-border">
+    <button type="button" onClick={() => onPage(Math.max(1, page - 1))} disabled={page === 1} className="text-sm font-semibold text-brand-text disabled:opacity-40">
+      Anterior
+    </button>
+    <span className="text-sm text-brand-secondary">{page} de {pages}</span>
+    <button type="button" onClick={() => onPage(Math.min(pages, page + 1))} disabled={page === pages} className="text-sm font-semibold text-brand-text disabled:opacity-40">
+      Siguiente
+    </button>
+  </div>
+);
