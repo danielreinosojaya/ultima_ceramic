@@ -226,13 +226,54 @@ function formatPartsLabel(start: { y: number; m: number; d: number }, end: { y: 
   return `${start.d} ${months[start.m - 1]} – ${end.d} ${months[end.m - 1]}`;
 }
 
+function isFullMonth(start: { y: number; m: number; d: number }, end: { y: number; m: number; d: number }): boolean {
+  return start.y === end.y && start.m === end.m && start.d === 1 && end.d === lastDayOfMonth(start.y, start.m);
+}
+
+function monthTitle(year: number, month: number): string {
+  const name = MONTHS_LONG[month - 1];
+  return `${name.charAt(0).toUpperCase()}${name.slice(1)} ${year}`;
+}
+
 function makeRange(start: { y: number; m: number; d: number }, end: { y: number; m: number; d: number }): DateRange {
   const bounds = rangeFromParts(start, end);
+  if (isFullMonth(start, end)) {
+    return {
+      ...bounds,
+      label: monthTitle(start.y, start.m),
+      shortLabel: `${MONTHS_SHORT[start.m - 1]} ${start.y}`,
+    };
+  }
   return {
     ...bounds,
     label: formatPartsLabel(start, end, 'long'),
     shortLabel: formatPartsLabel(start, end, 'short'),
   };
+}
+
+/** Mes completo. Si es el mes en curso, llega hasta hoy y se compara con los mismos días del mes anterior. */
+export function monthWindow(year: number, month: number, now: Date = new Date()): PeriodWindow {
+  const today = guayaquilYmd(now);
+  const future = year > today.y || (year === today.y && month > today.m);
+  if (future || month < 1 || month > 12) {
+    return { ready: false, current: emptyRange(), previous: emptyRange() };
+  }
+  const currentMonth = year === today.y && month === today.m;
+  const start = { y: year, m: month, d: 1 };
+  const end = currentMonth ? today : { y: year, m: month, d: lastDayOfMonth(year, month) };
+  const prev = shiftMonth(year, month, -1);
+  const prevEndDay = currentMonth
+    ? Math.min(today.d, lastDayOfMonth(prev.y, prev.m))
+    : lastDayOfMonth(prev.y, prev.m);
+  return {
+    ready: true,
+    current: makeRange(start, end),
+    previous: makeRange({ y: prev.y, m: prev.m, d: 1 }, { y: prev.y, m: prev.m, d: prevEndDay }),
+  };
+}
+
+export function rangeKeys(range: { start: Date; end: Date }): { from: string; to: string } {
+  return { from: dayKey(range.start), to: dayKey(range.end) };
 }
 
 function emptyRange(): DateRange {

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Chart from 'chart.js/auto';
 import Papa from 'papaparse';
 import type { Booking, PaymentDetails, AdminTab, InvoiceRequest } from '../../types.js';
@@ -17,11 +17,12 @@ import {
   CATEGORY_LABEL,
   formatStudioDate,
   getPeriodWindow,
+  guayaquilYmd,
   inRange,
+  monthWindow,
   openBalances,
+  rangeKeys,
   asDate,
-  type DayBucket,
-  type PeriodKey,
   type SaleCategory,
 } from './financeModel.js';
 
@@ -41,12 +42,8 @@ interface FinancialDashboardProps {
   setNavigateTo: React.Dispatch<React.SetStateAction<NavigationState | null>>;
 }
 
-const PERIODS: { id: PeriodKey; label: string }[] = [
-  { id: 'today', label: 'Hoy' },
-  { id: 'week', label: 'Semana' },
-  { id: 'month', label: 'Mes' },
-  { id: 'lastMonth', label: 'Mes pasado' },
-];
+const MONTH_BUTTONS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+const FIRST_YEAR = 2025;
 
 const PAGE_SIZE = 12;
 
@@ -57,16 +54,20 @@ const toneClass = (tone: 'up' | 'down' | 'flat') => {
 };
 
 export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({
-  bookings: allBookings,
   invoiceRequests,
   onDataChange,
   setNavigateTo,
 }) => {
   const adminData = useAdminData();
+  const todayParts = guayaquilYmd(new Date());
   const [view, setView] = useState<FinanceView>('summary');
-  const [period, setPeriod] = useState<PeriodKey>('month');
-  const [customRange, setCustomRange] = useState({ start: '', end: '' });
-  const [showCustom, setShowCustom] = useState(false);
+  const [mode, setMode] = useState<'today' | 'week' | 'month'>('month');
+  const [year, setYear] = useState(todayParts.y);
+  const [month, setMonth] = useState(todayParts.m);
+  const [financeBookings, setFinanceBookings] = useState<Booking[]>([]);
+  const [loadingFinance, setLoadingFinance] = useState(true);
+  const [financeError, setFinanceError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [category, setCategory] = useState<SaleCategory | 'all'>('all');
   const [query, setQuery] = useState('');
   const [focusDayKey, setFocusDayKey] = useState<string | null>(null);
@@ -88,12 +89,44 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({
   const chartRef = useRef<HTMLCanvasElement>(null);
   const chartClickRef = useRef<(key: string) => void>(() => {});
 
-  const windowRange = useMemo(() => getPeriodWindow(period, customRange), [period, customRange]);
+  const windowRange = useMemo(() => {
+    if (mode === 'month') return monthWindow(year, month);
+    return getPeriodWindow(mode, { start: '', end: '' });
+  }, [mode, year, month]);
+
+  const reloadFinance = useCallback(() => setReloadKey((current) => current + 1), []);
+
+  useEffect(() => {
+    if (!windowRange.ready) return;
+    const current = rangeKeys(windowRange.current);
+    const previous = rangeKeys(windowRange.previous);
+    let cancelled = false;
+    setLoadingFinance(true);
+    setFinanceError(null);
+    setFinanceBookings([]);
+    dataService.getFinanceBookings({
+      from: current.from,
+      to: current.to,
+      compareFrom: previous.from,
+      compareTo: previous.to,
+    }).then((rows) => {
+      if (cancelled) return;
+      setFinanceBookings(rows);
+      setLoadingFinance(false);
+    }).catch((error: unknown) => {
+      if (cancelled) return;
+      setFinanceError(error instanceof Error ? error.message : 'No se pudieron cargar los movimientos de este mes');
+      setLoadingFinance(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [windowRange, reloadKey]);
 
   const categoryOptions = useMemo(() => {
     if (!windowRange.ready) return [];
-    return buildSnapshot(allBookings, windowRange.current, 'all').categories.filter((row) => row.sold > 0);
-  }, [allBookings, windowRange]);
+    return buildSnapshot(financeBookings, windowRange.current, 'all').categories.filter((row) => row.sold > 0);
+  }, [financeBookings, windowRange]);
 
   const activeCategory: SaleCategory | 'all' = category === 'all' || categoryOptions.some((row) => row.category === category)
     ? category
@@ -101,15 +134,15 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({
 
   const snapshot = useMemo(() => {
     if (!windowRange.ready) return null;
-    return buildSnapshot(allBookings, windowRange.current, activeCategory);
-  }, [allBookings, windowRange, activeCategory]);
+    return buildSnapshot(financeBookings, windowRange.current, activeCategory);
+  }, [financeBookings, windowRange, activeCategory]);
 
   const previousTotals = useMemo(() => {
     if (!windowRange.ready) return null;
-    return buildSnapshot(allBookings, windowRange.previous, activeCategory);
-  }, [allBookings, windowRange, activeCategory]);
+    return buildSnapshot(financeBookings, windowRange.previous, activeCategory);
+  }, [financeBookings, windowRange, activeCategory]);
 
-  const openRows = useMemo(() => openBalances(allBookings), [allBookings]);
+  const openRows = useMemo(() => openBalances(financeBookings), [financeBookings]);
   const openTotal = roundList(openRows.reduce((sum, row) => sum + row.pending, 0));
 
   const focusDay = snapshot?.days.find((day) => day.key === focusDayKey) || null;
@@ -227,12 +260,21 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({
     return () => window.clearTimeout(timer);
   }, [feedback]);
 
-  const choosePeriod = (next: PeriodKey) => {
-    setPeriod(next);
-    if (next !== 'custom') setShowCustom(false);
+  const clearDrill = () => {
     setFocusDayKey(null);
     setProductFocus(null);
     setPage(1);
+  };
+
+  const chooseMonth = (nextMonth: number) => {
+    setMode('month');
+    setMonth(nextMonth);
+    clearDrill();
+  };
+
+  const chooseQuick = (next: 'today' | 'week') => {
+    setMode(next);
+    clearDrill();
   };
 
   const chooseCategory = (next: SaleCategory | 'all') => {
@@ -283,6 +325,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({
     }
     adminData.optimisticRemoveBooking(bookingToDelete.id);
     setFeedback({ type: 'success', text: 'Reserva eliminada' });
+    reloadFinance();
   };
 
   const handleGoToInvoicing = () => {
@@ -322,7 +365,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({
         </div>
       )}
       {bookingToPay && (
-        <AcceptPaymentModal isOpen={!!bookingToPay} onClose={() => setBookingToPay(null)} booking={bookingToPay} onDataChange={onDataChange} />
+        <AcceptPaymentModal isOpen={!!bookingToPay} onClose={() => setBookingToPay(null)} booking={bookingToPay} onDataChange={() => { onDataChange(); reloadFinance(); }} />
       )}
       {isInvoiceReminderOpen && (
         <InvoiceReminderModal
@@ -357,6 +400,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({
             await dataService.updatePaymentDetails(paymentToEdit.bookingId, identifier, updated);
             adminData.optimisticUpdateBookingPayment(paymentToEdit.bookingId, identifier, updated);
             setPaymentToEdit(null);
+            reloadFinance();
           }}
         />
       )}
@@ -370,7 +414,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({
                 <span className="text-brand-text font-semibold">{windowRange.current.label}</span>
                 <span> · comparado con {windowRange.previous.label}</span>
               </>
-            ) : 'Elige el inicio y el fin del rango'}
+            ) : 'Ese mes todavía no empieza'}
           </p>
         </div>
         <div className="inline-flex rounded-full bg-brand-background p-1 self-start" role="tablist" aria-label="Vista">
@@ -388,56 +432,41 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({
       </div>
 
       <div className="flex flex-wrap items-center gap-2 mb-3">
-        {PERIODS.map((item) => (
-          <button key={item.id} type="button" onClick={() => choosePeriod(item.id)} className={chipClass(period === item.id)} aria-pressed={period === item.id}>
-            {item.label}
-          </button>
-        ))}
-        <button type="button" onClick={() => setShowCustom((open) => !open)} className={chipClass(period === 'custom' || showCustom)} aria-pressed={period === 'custom'}>
-          Fechas
-        </button>
+        <button type="button" onClick={() => setYear((current) => Math.max(FIRST_YEAR, current - 1))} disabled={year <= FIRST_YEAR} className="h-8 w-8 rounded-full border border-brand-border text-brand-text disabled:opacity-30" aria-label="Año anterior">‹</button>
+        <span className="min-w-12 text-center text-sm font-semibold text-brand-text">{year}</span>
+        <button type="button" onClick={() => setYear((current) => Math.min(todayParts.y, current + 1))} disabled={year >= todayParts.y} className="h-8 w-8 rounded-full border border-brand-border text-brand-text disabled:opacity-30" aria-label="Año siguiente">›</button>
+        <span className="mx-1 hidden sm:inline text-brand-border">|</span>
+        <button type="button" onClick={() => chooseQuick('today')} className={chipClass(mode === 'today')} aria-pressed={mode === 'today'}>Hoy</button>
+        <button type="button" onClick={() => chooseQuick('week')} className={chipClass(mode === 'week')} aria-pressed={mode === 'week'}>Semana</button>
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-4" role="group" aria-label="Mes">
+        {MONTH_BUTTONS.map((label, index) => {
+          const monthNumber = index + 1;
+          const future = year > todayParts.y || (year === todayParts.y && monthNumber > todayParts.m);
+          const active = mode === 'month' && month === monthNumber;
+          return (
+            <button
+              key={label}
+              type="button"
+              disabled={future}
+              onClick={() => chooseMonth(monthNumber)}
+              className={`${chipClass(active)} shrink-0 disabled:opacity-30`}
+              aria-pressed={active}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
-      {(showCustom || period === 'custom') && (
-        <div className="flex flex-wrap items-center gap-2 mb-5">
-          <label className="text-sm text-brand-secondary">
-            Desde
-            <input
-              type="date"
-              value={customRange.start}
-              onChange={(event) => {
-                const start = event.target.value;
-                setCustomRange((current) => ({ ...current, start }));
-                if (start && customRange.end) {
-                  setPeriod('custom');
-                  setFocusDayKey(null);
-                  setPage(1);
-                }
-              }}
-              className="ml-2 text-sm p-1.5 border border-brand-border rounded-md text-brand-text"
-            />
-          </label>
-          <label className="text-sm text-brand-secondary">
-            Hasta
-            <input
-              type="date"
-              value={customRange.end}
-              onChange={(event) => {
-                const end = event.target.value;
-                setCustomRange((current) => ({ ...current, end }));
-                if (customRange.start && end) {
-                  setPeriod('custom');
-                  setFocusDayKey(null);
-                  setPage(1);
-                }
-              }}
-              className="ml-2 text-sm p-1.5 border border-brand-border rounded-md text-brand-text"
-            />
-          </label>
-        </div>
+      {loadingFinance && (
+        <p className="text-sm text-brand-secondary py-8">Cargando movimientos…</p>
+      )}
+      {financeError && !loadingFinance && (
+        <p className="text-sm text-red-700 py-6">{financeError}</p>
       )}
 
-      {view === 'summary' && snapshot && (
+      {view === 'summary' && !loadingFinance && !financeError && snapshot && (
         <div className="animate-fade-in">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
             <Metric
@@ -663,11 +692,11 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({
 
       {view === 'summary' && !windowRange.ready && (
         <div className="bg-white border border-brand-border rounded-xl p-8 text-center text-brand-secondary">
-          Elige desde y hasta para ver ese rango.
+          Ese mes todavía no empieza.
         </div>
       )}
 
-      {view === 'open' && (
+      {view === 'open' && !loadingFinance && !financeError && (
         <div className="animate-fade-in">
           <div className="bg-white border border-brand-border rounded-xl p-4 mb-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>

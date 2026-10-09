@@ -952,6 +952,28 @@ export const getCustomers = async (opts?: { page?: number; limit?: number; searc
   }
 };
 
+/** Reservas del rango de finanzas, con pagos. La lista general del admin no alcanza para meses anteriores. */
+export const getFinanceBookings = async (range: {
+    from: string;
+    to: string;
+    compareFrom?: string;
+    compareTo?: string;
+}): Promise<Booking[]> => {
+    const params = new URLSearchParams({
+        action: 'financeRange',
+        from: range.from,
+        to: range.to,
+    });
+    if (range.compareFrom) params.set('compareFrom', range.compareFrom);
+    if (range.compareTo) params.set('compareTo', range.compareTo);
+    const response = await fetch(`/api/data?${params.toString()}`);
+    if (!response.ok) {
+        throw new Error('No se pudieron cargar los movimientos de este mes');
+    }
+    const data = await response.json();
+    return Array.isArray(data) ? data : [];
+};
+
 export const getBookings = async (): Promise<Booking[]> => {
     try {
         // Agregar cache-busting timestamp si hubo mutation reciente

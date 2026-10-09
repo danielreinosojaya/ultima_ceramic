@@ -2691,6 +2691,90 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         return res.status(500).json({ success: false, error: 'Failed to fetch booking' });
                     }
                 }
+            case 'financeRange': {
+                const dayPattern = /^\d{4}-\d{2}-\d{2}$/;
+                const from = typeof req.query.from === 'string' && dayPattern.test(req.query.from) ? req.query.from : '';
+                const to = typeof req.query.to === 'string' && dayPattern.test(req.query.to) ? req.query.to : '';
+                if (!from || !to) {
+                    return res.status(400).json({ error: 'from y to son obligatorios (YYYY-MM-DD)' });
+                }
+                const compareFrom = typeof req.query.compareFrom === 'string' && dayPattern.test(req.query.compareFrom) ? req.query.compareFrom : from;
+                const compareTo = typeof req.query.compareTo === 'string' && dayPattern.test(req.query.compareTo) ? req.query.compareTo : to;
+                const start = `${from}T00:00:00.000-05:00`;
+                const end = `${to}T23:59:59.999-05:00`;
+                const compareStart = `${compareFrom}T00:00:00.000-05:00`;
+                const compareEnd = `${compareTo}T23:59:59.999-05:00`;
+                try {
+                    // La lista general del admin solo trae ~30 días y omite payment_details.
+                    // Finanzas necesita el mes elegido completo, con los pagos.
+                    const { rows } = await sql`
+                        SELECT
+                            b.id,
+                            b.product_id,
+                            b.product_type,
+                            COALESCE(NULLIF(b.product->>'name', ''), p.name) AS product_name,
+                            b.product->>'technique' AS product_technique,
+                            b.product->>'kind' AS product_kind,
+                            b.product->'details'->>'serviceKind' AS product_service_kind,
+                            b.product->'details'->>'bookingSource' AS product_booking_source,
+                            b.slots,
+                            b.user_info,
+                            b.created_at,
+                            b.is_paid,
+                            b.price,
+                            b.booking_mode,
+                            b.booking_code,
+                            b.booking_date,
+                            b.status,
+                            b.expires_at,
+                            b.participants,
+                            b.group_metadata AS group_class_metadata,
+                            b.technique,
+                            b.client_note,
+                            b.payment_details,
+                            b.giftcard_redeemed_amount,
+                            b.giftcard_id
+                        FROM bookings b
+                        LEFT JOIN products p ON p.id = b.product_id
+                        WHERE (
+                            (b.created_at >= ${start}::timestamptz AND b.created_at <= ${end}::timestamptz)
+                            OR (b.created_at >= ${compareStart}::timestamptz AND b.created_at <= ${compareEnd}::timestamptz)
+                            OR EXISTS (
+                                SELECT 1
+                                FROM jsonb_array_elements(
+                                    CASE
+                                        WHEN jsonb_typeof(b.payment_details) = 'array' THEN b.payment_details
+                                        ELSE '[]'::jsonb
+                                    END
+                                ) pay
+                                WHERE (pay->>'receivedAt') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+                                  AND (
+                                    (
+                                        (pay->>'receivedAt')::timestamptz >= ${start}::timestamptz
+                                        AND (pay->>'receivedAt')::timestamptz <= ${end}::timestamptz
+                                    )
+                                    OR (
+                                        (pay->>'receivedAt')::timestamptz >= ${compareStart}::timestamptz
+                                        AND (pay->>'receivedAt')::timestamptz <= ${compareEnd}::timestamptz
+                                    )
+                                  )
+                            )
+                            OR (
+                                COALESCE(b.is_paid, false) = false
+                                AND COALESCE(b.status, 'active') NOT IN ('expired', 'cancelled')
+                            )
+                        )
+                        ORDER BY b.created_at DESC
+                        LIMIT 2500
+                    `;
+                    data = rows.map(parseBookingFromDB).filter(Boolean);
+                    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+                } catch (error) {
+                    console.error('[financeRange] Error:', error);
+                    return res.status(500).json({ error: 'No se pudieron cargar las finanzas' });
+                }
+                break;
+            }
             default:
                 return res.status(400).json({ error: `Unknown action: ${action}` });
         }
