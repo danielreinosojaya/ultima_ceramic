@@ -516,9 +516,11 @@ const parseCorporateEventFromDB = (dbRow: any): CorporateEvent => {
 const parseInvoiceRequestFromDB = (dbRow: any): InvoiceRequest => {
     if (!dbRow) return dbRow;
     const camelCased = toCamelCase(dbRow);
-    camelCased.requestedAt = camelCased.requestedAtIso;
+    camelCased.requestedAt = camelCased.requestedAtIso || camelCased.requestedAt;
     delete camelCased.requestedAtIso;
     camelCased.processedAt = safeParseDate(camelCased.processedAt)?.toISOString();
+    const price = parseFloat(String(camelCased.price ?? ''));
+    camelCased.price = Number.isFinite(price) ? price : undefined;
     return camelCased as InvoiceRequest;
 };
 
@@ -1542,12 +1544,25 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                         i.*,
                         to_char(i.requested_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as requested_at_iso,
                         b.booking_code,
-                        b.user_info
+                        b.user_info,
+                        b.price,
+                        COALESCE(
+                            NULLIF(b.product->>'name', ''),
+                            CASE COALESCE(NULLIF(b.technique, ''), NULLIF(b.product->>'technique', ''))
+                                WHEN 'painting' THEN 'Pintura de piezas'
+                                WHEN 'potters_wheel' THEN 'Torno Alfarero'
+                                WHEN 'hand_modeling' THEN 'Modelado a Mano'
+                                WHEN 'molding' THEN 'Modelado a Mano'
+                                ELSE NULL
+                            END,
+                            'Clase'
+                        ) AS product_name
                     FROM invoice_requests i
-                    JOIN bookings b ON i.booking_id = b.id
+                    LEFT JOIN bookings b ON i.booking_id = b.id
                     ORDER BY i.requested_at DESC
                 `;
                 data = invoiceRequests.map(parseInvoiceRequestFromDB);
+                res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
                 break;
             }
                 case 'instructors': {
@@ -6913,7 +6928,23 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 WHERE id = ${processInvoiceBody.invoiceId}
                 RETURNING *;
             `;
+            if (!processedInvoice) {
+                return res.status(404).json({ error: 'Solicitud no encontrada' });
+            }
             result = parseInvoiceRequestFromDB(processedInvoice);
+            break;
+        case 'reopenInvoiceRequest':
+            const reopenInvoiceBody = req.body;
+            const { rows: [reopenedInvoice] } = await sql`
+                UPDATE invoice_requests
+                SET status = 'Pending', processed_at = NULL
+                WHERE id = ${reopenInvoiceBody.invoiceId}
+                RETURNING *;
+            `;
+            if (!reopenedInvoice) {
+                return res.status(404).json({ error: 'Solicitud no encontrada' });
+            }
+            result = parseInvoiceRequestFromDB(reopenedInvoice);
             break;
         case 'deleteClientNotification':
             const { id: notificationIdToDelete } = req.body;

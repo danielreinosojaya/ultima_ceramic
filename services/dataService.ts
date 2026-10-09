@@ -1747,6 +1747,7 @@ export const getInvoiceRequests = async (): Promise<InvoiceRequest[]> => {
     return rawInvoices || [];
 };
 export const markInvoiceAsProcessed = (invoiceId: string): Promise<InvoiceRequest> => postAction('markInvoiceAsProcessed', { invoiceId });
+export const reopenInvoiceRequest = (invoiceId: string): Promise<InvoiceRequest> => postAction('reopenInvoiceRequest', { invoiceId });
 
 // Notifications & Announcements
 export const getNotifications = async (): Promise<Notification[]> => {

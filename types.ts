@@ -594,6 +594,8 @@ export interface InvoiceRequest {
     // Joined data from booking
     bookingCode?: string;
     userInfo?: UserInfo;
+    price?: number;
+    productName?: string;
 }
 
 // App Settings & Data
