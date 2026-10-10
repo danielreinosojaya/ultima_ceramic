@@ -6,7 +6,21 @@ import App from './App';
 import ErrorBoundary from './components/admin/ErrorBoundary';
 import { BootFailure } from './components/BootFailure';
 import { APP_BOOT_OK } from './config/appBoot';
+import { clearStaleChunkReloadFlag, isStaleChunkError, reloadForStaleChunk } from './utils/staleChunkReload';
 import './index.css';
+
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault();
+  reloadForStaleChunk();
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  if (isStaleChunkError(event.reason) && reloadForStaleChunk()) {
+    event.preventDefault();
+  }
+});
+
+window.setTimeout(clearStaleChunkReloadFlag, 15000);
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

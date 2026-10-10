@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { isStaleChunkError, reloadForStaleChunk } from '../../utils/staleChunkReload';
 
 interface ErrorBoundaryProps {
   fallback: React.ReactNode;
@@ -24,7 +25,10 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    // You can also log the error to an error reporting service
+    if (isStaleChunkError(error)) {
+      reloadForStaleChunk();
+      return;
+    }
     console.error("ErrorBoundary caught an error", error, info);
     // You could also log it to a service here
     // logErrorToMyService(error, info.componentStack);
