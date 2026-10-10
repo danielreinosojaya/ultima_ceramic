@@ -1,3 +1,5 @@
+import type { MezzanineRental, MezzanineRentalInput } from '../utils/mezzanineRental';
+
 export const addGiftcardRequest = async (request: Omit<GiftcardRequest, 'id' | 'status' | 'createdAt'>): Promise<{ success: boolean; id?: string; error?: string }> => {
     try {
         console.log('[dataService] 📮 Enviando addGiftcardRequest:', request);
@@ -3880,6 +3882,60 @@ export const createCourseSchedule = async (scheduleData: {
             success: false,
             error: error instanceof Error ? error.message : 'Error desconocido'
         };
+    }
+};
+
+async function readMezzanineResponse(response: Response): Promise<{ success: boolean; data?: MezzanineRental; error?: string }> {
+    const result = await response.json().catch(() => null);
+    if (!response.ok || !result?.success) {
+        return {
+            success: false,
+            error: result?.error || 'No se pudo guardar la agenda del mezzanine.',
+        };
+    }
+    return { success: true, data: result.data };
+}
+
+export const listMezzanineRentals = async (): Promise<MezzanineRental[]> => {
+    const response = await fetch('/api/mezzanine?action=list', { signal: AbortSignal.timeout(20000) });
+    const result = await response.json().catch(() => null);
+    if (!response.ok || !result?.success || !Array.isArray(result.data)) {
+        throw new Error(result?.error || 'No se pudo cargar la agenda del mezzanine.');
+    }
+    return result.data as MezzanineRental[];
+};
+
+export const saveMezzanineRental = async (
+    input: MezzanineRentalInput & { id?: string }
+): Promise<{ success: boolean; data?: MezzanineRental; error?: string }> => {
+    try {
+        const response = await fetch('/api/mezzanine?action=save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(input),
+            signal: AbortSignal.timeout(20000),
+        });
+        return await readMezzanineResponse(response);
+    } catch (error) {
+        console.error('Error saving mezzanine rental:', error);
+        return { success: false, error: 'No se pudo guardar la reserva del mezzanine.' };
+    }
+};
+
+export const cancelMezzanineRental = async (
+    id: string
+): Promise<{ success: boolean; data?: MezzanineRental; error?: string }> => {
+    try {
+        const response = await fetch('/api/mezzanine?action=cancel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id }),
+            signal: AbortSignal.timeout(20000),
+        });
+        return await readMezzanineResponse(response);
+    } catch (error) {
+        console.error('Error cancelling mezzanine rental:', error);
+        return { success: false, error: 'No se pudo cancelar la reserva del mezzanine.' };
     }
 };
 

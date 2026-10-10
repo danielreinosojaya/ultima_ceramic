@@ -405,6 +405,30 @@ export async function ensureTablesExist() {
         await sql`CREATE INDEX IF NOT EXISTS idx_corporate_events_stage ON corporate_events(stage);`;
         await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS corporate_event_id UUID REFERENCES corporate_events(id) ON DELETE SET NULL;`;
         await sql`CREATE INDEX IF NOT EXISTS idx_bookings_corporate_event_id ON bookings(corporate_event_id);`;
+
+        await sql`
+            CREATE TABLE IF NOT EXISTS mezzanine_rentals (
+                id UUID PRIMARY KEY,
+                contact_name VARCHAR(255) NOT NULL,
+                phone VARCHAR(50) NOT NULL DEFAULT '',
+                email VARCHAR(255) NOT NULL DEFAULT '',
+                rental_date DATE NOT NULL,
+                start_time VARCHAR(5) NOT NULL,
+                end_time VARCHAR(5) NOT NULL,
+                purpose TEXT NOT NULL DEFAULT '',
+                agreed_price NUMERIC(10, 2) NOT NULL DEFAULT 0,
+                amount_paid NUMERIC(10, 2) NOT NULL DEFAULT 0,
+                payment_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                payment_method VARCHAR(40) NOT NULL DEFAULT '',
+                payment_notes TEXT NOT NULL DEFAULT '',
+                status VARCHAR(20) NOT NULL DEFAULT 'confirmed',
+                internal_notes TEXT NOT NULL DEFAULT '',
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+        `;
+        await sql`CREATE INDEX IF NOT EXISTS idx_mezzanine_rentals_date ON mezzanine_rentals(rental_date);`;
+        await sql`CREATE INDEX IF NOT EXISTS idx_mezzanine_rentals_status ON mezzanine_rentals(status);`;
         
         console.log("Essential columns and indexes ensured.");
     } catch (error) {

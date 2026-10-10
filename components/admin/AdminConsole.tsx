@@ -17,7 +17,7 @@ import { SettingsManager } from './SettingsManager';
 import { PiecesManager } from './PiecesManager';
 import type { AdminTab, Notification, Product, Booking, Customer, GroupInquiry, Instructor, ScheduleOverrides, DayKey, AvailableSlot, ClassCapacity, CapacityMessageSettings, Announcement, AppData, BankDetails, InvoiceRequest, NavigationState } from '../../types';
 
-type ExtendedAdminTab = AdminTab | 'giftcards' | 'expired-bookings' | 'pieces' | 'courses' | 'valentine';
+type ExtendedAdminTab = AdminTab | 'giftcards' | 'expired-bookings' | 'pieces' | 'courses' | 'valentine' | 'mezzanine';
 import { ScheduleSettingsManager } from './ScheduleSettingsManager';
 import { CalendarEditIcon } from '../icons/CalendarEditIcon';
 import { InquiryManager } from './InquiryManager';
@@ -36,6 +36,7 @@ import { ExpiredBookingsManager } from './ExpiredBookingsManager';
 import { AdminCourseManagement } from './AdminCourseManagement';
 import { ValentineAdminPanel } from './ValentineAdminPanel';
 import { CorporateEventsPanel } from './CorporateEventsPanel';
+import { MezzanineRentalsPanel } from './MezzanineRentalsPanel';
 
 interface AdminData {
   products: Product[];
@@ -182,6 +183,8 @@ export const AdminConsole: React.FC = () => {
         return <GiftcardsManager />;
       case 'products':
         return <ProductManager products={adminData.products} onDataChange={handleSync} />;
+      case 'mezzanine':
+        return <MezzanineRentalsPanel />;
       case 'calendar':
         if (calendarView === 'month') {
           return <CalendarOverview bookings={adminData.bookings} onDateSelect={handleDateSelect} onDataChange={handleSync} products={adminData.products} />;
@@ -317,6 +320,16 @@ export const AdminConsole: React.FC = () => {
             <div className="flex items-center space-x-2 flex-wrap gap-2">
               <TabButton tab="products" icon={<CubeIcon className="w-4 h-4" />}>Productos</TabButton>
               <TabButton tab="calendar" icon={<CalendarIcon className="w-4 h-4" />}>Calendario</TabButton>
+              <TabButton
+                tab="mezzanine"
+                icon={
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
+                    <path strokeWidth="2" strokeLinecap="round" d="M4 20h16M6 20V10h12v10M9 10V6h6v4" />
+                  </svg>
+                }
+              >
+                Mezzanine
+              </TabButton>
               <TabButton tab="schedule-settings" icon={<CalendarEditIcon className="w-4 h-4" />}>Configuración de Horarios</TabButton>
               <TabButton tab="inquiries" icon={<ChatBubbleLeftRightIcon className="w-4 h-4" />}>Consultas</TabButton>
               <TabButton
