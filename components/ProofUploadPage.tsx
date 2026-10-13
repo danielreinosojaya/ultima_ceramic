@@ -197,12 +197,19 @@ export const ProofUploadPage: React.FC<ProofUploadPageProps> = ({ bookingCode, o
                 )}
 
                 {/* Upload Section */}
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-6">
-                    <h3 className="font-bold text-amber-900 mb-1 flex items-center gap-2">
-                        <span>📎</span> Sube tu comprobante de pago
+                <div className="bg-amber-50 border-2 border-amber-400 rounded-xl p-5 mb-6 ring-2 ring-amber-200/60">
+                    <p className="text-xs font-bold uppercase tracking-wider text-amber-700 mb-2">
+                        Último paso para confirmar
+                    </p>
+                    <h3 className="font-bold text-amber-950 text-lg mb-2 flex items-center gap-2">
+                        <span>📎</span> Sube tu comprobante aquí
                     </h3>
-                    <p className="text-sm text-amber-800 mb-4">
-                        Una vez subido, tu reserva quedará en estado <strong>"En Revisión"</strong> y <strong>no expirará</strong> mientras verificamos tu pago.
+                    <p className="text-sm text-amber-900 mb-2 leading-relaxed">
+                        Sube el comprobante <strong>en esta página</strong> (no por WhatsApp).
+                        Quedará en revisión y <strong>no expirará</strong> mientras validamos tu pago.
+                    </p>
+                    <p className="text-sm text-amber-800 mb-4 leading-relaxed">
+                        Si no lo subes a tiempo, la pre-reserva <strong>expira en 2 horas</strong> y tendrás que repetir el proceso.
                     </p>
 
                     <label className={`flex flex-col items-center justify-center w-full py-8 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
@@ -254,7 +261,7 @@ export const ProofUploadPage: React.FC<ProofUploadPageProps> = ({ bookingCode, o
 
                 {/* Contact for help */}
                 <p className="text-center text-sm text-brand-secondary">
-                    ¿Tienes alguna duda? Puedes contactarnos por WhatsApp y con gusto te ayudamos.
+                    ¿Dudas? Contáctanos por WhatsApp. El comprobante súbelo arriba en esta página.
                 </p>
             </div>
         );

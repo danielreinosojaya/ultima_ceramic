@@ -225,134 +225,128 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
         data: bankAccounts
     });
 
+    const expirationTime = new Date(new Date(booking.createdAt).getTime() + 2 * 60 * 60 * 1000);
+    const expirationDiffMs = expirationTime.getTime() - Date.now();
+    const expirationLabel = expirationDiffMs <= 0
+        ? null
+        : expirationTime.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+
+    const proofUploadBlock = !isFullyPaid && booking.id ? (
+        !proofUploaded ? (
+            <div className="mb-6 bg-amber-50 border-2 border-amber-400 rounded-xl p-5 shadow-md ring-2 ring-amber-200/60">
+                <p className="text-xs font-bold uppercase tracking-wider text-amber-700 mb-2">
+                    Siguiente y último paso
+                </p>
+                <h4 className="font-bold text-amber-950 text-lg mb-2 flex items-center gap-2">
+                    <span>📎</span> Sube tu comprobante aquí
+                </h4>
+                <p className="text-sm text-amber-900 mb-2 leading-relaxed">
+                    Después de transferir, <strong>sube el comprobante en esta página</strong>.
+                    No lo envíes por WhatsApp: con subirlo aquí tu reserva queda en revisión y <strong>no expirará</strong> mientras validamos el pago.
+                </p>
+                <p className="text-sm text-amber-800 mb-4 leading-relaxed">
+                    Si no subes el comprobante en <strong>2 horas</strong>
+                    {expirationLabel ? <> (antes de las {expirationLabel})</> : ''},
+                    la pre-reserva <strong>expira</strong> y tendrás que repetir el proceso desde el inicio.
+                </p>
+                <label className={`flex flex-col items-center justify-center w-full py-7 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
+                    proofUploading ? 'border-amber-300 bg-amber-100 cursor-not-allowed' : 'border-amber-500 bg-white hover:border-amber-600 hover:bg-amber-100'
+                }`}>
+                    <span className="text-3xl mb-2">{proofUploading ? '⏳' : '⬆️'}</span>
+                    <span className="text-base font-bold text-amber-900">
+                        {proofUploading ? 'Subiendo comprobante...' : 'Seleccionar JPG, PNG o PDF'}
+                    </span>
+                    <span className="text-xs text-amber-700 mt-1">Máximo 5MB</span>
+                    <input
+                        type="file"
+                        accept="image/jpeg,image/png,application/pdf"
+                        className="hidden"
+                        onChange={handleProofUpload}
+                        disabled={proofUploading}
+                    />
+                </label>
+                {proofError && (
+                    <p className="text-sm text-red-600 mt-2 font-semibold">❌ {proofError}</p>
+                )}
+            </div>
+        ) : (
+            <div className="mb-6 bg-green-50 border-2 border-green-400 rounded-xl p-5 flex items-start gap-3">
+                <span className="text-2xl flex-shrink-0">✅</span>
+                <div>
+                    <p className="font-bold text-green-900">¡Comprobante recibido!</p>
+                    <p className="text-sm text-green-800 mt-1">Tu reserva está en revisión. El equipo validará tu pago y recibirás confirmación por correo. Tu lugar no expirará durante este proceso.</p>
+                </div>
+            </div>
+        )
+    ) : null;
+
         return (
             <div className="max-w-2xl mx-auto p-6 sm:p-8 bg-brand-surface rounded-xl shadow-lifted animate-fade-in-up">
             {/* Header */}
-            <div className="text-center mb-6">
-                <CheckCircleIcon className="w-16 h-16 text-brand-success mx-auto mb-3" />
+            <div className="text-center mb-5">
+                <CheckCircleIcon className="w-14 h-14 text-brand-success mx-auto mb-3" />
                 <h2 className="text-3xl font-bold text-brand-text mb-2">¡Cupo guardado!</h2>
-                <p className="text-brand-secondary text-sm">Completa el pago para confirmar tu reserva.</p>
-            </div>
-
-            {/* Resumen de Reserva - CLARO Y PROMINENTE */}
-            <div className="mb-6 bg-white border-2 border-brand-primary rounded-lg p-6 shadow-lg">
-                <h3 className="text-lg font-bold text-brand-primary mb-4 flex items-center gap-2">
-                    <span className="text-2xl">📋</span>
-                    Resumen de tu Reserva
-                </h3>
-                
-                <div className="space-y-4 mb-6">
-                    {/* Producto/Técnica */}
-                    <div className="pb-4 border-b border-brand-border">
-                        <p className="text-xs text-brand-secondary font-semibold uppercase mb-1">Experiencia</p>
-                        <p className="text-lg font-bold text-brand-text">{getBookingDisplayName(booking)}</p>
-                    </div>
-                    
-                    {/* Detalles de la reserva */}
-                    <div className="grid grid-cols-2 gap-4">
-                        {booking.slots && booking.slots.length > 0 && (
-                            <>
-                                <div>
-                                    <p className="text-xs text-brand-secondary font-semibold mb-1">📅 Fecha</p>
-                                    <p className="text-sm font-bold text-brand-text">{(() => {
-                                        const dateStr = booking.slots[0].date;
-                                        const [year, month, day] = dateStr.split('-').map(Number);
-                                        const localDate = new Date(year, month - 1, day);
-                                        return localDate.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-                                    })()}</p>
-                                </div>
-                                <div>
-                                    <p className="text-xs text-brand-secondary font-semibold mb-1">🕐 Hora</p>
-                                    <p className="text-sm font-bold text-brand-text">{booking.slots[0].time} - {(() => {
-                                        const [h, m] = booking.slots[0].time.split(':').map(Number);
-                                        return `${String((h + 2) % 24).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-                                    })()}</p>
-                                </div>
-                            </>
-                        )}
-                        
-                        <div>
-                            <p className="text-xs text-brand-secondary font-semibold mb-1">👥 Participantes</p>
-                            <p className="text-sm font-bold text-brand-text">{participantLabel}</p>
-                        </div>
-                        
-                        <div>
-                            <p className="text-xs text-brand-secondary font-semibold mb-1">⏱️ Duración</p>
-                            <p className="text-sm font-bold text-brand-text">{durationLabel}</p>
-                        </div>
-                    </div>
-                    
-                    {techniqueLabel && (
-                        <div className="pt-2">
-                            <p className="text-xs text-brand-secondary font-semibold mb-1">Técnica</p>
-                            <p className="text-sm font-bold text-brand-text">{techniqueLabel}</p>
-                        </div>
-                    )}
-                </div>
-
-                {/* PRECIO PROMINENTE */}
-                <div className="bg-gradient-to-r from-brand-primary/5 to-brand-accent/5 border-2 border-brand-primary rounded-lg p-5 text-center mb-4">
-                    <p className="text-xs font-semibold text-brand-secondary uppercase tracking-wider mb-2">Monto a Pagar</p>
-                    <p className="text-5xl font-bold text-brand-primary mb-1">{formatPrice(booking.price)}</p>
-                    {priceBreakdown && (
-                        <p className="text-sm font-semibold text-brand-text mb-1">{priceBreakdown}</p>
-                    )}
-                    <div className="text-xs text-brand-secondary space-y-1">
-                        <p>Subtotal: {formatPrice(subtotal)}</p>
-                        <p>IVA ({(VAT_RATE * 100).toFixed(0)}%): {formatPrice(vat)}</p>
-                    </div>
-                </div>
-
-                {isPackage && typeof (booking.product as ClassPackage).classes === 'number' && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-left">
-                        <p className="text-sm font-bold text-amber-900 mb-1">
-                            ⏰ Plazo del paquete: {getClassPackageValidityLabel((booking.product as ClassPackage).classes)}
-                        </p>
-                        <p className="text-xs text-amber-800 leading-relaxed">
-                            {getClassPackageValidityDescription((booking.product as ClassPackage).classes)}
-                        </p>
-                    </div>
+                {isFullyPaid ? (
+                    <p className="text-brand-secondary text-sm">Tu reserva está confirmada. Guarda tu código abajo.</p>
+                ) : (
+                    <p className="text-brand-text text-sm font-medium">
+                        Transfiere y <strong className="text-amber-800">sube el comprobante abajo</strong> — es el último paso para confirmar.
+                    </p>
                 )}
             </div>
 
-            {/* Código de Pre-Reserva */}
-            <div className="mb-5 bg-gradient-to-r from-brand-primary/10 to-brand-accent/10 border-2 border-brand-primary rounded-lg p-5 text-center">
-                <p className="text-xs font-semibold text-brand-secondary uppercase tracking-wider mb-2">Tu Código de Pre-Reserva</p>
-                <div className="flex items-center justify-center gap-2 sm:gap-4 flex-wrap">
-                    <p className="text-2xl sm:text-4xl font-bold text-brand-primary font-mono tracking-wider break-all" style={{ letterSpacing: '0.1em' }}>{booking.bookingCode}</p>
-                    <button 
-                        onClick={() => handleCopy(booking.bookingCode)} 
-                        className="p-3 bg-white rounded-full text-brand-primary hover:bg-brand-primary hover:text-white transition-all shadow-md hover:shadow-lg" 
-                        title="Copiar código"
-                    >
-                        {copied ? <CheckCircleIcon className="w-6 h-6 text-brand-success" /> : <DocumentDuplicateIcon className="w-6 h-6" />}
-                    </button>
+            {/* Expiración — visible de inmediato */}
+            {!isFullyPaid && !proofUploaded && (
+                <div className="mb-5 bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-lg flex items-start gap-3">
+                    <span className="text-yellow-600 text-xl font-bold mt-0.5">⏰</span>
+                    <div>
+                        <p className="font-bold text-yellow-900 text-sm">
+                            Tienes 2 horas para pagar y subir el comprobante
+                        </p>
+                        <p className="text-xs text-yellow-800 mt-1 leading-relaxed">
+                            Si no lo haces a tiempo, el cupo se libera y tendrás que reservar de nuevo.
+                            {expirationDiffMs <= 0
+                                ? <span className="block text-red-600 font-mono font-bold mt-1">⚠️ EXPIRÓ</span>
+                                : <span className="block font-mono mt-1">Expira a las {expirationLabel}</span>}
+                        </p>
+                    </div>
                 </div>
-                <p className="text-xs text-brand-secondary mt-2">Inclúyelo como referencia en tu transferencia.</p>
+            )}
+
+            {/* Código + monto — lo mínimo para transferir */}
+            <div className="mb-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="bg-gradient-to-r from-brand-primary/10 to-brand-accent/10 border-2 border-brand-primary rounded-lg p-4 text-center">
+                    <p className="text-xs font-semibold text-brand-secondary uppercase tracking-wider mb-1">Código (referencia)</p>
+                    <div className="flex items-center justify-center gap-2 flex-wrap">
+                        <p className="text-xl sm:text-2xl font-bold text-brand-primary font-mono tracking-wider break-all">{booking.bookingCode}</p>
+                        <button
+                            onClick={() => handleCopy(booking.bookingCode)}
+                            className="p-2 bg-white rounded-full text-brand-primary hover:bg-brand-primary hover:text-white transition-all shadow-md"
+                            title="Copiar código"
+                        >
+                            {copied ? <CheckCircleIcon className="w-5 h-5 text-brand-success" /> : <DocumentDuplicateIcon className="w-5 h-5" />}
+                        </button>
+                    </div>
+                </div>
+                <div className="bg-gradient-to-r from-brand-primary/5 to-brand-accent/5 border-2 border-brand-primary rounded-lg p-4 text-center">
+                    <p className="text-xs font-semibold text-brand-secondary uppercase tracking-wider mb-1">
+                        {isFullyPaid ? 'Total' : 'Monto a transferir'}
+                    </p>
+                    <p className="text-3xl font-bold text-brand-primary">{formatPrice(isFullyPaid ? localBooking.price : amountDue)}</p>
+                    {priceBreakdown && !isFullyPaid && amountDue >= localBooking.price - 0.009 && (
+                        <p className="text-xs font-semibold text-brand-text mt-1">{priceBreakdown}</p>
+                    )}
+                </div>
             </div>
 
-            {/* Aviso de expiración compacto */}
-            <div className="mb-5 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg flex items-start gap-3">
-                <span className="text-yellow-600 text-xl font-bold mt-0.5">⏰</span>
-                <div>
-                    <p className="font-bold text-yellow-900 text-sm">Válida por 2 horas · 15 min tolerancia el día de la clase</p>
-                    {(() => {
-                        const expirationTime = new Date(new Date(booking.createdAt).getTime() + 2 * 60 * 60 * 1000);
-                        const diffMs = expirationTime.getTime() - Date.now();
-                        if (diffMs <= 0) return <p className="text-xs text-red-600 font-mono font-bold mt-1">⚠️ EXPIRÓ</p>;
-                        return <p className="text-xs text-yellow-700 font-mono mt-1">Expira a las {expirationTime.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</p>;
-                    })()}
-                </div>
-            </div>
-
-            {/* Datos para tu Transferencia - Cuentas Bancarias */}
+            {/* Datos bancarios — necesarios antes de subir */}
             {!isFullyPaid && bankAccounts && bankAccounts.length > 0 && (
-                <div className="mb-6 bg-white p-6 rounded-lg border-2 border-brand-border shadow-md">
-                    <h3 className="text-lg font-bold text-brand-text mb-4 flex items-center gap-2">
-                        <BankIcon className="w-6 h-6 text-brand-primary" />
-                        Datos para tu Transferencia
+                <div className="mb-5 bg-white p-5 rounded-lg border-2 border-brand-border shadow-md">
+                    <h3 className="text-base font-bold text-brand-text mb-3 flex items-center gap-2">
+                        <BankIcon className="w-5 h-5 text-brand-primary" />
+                        1. Transfiere a una de estas cuentas
                     </h3>
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                         {bankAccounts.map((acc, idx) => (
                             <div key={idx} className="bg-brand-background rounded-lg p-4 border-l-4 border-brand-primary">
                                 <div className="flex justify-between items-start mb-3">
@@ -406,9 +400,12 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                 </div>
             )}
 
+            {/* Upload — acción principal, justo después de transferir */}
+            {proofUploadBlock}
+
             {/* Giftcard summary */}
             {(paymentSplit.giftcardApplied > 0.009 || appliedHold || isFullyPaid) && (
-                <div className="mb-6 bg-green-50 border-2 border-green-400 p-5 rounded-lg">
+                <div className="mb-5 bg-green-50 border-2 border-green-400 p-5 rounded-lg">
                     <div className="flex items-start gap-3">
                         <span className="text-2xl">🎁</span>
                         <div className="flex-1">
@@ -477,30 +474,77 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                 </div>
             )}
 
-            {/* Próximos pasos (compacto) */}
-            <div className="mb-5 bg-brand-background p-4 rounded-lg border border-brand-border">
-                <h3 className="text-sm font-bold text-brand-text mb-3">¿Qué hacer ahora?</h3>
-                {isFullyPaid ? (
-                    <p className="text-sm text-brand-secondary">Tu cupo está confirmado. Guarda tu código <span className="font-mono font-bold text-brand-primary">{localBooking.bookingCode}</span>.</p>
-                ) : (
-                <div className="space-y-3 text-sm">
-                    <div className="flex items-start gap-3">
-                        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-violet-600 text-white text-xs font-bold flex-shrink-0">1</span>
-                        <p className="text-brand-secondary"><strong className="text-brand-text">Redime tu gift card</strong> aquí mismo (código virtual) si la tienes.</p>
+            {/* Resumen — debajo de la acción principal */}
+            <div className="mb-5 bg-white border border-brand-border rounded-lg p-5">
+                <h3 className="text-sm font-bold text-brand-secondary uppercase tracking-wider mb-3">
+                    Resumen de tu reserva
+                </h3>
+
+                <div className="space-y-3 mb-4">
+                    <div className="pb-3 border-b border-brand-border">
+                        <p className="text-xs text-brand-secondary font-semibold uppercase mb-1">Experiencia</p>
+                        <p className="text-base font-bold text-brand-text">{getBookingDisplayName(booking)}</p>
                     </div>
-                    <div className="flex items-start gap-3">
-                        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-primary text-white text-xs font-bold flex-shrink-0">2</span>
-                        <p className="text-brand-secondary"><strong className="text-brand-text">Transfiere {formatPrice(amountDue)}</strong> a cualquiera de las cuentas y usa <span className="font-mono text-brand-primary font-bold">{localBooking.bookingCode}</span> como referencia.</p>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        {booking.slots && booking.slots.length > 0 && (
+                            <>
+                                <div>
+                                    <p className="text-xs text-brand-secondary font-semibold mb-1">Fecha</p>
+                                    <p className="text-sm font-bold text-brand-text">{(() => {
+                                        const dateStr = booking.slots[0].date;
+                                        const [year, month, day] = dateStr.split('-').map(Number);
+                                        const localDate = new Date(year, month - 1, day);
+                                        return localDate.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                                    })()}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-brand-secondary font-semibold mb-1">Hora</p>
+                                    <p className="text-sm font-bold text-brand-text">{booking.slots[0].time} - {(() => {
+                                        const [h, m] = booking.slots[0].time.split(':').map(Number);
+                                        return `${String((h + 2) % 24).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                                    })()}</p>
+                                </div>
+                            </>
+                        )}
+
+                        <div>
+                            <p className="text-xs text-brand-secondary font-semibold mb-1">Participantes</p>
+                            <p className="text-sm font-bold text-brand-text">{participantLabel}</p>
+                        </div>
+
+                        <div>
+                            <p className="text-xs text-brand-secondary font-semibold mb-1">Duración</p>
+                            <p className="text-sm font-bold text-brand-text">{durationLabel}</p>
+                        </div>
                     </div>
-                    <div className="flex items-start gap-3">
-                        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-primary text-white text-xs font-bold flex-shrink-0">3</span>
-                        <p className="text-brand-secondary"><strong className="text-brand-text">Sube el comprobante</strong> si pagaste por transferencia.</p>
-                    </div>
+
+                    {techniqueLabel && (
+                        <div className="pt-1">
+                            <p className="text-xs text-brand-secondary font-semibold mb-1">Técnica</p>
+                            <p className="text-sm font-bold text-brand-text">{techniqueLabel}</p>
+                        </div>
+                    )}
                 </div>
+
+                <div className="text-xs text-brand-secondary space-y-1 border-t border-brand-border pt-3">
+                    <p>Precio total: <span className="font-semibold text-brand-text">{formatPrice(booking.price)}</span></p>
+                    <p>Subtotal: {formatPrice(subtotal)} · IVA ({(VAT_RATE * 100).toFixed(0)}%): {formatPrice(vat)}</p>
+                </div>
+
+                {isPackage && typeof (booking.product as ClassPackage).classes === 'number' && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-left mt-3">
+                        <p className="text-sm font-bold text-amber-900 mb-1">
+                            Plazo del paquete: {getClassPackageValidityLabel((booking.product as ClassPackage).classes)}
+                        </p>
+                        <p className="text-xs text-amber-800 leading-relaxed">
+                            {getClassPackageValidityDescription((booking.product as ClassPackage).classes)}
+                        </p>
+                    </div>
                 )}
             </div>
 
-            {/* Botón de WhatsApp - solo para dudas */}
+            {/* WhatsApp — dudas, no comprobante */}
             <div className="mb-5">
                 <a
                     href={whatsappLink}
@@ -511,52 +555,17 @@ export const ConfirmationPage: React.FC<ConfirmationPageProps> = ({ booking, ban
                     <WhatsAppIcon className="w-6 h-6" />
                     ¿Dudas? Contáctanos por WhatsApp
                 </a>
+                {!isFullyPaid && !proofUploaded && (
+                    <p className="text-xs text-center text-brand-secondary mt-2">
+                        Solo para preguntas. El comprobante súbelo arriba en esta página.
+                    </p>
+                )}
             </div>
-
-            {/* Upload comprobante de pago */}
-            {!isFullyPaid && booking.id && (
-                !proofUploaded ? (
-                    <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-5">
-                        <h4 className="font-bold text-amber-900 mb-1 flex items-center gap-2">
-                            <span>📎</span> Sube tu comprobante aquí
-                        </h4>
-                        <p className="text-sm text-amber-800 mb-3">
-                            Si pagas por transferencia, sube el comprobante. Tu reserva quedará en revisión y <strong>no expirará</strong> mientras validamos tu pago.
-                        </p>
-                        <label className={`flex flex-col items-center justify-center w-full py-6 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
-                            proofUploading ? 'border-amber-300 bg-amber-100 cursor-not-allowed' : 'border-amber-300 hover:border-amber-400 hover:bg-amber-100'
-                        }`}>
-                            <span className="text-2xl mb-1">{proofUploading ? '⏳' : '⬆️'}</span>
-                            <span className="text-sm font-semibold text-amber-800">
-                                {proofUploading ? 'Subiendo comprobante...' : 'Seleccionar JPG, PNG o PDF (máx 5MB)'}
-                            </span>
-                            <input
-                                type="file"
-                                accept="image/jpeg,image/png,application/pdf"
-                                className="hidden"
-                                onChange={handleProofUpload}
-                                disabled={proofUploading}
-                            />
-                        </label>
-                        {proofError && (
-                            <p className="text-sm text-red-600 mt-2 font-semibold">❌ {proofError}</p>
-                        )}
-                    </div>
-                ) : (
-                    <div className="mb-6 bg-green-50 border border-green-300 rounded-xl p-5 flex items-start gap-3">
-                        <span className="text-2xl flex-shrink-0">✅</span>
-                        <div>
-                            <p className="font-bold text-green-900">¡Comprobante recibido!</p>
-                            <p className="text-sm text-green-800 mt-1">Tu reserva está en revisión. El equipo validará tu pago y recibirás confirmación por correo. Tu lugar no expirará durante este proceso.</p>
-                        </div>
-                    </div>
-                )
-            )}
 
             <BankAccountsModal open={modalOpen} onClose={() => setModalOpen(false)} accounts={bankAccounts} />
 
             {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8 pt-6 border-t border-brand-border">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-6 pt-6 border-t border-brand-border">
                 <button
                     onClick={onFinish}
                     className="w-full sm:w-auto bg-brand-primary text-white font-bold py-3 px-10 rounded-lg hover:opacity-90 transition-opacity duration-300 shadow-md text-base"
