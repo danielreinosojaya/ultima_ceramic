@@ -752,7 +752,9 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         for (const booking of appData.bookings || []) {
             const status = String(booking.status || 'active').toLowerCase();
             if (status === 'cancelled') continue;
-            if (status === 'expired' && !isPaintingUpsell(booking)) continue;
+            // Mostrar expiradas sin pago (como en Pre-Reservas, en rojo) si tienen slot;
+            // painting upsell expirado sigue visible como antes.
+            if (status === 'expired' && booking.isPaid && !isPaintingUpsell(booking)) continue;
 
             const slots = Array.isArray(booking.slots) ? booking.slots : [];
             for (const slot of slots) {
@@ -798,10 +800,41 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         const isHighlighted = bookingToHighlight?.id === booking.id;
         const isGroupClass = booking.productType === 'GROUP_CLASS' || booking.productType === 'CUSTOM_GROUP_EXPERIENCE';
         const isCorporate = Boolean(booking.corporateEventId);
+        const status = String(booking.status || 'active').toLowerCase();
+        const isExpiredUnpaid = status === 'expired' && !booking.isPaid;
+        const isPendingVerification = status === 'pending_verification' && !booking.isPaid;
+        // Mismo criterio visual que Pre-Reservas: sin completar pago → rojo (o ámbar si hay comprobante en revisión)
+        const needsPaymentAttention = !booking.isPaid;
         const name = `${booking.userInfo?.firstName || ''} ${booking.userInfo?.lastName || ''}`.trim() || 'Sin nombre';
         const color = colorMap[instructor?.colorScheme || ''] || colorMap[defaultColorName];
-        const bgColor = isCorporate ? 'bg-violet-100' : isGroupClass ? 'bg-blue-100' : booking.isPaid ? 'bg-green-100' : `bg-${color.bg}`;
-        const borderColor = isCorporate ? 'border-violet-500' : isGroupClass ? 'border-blue-400' : `border-${color.text}/50`;
+        const bgColor = needsPaymentAttention
+            ? (isPendingVerification ? 'bg-amber-50' : 'bg-red-50')
+            : isCorporate
+              ? 'bg-violet-100'
+              : isGroupClass
+                ? 'bg-blue-100'
+                : booking.isPaid
+                  ? 'bg-green-100'
+                  : `bg-${color.bg}`;
+        const borderColor = needsPaymentAttention
+            ? (isPendingVerification ? 'border-amber-500' : 'border-red-500')
+            : isCorporate
+              ? 'border-violet-500'
+              : isGroupClass
+                ? 'border-blue-400'
+                : `border-${color.text}/50`;
+        const timeTextColor = needsPaymentAttention
+            ? (isPendingVerification ? 'text-amber-900' : 'text-red-800')
+            : isCorporate
+              ? 'text-violet-900'
+              : isGroupClass
+                ? 'text-blue-800'
+                : `text-${color.text}`;
+        const paymentLabel = isExpiredUnpaid
+            ? 'expirada · sin pagar'
+            : isPendingVerification
+              ? 'en revisión'
+              : 'sin pagar';
         const slotForClick: EnrichedSlot = { ...slot, time, bookings: [booking] };
 
         return (
@@ -809,28 +842,42 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 key={`${booking.id}-${normalizeTime(time)}`}
                 type="button"
                 onClick={() => handleShiftClick(dateStr, slotForClick)}
-                aria-label={`${time} ${name}`}
-                className={`w-full text-left p-2 rounded-md shadow-sm border-l-4 ${bgColor} ${borderColor} hover:shadow-md transition-shadow relative overflow-hidden ${isHighlighted ? 'animate-pulse-border' : ''}`}
+                aria-label={`${time} ${name}${needsPaymentAttention ? ` · ${paymentLabel}` : ''}`}
+                className={`w-full text-left p-2 rounded-md shadow-sm border-l-4 ${bgColor} ${borderColor} hover:shadow-md transition-shadow relative overflow-hidden ${isHighlighted ? 'animate-pulse-border' : ''} ${needsPaymentAttention && !isPendingVerification ? 'ring-1 ring-red-200/80' : ''}`}
             >
-                {!booking.isPaid && <div className="absolute inset-0 unpaid-booking-stripe opacity-70"></div>}
+                {needsPaymentAttention && !isPendingVerification && (
+                    <div className="absolute inset-0 unpaid-booking-stripe opacity-80"></div>
+                )}
                 <div className="relative z-10">
-                    <div className={`font-bold text-xs text-${isCorporate ? 'violet-900' : isGroupClass ? 'blue-800' : color.text} flex items-center gap-1 flex-wrap`}>
+                    <div className={`font-bold text-xs ${timeTextColor} flex items-center gap-1 flex-wrap`}>
                         {time}
                         {isCorporate && (
                             <span className="text-[10px] font-bold uppercase bg-violet-200 text-violet-900 px-1 rounded">Corp</span>
                         )}
                         {isGroupClass && <UserGroupIcon className="w-3.5 h-3.5" />}
                     </div>
-                    <div className="text-xs font-semibold text-gray-900 mt-0.5 truncate">{name}</div>
-                    <div className="text-[11px] text-gray-600 mt-0.5 truncate">
+                    <div className={`text-xs font-semibold mt-0.5 truncate ${needsPaymentAttention && !isPendingVerification ? 'text-red-950' : 'text-gray-900'}`}>
+                        {name}
+                    </div>
+                    <div className={`text-[11px] mt-0.5 truncate ${needsPaymentAttention && !isPendingVerification ? 'text-red-800/80' : 'text-gray-600'}`}>
                         {getBookingDisplayName(booking, 'admin')}
                         {` · ${getBookingParticipantCount(booking)} pers.`}
                     </div>
                     {instructor && appData.instructors.length > 1 && (
-                        <div className="text-[10px] text-gray-500 mt-0.5 truncate">{instructor.name}</div>
+                        <div className={`text-[10px] mt-0.5 truncate ${needsPaymentAttention && !isPendingVerification ? 'text-red-700/70' : 'text-gray-500'}`}>
+                            {instructor.name}
+                        </div>
                     )}
-                    {!booking.isPaid && (
-                        <div className="text-[11px] font-bold text-brand-primary mt-0.5">sin pagar</div>
+                    {needsPaymentAttention && (
+                        <div
+                            className={`text-[11px] font-bold mt-0.5 ${
+                                isPendingVerification
+                                    ? 'text-amber-700'
+                                    : 'text-red-700'
+                            }`}
+                        >
+                            {paymentLabel}
+                        </div>
                     )}
                 </div>
             </button>
