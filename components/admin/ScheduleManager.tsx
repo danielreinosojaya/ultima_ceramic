@@ -1132,6 +1132,55 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 })()}
             </div>
         </div>
+
+        {/* Leyenda sutil de colores / estados */}
+        <footer
+            className="mt-5 pt-4 border-t border-gray-100"
+            aria-label="Leyenda del calendario"
+        >
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2.5">
+                Leyenda
+            </p>
+            <ul className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-gray-500">
+                <li className="inline-flex items-center gap-1.5">
+                    <span
+                        className="w-3.5 h-3.5 rounded-sm bg-green-100 border-l-[3px] border-green-500 shrink-0"
+                        aria-hidden
+                    />
+                    <span>Pagada</span>
+                </li>
+                <li className="inline-flex items-center gap-1.5">
+                    <span
+                        className="w-3.5 h-3.5 rounded-sm bg-red-50 border-l-[3px] border-red-500 ring-1 ring-red-200/60 shrink-0 relative overflow-hidden"
+                        aria-hidden
+                    >
+                        <span className="absolute inset-0 unpaid-booking-stripe opacity-80" />
+                    </span>
+                    <span>Sin pagar / expirada</span>
+                </li>
+                <li className="inline-flex items-center gap-1.5">
+                    <span
+                        className="w-3.5 h-3.5 rounded-sm bg-amber-50 border-l-[3px] border-amber-500 shrink-0"
+                        aria-hidden
+                    />
+                    <span>Comprobante en revisión</span>
+                </li>
+                <li className="inline-flex items-center gap-1.5">
+                    <span
+                        className="w-3.5 h-3.5 rounded-sm bg-blue-100 border-l-[3px] border-blue-400 shrink-0"
+                        aria-hidden
+                    />
+                    <span>Clase grupal</span>
+                </li>
+                <li className="inline-flex items-center gap-1.5">
+                    <span
+                        className="w-3.5 h-3.5 rounded-sm bg-violet-100 border-l-[3px] border-violet-500 shrink-0"
+                        aria-hidden
+                    />
+                    <span>Corporativo</span>
+                </li>
+            </ul>
+        </footer>
       </div>
     );
 };
