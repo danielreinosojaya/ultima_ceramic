@@ -285,6 +285,11 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({
   };
 
   const exportCsv = () => {
+    const invoicedBookingIds = new Set(
+      invoiceRequests
+        .filter((request) => request.status === 'Processed')
+        .map((request) => request.bookingId),
+    );
     const rows = visibleMovements.map((movement) => ({
       Fecha: formatStudioDate(movement.date),
       Cliente: clientName(movement.booking),
@@ -294,6 +299,7 @@ export const FinancialDashboard: React.FC<FinancialDashboardProps> = ({
       Tipo: CATEGORY_LABEL[movement.category],
       Metodo: movement.methodLabel,
       Cobrado: movement.amount.toFixed(2),
+      Facturado: invoicedBookingIds.has(movement.booking.id) ? 'sí' : 'no',
     }));
     const csv = Papa.unparse(rows, { quotes: true });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
