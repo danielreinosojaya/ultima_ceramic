@@ -661,20 +661,31 @@ export const ExpiredBookingsManager: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedBookings.map((booking, idx) => (
+                  {paginatedBookings.map((booking, idx) => {
+                    const isExpiredRow =
+                      booking.status === 'expired' ||
+                      (typeof booking.hoursUntilExpiry === 'number' &&
+                        booking.hoursUntilExpiry <= 0 &&
+                        booking.status !== 'confirmed' &&
+                        booking.status !== 'pending_verification' &&
+                        !booking.isPaid);
+
+                    return (
                     <tr
                       key={booking.id}
-                      className={`border-b border-brand-border transition-colors ${
-                        idx % 2 === 0 ? 'bg-white' : 'bg-brand-surface/30'
-                      } hover:bg-brand-surface`}
+                      className={`border-b transition-colors ${
+                        isExpiredRow
+                          ? 'bg-gradient-to-r from-red-100/95 via-red-50 to-rose-50/80 border-red-200/70 border-l-[3px] border-l-red-500 hover:from-red-200/80 hover:via-red-100 hover:to-rose-100/90'
+                          : `border-brand-border ${idx % 2 === 0 ? 'bg-white' : 'bg-brand-surface/30'} hover:bg-brand-surface`
+                      }`}
                     >
-                      <td className="px-4 py-3 font-mono font-bold text-brand-primary">{booking.bookingCode}</td>
-                      <td className="px-4 py-3 font-semibold text-brand-text">
+                      <td className={`px-4 py-3 font-mono font-bold ${isExpiredRow ? 'text-red-800' : 'text-brand-primary'}`}>{booking.bookingCode}</td>
+                      <td className={`px-4 py-3 font-semibold ${isExpiredRow ? 'text-red-950' : 'text-brand-text'}`}>
                         {booking.userInfo?.firstName} {booking.userInfo?.lastName}
                       </td>
-                      <td className="px-4 py-3 text-xs text-brand-secondary">{booking.userInfo?.email}</td>
-                      <td className="px-4 py-3 text-sm text-brand-text">{getBookingDisplayName(booking, 'admin')}</td>
-                      <td className="px-4 py-3 font-bold text-brand-primary text-right">${booking.price?.toFixed(2)}</td>
+                      <td className={`px-4 py-3 text-xs ${isExpiredRow ? 'text-red-800/70' : 'text-brand-secondary'}`}>{booking.userInfo?.email}</td>
+                      <td className={`px-4 py-3 text-sm ${isExpiredRow ? 'text-red-900/90' : 'text-brand-text'}`}>{getBookingDisplayName(booking, 'admin')}</td>
+                      <td className={`px-4 py-3 font-bold text-right ${isExpiredRow ? 'text-red-800' : 'text-brand-primary'}`}>${booking.price?.toFixed(2)}</td>
                       <td className="px-4 py-3 text-right text-xs">
                         {(() => {
                           const n = Array.isArray(booking.paymentDetails) ? booking.paymentDetails.length : 0;
@@ -708,8 +719,8 @@ export const ExpiredBookingsManager: React.FC = () => {
                       <td className="px-4 py-3">
                         <span
                           className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
-                            booking.status === 'expired'
-                              ? 'bg-red-100 text-red-700'
+                            isExpiredRow || booking.status === 'expired'
+                              ? 'bg-red-600 text-white shadow-sm shadow-red-200'
                               : booking.status === 'pending_verification'
                               ? 'bg-orange-100 text-orange-700'
                               : booking.status === 'confirmed' || booking.isPaid
@@ -717,12 +728,12 @@ export const ExpiredBookingsManager: React.FC = () => {
                               : 'bg-yellow-100 text-yellow-700'
                           }`}
                         >
-                          {booking.status === 'expired' && <XIcon className="w-3 h-3" />}
+                          {(isExpiredRow || booking.status === 'expired') && <XIcon className="w-3 h-3" />}
                           {(booking.status === 'confirmed' || booking.isPaid) && <CheckIcon className="w-3 h-3" />}
-                          {booking.status === 'expired' ? 'Expirada' : booking.status === 'pending_verification' ? 'En revisión' : (booking.status === 'confirmed' || booking.isPaid) ? 'Confirmada' : 'Pendiente pago'}
+                          {isExpiredRow || booking.status === 'expired' ? 'Expirada' : booking.status === 'pending_verification' ? 'En revisión' : (booking.status === 'confirmed' || booking.isPaid) ? 'Confirmada' : 'Pendiente pago'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-brand-secondary">
+                      <td className={`px-4 py-3 text-xs ${isExpiredRow ? 'text-red-800/70' : 'text-brand-secondary'}`}>
                         {booking.createdAt
                           ? formatDistanceToNow(new Date(booking.createdAt), { addSuffix: true, locale: es })
                           : '-'}
@@ -730,10 +741,10 @@ export const ExpiredBookingsManager: React.FC = () => {
                       <td className="px-4 py-3">
                         {booking.expiresAt ? (
                           <div className="text-xs">
-                            <div className={`font-bold ${booking.hoursUntilExpiry! <= 0 ? 'text-red-600' : 'text-green-600'}`}>
-                              {booking.hoursUntilExpiry! <= 0 ? '✕ Expiró' : `⏱ En ${Math.ceil(booking.hoursUntilExpiry!)}h`}
+                            <div className={`font-bold ${booking.hoursUntilExpiry! <= 0 || isExpiredRow ? 'text-red-700' : 'text-green-600'}`}>
+                              {booking.hoursUntilExpiry! <= 0 || isExpiredRow ? '✕ Expiró' : `⏱ En ${Math.ceil(booking.hoursUntilExpiry!)}h`}
                             </div>
-                            <div className="text-brand-secondary">
+                            <div className={isExpiredRow ? 'text-red-700/60' : 'text-brand-secondary'}>
                               {new Date(booking.expiresAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
                             </div>
                           </div>
@@ -827,7 +838,8 @@ export const ExpiredBookingsManager: React.FC = () => {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
