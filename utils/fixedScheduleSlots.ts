@@ -1,5 +1,6 @@
 import type { AvailableSlot, DayKey, ScheduleOverrides } from '../types';
 import { getEcuadorDateYmd, isEcuadorSlotInPast } from './formatters';
+import { isStudioClosedOnDate } from './studioClosedDates';
 
 const DAY_KEYS: DayKey[] = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -76,6 +77,7 @@ export function enumerateFixedScheduleDays(
 
   for (let i = 0; i < daysAhead; i++) {
     const date = addDaysYmd(start, i);
+    if (isStudioClosedOnDate(date)) continue;
     if (scheduleOverrides?.[date]?.disableRules) continue;
     const times = getFixedTimesForDate(date, technique, availability, scheduleOverrides).filter(
       (time) => !isEcuadorSlotInPast(date, time)

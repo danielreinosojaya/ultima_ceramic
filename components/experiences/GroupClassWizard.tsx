@@ -653,6 +653,18 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
                     // Obtener TODOS los slots para la fecha (disponibles e indisponibles)
                     const slotsForDate = availableSlots.filter(s => s.date === selectedDate);
                     const allTimes = [...new Set(slotsForDate.map(s => s.time))].sort();
+                    const isStudioClosedDay = slotsForDate.length > 0 && slotsForDate.every(s => s.blockedReason === 'studio_closed');
+
+                    if (isStudioClosedDay) {
+                      return (
+                        <div className="text-center py-6 bg-amber-50 border border-amber-200 rounded-lg px-4">
+                          <p className="font-semibold text-amber-900">Local cerrado</p>
+                          <p className="text-amber-800 text-sm mt-1">
+                            Este día el local estará cerrado. Te recomendamos reservar en otros días con disponibilidad.
+                          </p>
+                        </div>
+                      );
+                    }
 
                     if (allTimes.length === 0) {
                       return (
@@ -678,6 +690,8 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
                             ? 'Bloqueado por curso'
                             : blockedReason === 'private_event'
                             ? 'Evento privado'
+                            : blockedReason === 'studio_closed'
+                            ? 'Local cerrado — te recomendamos reservar otro día'
                             : blockedReason === 'fixed_class_conflict'
                             ? 'Bloqueado por clase fija'
                             : blockedReason === 'potters_overlap'

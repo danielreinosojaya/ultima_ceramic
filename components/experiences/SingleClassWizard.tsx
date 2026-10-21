@@ -149,7 +149,9 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
       .then(async (slots) => {
         if (cancelled) return;
         let bookable = (slots || []).filter(
-          (s) => s.canBook && !isEcuadorSlotInPast(s.date, s.time)
+          (s) =>
+            !isEcuadorSlotInPast(s.date, s.time) &&
+            (s.canBook || s.blockedReason === 'studio_closed')
         );
 
         const fallbackDays = enumerateFixedScheduleDays(technique, availability, scheduleOverrides, 90);
@@ -1062,6 +1064,22 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                       });
                     }
 
+                    const isStudioClosedDay =
+                      slotsForDate.length > 0 &&
+                      slotsForDate.every((s) => s.blockedReason === 'studio_closed');
+
+                    if (isStudioClosedDay) {
+                      return (
+                        <div className="text-center py-6 bg-amber-50 border border-amber-200 rounded-lg px-4">
+                          <p className="font-semibold text-amber-900">Local cerrado</p>
+                          <p className="text-amber-800 text-sm mt-1">
+                            Este día el local estará cerrado. Te recomendamos reservar en otros días con
+                            disponibilidad.
+                          </p>
+                        </div>
+                      );
+                    }
+
                     if (allTimes.length === 0) {
                       return (
                         <div className="text-center py-6 bg-gray-50 rounded-lg">
@@ -1181,7 +1199,9 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
             )}
             <div className="flex justify-between pb-4 border-b border-brand-border">
               <span className="text-brand-secondary">Personas</span>
-              <span className="font-semibold text-brand-text">{participants}</span>
+              <span className="font-semibold text-brand-text">
+                {participants} {participants === 1 ? 'persona' : 'personas'}
+              </span>
             </div>
             <p className="text-xs text-brand-secondary -mt-2">
               Las notificaciones llegan a quien reserva (siguiente paso: tus datos).

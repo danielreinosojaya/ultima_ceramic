@@ -70,6 +70,8 @@ import {
     isSlotBlockedByExperienceTypeOverride,
     sanitizeExperienceTypeOverrides,
 } from '../utils/experienceTypeRestrictions.js';
+import { getTechniqueDateBlock } from '../utils/techniqueDateBlocks.js';
+import { getStudioClosedDate } from '../utils/studioClosedDates.js';
 import {
     areClassPackageSlotsWithinValidity,
     getClassPackageValidityLabel,
@@ -941,6 +943,14 @@ const evaluatePublicExperienceSlot = (params: {
         return { ...base, available: 0, canBook: false, blockedReason: 'private_event' };
     }
 
+    if (getStudioClosedDate(dateStr)) {
+        return { ...base, available: 0, canBook: false, blockedReason: 'studio_closed' };
+    }
+
+    if (getTechniqueDateBlock(dateStr, requestedTechnique)) {
+        return { ...base, available: 0, canBook: false, blockedReason: 'technique_restriction' };
+    }
+
     if (hasCourseOverlap(dateStr, slotStartMinutes, slotEndMinutes, courseSessionsByDate)) {
         return { ...base, available: 0, canBook: false, blockedReason: 'course_conflict' };
     }
@@ -1031,6 +1041,23 @@ const computeSlotAvailability = async (
         };
     }
 
+    const studioClosed = getStudioClosedDate(requestedDate);
+    if (studioClosed) {
+        const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
+        return {
+            available: false,
+            normalizedTime,
+            blockedReason: 'studio_closed',
+            capacity: {
+                max: maxCapacity,
+                booked: maxCapacity,
+                available: 0,
+            },
+            bookingsCount: 0,
+            message: studioClosed.message,
+        };
+    }
+
     if (!isSpecialDayNoRules && requestedTechnique === 'painting' && requestedDayOfWeek === 1) {
         const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
         return {
@@ -1043,6 +1070,23 @@ const computeSlotAvailability = async (
             },
             bookingsCount: 0,
             message: 'Pintura no está disponible los lunes'
+        };
+    }
+
+    const techniqueDateBlock = getTechniqueDateBlock(requestedDate, requestedTechnique);
+    if (techniqueDateBlock) {
+        const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
+        return {
+            available: false,
+            normalizedTime,
+            blockedReason: 'technique_restriction',
+            capacity: {
+                max: maxCapacity,
+                booked: maxCapacity,
+                available: 0,
+            },
+            bookingsCount: 0,
+            message: techniqueDateBlock.message,
         };
     }
 
@@ -2261,6 +2305,13 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                 });
                         }
 
+                        // Día de cierre total: exponer slots bloqueados para que el calendario muestre el aviso
+                        if (getStudioClosedDate(dateStr) && timesToEvaluate.size === 0) {
+                            getBusinessStartTimesForDate(dateStr).forEach((time) => {
+                                timesToEvaluate.set(normalizeTime(time), undefined);
+                            });
+                        }
+
                         if (timesToEvaluate.size === 0) continue;
 
                         timesToEvaluate.forEach((instructorId, slotTime) => {
@@ -2378,13 +2429,19 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
 
                         if (candidateTimes.length === 0) continue;
 
+                        const dayStudioClosed = getStudioClosedDate(dateStr);
+
                         candidateTimes.forEach(slotTime => {
                             const normalizedTime = normalizeTime(slotTime);
                             const slotStartMinutes = timeToMinutes(normalizedTime);
                             const slotEndMinutes = slotStartMinutes + (2 * 60);
 
                             const courseBlocked = hasCourseOverlap(dateStr, slotStartMinutes, slotEndMinutes, courseSessionsByDate);
-                            let blockedReason: string | null = courseBlocked ? 'course_conflict' : null;
+                            let blockedReason: string | null = dayStudioClosed
+                                ? 'studio_closed'
+                                : courseBlocked
+                                ? 'course_conflict'
+                                : null;
                             if (!blockedReason && slotOverlapsPrivateEvent(dateStr, normalizedTime)) {
                                 blockedReason = 'private_event';
                             }
@@ -2402,6 +2459,11 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
 
                             if (pottersCount > 0) {
                                 pottersTotal = resolveCapacity(dateStr, 'potters_wheel', maxCapacityMap, scheduleOverrides);
+
+                                if (getTechniqueDateBlock(dateStr, 'potters_wheel')) {
+                                    pottersBlocked = true;
+                                    blockedReason = blockedReason || 'technique_restriction';
+                                }
 
                                 // Martes (2) y Miércoles (3): torno alfarero último inicio 17:00 (clase 17:00-19:00)
                                 // Excepción: fechas con último inicio extendido (ej. post-alquiler 18:30).
@@ -10099,6 +10161,18 @@ async function addBookingAction(
                 throw new Error(getBusinessHoursRejectionMessage(slot.date));
             }
 
+            const groupStudioClosed = getStudioClosedDate(slot.date);
+            if (groupStudioClosed && !adminOverride) {
+                throw new Error(groupStudioClosed.message);
+            }
+
+            if (pottersCount > 0) {
+                const pottersDateBlock = getTechniqueDateBlock(slot.date, 'potters_wheel');
+                if (pottersDateBlock) {
+                    throw new Error(pottersDateBlock.message);
+                }
+            }
+
             const fixedPottersTimes = getFixedSlotTimesForDate(slot.date, dayKey, availability, scheduleOverrides, 'potters_wheel');
             const fixedPottersMinutes = fixedPottersTimes.map(timeToMinutes);
             const fixedHandTimes = getFixedSlotTimesForDate(slot.date, dayKey, availability, scheduleOverrides, 'molding');
@@ -10254,7 +10328,7 @@ async function addBookingAction(
 
             const blockedReason = (slotAvailability as any)?.blockedReason;
             if (!slotAvailability.available) {
-                if (adminOverride && (blockedReason === 'technique_restriction' || blockedReason === 'private_event' || blockedReason === 'business_hours')) {
+                if (adminOverride && (blockedReason === 'technique_restriction' || blockedReason === 'private_event' || blockedReason === 'business_hours' || blockedReason === 'studio_closed')) {
                     console.log(`[addBookingAction SINGLE_CLASS] 🔓 Admin override: bypassing ${blockedReason} for ${requestedTechnique} on ${slot.date} at ${normalizedTime}`);
                 } else {
                 throw new Error(slotAvailability.message || `No hay cupos disponibles para ${requestedTechnique} en ${slot.date} a las ${normalizedTime}`);

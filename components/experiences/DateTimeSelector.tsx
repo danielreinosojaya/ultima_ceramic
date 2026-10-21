@@ -41,12 +41,13 @@ export const DateTimeSelector: React.FC<DateTimeSelectorProps> = ({
           startDate: new Date().toISOString().split('T')[0],
           daysAhead: 90
         });
-        
-        setAvailableSlots(slots);
+
+        const bookable = slots.filter((s) => s.canBook !== false);
+        setAvailableSlots(bookable);
         
         // Auto-seleccionar primera fecha disponible
-        if (slots.length > 0 && !selectedDate) {
-          setSelectedDate(slots[0].date);
+        if (bookable.length > 0 && !selectedDate) {
+          setSelectedDate(bookable[0].date);
         }
       } catch (err) {
         console.error('Error loading available slots:', err);

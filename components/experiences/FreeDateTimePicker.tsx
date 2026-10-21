@@ -8,6 +8,8 @@ import {
   isSlotBlockedByExperienceTypeOverride,
   sanitizeExperienceTypeOverrides,
 } from '../../utils/experienceTypeRestrictions';
+import { isTechniqueBlockedOnDate } from '../../utils/techniqueDateBlocks';
+import { getStudioClosedMessage, isStudioClosedOnDate } from '../../utils/studioClosedDates';
 import { isClassStartWithinBusinessHours, getBusinessStartTimesForDate, LAST_CLASS_START_BY_DATE } from '../../utils/businessHours';
 import { enumerateFixedScheduleDays } from '../../utils/fixedScheduleSlots';
 
@@ -191,8 +193,9 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     return slotOverlapsPrivateEvent(dateStr, time);
   }, []);
 
-  // Validación local: experienceTypeOverrides (lista blanca; allowedTimes vacío = sin restricción)
+  // Validación local: bloqueos por fecha + experienceTypeOverrides (lista blanca)
   const isSlotBlockedByTechRestrictionLocal = useCallback((dateStr: string, time: string): boolean => {
+    if (isTechniqueBlockedOnDate(dateStr, technique)) return true;
     if (scheduleOverrides?.[dateStr]?.disableRules) return false;
     return isSlotBlockedByExperienceTypeOverride(experienceTypeOverrides, dateStr, technique, time);
   }, [experienceTypeOverrides, technique, scheduleOverrides]);
@@ -270,6 +273,8 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
 
   const visibleHoursForSelectedDate = useMemo(() => {
     if (!selectedDate) return [] as string[];
+    if (isStudioClosedOnDate(selectedDate)) return [] as string[];
+    if (isTechniqueBlockedOnDate(selectedDate, technique)) return [] as string[];
     const candidateHours = getAvailableHours(selectedDate);
     const isSpecialDayNoRules = scheduleOverrides?.[selectedDate]?.disableRules === true;
 
@@ -463,9 +468,19 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   };
 
   const handleDayClick = (day: number) => {
-    if (isMonday(day) || isPastDate(day) || isAfterMaxDate(day) || !dateHasSelectableIndividualSlots(day)) return;
-    
     const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    // Día de cierre total: permitir clic para mostrar el aviso amable
+    if (isStudioClosedOnDate(dateStr)) {
+      onSelectDate(dateStr);
+      requestAnimationFrame(() => {
+        if (hourSectionRef.current) {
+          hourSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+      return;
+    }
+    if (isMonday(day) || isPastDate(day) || isAfterMaxDate(day) || !dateHasSelectableIndividualSlots(day)) return;
+
     onSelectDate(dateStr);
     // Llevar al selector de horas inmediatamente
     requestAnimationFrame(() => {
@@ -559,16 +574,20 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
             const isBeyondHold = isAfterMaxDate(day);
             const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const isSelected = selectedDate === dateStr;
-            const isDisabled = isMonday_ || isPast || isBeyondHold || !dateHasSelectableIndividualSlots(day);
+            const isClosed = isStudioClosedOnDate(dateStr);
+            const isDisabled = !isClosed && (isMonday_ || isPast || isBeyondHold || !dateHasSelectableIndividualSlots(day));
             
             return (
               <button
                 key={day}
                 onClick={() => handleDayClick(day)}
                 disabled={isDisabled}
+                title={isClosed ? getStudioClosedMessage(dateStr) : undefined}
                 className={`aspect-square rounded-xl font-semibold text-sm transition-all ${
                   isSelected
                     ? 'bg-gradient-to-br from-brand-primary to-brand-accent text-white shadow-lg scale-105'
+                    : isClosed
+                    ? 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
                     : isDisabled
                     ? 'bg-transparent text-gray-300 cursor-not-allowed'
                     : 'bg-gray-50 text-brand-text hover:bg-brand-primary/10 hover:scale-105 border border-transparent hover:border-brand-primary/20'
@@ -612,10 +631,10 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
           </div>
           
           {/* Mensaje informativo para grupos pequeños de torno */}
-          {technique === 'potters_wheel' && participants < 3 && (
+          {!isStudioClosedOnDate(selectedDate) && technique === 'potters_wheel' && participants < 3 && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
               <div className="flex items-start gap-3">
-                <span className="text-xl">�</span>
+                <span className="text-xl">ℹ️</span>
                 <div>
                   <p className="font-semibold text-amber-900 text-sm">
                     Te unirás a una clase existente
@@ -630,7 +649,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
           )}
 
           {/* Mensaje informativo para Modelado a Mano o Torno con 1 persona */}
-          {(technique === 'hand_modeling' || technique === 'potters_wheel') && participants === 1 && (
+          {!isStudioClosedOnDate(selectedDate) && (technique === 'hand_modeling' || technique === 'potters_wheel') && participants === 1 && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
               <div className="flex items-start gap-3">
                 <span className="text-xl">ℹ️</span>
@@ -649,13 +668,33 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
           
           {/* Mensaje si no hay horarios disponibles */}
           {visibleHoursForSelectedDate.length === 0 && (
-            <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 text-center">
-              <span className="text-3xl mb-2 block">📭</span>
-              <p className="font-semibold text-gray-700">No hay horarios disponibles este día</p>
-              <p className="text-gray-500 text-sm mt-1">
-                {(technique === 'hand_modeling' || technique === 'potters_wheel') && participants === 1
+            <div className={`rounded-xl p-6 text-center border ${
+              selectedDate && isStudioClosedOnDate(selectedDate)
+                ? 'bg-amber-50 border-amber-200'
+                : 'bg-gray-50 border-gray-200'
+            }`}>
+              <span className="text-3xl mb-2 block">
+                {selectedDate && isStudioClosedOnDate(selectedDate) ? '🏠' : '📭'}
+              </span>
+              <p className={`font-semibold ${
+                selectedDate && isStudioClosedOnDate(selectedDate) ? 'text-amber-900' : 'text-gray-700'
+              }`}>
+                {selectedDate && isStudioClosedOnDate(selectedDate)
+                  ? 'Local cerrado'
+                  : selectedDate && isTechniqueBlockedOnDate(selectedDate, technique)
+                  ? 'No disponible'
+                  : 'No hay horarios disponibles este día'}
+              </p>
+              <p className={`text-sm mt-1 ${
+                selectedDate && isStudioClosedOnDate(selectedDate) ? 'text-amber-800' : 'text-gray-500'
+              }`}>
+                {selectedDate && isStudioClosedOnDate(selectedDate)
+                  ? getStudioClosedMessage(selectedDate)
+                  : selectedDate && isTechniqueBlockedOnDate(selectedDate, technique)
+                  ? 'Por favor selecciona otro día.'
+                  : (technique === 'hand_modeling' || technique === 'potters_wheel') && participants === 1
                   ? `No hay horarios disponibles para este día. Prueba otro día o revisa si aparece un slot abierto por un grupo de 3+ en ${technique === 'hand_modeling' ? 'modelado' : 'torno'}.`
-                  : (technique === 'potters_wheel' && participants < 3 
+                  : (technique === 'potters_wheel' && participants < 3
                     ? 'No hay clases de torno programadas para este día. Prueba otro día o agrega más personas a tu grupo (3+ para clase privada).'
                     : 'Por favor selecciona otro día.')}
               </p>
@@ -702,7 +741,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
                     : isBlockedBySpecialEvent
                     ? 'Bloqueado por evento'
                     : isBlockedByTechniqueRestriction
-                    ? 'Bloqueado - Restricción de técnica'
+                    ? 'No disponible'
                     : (isUnavailableByCapacity ? 'Sin cupos disponibles' : 'Click para seleccionar')}
                   className={`relative p-3.5 rounded-xl border-2 font-bold text-sm transition-all ${
                     isSelected
