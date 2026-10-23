@@ -8494,9 +8494,33 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                 if (currentPaintingStatus === 'completed') {
                     return res.status(400).json({ error: 'Painting service is already completed' });
                 }
-                
-                if (currentPaintingStatus !== 'paid' && currentPaintingStatus !== 'deferred') {
-                    return res.status(400).json({ error: 'Invalid painting service status. Please contact support.' });
+
+                // Misma regla que checkPaintingPaymentStatus: el cliente que ya vio cupos
+                // puede confirmar. pending_payment solo llega aquí con la pieza lista
+                // (el bloque de arriba corta el cobro pendiente sin ready_at) y paga el día de la cita.
+                // scheduled sin fecha es una cita a medias: se completa en lugar de rechazarla.
+                const pieceIsReady =
+                    Boolean((delivery as any).ready_at ?? (delivery as any).readyAt);
+                const canSchedulePayOnDay =
+                    currentPaintingStatus === 'pending_payment' && pieceIsReady;
+                const canFinishOpenSchedule =
+                    currentPaintingStatus === 'scheduled' && !existingBookingDate;
+
+                if (
+                    currentPaintingStatus !== 'paid' &&
+                    currentPaintingStatus !== 'deferred' &&
+                    !canSchedulePayOnDay &&
+                    !canFinishOpenSchedule
+                ) {
+                    console.warn('[schedulePaintingBooking] estado no agendable', {
+                        deliveryId,
+                        currentPaintingStatus,
+                        pieceIsReady,
+                        existingBookingDate
+                    });
+                    return res.status(400).json({
+                        error: 'No se puede agendar la pintura con el estado actual de esta entrega. Escríbenos por WhatsApp y lo revisamos.'
+                    });
                 }
 
                 const readyAtForHold =
