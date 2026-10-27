@@ -369,6 +369,7 @@ import { DAY_NAMES, DEFAULT_PRODUCTS, DEFAULT_POLICIES_TEXT } from '../constants
 import { getEcuadorToday } from '../utils/formatters';
 import { slotOverlapsPrivateEvent } from '../utils/privateEventBlocks';
 import { getMaxClassStartMinutesForDate, getBusinessStartTimesForDate, LAST_CLASS_START_BY_DATE } from '../utils/businessHours';
+import { isStudioClosedOnDate } from '../utils/studioClosedDates';
 
 // --- API Helpers ---
 
@@ -3640,6 +3641,8 @@ export const generateTimeSlots = (
         const date = new Date(startYear, startMonth, startDay + d);
         const dayOfWeek = date.getDay();
         const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+        if (isStudioClosedOnDate(dateStr)) continue;
 
         const override = scheduleOverrides?.[dateStr];
 

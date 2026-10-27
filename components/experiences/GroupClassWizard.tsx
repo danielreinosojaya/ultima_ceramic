@@ -3,6 +3,7 @@ import type { GroupClassConfig, TimeSlot, ParticipantTechniqueAssignment, GroupT
 import { GROUP_CLASS_CAPACITY } from '../../types';
 import * as dataService from '../../services/dataService';
 import { useNavigationSubStep } from '../../hooks/useAppNavigationHistory';
+import { getStudioClosedMessage, isStudioClosedOnDate } from '../../utils/studioClosedDates';
 
 export interface GroupClassWizardProps {
   config: GroupClassConfig;
@@ -95,7 +96,9 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
 
         setAvailableSlots(slots);
 
-        const uniqueDates = [...new Set(slots.map(s => s.date))].sort();
+        const uniqueDates = [...new Set(slots.map(s => s.date))]
+          .filter((date) => !isStudioClosedOnDate(date))
+          .sort();
         if (uniqueDates.length > 0) {
           if (!selectedDate || !uniqueDates.includes(selectedDate)) {
             setSelectedDate(uniqueDates[0]);
@@ -213,6 +216,10 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
         setError('Por favor selecciona un horario');
         return;
       }
+      if (isStudioClosedOnDate(selectedSlot.date)) {
+        setError(getStudioClosedMessage(selectedSlot.date));
+        return;
+      }
       setError('');
       setStep(5);
     } else if (step === 5) {
@@ -232,6 +239,10 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
   const handleConfirm = async () => {
     if (!selectedSlot) {
       setError('Por favor selecciona un horario');
+      return;
+    }
+    if (isStudioClosedOnDate(selectedSlot.date)) {
+      setError(getStudioClosedMessage(selectedSlot.date));
       return;
     }
     setLoading(true);
@@ -512,7 +523,13 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
             <div className="space-y-6">
               {/* Calendar Month Navigation */}
               {(() => {
-                const uniqueDates = [...new Set(availableSlots.map(s => s.date))].sort();
+                const uniqueDates = [...new Set(availableSlots.map(s => s.date))]
+                  .filter((date) => {
+                    if (isStudioClosedOnDate(date)) return false;
+                    const daySlots = availableSlots.filter((s) => s.date === date);
+                    return !(daySlots.length > 0 && daySlots.every((s) => s.blockedReason === 'studio_closed'));
+                  })
+                  .sort();
                 const allMonths: { key: string; dates: string[]; date: Date }[] = [];
                 
                 // Helper para parsear fechas en zona horaria local, no UTC
@@ -653,7 +670,7 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
                     // Obtener TODOS los slots para la fecha (disponibles e indisponibles)
                     const slotsForDate = availableSlots.filter(s => s.date === selectedDate);
                     const allTimes = [...new Set(slotsForDate.map(s => s.time))].sort();
-                    const isStudioClosedDay = slotsForDate.length > 0 && slotsForDate.every(s => s.blockedReason === 'studio_closed');
+                    const isStudioClosedDay = isStudioClosedOnDate(selectedDate) || (slotsForDate.length > 0 && slotsForDate.every(s => s.blockedReason === 'studio_closed'));
 
                     if (isStudioClosedDay) {
                       return (

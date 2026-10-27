@@ -6,6 +6,7 @@ import { SocialBadge } from '../SocialBadge';
 import {
   enumerateFixedScheduleDays,
 } from '../../utils/fixedScheduleSlots';
+import { getStudioClosedMessage, isStudioClosedOnDate } from '../../utils/studioClosedDates';
 import {
   CATALOG_HOME_ITEMS,
   CATALOG_INTRO,
@@ -82,6 +83,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
   const [availability, setAvailability] = useState<Record<string, any> | null>(null);
   const [scheduleOverrides, setScheduleOverrides] = useState<Record<string, any>>({});
   const [scheduleSlots, setScheduleSlots] = useState<dataService.AvailableSlotResult[]>([]);
+  const [closedScheduleDates, setClosedScheduleDates] = useState<string[]>([]);
   const [loadingScheduleSlots, setLoadingScheduleSlots] = useState(false);
 
   const technique: GroupTechnique = sku?.capacityTechnique || 'hand_modeling';
@@ -128,7 +130,9 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
 
   useEffect(() => {
     if (availableSlots.length > 0 && !selectedDate && !restrictToFixedSchedule) {
-      const uniqueDates = [...new Set(availableSlots.map((s) => s.date))].sort();
+      const uniqueDates = [...new Set(availableSlots.map((s) => s.date))]
+        .filter((date) => !isStudioClosedOnDate(date))
+        .sort();
       if (uniqueDates.length > 0) setSelectedDate(uniqueDates[0]);
     }
   }, [availableSlots, selectedDate, restrictToFixedSchedule]);
@@ -148,11 +152,15 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
       })
       .then(async (slots) => {
         if (cancelled) return;
-        let bookable = (slots || []).filter(
-          (s) =>
-            !isEcuadorSlotInPast(s.date, s.time) &&
-            (s.canBook || s.blockedReason === 'studio_closed')
-        );
+        const closedDates = new Set<string>();
+        let bookable = (slots || []).filter((s) => {
+          if (isEcuadorSlotInPast(s.date, s.time)) return false;
+          if (s.blockedReason === 'studio_closed' || isStudioClosedOnDate(s.date)) {
+            closedDates.add(s.date);
+            return false;
+          }
+          return Boolean(s.canBook);
+        });
 
         const fallbackDays = enumerateFixedScheduleDays(technique, availability, scheduleOverrides, 90);
         if (bookable.length === 0 && fallbackDays.length > 0) {
@@ -205,6 +213,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
         }
 
         if (cancelled) return;
+        setClosedScheduleDates([...closedDates].sort());
         setScheduleSlots(bookable);
 
         const uniqueDates = [...new Set(bookable.map((s) => s.date))].sort();
@@ -220,6 +229,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
         console.error('[SingleClassWizard] Error loading individual slots:', err);
         if (cancelled) return;
         const fallbackDays = enumerateFixedScheduleDays(technique, availability, scheduleOverrides, 90);
+        setClosedScheduleDates([]);
         setScheduleSlots(
           fallbackDays.flatMap((day) =>
             day.times.map((time) => ({
@@ -433,6 +443,10 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
       setError('Revisa actividad y horario');
       return;
     }
+    if (isStudioClosedOnDate(selectedSlot.date)) {
+      setError(getStudioClosedMessage(selectedSlot.date));
+      return;
+    }
     onConfirm(pricing, selectedSlot, technique, {
       serviceKind: sku.id,
       productName: sku.label,
@@ -476,7 +490,17 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
 
   const upcomingBookableDates = useMemo(() => bookableDates.slice(0, 8), [bookableDates]);
 
+  const upcomingScheduleDates = useMemo(
+    () => [...new Set([...bookableDates, ...closedScheduleDates])].sort().slice(0, 8),
+    [bookableDates, closedScheduleDates]
+  );
+
   const selectTimeSlot = (date: string, time: string) => {
+    if (isStudioClosedOnDate(date)) {
+      setSelectedSlot(null);
+      setError(getStudioClosedMessage(date));
+      return;
+    }
     setSelectedDate(date);
     setSelectedSlot({ date, time, instructorId: 0 });
     setError('');
@@ -721,9 +745,30 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                   <div>
                     <h4 className="text-sm font-bold text-brand-text mb-3">Próximos horarios</h4>
                     <div className="space-y-3">
-                      {upcomingBookableDates.map((date) => {
-                        const slots = bookableByDate[date] || [];
+                      {upcomingScheduleDates.map((date) => {
+                        const slots = (bookableByDate[date] || []).filter((slot) => slot.canBook !== false);
+                        const isClosedDay = slots.length === 0 && (closedScheduleDates.includes(date) || isStudioClosedOnDate(date));
                         const isDateSelected = selectedDate === date;
+                        if (isClosedDay) {
+                          return (
+                            <div
+                              key={date}
+                              className="rounded-2xl border border-amber-200 bg-amber-50 p-3 sm:p-4"
+                            >
+                              <div className="text-sm font-semibold text-amber-900 capitalize mb-1">
+                                {parseLocalDateStr(date).toLocaleDateString('es-ES', {
+                                  weekday: 'long',
+                                  day: 'numeric',
+                                  month: 'long',
+                                })}
+                              </div>
+                              <p className="text-amber-800 text-xs leading-relaxed">
+                                {getStudioClosedMessage(date)}
+                              </p>
+                            </div>
+                          );
+                        }
+                        if (slots.length === 0) return null;
                         return (
                           <div
                             key={date}
@@ -893,7 +938,9 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
           ) : availableSlots.length > 0 ? (
             <div className="space-y-6">
               {(() => {
-                const uniqueDates = [...new Set(availableSlots.map((s) => s.date))].sort();
+                const uniqueDates = [...new Set(availableSlots.map((s) => s.date))]
+                  .filter((date) => !isStudioClosedOnDate(date))
+                  .sort();
                 const allMonths: { key: string; dates: string[]; date: Date }[] = [];
                 const groupedByMonth: Record<string, string[]> = {};
                 uniqueDates.forEach((date) => {
@@ -1065,8 +1112,9 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                     }
 
                     const isStudioClosedDay =
-                      slotsForDate.length > 0 &&
-                      slotsForDate.every((s) => s.blockedReason === 'studio_closed');
+                      isStudioClosedOnDate(selectedDate) ||
+                      (slotsForDate.length > 0 &&
+                        slotsForDate.every((s) => s.blockedReason === 'studio_closed'));
 
                     if (isStudioClosedDay) {
                       return (
