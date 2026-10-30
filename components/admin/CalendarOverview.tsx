@@ -11,6 +11,8 @@ import { DocumentDownloadIcon } from '../icons/DocumentDownloadIcon';
 import { CalendarClearIcon } from '../icons/CalendarClearIcon';
 import { AcceptPaymentModal } from './AcceptPaymentModal';
 import { isExclusiveSpaceRentalBooking } from '../../utils/spaceRental';
+import type { PrivateCustomEvent } from '../../utils/privateCustomEvent';
+import { PrivateCustomEventModal } from './PrivateCustomEventModal';
 
 type AttendeeInfo = { userInfo: UserInfo; bookingId: string; isPaid: boolean; bookingCode?: string; paymentDetails?: PaymentDetails[] };
 type SlotInfo = { attendees: AttendeeInfo[]; instructorId: number; };
@@ -33,6 +35,42 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isClearScheduleModalOpen, setIsClearScheduleModalOpen] = useState(false);
   const [corporateMonthFilter, setCorporateMonthFilter] = useState(false);
+  const [privateEvents, setPrivateEvents] = useState<PrivateCustomEvent[]>([]);
+  const [privateEventModalOpen, setPrivateEventModalOpen] = useState(false);
+  const [editingPrivateEvent, setEditingPrivateEvent] = useState<PrivateCustomEvent | null>(null);
+  const [privateEventCreateDate, setPrivateEventCreateDate] = useState<string | undefined>(undefined);
+
+  const monthRange = useMemo(() => {
+    const y = currentDate.getFullYear();
+    const m = currentDate.getMonth();
+    const from = `${y}-${String(m + 1).padStart(2, '0')}-01`;
+    const lastDay = new Date(y, m + 1, 0).getDate();
+    const to = `${y}-${String(m + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    return { from, to };
+  }, [currentDate]);
+
+  const reloadPrivateEvents = useCallback(async () => {
+    try {
+      const rows = await dataService.listPrivateCustomEvents({
+        from: monthRange.from,
+        to: monthRange.to,
+      });
+      setPrivateEvents(rows.filter((e) => e.status !== 'cancelled'));
+    } catch (error) {
+      console.error('Error loading private custom events for month:', error);
+      setPrivateEvents([]);
+    }
+  }, [monthRange.from, monthRange.to]);
+
+  useEffect(() => {
+    void reloadPrivateEvents();
+  }, [reloadPrivateEvents]);
+
+  const privateEventDates = useMemo(() => {
+    const set = new Set<string>();
+    for (const event of privateEvents) set.add(event.eventDate);
+    return set;
+  }, [privateEvents]);
 
   const { bookingsByDate, unpaidDates } = useMemo(() => {
     console.log('CalendarOverview processing bookings:', bookings?.length || 0);
@@ -144,6 +182,24 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
           onConfirm={handleClearSchedule}
         />
       )}
+      <PrivateCustomEventModal
+        isOpen={privateEventModalOpen}
+        onClose={() => {
+          setPrivateEventModalOpen(false);
+          setEditingPrivateEvent(null);
+        }}
+        initialDate={privateEventCreateDate}
+        event={editingPrivateEvent}
+        onSaved={async (saved, meta) => {
+          await reloadPrivateEvents();
+          if (meta?.keepOpen) {
+            setEditingPrivateEvent(saved);
+            return;
+          }
+          setPrivateEventModalOpen(false);
+          setEditingPrivateEvent(null);
+        }}
+      />
       <div className="flex justify-between items-center flex-wrap gap-4 mb-6">
         <div>
             <h2 className="text-2xl font-serif text-brand-text mb-2">Calendario de Reservas</h2>
@@ -172,6 +228,17 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
             >
               <DocumentDownloadIcon className="w-5 h-5" />
               Descargar Reporte
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingPrivateEvent(null);
+                setPrivateEventCreateDate(formatDateToYYYYMMDD(getEcuadorToday()));
+                setPrivateEventModalOpen(true);
+              }}
+              className="flex items-center justify-center gap-2 bg-teal-700 text-white font-bold py-2 px-4 rounded-lg hover:bg-teal-800 transition-colors"
+            >
+              Evento personalizado
             </button>
             <button 
               onClick={() => setIsManualBookingModalOpen(true)}
@@ -219,6 +286,8 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
                 return b ? isExclusiveSpaceRentalBooking(b) : false;
               })
             );
+            const isPrivateEventDay = privateEventDates.has(dateStr);
+            const hasAnyActivity = hasBookings || isPrivateEventDay;
             return (
               <div 
                 key={day}
@@ -227,22 +296,29 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
                 <button
                   onClick={() => onDateSelect(date)}
                   className={`w-full aspect-square border rounded-md flex flex-col items-center justify-center text-sm font-semibold transition-all duration-200 p-1 group
-                    ${hasBookings
-                      ? isSpaceRentalDay
+                    ${hasAnyActivity
+                      ? isPrivateEventDay && !hasBookings
+                        ? 'bg-teal-100 hover:bg-teal-200 border-teal-300 cursor-pointer'
+                        : isSpaceRentalDay
                         ? 'bg-rose-100 hover:bg-rose-200 border-rose-300 cursor-pointer'
                         : isCorporateDay
                         ? 'bg-violet-100 hover:bg-violet-200 border-violet-300 cursor-pointer'
                         : isGroupClassDay
                         ? 'bg-blue-100 hover:bg-blue-200 cursor-pointer'
+                        : isPrivateEventDay
+                        ? 'bg-teal-50 hover:bg-teal-100 border-teal-200 cursor-pointer'
                         : 'bg-brand-primary/20 hover:bg-brand-primary/30 cursor-pointer'
                       : 'bg-white'}
                   `}
                 >
                   <span className="transition-transform duration-200 group-hover:scale-110">{day}</span>
-                  {isSpaceRentalDay && (
+                  {isPrivateEventDay && (
+                    <span className="text-[9px] leading-none mt-0.5 font-bold text-teal-800 uppercase tracking-wide">Evento</span>
+                  )}
+                  {isSpaceRentalDay && !isPrivateEventDay && (
                     <span className="text-[9px] leading-none mt-0.5 font-bold text-rose-700 uppercase tracking-wide">Privado</span>
                   )}
-                  {hasBookings && !isSpaceRentalDay && <div className={`w-2 h-2 rounded-full mt-1 ${hasUnpaidBookings ? 'border-2 border-brand-accent bg-white' : 'bg-brand-accent'}`}></div>}
+                  {hasBookings && !isSpaceRentalDay && !isPrivateEventDay && <div className={`w-2 h-2 rounded-full mt-1 ${hasUnpaidBookings ? 'border-2 border-brand-accent bg-white' : 'bg-brand-accent'}`}></div>}
                 </button>
               </div>
             );

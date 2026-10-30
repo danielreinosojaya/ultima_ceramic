@@ -52,6 +52,9 @@ import { MagnifyingGlassIcon } from '../icons/MagnifyingGlassIcon';
 import { CustomerSearchResultsPanel } from './CustomerSearchResultsPanel';
 import { UserGroupIcon } from '../icons/UserGroupIcon';
 import { useAdminData } from '../../context/AdminDataContext';
+import type { PrivateCustomEvent } from '../../utils/privateCustomEvent';
+import { PRIVATE_EVENT_PAYMENT_LABEL } from '../../utils/privateCustomEvent';
+import { PrivateCustomEventModal } from './PrivateCustomEventModal';
 
 const colorMap = PALETTE_COLORS.reduce((acc, color) => {
     acc[color.name] = { bg: color.bg.replace('bg-', ''), text: color.text.replace('text-', '') };
@@ -264,6 +267,10 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     const [rescheduleInfo, setRescheduleInfo] = useState<RescheduleSlotInfo | null>(null);
     const [isInvoiceReminderOpen, setIsInvoiceReminderOpen] = useState(false);
     const [bookingIdForReminder, setBookingIdForReminder] = useState<string | null>(null);
+    const [privateEvents, setPrivateEvents] = useState<PrivateCustomEvent[]>([]);
+    const [privateEventModalOpen, setPrivateEventModalOpen] = useState(false);
+    const [editingPrivateEvent, setEditingPrivateEvent] = useState<PrivateCustomEvent | null>(null);
+    const [privateEventCreateDate, setPrivateEventCreateDate] = useState<string | undefined>(undefined);
 
      useEffect(() => {
         const timer = setInterval(() => setNow(new Date()), 60000);
@@ -794,6 +801,88 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         return map;
     }, [weekDates, appData.bookings, appData.instructors]);
 
+    const weekRangeKey = useMemo(() => {
+        if (!weekDates.length) return '';
+        return `${formatDateToYYYYMMDD(weekDates[0])}|${formatDateToYYYYMMDD(weekDates[6])}`;
+    }, [weekDates]);
+
+    const reloadPrivateEvents = useCallback(async () => {
+        if (!weekDates.length) return;
+        const from = formatDateToYYYYMMDD(weekDates[0]);
+        const to = formatDateToYYYYMMDD(weekDates[6]);
+        try {
+            const rows = await dataService.listPrivateCustomEvents({ from, to });
+            setPrivateEvents(rows.filter((e) => e.status !== 'cancelled'));
+        } catch (error) {
+            console.error('Error loading private custom events:', error);
+            setPrivateEvents([]);
+        }
+    }, [weekDates]);
+
+    useEffect(() => {
+        void reloadPrivateEvents();
+    }, [weekRangeKey, reloadPrivateEvents]);
+
+    const privateEventsByDate = useMemo(() => {
+        const map: Record<string, PrivateCustomEvent[]> = {};
+        for (const event of privateEvents) {
+            if (!map[event.eventDate]) map[event.eventDate] = [];
+            map[event.eventDate].push(event);
+        }
+        for (const dateStr of Object.keys(map)) {
+            map[dateStr].sort((a, b) => a.startTime.localeCompare(b.startTime));
+        }
+        return map;
+    }, [privateEvents]);
+
+    const openCreatePrivateEvent = (dateStr?: string) => {
+        setEditingPrivateEvent(null);
+        setPrivateEventCreateDate(dateStr || formatDateToYYYYMMDD(weekDates[0]));
+        setPrivateEventModalOpen(true);
+    };
+
+    const openEditPrivateEvent = (event: PrivateCustomEvent) => {
+        setEditingPrivateEvent(event);
+        setPrivateEventCreateDate(undefined);
+        setPrivateEventModalOpen(true);
+    };
+
+    const renderPrivateEventCard = (event: PrivateCustomEvent) => {
+        const needsPayment = event.paymentStatus !== 'paid';
+        const paymentLabel = PRIVATE_EVENT_PAYMENT_LABEL[event.paymentStatus];
+        return (
+            <button
+                key={`pe-${event.id}`}
+                type="button"
+                onClick={() => openEditPrivateEvent(event)}
+                aria-label={`${event.startTime} Evento personalizado ${event.title}`}
+                className="w-full text-left p-2 rounded-md shadow-sm border-l-4 bg-teal-50 border-teal-500 hover:shadow-md transition-shadow relative overflow-hidden"
+            >
+                <div className="relative z-10">
+                    <div className="font-bold text-xs text-teal-900 flex items-center gap-1 flex-wrap">
+                        {event.startTime}–{event.endTime}
+                        <span className="text-[10px] font-bold uppercase bg-teal-200 text-teal-900 px-1 rounded">
+                            Evento personalizado
+                        </span>
+                    </div>
+                    <div className="text-xs font-semibold mt-0.5 truncate text-gray-900">
+                        {event.title}
+                    </div>
+                    <div className="text-[11px] mt-0.5 truncate text-gray-600">
+                        {event.contactName || 'Sin contacto'}
+                        {event.participants > 0 ? ` · ${event.participants} pers.` : ''}
+                    </div>
+                    {needsPayment && (
+                        <div className="text-[11px] font-bold mt-0.5 text-amber-800">
+                            {paymentLabel}
+                            {event.balanceDue > 0 ? ` · falta $${event.balanceDue.toFixed(2)}` : ''}
+                        </div>
+                    )}
+                </div>
+            </button>
+        );
+    };
+
     const renderDayBookingCard = (dateStr: string, row: DayBookingRow) => {
         const { booking, time, instructorId, slot } = row;
         const instructor = appData.instructors.find(i => i.id === instructorId);
@@ -953,15 +1042,33 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 onNavigate={handleNavigateFromSearch}
             />
         )}
+        <PrivateCustomEventModal
+            isOpen={privateEventModalOpen}
+            onClose={() => {
+                setPrivateEventModalOpen(false);
+                setEditingPrivateEvent(null);
+            }}
+            initialDate={privateEventCreateDate}
+            event={editingPrivateEvent}
+            onSaved={async (saved, meta) => {
+                await reloadPrivateEvents();
+                if (meta?.keepOpen) {
+                    setEditingPrivateEvent(saved);
+                    return;
+                }
+                setPrivateEventModalOpen(false);
+                setEditingPrivateEvent(null);
+            }}
+        />
 
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex justify-between items-center mb-6 flex-wrap gap-3">
             <div>
                  <button onClick={onBackToMonth} className="text-brand-secondary hover:text-brand-accent mb-2 transition-colors font-semibold">
                     &larr; Volver al Mes
                 </button>
                 <h2 className="text-2xl font-serif text-brand-text">Vista Semanal</h2>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 flex-wrap">
                  <form onSubmit={handleSearch} className="relative">
                     <input 
                         type="text"
@@ -974,6 +1081,13 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                         <MagnifyingGlassIcon className="w-5 h-5" />
                     </button>
                 </form>
+                 <button
+                    type="button"
+                    onClick={() => openCreatePrivateEvent()}
+                    className="flex items-center justify-center gap-2 bg-teal-700 text-white font-bold py-2 px-4 rounded-lg hover:bg-teal-800 transition-colors text-sm"
+                >
+                    Evento personalizado
+                </button>
                  <button 
                     onClick={handleDownloadPdf}
                     className="flex items-center justify-center gap-2 bg-white border border-brand-secondary text-brand-secondary font-bold py-2 px-4 rounded-lg hover:bg-brand-secondary hover:text-white transition-colors text-sm"
@@ -1057,7 +1171,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                             {weekDates.map(date => {
                                 const isToday = formatDateToYYYYMMDD(date) === todayStr;
                                 const dateStr = formatDateToYYYYMMDD(date);
-                                const count = (bookingsByDate[dateStr] || []).length;
+                                const count = (bookingsByDate[dateStr] || []).length + (privateEventsByDate[dateStr] || []).length;
                                 return (
                                 <th key={date.toISOString()} scope="col" className={`px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider w-1/7 transition-colors ${isToday ? 'bg-brand-primary/10' : ''}`}>
                                     {date.toLocaleDateString(language, { weekday: 'short' })}
@@ -1075,11 +1189,13 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                                     const dateStr = formatDateToYYYYMMDD(date);
                                     const isToday = dateStr === todayStr;
                                     const dayBookings = bookingsByDate[dateStr] || [];
+                                    const dayPrivateEvents = privateEventsByDate[dateStr] || [];
                                     return (
                                         <td key={dateStr} className={`px-2 py-2 align-top w-1/7 min-h-[100px] relative transition-colors ${isToday ? 'bg-brand-primary/5' : ''}`}>
                                             <div className="space-y-2">
                                                 {dayBookings.map(row => renderDayBookingCard(dateStr, row))}
-                                                {dayBookings.length === 0 && (
+                                                {dayPrivateEvents.map((event) => renderPrivateEventCard(event))}
+                                                {dayBookings.length === 0 && dayPrivateEvents.length === 0 && (
                                                     <div className="text-[11px] text-gray-400 text-center py-4">Sin reservas</div>
                                                 )}
                                             </div>
@@ -1121,14 +1237,20 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                     const selectedDate = weekDates[selectedDayIndex];
                     const dateStr = formatDateToYYYYMMDD(selectedDate);
                     const dayBookings = bookingsByDate[dateStr] || [];
-                    if (dayBookings.length === 0) {
+                    const dayPrivateEvents = privateEventsByDate[dateStr] || [];
+                    if (dayBookings.length === 0 && dayPrivateEvents.length === 0) {
                         return (
                             <div className="text-center py-10 text-brand-secondary">
                                 Sin reservas este día.
                             </div>
                         );
                     }
-                    return dayBookings.map(row => renderDayBookingCard(dateStr, row));
+                    return (
+                        <>
+                            {dayBookings.map(row => renderDayBookingCard(dateStr, row))}
+                            {dayPrivateEvents.map((event) => renderPrivateEventCard(event))}
+                        </>
+                    );
                 })()}
             </div>
         </div>
@@ -1178,6 +1300,13 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                         aria-hidden
                     />
                     <span>Corporativo</span>
+                </li>
+                <li className="inline-flex items-center gap-1.5">
+                    <span
+                        className="w-3.5 h-3.5 rounded-sm bg-teal-50 border-l-[3px] border-teal-500 shrink-0"
+                        aria-hidden
+                    />
+                    <span>Evento personalizado</span>
                 </li>
             </ul>
         </footer>

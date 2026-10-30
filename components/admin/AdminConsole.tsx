@@ -17,7 +17,7 @@ import { SettingsManager } from './SettingsManager';
 import { PiecesManager } from './PiecesManager';
 import type { AdminTab, Notification, Product, Booking, Customer, GroupInquiry, Instructor, ScheduleOverrides, DayKey, AvailableSlot, ClassCapacity, CapacityMessageSettings, Announcement, AppData, BankDetails, InvoiceRequest, NavigationState } from '../../types';
 
-type ExtendedAdminTab = AdminTab | 'giftcards' | 'expired-bookings' | 'pieces' | 'courses' | 'valentine' | 'mezzanine';
+type ExtendedAdminTab = AdminTab | 'giftcards' | 'expired-bookings' | 'pieces' | 'courses' | 'valentine' | 'mezzanine' | 'private-events';
 import { ScheduleSettingsManager } from './ScheduleSettingsManager';
 import { CalendarEditIcon } from '../icons/CalendarEditIcon';
 import { InquiryManager } from './InquiryManager';
@@ -37,6 +37,7 @@ import { AdminCourseManagement } from './AdminCourseManagement';
 import { ValentineAdminPanel } from './ValentineAdminPanel';
 import { CorporateEventsPanel } from './CorporateEventsPanel';
 import { MezzanineRentalsPanel } from './MezzanineRentalsPanel';
+import { PrivateCustomEventsPanel } from './PrivateCustomEventsPanel';
 
 interface AdminData {
   products: Product[];
@@ -185,6 +186,8 @@ export const AdminConsole: React.FC = () => {
         return <ProductManager products={adminData.products} onDataChange={handleSync} />;
       case 'mezzanine':
         return <MezzanineRentalsPanel />;
+      case 'private-events':
+        return <PrivateCustomEventsPanel />;
       case 'calendar':
         if (calendarView === 'month') {
           return <CalendarOverview bookings={adminData.bookings} onDateSelect={handleDateSelect} onDataChange={handleSync} products={adminData.products} />;
@@ -329,6 +332,16 @@ export const AdminConsole: React.FC = () => {
                 }
               >
                 Mezzanine
+              </TabButton>
+              <TabButton
+                tab="private-events"
+                icon={
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
+                    <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3M4 11h16M5 5h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1z" />
+                  </svg>
+                }
+              >
+                Eventos pers.
               </TabButton>
               <TabButton tab="schedule-settings" icon={<CalendarEditIcon className="w-4 h-4" />}>Configuración de Horarios</TabButton>
               <TabButton tab="inquiries" icon={<ChatBubbleLeftRightIcon className="w-4 h-4" />}>Consultas</TabButton>

@@ -1,4 +1,8 @@
 import type { MezzanineRental, MezzanineRentalInput } from '../utils/mezzanineRental';
+import type {
+    PrivateCustomEvent,
+    PrivateCustomEventInput,
+} from '../utils/privateCustomEvent';
 
 export const addGiftcardRequest = async (request: Omit<GiftcardRequest, 'id' | 'status' | 'createdAt'>): Promise<{ success: boolean; id?: string; error?: string }> => {
     try {
@@ -3939,6 +3943,90 @@ export const cancelMezzanineRental = async (
     } catch (error) {
         console.error('Error cancelling mezzanine rental:', error);
         return { success: false, error: 'No se pudo cancelar la reserva del mezzanine.' };
+    }
+};
+
+async function readPrivateEventResponse(
+    response: Response
+): Promise<{ success: boolean; data?: PrivateCustomEvent; error?: string }> {
+    const result = await response.json().catch(() => null);
+    if (!response.ok || !result?.success) {
+        return {
+            success: false,
+            error: result?.error || 'No se pudo guardar el evento personalizado.',
+        };
+    }
+    return { success: true, data: result.data };
+}
+
+export const listPrivateCustomEvents = async (opts?: {
+    from?: string;
+    to?: string;
+}): Promise<PrivateCustomEvent[]> => {
+    const params = new URLSearchParams({ action: 'list' });
+    if (opts?.from) params.set('from', opts.from);
+    if (opts?.to) params.set('to', opts.to);
+    const response = await fetch(`/api/private-events?${params.toString()}`, {
+        signal: AbortSignal.timeout(20000),
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok || !result?.success || !Array.isArray(result.data)) {
+        throw new Error(result?.error || 'No se pudo cargar los eventos personalizados.');
+    }
+    return result.data as PrivateCustomEvent[];
+};
+
+export const savePrivateCustomEvent = async (
+    input: PrivateCustomEventInput & { id?: string }
+): Promise<{ success: boolean; data?: PrivateCustomEvent; error?: string }> => {
+    try {
+        const response = await fetch('/api/private-events?action=save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(input),
+            signal: AbortSignal.timeout(20000),
+        });
+        return await readPrivateEventResponse(response);
+    } catch (error) {
+        console.error('Error saving private custom event:', error);
+        return { success: false, error: 'No se pudo guardar el evento personalizado.' };
+    }
+};
+
+export const addPrivateCustomEventPayment = async (input: {
+    id: string;
+    amount: number | string;
+    method?: string;
+    note?: string;
+}): Promise<{ success: boolean; data?: PrivateCustomEvent; error?: string }> => {
+    try {
+        const response = await fetch('/api/private-events?action=add-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(input),
+            signal: AbortSignal.timeout(20000),
+        });
+        return await readPrivateEventResponse(response);
+    } catch (error) {
+        console.error('Error adding private custom event payment:', error);
+        return { success: false, error: 'No se pudo registrar el abono.' };
+    }
+};
+
+export const cancelPrivateCustomEvent = async (
+    id: string
+): Promise<{ success: boolean; data?: PrivateCustomEvent; error?: string }> => {
+    try {
+        const response = await fetch('/api/private-events?action=cancel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id }),
+            signal: AbortSignal.timeout(20000),
+        });
+        return await readPrivateEventResponse(response);
+    } catch (error) {
+        console.error('Error cancelling private custom event:', error);
+        return { success: false, error: 'No se pudo cancelar el evento personalizado.' };
     }
 };
 
