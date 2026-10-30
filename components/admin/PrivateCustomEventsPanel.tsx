@@ -190,7 +190,7 @@ export const PrivateCustomEventsPanel: React.FC = () => {
 
   const cancelEvent = async (event: PrivateCustomEvent) => {
     const ok = window.confirm(
-      `¿Cancelar el evento «${event.title}»? Seguirá visible como cancelado en el historial.`
+      `¿Cancelar el evento «${event.title}»? Puedes reactivarlo después si fue un error.`
     );
     if (!ok) return;
     setBusyId(event.id);
@@ -198,6 +198,32 @@ export const PrivateCustomEventsPanel: React.FC = () => {
     setBusyId(null);
     if (!result.success) {
       window.alert(result.error || 'No se pudo cancelar el evento.');
+      return;
+    }
+    await load();
+  };
+
+  const restoreEvent = async (event: PrivateCustomEvent) => {
+    setBusyId(event.id);
+    const result = await dataService.restorePrivateCustomEvent(event.id);
+    setBusyId(null);
+    if (!result.success) {
+      window.alert(result.error || 'No se pudo reactivar el evento.');
+      return;
+    }
+    await load();
+  };
+
+  const deleteEvent = async (event: PrivateCustomEvent) => {
+    const ok = window.confirm(
+      `¿Eliminar definitivamente «${event.title}»? Esta acción no se puede deshacer.`
+    );
+    if (!ok) return;
+    setBusyId(event.id);
+    const result = await dataService.deletePrivateCustomEvent(event.id);
+    setBusyId(null);
+    if (!result.success) {
+      window.alert(result.error || 'No se pudo eliminar el evento.');
       return;
     }
     await load();
@@ -496,16 +522,34 @@ export const PrivateCustomEventsPanel: React.FC = () => {
                                 Marcar pagado
                               </button>
                             )}
+                            {(event.status === 'cancelled' || event.status === 'completed') && (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => void restoreEvent(event)}
+                                className="text-xs font-bold px-2 py-1 rounded bg-teal-700 text-white"
+                              >
+                                Reactivar
+                              </button>
+                            )}
                             {event.status !== 'cancelled' && (
                               <button
                                 type="button"
                                 disabled={busy}
                                 onClick={() => void cancelEvent(event)}
-                                className="text-xs font-bold px-2 py-1 rounded text-red-700"
+                                className="text-xs font-bold px-2 py-1 rounded text-amber-800"
                               >
                                 Cancelar
                               </button>
                             )}
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void deleteEvent(event)}
+                              className="text-xs font-bold px-2 py-1 rounded text-red-700"
+                            >
+                              Eliminar
+                            </button>
                           </div>
                         </div>
                       </li>
@@ -534,6 +578,11 @@ export const PrivateCustomEventsPanel: React.FC = () => {
           }
           setModalOpen(false);
           setEditing(null);
+        }}
+        onDeleted={async () => {
+          setModalOpen(false);
+          setEditing(null);
+          await load();
         }}
       />
     </div>

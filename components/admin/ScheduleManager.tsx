@@ -1059,6 +1059,11 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 setPrivateEventModalOpen(false);
                 setEditingPrivateEvent(null);
             }}
+            onDeleted={async () => {
+                setPrivateEventModalOpen(false);
+                setEditingPrivateEvent(null);
+                await reloadPrivateEvents();
+            }}
         />
 
         <div className="flex justify-between items-center mb-6 flex-wrap gap-3">

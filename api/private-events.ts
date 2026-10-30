@@ -383,6 +383,70 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ success: true, data });
     }
 
+    if (action === 'restore') {
+      const id = String((req.body || {}).id || '').trim();
+      if (!UUID_RE.test(id)) {
+        return res.status(400).json({ success: false, error: 'No se encontró ese evento.' });
+      }
+      const current = await getById(id);
+      if (!current) return res.status(404).json({ success: false, error: 'No se encontró ese evento.' });
+      await sql`
+        UPDATE private_custom_events
+        SET status = 'confirmed', updated_at = NOW()
+        WHERE id = ${id}
+      `;
+      const data = await getById(id);
+      return res.status(200).json({ success: true, data });
+    }
+
+    if (action === 'remove-payment') {
+      const body = (req.body || {}) as { id?: string; paymentId?: string };
+      const id = String(body.id || '').trim();
+      const paymentId = String(body.paymentId || '').trim();
+      if (!UUID_RE.test(id)) {
+        return res.status(400).json({ success: false, error: 'No se encontró ese evento.' });
+      }
+      if (!paymentId) {
+        return res.status(400).json({ success: false, error: 'No se encontró ese abono.' });
+      }
+      const current = await getById(id);
+      if (!current) return res.status(404).json({ success: false, error: 'No se encontró ese evento.' });
+
+      const paymentEntries = current.paymentEntries.filter((entry) => entry.id !== paymentId);
+      if (paymentEntries.length === current.paymentEntries.length) {
+        return res.status(404).json({ success: false, error: 'No se encontró ese abono.' });
+      }
+      const amountPaid = sumPaymentEntries(paymentEntries);
+      const paymentStatus = derivePaymentStatus(current.agreedPrice, amountPaid);
+      const entriesPayload = entriesJson(paymentEntries);
+      const lastMethod = paymentEntries.length
+        ? paymentEntries[paymentEntries.length - 1].method
+        : current.paymentMethod;
+
+      await sql`
+        UPDATE private_custom_events SET
+          amount_paid = ${amountPaid},
+          payment_status = ${paymentStatus},
+          payment_method = ${lastMethod},
+          payment_entries = ${entriesPayload}::jsonb,
+          updated_at = NOW()
+        WHERE id = ${id}
+      `;
+      const data = await getById(id);
+      return res.status(200).json({ success: true, data });
+    }
+
+    if (action === 'delete') {
+      const id = String((req.body || {}).id || '').trim();
+      if (!UUID_RE.test(id)) {
+        return res.status(400).json({ success: false, error: 'No se encontró ese evento.' });
+      }
+      const current = await getById(id);
+      if (!current) return res.status(404).json({ success: false, error: 'No se encontró ese evento.' });
+      await sql`DELETE FROM private_custom_events WHERE id = ${id}`;
+      return res.status(200).json({ success: true, data: { id } });
+    }
+
     return res.status(400).json({ success: false, error: 'Acción no reconocida.' });
   } catch (error) {
     console.error('[private-events]', action, error);

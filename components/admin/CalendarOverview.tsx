@@ -199,6 +199,11 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
           setPrivateEventModalOpen(false);
           setEditingPrivateEvent(null);
         }}
+        onDeleted={async () => {
+          setPrivateEventModalOpen(false);
+          setEditingPrivateEvent(null);
+          await reloadPrivateEvents();
+        }}
       />
       <div className="flex justify-between items-center flex-wrap gap-4 mb-6">
         <div>

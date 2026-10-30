@@ -4030,4 +4030,63 @@ export const cancelPrivateCustomEvent = async (
     }
 };
 
+export const restorePrivateCustomEvent = async (
+    id: string
+): Promise<{ success: boolean; data?: PrivateCustomEvent; error?: string }> => {
+    try {
+        const response = await fetch('/api/private-events?action=restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id }),
+            signal: AbortSignal.timeout(20000),
+        });
+        return await readPrivateEventResponse(response);
+    } catch (error) {
+        console.error('Error restoring private custom event:', error);
+        return { success: false, error: 'No se pudo reactivar el evento personalizado.' };
+    }
+};
+
+export const removePrivateCustomEventPayment = async (input: {
+    id: string;
+    paymentId: string;
+}): Promise<{ success: boolean; data?: PrivateCustomEvent; error?: string }> => {
+    try {
+        const response = await fetch('/api/private-events?action=remove-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(input),
+            signal: AbortSignal.timeout(20000),
+        });
+        return await readPrivateEventResponse(response);
+    } catch (error) {
+        console.error('Error removing private custom event payment:', error);
+        return { success: false, error: 'No se pudo quitar el abono.' };
+    }
+};
+
+export const deletePrivateCustomEvent = async (
+    id: string
+): Promise<{ success: boolean; error?: string }> => {
+    try {
+        const response = await fetch('/api/private-events?action=delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id }),
+            signal: AbortSignal.timeout(20000),
+        });
+        const result = await response.json().catch(() => null);
+        if (!response.ok || !result?.success) {
+            return {
+                success: false,
+                error: result?.error || 'No se pudo eliminar el evento personalizado.',
+            };
+        }
+        return { success: true };
+    } catch (error) {
+        console.error('Error deleting private custom event:', error);
+        return { success: false, error: 'No se pudo eliminar el evento personalizado.' };
+    }
+};
+
 

@@ -90,6 +90,8 @@ interface PrivateCustomEventModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSaved: (event: PrivateCustomEvent, meta?: { keepOpen?: boolean }) => void;
+  /** Called after hard delete; parent should close and refresh */
+  onDeleted?: () => void;
   /** Prefill date when creating */
   initialDate?: string;
   /** Existing event to edit; if omitted, create mode */
@@ -100,6 +102,7 @@ export const PrivateCustomEventModal: React.FC<PrivateCustomEventModalProps> = (
   isOpen,
   onClose,
   onSaved,
+  onDeleted,
   initialDate,
   event = null,
 }) => {
@@ -113,6 +116,7 @@ export const PrivateCustomEventModal: React.FC<PrivateCustomEventModalProps> = (
   const [paymentMethod, setPaymentMethod] = useState('');
   const [paymentNote, setPaymentNote] = useState('');
   const [paying, setPaying] = useState(false);
+  const [busyAction, setBusyAction] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -127,11 +131,11 @@ export const PrivateCustomEventModal: React.FC<PrivateCustomEventModalProps> = (
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !saving && !paying) onClose();
+      if (e.key === 'Escape' && !saving && !paying && !busyAction) onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isOpen, saving, paying, onClose]);
+  }, [isOpen, saving, paying, busyAction, onClose]);
 
   if (!isOpen) return null;
 
@@ -225,11 +229,85 @@ export const PrivateCustomEventModal: React.FC<PrivateCustomEventModalProps> = (
     onSaved(result.data, { keepOpen: true });
   };
 
+  const removePayment = async (paymentId: string) => {
+    if (!liveEvent?.id) return;
+    const ok = window.confirm('¿Quitar este abono? El saldo se recalcula.');
+    if (!ok) return;
+    setPaying(true);
+    setFormError('');
+    const result = await dataService.removePrivateCustomEventPayment({
+      id: liveEvent.id,
+      paymentId,
+    });
+    setPaying(false);
+    if (!result.success || !result.data) {
+      setFormError(result.error || 'No se pudo quitar el abono.');
+      return;
+    }
+    setLiveEvent(result.data);
+    setDraft(draftFromEvent(result.data));
+    onSaved(result.data, { keepOpen: true });
+  };
+
+  const cancelEvent = async () => {
+    if (!liveEvent?.id) return;
+    const ok = window.confirm(
+      `¿Cancelar «${liveEvent.title}»? Puedes reactivarlo después si fue un error.`
+    );
+    if (!ok) return;
+    setBusyAction(true);
+    setFormError('');
+    const result = await dataService.cancelPrivateCustomEvent(liveEvent.id);
+    setBusyAction(false);
+    if (!result.success || !result.data) {
+      setFormError(result.error || 'No se pudo cancelar el evento.');
+      return;
+    }
+    setLiveEvent(result.data);
+    setDraft(draftFromEvent(result.data));
+    onSaved(result.data, { keepOpen: true });
+  };
+
+  const restoreEvent = async () => {
+    if (!liveEvent?.id) return;
+    setBusyAction(true);
+    setFormError('');
+    const result = await dataService.restorePrivateCustomEvent(liveEvent.id);
+    setBusyAction(false);
+    if (!result.success || !result.data) {
+      setFormError(result.error || 'No se pudo reactivar el evento.');
+      return;
+    }
+    setLiveEvent(result.data);
+    setDraft(draftFromEvent(result.data));
+    onSaved(result.data, { keepOpen: true });
+  };
+
+  const deleteEvent = async () => {
+    if (!liveEvent?.id) return;
+    const ok = window.confirm(
+      `¿Eliminar definitivamente «${liveEvent.title}»? Esta acción no se puede deshacer.`
+    );
+    if (!ok) return;
+    setBusyAction(true);
+    setFormError('');
+    const result = await dataService.deletePrivateCustomEvent(liveEvent.id);
+    setBusyAction(false);
+    if (!result.success) {
+      setFormError(result.error || 'No se pudo eliminar el evento.');
+      return;
+    }
+    if (onDeleted) onDeleted();
+    else onClose();
+  };
+
+  const locked = saving || paying || busyAction;
+
   return (
     <div
       className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4"
       onClick={() => {
-        if (!saving && !paying) onClose();
+        if (!locked) onClose();
       }}
     >
       <form
@@ -442,28 +520,37 @@ export const PrivateCustomEventModal: React.FC<PrivateCustomEventModalProps> = (
               {liveEvent.paymentEntries.map((entry) => (
                 <li
                   key={entry.id}
-                  className="text-xs text-brand-secondary flex flex-wrap justify-between gap-2 bg-brand-background rounded-md px-2 py-1.5"
+                  className="text-xs text-brand-secondary flex flex-wrap items-center justify-between gap-2 bg-brand-background rounded-md px-2 py-1.5"
                 >
                   <span>
                     {money(entry.amount)}
                     {entry.method ? ` · ${entry.method}` : ''}
                     {entry.note ? ` · ${entry.note}` : ''}
-                  </span>
-                  <span>
                     {entry.paidAt
-                      ? new Date(entry.paidAt).toLocaleString('es-EC', {
+                      ? ` · ${new Date(entry.paidAt).toLocaleString('es-EC', {
                           dateStyle: 'short',
                           timeStyle: 'short',
-                        })
+                        })}`
                       : ''}
                   </span>
+                  <button
+                    type="button"
+                    disabled={locked}
+                    onClick={() => void removePayment(entry.id)}
+                    className="text-[11px] font-bold text-red-700 underline disabled:opacity-50"
+                  >
+                    Quitar
+                  </button>
                 </li>
               ))}
             </ul>
+            <p className="text-[11px] text-brand-secondary mt-1">
+              Si marcaste pagado por error, quita el abono y el saldo vuelve a pendientes.
+            </p>
           </div>
         )}
 
-        {liveEvent && liveEvent.status !== 'cancelled' && liveEvent.paymentStatus !== 'paid' && (
+        {liveEvent && liveEvent.status !== 'cancelled' && (
           <div className="mt-4 border-t border-brand-border pt-3">
             <h4 className="text-sm font-bold text-brand-text mb-2">Registrar abono</h4>
             <div className="grid sm:grid-cols-3 gap-2">
@@ -490,7 +577,7 @@ export const PrivateCustomEventModal: React.FC<PrivateCustomEventModalProps> = (
             <div className="flex flex-wrap gap-2 mt-2">
               <button
                 type="button"
-                disabled={paying}
+                disabled={locked}
                 onClick={() => void registerPayment()}
                 className="text-xs font-bold px-3 py-1.5 rounded-md bg-teal-700 text-white disabled:opacity-50"
               >
@@ -499,7 +586,7 @@ export const PrivateCustomEventModal: React.FC<PrivateCustomEventModalProps> = (
               {balance > 0 && (
                 <button
                   type="button"
-                  disabled={paying}
+                  disabled={locked}
                   onClick={() => void markFullyPaid()}
                   className="text-xs font-bold px-3 py-1.5 rounded-md bg-emerald-700 text-white disabled:opacity-50"
                 >
@@ -507,6 +594,46 @@ export const PrivateCustomEventModal: React.FC<PrivateCustomEventModalProps> = (
                 </button>
               )}
             </div>
+          </div>
+        )}
+
+        {liveEvent?.id && (
+          <div className="mt-4 border-t border-brand-border pt-3">
+            <h4 className="text-sm font-bold text-brand-text mb-2">Gestión del evento</h4>
+            <div className="flex flex-wrap gap-2">
+              {(liveEvent.status === 'cancelled' || liveEvent.status === 'completed') && (
+                <button
+                  type="button"
+                  disabled={locked}
+                  onClick={() => void restoreEvent()}
+                  className="text-xs font-bold px-3 py-1.5 rounded-md bg-teal-700 text-white disabled:opacity-50"
+                >
+                  Reactivar
+                </button>
+              )}
+              {liveEvent.status !== 'cancelled' && (
+                <button
+                  type="button"
+                  disabled={locked}
+                  onClick={() => void cancelEvent()}
+                  className="text-xs font-bold px-3 py-1.5 rounded-md border border-amber-400 text-amber-900 disabled:opacity-50"
+                >
+                  Cancelar evento
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={locked}
+                onClick={() => void deleteEvent()}
+                className="text-xs font-bold px-3 py-1.5 rounded-md border border-red-400 text-red-700 disabled:opacity-50"
+              >
+                Eliminar definitivo
+              </button>
+            </div>
+            <p className="text-[11px] text-brand-secondary mt-1">
+              Cancelar lo oculta de la agenda activa; reactivar lo vuelve. Eliminar lo borra por
+              completo.
+            </p>
           </div>
         )}
 
@@ -519,7 +646,7 @@ export const PrivateCustomEventModal: React.FC<PrivateCustomEventModalProps> = (
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <button
             type="button"
-            disabled={saving || paying}
+            disabled={locked}
             onClick={onClose}
             className="text-sm font-bold px-4 py-2 rounded-md border border-brand-border text-brand-secondary"
           >
@@ -527,7 +654,7 @@ export const PrivateCustomEventModal: React.FC<PrivateCustomEventModalProps> = (
           </button>
           <button
             type="submit"
-            disabled={saving || paying}
+            disabled={locked}
             className="text-sm font-bold px-4 py-2 rounded-md bg-brand-primary text-white disabled:opacity-50"
           >
             {saving ? 'Guardando…' : draft.id ? 'Guardar cambios' : 'Crear evento'}
