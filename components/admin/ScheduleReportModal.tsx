@@ -76,6 +76,7 @@ export const ScheduleReportModal: React.FC<ScheduleReportModalProps> = ({ isOpen
 
         setPdfLoading(true);
         let bookingsForPdf: Booking[] = allBookings;
+        let privateEventsForPdf: Awaited<ReturnType<typeof dataService.listPrivateCustomEvents>> = [];
         try {
             const ids = [...new Set(allBookings.map((b) => b.id).filter(Boolean))];
             if (ids.length > 0) {
@@ -95,11 +96,29 @@ export const ScheduleReportModal: React.FC<ScheduleReportModalProps> = ({ isOpen
             }
         } catch (e) {
             console.warn('[ScheduleReportModal] getBookingsPaymentLedger failed', e);
+        }
+
+        try {
+            const pad = (n: number) => String(n).padStart(2, '0');
+            const localYmd = (d: Date) =>
+                `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+            privateEventsForPdf = await dataService.listPrivateCustomEvents({
+                from: localYmd(startDate),
+                to: localYmd(endDate),
+            });
+        } catch (e) {
+            console.warn('[ScheduleReportModal] listPrivateCustomEvents failed', e);
         } finally {
             setPdfLoading(false);
         }
 
-        generateScheduleReportPDF(bookingsForPdf, { start: startDate, end: endDate }, pdfTranslations, language);
+        generateScheduleReportPDF(
+            bookingsForPdf,
+            { start: startDate, end: endDate },
+            pdfTranslations,
+            language,
+            privateEventsForPdf
+        );
         onClose();
     };
 

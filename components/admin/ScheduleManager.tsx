@@ -691,7 +691,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     };
 
     const handleDownloadPdf = () => {
-    generateWeeklySchedulePDF(weekDates, scheduleData, language, false);
+    generateWeeklySchedulePDF(weekDates, scheduleData, language, false, undefined, privateEvents);
     };
     
     const handleSearch = (e: React.FormEvent) => {

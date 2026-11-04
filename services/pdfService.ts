@@ -10,6 +10,29 @@ import {
   PAINTING_UPSELL_LABEL,
   isGenericProductName,
 } from '../utils/bookingDisplay';
+import type { PrivateCustomEvent } from '../utils/privateCustomEvent';
+import { PRIVATE_EVENT_PAYMENT_LABEL } from '../utils/privateCustomEvent';
+
+function formatLocalYmd(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function formatPrivateEventPayment(event: PrivateCustomEvent): string {
+  const label = PRIVATE_EVENT_PAYMENT_LABEL[event.paymentStatus] || event.paymentStatus;
+  const agreed = Number(event.agreedPrice) || 0;
+  const paid = Number(event.amountPaid) || 0;
+  const due = Math.max(0, Math.round((agreed - paid) * 100) / 100);
+  if (event.paymentStatus === 'paid') {
+    return agreed > 0 ? `${label} ($${agreed.toFixed(2)})` : label;
+  }
+  if (event.paymentStatus === 'partial') {
+    return `${label} $${paid.toFixed(2)} · Saldo $${due.toFixed(2)}`;
+  }
+  return agreed > 0 ? `${label} · Total $${agreed.toFixed(2)}` : label;
+}
 
 // The `import 'jspdf-autotable';` statement is sufficient to load the necessary type augmentations.
 
@@ -443,7 +466,8 @@ export const generateScheduleReportPDF = (
   bookings: Booking[],
   dateRange: { start: Date; end: Date },
   translations: ScheduleReportPdfTranslations,
-  language: string
+  language: string,
+  privateEvents: PrivateCustomEvent[] = []
 ): void => {
     const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
     const pageMargin = 15;
@@ -468,7 +492,23 @@ export const generateScheduleReportPDF = (
         });
     });
 
-    const sortedDates = Object.keys(reportData).sort();
+    const privateEventsByDate: Record<string, PrivateCustomEvent[]> = {};
+    privateEvents
+      .filter((event) => event.status !== 'cancelled')
+      .forEach((event) => {
+        const eventDate = new Date(event.eventDate + 'T00:00:00');
+        if (eventDate >= dateRange.start && eventDate <= dateRange.end) {
+          if (!privateEventsByDate[event.eventDate]) privateEventsByDate[event.eventDate] = [];
+          privateEventsByDate[event.eventDate].push(event);
+        }
+      });
+    Object.values(privateEventsByDate).forEach((list) =>
+      list.sort((a, b) => a.startTime.localeCompare(b.startTime) || a.title.localeCompare(b.title, 'es'))
+    );
+
+    const sortedDates = Array.from(
+      new Set([...Object.keys(reportData), ...Object.keys(privateEventsByDate)])
+    ).sort();
 
     // --- PDF HEADER ---
     doc.setFont('helvetica', 'bold');
@@ -510,7 +550,7 @@ export const generateScheduleReportPDF = (
           doc.text(dayTitle, pageMargin, currentY);
           currentY += 6;
 
-          const sortedTimes = Object.keys(reportData[dateStr]).sort();
+          const sortedTimes = Object.keys(reportData[dateStr] || {}).sort();
           sortedTimes.forEach(time => {
               const attendees = reportData[dateStr][time];
               const notesHeader = translations.notes || 'Notas';
@@ -542,12 +582,12 @@ export const generateScheduleReportPDF = (
                       halign: 'center'
                   },
                   columnStyles: {
-                      0: { halign: 'center', cellWidth: 16 },
-                      2: { halign: 'center', cellWidth: 16 },
+                      0: {halign: 'center', cellWidth: 16 },
+                      2: {halign: 'center', cellWidth: 16 },
                       3: { cellWidth: 32 },
-                      4: { halign: 'center', cellWidth: 16 },
-                      5: { halign: 'left', cellWidth: 36, overflow: 'linebreak' as const },
-                      6: { halign: 'left', cellWidth: 38, overflow: 'linebreak' as const, fontSize: 8 }
+                      4: {halign: 'center', cellWidth: 16 },
+                      5: {halign: 'left', cellWidth: 36, overflow: 'linebreak' as const },
+                      6: {halign: 'left', cellWidth: 38, overflow: 'linebreak' as const, fontSize: 8 }
                   },
                   styles: {
                       font: 'helvetica',
@@ -559,6 +599,53 @@ export const generateScheduleReportPDF = (
               });
               currentY = (doc as any).lastAutoTable.finalY + 5;
           });
+
+          const dayPrivateEvents = privateEventsByDate[dateStr] || [];
+          if (dayPrivateEvents.length > 0) {
+              (doc as any).autoTable({
+                  startY: currentY,
+                  head: [[
+                      'Evento personalizado',
+                      translations.time,
+                      'Personas',
+                      'Contacto',
+                      translations.paymentStatus,
+                      translations.notes || 'Notas'
+                  ]],
+                  body: dayPrivateEvents.map((event) => [
+                      event.title,
+                      `${event.startTime}–${event.endTime}`,
+                      event.participants > 0 ? String(event.participants) : '—',
+                      event.contactName || '—',
+                      formatPrivateEventPayment(event),
+                      (event.internalNotes && event.internalNotes.trim()) || '—'
+                  ]),
+                  theme: 'grid',
+                  headStyles: {
+                      fillColor: '#0F766E',
+                      textColor: '#FFFFFF',
+                      fontStyle: 'bold',
+                      halign: 'center'
+                  },
+                  columnStyles: {
+                      0: { cellWidth: 42 },
+                      1: {halign: 'center', cellWidth: 24 },
+                      2: {halign: 'center', cellWidth: 16 },
+                      3: { cellWidth: 28 },
+                      4: {halign: 'left', cellWidth: 36, overflow: 'linebreak' as const },
+                      5: {halign: 'left', cellWidth: 34, overflow: 'linebreak' as const, fontSize: 8 }
+                  },
+                  styles: {
+                      font: 'helvetica',
+                      fontSize: 8,
+                      cellPadding: 1.5,
+                      valign: 'middle'
+                  },
+                  margin: { left: pageMargin, right: pageMargin }
+              });
+              currentY = (doc as any).lastAutoTable.finalY + 5;
+          }
+
           currentY += 5; // Extra space between days
       });
     }
@@ -572,7 +659,8 @@ export const generateWeeklySchedulePDF = (
   scheduleData: Map<number, { instructor: Instructor, schedule: Record<string, any[]> }>,
   language: string,
   isFiltered?: boolean,
-  filteredSubtitle?: string
+  filteredSubtitle?: string,
+  privateEvents: PrivateCustomEvent[] = []
 ): void => {
     const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' }); // Landscape
     const pageMargin = 10;
@@ -645,6 +733,53 @@ export const generateWeeklySchedulePDF = (
         margin: { left: pageMargin, right: pageMargin }
     });
 
+    currentY = (doc as any).lastAutoTable.finalY + 8;
+
+    const weekDateKeys = new Set(weekDates.map((date) => formatLocalYmd(date)));
+    const activePrivateEvents = privateEvents
+      .filter((event) => event.status !== 'cancelled' && weekDateKeys.has(event.eventDate))
+      .sort(
+        (a, b) =>
+          a.eventDate.localeCompare(b.eventDate) ||
+          a.startTime.localeCompare(b.startTime) ||
+          a.title.localeCompare(b.title, 'es')
+      );
+
+    if (activePrivateEvents.length > 0) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.setTextColor('#0F766E');
+      doc.text('Eventos personalizados', pageMargin, currentY);
+      currentY += 4;
+
+      (doc as any).autoTable({
+        startY: currentY,
+        head: [['Fecha', 'Horario', 'Evento', 'Personas', 'Contacto', 'Pago / saldo']],
+        body: activePrivateEvents.map((event) => [
+          event.eventDate,
+          `${event.startTime}–${event.endTime}`,
+          event.title,
+          event.participants > 0 ? String(event.participants) : '—',
+          event.contactName || '—',
+          formatPrivateEventPayment(event),
+        ]),
+        theme: 'grid',
+        headStyles: {
+          fillColor: '#0F766E',
+          textColor: '#FFFFFF',
+          fontStyle: 'bold',
+          halign: 'center',
+        },
+        styles: {
+          font: 'helvetica',
+          fontSize: 8,
+          cellPadding: 2,
+          valign: 'middle',
+        },
+        margin: { left: pageMargin, right: pageMargin },
+      });
+    }
+
     // --- SAVE ---
-    doc.save(`CeramicAlma_Vista_Semanal_${weekStart.toISOString().split('T')[0]}.pdf`);
+    doc.save(`CeramicAlma_Vista_Semanal_${formatLocalYmd(weekStart)}.pdf`);
 };
