@@ -840,13 +840,10 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
           <div className="space-y-3">
             {/* Catálogo creativo (mismo que la web) — único listado de actividades */}
             <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="material-icons text-emerald-700 text-base">palette</span>
-                <div>
-                  <div className="text-sm font-bold text-emerald-950">Experiencias creativas</div>
-                  <div className="text-xs text-emerald-900/70">
-                    Cerámica, tote bag, leather, charm bar, canvas y cepillo.
-                  </div>
+              <div>
+                <div className="text-sm font-bold text-emerald-950">Experiencias creativas</div>
+                <div className="text-xs text-emerald-900/70">
+                  Cerámica, tote bag, leather, charm bar, canvas y cepillo.
                 </div>
               </div>
               <div className="max-h-64 overflow-y-auto space-y-3 pr-1">
@@ -874,7 +871,6 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
                               onClick={() => selectCreativeSku(sku)}
                               aria-label={`Seleccionar ${sku.label}`}
                             >
-                              <span className="material-icons text-emerald-600 text-base">auto_awesome</span>
                               <div className="flex-1 min-w-0">
                                 <div className="font-semibold text-brand-text text-sm truncate">{sku.label}</div>
                                 <div className="text-[11px] text-brand-secondary">
@@ -909,7 +905,6 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
               }}
               aria-label="Crear experiencia personalizada"
             >
-              <span className="material-icons text-purple-600">celebration</span>
               <div className="flex-1 text-left">
                 <div className="font-bold text-brand-text">Experiencia personalizada</div>
                 <div className="text-xs text-brand-secondary">Precio o técnica especial acordada (sin SKU del catálogo)</div>
