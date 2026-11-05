@@ -23,6 +23,7 @@ interface ManualBookingModalProps {
   onClose: () => void;
   onBookingAdded: () => void;
   existingBookings?: Booking[];
+  /** @deprecated Ya no se listan productos legacy en este modal; se mantiene por compatibilidad de callers. */
   availableProducts?: Product[];
   preselectedCustomer?: Customer;
 }
@@ -82,7 +83,6 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
   onClose, 
   onBookingAdded,
   existingBookings = [],
-  availableProducts = [],
   preselectedCustomer
 }) => {
   const adminData = useAdminData();
@@ -92,9 +92,8 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(preselectedCustomer || null);
   const [userInfo, setUserInfo] = useState<UserInfo>({ firstName: '', lastName: '', email: '', phone: '', countryCode: COUNTRIES[0].code, birthday: '' });
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  /** SKU creativo elegido (leather, tote, charm…); null = catálogo / experiencia personalizada */
+  /** SKU creativo elegido (leather, tote, charm…); null = experiencia personalizada */
   const [selectedCreativeSkuId, setSelectedCreativeSkuId] = useState<string | null>(null);
-  const [products, setProducts] = useState<Product[]>([]);
   const [price, setPrice] = useState('');
   const [clientNote, setClientNote] = useState('');
   const [selectedSlots, setSelectedSlots] = useState<TimeSlot[]>([]);
@@ -208,10 +207,6 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
     // Para el administrador, ser más flexible con los límites
     return true;
   };
-
-  useEffect(() => {
-    setProducts(availableProducts);
-  }, [availableProducts]);
 
   // Búsqueda de clientes en vivo (server-side) — getCustomers ahora paginado devolvía objeto y el dropdown quedaba vacío
   useEffect(() => {
@@ -791,9 +786,9 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
               onClick={() => setManualMode('standard')}
               className="w-full text-left rounded-2xl border border-brand-border p-4 hover:border-brand-primary/40 hover:bg-brand-primary/[0.03] transition-all"
             >
-              <div className="font-semibold text-brand-text">Clase, paquete o experiencia</div>
+              <div className="font-semibold text-brand-text">Experiencia creativa</div>
               <div className="text-xs text-brand-secondary mt-1">
-                Creativas (tote, leather, charm…), clases, paquetes o experiencia personalizada.
+                Cerámica, tote, leather, charm, canvas, cepillo… o precio personalizado.
               </div>
             </button>
             <button
@@ -842,38 +837,19 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
         </button>
         <div className="mb-4">
           <label className="block text-sm font-bold mb-1">Producto o Experiencia</label>
-          <div className="space-y-2">
-            {/* Opción de Experiencia Personalizada (sin producto de catálogo) */}
-            <button
-              type="button"
-              className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors duration-200 ${selectedProduct === null && !selectedCreativeSkuId && (selectedTechnique !== null) ? 'border-brand-primary bg-purple-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
-              onClick={() => { 
-                clearCreativeSelection();
-                setSelectedProduct(null); 
-                setSelectedTechnique('potters_wheel');
-                setProductError(''); 
-              }}
-              aria-label="Crear experiencia personalizada"
-            >
-              <span className="material-icons text-purple-600">celebration</span>
-              <div className="flex-1 text-left">
-                <div className="font-bold text-brand-text">Experiencia Personalizada</div>
-                <div className="text-xs text-brand-secondary">Crear una experiencia única (sin producto de catálogo)</div>
-              </div>
-            </button>
-
-            {/* Experiencias creativas (leather, tote, charm, canvas…) — mismo catálogo que la web */}
+          <div className="space-y-3">
+            {/* Catálogo creativo (mismo que la web) — único listado de actividades */}
             <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 space-y-2">
               <div className="flex items-center gap-2">
                 <span className="material-icons text-emerald-700 text-base">palette</span>
                 <div>
                   <div className="text-sm font-bold text-emerald-950">Experiencias creativas</div>
                   <div className="text-xs text-emerald-900/70">
-                    Tote bag, leather, charm bar, canvas, cepillo y cerámica. Cupo según técnica interna.
+                    Cerámica, tote bag, leather, charm bar, canvas y cepillo.
                   </div>
                 </div>
               </div>
-              <div className="max-h-56 overflow-y-auto space-y-3 pr-1">
+              <div className="max-h-64 overflow-y-auto space-y-3 pr-1">
                 {CREATIVE_CATEGORIES.map((category) => {
                   const skus = skusForCategory(category.id);
                   if (skus.length === 0) return null;
@@ -921,51 +897,24 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
               </div>
             </div>
 
-            {/* Productos de catálogo */}
-            {(() => {
-              const seenNames = new Set<string>();
-              const filtered = products
-                .filter(p => {
-                  if (isCreativeCatalogProduct(p)) return false;
-                  if (p.type === 'SINGLE_CLASS') {
-                    if (seenNames.has(p.name)) return false;
-                    seenNames.add(p.name);
-                    return true;
-                  }
-                  // INTRODUCTORY_CLASS retirado de venta (producto legacy; historial se conserva)
-                  if (p.isActive && p.type === 'CLASS_PACKAGE') {
-                    return true;
-                  }
-                  return false;
-                });
-              
-              return filtered.map(p => (
-                <button
-                  key={p.id}
-                  type="button"
-                  className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors duration-200 ${!selectedCreativeSkuId && selectedProduct?.id === p.id ? 'border-brand-primary bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
-                  onClick={() => {
-                    clearCreativeSelection();
-                    setSelectedProduct(p);
-                    setSelectedTechnique(null);
-                    setProductError('');
-                  }}
-                  aria-label={`Seleccionar ${p.name}`}
-                >
-                  <span className="inline-block">
-                    {p.type === 'CLASS_PACKAGE' && <span className="material-icons text-brand-primary">layers</span>}
-                    {p.type === 'SINGLE_CLASS' && <span className="material-icons text-green-600">person</span>}
-                    {p.type === 'INTRODUCTORY_CLASS' && <span className="material-icons text-indigo-600">star</span>}
-                  </span>
-                  <div className="flex-1 text-left">
-                    <div className="font-bold text-brand-text">{p.name}</div>
-                    <div className="text-xs text-brand-secondary">{p.type === 'CLASS_PACKAGE' ? 'Paquete de Clases' : p.type === 'SINGLE_CLASS' ? 'Clase Individual' : 'Introductoria'}</div>
-                    <div className="text-xs text-gray-500">{p.details?.duration || ''}</div>
-                  </div>
-                  <div className="font-bold text-brand-primary">${p.price?.toFixed(2) || ''}</div>
-                </button>
-              ));
-            })()}
+            {/* Precio / técnica acordada fuera del catálogo */}
+            <button
+              type="button"
+              className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors duration-200 ${selectedProduct === null && !selectedCreativeSkuId && (selectedTechnique !== null) ? 'border-brand-primary bg-purple-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
+              onClick={() => { 
+                clearCreativeSelection();
+                setSelectedProduct(null); 
+                setSelectedTechnique('potters_wheel');
+                setProductError(''); 
+              }}
+              aria-label="Crear experiencia personalizada"
+            >
+              <span className="material-icons text-purple-600">celebration</span>
+              <div className="flex-1 text-left">
+                <div className="font-bold text-brand-text">Experiencia personalizada</div>
+                <div className="text-xs text-brand-secondary">Precio o técnica especial acordada (sin SKU del catálogo)</div>
+              </div>
+            </button>
           </div>
           {productError && <div className="text-red-500 text-sm mt-2">{productError}</div>}
         </div>
