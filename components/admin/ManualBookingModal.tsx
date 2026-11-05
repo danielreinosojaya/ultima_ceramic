@@ -9,6 +9,14 @@ import { SpaceRentalBookingForm } from './SpaceRentalBookingForm';
 import { COUNTRIES } from '@/constants';
 import { useAdminData } from '../../context/AdminDataContext';
 import { customerMatchesSearch } from '../../utils/textSearch';
+import {
+  CREATIVE_CATEGORIES,
+  getCreativeSku,
+  skusForCategory,
+  totalPriceCharged,
+  unitPriceCharged,
+  type CreativeSku,
+} from '../../config/creativeExperiences';
 
 interface ManualBookingModalProps {
   isOpen: boolean;
@@ -19,14 +27,54 @@ interface ManualBookingModalProps {
   preselectedCustomer?: Customer;
 }
 
-function catalogSingleClassForcesOnePerson(product: Product | null): boolean {
-  if (!product || product.type !== 'SINGLE_CLASS') return false;
+function isCreativeCatalogProduct(product: Product | null): boolean {
+  if (!product) return false;
   const details = (product as any).details || {};
-  const isCreative =
+  return (
     details.bookingSource === 'creative_experiences' ||
     Boolean(details.serviceKind) ||
-    String(product.id || '').startsWith('creative-');
-  return !isCreative;
+    String(product.id || '').startsWith('creative-')
+  );
+}
+
+function catalogSingleClassForcesOnePerson(product: Product | null): boolean {
+  if (!product || product.type !== 'SINGLE_CLASS') return false;
+  return !isCreativeCatalogProduct(product);
+}
+
+/** Mismo shape que el wizard público: capacityTechnique + serviceKind para cupos. */
+function buildCreativeAdminProduct(sku: CreativeSku, participants: number, totalPrice?: number): Product {
+  const charged = totalPrice ?? totalPriceCharged(sku, participants);
+  return {
+    id: `creative-${sku.id}`,
+    name: sku.label,
+    type: 'SINGLE_CLASS',
+    price: charged,
+    classes: 1,
+    description: sku.shortDesc || sku.label,
+    isActive: true,
+    details: {
+      technique: sku.capacityTechnique,
+      serviceKind: sku.id,
+      bookingSource: 'creative_experiences',
+      participants,
+      duration: sku.duration || 'hasta 2 horas',
+      durationHours: 2,
+      minParticipants: sku.minParticipants,
+      maxParticipants: sku.maxParticipants,
+    },
+  } as Product;
+}
+
+function techniqueLabelForCreative(sku: CreativeSku): string {
+  switch (sku.capacityTechnique) {
+    case 'potters_wheel':
+      return 'cupo torno';
+    case 'painting':
+      return 'cupo pintura';
+    default:
+      return 'cupo mesa';
+  }
 }
 
 export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({ 
@@ -44,6 +92,8 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(preselectedCustomer || null);
   const [userInfo, setUserInfo] = useState<UserInfo>({ firstName: '', lastName: '', email: '', phone: '', countryCode: COUNTRIES[0].code, birthday: '' });
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  /** SKU creativo elegido (leather, tote, charm…); null = catálogo / experiencia personalizada */
+  const [selectedCreativeSkuId, setSelectedCreativeSkuId] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [price, setPrice] = useState('');
   const [clientNote, setClientNote] = useState('');
@@ -95,8 +145,16 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
     return `${hour.toString().padStart(2, '0')}:${min}`;
   });
 
+  const selectedCreativeSku = selectedCreativeSkuId
+    ? getCreativeSku(selectedCreativeSkuId) || null
+    : null;
+
   // Función para obtener límites de participantes por tipo de producto
-  const getParticipantsRange = (product: Product | null) => {
+  const getParticipantsRange = (product: Product | null, creativeSku: CreativeSku | null = null) => {
+    if (creativeSku) {
+      // Admin: mínimo del SKU, máximo flexible (puede override)
+      return { min: creativeSku.minParticipants || 1, max: 100 };
+    }
     if (!product) return { min: 1, max: 50 }; // Flexibilidad total por defecto
     
     switch(product.type) {
@@ -106,6 +164,14 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
           max: 50 // Flexibilidad para grupos grandes
         };
       case 'SINGLE_CLASS':
+        if (isCreativeCatalogProduct(product)) {
+          const details = (product as any).details || {};
+          return {
+            min: Number(details.minParticipants) || 1,
+            max: 100,
+          };
+        }
+        return { min: 1, max: 1 };
       case 'CLASS_PACKAGE':
         return { min: 1, max: 30 }; // Máxima flexibilidad para el admin
       case 'INTRODUCTORY_CLASS':
@@ -113,6 +179,22 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
       default:
         return { min: 1, max: 50 }; // Flexibilidad total por defecto
     }
+  };
+
+  const selectCreativeSku = (sku: CreativeSku) => {
+    const count = Math.max(sku.minParticipants || 1, 1);
+    const product = buildCreativeAdminProduct(sku, count);
+    setSelectedCreativeSkuId(sku.id);
+    setSelectedProduct(product);
+    setSelectedTechnique(null);
+    setParticipants(count);
+    setParticipantsInput(String(count));
+    setPrice(String(totalPriceCharged(sku, count)));
+    setProductError('');
+  };
+
+  const clearCreativeSelection = () => {
+    setSelectedCreativeSkuId(null);
   };
 
   // Validación de participantes - más flexible para admin
@@ -198,6 +280,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
     if (!isOpen) {
       setSelectedCustomer(preselectedCustomer || null);
       setSelectedProduct(null);
+      setSelectedCreativeSkuId(null);
       setPrice('');
       setClientNote('');
       setSelectedSlots([]);
@@ -239,21 +322,28 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
     }
   }, [isOpen, preselectedCustomer]);
 
-  // Efecto para resetear participants cuando cambia el producto
+  // Efecto para resetear participants cuando cambia el producto (no creativo: selectCreativeSku ya fija cupos/precio)
   useEffect(() => {
-    if (selectedProduct) {
-      const range = getParticipantsRange(selectedProduct);
-      setParticipants(range.min);
-      setParticipantsInput(String(range.min));
-      // Reset technique when product changes (unless it's CUSTOM_EXPERIENCE)
-      if (selectedProduct.type !== 'CUSTOM_EXPERIENCE') {
-        setSelectedTechnique(null);
-      } else {
-        // Default to potters_wheel for CUSTOM_EXPERIENCE
-        setSelectedTechnique('potters_wheel');
-      }
+    if (!selectedProduct || selectedCreativeSkuId) return;
+    const range = getParticipantsRange(selectedProduct, null);
+    setParticipants(range.min);
+    setParticipantsInput(String(range.min));
+    if (selectedProduct.type !== 'CUSTOM_EXPERIENCE') {
+      setSelectedTechnique(null);
+    } else {
+      setSelectedTechnique('potters_wheel');
     }
-  }, [selectedProduct]);
+  }, [selectedProduct, selectedCreativeSkuId]);
+
+  // Recalcular precio sugerido al cambiar participantes de una experiencia creativa
+  useEffect(() => {
+    if (!selectedCreativeSkuId) return;
+    const sku = getCreativeSku(selectedCreativeSkuId);
+    if (!sku) return;
+    const n = Math.max(1, participants);
+    setSelectedProduct(buildCreativeAdminProduct(sku, n));
+    setPrice(String(totalPriceCharged(sku, n)));
+  }, [participants, selectedCreativeSkuId]);
 
   const handleSelectCustomer = (customer: Customer) => {
     setSelectedCustomer(customer);
@@ -328,10 +418,10 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
       // Validación básica
       if (!selectedCustomer) throw new Error('Selecciona un cliente');
       
-      // Determinar si es Experiencia Personalizada (selectedProduct === null) o producto de catálogo
-      const isCustomExperience = selectedProduct === null;
+      // Experiencia Personalizada = selectedProduct === null y sin SKU creativo
+      const isCustomExperience = selectedProduct === null && !selectedCreativeSku;
       
-      if (!isCustomExperience && !selectedProduct) {
+      if (!isCustomExperience && !selectedProduct && !selectedCreativeSku) {
         setProductError('Selecciona un producto o experiencia antes de continuar.');
         setSubmitDisabled(false);
         return;
@@ -349,6 +439,14 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
       if (participantsCount < 1 || participantsCount > 100) {
         throw new Error('Número de participantes debe estar entre 1 y 100');
       }
+
+      const productForValidation = selectedCreativeSku
+        ? buildCreativeAdminProduct(
+            selectedCreativeSku,
+            participantsCount,
+            Number(price) || totalPriceCharged(selectedCreativeSku, participantsCount)
+          )
+        : selectedProduct;
 
       // Para Experiencia Personalizada, no hay validación de reglas (es más flexible)
       if (isCustomExperience) {
@@ -370,14 +468,16 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
           return;
         }
       } else {
-        // Para productos de catálogo, validar reglas completas
+        // Catálogo / experiencias creativas
         const validation = await adminValidator.validateAdminBooking({
           date: selectedSlots[0].date,
           time: selectedSlots[0].time,
-          technique: selectedProduct.details?.technique,
+          technique:
+            (productForValidation as any)?.details?.technique ||
+            selectedCreativeSku?.capacityTechnique,
           participants: participantsCount,
-          productType: selectedProduct.type,
-          product: selectedProduct
+          productType: productForValidation?.type || 'SINGLE_CLASS',
+          product: productForValidation
         });
 
         setValidationResult(validation);
@@ -403,7 +503,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
   const performBookingSubmit = async (adminOverride: boolean, overrideReason: string) => {
     setOverrideInProgress(true);
     try {
-      const isCustomExperience = selectedProduct === null;
+      const isCustomExperience = selectedProduct === null && !selectedCreativeSku;
       const participantsCount =
         !isCustomExperience && catalogSingleClassForcesOnePerson(selectedProduct)
           ? 1
@@ -445,7 +545,19 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
         }
         createdBooking = customResult.booking ?? null;
       } else {
-        // Para productos de catálogo: usar addBooking
+        const productToBook = selectedCreativeSku
+          ? buildCreativeAdminProduct(
+              selectedCreativeSku,
+              participantsCount,
+              Number(price) || totalPriceCharged(selectedCreativeSku, participantsCount)
+            )
+          : selectedProduct;
+
+        if (!productToBook) {
+          throw new Error('Selecciona un producto o experiencia');
+        }
+
+        // Catálogo o experiencia creativa (leather, tote, charm…)
         const bookingData = {
           userInfo: selectedCustomer?.userInfo || {
             firstName: selectedCustomer?.userInfo?.firstName || '',
@@ -455,21 +567,22 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
             countryCode: selectedCustomer?.userInfo?.countryCode || '',
             birthday: selectedCustomer?.userInfo?.birthday || null
           },
-          productId: selectedProduct.id,
-          price: Number(price) || selectedProduct.price,
+          productId: productToBook.id,
+          price: Number(price) || productToBook.price,
           clientNote,
           slots: selectedSlots,
-          product: selectedProduct,
-          productType: selectedProduct.type,
+          product: productToBook,
+          productType: productToBook.type,
           bookingMode: 'flexible',
           isPaid: false,
           paymentDetails: [],
           participants: participantsCount,
-          // Técnica: siempre pasar explícitamente (de selectedTechnique o de product.details)
-          technique: selectedProduct.type === 'CUSTOM_EXPERIENCE' && selectedTechnique
-            ? selectedTechnique
-            : (selectedProduct as any).details?.technique || undefined,
-          // Admin override flags
+          technique:
+            productToBook.type === 'CUSTOM_EXPERIENCE' && selectedTechnique
+              ? selectedTechnique
+              : (productToBook as any).details?.technique ||
+                selectedCreativeSku?.capacityTechnique ||
+                undefined,
           adminOverride,
           overrideReason: adminOverride ? overrideReason : undefined,
           violatedRules: adminOverride ? (validationResult?.warnings || []) : undefined
@@ -679,7 +792,9 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
               className="w-full text-left rounded-2xl border border-brand-border p-4 hover:border-brand-primary/40 hover:bg-brand-primary/[0.03] transition-all"
             >
               <div className="font-semibold text-brand-text">Clase, paquete o experiencia</div>
-              <div className="text-xs text-brand-secondary mt-1">Clases sueltas, paquetes o experiencia personalizada con técnica.</div>
+              <div className="text-xs text-brand-secondary mt-1">
+                Creativas (tote, leather, charm…), clases, paquetes o experiencia personalizada.
+              </div>
             </button>
             <button
               type="button"
@@ -731,8 +846,9 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
             {/* Opción de Experiencia Personalizada (sin producto de catálogo) */}
             <button
               type="button"
-              className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors duration-200 ${selectedProduct === null && (selectedTechnique !== null) ? 'border-brand-primary bg-purple-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
+              className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors duration-200 ${selectedProduct === null && !selectedCreativeSkuId && (selectedTechnique !== null) ? 'border-brand-primary bg-purple-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
               onClick={() => { 
+                clearCreativeSelection();
                 setSelectedProduct(null); 
                 setSelectedTechnique('potters_wheel');
                 setProductError(''); 
@@ -746,11 +862,71 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
               </div>
             </button>
 
+            {/* Experiencias creativas (leather, tote, charm, canvas…) — mismo catálogo que la web */}
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="material-icons text-emerald-700 text-base">palette</span>
+                <div>
+                  <div className="text-sm font-bold text-emerald-950">Experiencias creativas</div>
+                  <div className="text-xs text-emerald-900/70">
+                    Tote bag, leather, charm bar, canvas, cepillo y cerámica. Cupo según técnica interna.
+                  </div>
+                </div>
+              </div>
+              <div className="max-h-56 overflow-y-auto space-y-3 pr-1">
+                {CREATIVE_CATEGORIES.map((category) => {
+                  const skus = skusForCategory(category.id);
+                  if (skus.length === 0) return null;
+                  return (
+                    <div key={category.id}>
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800/80 mb-1">
+                        {category.label}
+                      </div>
+                      <div className="space-y-1">
+                        {skus.map((sku) => {
+                          const selected = selectedCreativeSkuId === sku.id;
+                          const unit = unitPriceCharged(sku);
+                          return (
+                            <button
+                              key={sku.id}
+                              type="button"
+                              className={`w-full flex items-center gap-3 p-2.5 rounded-lg border text-left transition-colors ${
+                                selected
+                                  ? 'border-emerald-600 bg-white shadow-sm'
+                                  : 'border-emerald-100 bg-white/80 hover:bg-white'
+                              }`}
+                              onClick={() => selectCreativeSku(sku)}
+                              aria-label={`Seleccionar ${sku.label}`}
+                            >
+                              <span className="material-icons text-emerald-600 text-base">auto_awesome</span>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-semibold text-brand-text text-sm truncate">{sku.label}</div>
+                                <div className="text-[11px] text-brand-secondary">
+                                  {techniqueLabelForCreative(sku)}
+                                  {sku.minParticipants > 1 ? ` · mín. ${sku.minParticipants}` : ''}
+                                  {sku.maxParticipants > 1 ? ` · hasta ${sku.maxParticipants}` : ''}
+                                </div>
+                              </div>
+                              <div className="text-sm font-bold text-emerald-800 shrink-0">
+                                ${unit.toFixed(2)}
+                                <span className="text-[10px] font-medium text-brand-secondary"> /p</span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Productos de catálogo */}
             {(() => {
               const seenNames = new Set<string>();
               const filtered = products
                 .filter(p => {
+                  if (isCreativeCatalogProduct(p)) return false;
                   if (p.type === 'SINGLE_CLASS') {
                     if (seenNames.has(p.name)) return false;
                     seenNames.add(p.name);
@@ -767,8 +943,13 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
                 <button
                   key={p.id}
                   type="button"
-                  className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors duration-200 ${selectedProduct?.id === p.id ? 'border-brand-primary bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
-                  onClick={() => { setSelectedProduct(p); setSelectedTechnique(null); setProductError(''); }}
+                  className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors duration-200 ${!selectedCreativeSkuId && selectedProduct?.id === p.id ? 'border-brand-primary bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
+                  onClick={() => {
+                    clearCreativeSelection();
+                    setSelectedProduct(p);
+                    setSelectedTechnique(null);
+                    setProductError('');
+                  }}
                   aria-label={`Seleccionar ${p.name}`}
                 >
                   <span className="inline-block">
@@ -797,7 +978,11 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
             <label className="block text-sm font-bold mb-1">
               Participantes
               <span className="text-xs text-gray-500 ml-1">
-                {selectedProduct?.type === 'SINGLE_CLASS' ? '(Siempre 1)' : '(1-100 personas)'}
+                {catalogSingleClassForcesOnePerson(selectedProduct)
+                  ? '(Siempre 1)'
+                  : selectedCreativeSku?.minParticipants && selectedCreativeSku.minParticipants > 1
+                    ? `(mín. ${selectedCreativeSku.minParticipants}, admin flexible)`
+                    : '(1-100 personas)'}
               </span>
             </label>
             <input
@@ -806,7 +991,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
               autoComplete="off"
               value={participantsInput}
               onChange={e => {
-                if (selectedProduct?.type === 'SINGLE_CLASS') {
+                if (catalogSingleClassForcesOnePerson(selectedProduct)) {
                   setParticipants(1);
                   setParticipantsInput('1');
                   return;
@@ -819,20 +1004,26 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
                 }
               }}
               onBlur={() => {
-                if (selectedProduct?.type === 'SINGLE_CLASS') {
+                if (catalogSingleClassForcesOnePerson(selectedProduct)) {
                   setParticipants(1);
                   setParticipantsInput('1');
                   return;
                 }
                 commitParticipantsInput(participantsInput);
               }}
-              disabled={selectedProduct?.type === 'SINGLE_CLASS'}
+              disabled={catalogSingleClassForcesOnePerson(selectedProduct)}
               className={`w-full px-3 py-2 border rounded-lg ${
-                selectedProduct?.type === 'SINGLE_CLASS'
+                catalogSingleClassForcesOnePerson(selectedProduct)
                   ? 'bg-gray-100 cursor-not-allowed'
                   : ''
               } ${participants < 1 || participants > 100 ? 'border-red-500' : ''}`}
             />
+            {selectedCreativeSku && (
+              <p className="text-xs text-brand-secondary mt-1">
+                Precio sugerido: ${unitPriceCharged(selectedCreativeSku).toFixed(2)} × {participants} = $
+                {totalPriceCharged(selectedCreativeSku, participants).toFixed(2)} (editable arriba)
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-bold mb-1">Nota interna</label>
@@ -849,8 +1040,8 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
           </div>
         </div>
         
-        {/* Técnica selector para Experiencia Personalizada (selectedProduct === null) */}
-        {(selectedProduct === null || selectedProduct?.type === 'CUSTOM_EXPERIENCE') && (
+        {/* Técnica selector para Experiencia Personalizada (sin SKU creativo) */}
+        {!selectedCreativeSkuId && (selectedProduct === null || selectedProduct?.type === 'CUSTOM_EXPERIENCE') && (
           <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
             <label className="block text-sm font-bold mb-3 text-purple-900">Seleccionar Técnica</label>
             <div className="grid grid-cols-3 gap-2">
@@ -989,7 +1180,7 @@ export const ManualBookingModal: React.FC<ManualBookingModalProps> = ({
           customerName: selectedCustomer 
             ? `${selectedCustomer.userInfo?.firstName} ${selectedCustomer.userInfo?.lastName}`
             : 'Cliente desconocido',
-          productName: selectedProduct?.name || 'Producto desconocido',
+          productName: selectedCreativeSku?.label || selectedProduct?.name || 'Producto desconocido',
           date: selectedSlots[0]?.date || '',
           time: selectedSlots[0]?.time || '',
           participants
