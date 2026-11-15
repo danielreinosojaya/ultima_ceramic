@@ -51,6 +51,7 @@ import { ProofUploadPage } from './components/ProofUploadPage';
 import { OpenStudioModal } from './components/admin/OpenStudioModal';
 import { MyClassesPrompt } from './components/MyClassesPrompt';
 import { EventsBottomSheet, useScrollEventsTrigger, hasUpcomingEvents } from './components/EventsBottomSheet';
+import { HolidayHoursNotice, dismissHolidayNotice, shouldOfferHolidayNotice, wasHolidayNoticeDismissed } from './components/HolidayHoursNotice';
 import { getSpecialEventConfig, SPECIAL_EVENT_CONFIGS } from './config/specialEventConfigs';
 import {
     parseInitialRoute,
@@ -127,6 +128,7 @@ const App: React.FC = () => {
     
     // Events Bottom Sheet state
     const [isEventsModalOpen, setIsEventsModalOpen] = useState(false);
+    const [holidayNoticeOpen, setHolidayNoticeOpen] = useState(false);
     const { shouldShowEvents } = useScrollEventsTrigger(hasUpcomingEvents());
     
     // COUPLES_EXPERIENCE states
@@ -320,18 +322,20 @@ const App: React.FC = () => {
         }
     }, [hasCheckedMyClasses, view]);
 
-    // Show Events Bottom Sheet when scroll trigger is activated (only once)
+    useEffect(() => {
+        if (view !== 'welcome') return;
+        if (!shouldOfferHolidayNotice() || wasHolidayNoticeDismissed()) return;
+        setHolidayNoticeOpen(true);
+    }, [view]);
+
+    // La hoja de eventos espera a que se cierre el aviso de horarios.
     const eventsModalShownRef = useRef(false);
     useEffect(() => {
-        // Solo mostrar si:
-        // 1. view es 'welcome'
-        // 2. NO se ha mostrado antes
-        // 3. El modal no está ya abierto
-        if (shouldShowEvents && view === 'welcome' && !eventsModalShownRef.current && !isEventsModalOpen) {
+        if (shouldShowEvents && view === 'welcome' && !holidayNoticeOpen && !eventsModalShownRef.current && !isEventsModalOpen) {
             eventsModalShownRef.current = true;
             setIsEventsModalOpen(true);
         }
-    }, [shouldShowEvents, view, isEventsModalOpen]);
+    }, [shouldShowEvents, view, isEventsModalOpen, holidayNoticeOpen]);
 
     // Handler for event clicks in the bottom sheet
     const handleEventClick = (slug: string) => {
@@ -1572,6 +1576,15 @@ const App: React.FC = () => {
                         setView('my-classes');
                     }}
                     onDismiss={() => setShowMyClassesPrompt(false)}
+                />
+            )}
+
+            {view === 'welcome' && holidayNoticeOpen && (
+                <HolidayHoursNotice
+                    onClose={() => {
+                        dismissHolidayNotice();
+                        setHolidayNoticeOpen(false);
+                    }}
                 />
             )}
 

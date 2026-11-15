@@ -10,7 +10,8 @@ import {
 } from '../../utils/experienceTypeRestrictions';
 import { isTechniqueBlockedOnDate } from '../../utils/techniqueDateBlocks';
 import { getStudioClosedMessage, isStudioClosedOnDate } from '../../utils/studioClosedDates';
-import { isClassStartWithinBusinessHours, getBusinessStartTimesForDate, LAST_CLASS_START_BY_DATE } from '../../utils/businessHours';
+import { isClassStartWithinBusinessHours, getBusinessStartTimesForDate, holidayReplacesWeekdayGrid, LAST_CLASS_START_BY_DATE } from '../../utils/businessHours';
+import { adjustFixedTimesForHoliday } from '../../utils/holidayHours';
 import { enumerateFixedScheduleDays } from '../../utils/fixedScheduleSlots';
 
 // Nombres de días para mapear Date.getDay() a DayKey
@@ -158,7 +159,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     if (technique === 'potters_wheel') {
       if (dayOfWeek === 3) fixedTornoSlots.push('11:00'); // Miércoles
     }
-    return fixedTornoSlots;
+    return adjustFixedTimesForHoliday(dateStr, fixedTornoSlots);
   }, [getSlotsForDate, technique]);
 
   // Obtener horarios fijos de una técnica para una fecha
@@ -172,7 +173,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     else return [];
     
     const fixedSlots = getSlotsForDate(dateStr).filter(slot => slot.technique === techniqueToMatch).map(slot => slot.time) || [];
-    return [...new Set(fixedSlots)].sort();
+    return adjustFixedTimesForHoliday(dateStr, [...new Set(fixedSlots)].sort());
   }, [getSlotsForDate]);
 
   // Verificar si un slot está bloqueado por clase fija
@@ -227,11 +228,14 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
       return hours;
     };
 
-    if (dayOfWeek === 1 && !hasOverrideForDate) return []; // Lunes cerrado por defecto, excepto en semanas especiales
+    if (dayOfWeek === 1 && !hasOverrideForDate && !holidayReplacesWeekdayGrid(dateStr)) return []; // Lunes cerrado por defecto, excepto en semanas especiales
     if (dayOfWeek === 1 && isSpecialDayNoRules) return buildSlots(10, 18);
 
     // Excepción por fecha (ej. 2026-08-05: último inicio 18:30 tras alquiler)
-    const baseHours = Object.prototype.hasOwnProperty.call(LAST_CLASS_START_BY_DATE, dateStr)
+    const baseHours = (
+      Object.prototype.hasOwnProperty.call(LAST_CLASS_START_BY_DATE, dateStr) ||
+      holidayReplacesWeekdayGrid(dateStr)
+    )
       ? getBusinessStartTimesForDate(dateStr)
       : dayOfWeek === 0
       ? buildSlots(10, 15)  // Domingo: último start 15:00 (cierre 17:00 - 2h clase)

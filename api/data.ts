@@ -71,7 +71,7 @@ import {
     sanitizeExperienceTypeOverrides,
 } from '../utils/experienceTypeRestrictions.js';
 import { getTechniqueDateBlock } from '../utils/techniqueDateBlocks.js';
-import { getStudioClosedDate } from '../utils/studioClosedDates.js';
+import { getStudioClosedDate, getStudioClosedMessage, isStudioClosedOnDate } from '../utils/studioClosedDates.js';
 import {
     areClassPackageSlotsWithinValidity,
     getClassPackageValidityLabel,
@@ -88,8 +88,10 @@ import {
     isClassStartWithinBusinessHours,
     getBusinessHoursRejectionMessage,
     getBusinessStartTimesForDate,
+    holidayReplacesWeekdayGrid,
     LAST_CLASS_START_BY_DATE,
 } from '../utils/businessHours.js';
+import { adjustFixedTimesForHoliday, isHolidayListed, isHolidayOpenDate } from '../utils/holidayHours.js';
 import { checkRateLimit } from './rateLimiter.js';
 import { uploadPhotoToBunny, uploadProofToBunny } from './bunnyUpload.js';
 import { deliverGiftcardToRecipient, recordDeliveryNotice } from './utils/giftcardDelivery.js';
@@ -883,7 +885,7 @@ const getFixedSlotTimesForDate = (
         if (dayKey === 'Wednesday') times.push('11:00');
     }
 
-    return Array.from(new Set(times)).sort();
+    return adjustFixedTimesForHoliday(dateStr, Array.from(new Set(times)).sort());
 };
 
 const techniquesCompeteForCapacity = (requestedTechnique: string, bookingTechnique: string | undefined): boolean => {
@@ -1058,7 +1060,7 @@ const computeSlotAvailability = async (
         };
     }
 
-    if (!isSpecialDayNoRules && requestedTechnique === 'painting' && requestedDayOfWeek === 1) {
+    if (!isSpecialDayNoRules && requestedTechnique === 'painting' && requestedDayOfWeek === 1 && !isHolidayOpenDate(requestedDate)) {
         const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
         return {
             available: false,
@@ -2303,6 +2305,13 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                 .forEach((time) => {
                                     if (!timesToEvaluate.has(time)) timesToEvaluate.set(time, undefined);
                                 });
+                        }
+
+                        if (requestedTechnique === 'painting' && holidayReplacesWeekdayGrid(dateStr)) {
+                            getBusinessStartTimesForDate(dateStr).forEach((time) => {
+                                const normalized = normalizeTime(time);
+                                if (!timesToEvaluate.has(normalized)) timesToEvaluate.set(normalized, undefined);
+                            });
                         }
 
                         // Día de cierre total: exponer slots bloqueados para que el calendario muestre el aviso
@@ -6259,6 +6268,16 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                     });
                 }
 
+                if (!forceAdminReschedule) {
+                    const rescheduleClosed = getStudioClosedDate(newSlot.date);
+                    if (rescheduleClosed) {
+                        return res.status(400).json({
+                            success: false,
+                            error: rescheduleClosed.message,
+                        });
+                    }
+                }
+
                 if (!forceAdminReschedule && slotOverlapsPrivateEvent(newSlot.date, normalizeTime(newSlot.time))) {
                     return res.status(400).json({
                         success: false,
@@ -7123,6 +7142,16 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                         success: false,
                         error: getBusinessHoursRejectionMessage(requestedDate),
                     });
+                }
+
+                if (!adminOverride) {
+                    const customClosed = getStudioClosedDate(requestedDate);
+                    if (customClosed) {
+                        return res.status(400).json({
+                            success: false,
+                            error: customClosed.message,
+                        });
+                    }
                 }
 
                 if (!adminOverride && slotOverlapsPrivateEvent(requestedDate, requestedTime)) {
@@ -10076,6 +10105,14 @@ async function addBookingAction(
       for (const slot of body.slots) {
         if (!slot?.date || !slot?.time) continue;
         const normalizedSlotTime = normalizeTime(slot.time);
+        if (isHolidayListed(slot.date)) {
+          if (isStudioClosedOnDate(slot.date)) {
+            throw new Error(getStudioClosedMessage(slot.date));
+          }
+          if (!isClassStartWithinBusinessHours(slot.date, normalizedSlotTime)) {
+            throw new Error(getBusinessHoursRejectionMessage(slot.date));
+          }
+        }
         if (slotOverlapsPrivateEvent(slot.date, normalizedSlotTime)) {
           throw new Error(
             `Lo sentimos, ${slot.date} a las ${normalizedSlotTime} no está disponible por un evento privado en el estudio.`
@@ -10326,7 +10363,7 @@ async function addBookingAction(
             const slotDate = new Date(`${slot.date}T00:00:00`);
             const dayOfWeek = slotDate.getDay();
             const isSpecialDayNoRules = scheduleOverrides?.[slot.date]?.disableRules === true;
-            if (!adminOverride && !isSpecialDayNoRules && dayOfWeek === 1 && requestedTechnique === 'painting') {
+            if (!adminOverride && !isSpecialDayNoRules && dayOfWeek === 1 && requestedTechnique === 'painting' && !isHolidayOpenDate(slot.date)) {
                 // Revisar si hay scheduleOverride para este lunes específico
                 const hasExceptionForThisDay = scheduleOverrides && scheduleOverrides[slot.date];
                 

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import type { Booking, AppData } from '../types';
 import * as dataService from '../services/dataService';
-import { formatDate, parseLocalDate } from '../utils/formatters';
+import { formatDate, formatDateToYYYYMMDD, parseLocalDate } from '../utils/formatters';
+import { isClassStartWithinBusinessHours, getMaxClassStartMinutesForDate } from '../utils/businessHours';
+import { isStudioClosedOnDate } from '../utils/studioClosedDates';
 import { XMarkIcon, CalendarIcon, ClockIcon } from '@heroicons/react/24/outline';
 
 interface RescheduleClientFlowProps {
@@ -108,22 +110,31 @@ export const RescheduleClientFlow: React.FC<RescheduleClientFlowProps> = ({
     };
 
     const getAvailableDates = (): string[] => {
-        if (!appData || !appData.availability) return [];
-        
-        // Get dates from next 30 days
         const dates: string[] = [];
         const today = new Date();
         for (let i = 1; i <= 30; i++) {
             const date = new Date(today);
             date.setDate(date.getDate() + i);
-            dates.push(date.toISOString().split('T')[0]);
+            const dateStr = formatDateToYYYYMMDD(date);
+            if (isStudioClosedOnDate(dateStr)) continue;
+            if (getMaxClassStartMinutesForDate(dateStr) === null) continue;
+            dates.push(dateStr);
         }
         return dates;
     };
 
-    const getAvailableTimes = (): string[] => {
-        // Standard class times
-        return ['09:00 AM', '10:30 AM', '02:00 PM', '03:30 PM', '05:00 PM', '06:30 PM'];
+    const timeOptions = [
+        { label: '09:00 AM', value: '09:00' },
+        { label: '10:30 AM', value: '10:30' },
+        { label: '02:00 PM', value: '14:00' },
+        { label: '03:30 PM', value: '15:30' },
+        { label: '05:00 PM', value: '17:00' },
+        { label: '06:30 PM', value: '18:30' },
+    ];
+
+    const getAvailableTimes = (): { label: string; value: string }[] => {
+        if (!selectedDate) return [];
+        return timeOptions.filter((option) => isClassStartWithinBusinessHours(selectedDate, option.value));
     };
 
     return (
@@ -244,21 +255,24 @@ export const RescheduleClientFlow: React.FC<RescheduleClientFlowProps> = ({
                                 Selecciona una hora para el {selectedDate && parseLocalDate(selectedDate).toLocaleDateString('es-ES')}
                             </label>
                             <div className="grid grid-cols-2 gap-2">
-                                {getAvailableTimes().map((time) => (
+                                {getAvailableTimes().length === 0 && (
+                                    <p className="text-sm text-brand-secondary">No hay horarios disponibles ese día.</p>
+                                )}
+                                {getAvailableTimes().map((option) => (
                                     <button
-                                        key={time}
+                                        key={option.value}
                                         onClick={() => {
-                                            setSelectedTime(time);
+                                            setSelectedTime(option.value);
                                             setCurrentStep('confirm');
                                         }}
                                         className={`p-3 rounded-lg text-center font-medium transition-colors flex items-center justify-center gap-2 ${
-                                            selectedTime === time
+                                            selectedTime === option.value
                                                 ? 'bg-brand-primary text-white'
                                                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                         }`}
                                     >
                                         <ClockIcon className="w-4 h-4" />
-                                        {time}
+                                        {option.label}
                                     </button>
                                 ))}
                             </div>

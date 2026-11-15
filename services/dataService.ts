@@ -372,8 +372,9 @@ import type {
 import { DAY_NAMES, DEFAULT_PRODUCTS, DEFAULT_POLICIES_TEXT } from '../constants';
 import { getEcuadorToday } from '../utils/formatters';
 import { slotOverlapsPrivateEvent } from '../utils/privateEventBlocks';
-import { getMaxClassStartMinutesForDate, getBusinessStartTimesForDate, LAST_CLASS_START_BY_DATE } from '../utils/businessHours';
+import { getMaxClassStartMinutesForDate, getBusinessStartTimesForDate, holidayReplacesWeekdayGrid, isClassStartWithinBusinessHours, LAST_CLASS_START_BY_DATE } from '../utils/businessHours';
 import { isStudioClosedOnDate } from '../utils/studioClosedDates';
+import { adjustFixedTimesForHoliday, getHolidayWindow, isHolidayListed } from '../utils/holidayHours';
 
 // --- API Helpers ---
 
@@ -2341,6 +2342,16 @@ export const generateIntroClassSessions = (
             }
         }
 
+        if (isHolidayListed(dateStr)) {
+            if (isStudioClosedOnDate(dateStr)) {
+                todaysSessions = [];
+            } else {
+                todaysSessions = todaysSessions.filter((session) =>
+                    isClassStartWithinBusinessHours(dateStr, session.time)
+                );
+            }
+        }
+
         todaysSessions.forEach((session) => {
             const isFull = appData.bookings.some((b) => b.date === session.date && b.time === session.time);
             if (includeFull || !isFull) {
@@ -2397,12 +2408,13 @@ const getBookingsForSlot = (date: Date, slot: AvailableSlot, appData: Pick<AppDa
 
 export const getAvailableTimesForDate = (date: Date, appData: Pick<AppData, 'availability' | 'scheduleOverrides' | 'classCapacity' | 'bookings'>, technique?: Technique): EnrichedAvailableSlot[] => {
     const dateStr = formatDateToYYYYMMDD(date);
+    if (isStudioClosedOnDate(dateStr)) return [];
     const dayKey = DAY_NAMES[date.getDay()];
     const override = appData.scheduleOverrides[dateStr];
     
     if (override && override.slots === null) return [];
 
-    let baseSlots = override ? override.slots! : appData.availability[dayKey];
+    let baseSlots = (override ? override.slots : appData.availability?.[dayKey]) ?? [];
     if (technique) {
         baseSlots = baseSlots.filter(s => s.technique === technique);
     }
@@ -2429,7 +2441,8 @@ export const getAvailableTimesForDate = (date: Date, appData: Pick<AppData, 'ava
     if ((date.getDay() === 2 || date.getDay() === 3) && maxStartForDate !== null) {
         baseSlots = baseSlots.filter(s => {
             if (dateOverrideActive) return toMinutes(s.time) <= maxStartForDate;
-            return s.technique === 'potters_wheel' ? toMinutes(s.time) <= 17 * 60 : toMinutes(s.time) <= 18 * 60;
+            const cap = s.technique === 'potters_wheel' ? 17 * 60 : 18 * 60;
+            return toMinutes(s.time) <= Math.min(cap, maxStartForDate);
         });
     }
 
@@ -2449,6 +2462,30 @@ export const getAvailableTimesForDate = (date: Date, appData: Pick<AppData, 'ava
                 if (slotOverlapsPrivateEvent(dateStr, time)) continue;
                 if (baseSlots.some(s => s.technique === tech && normalizeSlotTime(s.time) === normalizeSlotTime(time))) continue;
                 baseSlots.push({ ...template, time });
+            }
+        }
+    }
+
+    const holidayWindow = getHolidayWindow(dateStr);
+    if (holidayWindow?.kind === 'open') {
+        const lastStart = holidayWindow.closeMinutes - 120;
+        baseSlots = baseSlots.filter(s => {
+            const minutes = toMinutes(s.time);
+            return minutes >= holidayWindow.openMinutes && minutes <= lastStart;
+        });
+        if (holidayWindow.injectStandardHours) {
+            const extraTimes = adjustFixedTimesForHoliday(dateStr, []);
+            const techniques = technique ? [technique] : ['molding', 'potters_wheel'];
+            for (const tech of techniques) {
+                const template = baseSlots.find(s => s.technique === tech);
+                for (const time of extraTimes) {
+                    if (baseSlots.some(s => s.technique === tech && normalizeSlotTime(s.time) === time)) continue;
+                    baseSlots.push({
+                        time,
+                        instructorId: template?.instructorId ?? 1,
+                        technique: tech as AvailableSlot['technique'],
+                    });
+                }
             }
         }
     }
@@ -3696,7 +3733,10 @@ export const generateTimeSlots = (
         }
 
         // Excepción por fecha (ej. 2026-08-05 último inicio 18:30 post-alquiler)
-        if (Object.prototype.hasOwnProperty.call(LAST_CLASS_START_BY_DATE, dateStr)) {
+        if (
+            Object.prototype.hasOwnProperty.call(LAST_CLASS_START_BY_DATE, dateStr) ||
+            holidayReplacesWeekdayGrid(dateStr)
+        ) {
             getBusinessStartTimesForDate(dateStr).forEach(pushSlot);
             continue;
         }

@@ -1,4 +1,9 @@
 import { parseLocalDate, normalizeSlotTimeHHMM } from './formatters.js';
+import {
+    getHolidayLastStartMinutes,
+    getHolidayWindow,
+    HOLIDAY_CLOSED_MESSAGE,
+} from './holidayHours.js';
 
 /** Cierre del estudio: mar–sáb 20:00, dom 17:00. Clases duran 2 h → último inicio mar–sáb 18:00, dom 15:00. */
 export const LAST_CLASS_START_MINUTES_TUE_SAT = 18 * 60;
@@ -23,7 +28,23 @@ export function getMaxClassStartMinutesForDate(dateStr: string): number | null {
     if (Object.prototype.hasOwnProperty.call(LAST_CLASS_START_BY_DATE, dateStr)) {
         return LAST_CLASS_START_BY_DATE[dateStr];
     }
+    const holidayLast = getHolidayLastStartMinutes(dateStr);
+    if (holidayLast !== null) return holidayLast;
+    if (getHolidayWindow(dateStr)?.kind === 'closed') return null;
     return getMaxClassStartMinutes(parseLocalDate(dateStr).getDay());
+}
+
+/**
+ * true solo cuando el horario de fiesta abre un día cerrado o mueve el último inicio.
+ * Un sábado o martes que ya cierra a las 20:00 no entra aquí.
+ */
+export function holidayReplacesWeekdayGrid(dateStr: string): boolean {
+    const holiday = getHolidayWindow(dateStr);
+    if (!holiday || holiday.kind !== 'open') return false;
+    const weekdayMax = getMaxClassStartMinutes(parseLocalDate(dateStr).getDay());
+    const holidayLast = holiday.closeMinutes - 120;
+    if (weekdayMax === null) return true;
+    return holidayLast !== weekdayMax;
 }
 
 export function timeToMinutesHHMM(time: string): number {
@@ -43,8 +64,11 @@ function formatMinutesAsHHMM(totalMinutes: number): string {
 export function getBusinessStartTimesForDate(dateStr: string, openHour = 10): string[] {
     const maxStart = getMaxClassStartMinutesForDate(dateStr);
     if (maxStart === null) return [];
+    let start = openHour * 60;
+    const holiday = getHolidayWindow(dateStr);
+    if (holiday?.kind === 'open') start = Math.max(start, holiday.openMinutes);
     const hours: string[] = [];
-    for (let minutes = openHour * 60; minutes <= maxStart; minutes += 30) {
+    for (let minutes = start; minutes <= maxStart; minutes += 30) {
         hours.push(formatMinutesAsHHMM(minutes));
     }
     return hours;
@@ -52,14 +76,22 @@ export function getBusinessStartTimesForDate(dateStr: string, openHour = 10): st
 
 /** true si el inicio de clase respeta el cierre del estudio (2 h de duración). */
 export function isClassStartWithinBusinessHours(dateStr: string, time: string): boolean {
+    if (getHolidayWindow(dateStr)?.kind === 'closed') return false;
     const maxStart = getMaxClassStartMinutesForDate(dateStr);
     if (maxStart === null) return false;
     const startMinutes = timeToMinutesHHMM(time);
     if (Number.isNaN(startMinutes)) return false;
+    const holiday = getHolidayWindow(dateStr);
+    if (holiday?.kind === 'open' && startMinutes < holiday.openMinutes) return false;
     return startMinutes <= maxStart;
 }
 
 export function getBusinessHoursRejectionMessage(dateStr: string): string {
+    const holiday = getHolidayWindow(dateStr);
+    if (holiday?.kind === 'closed') return HOLIDAY_CLOSED_MESSAGE;
+    if (holiday?.kind === 'open') {
+        return `Ese día el último inicio permitido es ${formatMinutesAsHHMM(holiday.closeMinutes - 120)} (cierre ${formatMinutesAsHHMM(holiday.closeMinutes)})`;
+    }
     if (Object.prototype.hasOwnProperty.call(LAST_CLASS_START_BY_DATE, dateStr)) {
         return `Ese día el último inicio permitido es ${formatMinutesAsHHMM(LAST_CLASS_START_BY_DATE[dateStr])}`;
     }

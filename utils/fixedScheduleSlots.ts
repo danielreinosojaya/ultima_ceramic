@@ -1,6 +1,7 @@
 import type { AvailableSlot, DayKey, ScheduleOverrides } from '../types';
 import { getEcuadorDateYmd, isEcuadorSlotInPast } from './formatters';
 import { isStudioClosedOnDate } from './studioClosedDates';
+import { adjustFixedTimesForHoliday } from './holidayHours';
 
 const DAY_KEYS: DayKey[] = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -63,7 +64,7 @@ export function getFixedTimesForDate(
     times.push('11:00');
   }
 
-  return [...new Set(times)].sort();
+  return adjustFixedTimesForHoliday(dateStr, [...new Set(times)].sort());
 }
 
 export function enumerateFixedScheduleDays(

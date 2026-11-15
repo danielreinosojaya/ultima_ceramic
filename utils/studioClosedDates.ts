@@ -3,6 +3,8 @@
  * Bloquea todas las actividades y horarios.
  */
 
+import { getHolidayWindow, HOLIDAY_CLOSED_MESSAGE } from './holidayHours.js';
+
 export interface StudioClosedDate {
   /** YYYY-MM-DD (Ecuador) */
   date: string;
@@ -22,7 +24,16 @@ export const STUDIO_CLOSED_DATES: StudioClosedDate[] = [
 
 export function getStudioClosedDate(dateStr: string): StudioClosedDate | null {
   if (!dateStr) return null;
-  return STUDIO_CLOSED_DATES.find((d) => d.date === dateStr) || null;
+  const listed = STUDIO_CLOSED_DATES.find((d) => d.date === dateStr) || null;
+  if (listed) return listed;
+  try {
+    if (getHolidayWindow(dateStr)?.kind === 'closed') {
+      return { date: dateStr, message: HOLIDAY_CLOSED_MESSAGE };
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 export function isStudioClosedOnDate(dateStr: string): boolean {
