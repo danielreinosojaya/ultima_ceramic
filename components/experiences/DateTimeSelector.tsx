@@ -261,7 +261,7 @@ export const DateTimeSelector: React.FC<DateTimeSelectorProps> = ({
                       {slot.instructor}
                     </div>
                     <SocialBadge 
-                      currentCount={slot.total - slot.available} 
+                      currentCount={slot.booked ?? 0} 
                       maxCapacity={slot.total} 
                       variant="compact" 
                     />

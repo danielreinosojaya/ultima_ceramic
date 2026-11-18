@@ -34,6 +34,7 @@ export const RumcomBooking: React.FC<RumcomBookingProps> = ({
   const [slotAvailability, setSlotAvailability] = useState<{
     available: number;
     total: number;
+    booked: number;
     canBook: boolean;
     message?: string;
   } | null>(null);
@@ -52,13 +53,14 @@ export const RumcomBooking: React.FC<RumcomBookingProps> = ({
           1,
           { skipTechRestriction: true }
         );
-        // Calculate booked count against EVENT_MAX_CAPACITY (20 fixed for this event)
+        // Cupo del evento usa ocupación de ventana; el badge usa inicio exacto.
         const dbMax = result.capacity?.max ?? EVENT_MAX_CAPACITY;
-        const dbBooked = dbMax - (result.capacity?.available ?? 0);
-        const eventAvailable = Math.max(0, EVENT_MAX_CAPACITY - dbBooked);
+        const dbOccupiedInWindow = dbMax - (result.capacity?.available ?? 0);
+        const eventAvailable = Math.max(0, EVENT_MAX_CAPACITY - dbOccupiedInWindow);
         setSlotAvailability({
           available: eventAvailable,
           total: EVENT_MAX_CAPACITY,
+          booked: result.capacity?.booked ?? 0,
           canBook: result.available && eventAvailable > 0,
           message: result.message,
         });
@@ -67,6 +69,7 @@ export const RumcomBooking: React.FC<RumcomBookingProps> = ({
         setSlotAvailability({
           available: 0,
           total: EVENT_MAX_CAPACITY,
+          booked: 0,
           canBook: false,
           message: 'Error verificando disponibilidad',
         });
@@ -192,7 +195,7 @@ export const RumcomBooking: React.FC<RumcomBookingProps> = ({
                           : 'Sin cupos disponibles'}
                       </span>
                       <SocialBadge
-                        currentCount={slotAvailability.total - slotAvailability.available}
+                        currentCount={slotAvailability.booked}
                         maxCapacity={slotAvailability.total}
                         variant="compact"
                       />

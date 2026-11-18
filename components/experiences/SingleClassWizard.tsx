@@ -187,6 +187,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
               time: c.time,
               available: val.capacity?.available ?? 8,
               total: val.capacity?.max ?? 8,
+              booked: val.capacity?.booked ?? 0,
               canBook: true,
               instructor: 'Instructor',
               instructorId: 0,
@@ -289,6 +290,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
         newCache[`${slot.date}-${slot.time}`] = {
           available: slot.available,
           total: slot.total,
+          booked: slot.booked ?? 0,
           canBook: slot.canBook,
           message: slot.canBook ? 'Disponible' : 'Sin cupos',
           openedByLargeGroup: slot.openedByLargeGroup ?? false,
@@ -320,6 +322,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
           newCache[slotKey] = {
             available: result.value.capacity?.available ?? 0,
             total: result.value.capacity?.max ?? 22,
+            booked: result.value.capacity?.booked ?? 0,
             canBook: result.value.available,
             message: result.value.message,
             openedByLargeGroup: result.value.openedByLargeGroup ?? false,
@@ -328,6 +331,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
           newCache[slotKey] = {
             available: 0,
             total: 22,
+            booked: 0,
             canBook: false,
             message: 'Error verificando disponibilidad',
             openedByLargeGroup: false,
@@ -1145,6 +1149,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                             selectedSlot?.time === time && selectedSlot?.date === selectedDate;
                           const available = slotInfo?.available ?? 22;
                           const total = slotInfo?.total ?? 22;
+                          const bookedAtTime = slotInfo?.booked ?? 0;
                           const canBook = slotInfo?.canBook ?? available >= participants;
 
                           return (
@@ -1173,7 +1178,7 @@ export const SingleClassWizard: React.FC<SingleClassWizardProps> = ({
                                 <span>{time}</span>
                                 {canBook && (
                                   <SocialBadge
-                                    currentCount={total - available}
+                                    currentCount={bookedAtTime}
                                     maxCapacity={total}
                                     variant="compact"
                                   />

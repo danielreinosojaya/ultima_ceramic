@@ -87,7 +87,13 @@ export const SocialBadge: React.FC<SocialBadgeProps> = ({
                 ${badge.shouldPulse ? 'animate-pulse' : ''}
                 transition-all duration-300
             `}
-            title={percentage === 100 ? 'Clase completa' : `${normalizedCount} de ${maxCapacity} cupos ocupados`}
+            title={
+                percentage === 100
+                    ? 'Clase completa a esta hora'
+                    : normalizedCount === 0
+                    ? `Sin reservas a esta hora · ${maxCapacity} cupos`
+                    : `${normalizedCount} ${normalizedCount === 1 ? 'persona' : 'personas'} a esta hora · ${maxCapacity} cupos`
+            }
         >
             <span className="text-xs">{badge.emoji}</span>
             <span className="whitespace-nowrap">{badge.text}</span>

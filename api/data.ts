@@ -71,6 +71,7 @@ import {
     sanitizeExperienceTypeOverrides,
 } from '../utils/experienceTypeRestrictions.js';
 import { getTechniqueSlotBlock, isTechniqueSlotBlocked } from '../utils/techniqueDateBlocks.js';
+import { summarizeSlotOccupancy } from '../utils/slotOccupancy.js';
 import { getStudioClosedDate, getStudioClosedMessage, isStudioClosedOnDate } from '../utils/studioClosedDates.js';
 import {
     areClassPackageSlotsWithinValidity,
@@ -942,42 +943,59 @@ const evaluatePublicExperienceSlot = (params: {
         slotOverlapsPrivateEvent(dateStr, slotTime) ||
         slotOverlapsExclusiveSpaceRental(dateStr, slotTime, bookings, 2 * 60).overlaps;
     if (hasPrivateEventBlock) {
-        return { ...base, available: 0, canBook: false, blockedReason: 'private_event' };
+        return { ...base, booked: 0, available: 0, canBook: false, blockedReason: 'private_event' };
     }
 
     if (getStudioClosedDate(dateStr)) {
-        return { ...base, available: 0, canBook: false, blockedReason: 'studio_closed' };
+        return { ...base, booked: 0, available: 0, canBook: false, blockedReason: 'studio_closed' };
     }
 
     if (isTechniqueSlotBlocked(dateStr, requestedTechnique, slotTime)) {
-        return { ...base, available: 0, canBook: false, blockedReason: 'technique_restriction' };
+        return { ...base, booked: 0, available: 0, canBook: false, blockedReason: 'technique_restriction' };
     }
 
     if (hasCourseOverlap(dateStr, slotStartMinutes, slotEndMinutes, courseSessionsByDate)) {
-        return { ...base, available: 0, canBook: false, blockedReason: 'course_conflict' };
+        return { ...base, booked: 0, available: 0, canBook: false, blockedReason: 'course_conflict' };
     }
 
-    let bookedParticipants = 0;
+    // booked = personas con inicio EXACTO en esta hora (badge / social proof).
+    // overlapping = cualquier reserva que solape la ventana de 2h (cupo real para canBook).
+    // Una reserva cuenta una sola vez aunque tenga varios slots ese día.
+    const occupancyEntries: Array<{ startMinutes: number; participants: number }> = [];
     for (const b of bookings) {
         if (!b.slots || !Array.isArray(b.slots)) continue;
         const occupancy = occupancyForRequestedTechnique(b, requestedTechnique);
         if (occupancy <= 0) continue;
-        const overlaps = b.slots.some((s: any) => {
-            if (s.date !== dateStr) return false;
-            const bookingStartMinutes = timeToMinutes(normalizeTime(s.time));
-            const bookingEndMinutes = bookingStartMinutes + (2 * 60);
-            return hasTimeOverlap(slotStartMinutes, slotEndMinutes, bookingStartMinutes, bookingEndMinutes);
-        });
-        if (overlaps) bookedParticipants += occupancy;
-    }
-    if (requestedTechnique === 'potters_wheel' && bookedParticipants === 0) {
-        bookedParticipants = 1;
-    }
 
-    const availableCapacity = maxCapacity - bookedParticipants;
+        let bestStart: number | null = null;
+        for (const s of b.slots) {
+            if (s.date !== dateStr) continue;
+            const start = timeToMinutes(normalizeTime(s.time));
+            if (Number.isNaN(start)) continue;
+            if (start === slotStartMinutes) {
+                bestStart = start;
+                break;
+            }
+            const end = start + (2 * 60);
+            if (hasTimeOverlap(slotStartMinutes, slotEndMinutes, start, end)) {
+                if (bestStart === null) bestStart = start;
+            }
+        }
+        if (bestStart !== null) {
+            occupancyEntries.push({ startMinutes: bestStart, participants: occupancy });
+        }
+    }
+    const { exactBooked, overlappingBooked } = summarizeSlotOccupancy(
+        occupancyEntries,
+        slotStartMinutes,
+        2 * 60
+    );
+
+    const availableCapacity = Math.max(0, maxCapacity - overlappingBooked);
     return {
         ...base,
-        available: Math.max(0, availableCapacity),
+        booked: exactBooked,
+        available: availableCapacity,
         canBook: availableCapacity >= requestedParticipants,
         blockedReason: null,
     };

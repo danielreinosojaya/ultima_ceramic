@@ -1802,8 +1802,10 @@ export interface AvailableSlotSearchParams {
 export interface AvailableSlotResult {
     date: string;               // YYYY-MM-DD
     time: string;               // HH:mm
-    available: number;          // Cupos disponibles
+    available: number;          // Cupos libres (ventana 2h / solapes)
     total: number;              // Capacidad total
+    /** Personas con inicio exacto en esta hora (para badges; no usar total-available) */
+    booked?: number;
     canBook: boolean;           // true si tiene espacio suficiente
     instructor: string;         // Nombre del instructor
     instructorId: number;       // ID del instructor
