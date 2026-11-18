@@ -8,7 +8,10 @@ import {
   isSlotBlockedByExperienceTypeOverride,
   sanitizeExperienceTypeOverrides,
 } from '../../utils/experienceTypeRestrictions';
-import { isTechniqueBlockedOnDate } from '../../utils/techniqueDateBlocks';
+import {
+  isTechniqueFullyBlockedOnDate,
+  isTechniqueSlotBlocked,
+} from '../../utils/techniqueDateBlocks';
 import { getStudioClosedMessage, isStudioClosedOnDate } from '../../utils/studioClosedDates';
 import { isClassStartWithinBusinessHours, getBusinessStartTimesForDate, holidayReplacesWeekdayGrid, LAST_CLASS_START_BY_DATE } from '../../utils/businessHours';
 import { adjustFixedTimesForHoliday } from '../../utils/holidayHours';
@@ -194,9 +197,9 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
     return slotOverlapsPrivateEvent(dateStr, time);
   }, []);
 
-  // Validación local: bloqueos por fecha + experienceTypeOverrides (lista blanca)
+  // Validación local: bloqueos por fecha/hora + experienceTypeOverrides (lista blanca)
   const isSlotBlockedByTechRestrictionLocal = useCallback((dateStr: string, time: string): boolean => {
-    if (isTechniqueBlockedOnDate(dateStr, technique)) return true;
+    if (isTechniqueSlotBlocked(dateStr, technique, time)) return true;
     if (scheduleOverrides?.[dateStr]?.disableRules) return false;
     return isSlotBlockedByExperienceTypeOverride(experienceTypeOverrides, dateStr, technique, time);
   }, [experienceTypeOverrides, technique, scheduleOverrides]);
@@ -278,8 +281,10 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   const visibleHoursForSelectedDate = useMemo(() => {
     if (!selectedDate) return [] as string[];
     if (isStudioClosedOnDate(selectedDate)) return [] as string[];
-    if (isTechniqueBlockedOnDate(selectedDate, technique)) return [] as string[];
-    const candidateHours = getAvailableHours(selectedDate);
+    if (isTechniqueFullyBlockedOnDate(selectedDate, technique)) return [] as string[];
+    const candidateHours = getAvailableHours(selectedDate).filter(
+      (hour) => !isTechniqueSlotBlocked(selectedDate, technique, hour)
+    );
     const isSpecialDayNoRules = scheduleOverrides?.[selectedDate]?.disableRules === true;
 
     if (isSpecialDayNoRules) {
@@ -685,7 +690,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
               }`}>
                 {selectedDate && isStudioClosedOnDate(selectedDate)
                   ? 'Local cerrado'
-                  : selectedDate && isTechniqueBlockedOnDate(selectedDate, technique)
+                  : selectedDate && isTechniqueFullyBlockedOnDate(selectedDate, technique)
                   ? 'No disponible'
                   : 'No hay horarios disponibles este día'}
               </p>
@@ -694,7 +699,7 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
               }`}>
                 {selectedDate && isStudioClosedOnDate(selectedDate)
                   ? getStudioClosedMessage(selectedDate)
-                  : selectedDate && isTechniqueBlockedOnDate(selectedDate, technique)
+                  : selectedDate && isTechniqueFullyBlockedOnDate(selectedDate, technique)
                   ? 'Por favor selecciona otro día.'
                   : (technique === 'hand_modeling' || technique === 'potters_wheel') && participants === 1
                   ? `No hay horarios disponibles para este día. Prueba otro día o revisa si aparece un slot abierto por un grupo de 3+ en ${technique === 'hand_modeling' ? 'modelado' : 'torno'}.`

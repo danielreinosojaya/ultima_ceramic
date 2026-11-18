@@ -70,7 +70,7 @@ import {
     isSlotBlockedByExperienceTypeOverride,
     sanitizeExperienceTypeOverrides,
 } from '../utils/experienceTypeRestrictions.js';
-import { getTechniqueDateBlock } from '../utils/techniqueDateBlocks.js';
+import { getTechniqueSlotBlock, isTechniqueSlotBlocked } from '../utils/techniqueDateBlocks.js';
 import { getStudioClosedDate, getStudioClosedMessage, isStudioClosedOnDate } from '../utils/studioClosedDates.js';
 import {
     areClassPackageSlotsWithinValidity,
@@ -949,7 +949,7 @@ const evaluatePublicExperienceSlot = (params: {
         return { ...base, available: 0, canBook: false, blockedReason: 'studio_closed' };
     }
 
-    if (getTechniqueDateBlock(dateStr, requestedTechnique)) {
+    if (isTechniqueSlotBlocked(dateStr, requestedTechnique, slotTime)) {
         return { ...base, available: 0, canBook: false, blockedReason: 'technique_restriction' };
     }
 
@@ -1075,7 +1075,7 @@ const computeSlotAvailability = async (
         };
     }
 
-    const techniqueDateBlock = getTechniqueDateBlock(requestedDate, requestedTechnique);
+    const techniqueDateBlock = getTechniqueSlotBlock(requestedDate, requestedTechnique, normalizedTime);
     if (techniqueDateBlock) {
         const maxCapacity = resolveCapacity(requestedDate, requestedTechnique, maxCapacityMap, scheduleOverrides);
         return {
@@ -2469,7 +2469,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                             if (pottersCount > 0) {
                                 pottersTotal = resolveCapacity(dateStr, 'potters_wheel', maxCapacityMap, scheduleOverrides);
 
-                                if (getTechniqueDateBlock(dateStr, 'potters_wheel')) {
+                                if (isTechniqueSlotBlocked(dateStr, 'potters_wheel', normalizedTime)) {
                                     pottersBlocked = true;
                                     blockedReason = blockedReason || 'technique_restriction';
                                 }
@@ -10228,7 +10228,7 @@ async function addBookingAction(
             }
 
             if (pottersCount > 0) {
-                const pottersDateBlock = getTechniqueDateBlock(slot.date, 'potters_wheel');
+                const pottersDateBlock = getTechniqueSlotBlock(slot.date, 'potters_wheel', normalizedTime);
                 if (pottersDateBlock) {
                     throw new Error(pottersDateBlock.message);
                 }
