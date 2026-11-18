@@ -4,6 +4,7 @@ import { GROUP_CLASS_CAPACITY } from '../../types';
 import * as dataService from '../../services/dataService';
 import { useNavigationSubStep } from '../../hooks/useAppNavigationHistory';
 import { getStudioClosedMessage, isStudioClosedOnDate } from '../../utils/studioClosedDates';
+import { isTechniqueSlotBlocked } from '../../utils/techniqueDateBlocks';
 
 export interface GroupClassWizardProps {
   config: GroupClassConfig;
@@ -94,9 +95,17 @@ export const GroupClassWizard: React.FC<GroupClassWizardProps> = ({
           daysAhead: 90
         });
 
-        setAvailableSlots(slots);
+        const markedSlots =
+          techniqueCounts.pottersWheel > 0
+            ? slots.map((s) =>
+                isTechniqueSlotBlocked(s.date, 'potters_wheel', s.time)
+                  ? { ...s, canBook: false, blockedReason: s.blockedReason || 'technique_restriction' }
+                  : s
+              )
+            : slots;
+        setAvailableSlots(markedSlots);
 
-        const uniqueDates = [...new Set(slots.map(s => s.date))]
+        const uniqueDates = [...new Set(markedSlots.map(s => s.date))]
           .filter((date) => !isStudioClosedOnDate(date))
           .sort();
         if (uniqueDates.length > 0) {

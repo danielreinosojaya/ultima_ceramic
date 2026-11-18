@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import * as dataService from '../../services/dataService';
 import { SocialBadge } from '../SocialBadge';
 import { getBusinessStartTimesForDate } from '../../utils/businessHours';
+import { isTechniqueSlotBlocked } from '../../utils/techniqueDateBlocks';
 
 interface DateTimeSelectorProps {
   technique: string;              // 'potters_wheel' | 'hand_modeling' | 'painting'
@@ -42,7 +43,9 @@ export const DateTimeSelector: React.FC<DateTimeSelectorProps> = ({
           daysAhead: 90
         });
 
-        const bookable = slots.filter((s) => s.canBook !== false);
+        const bookable = slots.filter(
+          (s) => s.canBook !== false && !isTechniqueSlotBlocked(s.date, technique, s.time)
+        );
         setAvailableSlots(bookable);
         
         // Auto-seleccionar primera fecha disponible
