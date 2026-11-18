@@ -44,7 +44,14 @@ export const TECHNIQUE_DATE_BLOCKS: TechniqueDateBlock[] = [
   { date: '2026-10-29', technique: 'potters_wheel', message: GENERIC_UNAVAILABLE },
   { date: '2026-10-30', technique: 'potters_wheel', message: GENERIC_UNAVAILABLE },
   { date: '2026-10-31', technique: 'potters_wheel', message: GENERIC_UNAVAILABLE },
-  // 19 nov: bloque 13:00–18:00 → reservable 11–13 y 18–20
+  // 19 nov: solo 11–13 y 18–20 (bloque antes de 11:00 + bloque 13:00–18:00)
+  {
+    date: '2026-11-19',
+    technique: 'potters_wheel',
+    message: GENERIC_UNAVAILABLE,
+    blockStart: '00:00',
+    blockEnd: '11:00',
+  },
   {
     date: '2026-11-19',
     technique: 'potters_wheel',

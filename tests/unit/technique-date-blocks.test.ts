@@ -30,12 +30,14 @@ describe('technique date blocks', () => {
     assert.equal(isTechniqueSlotBlocked('2026-11-18', 'potters_wheel', '13:00'), false);
   });
 
-  describe('2026-11-19 afternoon window 13:00-18:00', () => {
+  describe('2026-11-19 only 11:00-13:00 and 18:00-20:00', () => {
     const date = '2026-11-19';
     it('is not a full-day block', () => {
       assert.equal(isTechniqueFullyBlockedOnDate(date, 'potters_wheel'), false);
     });
-    it('allows 11:00 and 18:00; blocks 13:00 and 16:00', () => {
+    it('allows 11:00 and 18:00; blocks 10:00, 10:30, 13:00 and 16:00', () => {
+      assert.equal(isTechniqueSlotBlocked(date, 'potters_wheel', '10:00'), true);
+      assert.equal(isTechniqueSlotBlocked(date, 'potters_wheel', '10:30'), true);
       assert.equal(isTechniqueSlotBlocked(date, 'potters_wheel', '11:00'), false);
       assert.equal(isTechniqueSlotBlocked(date, 'potters_wheel', '13:00'), true);
       assert.equal(isTechniqueSlotBlocked(date, 'potters_wheel', '16:00'), true);
