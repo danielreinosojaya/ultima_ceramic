@@ -39,6 +39,8 @@ const TECH_ALIASES: Record<string, string[]> = {
  * Torno alfarero cerrado:
  * - 29–31 oct 2026 (día completo; 1 nov es cierre total → studioClosedDates.ts)
  * - 19 / 25–28 nov 2026 (parciales + días completos; talleres fuera del local)
+ * - Fiestas dic 2026, días en que el local abre: 21, 23, 26, 27 y 29 (día completo).
+ *   El 28 solo queda el inicio de las 16:00 (clase 16:00–18:00).
  */
 export const TECHNIQUE_DATE_BLOCKS: TechniqueDateBlock[] = [
   { date: '2026-10-29', technique: 'potters_wheel', message: GENERIC_UNAVAILABLE },
@@ -76,6 +78,26 @@ export const TECHNIQUE_DATE_BLOCKS: TechniqueDateBlock[] = [
     message: GENERIC_UNAVAILABLE,
     blockStart: '00:00',
     blockEnd: '15:00',
+  },
+  // Fiestas: torno cerrado en los días abiertos. El 28 dic solo 16:00–18:00.
+  { date: '2026-12-21', technique: 'potters_wheel', message: GENERIC_UNAVAILABLE },
+  { date: '2026-12-23', technique: 'potters_wheel', message: GENERIC_UNAVAILABLE },
+  { date: '2026-12-26', technique: 'potters_wheel', message: GENERIC_UNAVAILABLE },
+  { date: '2026-12-27', technique: 'potters_wheel', message: GENERIC_UNAVAILABLE },
+  { date: '2026-12-29', technique: 'potters_wheel', message: GENERIC_UNAVAILABLE },
+  {
+    date: '2026-12-28',
+    technique: 'potters_wheel',
+    message: GENERIC_UNAVAILABLE,
+    blockStart: '00:00',
+    blockEnd: '16:00',
+  },
+  {
+    date: '2026-12-28',
+    technique: 'potters_wheel',
+    message: GENERIC_UNAVAILABLE,
+    blockStart: '18:00',
+    blockEnd: '24:00',
   },
 ];
 

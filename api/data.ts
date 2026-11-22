@@ -6294,6 +6294,22 @@ async function handleAction(action: string, req: VercelRequest, res: VercelRespo
                             error: rescheduleClosed.message,
                         });
                     }
+                    const movesPotters =
+                        deriveBookingTechnique(booking) === 'potters_wheel' ||
+                        getGroupClassBookingCounts(booking).potters > 0;
+                    if (movesPotters) {
+                        const pottersDateBlock = getTechniqueSlotBlock(
+                            newSlot.date,
+                            'potters_wheel',
+                            normalizeTime(newSlot.time)
+                        );
+                        if (pottersDateBlock) {
+                            return res.status(400).json({
+                                success: false,
+                                error: pottersDateBlock.message,
+                            });
+                        }
+                    }
                 }
 
                 if (!forceAdminReschedule && slotOverlapsPrivateEvent(newSlot.date, normalizeTime(newSlot.time))) {

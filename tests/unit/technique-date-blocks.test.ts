@@ -78,6 +78,43 @@ describe('technique date blocks', () => {
     });
   });
 
+  describe('holiday open days dec 2026: potters closed', () => {
+    const dates = ['2026-12-21', '2026-12-23', '2026-12-26', '2026-12-27', '2026-12-29'];
+    for (const date of dates) {
+      it(`blocks potters_wheel all day on ${date}`, () => {
+        assert.equal(isTechniqueFullyBlockedOnDate(date, 'potters_wheel'), true);
+        assert.equal(isTechniqueSlotBlocked(date, 'potters_wheel', '10:00'), true);
+        assert.equal(isTechniqueSlotBlocked(date, 'potters_wheel', '16:00'), true);
+      });
+
+      it(`does not block molding/painting on ${date}`, () => {
+        assert.equal(isTechniqueFullyBlockedOnDate(date, 'molding'), false);
+        assert.equal(isTechniqueSlotBlocked(date, 'molding', '10:00'), false);
+        assert.equal(isTechniqueSlotBlocked(date, 'painting', '16:00'), false);
+        assert.equal(isTechniqueSlotBlocked(date, 'hand_modeling', '16:00'), false);
+      });
+    }
+  });
+
+  describe('2026-12-28 only 16:00', () => {
+    const date = '2026-12-28';
+    it('is not a full-day block', () => {
+      assert.equal(isTechniqueFullyBlockedOnDate(date, 'potters_wheel'), false);
+    });
+    it('allows 16:00 and blocks the other starts', () => {
+      assert.equal(isTechniqueSlotBlocked(date, 'potters_wheel', '10:00'), true);
+      assert.equal(isTechniqueSlotBlocked(date, 'potters_wheel', '14:00'), true);
+      assert.equal(isTechniqueSlotBlocked(date, 'potters_wheel', '16:00'), false);
+      assert.equal(isTechniqueSlotBlocked(date, 'potters_wheel', '16:30'), true);
+      assert.equal(isTechniqueSlotBlocked(date, 'potters_wheel', '18:00'), true);
+    });
+    it('does not block molding/painting', () => {
+      assert.equal(isTechniqueSlotBlocked(date, 'molding', '10:00'), false);
+      assert.equal(isTechniqueSlotBlocked(date, 'painting', '16:00'), false);
+      assert.equal(isTechniqueSlotBlocked(date, 'hand_modeling', '16:00'), false);
+    });
+  });
+
   describe('isolation from other techniques on nov blocks', () => {
     const dates = ['2026-11-19', '2026-11-25', '2026-11-26', '2026-11-27', '2026-11-28'];
     for (const date of dates) {
