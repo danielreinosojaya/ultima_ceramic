@@ -60,10 +60,6 @@ export function getFixedTimesForDate(
     })
     .map((slot) => slot.time);
 
-  if (techniqueKey === 'potters_wheel' && dayKey === 'Wednesday') {
-    times.push('11:00');
-  }
-
   return adjustFixedTimesForHoliday(dateStr, [...new Set(times)].sort());
 }
 

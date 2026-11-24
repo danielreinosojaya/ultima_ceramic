@@ -154,16 +154,11 @@ export const FreeDateTimePicker: React.FC<FreeDateTimePickerProps> = ({
   
   // Obtener horarios fijos de torno para una fecha (helper)
   const getFixedTornoSlots = useCallback((dateStr: string): string[] => {
-    const date = parseLocalDate(dateStr);
-    const dayOfWeek = date.getDay();
     const fixedTornoSlots = getSlotsForDate(dateStr).filter(slot => 
       slot.technique === 'potters_wheel'
     ).map(slot => slot.time) || [];
-    if (technique === 'potters_wheel') {
-      if (dayOfWeek === 3) fixedTornoSlots.push('11:00'); // Miércoles
-    }
     return adjustFixedTimesForHoliday(dateStr, fixedTornoSlots);
-  }, [getSlotsForDate, technique]);
+  }, [getSlotsForDate]);
 
   // Obtener horarios fijos de una técnica para una fecha
   // Para ModeladoAMano (hand_modeling): técnica 'molding' en el calendario

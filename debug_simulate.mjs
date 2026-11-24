@@ -33,10 +33,6 @@ const getFixedSlotTimesForDate = (dateStr, dayKey, availability, scheduleOverrid
     const times = baseSlots
         .filter((slot) => slot.technique === techniqueKey)
         .map((slot) => normalizeTime(slot.time));
-    if (techniqueKey === 'potters_wheel') {
-        if (dayKey === 'Tuesday') times.push('19:00');
-        if (dayKey === 'Wednesday') times.push('11:00');
-    }
     return [...new Set(times)].sort();
 };
 

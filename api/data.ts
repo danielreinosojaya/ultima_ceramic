@@ -882,10 +882,6 @@ const getFixedSlotTimesForDate = (
         })
         .map((slot: any) => normalizeTime(slot.time));
 
-    if (techniqueKey === 'potters_wheel') {
-        if (dayKey === 'Wednesday') times.push('11:00');
-    }
-
     return adjustFixedTimesForHoliday(dateStr, Array.from(new Set(times)).sort());
 };
 
