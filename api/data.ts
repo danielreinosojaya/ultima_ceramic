@@ -10453,6 +10453,19 @@ async function addBookingAction(
 
     // CLASS_PACKAGE: ventanas 4 sem / 2 meses / 3 meses desde la primera clase
     if (body.productType === 'CLASS_PACKAGE' && Array.isArray(body.slots) && body.slots.length > 0) {
+      if (!adminOverride && technique) {
+        for (const packageSlot of body.slots) {
+          if (!packageSlot?.date || !packageSlot?.time) continue;
+          const packageBlock = getTechniqueSlotBlock(
+            packageSlot.date,
+            technique,
+            normalizeTime(packageSlot.time)
+          );
+          if (packageBlock) {
+            throw new Error(packageBlock.message);
+          }
+        }
+      }
       const classCount = Number((body.product as any)?.classes) || body.slots.length;
       const check = areClassPackageSlotsWithinValidity(
         body.slots.map((s: any) => s.date).filter(Boolean),

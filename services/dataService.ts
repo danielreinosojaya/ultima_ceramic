@@ -375,6 +375,7 @@ import { slotOverlapsPrivateEvent } from '../utils/privateEventBlocks';
 import { getMaxClassStartMinutesForDate, getBusinessStartTimesForDate, holidayReplacesWeekdayGrid, isClassStartWithinBusinessHours, LAST_CLASS_START_BY_DATE } from '../utils/businessHours';
 import { isStudioClosedOnDate } from '../utils/studioClosedDates';
 import { adjustFixedTimesForHoliday, getHolidayWindow, isHolidayListed } from '../utils/holidayHours';
+import { isTechniqueSlotBlocked } from '../utils/techniqueDateBlocks';
 
 // --- API Helpers ---
 
@@ -2513,6 +2514,10 @@ export const getAvailableTimesForDate = (date: Date, appData: Pick<AppData, 'ava
             totalBookingsCount: totalParticipants,
             maxCapacity
         };
+    }).filter((slot) => {
+        const slotTechnique = slot.technique || technique;
+        if (!slotTechnique) return true;
+        return !isTechniqueSlotBlocked(dateStr, slotTechnique, slot.time);
     });
 };
 
@@ -3597,12 +3602,14 @@ export const calculateSlotAvailability = (
             if (!hasOverlap) return;
 
             const participantCount =
-                booking.participants
-                ?? booking.groupClassMetadata?.totalParticipants
-                ?? (typeof booking.product === 'object' && 'minParticipants' in booking.product
-                    ? (booking.product as any).minParticipants
-                    : undefined)
-                ?? 1;
+                Math.max(
+                    booking.participants || 0,
+                    Number.parseInt(String((booking.product as any)?.details?.participants ?? ''), 10) || 0,
+                    booking.groupClassMetadata?.totalParticipants || 0,
+                    typeof booking.product === 'object' && 'minParticipants' in booking.product
+                        ? Number((booking.product as any).minParticipants) || 0
+                        : 0
+                ) || 1;
             if (isHandWork(bookingTechnique)) {
                 capacity.hand_work.bookedInWindow += participantCount;
             } else if (bookingTechnique === 'potters_wheel') {
