@@ -1023,6 +1023,46 @@ export const getBookings = async (): Promise<Booking[]> => {
         return [];
     }
 };
+
+/** Admin calendar: bookings whose class slots fall in [from, to] (YYYY-MM-DD). */
+export const getBookingsInRange = async (from: string, to: string): Promise<Booking[]> => {
+    const fromDate = String(from || '').slice(0, 10);
+    const toDate = String(to || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(toDate) || fromDate > toDate) {
+        console.warn('getBookingsInRange: invalid range', from, to);
+        return [];
+    }
+
+    try {
+        const cacheBuster = lastMutationTimestamp > 0 ? `&_t=${lastMutationTimestamp}` : '';
+        const url =
+            `/api/data?key=bookings` +
+            `&from=${encodeURIComponent(fromDate)}` +
+            `&to=${encodeURIComponent(toDate)}` +
+            cacheBuster;
+        const rawBookings = await fetchData(url);
+
+        if (!rawBookings || !Array.isArray(rawBookings)) {
+            console.warn('getBookingsInRange: No bookings data received, returning empty array');
+            return [];
+        }
+
+        const parsedBookings: Booking[] = [];
+        rawBookings.forEach((booking: any, index: number) => {
+            if (!booking || typeof booking !== 'object') return;
+            try {
+                const parsed = parseBooking(booking);
+                if (parsed) parsedBookings.push(parsed);
+            } catch (error) {
+                console.error(`getBookingsInRange: Error parsing booking ${index + 1}:`, error);
+            }
+        });
+        return parsedBookings;
+    } catch (error) {
+        console.error('getBookingsInRange: Error:', error);
+        return [];
+    }
+};
 export const addBooking = async (bookingData: any): Promise<AddBookingResult> => {
     const result = await postAction('addBooking', bookingData);
     if(result.success && result.booking) {

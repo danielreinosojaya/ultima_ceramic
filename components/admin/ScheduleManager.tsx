@@ -823,6 +823,14 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         void reloadPrivateEvents();
     }, [weekRangeKey, reloadPrivateEvents]);
 
+    // Ensure class-date bookings for the visible week are in admin memory (historical months).
+    useEffect(() => {
+        if (!weekDates.length) return;
+        const from = formatDateToYYYYMMDD(weekDates[0]);
+        const to = formatDateToYYYYMMDD(weekDates[6]);
+        void adminData.ensureBookingsRange(from, to);
+    }, [weekRangeKey, weekDates, adminData.ensureBookingsRange]);
+
     const privateEventsByDate = useMemo(() => {
         const map: Record<string, PrivateCustomEvent[]> = {};
         for (const event of privateEvents) {

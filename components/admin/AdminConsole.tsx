@@ -94,6 +94,24 @@ export const AdminConsole: React.FC = () => {
     }
     forceRefresh();
   };
+  const formatYmd = useCallback((d: Date): string => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }, []);
+
+  const ensureWeekBookings = useCallback((anchor: Date) => {
+    const weekStart = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // domingo
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    // Incluir un día de margen por si el ancla cae cerca del borde del mes
+    weekStart.setDate(weekStart.getDate() - 1);
+    weekEnd.setDate(weekEnd.getDate() + 1);
+    void adminData.ensureBookingsRange(formatYmd(weekStart), formatYmd(weekEnd));
+  }, [adminData.ensureBookingsRange, formatYmd]);
+
   // Set isSyncing to false when adminData finishes loading
   useEffect(() => {
     if (!adminData.loading) {
@@ -128,9 +146,16 @@ export const AdminConsole: React.FC = () => {
     const sorted = [...booking.slots].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
     const d = sorted[0]?.date;
     if (d && d !== 'TBD') {
-      setWeekStartDate(new Date(d + 'T00:00:00'));
+      const anchor = new Date(d + 'T00:00:00');
+      setWeekStartDate(anchor);
+      ensureWeekBookings(anchor);
     }
-  }, [adminData.bookings]);
+  }, [adminData.bookings, ensureWeekBookings]);
+
+  useEffect(() => {
+    if (calendarView !== 'week' || !weekStartDate) return;
+    ensureWeekBookings(weekStartDate);
+  }, [calendarView, weekStartDate, ensureWeekBookings]);
 
   const handleNotificationClick = async (notification: Notification) => {
     handleSync(); 
@@ -152,11 +177,25 @@ export const AdminConsole: React.FC = () => {
   const handleDateSelect = (date: Date) => {
     setWeekStartDate(date);
     setCalendarView('week');
+    ensureWeekBookings(date);
   };
 
   const handleBackToMonth = () => {
     setCalendarView('month');
     setWeekStartDate(null);
+  };
+
+  const handleCalendarDataChange = () => {
+    handleSync();
+    if (calendarView === 'week' && weekStartDate) {
+      const anchor = weekStartDate;
+      const weekStart = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      adminData.invalidateBookingsRangeCache(formatYmd(weekStart), formatYmd(weekEnd));
+      void adminData.ensureBookingsRange(formatYmd(weekStart), formatYmd(weekEnd), { force: true });
+    }
   };
 
   const renderContent = () => {
@@ -190,7 +229,7 @@ export const AdminConsole: React.FC = () => {
         return <PrivateCustomEventsPanel />;
       case 'calendar':
         if (calendarView === 'month') {
-          return <CalendarOverview bookings={adminData.bookings} onDateSelect={handleDateSelect} onDataChange={handleSync} products={adminData.products} />;
+          return <CalendarOverview bookings={adminData.bookings} onDateSelect={handleDateSelect} onDataChange={handleCalendarDataChange} products={adminData.products} />;
         } else {
           return (
             <ErrorBoundary fallback={<p className="text-center text-red-500 font-bold p-8">Hubo un error al cargar el calendario. Por favor, intenta de nuevo.</p>}>
@@ -200,7 +239,7 @@ export const AdminConsole: React.FC = () => {
                 {...appDataForScheduleManager}
                 invoiceRequests={adminData.invoiceRequests}
                 setNavigateTo={setNavigateTo}
-                onDataChange={handleSync}
+                onDataChange={handleCalendarDataChange}
               />
             </ErrorBoundary>
           );

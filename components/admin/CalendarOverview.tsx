@@ -13,6 +13,7 @@ import { AcceptPaymentModal } from './AcceptPaymentModal';
 import { isExclusiveSpaceRentalBooking } from '../../utils/spaceRental';
 import type { PrivateCustomEvent } from '../../utils/privateCustomEvent';
 import { PrivateCustomEventModal } from './PrivateCustomEventModal';
+import { useAdminData } from '../../context/AdminDataContext';
 
 type AttendeeInfo = { userInfo: UserInfo; bookingId: string; isPaid: boolean; bookingCode?: string; paymentDetails?: PaymentDetails[] };
 type SlotInfo = { attendees: AttendeeInfo[]; instructorId: number; };
@@ -30,6 +31,7 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
   
   // Monolingüe español, textos hardcodeados
   const language = 'es-ES';
+  const { ensureBookingsRange, invalidateBookingsRangeCache, lastUpdated } = useAdminData();
   const [currentDate, setCurrentDate] = useState(getEcuadorToday());
   const [isManualBookingModalOpen, setIsManualBookingModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
@@ -39,6 +41,7 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
   const [privateEventModalOpen, setPrivateEventModalOpen] = useState(false);
   const [editingPrivateEvent, setEditingPrivateEvent] = useState<PrivateCustomEvent | null>(null);
   const [privateEventCreateDate, setPrivateEventCreateDate] = useState<string | undefined>(undefined);
+  const [monthLoading, setMonthLoading] = useState(false);
 
   const monthRange = useMemo(() => {
     const y = currentDate.getFullYear();
@@ -65,6 +68,28 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
   useEffect(() => {
     void reloadPrivateEvents();
   }, [reloadPrivateEvents]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setMonthLoading(true);
+    // Re-run after critical sync (lastUpdated.critical) so the visible month stays fresh.
+    void ensureBookingsRange(monthRange.from, monthRange.to)
+      .catch((error) => {
+        console.error('Error loading bookings for month:', error);
+      })
+      .finally(() => {
+        if (!cancelled) setMonthLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [monthRange.from, monthRange.to, ensureBookingsRange, lastUpdated.critical]);
+
+  const notifyDataChange = useCallback(() => {
+    invalidateBookingsRangeCache(monthRange.from, monthRange.to);
+    void ensureBookingsRange(monthRange.from, monthRange.to, { force: true });
+    onDataChange();
+  }, [ensureBookingsRange, invalidateBookingsRangeCache, monthRange.from, monthRange.to, onDataChange]);
 
   const privateEventDates = useMemo(() => {
     const set = new Set<string>();
@@ -147,12 +172,12 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
   };
   
   const handleManualBookingAdded = () => {
-    onDataChange();
+    notifyDataChange();
     setIsManualBookingModalOpen(false);
   };
 
   const handleClearSchedule = () => {
-    onDataChange();
+    notifyDataChange();
     setIsClearScheduleModalOpen(false);
   };
 
@@ -260,13 +285,18 @@ export const CalendarOverview: React.FC<CalendarOverviewProps> = ({ onDateSelect
           <button 
             onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}
             className="p-2 rounded-full hover:bg-brand-background"
+            aria-label="Mes anterior"
           >&larr;</button>
           <h3 className="text-xl font-bold text-brand-text capitalize">
             {currentDate.toLocaleString(language, { month: 'long', year: 'numeric' })}
+            {monthLoading ? (
+              <span className="ml-2 text-sm font-normal text-brand-secondary">Cargando…</span>
+            ) : null}
           </h3>
           <button 
             onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}
             className="p-2 rounded-full hover:bg-brand-background"
+            aria-label="Mes siguiente"
           >&rarr;</button>
         </div>
         <div className="grid grid-cols-7 gap-1 text-center text-sm text-brand-secondary">

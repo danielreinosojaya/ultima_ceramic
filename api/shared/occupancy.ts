@@ -156,8 +156,11 @@ const CALENDAR_SELECT = `
     b.id,
     b.product_id,
     b.product_type,
-    p.name AS product_name,
+    COALESCE(NULLIF(b.product->>'name', ''), p.name) AS product_name,
     b.product->>'technique' AS product_technique,
+    b.product->>'kind' AS product_kind,
+    b.product->'details'->>'serviceKind' AS product_service_kind,
+    b.product->'details'->>'bookingSource' AS product_booking_source,
     b.slots,
     b.user_info,
     b.created_at,
@@ -170,6 +173,7 @@ const CALENDAR_SELECT = `
     b.status,
     b.expires_at,
     b.participants,
+    b.product #>> '{details,participants}' AS product_details_participants,
     b.group_metadata AS group_class_metadata,
     b.technique,
     b.payment_proof_url,
@@ -219,6 +223,7 @@ export async function fetchCalendarOccupancyRows(from: string, to: string, slotl
             LEFT JOIN products p ON p.id = b.product_id
             WHERE ${where}
             ORDER BY b.created_at DESC
+            LIMIT 2000
         `;
         return sql.query(text, params);
     };

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect, ReactNode, useRef } from 'react';
 import * as dataService from '../services/dataService';
+import { slotDateKey } from '../utils/formatters';
 import type { Product, Booking, Customer, GroupInquiry, Instructor, ScheduleOverrides, FreeDateTimeOverrides, DayKey, AvailableSlot, ClassCapacity, CapacityMessageSettings, Announcement, InvoiceRequest, Delivery, PaymentDetails, ExperienceTypeOverrides, CorporateEvent } from '../types';
 
 interface AdminData {
@@ -37,6 +38,10 @@ interface AdminData {
   refreshCritical: () => void;
   refreshExtended: () => void;
   refreshSecondary: () => void;
+  /** Load/merge bookings whose class dates fall in [from, to] (YYYY-MM-DD). */
+  ensureBookingsRange: (from: string, to: string, opts?: { force?: boolean }) => Promise<void>;
+  /** Drop soft-cache for a range (or all ranges) so the next ensure re-fetches. */
+  invalidateBookingsRangeCache: (from?: string, to?: string) => void;
 
   // Optimistic updates (evitar refresh completo tras mutaciones)
   optimisticUpsertBooking: (booking: Booking) => void;
@@ -98,6 +103,7 @@ type AdminAction =
   | { type: 'SET_ERROR'; error: string | null }
   | { type: 'UPDATE_TIMESTAMP'; dataType: 'critical' | 'extended' | 'secondary' }
   | { type: 'SET_GIFTCARD_REQUESTS'; requests: import('../services/dataService').GiftcardRequest[] }
+  | { type: 'REPLACE_BOOKINGS_IN_RANGE'; from: string; to: string; bookings: Booking[] }
   | { type: 'UPSERT_BOOKING'; booking: Booking }
   | { type: 'PATCH_BOOKING'; bookingId: string; patch: Partial<Booking> }
   | { type: 'UPDATE_BOOKING_PAYMENT'; bookingId: string; paymentIdOrIndex: string | number; patch: Partial<PaymentDetails> }
@@ -110,6 +116,29 @@ type AdminAction =
   | { type: 'REMOVE_DELIVERY'; deliveryId: string }
   | { type: 'UPSERT_INVOICE_REQUEST'; request: InvoiceRequest }
   | { type: 'PATCH_INVOICE_REQUEST'; id: string; patch: Partial<InvoiceRequest> };
+
+const bookingOverlapsDateRange = (booking: Booking, from: string, to: string): boolean => {
+  const slots = Array.isArray(booking.slots) ? booking.slots : [];
+  if (slots.length === 0) {
+    const created = String((booking as any).createdAt || '').slice(0, 10);
+    return !!(created && created >= from && created <= to);
+  }
+  return slots.some((slot) => {
+    const d = slotDateKey(slot?.date);
+    return !!(d && d !== 'TBD' && d >= from && d <= to);
+  });
+};
+
+const mergeBookingsById = (existing: Booking[], incoming: Booking[]): Booking[] => {
+  const byId = new Map<string, Booking>();
+  for (const b of existing) {
+    if (b?.id) byId.set(String(b.id), b);
+  }
+  for (const b of incoming) {
+    if (b?.id) byId.set(String(b.id), b);
+  }
+  return Array.from(byId.values());
+};
 
 const normalizeEmail = (email: string | null | undefined): string => (email || '').trim().toLowerCase();
 
@@ -188,15 +217,35 @@ function adminReducer(state: AdminState, action: AdminAction): AdminState {
           },
         };
       }
-    case 'SET_CRITICAL_DATA':
+    case 'SET_CRITICAL_DATA': {
+      // Upsert the sync window into existing bookings so historically loaded months are not wiped.
+      const { bookings: incomingBookings, ...rest } = action.data;
+      const nextBookings =
+        incomingBookings !== undefined
+          ? mergeBookingsById(state.bookings, incomingBookings as Booking[])
+          : state.bookings;
       return {
         ...state,
-        ...action.data,
+        ...rest,
+        bookings: nextBookings,
         lastUpdated: {
           ...state.lastUpdated,
           critical: Date.now(),
         },
       };
+    }
+
+    case 'REPLACE_BOOKINGS_IN_RANGE': {
+      const incomingIds = new Set(action.bookings.map((b) => String(b.id)));
+      const kept = state.bookings.filter((b) => {
+        if (incomingIds.has(String(b.id))) return false;
+        return !bookingOverlapsDateRange(b, action.from, action.to);
+      });
+      return {
+        ...state,
+        bookings: [...action.bookings, ...kept],
+      };
+    }
     case 'SET_EXTENDED_DATA':
       return {
         ...state,
@@ -446,6 +495,9 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
     secondary: null as number | null,
   });
   const isAdminRef = useRef(isAdmin);
+  /** Soft-cache of occupancy ranges already loaded into state.bookings (key: from_to). */
+  const loadedBookingRangesRef = useRef<Map<string, number>>(new Map());
+  const pendingBookingRangesRef = useRef<Map<string, Promise<void>>>(new Map());
   
   // Mantener ref actualizado
   useEffect(() => {
@@ -485,6 +537,7 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
     try {
       if (force) {
         dataService.invalidateBookingsCache();
+        loadedBookingRangesRef.current.clear();
       }
       // Usar batch optimizado del dataService para datos críticos con fallback
       const results = await Promise.allSettled([
@@ -756,6 +809,57 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
     lastUpdatedRef.current.secondary = Date.now();
   }, []);
 
+  const bookingRangeCacheKey = (from: string, to: string) => `${from}_${to}`;
+
+  const invalidateBookingsRangeCache = useCallback((from?: string, to?: string) => {
+    if (from && to) {
+      loadedBookingRangesRef.current.delete(bookingRangeCacheKey(from, to));
+    } else {
+      loadedBookingRangesRef.current.clear();
+    }
+  }, []);
+
+  const ensureBookingsRange = useCallback(async (from: string, to: string, opts?: { force?: boolean }) => {
+    const fromDate = String(from || '').slice(0, 10);
+    const toDate = String(to || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(toDate) || fromDate > toDate) {
+      console.warn('[AdminDataContext] ensureBookingsRange: invalid range', from, to);
+      return;
+    }
+
+    const key = bookingRangeCacheKey(fromDate, toDate);
+    const force = opts?.force === true;
+    const RANGE_SOFT_TTL_MS = 5 * 60 * 1000;
+
+    if (!force) {
+      const loadedAt = loadedBookingRangesRef.current.get(key);
+      if (loadedAt && Date.now() - loadedAt < RANGE_SOFT_TTL_MS) {
+        return;
+      }
+      const pending = pendingBookingRangesRef.current.get(key);
+      if (pending) {
+        await pending;
+        return;
+      }
+    }
+
+    const promise = (async () => {
+      try {
+        const bookings = await dataService.getBookingsInRange(fromDate, toDate);
+        dispatch({ type: 'REPLACE_BOOKINGS_IN_RANGE', from: fromDate, to: toDate, bookings });
+        loadedBookingRangesRef.current.set(key, Date.now());
+        console.debug('[AdminDataContext] ensureBookingsRange loaded', fromDate, toDate, bookings.length);
+      } catch (error) {
+        console.error('[AdminDataContext] ensureBookingsRange failed:', error);
+      } finally {
+        pendingBookingRangesRef.current.delete(key);
+      }
+    })();
+
+    pendingBookingRangesRef.current.set(key, promise);
+    await promise;
+  }, []);
+
   // Cargar datos iniciales - solo una vez al montar
   useEffect(() => {
     let mounted = true;
@@ -811,6 +915,8 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
   refreshCritical,
   refreshExtended,
   refreshSecondary,
+  ensureBookingsRange,
+  invalidateBookingsRangeCache,
   optimisticUpsertBooking,
   optimisticPatchBooking,
   optimisticUpdateBookingPayment,

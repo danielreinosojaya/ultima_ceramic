@@ -49,6 +49,11 @@ import * as emailService from './emailService.js';
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { rejectIfBootBlocked } from './shared/runtimeGuard.js';
 import {
+    fetchCalendarOccupancyRows,
+    SLOTLESS_CREATED_LOOKBEHIND_DAYS,
+    addDaysYmd,
+} from './shared/occupancy.js';
+import {
     generatePaymentId,
     generateGiftcardCode,
     ecuadorSlotStartIso,
@@ -2953,6 +2958,26 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                 // ⚡ PHASE 5 FINAL OPTIMIZATION: Partial SELECT sin campo `product` (10-20 KB por booking)
                                 // Omitir `product`, `payment_details`, `attendance` → ~85% payload reduction
                                 // Lazy load detalles solo cuando se abre modal de pagos/detalles
+                                const ISO_DATE_RE = /^(\d{4}-\d{2}-\d{2})$/;
+                                const rangeFrom = typeof req.query.from === 'string' ? req.query.from.slice(0, 10) : '';
+                                const rangeTo = typeof req.query.to === 'string' ? req.query.to.slice(0, 10) : '';
+                                const useOccupancyRange = ISO_DATE_RE.test(rangeFrom) && ISO_DATE_RE.test(rangeTo) && rangeFrom <= rangeTo;
+
+                                let bookings: any[] = [];
+
+                                if (useOccupancyRange) {
+                                    // Admin calendar: classes that OCCUR in [from, to], not by created_at
+                                    const today = new Date();
+                                    today.setHours(0, 0, 0, 0);
+                                    const slotlessSince = addDaysYmd(today, -SLOTLESS_CREATED_LOOKBEHIND_DAYS);
+                                    try {
+                                        bookings = await fetchCalendarOccupancyRows(rangeFrom, rangeTo, slotlessSince);
+                                        console.log(`API: Loaded ${bookings.length} bookings by occupancy range ${rangeFrom}..${rangeTo}`);
+                                    } catch (occupancyRangeError) {
+                                        console.error('API: occupancy range bookings failed:', occupancyRangeError);
+                                        bookings = [];
+                                    }
+                                } else {
                                 const daysLimit = parseInt(req.query.daysLimit as string) || 30;
                                 const limitDate = new Date();
                                 limitDate.setDate(limitDate.getDate() - daysLimit);
@@ -2960,7 +2985,6 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                 // ⚡ PERFORMANCE FIX: Removed expensive EXISTS subquery that was checking every booking's slots
                                 // Now relies on daysLimit to filter recent bookings (most active bookings are recent)
                                 // If you need future slots from old bookings, increase daysLimit query param
-                                let bookings: any[] = [];
                                 try {
                                     const { rows } = await sql`
                                         SELECT 
@@ -3195,6 +3219,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                 } catch (occupancySupplementError) {
                                     console.warn('API: upcoming-slot supplement skipped:', occupancySupplementError);
                                 }
+                                } // end !useOccupancyRange
 
                 
                 if (bookings.length === 0) {
@@ -3211,7 +3236,12 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                 }
                 // ✅ CACHE STRATEGY: Cache CDN 30 segundos para balance entre performance y freshness
                 // Permite updates rápidos después de mutations sin sacrificar totalmente CDN
-                res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
+                // Rango por ocupación: no cachear en CDN (navegación histórica admin)
+                if (useOccupancyRange) {
+                    res.setHeader('Cache-Control', 'private, no-store');
+                } else {
+                    res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
+                }
             } else if (key === 'customers') {
                 // ⚡ PHASE 6b EXTREME OPTIMIZATION: Aggregate-only, no full booking objects
                 //  VERCEL DEPLOYMENT TEST: 2026-02-18T22:16:00Z - Should see change immediately
