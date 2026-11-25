@@ -181,6 +181,9 @@ const CALENDAR_SELECT = `
 `;
 
 function occupancyWhereSql(hasColumns: boolean, includeCreatedSince: boolean): string {
+    // IMPORTANT: $1/$2 are cast to date in the column branch. Any reuse of $1/$2 must also
+    // compare as date (not text), or Postgres errors with: operator does not exist: text >= date
+    // and the admin month fetch silently returns [].
     const occupancy = hasColumns
         ? `(
             (b.first_slot_date IS NOT NULL
@@ -191,16 +194,16 @@ function occupancyWhereSql(hasColumns: boolean, includeCreatedSince: boolean): s
               AND EXISTS (
                 SELECT 1 FROM jsonb_array_elements(COALESCE(b.slots, '[]'::jsonb)) s
                 WHERE (s->>'date') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
-                  AND LEFT(s->>'date', 10) >= $1
-                  AND LEFT(s->>'date', 10) <= $2
+                  AND LEFT(s->>'date', 10)::date >= $1::date
+                  AND LEFT(s->>'date', 10)::date <= $2::date
               )
             )
           )`
         : `EXISTS (
             SELECT 1 FROM jsonb_array_elements(COALESCE(b.slots, '[]'::jsonb)) s
             WHERE (s->>'date') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
-              AND LEFT(s->>'date', 10) >= $1
-              AND LEFT(s->>'date', 10) <= $2
+              AND LEFT(s->>'date', 10)::date >= $1::date
+              AND LEFT(s->>'date', 10)::date <= $2::date
           )`;
 
     if (!includeCreatedSince) return occupancy;

@@ -846,10 +846,12 @@ export const AdminDataProvider: React.FC<{ children: ReactNode; isAdmin?: boolea
     const promise = (async () => {
       try {
         const bookings = await dataService.getBookingsInRange(fromDate, toDate);
+        // Only replace the month when the fetch succeeded (even if truly empty).
         dispatch({ type: 'REPLACE_BOOKINGS_IN_RANGE', from: fromDate, to: toDate, bookings });
         loadedBookingRangesRef.current.set(key, Date.now());
         console.debug('[AdminDataContext] ensureBookingsRange loaded', fromDate, toDate, bookings.length);
       } catch (error) {
+        // Keep any previously loaded bookings for this month; do not mark cache warm.
         console.error('[AdminDataContext] ensureBookingsRange failed:', error);
       } finally {
         pendingBookingRangesRef.current.delete(key);

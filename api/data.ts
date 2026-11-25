@@ -2975,7 +2975,13 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
                                         console.log(`API: Loaded ${bookings.length} bookings by occupancy range ${rangeFrom}..${rangeTo}`);
                                     } catch (occupancyRangeError) {
                                         console.error('API: occupancy range bookings failed:', occupancyRangeError);
-                                        bookings = [];
+                                        // Do not return [] — client REPLACE would wipe the month as if empty.
+                                        return res.status(500).json({
+                                            error: 'Failed to load bookings for date range',
+                                            message: occupancyRangeError instanceof Error
+                                                ? occupancyRangeError.message
+                                                : String(occupancyRangeError),
+                                        });
                                     }
                                 } else {
                                 const daysLimit = parseInt(req.query.daysLimit as string) || 30;
